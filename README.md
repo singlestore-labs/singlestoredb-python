@@ -1,19 +1,87 @@
-# open-source-template
-Template project for open source projects from SingleStore
+# SingleStore Python Interface
+
+This project contains a Python interface to the SingleStore database
+and cluster management API. The database interface is more of a meta-API
+that wraps various MySQL-compatible Python interfaces and normalizes
+the differences and also adds support for the SingleStore HTTP API.
+This simply means that you can use your choice of various interfaces all 
+behind the same Python programming API.
+
+## Install
+
+This package can be install from PyPI using `pip`:
+```
+pip install singlestore
+```
+
+The default installation includes the `pymysql` and `requests` packages
+which can access the SingleStore database using pure Python code. To 
+install additional interfaces such as the MySQLdb connector or the 
+official MySQL Python connector (`mysql.connector`) which may offer
+better performance, either install the connectors separately or include
+them as an optional install:
+```
+# Include the MySQLdb connector
+pip install singlestore[MySQLdb]
+
+# Include the MySQL Python connector
+pip install singlestore[mysql-connector]
+
+# Include the pyodbc connector
+pip install singlestore[pyodbc]
+
+# Include the cymysql connector
+pip install singlestore[cymysql]
+```
 
 ## Usage
 
-1. [Sign up](https://www.singlestore.com/try-free/) for a free SingleStore license. This allows you
-   to run up to 4 nodes up to 32 gigs each for free. Grab your license key from
-   [SingleStore portal](https://portal.singlestore.com/?utm_medium=osm&utm_source=github) and set it as an environment
-   variable.
+Connections to the SingleStore database are made using URLs that specify
+the connection driver package, server hostname, server port, and user
+credentials. All connections support the
+[Python DB-API 2.0](https://www.python.org/dev/peps/pep-0249/).
+By default, the `pymysql` connector is used since it works on all platforms.
+However, you may want to select other connectors for better performance.
+```
+import singlestore as s2
 
-   ```bash
-   export SINGLESTORE_LICENSE="singlestore license"
-   ```
+# Connect using the pymysql connector
+conn = s2.connect('user:password@host:3306/db_name')
+
+# Explicitly specifying the connector works as well
+# conn = s2.connect('pymysql://user:password@host:3306/db_name')
+
+# Create a cursor
+cur = conn.cursor()
+
+# Execute SQL
+cur.execute('select * from foo;')
+
+# Fetch the results
+print(cur.description)
+for item in cur:
+    print(item)
+
+# Close the connection
+conn.close()
+```
+
+The above example used the `pymysql` connector for doing the actual
+communication with the server using the MySQL wire protocol. You can
+use other MySQL-compatible packages as well.
+```
+# Use the MySQLdb connector
+conn = s2.connect('mysqldb://user:password@host:3306/db_name')
+
+# Use the mysql.connector connector
+conn = s2.connect('mysqlconnector://user:password@host:3306/db_name')
+
+# Use the HTTP API connector
+conn = s2.connect('http://user:password@host:3306/db_name')
+```
+
 
 ## Resources
 
-* [Documentation](https://docs.singlestore.com)
-* [Twitter](https://twitter.com/SingleStoreDevs)
-* [SingleStore forums](https://www.singlestore.com/forum)
+* [SingleStore](https://singlestore.com)
+* [Python](https://python.org)
