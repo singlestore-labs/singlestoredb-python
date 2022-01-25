@@ -25,7 +25,7 @@ them as an optional install:
 pip install singlestore[MySQLdb]
 
 # Include the MySQL Python connector
-pip install singlestore[mysql-connector]
+pip install singlestore[mysqlconnector]
 
 # Include the pyodbc connector
 pip install singlestore[pyodbc]
