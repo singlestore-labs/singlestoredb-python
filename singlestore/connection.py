@@ -1,4 +1,5 @@
 
+import importlib
 import requests
 import sqlparams
 from collections.abc import Mapping, Sequence
@@ -110,6 +111,8 @@ class Connection(object):
     NotSupportedError = exceptions.NotSupportedError
 
     def __init__(self, url: str) -> 'Connection':
+        global DEFAULT_DRIVER
+
         self._conn = None
         self.url = url
         self.arraysize = type(self).arraysize
@@ -133,19 +136,16 @@ class Connection(object):
         driver = url.scheme.lower()
 
         if driver == 'auto':
-            if url.port == 80:
-                driver = 'http'
-            else:
-                driver = 'pymysql'
+            driver = DEFAULT_DRIVER
 
-        if driver == 'pymysql':
-            import pymysql as connector
-        elif driver == 'mysqldb':
+        if driver == 'mysqldb':
             import MySQLdb as connector
-        elif driver == 'cymysql':
-            import cymysql as connector
         elif driver == 'mysqlconnector':
             import mysql.connector as connector
+        elif driver == 'cymysql':
+            import cymysql as connector
+        elif driver == 'pymysql':
+            import pymysql as connector
         elif driver.startswith('pyodbc'):
             import pyodbc as connector
             if '+' in driver:
@@ -158,7 +158,7 @@ class Connection(object):
                 params['port'] = 80
             params['protocol'] = driver
         else:
-            raise Error(f'Unrecognized SingleStore driver: {driver}')
+            raise exceptions.Error(0, f'Unrecognized SingleStore driver: {driver}')
 
         params = {k: v for k, v in params.items() if v is not None}
 
@@ -200,3 +200,14 @@ class Connection(object):
 
 def connect(url: str) -> Connection:
     return Connection(url)
+
+
+DEFAULT_DRIVER = 'pymysql'
+
+for drv in ['MySQLdb', 'mysql.connector', 'cymysql', 'pyodbc', 'pymysql']:
+    try:
+        importlib.import_module(drv)
+        DEFAULT_DRIVER = drv.lower()
+        break
+    except ImportError:
+        pass

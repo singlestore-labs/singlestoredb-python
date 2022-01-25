@@ -77,6 +77,8 @@ class Cursor(object):
         else:
             self.rowcount = out['rowsAffected']
 
+        return self.rowcount
+
     def executemany(self, query: str, param_seq: Sequence[Union[Sequence, Mapping]]=None):
         # TODO: What to do with the results?
         for params in param_seq:

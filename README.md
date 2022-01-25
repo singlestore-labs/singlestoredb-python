@@ -40,16 +40,15 @@ Connections to the SingleStore database are made using URLs that specify
 the connection driver package, server hostname, server port, and user
 credentials. All connections support the
 [Python DB-API 2.0](https://www.python.org/dev/peps/pep-0249/).
-By default, the `pymysql` connector is used since it works on all platforms.
-However, you may want to select other connectors for better performance.
+The default connector depends on an order of precedence. This order is
+`MySQLdb`, `mysql.connector`, `cymysql`, `pyodbc`, and `pymysql`.
+If a connector is not explicitly specified, the first importable package
+from the list above is used.
 ```
 import singlestore as s2
 
-# Connect using the pymysql connector
+# Connect using the default connector
 conn = s2.connect('user:password@host:3306/db_name')
-
-# Explicitly specifying the connector works as well
-# conn = s2.connect('pymysql://user:password@host:3306/db_name')
 
 # Create a cursor
 cur = conn.cursor()
@@ -66,9 +65,9 @@ for item in cur:
 conn.close()
 ```
 
-The above example used the `pymysql` connector for doing the actual
+The above example used the default connector for doing the actual
 communication with the server using the MySQL wire protocol. You can
-use other MySQL-compatible packages as well.
+explicitly specify other MySQL-compatible packages as well.
 ```
 # Use the MySQLdb connector
 conn = s2.connect('mysqldb://user:password@host:3306/db_name')
