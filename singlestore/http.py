@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from typing import Union, Optional
 from urllib.parse import urljoin
 from . import exceptions
+from . import types
 
 paramstyle = 'qmark'
 
@@ -53,10 +54,15 @@ class Cursor(object):
             res = self._post('exec', json=data)
 
         if res.status_code >= 400:
-            # print(res.request.body)
+            print(res.request.body)
+            print(res.text)
             if res.text:
-                code, msg = res.text.split(':', 1)
-                code = int(code.split()[-1])
+                if ':' in res.text:
+                    code, msg = res.text.split(':', 1)
+                    code = int(code.split()[-1])
+                else:
+                    code = res.status_code
+                    msg = res.text
                 raise exceptions.InterfaceError(code, msg.strip())
             raise exceptions.InterfaceError(res.status_code, 'HTTP Error')
 
@@ -70,10 +76,11 @@ class Cursor(object):
             self._rows = out['results'][0]['rows']
             self.rowcount = len(self._rows)
             # description: (name, type_code, display_size, internal_size,
-            #               precision, scale, null_ok)
+            #               precision, scale, null_ok, column_flags, ?)
             for item in out['results'][0].get('columns', []):
-                self.description.append((item['name'], item['dataType'], None, None,
-                                         None, None, item.get('nullable', False)))
+                self.description.append((item['name'], types.MAP[item['dataType']],
+                                         None, None, None, None,
+                                         item.get('nullable', False, 0, 0)))
         else:
             self.rowcount = out['rowsAffected']
 

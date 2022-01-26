@@ -1,5 +1,6 @@
 
 import importlib
+import os
 import requests
 import sqlparams
 from collections.abc import Mapping, Sequence
@@ -30,7 +31,13 @@ class Cursor(object):
 
     @property
     def description(self) -> Sequence:
-        return self._cursor.description
+        desc = self._cursor.description
+        out = []
+        for item in self._cursor.description:
+            item = list(item)
+            item[6] = not(not(item[6]))
+            out.append(tuple(item))
+        return out
 
     @property
     def rowcount(self) -> int:
@@ -110,38 +117,53 @@ class Connection(object):
     ProgrammingError = exceptions.ProgrammingError
     NotSupportedError = exceptions.NotSupportedError
 
-    def __init__(self, url: str) -> 'Connection':
-        global DEFAULT_DRIVER
-
+    def __init__(self, dsn=None, user=None, password=None, host=None,
+                 port=None, database=None, driver='mysql.connector') -> 'Connection':
         self._conn = None
-        self.url = url
         self.arraysize = type(self).arraysize
         self.errorhandler = None
 
-        if '//' not in url:
-            url = '//' + url
-
-        url = urlparse(url, scheme='auto', allow_fragments=True)
-
+        # Setup connection parameters
         params = {}
-        params['host'] = url.hostname or '127.0.0.1'
-        params['port'] = url.port or 3306
-        database = url.path
-        if database.startswith('/'):
-            database = database.split('/')[1].strip()
-        params['database'] = database.split('/')[0].strip() or None
-        params['user'] = url.username 
-        params['password'] = url.password 
+        params['host'] = host or os.environ.get('SINGLESTORE_HOST', '127.0.0.1')
+        params['port'] = port or os.environ.get('SINGLESTORE_PORT', None)
+        params['database'] = database or os.environ.get('SINGLESTORE_DATABASE', None)
+        params['user'] = user or os.environ.get('SINGLESTORE_USER', None)
+        params['password'] = password or os.environ.get('SINGLESTORE_PASSWORD', None)
 
-        driver = url.scheme.lower()
+        # Check environment for dsn
+        if not dsn:
+            dsn = os.environ.get('SINGLESTORE_DSN', None)
 
-        if driver == 'auto':
-            driver = DEFAULT_DRIVER
+        # If a dsn url is supplied, it takes precedence
+        if dsn:
+            if '//' not in dsn:
+                dsn = '//' + dsn
 
-        if driver == 'mysqldb':
-            import MySQLdb as connector
-        elif driver == 'mysqlconnector':
+            dsn = urlparse(dsn, scheme='auto', allow_fragments=True)
+
+            dsn_db = dsn.path
+            if dsn_db.startswith('/'):
+                dsn_db = dsn_db.split('/')[1].strip()
+            dsn_db = dsn_db.split('/')[0].strip() or None
+
+            params['host'] = dsn.hostname or params['host']
+            params['port'] = dsn.port or params['port']
+            params['database'] = dsn_db or params['database']
+            params['user'] = dsn.username or params['user']
+            if dsn.password is not None:
+                params['password'] = dsn.password
+
+            if dsn.scheme != 'auto':
+                driver = dsn.scheme.lower()
+
+        # Load requested driver
+        driver = driver.lower() or os.environ.get('SINGLESTORE_DRIVER',
+                                                  'mysql.connector').lower()
+        if driver in ['mysqlconnector', 'mysql-connector', 'mysql.connector']:
             import mysql.connector as connector
+        elif driver == 'mysqldb':
+            import MySQLdb as connector
         elif driver == 'cymysql':
             import cymysql as connector
         elif driver == 'pymysql':
@@ -154,11 +176,20 @@ class Connection(object):
                 params['driver'] = 'MySQL'
         elif driver in ['http', 'https']:
             from . import http as connector
-            if url.port is None:
-                params['port'] = 80
             params['protocol'] = driver
         else:
             raise exceptions.Error(0, f'Unrecognized SingleStore driver: {driver}')
+
+        # Fill in port based on driver, if it wasn't specified
+        if not params['port']:
+            if driver == 'http':
+                params['port'] = 80
+            elif driver == 'https':
+                params['port'] = 443
+            else:
+                params['port'] = 3306
+
+        params['port'] = int(params['port'])
 
         params = {k: v for k, v in params.items() if v is not None}
 
@@ -198,16 +229,9 @@ class Connection(object):
         return False
 
 
-def connect(url: str) -> Connection:
-    return Connection(url)
+def connect(dsn=None, user=None, password=None, host=None,
+            port=None, database=None, driver='mysql.connector') -> 'Connection':
+    return Connection(dsn=dsn, user=user, password=password, host=host,
+                      port=port, database=database, driver=driver)
 
 
-DEFAULT_DRIVER = 'pymysql'
-
-for drv in ['MySQLdb', 'mysql.connector', 'cymysql', 'pyodbc', 'pymysql']:
-    try:
-        importlib.import_module(drv)
-        DEFAULT_DRIVER = drv.lower()
-        break
-    except ImportError:
-        pass

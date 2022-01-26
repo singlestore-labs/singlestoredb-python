@@ -1,11 +1,7 @@
 # SingleStore Python Interface
 
-This project contains a Python interface to the SingleStore database
-and cluster management API. The database interface is more of a meta-API
-that wraps various MySQL-compatible Python interfaces and normalizes
-the differences and also adds support for the SingleStore HTTP API.
-This simply means that you can use your choice of various interfaces all 
-behind the same Python programming API.
+This project contains a DB-API compatible Python interface to the
+SingleStore database and cluster management API.
 
 ## Install
 
@@ -14,36 +10,12 @@ This package can be install from PyPI using `pip`:
 pip install singlestore
 ```
 
-The default installation includes the `pymysql` and `requests` packages
-which can access the SingleStore database using pure Python code. To 
-install additional interfaces such as the MySQLdb connector or the 
-official MySQL Python connector (`mysql.connector`) which may offer
-better performance, either install the connectors separately or include
-them as an optional install:
-```
-# Include the MySQLdb connector
-pip install singlestore[MySQLdb]
-
-# Include the MySQL Python connector
-pip install singlestore[mysqlconnector]
-
-# Include the pyodbc connector
-pip install singlestore[pyodbc]
-
-# Include the cymysql connector
-pip install singlestore[cymysql]
-```
-
 ## Usage
 
 Connections to the SingleStore database are made using URLs that specify
 the connection driver package, server hostname, server port, and user
 credentials. All connections support the
 [Python DB-API 2.0](https://www.python.org/dev/peps/pep-0249/).
-The default connector depends on an order of precedence. This order is
-`MySQLdb`, `mysql.connector`, `cymysql`, `pyodbc`, and `pymysql`.
-If a connector is not explicitly specified, the first importable package
-from the list above is used.
 ```
 import singlestore as s2
 
@@ -65,18 +37,10 @@ for item in cur:
 conn.close()
 ```
 
-The above example used the default connector for doing the actual
-communication with the server using the MySQL wire protocol. You can
-explicitly specify other MySQL-compatible packages as well.
+Connecting to the HTTP API is done as follows:
 ```
-# Use the MySQLdb connector
-conn = s2.connect('mysqldb://user:password@host:3306/db_name')
-
-# Use the mysql.connector connector
-conn = s2.connect('mysqlconnector://user:password@host:3306/db_name')
-
 # Use the HTTP API connector
-conn = s2.connect('http://user:password@host:3306/db_name')
+conn = s2.connect('http://user:password@host:8080/db_name')
 ```
 
 

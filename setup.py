@@ -25,13 +25,8 @@ setup(
         'singlestore',
     ],
     install_requires=[
-        'PyMySQL',
+        'mysql-connector-python',
         'requests',
         'sqlparams',
     ],
-    extras_require={
-        'MySQLdb': ['mysqlclient>=2.0'],
-        'mysqlconnector': ['mysql-connector-python'],
-        'pyodbc': ['pyodbc'],
-    }
 )
