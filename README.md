@@ -1,4 +1,4 @@
-# SingleStore Python Interface
+# <img src="resources/singlestore-logo.png" height="60" valign="middle"/> SingleStore Python Interface
 
 This project contains a DB-API compatible Python interface to the
 SingleStore database and cluster management API.
