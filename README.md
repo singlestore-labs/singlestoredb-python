@@ -1,7 +1,7 @@
 # SingleStore Python Interface
 
-This project contains a DB-API compatible Python interface to the
-SingleStore database and cluster management API.
+This project contains a [DB-API 2.0](https://www.python.org/dev/peps/pep-0249/).
+compatible Python interface to the SingleStore database and cluster management API.
 
 ## Install
 

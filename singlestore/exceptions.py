@@ -46,3 +46,6 @@ class DataError(DatabaseError):
 
 class NotSupportedError(DatabaseError):
     pass
+
+class ClusterManagerError(Error):
+    pass
