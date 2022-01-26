@@ -1,4 +1,4 @@
-# SingleStore Python Interface
+# <img src="resources/singlestore-logo.png" height="60" valign="middle"/> SingleStore Python Interface
 
 This project contains a [DB-API 2.0](https://www.python.org/dev/peps/pep-0249/).
 compatible Python interface to the SingleStore database and cluster management API.
