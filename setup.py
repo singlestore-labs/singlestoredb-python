@@ -29,4 +29,7 @@ setup(
         'requests',
         'sqlparams',
     ],
+    extras_require={
+        'dataframe': ['pandas'],
+    },
 )
