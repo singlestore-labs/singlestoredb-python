@@ -4,6 +4,7 @@ import os
 import re
 import requests
 import sqlparams
+from collections import namedtuple
 from collections.abc import Mapping, Sequence
 from typing import Union, Optional
 from urllib.parse import urlparse
@@ -21,6 +22,11 @@ def _name_check(name):
     if not re.match(r'^[A-Za-z][\w+_]*$', name):
         raise ValueError('Name contains invalid characters')
     return name
+
+
+Description = namedtuple('Description',
+        ['name', 'type_code', 'display_size', 'internal_size',
+         'precision', 'scale', 'null_ok', 'column_flags', 'unknown'])
 
 
 class Cursor(object):
@@ -51,7 +57,7 @@ class Cursor(object):
             item = list(item)
             item[1] = types.ColumnType.get_name(item[1])
             item[6] = not(not(item[6]))
-            out.append(tuple(item))
+            out.append(Description(*item))
         return out
 
     @property
