@@ -6,6 +6,8 @@ from typing import Union, Optional
 from urllib.parse import urljoin
 from . import exceptions
 from . import types
+from .converters import converters
+
 
 paramstyle = 'qmark'
 
@@ -15,7 +17,7 @@ class Cursor(object):
     def __init__(self, connection) -> 'Cursor':
         self.connection = connection
         self._rows = []
-        self.description = []
+        self.description = None
         self.arraysize = 1000
         self.rowcount = 0
         self.messages = []
@@ -68,23 +70,30 @@ class Cursor(object):
 
         out = res.json()
 
-        self.description = []
+        self.description = None
         self._rows = []
         self.rowcount = 0
 
         if sql_type == 'query':
-            self._rows = out['results'][0]['rows']
-            self.rowcount = len(self._rows)
             # description: (name, type_code, display_size, internal_size,
             #               precision, scale, null_ok, column_flags, ?)
+            self.description = []
+            convs = []
             for item in out['results'][0].get('columns', []):
-                self.description.append((item['name'], types.MAP[item['dataType']],
+                col_type = types.ColumnType.get_name(item['dataType'])
+                convs.append(converters[col_type])
+                self.description.append((item['name'], col_type,
                                          None, None, None, None,
-                                         item.get('nullable', False, 0, 0)))
+                                         item.get('nullable', False), 0, 0))
+
+            # Convert data to Python types
+            self._rows = out['results'][0]['rows']
+            for i, row in enumerate(self._rows):
+                self._rows[i] = tuple(x(y) for x, y in zip(convs, row))
+
+            self.rowcount = len(self._rows)
         else:
             self.rowcount = out['rowsAffected']
-
-        return self.rowcount
 
     def executemany(self, query: str, param_seq: Sequence[Union[Sequence, Mapping]]=None):
         # TODO: What to do with the results?
@@ -94,19 +103,28 @@ class Cursor(object):
     def fetchone(self) -> Optional[Sequence]:
         if self._rows:
             return self._rows.pop(0)
+        self.description = None
         return None
 
     def fetchmany(self, size: Optional[int]=None) -> Optional[Sequence]:
-        if self._rows:
-            if size and int(size) > 0:
-                out = []
-                while size > 0:
-                    out.append(self._rows.pop(0))
-                return out
-            out = self.fetchone()
-            if out is not None:
-                return [out]
-        return None
+        if not size or int(size) <= 0:
+            size = self.arraysize
+        out = []
+        while size > 0:
+            row = self.fetchone()
+            if row is None:
+                break
+            out.append(row)
+        return out or None
+
+    def fetchall(self):
+        out = []
+        while True:
+            row = self.fetchone()
+            if row is None:
+                break
+            out.append(row)
+        return out or None
 
     def nextset(self) -> Optional[bool]:
         raise NotImplementedError

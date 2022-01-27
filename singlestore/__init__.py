@@ -1,8 +1,7 @@
 
 __version__ = "1.0.0"
 
-from .connection import connect
-from .dbapi import apilevel, threadsafety, paramstyle
+from .connection import connect, apilevel, threadsafety, paramstyle
 from .exceptions import (
     Warning, Error, InterfaceError, DatabaseError, OperationalError,
     IntegrityError, InternalError, ProgrammingError, NotSupportedError

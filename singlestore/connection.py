@@ -1,12 +1,26 @@
 
 import importlib
 import os
+import re
 import requests
 import sqlparams
 from collections.abc import Mapping, Sequence
 from typing import Union, Optional
 from urllib.parse import urlparse
-from . import exceptions, dbapi
+from . import exceptions, types
+
+
+# DB-API settings
+apilevel = "2.0"
+threadsafety = 1
+paramstyle = "qmark"
+
+
+def _name_check(name):
+    name = name.strip()
+    if not re.match(r'^[A-Za-z][\w+_]*$', name):
+        raise ValueError('Name contains invalid characters')
+    return name
 
 
 class Cursor(object):
@@ -35,6 +49,7 @@ class Cursor(object):
         out = []
         for item in self._cursor.description:
             item = list(item)
+            item[1] = types.ColumnType.get_name(item[1])
             item[6] = not(not(item[6]))
             out.append(tuple(item))
         return out
@@ -49,19 +64,26 @@ class Cursor(object):
     def close(self):
         out = self._cursor.close()
         self._conn = None
-        return out
 
     def execute(self, oper: str, params: Union[Sequence, Mapping]=None):
-        return self._cursor.execute(*self._param_converter.format(oper, params or []))
+        self._cursor.execute(*self._param_converter.format(oper, params or []))
 
     def executemany(self, oper: str, param_seq: Sequence[Union[Sequence, Mapping]]=None):
-        return self._cursor.executemany(*self._param_converter.formatmany(oper, param_seq or []))
+        self._cursor.executemany(*self._param_converter.formatmany(oper, param_seq or []))
 
     def fetchone(self) -> Optional[Sequence]:
         return self._cursor.fetchone()
 
     def fetchmany(self, size: Optional[int]=None) -> Optional[Sequence]:
-        return self._cursor.fetchmany(size=size)
+        return self._cursor.fetchmany(size=size or self.arraysize)
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    def fetchframe(self, size: Optional[int]=None) -> Optional['DataFrame']:
+        from pandas import DataFrame
+        columns = [x[0] for x in self.description]
+        return DataFrame(data=self.fetchall(), columns=columns)
 
     def nextset(self) -> Optional[bool]:
         return self._cursor.nextset()
@@ -77,7 +99,7 @@ class Cursor(object):
         return self._cursor.rownumber
 
     def scroll(self, value, mode='relative'):
-        return self._cursor.scroll(mode=mode)
+        self._cursor.scroll(mode=mode)
 
     @property
     def messages(self) -> Sequence[tuple]:
@@ -106,6 +128,7 @@ class Cursor(object):
 class Connection(object):
 
     arraysize = 1000
+    default_driver = 'mysql.connector'
 
     Warning = exceptions.Warning
     Error = exceptions.Error
@@ -118,7 +141,7 @@ class Connection(object):
     NotSupportedError = exceptions.NotSupportedError
 
     def __init__(self, dsn=None, user=None, password=None, host=None,
-                 port=None, database=None, driver='mysql.connector') -> 'Connection':
+                 port=None, database=None, driver=None, pure_python=False) -> 'Connection':
         self._conn = None
         self.arraysize = type(self).arraysize
         self.errorhandler = None
@@ -158,10 +181,12 @@ class Connection(object):
                 driver = dsn.scheme.lower()
 
         # Load requested driver
-        driver = driver.lower() or os.environ.get('SINGLESTORE_DRIVER',
-                                                  'mysql.connector').lower()
+        driver = (driver or \
+                  os.environ.get('SINGLESTORE_DRIVER', type(self).default_driver)).lower()
+
         if driver in ['mysqlconnector', 'mysql-connector', 'mysql.connector']:
             import mysql.connector as connector
+            params['use_pure'] = pure_python
         elif driver == 'mysqldb':
             import MySQLdb as connector
         elif driver == 'cymysql':
@@ -194,7 +219,7 @@ class Connection(object):
         params = {k: v for k, v in params.items() if v is not None}
 
         self._conn = connector.connect(**params)
-        self._param_converter = sqlparams.SQLParams(dbapi.paramstyle,
+        self._param_converter = sqlparams.SQLParams(paramstyle,
                                                     connector.paramstyle)
 
     def close(self):
@@ -227,6 +252,47 @@ class Connection(object):
         if is_connected is not None and is_connected():
             return True
         return False
+
+    def set_global_var(self, **kwargs):
+        cur = self.cursor()
+        for name, value in kwargs.items():
+            if value is True:
+                value = 'on'
+            elif value is False:
+                valule = 'off'
+            cur.execute('set global {}=?'.format(_name_check(name)), [value])
+
+    def set_session_var(self, **kwargs):
+        cur = self.cursor()
+        for name, value in kwargs.items():
+            if value is True:
+                value = 'on'
+            elif value is False:
+                valule = 'off'
+            cur.execute('set session {}=?'.format(_name_check(name)), [value])
+
+    def get_global_var(self, name):
+        cur = self.cursor()
+        cur.execute('select @@global.{}'.format(_name_check(name)))
+        return list(cur)[0][0]
+
+    def get_session_var(self, name):
+        cur = self.cursor()
+        cur.execute('select @@session.{}'.format(_name_check(name)))
+        return list(cur)[0][0]
+
+    def enable_http_api(self, port=None):
+        cur = self.cursor()
+        if port is not None:
+            self.set_global_var(http_proxy_port=int(port))
+        self.set_global_var(http_api=True)
+        cur.execute('restart proxy')
+        return self.get_global_var('http_proxy_port')
+
+    def disable_http_api(self):
+        cur = self.cursor()
+        self.set_global_var(http_api=False)
+        cur.execute('restart proxy')
 
 
 def connect(dsn=None, user=None, password=None, host=None,
