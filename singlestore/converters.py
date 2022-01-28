@@ -3,6 +3,8 @@
 Data value conversion utilities
 
 '''
+from __future__ import annotations
+
 import datetime
 import decimal
 import json

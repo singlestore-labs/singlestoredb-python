@@ -1,7 +1,13 @@
 #!/usr/bin/env python
-''' SingleStore data type utilities '''
+'''
+SingleStore data type utilities
+
+'''
+from __future__ import annotations
+
 import datetime
 import time
+from typing import Dict
 
 
 Date = datetime.date
@@ -109,8 +115,8 @@ class ColumnType(object):
     STRING = StringDBAPIType('STRING', 0xfe)
     GEOMETRY = DBAPIType('GEOMETRY', 0xff)
 
-    _type_name_map = {}
-    _type_code_map = {}
+    _type_name_map: Dict[str, int] = {}
+    _type_code_map: Dict[int, str] = {}
 
     @classmethod
     def get_code(cls, name):

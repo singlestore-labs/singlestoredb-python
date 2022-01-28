@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-''' Database exeception classes '''
+'''
+Database exeception classes
+
+'''
+from __future__ import annotations
 
 
 class Error(Exception):

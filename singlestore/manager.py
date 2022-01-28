@@ -1,7 +1,14 @@
 #!/usr/bin/env python
-''' SingleStore Cluster Management '''
+'''
+SingleStore Cluster Management
+
+'''
+from __future__ import annotations
+
 import os
 from collections.abc import Sequence
+from typing import Any
+from typing import Dict
 from typing import Optional
 from urllib.parse import urljoin
 
@@ -32,14 +39,14 @@ class Region(object):
 
     '''
 
-    def __init__(self, region_id: str, region: str, provider: str) -> 'Region':
+    def __init__(self, region_id: str, region: str, provider: str):
         self.id = region_id
         self.region = region
         self.provider = provider
-        self._manager = None
+        self._manager: Optional[ClusterManager] = None
 
     @classmethod
-    def from_dict(cls, obj, manager: Optional['ClusterManager'] = None) -> 'Region':
+    def from_dict(cls, obj: Dict[str, str], manager: 'ClusterManager') -> Region:
         '''
         Convert dictionary to a `Region` object
 
@@ -113,7 +120,7 @@ class Cluster(object):
         created_at: str, expires_at: Optional[str] = None,
         firewall_ranges: Optional[Sequence[str]] = None,
         terminated_at: Optional[str] = None,
-    ) -> 'Cluster':
+    ):
         self.name = name
         self.id = cluster_id
         self.region = region
@@ -125,10 +132,10 @@ class Cluster(object):
         self.expires_at = expires_at
         self.firewall_ranges = firewall_ranges
         self.terminated_at = terminated_at
-        self._manager = None
+        self._manager: Optional[ClusterManager] = None
 
     @classmethod
-    def from_dict(cls, obj, manager: Optional['ClusterManager'] = None) -> 'Cluster':
+    def from_dict(cls, obj: Dict[str, Any], manager: 'ClusterManager') -> Cluster:
         '''
         Construct a Cluster from a dictionary of values
 
@@ -146,7 +153,7 @@ class Cluster(object):
         '''
         out = cls(
             name=obj['name'], cluster_id=obj['clusterId'],
-            region=Region.from_dict(obj['region'], manager=manager),
+            region=Region.from_dict(obj['region'], manager),
             size=obj['size'], units=obj['units'],
             state=obj['state'], version=obj['version'],
             created_at=obj['createdAt'], expires_at=obj['expiresAt'],
@@ -160,7 +167,7 @@ class Cluster(object):
         self, name: Optional[str] = None,
         admin_password: Optional[str] = None,
         expires_at: Optional[str] = None,
-        size: Optional[str] = None, firewall_ranges: Sequence[str] = None,
+        size: Optional[str] = None, firewall_ranges: Optional[Sequence[str]] = None,
     ):
         '''
         Update the cluster definition
@@ -179,17 +186,21 @@ class Cluster(object):
             List of allowed incoming IP addresses
 
         '''
+        if self._manager is None:
+            raise ValueError('ClusterManager value has not been set')
         data = {
             k: v for k, v in dict(
                 name=name, adminPassword=admin_password,
                 expiresAt=expires_at, size=size,
                 firewallRanges=firewall_ranges,
-            ) if v is not None
+            ).items() if v is not None
         }
-        self._manager._patch(f'clusters/{self.cluster_id}', json=data)
+        self._manager._patch(f'clusters/{self.id}', json=data)
 
     def suspend(self):
         ''' Suspend the cluster '''
+        if self._manager is None:
+            raise ValueError('ClusterManager value has not been set')
         self._manager._post(
             f'clusters/{self.cluster_id}/suspend',
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
@@ -197,6 +208,8 @@ class Cluster(object):
 
     def resume(self):
         ''' Resume the cluster '''
+        if self._manager is None:
+            raise ValueError('ClusterManager value has not been set')
         self._manager._post(
             f'clusters/{self.cluster_id}/resume',
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
@@ -204,6 +217,8 @@ class Cluster(object):
 
     def terminate(self):
         ''' Terminate the cluster '''
+        if self._manager is None:
+            raise ValueError('ClusterManager value has not been set')
         self._manager._delete(f'clusters/{self.cluster_id}')
 
 
@@ -232,7 +247,7 @@ class ClusterManager(object):
     def __init__(
         self, access_token: str = None, version: str = None,
         base_url: str = None,
-    ) -> 'ClusterManager':
+    ):
         access_token = (
             access_token or
             os.environ.get('SINGLESTORE_MANAGEMENT_TOKEN', None)
@@ -248,7 +263,7 @@ class ClusterManager(object):
             version or type(self).default_version,
         ) + '/'
 
-    def _check(self, res):
+    def _check(self, res: requests.Response):
         '''
         Check the HTTP response status code and raise an exception as needed
 
@@ -263,10 +278,10 @@ class ClusterManager(object):
 
         '''
         if res.status_code >= 400:
-            raise exceptions.ClusterError(res.status_code, res.text)
+            raise exceptions.ClusterManagerError(res.status_code, res.text)
         return res
 
-    def _get(self, path, *args, **kwargs):
+    def _get(self, path: str, *args, **kwargs):
         '''
         Invoke a GET request
 
@@ -291,7 +306,7 @@ class ClusterManager(object):
             ),
         )
 
-    def _post(self, path, *args, **kwargs):
+    def _post(self, path: str, *args, **kwargs):
         '''
         Invoke a POST request
 
@@ -316,7 +331,7 @@ class ClusterManager(object):
             ),
         )
 
-    def _put(self, path, *args, **kwargs):
+    def _put(self, path: str, *args, **kwargs):
         '''
         Invoke a PUT request
 
@@ -341,7 +356,7 @@ class ClusterManager(object):
             ),
         )
 
-    def _delete(self, path, *args, **kwargs):
+    def _delete(self, path: str, *args, **kwargs):
         '''
         Invoke a DELETE request
 
@@ -366,7 +381,7 @@ class ClusterManager(object):
             ),
         )
 
-    def _patch(self, path, *args, **kwargs):
+    def _patch(self, path: str, *args, **kwargs):
         '''
         Invoke a PATCH request
 
@@ -395,13 +410,13 @@ class ClusterManager(object):
     def clusters(self) -> Sequence[Cluster]:
         ''' List of available clusters '''
         res = self._get('clusters')
-        return [Cluster.from_dict(item, manager=self) for item in res.json()]
+        return [Cluster.from_dict(item, self) for item in res.json()]
 
     @property
     def regions(self) -> Sequence[Region]:
         ''' List of available regions '''
         res = self._get('regions')
-        return [Region.from_dict(item, manager=self) for item in res.json()]
+        return [Region.from_dict(item, self) for item in res.json()]
 
     def create_cluster(
         self, name: str, region_id: str, admin_password: str,
@@ -440,7 +455,7 @@ class ClusterManager(object):
                 plan=plan,
             ),
         )
-        return Cluster.from_obj(res.json(), manager=self)
+        return Cluster.from_dict(res.json(), manager=self)
 
     def get_cluster(self, cluster_id: str):
         '''
@@ -457,11 +472,11 @@ class ClusterManager(object):
 
         '''
         res = self._get(f'clusters/{cluster_id}')
-        return Cluster.from_obj(res.json(), manager=self)
+        return Cluster.from_dict(res.json(), manager=self)
 
 
 def manage_cluster(
-    access_token: str = None,
+    access_token: Optional[str] = None,
     version: str = ClusterManager.default_version,
     base_url: str = ClusterManager.default_base_url,
 ) -> ClusterManager:

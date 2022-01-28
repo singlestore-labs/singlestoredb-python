@@ -1,8 +1,14 @@
 #!/usr/bin/env python
-''' SingleStore HTTP API interface '''
+'''
+SingleStore HTTP API interface
+
+'''
+from __future__ import annotations
+
 import re
 from collections.abc import Mapping
 from collections.abc import Sequence
+from typing import Any
 from typing import Optional
 from typing import Union
 from urllib.parse import urljoin
@@ -36,16 +42,16 @@ class Cursor(object):
 
     '''
 
-    def __init__(self, connection) -> 'Cursor':
-        self.connection = connection
-        self._rows = []
-        self.description = None
-        self.arraysize = 1000
-        self.rowcount = 0
-        self.messages = []
-        self.lastrowid = None
+    def __init__(self, connection: Connection):
+        self.connection: Connection = connection
+        self._rows: list[tuple[Any, ...]] = []
+        self.description: Optional[list[tuple]] = None
+        self.arraysize: int = 1000
+        self.rowcount: int = 0
+        self.messages: list[tuple[int, str]] = []
+        self.lastrowid: Optional[int] = None
 
-    def _get(self, path, *args, **kwargs):
+    def _get(self, path: str, *args, **kwargs):
         '''
         Invoke a GET request on the HTTP connection
 
@@ -65,7 +71,7 @@ class Cursor(object):
         '''
         return self.connection._get(path, *args, **kwargs)
 
-    def _post(self, path, *args, **kwargs):
+    def _post(self, path: str, *args, **kwargs):
         '''
         Invoke a POST request on the HTTP connection
 
@@ -85,7 +91,7 @@ class Cursor(object):
         '''
         return self.connection._post(path, *args, **kwargs)
 
-    def _delete(self, path, *args, **kwargs):
+    def _delete(self, path: str, *args, **kwargs):
         '''
         Invoke a DELETE request on the HTTP connection
 
@@ -185,7 +191,7 @@ class Cursor(object):
             # Convert data to Python types
             self._rows = out['results'][0]['rows']
             for i, row in enumerate(self._rows):
-                self._rows[i] = tuple(x(y) for x, y in zip(convs, row))
+                self._rows[i] = tuple(x(y) for x, y in zip(convs, row))  # type: ignore
 
             self.rowcount = len(self._rows)
         else:
@@ -193,7 +199,7 @@ class Cursor(object):
 
     def executemany(
         self, query: str,
-        param_seq: Sequence[Union[Sequence, Mapping]] = None,
+        param_seq: Optional[Sequence[Union[Sequence, Mapping]]] = None,
     ):
         '''
         Execute SQL code against multiple sets of parameters
@@ -207,8 +213,11 @@ class Cursor(object):
 
         '''
         # TODO: What to do with the results?
-        for params in param_seq:
-            self.execute(query, params)
+        if param_seq:
+            for params in param_seq:
+                self.execute(query, params)
+        else:
+            self.execute(query)
 
     def fetchone(self) -> Optional[Sequence]:
         '''
@@ -379,7 +388,7 @@ class Connection(object):
         self._url = f'{protocol}://{host}:{port}/api/{version}/'
         self.messages = []
 
-    def _get(self, path, *args, **kwargs):
+    def _get(self, path: str, *args, **kwargs):
         '''
         Invoke a GET request on the HTTP connection
 
@@ -399,7 +408,7 @@ class Connection(object):
         '''
         return self._sess.get(urljoin(self._url, path), *args, **kwargs)
 
-    def _post(self, path, *args, **kwargs):
+    def _post(self, path: str, *args, **kwargs):
         '''
         Invoke a POST request on the HTTP connection
 
@@ -419,7 +428,7 @@ class Connection(object):
         '''
         return self._sess.post(urljoin(self._url, path), *args, **kwargs)
 
-    def _delete(self, path, *args, **kwargs):
+    def _delete(self, path: str, *args, **kwargs):
         '''
         Invoke a DELETE request on the HTTP connection
 
