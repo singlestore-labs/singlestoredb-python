@@ -1,69 +1,102 @@
+#!/usr/bin/env python
+
+'''
+Data value conversion utilities
+
+'''
 
 import datetime
 import decimal
 import json
-from .types import ColumnType, DBAPIType
 
 
 def int_or_none(x):
+    ''' Convert value to int or None '''
     if x is None:
         return
     return int(x)
 
+
 def float_or_none(x):
+    ''' Convert value to float or None '''
     if x is None:
         return
     return float(x)
 
+
 def decimal_or_none(x):
+    ''' Convert value to decimal or None '''
     if x is None:
         return
     return decimal.Decimal(x)
 
+
 def date_or_none(x):
+    ''' Convert value to date or None '''
     if x is None:
         return
     return datetime.date.fromisoformat(x)
 
+
 def time_or_none(x):
+    ''' Convert value to time or None '''
     if x is None:
         return
     return datetime.time.fromisoformat(x)
 
+
 def datetime_or_none(x):
+    ''' Convert value to datetime or None '''
     if x is None:
         return
     return datetime.datetime.fromisoformat(x)
 
+
 def bytes_or_none(x):
+    ''' Convert value to bytes or None '''
     if x is None:
         return
+    if isinstance(x, bytes):
+        return x
     return bytes(x)
 
-def string_or_none(x):
+
+def string_or_none(x, encoding='utf-8'):
+    ''' Convert value to string or None '''
     if x is None:
         return
-    return str(x)
+    if isinstance(x, str):
+        return x
+    return str(x, 'utf-8')
+
 
 def none(x):
+    ''' Return None '''
     return
 
+
 def json_or_none(x):
+    ''' Convert JSON to dict or None '''
     if x is None:
         return
     return json.loads(x)
 
+
 def set_or_none(x):
+    ''' Convert value to set of strings or None '''
     if x is None:
         return
     return set(y.strip() for y in x.split(','))
 
+
 def geometry_or_none(x):
+    ''' Convert value to geometry coordinates or None '''
     if x is None:
         return
     return x
 
 
+# Map of database types and conversion functions
 converters = {
     'DECIMAL': decimal_or_none,
     0x00: decimal_or_none,

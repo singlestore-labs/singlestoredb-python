@@ -1,5 +1,8 @@
+#!/usr/bin/env python
 
-__version__ = "1.0.0"
+''' SingleStore database module '''
+
+__version__ = '1.0.0'
 
 from .connection import connect, apilevel, threadsafety, paramstyle
 from .exceptions import (
