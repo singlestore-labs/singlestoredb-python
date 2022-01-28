@@ -1,12 +1,14 @@
 #!/usr/bin/env python
-
 ''' SingleStore HTTP API interface '''
-
 import re
-import requests
-from collections.abc import Mapping, Sequence
-from typing import Union, Optional
+from collections.abc import Mapping
+from collections.abc import Sequence
+from typing import Optional
+from typing import Union
 from urllib.parse import urljoin
+
+import requests
+
 from . import exceptions
 from . import types
 from .converters import converters
@@ -174,9 +176,11 @@ class Cursor(object):
             for item in out['results'][0].get('columns', []):
                 col_type = types.ColumnType.get_name(item['dataType'])
                 convs.append(converters[col_type])
-                self.description.append((item['name'], col_type,
-                                         None, None, None, None,
-                                         item.get('nullable', False), 0, 0))
+                self.description.append((
+                    item['name'], col_type,
+                    None, None, None, None,
+                    item.get('nullable', False), 0, 0,
+                ))
 
             # Convert data to Python types
             self._rows = out['results'][0]['rows']
@@ -187,8 +191,10 @@ class Cursor(object):
         else:
             self.rowcount = out['rowsAffected']
 
-    def executemany(self, query: str,
-                    param_seq: Sequence[Union[Sequence, Mapping]] = None):
+    def executemany(
+        self, query: str,
+        param_seq: Sequence[Union[Sequence, Mapping]] = None,
+    ):
         '''
         Execute SQL code against multiple sets of parameters
 
@@ -354,8 +360,10 @@ class Connection(object):
 
     '''
 
-    def __init__(self, host=None, port=None, user=None, password=None,
-                 database=None, protocol='http', version='v1'):
+    def __init__(
+        self, host=None, port=None, user=None, password=None,
+        database=None, protocol='http', version='v1',
+    ):
         host = host or 'localhost'
         port = port or 3306
 
@@ -480,8 +488,10 @@ class Connection(object):
         return False
 
 
-def connect(host=None, port=None, user=None, password=None,
-            database=None, protocol='http', version='v1') -> Connection:
+def connect(
+    host=None, port=None, user=None, password=None,
+    database=None, protocol='http', version='v1',
+) -> Connection:
     '''
     SingleStore HTTP database connection
 
@@ -508,5 +518,7 @@ def connect(host=None, port=None, user=None, password=None,
     Connection
 
     '''
-    return Connection(host=host, port=port, user=user, password=password,
-                      database=database, protocol=protocol, version=version)
+    return Connection(
+        host=host, port=port, user=user, password=password,
+        database=database, protocol=protocol, version=version,
+    )

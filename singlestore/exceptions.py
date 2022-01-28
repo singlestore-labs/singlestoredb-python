@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 ''' Database exeception classes '''
 
 

@@ -1,10 +1,8 @@
 #!/usr/bin/env python
-
 '''
 Data value conversion utilities
 
 '''
-
 import datetime
 import decimal
 import json

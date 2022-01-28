@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-
 ''' SingleStore Cluster Management '''
-
 import os
-import requests
 from collections.abc import Sequence
 from typing import Optional
 from urllib.parse import urljoin
+
+import requests
+
 from . import exceptions
 
 
@@ -55,9 +55,11 @@ class Region(object):
         Region
 
         '''
-        out = cls(region_id=obj['regionId'],
-                  region=obj['region'],
-                  provider=obj['provider'])
+        out = cls(
+            region_id=obj['regionId'],
+            region=obj['region'],
+            provider=obj['provider'],
+        )
         out._manager = manager
         return out
 
@@ -105,11 +107,13 @@ class Cluster(object):
 
     '''
 
-    def __init__(self, name: str, cluster_id: str, region: Region, size: str,
-                 units: float, state: str, version: str,
-                 created_at: str, expires_at: Optional[str] = None,
-                 firewall_ranges: Optional[Sequence[str]] = None,
-                 terminated_at: Optional[str] = None) -> 'Cluster':
+    def __init__(
+        self, name: str, cluster_id: str, region: Region, size: str,
+        units: float, state: str, version: str,
+        created_at: str, expires_at: Optional[str] = None,
+        firewall_ranges: Optional[Sequence[str]] = None,
+        terminated_at: Optional[str] = None,
+    ) -> 'Cluster':
         self.name = name
         self.id = cluster_id
         self.region = region
@@ -140,20 +144,24 @@ class Cluster(object):
         Cluster
 
         '''
-        out = cls(name=obj['name'], cluster_id=obj['clusterId'],
-                  region=Region.from_dict(obj['region'], manager=manager),
-                  size=obj['size'], units=obj['units'],
-                  state=obj['state'], version=obj['version'],
-                  created_at=obj['createdAt'], expires_at=obj['expiresAt'],
-                  firewall_ranges=obj['firewallRanges'],
-                  terminated_at=obj['terminatedAt'])
+        out = cls(
+            name=obj['name'], cluster_id=obj['clusterId'],
+            region=Region.from_dict(obj['region'], manager=manager),
+            size=obj['size'], units=obj['units'],
+            state=obj['state'], version=obj['version'],
+            created_at=obj['createdAt'], expires_at=obj['expiresAt'],
+            firewall_ranges=obj['firewallRanges'],
+            terminated_at=obj['terminatedAt'],
+        )
         out._manager = manager
         return out
 
-    def update(self, name: Optional[str] = None,
-               admin_password: Optional[str] = None,
-               expires_at: Optional[str] = None,
-               size: Optional[str] = None, firewall_ranges: Sequence[str] = None):
+    def update(
+        self, name: Optional[str] = None,
+        admin_password: Optional[str] = None,
+        expires_at: Optional[str] = None,
+        size: Optional[str] = None, firewall_ranges: Sequence[str] = None,
+    ):
         '''
         Update the cluster definition
 
@@ -171,20 +179,28 @@ class Cluster(object):
             List of allowed incoming IP addresses
 
         '''
-        data = {k: v for k, v in dict(name=name, adminPassword=admin_password,
-                                      expiresAt=expires_at, size=size,
-                                      firewallRanges=firewall_ranges) if v is not None}
+        data = {
+            k: v for k, v in dict(
+                name=name, adminPassword=admin_password,
+                expiresAt=expires_at, size=size,
+                firewallRanges=firewall_ranges,
+            ) if v is not None
+        }
         self._manager._patch(f'clusters/{self.cluster_id}', json=data)
 
     def suspend(self):
         ''' Suspend the cluster '''
-        self._manager._post(f'clusters/{self.cluster_id}/suspend',
-                            headers={'Content-Type': 'application/x-www-form-urlencoded'})
+        self._manager._post(
+            f'clusters/{self.cluster_id}/suspend',
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+        )
 
     def resume(self):
         ''' Resume the cluster '''
-        self._manager._post(f'clusters/{self.cluster_id}/resume',
-                            headers={'Content-Type': 'application/x-www-form-urlencoded'})
+        self._manager._post(
+            f'clusters/{self.cluster_id}/resume',
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+        )
 
     def terminate(self):
         ''' Terminate the cluster '''
@@ -213,18 +229,24 @@ class ClusterManager(object):
     default_version = 'v0beta'
     default_base_url = 'https://api.singlestore.com'
 
-    def __init__(self, access_token: str = None, version: str = None,
-                 base_url: str = None) -> 'ClusterManager':
-        access_token = (access_token or
-                        os.environ.get('SINGLESTORE_MANAGEMENT_TOKEN', None))
+    def __init__(
+        self, access_token: str = None, version: str = None,
+        base_url: str = None,
+    ) -> 'ClusterManager':
+        access_token = (
+            access_token or
+            os.environ.get('SINGLESTORE_MANAGEMENT_TOKEN', None)
+        )
         self._sess = requests.Session()
         self._sess.headers.update({
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json',
             'Accept': 'application/json',
         })
-        self._base_url = urljoin(base_url or type(self).default_base_url,
-                                 version or type(self).default_version) + '/'
+        self._base_url = urljoin(
+            base_url or type(self).default_base_url,
+            version or type(self).default_version,
+        ) + '/'
 
     def _check(self, res):
         '''
@@ -262,8 +284,12 @@ class ClusterManager(object):
         requests.Response
 
         '''
-        return self._check(self._sess.get(urljoin(self._base_url, path),
-                                          *args, **kwargs))
+        return self._check(
+            self._sess.get(
+                urljoin(self._base_url, path),
+                *args, **kwargs,
+            ),
+        )
 
     def _post(self, path, *args, **kwargs):
         '''
@@ -283,8 +309,12 @@ class ClusterManager(object):
         requests.Response
 
         '''
-        return self._check(self._sess.post(urljoin(self._base_url, path),
-                                           *args, **kwargs))
+        return self._check(
+            self._sess.post(
+                urljoin(self._base_url, path),
+                *args, **kwargs,
+            ),
+        )
 
     def _put(self, path, *args, **kwargs):
         '''
@@ -304,8 +334,12 @@ class ClusterManager(object):
         requests.Response
 
         '''
-        return self._check(self._sess.put(urljoin(self._base_url, path),
-                                          *args, **kwargs))
+        return self._check(
+            self._sess.put(
+                urljoin(self._base_url, path),
+                *args, **kwargs,
+            ),
+        )
 
     def _delete(self, path, *args, **kwargs):
         '''
@@ -325,8 +359,12 @@ class ClusterManager(object):
         requests.Response
 
         '''
-        return self._check(self._sess.delete(urljoin(self._base_url, path),
-                                             *args, **kwargs))
+        return self._check(
+            self._sess.delete(
+                urljoin(self._base_url, path),
+                *args, **kwargs,
+            ),
+        )
 
     def _patch(self, path, *args, **kwargs):
         '''
@@ -346,8 +384,12 @@ class ClusterManager(object):
         requests.Response
 
         '''
-        return self._check(self._sess.patch(urljoin(self._base_url, path),
-                                            *args, **kwargs))
+        return self._check(
+            self._sess.patch(
+                urljoin(self._base_url, path),
+                *args, **kwargs,
+            ),
+        )
 
     @property
     def clusters(self) -> Sequence[Cluster]:
@@ -361,9 +403,11 @@ class ClusterManager(object):
         res = self._get('regions')
         return [Region.from_dict(item, manager=self) for item in res.json()]
 
-    def create_cluster(self, name: str, region_id: str, admin_password: str,
-                       firewall_ranges: Sequence[str], expires_at: Optional[str] = None,
-                       size: Optional[str] = None, plan: Optional[str] = None) -> Cluster:
+    def create_cluster(
+        self, name: str, region_id: str, admin_password: str,
+        firewall_ranges: Sequence[str], expires_at: Optional[str] = None,
+        size: Optional[str] = None, plan: Optional[str] = None,
+    ) -> Cluster:
         '''
         Create a new cluster
 
@@ -389,11 +433,13 @@ class ClusterManager(object):
         Cluster
 
         '''
-        res = self._post('clusters', json=dict(
-            name=name, regionID=region_id, adminPassword=admin_password,
-            expiresAt=expires_at, size=size, firewallRanges=firewall_ranges,
-            plan=plan
-        ))
+        res = self._post(
+            'clusters', json=dict(
+                name=name, regionID=region_id, adminPassword=admin_password,
+                expiresAt=expires_at, size=size, firewallRanges=firewall_ranges,
+                plan=plan,
+            ),
+        )
         return Cluster.from_obj(res.json(), manager=self)
 
     def get_cluster(self, cluster_id: str):
@@ -414,9 +460,11 @@ class ClusterManager(object):
         return Cluster.from_obj(res.json(), manager=self)
 
 
-def manage_cluster(access_token: str = None,
-                   version: str = ClusterManager.default_version,
-                   base_url: str = ClusterManager.default_base_url) -> ClusterManager:
+def manage_cluster(
+    access_token: str = None,
+    version: str = ClusterManager.default_version,
+    base_url: str = ClusterManager.default_base_url,
+) -> ClusterManager:
     '''
     Retrieve a SingleStore cluster manager
 

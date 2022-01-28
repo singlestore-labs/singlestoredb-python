@@ -1,23 +1,27 @@
 #!/usr/bin/env python
-
 '''
 SingleStore database connections and cursors
 
 '''
-
 import os
 import re
-import sqlparams
-from collections.abc import Mapping, Sequence
-from typing import Union, Optional, NamedTuple
+from collections.abc import Mapping
+from collections.abc import Sequence
+from typing import NamedTuple
+from typing import Optional
+from typing import Union
 from urllib.parse import urlparse
-from . import exceptions, types
+
+import sqlparams
+
+from . import exceptions
+from . import types
 
 
 # DB-API settings
-apilevel = "2.0"
+apilevel = '2.0'
 threadsafety = 1
-paramstyle = "qmark"
+paramstyle = 'qmark'
 
 
 def _name_check(name):
@@ -144,8 +148,10 @@ class Cursor(object):
         '''
         self._cursor.execute(*self._param_converter.format(oper, params or []))
 
-    def executemany(self, oper: str,
-                    param_seq: Sequence[Union[Sequence, Mapping]] = None):
+    def executemany(
+        self, oper: str,
+        param_seq: Sequence[Union[Sequence, Mapping]] = None,
+    ):
         '''
         Execute SQL code against multiple sets of parameters
 
@@ -343,9 +349,11 @@ class Connection(object):
     ProgrammingError = exceptions.ProgrammingError
     NotSupportedError = exceptions.NotSupportedError
 
-    def __init__(self, dsn=None, user=None, password=None, host=None,
-                 port=None, database=None, driver=None,
-                 pure_python=False) -> 'Connection':
+    def __init__(
+        self, dsn=None, user=None, password=None, host=None,
+        port=None, database=None, driver=None,
+        pure_python=False,
+    ) -> 'Connection':
         self._conn = None
         self.arraysize = type(self).arraysize
         self.errorhandler = None
@@ -385,8 +393,10 @@ class Connection(object):
                 driver = dsn.scheme.lower()
 
         # Load requested driver
-        driver = (driver or
-                  os.environ.get('SINGLESTORE_DRIVER', type(self).default_driver)).lower()
+        driver = (
+            driver or
+            os.environ.get('SINGLESTORE_DRIVER', type(self).default_driver)
+        ).lower()
 
         if driver in ['mysqlconnector', 'mysql-connector', 'mysql.connector']:
             import mysql.connector as connector
@@ -423,8 +433,10 @@ class Connection(object):
         params = {k: v for k, v in params.items() if v is not None}
 
         self._conn = connector.connect(**params)
-        self._param_converter = sqlparams.SQLParams(paramstyle,
-                                                    connector.paramstyle)
+        self._param_converter = sqlparams.SQLParams(
+            paramstyle,
+            connector.paramstyle,
+        )
 
     def close(self):
         ''' Close the database connection '''
@@ -574,8 +586,10 @@ class Connection(object):
         cur.execute('restart proxy')
 
 
-def connect(dsn=None, user=None, password=None, host=None,
-            port=None, database=None, driver=None, pure_python=False) -> 'Connection':
+def connect(
+    dsn=None, user=None, password=None, host=None,
+    port=None, database=None, driver=None, pure_python=False,
+) -> 'Connection':
     '''
     Return a SingleStore database connection
 
@@ -617,6 +631,8 @@ def connect(dsn=None, user=None, password=None, host=None,
     Connection
 
     '''
-    return Connection(dsn=dsn, user=user, password=password, host=host,
-                      port=port, database=database, driver=driver,
-                      pure_python=pure_python)
+    return Connection(
+        dsn=dsn, user=user, password=password, host=host,
+        port=port, database=database, driver=driver,
+        pure_python=pure_python,
+    )

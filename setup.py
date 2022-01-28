@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-
 from setuptools import setup
+
 from singlestore import __version__
 
 setup(

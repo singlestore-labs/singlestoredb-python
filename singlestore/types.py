@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-
 ''' SingleStore data type utilities '''
-
 import datetime
 import time
 
@@ -47,8 +45,10 @@ class DBAPIType(object):
         return not(self.__eq__(other))
 
     def __str__(self):
-        return "<{} object [{}]>".format(type(self).__name__,
-                                         ', '.join(str(x) for x in sorted(self.values)))
+        return '<{} object [{}]>'.format(
+            type(self).__name__,
+            ', '.join(str(x) for x in sorted(self.values)),
+        )
 
     def __repr__(self):
         return str(self)
