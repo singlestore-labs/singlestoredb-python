@@ -23,14 +23,14 @@ class Error(Exception):
 
     '''
 
-    def __init__(self, code, message):
+    def __init__(self, code: int, message: str):
         self.code = code
         self.message = message
 
-    def __str__(self):
+    def __str__(self) -> str:
         return '[{}] {}'.format(self.code, self.message)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self)
 
 

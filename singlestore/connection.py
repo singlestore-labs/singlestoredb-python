@@ -9,6 +9,10 @@ import os
 import re
 from collections.abc import Mapping
 from collections.abc import Sequence
+from typing import Any
+from typing import Dict
+from typing import Iterable
+from typing import List
 from typing import NamedTuple
 from typing import Optional
 from typing import Union
@@ -26,7 +30,7 @@ threadsafety = 1
 paramstyle = 'qmark'
 
 
-def _name_check(name):
+def _name_check(name: str) -> str:
     '''
     Make sure the given name is a legal variable name
 
@@ -80,14 +84,17 @@ class Cursor(object):
 
     '''
 
-    def __init__(self, connection, cursor, param_converter):
+    def __init__(
+        self, connection: Connection, cursor: Any,
+        param_converter: sqlparams.SQLParams,
+    ):
         self.errorhandler = connection.errorhandler
-        self._conn = connection
+        self._conn: Optional[Connection] = connection
         self._cursor = cursor
         self._param_converter = param_converter
 
     @property
-    def connection(self) -> Connection:
+    def connection(self) -> Optional[Connection]:
         ''' The Connection that the cursor belongs to '''
         return self._conn
 
@@ -97,12 +104,12 @@ class Cursor(object):
         return self._cursor.arraysize
 
     @arraysize.setter
-    def arraysize(self, val: int):
+    def arraysize(self, val: int) -> None:
         ''' Set the batch size used by `fetchmany` '''
         self._cursor.arraysize = val
 
     @property
-    def description(self) -> Sequence:
+    def description(self) -> List[Description]:
         ''' Column descriptions for the current result set '''
         out = []
         for item in self._cursor.description:
@@ -117,7 +124,10 @@ class Cursor(object):
         ''' Number of rows the last execute produced or affected '''
         return self._cursor.rowcount
 
-    def callproc(self, name: str, params: Union[Sequence, Mapping, None] = None):
+    def callproc(
+        self, name: str,
+        params: Optional[Union[Sequence[Any], Mapping[str, Any]]] = None,
+    ) -> None:
         '''
         Call a stored procedure
 
@@ -131,12 +141,15 @@ class Cursor(object):
         '''
         self._cursor.callproc(name, params)
 
-    def close(self):
+    def close(self) -> None:
         ''' Close the cursor '''
         self._cursor.close()
         self._conn = None
 
-    def execute(self, oper: str, params: Union[Sequence, Mapping] = None):
+    def execute(
+        self, oper: str,
+        params: Optional[Union[Sequence[Any], Mapping[str, Any]]] = None,
+    ) -> None:
         '''
         Execute a SQL statement
 
@@ -152,8 +165,8 @@ class Cursor(object):
 
     def executemany(
         self, oper: str,
-        param_seq: Sequence[Union[Sequence, Mapping]] = None,
-    ):
+        param_seq: Optional[Sequence[Union[Sequence[Any], Mapping[str, Any]]]] = None,
+    ) -> None:
         '''
         Execute SQL code against multiple sets of parameters
 
@@ -167,7 +180,7 @@ class Cursor(object):
         '''
         self._cursor.executemany(*self._param_converter.formatmany(oper, param_seq or []))
 
-    def fetchone(self) -> Optional[tuple]:
+    def fetchone(self) -> Optional[tuple[Any]]:
         '''
         Fetch a single row from the result set
 
@@ -181,7 +194,7 @@ class Cursor(object):
         '''
         return self._cursor.fetchone()
 
-    def fetchmany(self, size: Optional[int] = None) -> Optional[Sequence[tuple]]:
+    def fetchmany(self, size: Optional[int] = None) -> Optional[Sequence[tuple[Any]]]:
         '''
         Fetch `size` rows from the result
 
@@ -197,7 +210,7 @@ class Cursor(object):
         '''
         return self._cursor.fetchmany(size=size or self.arraysize)
 
-    def fetchall(self) -> Optional[Sequence[tuple]]:
+    def fetchall(self) -> Optional[Sequence[tuple[Any]]]:
         '''
         Fetch all rows in the result set
 
@@ -231,48 +244,48 @@ class Cursor(object):
         ''' Skip to the next available result set '''
         raise NotImplementedError
 
-    def setinputsizes(self, sizes: Sequence):
+    def setinputsizes(self, sizes: Sequence[int]) -> None:
         ''' Predefine memory areas for parameters '''
         self._cursor.setinputsizes(sizes)
 
-    def setoutputsize(self, size: int, column=None):
+    def setoutputsize(self, size: int, column: Optional[str] = None) -> None:
         ''' Set a column buffer size for fetches of large columns '''
         self._cursor.setoutputsize(size, column)
 
-    @property
+    @ property
     def rownumber(self) -> Optional[int]:
         ''' Current zero-based index of the cursor in the result set '''
         return self._cursor.rownumber
 
-    def scroll(self, value, mode='relative'):
+    def scroll(self, value: int, mode: str = 'relative') -> None:
         ''' Scroll the cursor to the position in the result set '''
         self._cursor.scroll(mode=mode)
 
-    @property
-    def messages(self) -> Sequence[tuple]:
+    @ property
+    def messages(self) -> Sequence[tuple[int, str]]:
         ''' List of received messages '''
         return self._cursor.messages
 
-    def next(self):
+    def next(self) -> Optional[Sequence[Any]]:
         ''' Return the next row from the result set for use in iterators '''
         return self._cursor.next()
 
     __next__ = next
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable[Sequence[Any]]:
         ''' Return result iterator '''
         return self._cursor.__iter__()
 
-    @property
-    def lastrowid(self):
+    @ property
+    def lastrowid(self) -> Optional[int]:
         ''' The rowid of the last modified row '''
         return self._cursor.lastrowid()
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         ''' Enter a context '''
         pass
 
-    def __exit__(self):
+    def __exit__(self) -> None:
         ''' Exit a context '''
         self.close()
 
@@ -285,6 +298,8 @@ class Cursor(object):
         bool
 
         '''
+        if self._conn is None:
+            return False
         return self._conn.is_connected()
 
 
@@ -338,8 +353,8 @@ class Connection(object):
 
     '''
 
-    arraysize = 1000
-    default_driver = 'mysql.connector'
+    arraysize: int = 1000
+    default_driver: str = 'mysql.connector'
 
     Warning = exceptions.Warning
     Error = exceptions.Error
@@ -352,16 +367,17 @@ class Connection(object):
     NotSupportedError = exceptions.NotSupportedError
 
     def __init__(
-        self, dsn=None, user=None, password=None, host=None,
-        port=None, database=None, driver=None,
-        pure_python=False,
+            self, dsn: Optional[str] = None, user: Optional[str] = None,
+            password: Optional[str] = None, host: Optional[str] = None,
+            port: Optional[int] = None, database: Optional[str] = None,
+            driver: Optional[str] = None, pure_python: Optional[bool] = False,
     ):
-        self._conn = None
+        self._conn: Optional[Any] = None
         self.arraysize = type(self).arraysize
         self.errorhandler = None
 
         # Setup connection parameters
-        params = {}
+        params: Dict[str, Any] = {}
         params['host'] = host or os.environ.get('SINGLESTORE_HOST', '127.0.0.1')
         params['port'] = port or os.environ.get('SINGLESTORE_PORT', None)
         params['database'] = database or os.environ.get('SINGLESTORE_DATABASE', None)
@@ -377,49 +393,51 @@ class Connection(object):
             if '//' not in dsn:
                 dsn = '//' + dsn
 
-            dsn = urlparse(dsn, scheme='auto', allow_fragments=True)
+            parts = urlparse(dsn, scheme='singlestore', allow_fragments=True)
 
-            dsn_db = dsn.path
+            dsn_db = parts.path
             if dsn_db.startswith('/'):
                 dsn_db = dsn_db.split('/')[1].strip()
-            dsn_db = dsn_db.split('/')[0].strip() or None
+            dsn_db = dsn_db.split('/')[0].strip() or ''
 
-            params['host'] = dsn.hostname or params['host']
-            params['port'] = dsn.port or params['port']
+            params['host'] = parts.hostname or params['host']
+            params['port'] = parts.port or params['port']
             params['database'] = dsn_db or params['database']
-            params['user'] = dsn.username or params['user']
-            if dsn.password is not None:
-                params['password'] = dsn.password
+            params['user'] = parts.username or params['user']
+            if parts.password is not None:
+                params['password'] = parts.password
 
-            if dsn.scheme != 'auto':
-                driver = dsn.scheme.lower()
+            if parts.scheme != 'singlestore':
+                driver = parts.scheme.lower()
 
         # Load requested driver
-        driver = (
-            driver or
-            os.environ.get('SINGLESTORE_DRIVER', type(self).default_driver)
-        ).lower()
+        drv_name = re.sub(
+            r'^singlestore\+', r'', (  # type: ignore
+                driver or
+                os.environ.get('SINGLESTORE_DRIVER', type(self).default_driver)
+            ).lower(),
+        )
 
-        if driver in ['mysqlconnector', 'mysql-connector', 'mysql.connector']:
+        if drv_name in ['mysqlconnector', 'mysql-connector', 'mysql.connector']:
             import mysql.connector as connector
             params['use_pure'] = pure_python
-        elif driver == 'mysqldb':
-            import MySQLdb as connector  # type: ignore
-        elif driver == 'cymysql':
-            import cymysql as connector  # type: ignore
-        elif driver == 'pymysql':
+        elif drv_name == 'mysqldb':
+            import MySQLdb as connector
+        elif drv_name == 'cymysql':
+            import cymysql as connector
+        elif drv_name == 'pymysql':
             import pymysql as connector  # type: ignore
-        elif driver.startswith('pyodbc'):
-            import pyodbc as connector  # type: ignore
-            if '+' in driver:
-                params['driver'] = driver.split('+', 1)[1]
+        elif drv_name.startswith('pyodbc'):
+            import pyodbc as connector
+            if '+' in drv_name:
+                params['driver'] = drv_name.split('+', 1)[1]
             else:
                 params['driver'] = 'MySQL'
-        elif driver in ['http', 'https']:
+        elif drv_name in ['http', 'https']:
             from . import http as connector  # type: ignore
-            params['protocol'] = driver
+            params['protocol'] = drv_name
         else:
-            raise exceptions.Error(0, f'Unrecognized SingleStore driver: {driver}')
+            raise exceptions.Error(0, f'Unrecognized SingleStore driver: {drv_name}')
 
         # Fill in port based on driver, if it wasn't specified
         if not params['port']:
@@ -440,17 +458,23 @@ class Connection(object):
             connector.paramstyle,
         )
 
-    def close(self):
+    def close(self) -> None:
         ''' Close the database connection '''
+        if self._conn is None:
+            return None
         self._conn.close()
         self._conn = None
 
-    def commit(self):
+    def commit(self) -> None:
         ''' Commit the pending transaction '''
+        if self._conn is None:
+            raise exceptions.InterfaceError(0, 'connection is closed')
         self._conn.commit()
 
-    def rollback(self):
+    def rollback(self) -> None:
         ''' Rollback the pending transaction '''
+        if self._conn is None:
+            raise exceptions.InterfaceError(0, 'connection is closed')
         self._conn.rollback()
 
     def cursor(self) -> Cursor:
@@ -462,18 +486,22 @@ class Connection(object):
         Cursor
 
         '''
+        if self._conn is None:
+            raise exceptions.InterfaceError(0, 'connection is closed')
         return Cursor(self, self._conn.cursor(), self._param_converter)
 
     @property
-    def messages(self) -> Sequence[tuple]:
+    def messages(self) -> Sequence[tuple[int, str]]:
         ''' Messages generated by the connection '''
+        if self._conn is None:
+            raise exceptions.InterfaceError(0, 'connection is closed')
         return self._conn.messages
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         ''' Enter a context '''
         pass
 
-    def __exit__(self):
+    def __exit__(self) -> None:
         ''' Exit a context '''
         self.close()
 
@@ -493,7 +521,7 @@ class Connection(object):
             return True
         return False
 
-    def set_global_var(self, **kwargs):
+    def set_global_var(self, **kwargs: Any) -> None:
         '''
         Set one or more global variables in the database
 
@@ -511,7 +539,7 @@ class Connection(object):
                 value = 'off'
             cur.execute('set global {}=?'.format(_name_check(name)), [value])
 
-    def set_session_var(self, **kwargs):
+    def set_session_var(self, **kwargs: Any) -> None:
         '''
         Set one or more session variables in the database
 
@@ -529,7 +557,7 @@ class Connection(object):
                 value = 'off'
             cur.execute('set session {}=?'.format(_name_check(name)), [value])
 
-    def get_global_var(self, name):
+    def get_global_var(self, name: str) -> Any:
         '''
         Retrieve the value of a global variable
 
@@ -540,9 +568,9 @@ class Connection(object):
         '''
         cur = self.cursor()
         cur.execute('select @@global.{}'.format(_name_check(name)))
-        return list(cur)[0][0]
+        return list(cur)[0][0]  # type: ignore
 
-    def get_session_var(self, name):
+    def get_session_var(self, name: str) -> Any:
         '''
         Retrieve the value of a session variable
 
@@ -553,9 +581,9 @@ class Connection(object):
         '''
         cur = self.cursor()
         cur.execute('select @@session.{}'.format(_name_check(name)))
-        return list(cur)[0][0]
+        return list(cur)[0][0]  # type: ignore
 
-    def enable_http_api(self, port=None):
+    def enable_http_api(self, port: Optional[int] = None) -> int:
         '''
         Enable the HTTP API in the server
 
@@ -581,7 +609,7 @@ class Connection(object):
         cur.execute('restart proxy')
         return self.get_global_var('http_proxy_port')
 
-    def disable_http_api(self):
+    def disable_http_api(self) -> None:
         ''' Disable the HTTP API '''
         cur = self.cursor()
         self.set_global_var(http_api=False)
@@ -589,9 +617,11 @@ class Connection(object):
 
 
 def connect(
-    dsn=None, user=None, password=None, host=None,
-    port=None, database=None, driver=None, pure_python=False,
-) -> 'Connection':
+    dsn: Optional[str] = None, user: Optional[str] = None,
+    password: Optional[str] = None, host: Optional[str] = None,
+    port: Optional[int] = None, database: Optional[str] = None,
+    driver: Optional[str] = None, pure_python: Optional[bool] = False,
+) -> Connection:
     '''
     Return a SingleStore database connection
 

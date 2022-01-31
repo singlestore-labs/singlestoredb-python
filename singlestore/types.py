@@ -8,6 +8,8 @@ from __future__ import annotations
 import datetime
 import time
 from typing import Dict
+from typing import List
+from typing import Set
 
 
 Date = datetime.date
@@ -16,17 +18,17 @@ Timestamp = datetime.datetime
 Binary = bytes
 
 
-def DateFromTicks(ticks):
+def DateFromTicks(ticks: int) -> Date:
     ''' Convert ticks to a date object '''
     return Date(*time.localtime(ticks)[:3])
 
 
-def TimeFromTicks(ticks):
+def TimeFromTicks(ticks: int) -> Time:
     ''' Convert ticks to a time object '''
     return Time(*time.localtime(ticks)[3:6])
 
 
-def TimestampFromTicks(ticks):
+def TimestampFromTicks(ticks: int) -> Timestamp:
     ''' Convert ticks to a datetime object '''
     return Timestamp(*time.localtime(ticks)[:6])
 
@@ -34,29 +36,29 @@ def TimestampFromTicks(ticks):
 class DBAPIType(object):
     ''' Base class for DB-API data types '''
 
-    def __init__(self, *values):
-        self.values = set()
+    def __init__(self, *values: int | str):
+        self.values: Set[int | str] = set()
         for item in values:
             if isinstance(item, DBAPIType):
                 self.values.update(item.values)
             else:
                 self.values.add(item)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if other in self.values:
             return True
         return False
 
-    def __ne__(self, other):
+    def __ne__(self, other: object) -> bool:
         return not(self.__eq__(other))
 
-    def __str__(self):
+    def __str__(self) -> str:
         return '<{} object [{}]>'.format(
             type(self).__name__,
             ', '.join(str(x) for x in sorted(self.values)),
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self)
 
 
@@ -119,7 +121,7 @@ class ColumnType(object):
     _type_code_map: Dict[int, str] = {}
 
     @classmethod
-    def get_code(cls, name):
+    def get_code(cls, name: str) -> int:
         '''
         Return the numeric database type code corresponding to `name`
 
@@ -142,7 +144,7 @@ class ColumnType(object):
         return cls._type_name_map[name.upper()]
 
     @classmethod
-    def get_name(cls, code):
+    def get_name(cls, code: int) -> str:
         '''
         Return the database type name corresponding to integer value `code`
 
@@ -165,7 +167,7 @@ class ColumnType(object):
         return cls._type_code_map[code]
 
     @classmethod
-    def _update_type_maps(cls):
+    def _update_type_maps(cls) -> None:
         ''' Update the type code and name maps '''
         for k, v in vars(cls).items():
             if not isinstance(v, DBAPIType):
@@ -178,7 +180,7 @@ class ColumnType(object):
                     cls._type_code_map[code] = name
 
     @classmethod
-    def get_string_types(cls):
+    def get_string_types(cls) -> List[str]:
         '''
         Return all database types that correspond to DB-API strings
 
@@ -190,7 +192,7 @@ class ColumnType(object):
         return [k for k, v in vars(cls).items() if type(v) is StringDBAPIType]
 
     @classmethod
-    def get_binary_types(cls):
+    def get_binary_types(cls) -> List[str]:
         '''
         Return all database types that correspond to DB-API binary objects
 
@@ -202,7 +204,7 @@ class ColumnType(object):
         return [k for k, v in vars(cls).items() if type(v) is BinaryDBAPIType]
 
     @classmethod
-    def get_number_types(cls):
+    def get_number_types(cls) -> List[str]:
         '''
         Return all database types that correspond to DB-API number objects
 
@@ -214,7 +216,7 @@ class ColumnType(object):
         return [k for k, v in vars(cls).items() if type(v) is NumberDBAPIType]
 
     @classmethod
-    def get_datetime_types(cls):
+    def get_datetime_types(cls) -> List[str]:
         '''
         Return all database types that correspond to DB-API datetime objects
 
@@ -226,7 +228,7 @@ class ColumnType(object):
         return [k for k, v in vars(cls).items() if type(v) is DatetimeDBAPIType]
 
     @classmethod
-    def get_non_dbapi_types(cls):
+    def get_non_dbapi_types(cls) -> List[str]:
         '''
         Return all database types that do not correspond to DB-API typed objects
 

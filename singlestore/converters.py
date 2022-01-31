@@ -8,96 +8,101 @@ from __future__ import annotations
 import datetime
 import decimal
 import json
+from typing import Any
+from typing import Callable
+from typing import Dict
+from typing import Optional
+from typing import Set
 
 
-def int_or_none(x):
+def int_or_none(x: Any) -> Optional[int]:
     ''' Convert value to int or None '''
     if x is None:
-        return
+        return None
     return int(x)
 
 
-def float_or_none(x):
+def float_or_none(x: Any) -> Optional[float]:
     ''' Convert value to float or None '''
     if x is None:
-        return
+        return None
     return float(x)
 
 
-def decimal_or_none(x):
+def decimal_or_none(x: Any) -> Optional[decimal.Decimal]:
     ''' Convert value to decimal or None '''
     if x is None:
-        return
+        return None
     return decimal.Decimal(x)
 
 
-def date_or_none(x):
+def date_or_none(x: Any) -> Optional[datetime.date]:
     ''' Convert value to date or None '''
     if x is None:
-        return
+        return None
     return datetime.date.fromisoformat(x)
 
 
-def time_or_none(x):
+def time_or_none(x: Any) -> Optional[datetime.time]:
     ''' Convert value to time or None '''
     if x is None:
-        return
+        return None
     return datetime.time.fromisoformat(x)
 
 
-def datetime_or_none(x):
+def datetime_or_none(x: Any) -> Optional[datetime.datetime]:
     ''' Convert value to datetime or None '''
     if x is None:
-        return
+        return None
     return datetime.datetime.fromisoformat(x)
 
 
-def bytes_or_none(x):
+def bytes_or_none(x: Any) -> Optional[bytes]:
     ''' Convert value to bytes or None '''
     if x is None:
-        return
+        return None
     if isinstance(x, bytes):
         return x
     return bytes(x)
 
 
-def string_or_none(x, encoding='utf-8'):
+def string_or_none(x: Any, encoding: str = 'utf-8') -> Optional[str]:
     ''' Convert value to string or None '''
     if x is None:
-        return
+        return None
     if isinstance(x, str):
         return x
     return str(x, 'utf-8')
 
 
-def none(x):
+def none(x: Any) -> None:
     ''' Return None '''
-    return
+    return None
 
 
-def json_or_none(x):
+def json_or_none(x: str) -> Optional[Dict[str, Any]]:
     ''' Convert JSON to dict or None '''
     if x is None:
-        return
+        return None
     return json.loads(x)
 
 
-def set_or_none(x):
+def set_or_none(x: str) -> Optional[Set[str]]:
     ''' Convert value to set of strings or None '''
     if x is None:
-        return
+        return None
     return set(y.strip() for y in x.split(','))
 
 
-def geometry_or_none(x):
+def geometry_or_none(x: Any) -> Optional[Any]:
     ''' Convert value to geometry coordinates or None '''
     if x is None:
-        return
+        return None
     return x
 
 
 # Map of database types and conversion functions
-converters = {
+converters: Dict[str | int, Callable[..., Any]] = {
     'DECIMAL': decimal_or_none,
     0x00: decimal_or_none,
     'TINY': int_or_none,

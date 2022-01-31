@@ -9,6 +9,8 @@ import re
 from collections.abc import Mapping
 from collections.abc import Sequence
 from typing import Any
+from typing import Dict
+from typing import Iterable
 from typing import Optional
 from typing import Union
 from urllib.parse import urljoin
@@ -43,15 +45,15 @@ class Cursor(object):
     '''
 
     def __init__(self, connection: Connection):
-        self.connection: Connection = connection
+        self.connection: Optional[Connection] = connection
         self._rows: list[tuple[Any, ...]] = []
-        self.description: Optional[list[tuple]] = None
+        self.description: Optional[list[tuple[Any, ...]]] = None
         self.arraysize: int = 1000
         self.rowcount: int = 0
         self.messages: list[tuple[int, str]] = []
         self.lastrowid: Optional[int] = None
 
-    def _get(self, path: str, *args, **kwargs):
+    def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         '''
         Invoke a GET request on the HTTP connection
 
@@ -69,9 +71,11 @@ class Cursor(object):
         requests.Response
 
         '''
+        if self.connection is None:
+            raise exceptions.InterfaceError(0, 'connection is closed')
         return self.connection._get(path, *args, **kwargs)
 
-    def _post(self, path: str, *args, **kwargs):
+    def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         '''
         Invoke a POST request on the HTTP connection
 
@@ -89,9 +93,11 @@ class Cursor(object):
         requests.Response
 
         '''
+        if self.connection is None:
+            raise exceptions.InterfaceError(0, 'connection is closed')
         return self.connection._post(path, *args, **kwargs)
 
-    def _delete(self, path: str, *args, **kwargs):
+    def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         '''
         Invoke a DELETE request on the HTTP connection
 
@@ -109,9 +115,14 @@ class Cursor(object):
         requests.Response
 
         '''
+        if self.connection is None:
+            raise exceptions.InterfaceError(0, 'connection is closed')
         return self.connection._delete(path, *args, **kwargs)
 
-    def callproc(self, name: str, params: Union[Sequence, Mapping]):
+    def callproc(
+        self, name: str,
+        params: Union[Sequence[Any], Mapping[str, Any]],
+    ) -> None:
         '''
         Call a stored procedure
 
@@ -125,12 +136,16 @@ class Cursor(object):
         '''
         raise NotImplementedError
 
-    def close(self):
+    def close(self) -> None:
         ''' Close the cursor '''
-        self.connection.close()
-        self.connection = None
+        if self.connection is not None:
+            self.connection.close()
+            self.connection = None
 
-    def execute(self, query: str, params=None):
+    def execute(
+        self, query: str,
+        params: Optional[Union[Sequence[Any], Mapping[str, Any]]] = None,
+    ) -> None:
         '''
         Execute a SQL statement
 
@@ -142,7 +157,10 @@ class Cursor(object):
             Parameters to substitute into the SQL code
 
         '''
-        data = dict(sql=query)
+        if self.connection is None:
+            raise exceptions.InterfaceError(0, 'connection is closed')
+
+        data: Dict[str, Any] = dict(sql=query)
         if params is not None:
             data['args'] = params
         if self.connection._database:
@@ -161,11 +179,11 @@ class Cursor(object):
             if res.text:
                 if ':' in res.text:
                     code, msg = res.text.split(':', 1)
-                    code = int(code.split()[-1])
+                    icode = int(code.split()[-1])
                 else:
-                    code = res.status_code
+                    icode = res.status_code
                     msg = res.text
-                raise exceptions.InterfaceError(code, msg.strip())
+                raise exceptions.InterfaceError(icode, msg.strip())
             raise exceptions.InterfaceError(res.status_code, 'HTTP Error')
 
         out = res.json()
@@ -191,7 +209,7 @@ class Cursor(object):
             # Convert data to Python types
             self._rows = out['results'][0]['rows']
             for i, row in enumerate(self._rows):
-                self._rows[i] = tuple(x(y) for x, y in zip(convs, row))  # type: ignore
+                self._rows[i] = tuple(x(y) for x, y in zip(convs, row))
 
             self.rowcount = len(self._rows)
         else:
@@ -199,8 +217,15 @@ class Cursor(object):
 
     def executemany(
         self, query: str,
-        param_seq: Optional[Sequence[Union[Sequence, Mapping]]] = None,
-    ):
+        param_seq: Optional[
+            Sequence[
+                Union[
+                    Sequence[Any],
+                    Mapping[str, Any],
+                ]
+            ]
+        ] = None,
+    ) -> None:
         '''
         Execute SQL code against multiple sets of parameters
 
@@ -219,7 +244,7 @@ class Cursor(object):
         else:
             self.execute(query)
 
-    def fetchone(self) -> Optional[Sequence]:
+    def fetchone(self) -> Optional[tuple[Any, ...]]:
         '''
         Fetch a single row from the result set
 
@@ -236,7 +261,10 @@ class Cursor(object):
         self.description = None
         return None
 
-    def fetchmany(self, size: Optional[int] = None) -> Optional[Sequence]:
+    def fetchmany(
+        self,
+        size: Optional[int] = None,
+    ) -> Optional[Sequence[tuple[Any, ...]]]:
         '''
         Fetch `size` rows from the result
 
@@ -260,7 +288,7 @@ class Cursor(object):
             out.append(row)
         return out or None
 
-    def fetchall(self):
+    def fetchall(self) -> Optional[Sequence[tuple[Any, ...]]]:
         '''
         Fetch all rows in the result set
 
@@ -284,24 +312,24 @@ class Cursor(object):
         ''' Skip to the next available result set '''
         raise NotImplementedError
 
-    def setinputsizes(self, sizes: Sequence):
+    def setinputsizes(self, sizes: Sequence[int]) -> None:
         ''' Predefine memory areas for parameters '''
         pass
 
-    def setoutputsize(self, size: int, column=None):
+    def setoutputsize(self, size: int, column: Optional[str] = None) -> None:
         ''' Set a column buffer size for fetches of large columns '''
         pass
 
-    @property
+    @ property
     def rownumber(self) -> Optional[int]:
         ''' Current zero-based index of the cursor in the result set '''
         return self.rowcount - len(self._rows)
 
-    def scroll(self, value, mode='relative'):
+    def scroll(self, value: int, mode: str = 'relative') -> None:
         ''' Scroll the cursor to the position in the result set '''
-        raise exceptions.NotSupportedError
+        raise exceptions.NotSupportedError(0, 'scroll is not supported')
 
-    def next(self):
+    def next(self) -> tuple[Any, ...]:
         ''' Return the next row from the result set for use in iterators '''
         out = self.fetchone()
         if out is None:
@@ -310,19 +338,19 @@ class Cursor(object):
 
     __next__ = next
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable[tuple[Any, ...]]:
         ''' Return result iterator '''
         return iter(self._rows)
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         ''' Enter a context '''
         pass
 
-    def __exit__(self):
+    def __exit__(self) -> None:
         ''' Exit a context '''
         self.close()
 
-    def is_connected(self):
+    def is_connected(self) -> bool:
         '''
         Is this cursor connected?
 
@@ -331,7 +359,9 @@ class Cursor(object):
         bool
 
         '''
-        return self._conn.is_connected()
+        if self.connection is None:
+            return False
+        return self.connection.is_connected()
 
 
 class Connection(object):
@@ -370,13 +400,14 @@ class Connection(object):
     '''
 
     def __init__(
-        self, host=None, port=None, user=None, password=None,
-        database=None, protocol='http', version='v1',
+            self, host: Optional[str] = None, port: Optional[int] = None,
+            user: Optional[str] = None, password: Optional[str] = None,
+            database: Optional[str] = None, protocol: str = 'http', version: str = 'v1',
     ):
         host = host or 'localhost'
         port = port or 3306
 
-        self._sess = requests.Session()
+        self._sess: Optional[requests.Session] = requests.Session()
         if user is not None and password is not None:
             self._sess.auth = (user, password)
         self._sess.headers.update({
@@ -386,9 +417,9 @@ class Connection(object):
 
         self._database = database
         self._url = f'{protocol}://{host}:{port}/api/{version}/'
-        self.messages = []
+        self.messages: list[list[Any]] = []
 
-    def _get(self, path: str, *args, **kwargs):
+    def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         '''
         Invoke a GET request on the HTTP connection
 
@@ -406,9 +437,11 @@ class Connection(object):
         requests.Response
 
         '''
+        if self._sess is None:
+            raise exceptions.InterfaceError(0, 'connection is closed')
         return self._sess.get(urljoin(self._url, path), *args, **kwargs)
 
-    def _post(self, path: str, *args, **kwargs):
+    def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         '''
         Invoke a POST request on the HTTP connection
 
@@ -426,9 +459,11 @@ class Connection(object):
         requests.Response
 
         '''
+        if self._sess is None:
+            raise exceptions.InterfaceError(0, 'connection is closed')
         return self._sess.post(urljoin(self._url, path), *args, **kwargs)
 
-    def _delete(self, path: str, *args, **kwargs):
+    def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         '''
         Invoke a DELETE request on the HTTP connection
 
@@ -446,19 +481,21 @@ class Connection(object):
         requests.Response
 
         '''
+        if self._sess is None:
+            raise exceptions.InterfaceError(0, 'connection is closed')
         return self._sess.delete(urljoin(self._url, path), *args, **kwargs)
 
-    def close(self):
+    def close(self) -> None:
         ''' Close the connection '''
         self._sess = None
 
-    def commit(self):
+    def commit(self) -> None:
         ''' Commit the pending transaction '''
-        raise exceptions.NotSupportedError
+        raise exceptions.NotSupportedError(0, 'operation not supported')
 
-    def rollback(self):
+    def rollback(self) -> None:
         ''' Rollback the pending transaction '''
-        raise exceptions.NotSupportedError
+        raise exceptions.NotSupportedError(0, 'operation not supported')
 
     def cursor(self) -> Cursor:
         '''
@@ -471,11 +508,11 @@ class Connection(object):
         '''
         return Cursor(self)
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         ''' Enter a context '''
         pass
 
-    def __exit__(self):
+    def __exit__(self) -> None:
         ''' Exit a context '''
         self.close()
 
@@ -498,8 +535,9 @@ class Connection(object):
 
 
 def connect(
-    host=None, port=None, user=None, password=None,
-    database=None, protocol='http', version='v1',
+    host: Optional[str] = None, port: Optional[int] = None,
+    user: Optional[str] = None, password: Optional[str] = None,
+    database: Optional[str] = None, protocol: str = 'http', version: str = 'v1',
 ) -> Connection:
     '''
     SingleStore HTTP database connection

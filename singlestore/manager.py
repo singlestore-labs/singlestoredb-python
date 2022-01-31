@@ -168,7 +168,7 @@ class Cluster(object):
         admin_password: Optional[str] = None,
         expires_at: Optional[str] = None,
         size: Optional[str] = None, firewall_ranges: Optional[Sequence[str]] = None,
-    ):
+    ) -> None:
         '''
         Update the cluster definition
 
@@ -197,29 +197,29 @@ class Cluster(object):
         }
         self._manager._patch(f'clusters/{self.id}', json=data)
 
-    def suspend(self):
+    def suspend(self) -> None:
         ''' Suspend the cluster '''
         if self._manager is None:
             raise ValueError('ClusterManager value has not been set')
         self._manager._post(
-            f'clusters/{self.cluster_id}/suspend',
+            f'clusters/{self.id}/suspend',
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
         )
 
-    def resume(self):
+    def resume(self) -> None:
         ''' Resume the cluster '''
         if self._manager is None:
             raise ValueError('ClusterManager value has not been set')
         self._manager._post(
-            f'clusters/{self.cluster_id}/resume',
+            f'clusters/{self.id}/resume',
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
         )
 
-    def terminate(self):
+    def terminate(self) -> None:
         ''' Terminate the cluster '''
         if self._manager is None:
             raise ValueError('ClusterManager value has not been set')
-        self._manager._delete(f'clusters/{self.cluster_id}')
+        self._manager._delete(f'clusters/{self.id}')
 
 
 class ClusterManager(object):
@@ -245,8 +245,8 @@ class ClusterManager(object):
     default_base_url = 'https://api.singlestore.com'
 
     def __init__(
-        self, access_token: str = None, version: str = None,
-        base_url: str = None,
+        self, access_token: Optional[str] = None, version: Optional[str] = None,
+        base_url: Optional[str] = None,
     ):
         access_token = (
             access_token or
@@ -263,7 +263,7 @@ class ClusterManager(object):
             version or type(self).default_version,
         ) + '/'
 
-    def _check(self, res: requests.Response):
+    def _check(self, res: requests.Response) -> requests.Response:
         '''
         Check the HTTP response status code and raise an exception as needed
 
@@ -281,7 +281,7 @@ class ClusterManager(object):
             raise exceptions.ClusterManagerError(res.status_code, res.text)
         return res
 
-    def _get(self, path: str, *args, **kwargs):
+    def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         '''
         Invoke a GET request
 
@@ -306,7 +306,7 @@ class ClusterManager(object):
             ),
         )
 
-    def _post(self, path: str, *args, **kwargs):
+    def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         '''
         Invoke a POST request
 
@@ -331,7 +331,7 @@ class ClusterManager(object):
             ),
         )
 
-    def _put(self, path: str, *args, **kwargs):
+    def _put(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         '''
         Invoke a PUT request
 
@@ -356,7 +356,7 @@ class ClusterManager(object):
             ),
         )
 
-    def _delete(self, path: str, *args, **kwargs):
+    def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         '''
         Invoke a DELETE request
 
@@ -381,7 +381,7 @@ class ClusterManager(object):
             ),
         )
 
-    def _patch(self, path: str, *args, **kwargs):
+    def _patch(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         '''
         Invoke a PATCH request
 
@@ -457,7 +457,7 @@ class ClusterManager(object):
         )
         return Cluster.from_dict(res.json(), manager=self)
 
-    def get_cluster(self, cluster_id: str):
+    def get_cluster(self, cluster_id: str) -> Cluster:
         '''
         Retrieve a cluster definition
 
