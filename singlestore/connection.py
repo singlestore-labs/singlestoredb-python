@@ -122,6 +122,8 @@ class Cursor(object):
     @property
     def rowcount(self) -> int:
         ''' Number of rows the last execute produced or affected '''
+        if hasattr(self._cursor, '_rowcount'):
+            return self._cursor._rowcount
         return self._cursor.rowcount
 
     def callproc(
