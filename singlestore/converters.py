@@ -57,13 +57,13 @@ def datetime_or_none(x: Any) -> Optional[datetime.datetime]:
     return datetime.datetime.fromisoformat(x)
 
 
-def bytes_or_none(x: Any) -> Optional[bytes]:
+def bytes_or_none(x: Any, encoding: str = 'utf-8') -> Optional[bytes]:
     ''' Convert value to bytes or None '''
     if x is None:
         return None
     if isinstance(x, bytes):
         return x
-    return bytes(x)
+    return bytes(x, encoding=encoding)
 
 
 def string_or_none(x: Any, encoding: str = 'utf-8') -> Optional[str]:
@@ -72,7 +72,7 @@ def string_or_none(x: Any, encoding: str = 'utf-8') -> Optional[str]:
         return None
     if isinstance(x, str):
         return x
-    return str(x, 'utf-8')
+    return str(x, encoding=encoding)
 
 
 def none(x: Any) -> None:
@@ -156,6 +156,7 @@ converters: Dict[str | int, Callable[..., Any]] = {
     'BLOB': bytes_or_none,
     0xfc: bytes_or_none,
     'TEXT': bytes_or_none,
+    'CHAR': bytes_or_none,
     'VAR_STRING': string_or_none,
     0xfd: string_or_none,
     'STRING': string_or_none,

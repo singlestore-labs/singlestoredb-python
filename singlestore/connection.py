@@ -149,7 +149,7 @@ class Cursor(object):
     def execute(
         self, oper: str,
         params: Optional[Union[Sequence[Any], Mapping[str, Any]]] = None,
-    ) -> None:
+    ) -> int:
         '''
         Execute a SQL statement
 
@@ -162,11 +162,12 @@ class Cursor(object):
 
         '''
         self._cursor.execute(*self._param_converter.format(oper, params or []))
+        return self._cursor.rowcount
 
     def executemany(
         self, oper: str,
         param_seq: Optional[Sequence[Union[Sequence[Any], Mapping[str, Any]]]] = None,
-    ) -> None:
+    ) -> int:
         '''
         Execute SQL code against multiple sets of parameters
 
@@ -179,8 +180,9 @@ class Cursor(object):
 
         '''
         self._cursor.executemany(*self._param_converter.formatmany(oper, param_seq or []))
+        return self._cursor.rowcount
 
-    def fetchone(self) -> Optional[tuple[Any]]:
+    def fetchone(self) -> Optional[tuple[Any, ...]]:
         '''
         Fetch a single row from the result set
 
@@ -194,7 +196,7 @@ class Cursor(object):
         '''
         return self._cursor.fetchone()
 
-    def fetchmany(self, size: Optional[int] = None) -> Optional[Sequence[tuple[Any]]]:
+    def fetchmany(self, size: Optional[int] = None) -> Sequence[tuple[Any, ...]]:
         '''
         Fetch `size` rows from the result
 
@@ -210,7 +212,7 @@ class Cursor(object):
         '''
         return self._cursor.fetchmany(size=size or self.arraysize)
 
-    def fetchall(self) -> Optional[Sequence[tuple[Any]]]:
+    def fetchall(self) -> Sequence[tuple[Any, ...]]:
         '''
         Fetch all rows in the result set
 
@@ -252,7 +254,7 @@ class Cursor(object):
         ''' Set a column buffer size for fetches of large columns '''
         self._cursor.setoutputsize(size, column)
 
-    @ property
+    @property
     def rownumber(self) -> Optional[int]:
         ''' Current zero-based index of the cursor in the result set '''
         return self._cursor.rownumber
@@ -261,7 +263,7 @@ class Cursor(object):
         ''' Scroll the cursor to the position in the result set '''
         self._cursor.scroll(mode=mode)
 
-    @ property
+    @property
     def messages(self) -> Sequence[tuple[int, str]]:
         ''' List of received messages '''
         return self._cursor.messages
@@ -276,16 +278,19 @@ class Cursor(object):
         ''' Return result iterator '''
         return self._cursor.__iter__()
 
-    @ property
+    @property
     def lastrowid(self) -> Optional[int]:
         ''' The rowid of the last modified row '''
         return self._cursor.lastrowid()
 
-    def __enter__(self) -> None:
+    def __enter__(self) -> Cursor:
         ''' Enter a context '''
-        pass
+        return self
 
-    def __exit__(self) -> None:
+    def __exit__(
+        self, exc_type: Optional[object],
+        exc_value: Optional[Exception], exc_traceback: Optional[str],
+    ) -> None:
         ''' Exit a context '''
         self.close()
 
@@ -375,6 +380,7 @@ class Connection(object):
         self._conn: Optional[Any] = None
         self.arraysize = type(self).arraysize
         self.errorhandler = None
+        self._autocommit: bool = False
 
         # Setup connection parameters
         params: Dict[str, Any] = {}
@@ -458,6 +464,10 @@ class Connection(object):
             connector.paramstyle,
         )
 
+    def autocommit(self, value: bool = True) -> None:
+        ''' Set autocommit '''
+        self._autocommit = value
+
     def close(self) -> None:
         ''' Close the database connection '''
         if self._conn is None:
@@ -497,11 +507,14 @@ class Connection(object):
             raise exceptions.InterfaceError(0, 'connection is closed')
         return self._conn.messages
 
-    def __enter__(self) -> None:
+    def __enter__(self) -> Connection:
         ''' Enter a context '''
-        pass
+        return self
 
-    def __exit__(self) -> None:
+    def __exit__(
+        self, exc_type: Optional[object],
+        exc_value: Optional[Exception], exc_traceback: Optional[str],
+    ) -> None:
         ''' Exit a context '''
         self.close()
 
@@ -520,6 +533,12 @@ class Connection(object):
         if is_connected is not None and is_connected():
             return True
         return False
+
+    def ping(self, reconnect: bool = False) -> bool:
+        # TODO: not sure how this is expected to work yet
+        if not self.is_connected():
+            raise exceptions.InterfaceError(2006, 'SingleStore server is not connected')
+        return True
 
     def set_global_var(self, **kwargs: Any) -> None:
         '''

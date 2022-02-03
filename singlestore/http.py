@@ -17,9 +17,10 @@ from urllib.parse import urljoin
 
 import requests
 
-from . import exceptions
 from . import types
 from .converters import converters
+from .exceptions import InterfaceError
+from .exceptions import NotSupportedError
 
 
 # DB-API parameter style
@@ -72,7 +73,7 @@ class Cursor(object):
 
         '''
         if self.connection is None:
-            raise exceptions.InterfaceError(0, 'connection is closed')
+            raise InterfaceError(0, 'connection is closed')
         return self.connection._get(path, *args, **kwargs)
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -94,7 +95,7 @@ class Cursor(object):
 
         '''
         if self.connection is None:
-            raise exceptions.InterfaceError(0, 'connection is closed')
+            raise InterfaceError(0, 'connection is closed')
         return self.connection._post(path, *args, **kwargs)
 
     def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -116,7 +117,7 @@ class Cursor(object):
 
         '''
         if self.connection is None:
-            raise exceptions.InterfaceError(0, 'connection is closed')
+            raise InterfaceError(0, 'connection is closed')
         return self.connection._delete(path, *args, **kwargs)
 
     def callproc(
@@ -139,7 +140,6 @@ class Cursor(object):
     def close(self) -> None:
         ''' Close the cursor '''
         if self.connection is not None:
-            self.connection.close()
             self.connection = None
 
     def execute(
@@ -158,7 +158,7 @@ class Cursor(object):
 
         '''
         if self.connection is None:
-            raise exceptions.InterfaceError(0, 'connection is closed')
+            raise InterfaceError(0, 'connection is closed')
 
         data: Dict[str, Any] = dict(sql=query)
         if params is not None:
@@ -167,7 +167,7 @@ class Cursor(object):
             data['database'] = self.connection._database
 
         sql_type = 'exec'
-        if re.match(r'^\s*select', query, flags=re.I):
+        if re.match(r'^\s*(select|show)\s+', query, flags=re.I):
             sql_type = 'query'
 
         if sql_type == 'query':
@@ -183,8 +183,8 @@ class Cursor(object):
                 else:
                     icode = res.status_code
                     msg = res.text
-                raise exceptions.InterfaceError(icode, msg.strip())
-            raise exceptions.InterfaceError(res.status_code, 'HTTP Error')
+                raise InterfaceError(icode, msg.strip())
+            raise InterfaceError(res.status_code, 'HTTP Error')
 
         out = res.json()
 
@@ -264,7 +264,7 @@ class Cursor(object):
     def fetchmany(
         self,
         size: Optional[int] = None,
-    ) -> Optional[Sequence[tuple[Any, ...]]]:
+    ) -> Sequence[tuple[Any, ...]]:
         '''
         Fetch `size` rows from the result
 
@@ -274,8 +274,6 @@ class Cursor(object):
         -------
         list of tuples
             Values of the returned rows if there are rows remaining
-        None
-            If there are no rows left to return
 
         '''
         if not size or int(size) <= 0:
@@ -286,9 +284,9 @@ class Cursor(object):
             if row is None:
                 break
             out.append(row)
-        return out or None
+        return out
 
-    def fetchall(self) -> Optional[Sequence[tuple[Any, ...]]]:
+    def fetchall(self) -> Sequence[tuple[Any, ...]]:
         '''
         Fetch all rows in the result set
 
@@ -296,8 +294,6 @@ class Cursor(object):
         -------
         list of tuples
             Values of the returned rows if there are rows remaining
-        None
-            If there are no rows to return
 
         '''
         out = []
@@ -306,7 +302,7 @@ class Cursor(object):
             if row is None:
                 break
             out.append(row)
-        return out or None
+        return out
 
     def nextset(self) -> Optional[bool]:
         ''' Skip to the next available result set '''
@@ -327,7 +323,7 @@ class Cursor(object):
 
     def scroll(self, value: int, mode: str = 'relative') -> None:
         ''' Scroll the cursor to the position in the result set '''
-        raise exceptions.NotSupportedError(0, 'scroll is not supported')
+        raise NotSupportedError(0, 'scroll is not supported')
 
     def next(self) -> tuple[Any, ...]:
         ''' Return the next row from the result set for use in iterators '''
@@ -342,11 +338,14 @@ class Cursor(object):
         ''' Return result iterator '''
         return iter(self._rows)
 
-    def __enter__(self) -> None:
+    def __enter__(self) -> Cursor:
         ''' Enter a context '''
-        pass
+        return self
 
-    def __exit__(self) -> None:
+    def __exit__(
+        self, exc_type: Optional[object],
+        exc_value: Optional[Exception], exc_traceback: Optional[str],
+    ) -> None:
         ''' Exit a context '''
         self.close()
 
@@ -410,14 +409,17 @@ class Connection(object):
         self._sess: Optional[requests.Session] = requests.Session()
         if user is not None and password is not None:
             self._sess.auth = (user, password)
+        elif user is not None:
+            self._sess.auth = (user, '')
         self._sess.headers.update({
             'Content-Type': 'application/json',
-            'Accepts': 'application/json',
+            'Accept': 'application/json',
         })
 
         self._database = database
         self._url = f'{protocol}://{host}:{port}/api/{version}/'
         self.messages: list[list[Any]] = []
+        self.autocommit: bool = True
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         '''
@@ -438,7 +440,7 @@ class Connection(object):
 
         '''
         if self._sess is None:
-            raise exceptions.InterfaceError(0, 'connection is closed')
+            raise InterfaceError(0, 'connection is closed')
         return self._sess.get(urljoin(self._url, path), *args, **kwargs)
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -460,7 +462,7 @@ class Connection(object):
 
         '''
         if self._sess is None:
-            raise exceptions.InterfaceError(0, 'connection is closed')
+            raise InterfaceError(0, 'connection is closed')
         return self._sess.post(urljoin(self._url, path), *args, **kwargs)
 
     def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -482,7 +484,7 @@ class Connection(object):
 
         '''
         if self._sess is None:
-            raise exceptions.InterfaceError(0, 'connection is closed')
+            raise InterfaceError(0, 'connection is closed')
         return self._sess.delete(urljoin(self._url, path), *args, **kwargs)
 
     def close(self) -> None:
@@ -491,11 +493,15 @@ class Connection(object):
 
     def commit(self) -> None:
         ''' Commit the pending transaction '''
-        raise exceptions.NotSupportedError(0, 'operation not supported')
+        if self.autocommit:
+            return
+        raise NotSupportedError(0, 'operation not supported')
 
     def rollback(self) -> None:
         ''' Rollback the pending transaction '''
-        raise exceptions.NotSupportedError(0, 'operation not supported')
+        if self.autocommit:
+            return
+        raise NotSupportedError(0, 'operation not supported')
 
     def cursor(self) -> Cursor:
         '''
@@ -508,11 +514,14 @@ class Connection(object):
         '''
         return Cursor(self)
 
-    def __enter__(self) -> None:
+    def __enter__(self) -> Connection:
         ''' Enter a context '''
-        pass
+        return self
 
-    def __exit__(self) -> None:
+    def __exit__(
+        self, exc_type: Optional[object],
+        exc_value: Optional[Exception], exc_traceback: Optional[str],
+    ) -> None:
         ''' Exit a context '''
         self.close()
 
@@ -532,6 +541,10 @@ class Connection(object):
         if res.status_code <= 400 and res.text == 'pong':
             return True
         return False
+
+    def ping(self, reconnect: bool = False) -> None:
+        if not self.is_connected():
+            raise InterfaceError(2006, 'Could not connect to SingleStore database')
 
 
 def connect(
