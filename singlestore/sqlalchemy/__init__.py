@@ -54,7 +54,7 @@ from sqlalchemy.dialects.mysql.dml import insert
 from sqlalchemy.dialects.mysql.expression import match
 
 # default dialect
-base.dialect = dialect = mysqlconnector.dialect
+base.dialect = dialect = pymysql.dialect
 
 __all__ = (
     'BIGINT',

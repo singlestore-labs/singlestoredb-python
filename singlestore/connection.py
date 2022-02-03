@@ -321,7 +321,7 @@ class Connection(object):
     ----------
     dsn : str, optional
         URL that describes the connection. The scheme or protocol defines
-        which database connector to use. By default, the `mysql.connector`
+        which database connector to use. By default, the `PyMySQL`
         is used. To connect to the HTTP API, the scheme can be set to `http`
         or `https`. The username, password, host, and port are specified as
         in a standard URL. The path indicates the database name. The overall
@@ -361,7 +361,7 @@ class Connection(object):
     '''
 
     arraysize: int = 1000
-    default_driver: str = 'mysql.connector'
+    default_driver: str = 'PyMySQL'
 
     Warning = exceptions.Warning
     Error = exceptions.Error
@@ -650,7 +650,7 @@ def connect(
     ----------
     dsn : str, optional
         URL that describes the connection. The scheme or protocol defines
-        which database connector to use. By default, the `mysql.connector`
+        which database connector to use. By default, the `PyMySQL`
         is used. To connect to the HTTP API, the scheme can be set to `http`
         or `https`. The username, password, host, and port are specified as
         in a standard URL. The path indicates the database name. The overall
