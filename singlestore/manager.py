@@ -1,8 +1,5 @@
 #!/usr/bin/env python
-'''
-SingleStore Cluster Management
-
-'''
+"""SingleStore Cluster Management."""
 from __future__ import annotations
 
 import os
@@ -18,8 +15,8 @@ from . import exceptions
 
 
 class Region(object):
-    '''
-    Cluster region information
+    """
+    Cluster region information.
 
     This object is not directly instantiated. It is used in results
     of `ClusterManager` API calls.
@@ -33,11 +30,7 @@ class Region(object):
     provider : str
         Name of the cloud provider
 
-    Returns
-    -------
-    Region
-
-    '''
+    """
 
     def __init__(self, region_id: str, region: str, provider: str):
         self.id = region_id
@@ -47,8 +40,8 @@ class Region(object):
 
     @classmethod
     def from_dict(cls, obj: Dict[str, str], manager: 'ClusterManager') -> Region:
-        '''
-        Convert dictionary to a `Region` object
+        """
+        Convert dictionary to a `Region` object.
 
         Parameters
         ----------
@@ -61,7 +54,7 @@ class Region(object):
         -------
         Region
 
-        '''
+        """
         out = cls(
             region_id=obj['regionId'],
             region=obj['region'],
@@ -72,8 +65,8 @@ class Region(object):
 
 
 class Cluster(object):
-    '''
-    SingleStore cluster definition
+    """
+    SingleStore cluster definition.
 
     This object is not instantiated directly. It is used in the results
     of API calls on the `ClusterManager`.
@@ -108,11 +101,7 @@ class Cluster(object):
     --------
     `ClusterManager.create_cluster`
 
-    Returns
-    -------
-    Cluster
-
-    '''
+    """
 
     def __init__(
         self, name: str, cluster_id: str, region: Region, size: str,
@@ -136,8 +125,8 @@ class Cluster(object):
 
     @classmethod
     def from_dict(cls, obj: Dict[str, Any], manager: 'ClusterManager') -> Cluster:
-        '''
-        Construct a Cluster from a dictionary of values
+        """
+        Construct a Cluster from a dictionary of values.
 
         Parameters
         ----------
@@ -150,7 +139,7 @@ class Cluster(object):
         -------
         Cluster
 
-        '''
+        """
         out = cls(
             name=obj['name'], cluster_id=obj['clusterId'],
             region=Region.from_dict(obj['region'], manager),
@@ -169,8 +158,8 @@ class Cluster(object):
         expires_at: Optional[str] = None,
         size: Optional[str] = None, firewall_ranges: Optional[Sequence[str]] = None,
     ) -> None:
-        '''
-        Update the cluster definition
+        """
+        Update the cluster definition.
 
         Parameters
         ----------
@@ -185,7 +174,7 @@ class Cluster(object):
         firewall_ranges : Sequence[str], optional
             List of allowed incoming IP addresses
 
-        '''
+        """
         if self._manager is None:
             raise ValueError('ClusterManager value has not been set')
         data = {
@@ -198,7 +187,7 @@ class Cluster(object):
         self._manager._patch(f'clusters/{self.id}', json=data)
 
     def suspend(self) -> None:
-        ''' Suspend the cluster '''
+        """Suspend the cluster."""
         if self._manager is None:
             raise ValueError('ClusterManager value has not been set')
         self._manager._post(
@@ -207,7 +196,7 @@ class Cluster(object):
         )
 
     def resume(self) -> None:
-        ''' Resume the cluster '''
+        """Resume the cluster."""
         if self._manager is None:
             raise ValueError('ClusterManager value has not been set')
         self._manager._post(
@@ -216,15 +205,15 @@ class Cluster(object):
         )
 
     def terminate(self) -> None:
-        ''' Terminate the cluster '''
+        """Terminate the cluster."""
         if self._manager is None:
             raise ValueError('ClusterManager value has not been set')
         self._manager._delete(f'clusters/{self.id}')
 
 
 class ClusterManager(object):
-    '''
-    SingleStore cluster manager
+    """
+    SingleStore cluster manager.
 
     Parameters
     ----------
@@ -235,11 +224,7 @@ class ClusterManager(object):
     base_url : str, optional
         Base URL of the cluster management API
 
-    Returns
-    -------
-    ClusterManager
-
-    '''
+    """
 
     default_version = 'v0beta'
     default_base_url = 'https://api.singlestore.com'
@@ -264,8 +249,8 @@ class ClusterManager(object):
         ) + '/'
 
     def _check(self, res: requests.Response) -> requests.Response:
-        '''
-        Check the HTTP response status code and raise an exception as needed
+        """
+        Check the HTTP response status code and raise an exception as needed.
 
         Parameters
         ----------
@@ -276,14 +261,14 @@ class ClusterManager(object):
         -------
         requests.Response
 
-        '''
+        """
         if res.status_code >= 400:
             raise exceptions.ClusterManagerError(res.status_code, res.text)
         return res
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        '''
-        Invoke a GET request
+        """
+        Invoke a GET request.
 
         Parameters
         ----------
@@ -298,7 +283,7 @@ class ClusterManager(object):
         -------
         requests.Response
 
-        '''
+        """
         return self._check(
             self._sess.get(
                 urljoin(self._base_url, path),
@@ -307,8 +292,8 @@ class ClusterManager(object):
         )
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        '''
-        Invoke a POST request
+        """
+        Invoke a POST request.
 
         Parameters
         ----------
@@ -323,7 +308,7 @@ class ClusterManager(object):
         -------
         requests.Response
 
-        '''
+        """
         return self._check(
             self._sess.post(
                 urljoin(self._base_url, path),
@@ -332,8 +317,8 @@ class ClusterManager(object):
         )
 
     def _put(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        '''
-        Invoke a PUT request
+        """
+        Invoke a PUT request.
 
         Parameters
         ----------
@@ -348,7 +333,7 @@ class ClusterManager(object):
         -------
         requests.Response
 
-        '''
+        """
         return self._check(
             self._sess.put(
                 urljoin(self._base_url, path),
@@ -357,8 +342,8 @@ class ClusterManager(object):
         )
 
     def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        '''
-        Invoke a DELETE request
+        """
+        Invoke a DELETE request.
 
         Parameters
         ----------
@@ -373,7 +358,7 @@ class ClusterManager(object):
         -------
         requests.Response
 
-        '''
+        """
         return self._check(
             self._sess.delete(
                 urljoin(self._base_url, path),
@@ -382,8 +367,8 @@ class ClusterManager(object):
         )
 
     def _patch(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        '''
-        Invoke a PATCH request
+        """
+        Invoke a PATCH request.
 
         Parameters
         ----------
@@ -398,7 +383,7 @@ class ClusterManager(object):
         -------
         requests.Response
 
-        '''
+        """
         return self._check(
             self._sess.patch(
                 urljoin(self._base_url, path),
@@ -408,13 +393,13 @@ class ClusterManager(object):
 
     @property
     def clusters(self) -> Sequence[Cluster]:
-        ''' List of available clusters '''
+        """Return a list of available clusters."""
         res = self._get('clusters')
         return [Cluster.from_dict(item, self) for item in res.json()]
 
     @property
     def regions(self) -> Sequence[Region]:
-        ''' List of available regions '''
+        """Return a list of available regions."""
         res = self._get('regions')
         return [Region.from_dict(item, self) for item in res.json()]
 
@@ -423,8 +408,8 @@ class ClusterManager(object):
         firewall_ranges: Sequence[str], expires_at: Optional[str] = None,
         size: Optional[str] = None, plan: Optional[str] = None,
     ) -> Cluster:
-        '''
-        Create a new cluster
+        """
+        Create a new cluster.
 
         Parameters
         ----------
@@ -447,7 +432,7 @@ class ClusterManager(object):
         -------
         Cluster
 
-        '''
+        """
         res = self._post(
             'clusters', json=dict(
                 name=name, regionID=region_id, adminPassword=admin_password,
@@ -458,8 +443,8 @@ class ClusterManager(object):
         return Cluster.from_dict(res.json(), manager=self)
 
     def get_cluster(self, cluster_id: str) -> Cluster:
-        '''
-        Retrieve a cluster definition
+        """
+        Retrieve a cluster definition.
 
         Parameters
         ----------
@@ -470,7 +455,7 @@ class ClusterManager(object):
         -------
         Cluster
 
-        '''
+        """
         res = self._get(f'clusters/{cluster_id}')
         return Cluster.from_dict(res.json(), manager=self)
 
@@ -480,8 +465,8 @@ def manage_cluster(
     version: str = ClusterManager.default_version,
     base_url: str = ClusterManager.default_base_url,
 ) -> ClusterManager:
-    '''
-    Retrieve a SingleStore cluster manager
+    """
+    Retrieve a SingleStore cluster manager.
 
     Parameters
     ----------
@@ -496,5 +481,5 @@ def manage_cluster(
     -------
     ClusterManager
 
-    '''
+    """
     return ClusterManager(access_token=access_token, base_url=base_url, version=version)

@@ -1,8 +1,5 @@
 #!/usr/bin/env python
-'''
-SingleStore data type utilities
-
-'''
+"""SingleStore data type utilities."""
 from __future__ import annotations
 
 import datetime
@@ -19,22 +16,66 @@ Binary = bytes
 
 
 def DateFromTicks(ticks: int) -> Date:
-    ''' Convert ticks to a date object '''
+    """
+    Convert ticks to a date object.
+
+    Parameters
+    ----------
+    ticks : int
+        Number of seconds since the epoch
+
+    Returns
+    -------
+    Date
+
+    """
     return Date(*time.localtime(ticks)[:3])
 
 
 def TimeFromTicks(ticks: int) -> Time:
-    ''' Convert ticks to a time object '''
+    """
+    Convert ticks to a time object.
+
+    Parameters
+    ----------
+    ticks : int
+        Number of seconds since the epoch
+
+    Returns
+    -------
+    Time
+
+    """
     return Time(*time.localtime(ticks)[3:6])
 
 
 def TimestampFromTicks(ticks: int) -> Timestamp:
-    ''' Convert ticks to a datetime object '''
+    """
+    Convert ticks to a datetime object.
+
+    Parameters
+    ----------
+    ticks : int
+        Number of seconds since the epoch
+
+    Returns
+    -------
+    Timestamp
+
+    """
     return Timestamp(*time.localtime(ticks)[:6])
 
 
 class DBAPIType(object):
-    ''' Base class for DB-API data types '''
+    """
+    Base class for DB-API data types.
+
+    Parameters
+    ----------
+    *values : int or str, optional
+        Names and codes of data types
+
+    """
 
     def __init__(self, *values: int | str):
         self.values: Set[int | str] = set()
@@ -45,45 +86,69 @@ class DBAPIType(object):
                 self.values.add(item)
 
     def __eq__(self, other: object) -> bool:
+        """
+        Determine if `other` object is equivalent.
+
+        Parameters
+        ----------
+        other : int or str or DBIAPIType
+            Object to compare to
+
+        Returns
+        -------
+        bool
+
+        """
         if other in self.values:
             return True
         return False
 
     def __ne__(self, other: object) -> bool:
+        """
+        Determine if `other` object is not equivalent.
+
+        Parameters
+        ----------
+        other : int or str or DBIAPIType
+            Object to compare to
+
+        Returns
+        -------
+        bool
+
+        """
         return not(self.__eq__(other))
 
     def __str__(self) -> str:
+        """Return string representation."""
         return '<{} object [{}]>'.format(
             type(self).__name__,
             ', '.join(str(x) for x in sorted(self.values)),
         )
 
     def __repr__(self) -> str:
+        """Return string representation."""
         return str(self)
 
 
 class StringDBAPIType(DBAPIType):
-    ''' STRING DB-API types '''
-    pass
+    """STRING DB-API types."""
 
 
 class BinaryDBAPIType(DBAPIType):
-    ''' BINARY DB-API types '''
-    pass
+    """BINARY DB-API types."""
 
 
 class NumberDBAPIType(DBAPIType):
-    ''' NUMBER DB-API types '''
-    pass
+    """NUMBER DB-API types."""
 
 
 class DatetimeDBAPIType(DBAPIType):
-    ''' DATETIME DB-API types '''
-    pass
+    """DATETIME DB-API types."""
 
 
 class ColumnType(object):
-    ''' Column types and utilities '''
+    """Column types and utilities."""
 
     DECIMAL = NumberDBAPIType('DECIMAL', 0x00)
     TINY = NumberDBAPIType('TINY', 0x01)
@@ -122,8 +187,8 @@ class ColumnType(object):
 
     @classmethod
     def get_code(cls, name: str) -> int:
-        '''
-        Return the numeric database type code corresponding to `name`
+        """
+        Return the numeric database type code corresponding to `name`.
 
         If `name` is given as an int, it is immediately returned.
 
@@ -136,7 +201,7 @@ class ColumnType(object):
         -------
         int
 
-        '''
+        """
         if isinstance(name, int):
             return name
         if not cls._type_name_map:
@@ -145,8 +210,8 @@ class ColumnType(object):
 
     @classmethod
     def get_name(cls, code: int) -> str:
-        '''
-        Return the database type name corresponding to integer value `code`
+        """
+        Return the database type name corresponding to integer value `code`.
 
         If `code` is given as a string, it is immediately returned.
 
@@ -159,7 +224,7 @@ class ColumnType(object):
         -------
         str
 
-        '''
+        """
         if isinstance(code, str):
             return code.upper()
         if not cls._type_code_map:
@@ -168,7 +233,7 @@ class ColumnType(object):
 
     @classmethod
     def _update_type_maps(cls) -> None:
-        ''' Update the type code and name maps '''
+        """Update the type code and name maps."""
         for k, v in vars(cls).items():
             if not isinstance(v, DBAPIType):
                 continue
@@ -181,62 +246,62 @@ class ColumnType(object):
 
     @classmethod
     def get_string_types(cls) -> List[str]:
-        '''
-        Return all database types that correspond to DB-API strings
+        """
+        Return all database types that correspond to DB-API strings.
 
         Returns
         -------
         list of StringDBAPIType instances
 
-        '''
+        """
         return [k for k, v in vars(cls).items() if type(v) is StringDBAPIType]
 
     @classmethod
     def get_binary_types(cls) -> List[str]:
-        '''
-        Return all database types that correspond to DB-API binary objects
+        """
+        Return all database types that correspond to DB-API binary objects.
 
         Returns
         -------
         list of BinaryDBAPIType instances
 
-        '''
+        """
         return [k for k, v in vars(cls).items() if type(v) is BinaryDBAPIType]
 
     @classmethod
     def get_number_types(cls) -> List[str]:
-        '''
-        Return all database types that correspond to DB-API number objects
+        """
+        Return all database types that correspond to DB-API number objects.
 
         Returns
         -------
         list of NumberDBAPIType instances
 
-        '''
+        """
         return [k for k, v in vars(cls).items() if type(v) is NumberDBAPIType]
 
     @classmethod
     def get_datetime_types(cls) -> List[str]:
-        '''
-        Return all database types that correspond to DB-API datetime objects
+        """
+        Return all database types that correspond to DB-API datetime objects.
 
         Returns
         -------
         list of DatetimeDBAPIType instances
 
-        '''
+        """
         return [k for k, v in vars(cls).items() if type(v) is DatetimeDBAPIType]
 
     @classmethod
     def get_non_dbapi_types(cls) -> List[str]:
-        '''
-        Return all database types that do not correspond to DB-API typed objects
+        """
+        Return all database types that do not correspond to DB-API typed objects.
 
         Returns
         -------
         list of DBAPIType instances
 
-        '''
+        """
         return [k for k, v in vars(cls).items() if type(v) is DBAPIType]
 
 

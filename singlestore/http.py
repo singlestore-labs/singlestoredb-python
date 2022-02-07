@@ -1,8 +1,5 @@
 #!/usr/bin/env python
-'''
-SingleStore HTTP API interface
-
-'''
+"""SingleStore HTTP API interface."""
 from __future__ import annotations
 
 import re
@@ -28,8 +25,8 @@ paramstyle = 'qmark'
 
 
 class Cursor(object):
-    '''
-    SingleStore HTTP database cursor
+    """
+    SingleStore HTTP database cursor.
 
     Cursor objects should not be created directly. They should come from
     the `cursor` method on the `Connection` object.
@@ -39,11 +36,7 @@ class Cursor(object):
     connection : Connection
         The HTTP Connection object the cursor belongs to
 
-    Returns
-    -------
-    Cursor
-
-    '''
+    """
 
     def __init__(self, connection: Connection):
         self.connection: Optional[Connection] = connection
@@ -55,8 +48,8 @@ class Cursor(object):
         self.lastrowid: Optional[int] = None
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        '''
-        Invoke a GET request on the HTTP connection
+        """
+        Invoke a GET request on the HTTP connection.
 
         Parameters
         ----------
@@ -71,14 +64,14 @@ class Cursor(object):
         -------
         requests.Response
 
-        '''
+        """
         if self.connection is None:
             raise InterfaceError(0, 'connection is closed')
         return self.connection._get(path, *args, **kwargs)
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        '''
-        Invoke a POST request on the HTTP connection
+        """
+        Invoke a POST request on the HTTP connection.
 
         Parameters
         ----------
@@ -93,14 +86,14 @@ class Cursor(object):
         -------
         requests.Response
 
-        '''
+        """
         if self.connection is None:
             raise InterfaceError(0, 'connection is closed')
         return self.connection._post(path, *args, **kwargs)
 
     def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        '''
-        Invoke a DELETE request on the HTTP connection
+        """
+        Invoke a DELETE request on the HTTP connection.
 
         Parameters
         ----------
@@ -115,7 +108,7 @@ class Cursor(object):
         -------
         requests.Response
 
-        '''
+        """
         if self.connection is None:
             raise InterfaceError(0, 'connection is closed')
         return self.connection._delete(path, *args, **kwargs)
@@ -124,8 +117,8 @@ class Cursor(object):
         self, name: str,
         params: Union[Sequence[Any], Mapping[str, Any]],
     ) -> None:
-        '''
-        Call a stored procedure
+        """
+        Call a stored procedure.
 
         Parameters
         ----------
@@ -134,11 +127,11 @@ class Cursor(object):
         params : iterable or dict, optional
             Parameters to the stored procedure
 
-        '''
+        """
         raise NotImplementedError
 
     def close(self) -> None:
-        ''' Close the cursor '''
+        """Close the cursor."""
         if self.connection is not None:
             self.connection = None
 
@@ -146,8 +139,8 @@ class Cursor(object):
         self, query: str,
         params: Optional[Union[Sequence[Any], Mapping[str, Any]]] = None,
     ) -> None:
-        '''
-        Execute a SQL statement
+        """
+        Execute a SQL statement.
 
         Parameters
         ----------
@@ -156,7 +149,7 @@ class Cursor(object):
         params : iterable or dict, optional
             Parameters to substitute into the SQL code
 
-        '''
+        """
         if self.connection is None:
             raise InterfaceError(0, 'connection is closed')
 
@@ -226,8 +219,8 @@ class Cursor(object):
             ]
         ] = None,
     ) -> None:
-        '''
-        Execute SQL code against multiple sets of parameters
+        """
+        Execute SQL code against multiple sets of parameters.
 
         Parameters
         ----------
@@ -236,7 +229,7 @@ class Cursor(object):
         params_seq : iterable of iterables or dicts, optional
             Sets of parameters to substitute into the SQL code
 
-        '''
+        """
         # TODO: What to do with the results?
         if param_seq:
             for params in param_seq:
@@ -245,8 +238,8 @@ class Cursor(object):
             self.execute(query)
 
     def fetchone(self) -> Optional[tuple[Any, ...]]:
-        '''
-        Fetch a single row from the result set
+        """
+        Fetch a single row from the result set.
 
         Returns
         -------
@@ -255,7 +248,7 @@ class Cursor(object):
         None
             If there are no rows left to return
 
-        '''
+        """
         if self._rows:
             return self._rows.pop(0)
         self.description = None
@@ -265,8 +258,8 @@ class Cursor(object):
         self,
         size: Optional[int] = None,
     ) -> Sequence[tuple[Any, ...]]:
-        '''
-        Fetch `size` rows from the result
+        """
+        Fetch `size` rows from the result.
 
         If `size` is not specified, the `arraysize` attribute is used.
 
@@ -275,7 +268,7 @@ class Cursor(object):
         list of tuples
             Values of the returned rows if there are rows remaining
 
-        '''
+        """
         if not size or int(size) <= 0:
             size = self.arraysize
         out = []
@@ -287,15 +280,15 @@ class Cursor(object):
         return out
 
     def fetchall(self) -> Sequence[tuple[Any, ...]]:
-        '''
-        Fetch all rows in the result set
+        """
+        Fetch all rows in the result set.
 
         Returns
         -------
         list of tuples
             Values of the returned rows if there are rows remaining
 
-        '''
+        """
         out = []
         while True:
             row = self.fetchone()
@@ -305,28 +298,55 @@ class Cursor(object):
         return out
 
     def nextset(self) -> Optional[bool]:
-        ''' Skip to the next available result set '''
+        """Skip to the next available result set."""
         raise NotImplementedError
 
     def setinputsizes(self, sizes: Sequence[int]) -> None:
-        ''' Predefine memory areas for parameters '''
+        """Predefine memory areas for parameters."""
         pass
 
     def setoutputsize(self, size: int, column: Optional[str] = None) -> None:
-        ''' Set a column buffer size for fetches of large columns '''
+        """Set a column buffer size for fetches of large columns."""
         pass
 
     @ property
     def rownumber(self) -> Optional[int]:
-        ''' Current zero-based index of the cursor in the result set '''
+        """
+        Return the zero-based index of the cursor in the result set.
+
+        Returns
+        -------
+        int
+
+        """
         return self.rowcount - len(self._rows)
 
     def scroll(self, value: int, mode: str = 'relative') -> None:
-        ''' Scroll the cursor to the position in the result set '''
+        """
+        Scroll the cursor to the position in the result set.
+
+        Parameters
+        ----------
+        value : int
+            Value of the positional move
+        mode : str
+            Type of move that should be made: 'relative' or 'absolute'
+
+        """
         raise NotSupportedError(0, 'scroll is not supported')
 
-    def next(self) -> tuple[Any, ...]:
-        ''' Return the next row from the result set for use in iterators '''
+    def next(self) -> Optional[tuple[Any, ...]]:
+        """
+        Return the next row from the result set for use in iterators.
+
+        Returns
+        -------
+        tuple
+            Values from the next result row
+        None
+            If no more rows exist
+
+        """
         out = self.fetchone()
         if out is None:
             raise StopIteration
@@ -335,37 +355,37 @@ class Cursor(object):
     __next__ = next
 
     def __iter__(self) -> Iterable[tuple[Any, ...]]:
-        ''' Return result iterator '''
+        """Return result iterator."""
         return iter(self._rows)
 
     def __enter__(self) -> Cursor:
-        ''' Enter a context '''
+        """Enter a context."""
         return self
 
     def __exit__(
         self, exc_type: Optional[object],
         exc_value: Optional[Exception], exc_traceback: Optional[str],
     ) -> None:
-        ''' Exit a context '''
+        """Exit a context."""
         self.close()
 
     def is_connected(self) -> bool:
-        '''
-        Is this cursor connected?
+        """
+        Check if the cursor is still connected.
 
         Returns
         -------
         bool
 
-        '''
+        """
         if self.connection is None:
             return False
         return self.connection.is_connected()
 
 
 class Connection(object):
-    '''
-    SingleStore HTTP database connection
+    """
+    SingleStore HTTP database connection.
 
     Instances of this object are typically created through the
     `connection` function rather than creating them directly.
@@ -392,11 +412,7 @@ class Connection(object):
     --------
     `connect`
 
-    Returns
-    -------
-    Connection
-
-    '''
+    """
 
     def __init__(
             self, host: Optional[str] = None, port: Optional[int] = None,
@@ -422,8 +438,8 @@ class Connection(object):
         self.autocommit: bool = True
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        '''
-        Invoke a GET request on the HTTP connection
+        """
+        Invoke a GET request on the HTTP connection.
 
         Parameters
         ----------
@@ -438,14 +454,14 @@ class Connection(object):
         -------
         requests.Response
 
-        '''
+        """
         if self._sess is None:
             raise InterfaceError(0, 'connection is closed')
         return self._sess.get(urljoin(self._url, path), *args, **kwargs)
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        '''
-        Invoke a POST request on the HTTP connection
+        """
+        Invoke a POST request on the HTTP connection.
 
         Parameters
         ----------
@@ -460,14 +476,14 @@ class Connection(object):
         -------
         requests.Response
 
-        '''
+        """
         if self._sess is None:
             raise InterfaceError(0, 'connection is closed')
         return self._sess.post(urljoin(self._url, path), *args, **kwargs)
 
     def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        '''
-        Invoke a DELETE request on the HTTP connection
+        """
+        Invoke a DELETE request on the HTTP connection.
 
         Parameters
         ----------
@@ -482,58 +498,58 @@ class Connection(object):
         -------
         requests.Response
 
-        '''
+        """
         if self._sess is None:
             raise InterfaceError(0, 'connection is closed')
         return self._sess.delete(urljoin(self._url, path), *args, **kwargs)
 
     def close(self) -> None:
-        ''' Close the connection '''
+        """Close the connection."""
         self._sess = None
 
     def commit(self) -> None:
-        ''' Commit the pending transaction '''
+        """Commit the pending transaction."""
         if self.autocommit:
             return
         raise NotSupportedError(0, 'operation not supported')
 
     def rollback(self) -> None:
-        ''' Rollback the pending transaction '''
+        """Rollback the pending transaction."""
         if self.autocommit:
             return
         raise NotSupportedError(0, 'operation not supported')
 
     def cursor(self) -> Cursor:
-        '''
-        Create a new cursor object
+        """
+        Create a new cursor object.
 
         Returns
         -------
         Cursor
 
-        '''
+        """
         return Cursor(self)
 
     def __enter__(self) -> Connection:
-        ''' Enter a context '''
+        """Enter a context."""
         return self
 
     def __exit__(
         self, exc_type: Optional[object],
         exc_value: Optional[Exception], exc_traceback: Optional[str],
     ) -> None:
-        ''' Exit a context '''
+        """Exit a context."""
         self.close()
 
     def is_connected(self) -> bool:
-        '''
-        Is the database still connected?
+        """
+        Check if the database is still connected.
 
         Returns
         -------
         bool
 
-        '''
+        """
         if self._sess is None:
             return False
         url = '/'.join(self._url.split('/')[:3]) + '/ping'
@@ -543,6 +559,15 @@ class Connection(object):
         return False
 
     def ping(self, reconnect: bool = False) -> None:
+        """
+        Check if the database server is still available.
+
+        Parameters
+        ----------
+        reconnect : bool
+            Should the server be reconnected?
+
+        """
         if not self.is_connected():
             raise InterfaceError(2006, 'Could not connect to SingleStore database')
 
@@ -552,8 +577,8 @@ def connect(
     user: Optional[str] = None, password: Optional[str] = None,
     database: Optional[str] = None, protocol: str = 'http', version: str = 'v1',
 ) -> Connection:
-    '''
-    SingleStore HTTP database connection
+    """
+    Connect to a SingleStore database using HTTP.
 
     Parameters
     ----------
@@ -577,7 +602,7 @@ def connect(
     -------
     Connection
 
-    '''
+    """
     return Connection(
         host=host, port=port, user=user, password=password,
         database=database, protocol=protocol, version=version,

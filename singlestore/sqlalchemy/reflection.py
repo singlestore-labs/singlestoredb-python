@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""SingleStore SQLAlchemy reflection utilities."""
 from __future__ import annotations
 
 import re
@@ -14,7 +15,6 @@ class SingleStoreTableDefinitionParser(MySQLTableDefinitionParser):
 
     def _prep_regexes(self) -> None:
         """Pre-compile regular expressions."""
-
         super(SingleStoreTableDefinitionParser, self)._prep_regexes()
 
         quotes = dict(

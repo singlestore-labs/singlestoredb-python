@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""SingleStore SQLAlchemy MySQLdb dialect."""
 from __future__ import annotations
 
 import re
@@ -21,9 +22,11 @@ from .base import TEXT
 
 
 class SingleStoreExecutionContext_mysqldb(SingleStoreExecutionContext):
+    """SingleStore SQLAlchemy MySQLdb execution context."""
 
     @property
     def rowcount(self) -> int:
+        """Return row count of last operation."""
         if hasattr(self, '_rowcount'):
             return self._rowcount
         else:
@@ -31,10 +34,11 @@ class SingleStoreExecutionContext_mysqldb(SingleStoreExecutionContext):
 
 
 class SingleStoreCompiler_mysqldb(SingleStoreCompiler):
-    pass
+    """SingleStore SQLAlchemy MySQLdb compiler."""
 
 
 class SingleStoreDialect_mysqldb(SingleStoreDialect):
+    """SingleStore SQLAlchemy MySQLdb dialect."""
 
     driver = 'mysqldb'
     supports_statement_cache = True
@@ -58,6 +62,19 @@ class SingleStoreDialect_mysqldb(SingleStoreDialect):
         )
 
     def _parse_dbapi_version(self, version: str) -> tuple[int, ...]:
+        """
+        Parse version number.
+
+        Parameters
+        ----------
+        version : str
+            Version string to parse
+
+        Returns
+        -------
+        tuple of ints
+
+        """
         m = re.match(r'(\d+)\.(\d+)(?:\.(\d+))?', version)
         if m:
             return tuple(int(x) for x in m.group(1, 2, 3) if x is not None)
@@ -66,6 +83,7 @@ class SingleStoreDialect_mysqldb(SingleStoreDialect):
 
     @util.langhelpers.memoized_property
     def supports_server_side_cursors(self) -> bool:
+        """Indicate whether connection supports server-side cursors."""
         try:
             cursors = __import__('MySQLdb.cursors').cursors
             self._sscursor = cursors.SSCursor
@@ -75,9 +93,11 @@ class SingleStoreDialect_mysqldb(SingleStoreDialect):
 
     @classmethod
     def dbapi(cls) -> Any:
+        """Return DB-API module."""
         return __import__('MySQLdb')
 
     def on_connect(self) -> Callable[[Connection], None]:
+        """Return function to call when server is connected."""
         super_ = super(SingleStoreDialect_mysqldb, self).on_connect()
 
         def on_connect(conn: Connection) -> None:
@@ -94,6 +114,19 @@ class SingleStoreDialect_mysqldb(SingleStoreDialect):
         return on_connect
 
     def do_ping(self, dbapi_connection: S2Connection) -> bool:
+        """
+        Determine if server is still available.
+
+        Parameters
+        ----------
+        dbapi_connection : Connection
+            The connection to check
+
+        Returns
+        -------
+        bool
+
+        """
         try:
             dbapi_connection.ping(False)
         except self.dbapi.Error as err:  # type: ignore
@@ -111,11 +144,27 @@ class SingleStoreDialect_mysqldb(SingleStoreDialect):
         parameters: Optional[Any],
         context: Optional[Any] = None,
     ) -> None:
+        """
+        Execute statement using multiple sets of parameters.
+
+        Parameters
+        ----------
+        cursor : Cursor
+            The cursor to execute statements on
+        statement : str
+            SQL code
+        parameters : dict or list, optional
+            Parameters to substitute into SQL code
+        context : SingleStoreExecutionContext, optional
+            Execution context
+
+        """
         rowcount = cursor.executemany(statement, parameters)
         if context is not None:
             context._rowcount = rowcount
 
     def _check_unicode_returns(self, connection: Connection) -> bool:
+        """Check if connection returns unicode."""
         # work around issue fixed in
         # https://github.com/farcepest/MySQLdb1/commit/cd44524fef63bd3fcb71947392326e9742d520e8
         # specific issue w/ the utf8mb4_bin collation and unicode returns
@@ -149,6 +198,23 @@ class SingleStoreDialect_mysqldb(SingleStoreDialect):
         url: URL,
         _translate_args: Optional[dict[str, Any]] = None,
     ) -> list[Any]:
+        """
+        Map connection parameters.
+
+        Parameters
+        ----------
+        url : URL
+            SQLAlchemy connection URL
+        _translate_args : dict, optional
+            Dictionary mapping of parameters
+
+        Returns
+        -------
+        list
+            List containing ??? and updated connection options
+
+        """
+        # TODO: fix docstring
         if _translate_args is None:
             _translate_args = dict(
                 database='db', username='user', password='passwd',
@@ -200,6 +266,7 @@ class SingleStoreDialect_mysqldb(SingleStoreDialect):
         return [[], opts]
 
     def _found_rows_client_flag(self) -> Optional[int]:
+        """Return found_rows client flag."""
         if self.dbapi is not None:
             try:
                 CLIENT_FLAGS = __import__(
@@ -213,11 +280,11 @@ class SingleStoreDialect_mysqldb(SingleStoreDialect):
             return None
 
     def _extract_error_code(self, exception: Exception) -> int:
+        """Extract error code from exception."""
         return exception.args[0]
 
     def _detect_charset(self, connection: Connection) -> str:
         """Sniff out the character set in use for connection results."""
-
         try:
             # note: the SQL here would be
             # "SHOW VARIABLES LIKE 'character_set%%'"
@@ -237,6 +304,7 @@ class SingleStoreDialect_mysqldb(SingleStoreDialect):
         self,
         dbapi_connection: S2Connection,
     ) -> tuple[str, ...]:
+        """Return valid transaction isolation level values."""
         return (
             'SERIALIZABLE',
             'READ UNCOMMITTED',
@@ -250,6 +318,22 @@ class SingleStoreDialect_mysqldb(SingleStoreDialect):
         dbapi_connection: S2Connection,
         level: str,
     ) -> None:
+        """
+        Set transaction isolation level.
+
+        Parameters
+        ----------
+        dbapi_connection : Connection
+            Connection to set level on
+        level : str
+            Level to set
+
+        See Also
+        --------
+        `get_isolation_level_values`
+
+
+        """
         if level == 'AUTOCOMMIT':
             dbapi_connection.autocommit(True)
         else:

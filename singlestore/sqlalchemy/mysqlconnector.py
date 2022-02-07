@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""SingleStore SQLAlchemy mysql.connector driver."""
 from __future__ import annotations
 
 import re
@@ -21,6 +22,7 @@ from .base import SingleStoreIdentifierPreparer
 
 
 class SingleStoreCompiler_mysqlconnector(SingleStoreCompiler):
+    """SingleStore SQLAlchemy mysql.connector compiler."""
 
     def visit_mod_binary(
         self,
@@ -28,6 +30,24 @@ class SingleStoreCompiler_mysqlconnector(SingleStoreCompiler):
         operator: Callable[[Any, Any], Any],
         **kw: Any,
     ) -> str:
+        """
+        Compile binary expression to SQL.
+
+        Parameters
+        ----------
+        binary : BinaryExpression
+            The expression to convert
+        operator : Callable
+            Operator to apply
+        **kw : keyword arguments
+            Additional arguments to pass to operation
+
+        Returns
+        -------
+        str
+            SQL code
+
+        """
         return (
             self.process(binary.left, **kw)
             + ' % '
@@ -36,21 +56,42 @@ class SingleStoreCompiler_mysqlconnector(SingleStoreCompiler):
 
 
 class SingleStoreIdentifierPreparer_mysqlconnector(SingleStoreIdentifierPreparer):
+    """SingleStore SQLAlchemy mysql.connector identifier preparer."""
 
     @property
     def _double_percents(self) -> bool:
+        """
+        Get double-percents flag.
+
+        Should percent signs be doubled-up?
+
+        """
         return False
 
     @_double_percents.setter
     def _double_percents(self, value: str) -> None:
-        pass
+        """Set double-percents flag."""
 
     def _escape_identifier(self, value: str) -> str:
+        """
+        Escape identifier for use in SQL statement.
+
+        Parameters
+        ----------
+        value : str
+            Input value to escape
+
+        Returns
+        -------
+        str
+
+        """
         value = value.replace(self.escape_quote, self.escape_to_quote)
         return value
 
 
 class _myconnpyBIT(BIT):
+    """mysql.connector BIT value."""
 
     def result_processor(self, dialect: SingleStoreDialect, coltype: int) -> None:
         """MySQL-connector already converts mysql bits, so."""
@@ -58,6 +99,7 @@ class _myconnpyBIT(BIT):
 
 
 class SingleStoreDialect_mysqlconnector(SingleStoreDialect):
+    """SingleStore SQLAlchemy dialect."""
 
     driver = 'mysqlconnector'
     supports_statement_cache = True
@@ -76,10 +118,24 @@ class SingleStoreDialect_mysqlconnector(SingleStoreDialect):
 
     @classmethod
     def dbapi(cls) -> Any:
+        """Return the DB-API module."""
         from mysql import connector
         return connector
 
     def do_ping(self, dbapi_connection: S2Connection) -> bool:
+        """
+        Check if the server is still available.
+
+        Parameters
+        ----------
+        dbapi_connection : Connection
+            Connection to test
+
+        Returns
+        -------
+        bool
+
+        """
         try:
             dbapi_connection.ping(False)
         except self.dbapi.Error as err:  # type: ignore
@@ -91,6 +147,21 @@ class SingleStoreDialect_mysqlconnector(SingleStoreDialect):
             return True
 
     def create_connect_args(self, url: URL) -> list[Any]:
+        """
+        Map connection parameters.
+
+        Parameters
+        ----------
+        url : URL
+            SQLAlchemy connection URL
+
+        Returns
+        -------
+        list
+            List containing ??? and updated options
+
+        """
+        # TODO: fix docstring
         opts = url.translate_connect_args(username='user')
 
         opts.update(url.query)
@@ -133,6 +204,7 @@ class SingleStoreDialect_mysqlconnector(SingleStoreDialect):
 
     @util.memoized_property
     def _mysqlconnector_version_info(self) -> Optional[tuple[int, ...]]:
+        """Return mysql.connector version."""
         if self.dbapi and hasattr(self.dbapi, '__version__'):  # type: ignore
             m = re.match(
                 r'(\d+)\.(\d+)(?:\.(\d+))?',
@@ -143,9 +215,11 @@ class SingleStoreDialect_mysqlconnector(SingleStoreDialect):
         return None
 
     def _detect_charset(self, connection: Connection) -> str:
+        """Detect server charset."""
         return connection.connection.charset
 
     def _extract_error_code(self, exception: Exception) -> int:
+        """Return the error code associated with an exception."""
         return exception.errno  # type: ignore
 
     def is_disconnect(
@@ -154,6 +228,23 @@ class SingleStoreDialect_mysqlconnector(SingleStoreDialect):
         connection: Connection,
         cursor: Optional[S2Cursor],
     ) -> bool:
+        """
+        Check if the server disconnected.
+
+        Parameters
+        ----------
+        e : Exception
+            Exception to check for disconnection
+        connection : Connection
+            Connection to check
+        cursor : Cursor, optional
+            Cursor to check
+
+        Returns
+        -------
+        bool
+
+        """
         errnos = (2006, 2013, 2014, 2045, 2055, 2048)
         exceptions = (
             self.dbapi.OperationalError,  # type: ignore
@@ -173,6 +264,7 @@ class SingleStoreDialect_mysqlconnector(SingleStoreDialect):
         rp: S2Cursor,
         charset: Optional[str] = None,
     ) -> Sequence[tuple[Any, ...]]:
+        """Return all results from a cursor."""
         return rp.fetchall()
 
     def _compat_fetchone(
@@ -180,6 +272,7 @@ class SingleStoreDialect_mysqlconnector(SingleStoreDialect):
         rp: S2Cursor,
         charset: Optional[str] = None,
     ) -> Optional[tuple[Any, ...]]:
+        """Return one result from a cursor."""
         return rp.fetchone()
 
     _isolation_lookup = set(
@@ -193,6 +286,22 @@ class SingleStoreDialect_mysqlconnector(SingleStoreDialect):
     )
 
     def _set_isolation_level(self, connection: Connection, level: str) -> None:
+        """
+        Set transaction isolation level.
+
+        Parameters
+        ----------
+        connection : Connection
+            Connection to set level on
+        level : str
+            Isolation level to set
+
+        See Also
+        --------
+        `_isolation_lookup`
+
+
+        """
         if level == 'AUTOCOMMIT':
             connection.autocommit = True
         else:

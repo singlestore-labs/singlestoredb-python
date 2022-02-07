@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""SingleStore SQLAlchemy HTTP API driver."""
 from __future__ import annotations
 
 from typing import Any
@@ -11,19 +12,50 @@ from .base import SingleStoreDialect
 
 
 class SingleStoreDialect_http(SingleStoreDialect):
+    """SingleStore SQLAlchemy HTTP API dialect."""
+
     driver = 'http'
     default_paramstyle = 'qmark'
 
     @classmethod
     def dbapi(cls) -> Any:
+        """Return the DB-API module."""
         return http
 
     def create_connect_args(self, url: URL) -> list[Any]:
+        """
+        Map connection parameters.
+
+        Parameters
+        ----------
+        url : URL
+            SQLAlchemy connection URL
+
+        Returns
+        -------
+        list
+            Contains ??? and updated options
+
+        """
+        # TODO: fix docstring
         opts = url.translate_connect_args(username='user')
         opts.update(url.query)
         return [[], opts]
 
     def do_ping(self, dbapi_connection: http.Connection) -> bool:
+        """
+        Check if the server is still available.
+
+        Parameters
+        ----------
+        dbapi_connection : http.Connection
+            The connection to check
+
+        Returns
+        -------
+        bool
+
+        """
         try:
             dbapi_connection.ping(False)
         except self.dbapi.Error as err:  # type: ignore
@@ -40,6 +72,23 @@ class SingleStoreDialect_http(SingleStoreDialect):
         connection: http.Connection,
         cursor: Optional[http.Cursor],
     ) -> bool:
+        """
+        Check if the server has disconnected.
+
+        Parameters
+        ----------
+        e : Exception
+            Exception value to check
+        connection : http.Connection
+            Connection to check
+        cursor : http.Cursor, optional
+            Cursor to check
+
+        Returns
+        -------
+        bool
+
+        """
         errnos = (2006, 2013, 2014, 2045, 2055, 2048)
         exceptions = (
             self.dbapi.OperationalError,  # type: ignore

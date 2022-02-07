@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""Base classes for SingleStore SQLAlchemy objects."""
 from __future__ import annotations
 
 from sqlalchemy import util
@@ -15,26 +16,27 @@ from . import reflection
 
 
 class SingleStoreExecutionContext(MySQLExecutionContext):
-    pass
+    """SingleStore SQLAlchemy execution context."""
 
 
 class SingleStoreCompiler(MySQLCompiler):
-    pass
+    """SingleStore SQLAlchemy compiler."""
 
 
 class SingleStoreDDLCompiler(MySQLDDLCompiler):
-    pass
+    """SingleStore SQLAlchemy DDL compiler."""
 
 
 class SingleStoreTypeCompiler(MySQLTypeCompiler):
-    pass
+    """SingleStore SQLAlchemy type compiler."""
 
 
 class SingleStoreIdentifierPreparer(MySQLIdentifierPreparer):
-    pass
+    """SingleStore SQLAlchemy identifier preparer."""
 
 
 class SingleStoreDialect(MySQLDialect):
+    """SingleStore SQLAlchemy dialect."""
 
     name = 'singlestore'
 
@@ -45,10 +47,15 @@ class SingleStoreDialect(MySQLDialect):
 
     @util.memoized_property
     def _tabledef_parser(self) -> reflection.SingleStoreTableDefinitionParser:
-        """return the MySQLTableDefinitionParser, generate if needed.
+        """
+        Return the SingleStoreTableDefinitionParser.
 
         The deferred creation ensures that the dialect has
         retrieved server version information first.
+
+        Returns
+        -------
+        reflection.SingleStoreTableDefinitionParser
 
         """
         from . import reflection

@@ -1,8 +1,17 @@
 #!/usr/bin/env python
-'''
-SingleStore database module
+"""
+SingleStore database module.
 
-'''
+Examples
+--------
+>>> import singlestore as s2
+>>> conn = s2.connect('user:password@host/dbname')
+>>> cur = conn.cursor()
+>>> cur.execute('select * from customers')
+>>> for row in cur:
+...     print(row)
+
+"""
 from __future__ import annotations
 
 __version__ = '0.1.0'

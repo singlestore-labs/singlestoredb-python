@@ -1,8 +1,5 @@
 #!/usr/bin/env python
-'''
-SingleStore database connections and cursors
-
-'''
+"""SingleStore database connections and cursors."""
 from __future__ import annotations
 
 import os
@@ -31,8 +28,8 @@ paramstyle = 'qmark'
 
 
 def _name_check(name: str) -> str:
-    '''
-    Make sure the given name is a legal variable name
+    """
+    Make sure the given name is a legal variable name.
 
     Parameters
     ----------
@@ -43,7 +40,7 @@ def _name_check(name: str) -> str:
     -------
     str
 
-    '''
+    """
     name = name.strip()
     if not re.match(r'^[A-Za-z][\w+_]*$', name):
         raise ValueError('Name contains invalid characters')
@@ -51,7 +48,8 @@ def _name_check(name: str) -> str:
 
 
 class Description(NamedTuple):
-    ''' Column definition '''
+    """Column definition."""
+
     name: str
     type_code: str
     display_size: Optional[int]
@@ -62,8 +60,8 @@ class Description(NamedTuple):
 
 
 class Cursor(object):
-    '''
-    Database cursor for submitting commands and queries
+    """
+    Database cursor for submitting commands and queries.
 
     This object should not be instantiated directly.
     The `Connection.cursor` method should be used.
@@ -82,7 +80,7 @@ class Cursor(object):
     -------
     Cursor
 
-    '''
+    """
 
     def __init__(
         self, connection: Connection, cursor: Any,
@@ -95,22 +93,51 @@ class Cursor(object):
 
     @property
     def connection(self) -> Optional[Connection]:
-        ''' The Connection that the cursor belongs to '''
+        """
+        Return the connection that the cursor belongs to.
+
+        Returns
+        -------
+        Connection or None
+
+        """
         return self._conn
 
     @property
     def arraysize(self) -> int:
-        ''' The batch size used by `fetchmany` '''
+        """
+        Return the batch size used by `fetchmany`.
+
+        Returns
+        -------
+        int
+
+        """
         return self._cursor.arraysize
 
     @arraysize.setter
     def arraysize(self, val: int) -> None:
-        ''' Set the batch size used by `fetchmany` '''
+        """
+        Set the batch size used by `fetchmany`.
+
+        Parameters
+        ----------
+        val : int
+            Size of the batch
+
+        """
         self._cursor.arraysize = val
 
     @property
     def description(self) -> List[Description]:
-        ''' Column descriptions for the current result set '''
+        """
+        Return column descriptions for the current result set.
+
+        Returns
+        -------
+        list of Description
+
+        """
         out = []
         for item in self._cursor.description:
             item = list(item)
@@ -121,7 +148,14 @@ class Cursor(object):
 
     @property
     def rowcount(self) -> int:
-        ''' Number of rows the last execute produced or affected '''
+        """
+        Return the number of rows the last execute produced or affected.
+
+        Returns
+        -------
+        int
+
+        """
         if hasattr(self._cursor, '_rowcount'):
             return self._cursor._rowcount
         return self._cursor.rowcount
@@ -130,8 +164,8 @@ class Cursor(object):
         self, name: str,
         params: Optional[Union[Sequence[Any], Mapping[str, Any]]] = None,
     ) -> None:
-        '''
-        Call a stored procedure
+        """
+        Call a stored procedure.
 
         Parameters
         ----------
@@ -140,11 +174,11 @@ class Cursor(object):
         params : iterable or dict, optional
             Parameters to the stored procedure
 
-        '''
+        """
         self._cursor.callproc(name, params)
 
     def close(self) -> None:
-        ''' Close the cursor '''
+        """Close the cursor."""
         self._cursor.close()
         self._conn = None
 
@@ -152,8 +186,8 @@ class Cursor(object):
         self, oper: str,
         params: Optional[Union[Sequence[Any], Mapping[str, Any]]] = None,
     ) -> int:
-        '''
-        Execute a SQL statement
+        """
+        Execute a SQL statement.
 
         Parameters
         ----------
@@ -162,7 +196,7 @@ class Cursor(object):
         params : iterable or dict, optional
             Parameters to substitute into the SQL code
 
-        '''
+        """
         self._cursor.execute(*self._param_converter.format(oper, params or []))
         return self._cursor.rowcount
 
@@ -170,8 +204,8 @@ class Cursor(object):
         self, oper: str,
         param_seq: Optional[Sequence[Union[Sequence[Any], Mapping[str, Any]]]] = None,
     ) -> int:
-        '''
-        Execute SQL code against multiple sets of parameters
+        """
+        Execute SQL code against multiple sets of parameters.
 
         Parameters
         ----------
@@ -180,13 +214,13 @@ class Cursor(object):
         params_seq : iterable of iterables or dicts, optional
             Sets of parameters to substitute into the SQL code
 
-        '''
+        """
         self._cursor.executemany(*self._param_converter.formatmany(oper, param_seq or []))
         return self._cursor.rowcount
 
     def fetchone(self) -> Optional[tuple[Any, ...]]:
-        '''
-        Fetch a single row from the result set
+        """
+        Fetch a single row from the result set.
 
         Returns
         -------
@@ -195,12 +229,12 @@ class Cursor(object):
         None
             If there are no rows left to return
 
-        '''
+        """
         return self._cursor.fetchone()
 
     def fetchmany(self, size: Optional[int] = None) -> Sequence[tuple[Any, ...]]:
-        '''
-        Fetch `size` rows from the result
+        """
+        Fetch `size` rows from the result.
 
         If `size` is not specified, the `arraysize` attribute is used.
 
@@ -211,12 +245,12 @@ class Cursor(object):
         None
             If there are no rows left to return
 
-        '''
+        """
         return self._cursor.fetchmany(size=size or self.arraysize)
 
     def fetchall(self) -> Sequence[tuple[Any, ...]]:
-        '''
-        Fetch all rows in the result set
+        """
+        Fetch all rows in the result set.
 
         Returns
         -------
@@ -225,12 +259,12 @@ class Cursor(object):
         None
             If there are no rows to return
 
-        '''
+        """
         return self._cursor.fetchall()
 
     def fetchframe(self) -> Optional[DataFrame]:  # type: ignore # noqa: F821
-        '''
-        Fetch all rows in the result set as a `pandas.DataFrame`
+        """
+        Fetch all rows in the result set as a `pandas.DataFrame`.
 
         Returns
         -------
@@ -239,80 +273,118 @@ class Cursor(object):
         None
             If there are no rows to return
 
-        '''
+        """
         from pandas import DataFrame
         columns = [x[0] for x in self.description]
         return DataFrame(data=self.fetchall(), columns=columns)
 
     def nextset(self) -> Optional[bool]:
-        ''' Skip to the next available result set '''
+        """Skip to the next available result set."""
         raise NotImplementedError
 
     def setinputsizes(self, sizes: Sequence[int]) -> None:
-        ''' Predefine memory areas for parameters '''
+        """Predefine memory areas for parameters."""
         self._cursor.setinputsizes(sizes)
 
     def setoutputsize(self, size: int, column: Optional[str] = None) -> None:
-        ''' Set a column buffer size for fetches of large columns '''
+        """Set a column buffer size for fetches of large columns."""
         self._cursor.setoutputsize(size, column)
 
     @property
     def rownumber(self) -> Optional[int]:
-        ''' Current zero-based index of the cursor in the result set '''
+        """
+        Return the zero-based index of the cursor in the result set.
+
+        Returns
+        -------
+        int
+            Position in current result set
+        None
+            No result set is selected
+
+        """
         return self._cursor.rownumber
 
     def scroll(self, value: int, mode: str = 'relative') -> None:
-        ''' Scroll the cursor to the position in the result set '''
+        """
+        Scroll the cursor to the position in the result set.
+
+        Parameters
+        ----------
+        value : int
+            Value of the positional move
+        mode : str
+            Where to move the cursor from: 'relative' or 'absolute'
+
+        """
         self._cursor.scroll(mode=mode)
 
     @property
     def messages(self) -> Sequence[tuple[int, str]]:
-        ''' List of received messages '''
+        """
+        List of received messages.
+
+        Returns
+        -------
+        list of tuples
+            Tuples contain a numeric code and a message
+
+        """
         return self._cursor.messages
 
     def next(self) -> Optional[Sequence[Any]]:
-        ''' Return the next row from the result set for use in iterators '''
+        """
+        Return the next row from the result set for use in iterators.
+
+        Returns
+        -------
+        tuple of values
+            If a row of results exists
+        None
+            If there are no more results
+
+        """
         return self._cursor.next()
 
     __next__ = next
 
     def __iter__(self) -> Iterable[Sequence[Any]]:
-        ''' Return result iterator '''
+        """Return result iterator."""
         return self._cursor.__iter__()
 
     @property
     def lastrowid(self) -> Optional[int]:
-        ''' The rowid of the last modified row '''
+        """Return the rowid of the last modified row."""
         return self._cursor.lastrowid()
 
     def __enter__(self) -> Cursor:
-        ''' Enter a context '''
+        """Enter a context."""
         return self
 
     def __exit__(
         self, exc_type: Optional[object],
         exc_value: Optional[Exception], exc_traceback: Optional[str],
     ) -> None:
-        ''' Exit a context '''
+        """Exit a context."""
         self.close()
 
     def is_connected(self) -> bool:
-        '''
-        Is this cursor connected?
+        """
+        Check if the cursor is connected.
 
         Returns
         -------
         bool
 
-        '''
+        """
         if self._conn is None:
             return False
         return self._conn.is_connected()
 
 
 class Connection(object):
-    '''
-    SingleStore database connection
+    """
+    SingleStore database connection.
 
     Instances of this object are typically created through the
     `connection` function rather than creating them directly.
@@ -354,11 +426,7 @@ class Connection(object):
     --------
     `connect`
 
-    Returns
-    -------
-    Connection
-
-    '''
+    """
 
     arraysize: int = 1000
     default_driver: str = 'PyMySQL'
@@ -467,68 +535,76 @@ class Connection(object):
         )
 
     def autocommit(self, value: bool = True) -> None:
-        ''' Set autocommit '''
+        """Set autocommit mode."""
         self._autocommit = value
 
     def close(self) -> None:
-        ''' Close the database connection '''
+        """Close the database connection."""
         if self._conn is None:
             return None
         self._conn.close()
         self._conn = None
 
     def commit(self) -> None:
-        ''' Commit the pending transaction '''
+        """Commit the pending transaction."""
         if self._conn is None:
             raise exceptions.InterfaceError(0, 'connection is closed')
         self._conn.commit()
 
     def rollback(self) -> None:
-        ''' Rollback the pending transaction '''
+        """Rollback the pending transaction."""
         if self._conn is None:
             raise exceptions.InterfaceError(0, 'connection is closed')
         self._conn.rollback()
 
     def cursor(self) -> Cursor:
-        '''
-        Create a new cursor object
+        """
+        Create a new cursor object.
 
         Returns
         -------
         Cursor
 
-        '''
+        """
         if self._conn is None:
             raise exceptions.InterfaceError(0, 'connection is closed')
         return Cursor(self, self._conn.cursor(), self._param_converter)
 
     @property
     def messages(self) -> Sequence[tuple[int, str]]:
-        ''' Messages generated by the connection '''
+        """
+        Return messages generated by the connection.
+
+        Returns
+        -------
+        list of tuples
+            Each tuple contains an int code and a message
+
+        """
         if self._conn is None:
             raise exceptions.InterfaceError(0, 'connection is closed')
         return self._conn.messages
 
     def __enter__(self) -> Connection:
-        ''' Enter a context '''
+        """Enter a context."""
         return self
 
     def __exit__(
         self, exc_type: Optional[object],
         exc_value: Optional[Exception], exc_traceback: Optional[str],
     ) -> None:
-        ''' Exit a context '''
+        """Exit a context."""
         self.close()
 
     def is_connected(self) -> bool:
-        '''
-        Is the database still connected?
+        """
+        Determine if the database is still connected.
 
         Returns
         -------
         bool
 
-        '''
+        """
         if self._conn is None:
             return False
         is_connected = getattr(self._conn, 'is_connected', None)
@@ -537,21 +613,34 @@ class Connection(object):
         return False
 
     def ping(self, reconnect: bool = False) -> bool:
+        """
+        Check to see if server is still available.
+
+        Parameters
+        ----------
+        reconnect : bool
+            Should a reconnection be attempted?
+
+        Returns
+        -------
+        bool
+
+        """
         # TODO: not sure how this is expected to work yet
         if not self.is_connected():
             raise exceptions.InterfaceError(2006, 'SingleStore server is not connected')
         return True
 
     def set_global_var(self, **kwargs: Any) -> None:
-        '''
-        Set one or more global variables in the database
+        """
+        Set one or more global variables in the database.
 
         Parameters
         ----------
         **kwargs : key-value pairs
             Keyword parameters specify the variable names and values to set
 
-        '''
+        """
         cur = self.cursor()
         for name, value in kwargs.items():
             if value is True:
@@ -561,15 +650,15 @@ class Connection(object):
             cur.execute('set global {}=?'.format(_name_check(name)), [value])
 
     def set_session_var(self, **kwargs: Any) -> None:
-        '''
-        Set one or more session variables in the database
+        """
+        Set one or more session variables in the database.
 
         Parameters
         ----------
         **kwargs : key-value pairs
             Keyword parameters specify the variable names and values to set
 
-        '''
+        """
         cur = self.cursor()
         for name, value in kwargs.items():
             if value is True:
@@ -579,34 +668,34 @@ class Connection(object):
             cur.execute('set session {}=?'.format(_name_check(name)), [value])
 
     def get_global_var(self, name: str) -> Any:
-        '''
-        Retrieve the value of a global variable
+        """
+        Retrieve the value of a global variable.
 
         Returns
         -------
         Any
 
-        '''
+        """
         cur = self.cursor()
         cur.execute('select @@global.{}'.format(_name_check(name)))
         return list(cur)[0][0]  # type: ignore
 
     def get_session_var(self, name: str) -> Any:
-        '''
-        Retrieve the value of a session variable
+        """
+        Retrieve the value of a session variable.
 
         Returns
         -------
         Any
 
-        '''
+        """
         cur = self.cursor()
         cur.execute('select @@session.{}'.format(_name_check(name)))
         return list(cur)[0][0]  # type: ignore
 
     def enable_http_api(self, port: Optional[int] = None) -> int:
-        '''
-        Enable the HTTP API in the server
+        """
+        Enable the HTTP API in the server.
 
         Use of this method requires privileges that allow setting global
         variables and starting the HTTP proxy.
@@ -620,9 +709,10 @@ class Connection(object):
 
         Returns
         -------
-        int : port number of the HTTP server
+        int
+            port number of the HTTP server
 
-        '''
+        """
         cur = self.cursor()
         if port is not None:
             self.set_global_var(http_proxy_port=int(port))
@@ -631,7 +721,7 @@ class Connection(object):
         return self.get_global_var('http_proxy_port')
 
     def disable_http_api(self) -> None:
-        ''' Disable the HTTP API '''
+        """Disable the HTTP API."""
         cur = self.cursor()
         self.set_global_var(http_api=False)
         cur.execute('restart proxy')
@@ -643,8 +733,8 @@ def connect(
     port: Optional[int] = None, database: Optional[str] = None,
     driver: Optional[str] = None, pure_python: Optional[bool] = False,
 ) -> Connection:
-    '''
-    Return a SingleStore database connection
+    """
+    Return a SingleStore database connection.
 
     Parameters
     ----------
@@ -683,7 +773,7 @@ def connect(
     -------
     Connection
 
-    '''
+    """
     return Connection(
         dsn=dsn, user=user, password=password, host=host,
         port=port, database=database, driver=driver,

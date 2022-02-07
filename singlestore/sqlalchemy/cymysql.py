@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""SingleStore CyMySQL driver."""
 from __future__ import annotations
 
 from typing import Any
@@ -16,6 +17,7 @@ from .mysqldb import SingleStoreDialect_mysqldb
 
 
 class _cymysqlBIT(BIT):
+    """BIT value for CyMySQL driver."""
 
     def result_processor(
         self,
@@ -36,6 +38,7 @@ class _cymysqlBIT(BIT):
 
 
 class SingleStoreDialect_cymysql(SingleStoreDialect_mysqldb):
+    """SingleStore CyMySQL dialect."""
 
     driver = 'cymysql'
     supports_statement_cache = True
@@ -49,12 +52,29 @@ class SingleStoreDialect_cymysql(SingleStoreDialect_mysqldb):
 
     @classmethod
     def dbapi(cls) -> Any:
+        """Return DB-API module."""
         return __import__('cymysql')
 
     def _detect_charset(self, connection: Connection) -> str:
+        """
+        Return charset of database connection.
+
+        Returns
+        -------
+        str
+
+        """
         return connection.connection.charset
 
     def _extract_error_code(self, exception: Exception) -> int:
+        """
+        Return error code from an exception.
+
+        Returns
+        -------
+        int
+
+        """
         return exception.errno  # type: ignore
 
     def is_disconnect(
@@ -63,6 +83,23 @@ class SingleStoreDialect_cymysql(SingleStoreDialect_mysqldb):
         connection: Connection,
         cursor: S2Cursor,
     ) -> bool:
+        """
+        Check if the server has been disconnected.
+
+        Parameters
+        ----------
+        e : Exception
+            Exception value to inspect
+        connection : Connection
+            Connection to check
+        cursor : Cursor
+            Cursor to check
+
+        Returns
+        -------
+        bool
+
+        """
         if isinstance(e, self.dbapi.OperationalError):  # type: ignore
             return self._extract_error_code(e) in (
                 2006,
