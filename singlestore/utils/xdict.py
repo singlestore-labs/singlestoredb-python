@@ -22,6 +22,7 @@ from __future__ import annotations
 import copy
 import re
 from typing import Any
+from typing import Dict
 from typing import ItemsView
 from typing import Iterable
 from typing import KeysView
@@ -48,7 +49,7 @@ def _is_compound_key(key: str) -> bool:
     return isinstance(key, str) and '.' in key
 
 
-class xdict(dict[str, Any]):
+class xdict(Dict[str, Any]):
     """
     Nested dictionary that allows setting of nested keys using '.' delimited strings.
 
@@ -265,8 +266,8 @@ class xdict(dict[str, Any]):
 
     def _flatten(
         self,
-        dct: dict[str, Any],
-        output: dict[str, Any],
+        dct: Dict[str, Any],
+        output: Dict[str, Any],
         prefix: str = '',
     ) -> None:
         """
@@ -302,9 +303,9 @@ class xdict(dict[str, Any]):
                 else:
                     output[prefix + key] = value
 
-    def flattened(self) -> dict[str, Any]:
+    def flattened(self) -> Dict[str, Any]:
         """Return an xdict with keys flattened to period (.) delimited strings."""
-        output: dict[str, Any] = {}
+        output: Dict[str, Any] = {}
         self._flatten(self, output)
         return output
 

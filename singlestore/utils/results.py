@@ -6,8 +6,11 @@ import collections
 import warnings
 from typing import Any
 from typing import Callable
+from typing import Dict
+from typing import List
 from typing import NamedTuple
 from typing import Optional
+from typing import Tuple
 from typing import Union
 
 try:
@@ -19,9 +22,9 @@ except ImportError:
 
 from ..config import options
 
-DBAPIResult = Union[list[tuple[Any, ...]], tuple[Any, ...]]
-OneResult = Union[tuple[Any, ...], dict[str, Any], DataFrame]
-ManyResult = Union[list[tuple[Any, ...]], list[dict[str, Any]], DataFrame]
+DBAPIResult = Union[List[Tuple[Any, ...]], Tuple[Any, ...]]
+OneResult = Union[Tuple[Any, ...], Dict[str, Any], DataFrame]
+ManyResult = Union[List[Tuple[Any, ...]], List[Dict[str, Any]], DataFrame]
 Result = Union[OneResult, ManyResult]
 
 
@@ -38,7 +41,7 @@ class Description(NamedTuple):
 
 
 def results_to_dataframe(
-    desc: list[Description],
+    desc: List[Description],
     res: Optional[DBAPIResult],
     single: Optional[bool] = False,
 ) -> Optional[Result]:
@@ -77,7 +80,7 @@ def results_to_dataframe(
 
 
 def results_to_namedtuple(
-    desc: list[Description],
+    desc: List[Description],
     res: Optional[DBAPIResult],
     single: Optional[bool] = False,
 ) -> Optional[Result]:
@@ -114,7 +117,7 @@ def results_to_namedtuple(
 
 
 def results_to_dict(
-    desc: list[Description],
+    desc: List[Description],
     res: Optional[DBAPIResult],
     single: Optional[bool] = False,
 ) -> Optional[Result]:
@@ -147,7 +150,7 @@ def results_to_dict(
 
 
 def results_to_tuple(
-    desc: list[Description],
+    desc: List[Description],
     res: Optional[DBAPIResult],
     single: Optional[bool] = False,
 ) -> Optional[Result]:
@@ -174,9 +177,9 @@ def results_to_tuple(
     return res
 
 
-_converters: dict[
+_converters: Dict[
     str, Callable[
-        [list[Description], Optional[DBAPIResult], Optional[bool]],
+        [List[Description], Optional[DBAPIResult], Optional[bool]],
         Optional[Result],
     ],
 ] = {
@@ -188,7 +191,7 @@ _converters: dict[
 
 
 def format_results(
-    desc: list[Description],
+    desc: List[Description],
     res: Optional[DBAPIResult],
     single: bool = False,
 ) -> Optional[Result]:
