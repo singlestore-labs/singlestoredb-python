@@ -37,7 +37,7 @@ jobs:
           pip install nose
       - name: Run tests
         run: |
-          nosetest .
+          nosetests .
         env:
           SINGLESTORE_URL: "mysqldb://root:root@127.0.0.1:3306/app"
           LICENSE_KEY: ${SINGLESTORE_LICENSE}
