@@ -368,7 +368,7 @@ class Connection(object):
 
     Parameters
     ----------
-    dsn : str, optional
+    url : str, optional
         URL that describes the connection. The scheme or protocol defines
         which database connector to use. By default, the `PyMySQL`
         is used. To connect to the HTTP API, the scheme can be set to `http`
@@ -419,7 +419,7 @@ class Connection(object):
     NotSupportedError = exceptions.NotSupportedError
 
     def __init__(
-            self, dsn: Optional[str] = None, user: Optional[str] = None,
+            self, url: Optional[str] = None, user: Optional[str] = None,
             password: Optional[str] = None, host: Optional[str] = None,
             port: Optional[int] = None, database: Optional[str] = None,
             driver: Optional[str] = None, pure_python: Optional[bool] = False,
@@ -437,25 +437,25 @@ class Connection(object):
         params['user'] = user or os.environ.get('SINGLESTORE_USER', None)
         params['password'] = password or os.environ.get('SINGLESTORE_PASSWORD', None)
 
-        # Check environment for dsn
-        if not dsn:
-            dsn = os.environ.get('SINGLESTORE_DSN', None)
+        # Check environment for url
+        if not url:
+            url = os.environ.get('SINGLESTORE_URL', None)
 
-        # If a dsn url is supplied, it takes precedence
-        if dsn:
-            if '//' not in dsn:
-                dsn = '//' + dsn
+        # If a url is supplied, it takes precedence
+        if url:
+            if '//' not in url:
+                url = '//' + url
 
-            parts = urlparse(dsn, scheme='singlestore', allow_fragments=True)
+            parts = urlparse(url, scheme='singlestore', allow_fragments=True)
 
-            dsn_db = parts.path
-            if dsn_db.startswith('/'):
-                dsn_db = dsn_db.split('/')[1].strip()
-            dsn_db = dsn_db.split('/')[0].strip() or ''
+            url_db = parts.path
+            if url_db.startswith('/'):
+                url_db = url_db.split('/')[1].strip()
+            url_db = url_db.split('/')[0].strip() or ''
 
             params['host'] = parts.hostname or params['host']
             params['port'] = parts.port or params['port']
-            params['database'] = dsn_db or params['database']
+            params['database'] = url_db or params['database']
             params['user'] = parts.username or params['user']
             if parts.password is not None:
                 params['password'] = parts.password
@@ -705,7 +705,7 @@ class Connection(object):
 
 
 def connect(
-    dsn: Optional[str] = None, user: Optional[str] = None,
+    url: Optional[str] = None, user: Optional[str] = None,
     password: Optional[str] = None, host: Optional[str] = None,
     port: Optional[int] = None, database: Optional[str] = None,
     driver: Optional[str] = None, pure_python: Optional[bool] = False,
@@ -715,7 +715,7 @@ def connect(
 
     Parameters
     ----------
-    dsn : str, optional
+    url : str, optional
         URL that describes the connection. The scheme or protocol defines
         which database connector to use. By default, the `PyMySQL`
         is used. To connect to the HTTP API, the scheme can be set to `http`
@@ -752,7 +752,7 @@ def connect(
 
     """
     return Connection(
-        dsn=dsn, user=user, password=password, host=host,
+        url=url, user=user, password=password, host=host,
         port=port, database=database, driver=driver,
         pure_python=pure_python,
     )
