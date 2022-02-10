@@ -9,21 +9,21 @@ class Error(Exception):
 
     Parameters
     ----------
-    code : int
+    errno : int
         The database error code
     message : str
         The database error message
 
     """
 
-    def __init__(self, code: int, message: str):
-        self.code = code
+    def __init__(self, errno: int, message: str):
+        self.errno = errno
         self.message = message
-        super(Exception, self).__init__(code, message)
+        super(Exception, self).__init__(errno, message)
 
     def __str__(self) -> str:
         """Return string representation."""
-        return '[{}] {}'.format(self.code, self.message)
+        return '[{}] {}'.format(self.errno, self.message)
 
     def __repr__(self) -> str:
         """Return string representation."""

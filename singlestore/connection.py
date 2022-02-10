@@ -10,7 +10,6 @@ from typing import Any
 from typing import Dict
 from typing import Iterable
 from typing import List
-from typing import NamedTuple
 from typing import Optional
 from typing import Union
 from urllib.parse import urlparse
@@ -19,6 +18,9 @@ import sqlparams
 
 from . import exceptions
 from . import types
+from .utils.results import Description
+from .utils.results import format_results
+from .utils.results import Result
 
 
 # DB-API settings
@@ -45,18 +47,6 @@ def _name_check(name: str) -> str:
     if not re.match(r'^[A-Za-z][\w+_]*$', name):
         raise ValueError('Name contains invalid characters')
     return name
-
-
-class Description(NamedTuple):
-    """Column definition."""
-
-    name: str
-    type_code: str
-    display_size: Optional[int]
-    internal_size: Optional[int]
-    precision: Optional[int]
-    scale: Optional[int]
-    null_ok: Optional[bool]
 
 
 class Cursor(object):
@@ -218,7 +208,7 @@ class Cursor(object):
         self._cursor.executemany(*self._param_converter.formatmany(oper, param_seq or []))
         return self._cursor.rowcount
 
-    def fetchone(self) -> Optional[tuple[Any, ...]]:
+    def fetchone(self) -> Optional[Result]:
         """
         Fetch a single row from the result set.
 
@@ -230,9 +220,9 @@ class Cursor(object):
             If there are no rows left to return
 
         """
-        return self._cursor.fetchone()
+        return format_results(self.description, self._cursor.fetchone(), single=True)
 
-    def fetchmany(self, size: Optional[int] = None) -> Sequence[tuple[Any, ...]]:
+    def fetchmany(self, size: Optional[int] = None) -> Optional[Result]:
         """
         Fetch `size` rows from the result.
 
@@ -246,9 +236,12 @@ class Cursor(object):
             If there are no rows left to return
 
         """
-        return self._cursor.fetchmany(size=size or self.arraysize)
+        return format_results(
+            self.description,
+            self._cursor.fetchmany(size=size or self.arraysize),
+        )
 
-    def fetchall(self) -> Sequence[tuple[Any, ...]]:
+    def fetchall(self) -> Optional[Result]:
         """
         Fetch all rows in the result set.
 
@@ -260,23 +253,7 @@ class Cursor(object):
             If there are no rows to return
 
         """
-        return self._cursor.fetchall()
-
-    def fetchframe(self) -> Optional[DataFrame]:  # type: ignore # noqa: F821
-        """
-        Fetch all rows in the result set as a `pandas.DataFrame`.
-
-        Returns
-        -------
-        pandas.DataFrame
-            Values of the returned rows if there are rows remaining
-        None
-            If there are no rows to return
-
-        """
-        from pandas import DataFrame
-        columns = [x[0] for x in self.description]
-        return DataFrame(data=self.fetchall(), columns=columns)
+        return format_results(self.description, self._cursor.fetchall())
 
     def nextset(self) -> Optional[bool]:
         """Skip to the next available result set."""

@@ -16,8 +16,11 @@ import requests
 
 from . import types
 from .converters import converters
+from .exceptions import Error  # noqa: F401
 from .exceptions import InterfaceError
 from .exceptions import NotSupportedError
+from .exceptions import OperationalError  # noqa: F401
+from .utils.results import Result
 
 
 # DB-API parameter style
@@ -192,7 +195,7 @@ class Cursor(object):
             convs = []
             for item in out['results'][0].get('columns', []):
                 col_type = types.ColumnType.get_name(item['dataType'])
-                convs.append(converters[col_type])
+                convs.append(converters[col_type.split('(', 1)[0]])
                 self.description.append((
                     item['name'], col_type,
                     None, None, None, None,
@@ -237,7 +240,7 @@ class Cursor(object):
         else:
             self.execute(query)
 
-    def fetchone(self) -> Optional[tuple[Any, ...]]:
+    def fetchone(self) -> Optional[Result]:
         """
         Fetch a single row from the result set.
 
@@ -251,13 +254,12 @@ class Cursor(object):
         """
         if self._rows:
             return self._rows.pop(0)
-        self.description = None
         return None
 
     def fetchmany(
         self,
         size: Optional[int] = None,
-    ) -> Sequence[tuple[Any, ...]]:
+    ) -> Optional[Result]:
         """
         Fetch `size` rows from the result.
 
@@ -272,14 +274,12 @@ class Cursor(object):
         if not size or int(size) <= 0:
             size = self.arraysize
         out = []
-        while size > 0:
-            row = self.fetchone()
-            if row is None:
-                break
-            out.append(row)
+        while size > 0 and self._rows:
+            out.append(self._rows.pop(0))
+            size -= 1
         return out
 
-    def fetchall(self) -> Sequence[tuple[Any, ...]]:
+    def fetchall(self) -> Optional[Result]:
         """
         Fetch all rows in the result set.
 
@@ -290,11 +290,8 @@ class Cursor(object):
 
         """
         out = []
-        while True:
-            row = self.fetchone()
-            if row is None:
-                break
-            out.append(row)
+        while self._rows:
+            out.append(self._rows.pop(0))
         return out
 
     def nextset(self) -> Optional[bool]:
@@ -335,7 +332,7 @@ class Cursor(object):
         """
         raise NotSupportedError(0, 'scroll is not supported')
 
-    def next(self) -> Optional[tuple[Any, ...]]:
+    def next(self) -> Optional[Result]:
         """
         Return the next row from the result set for use in iterators.
 

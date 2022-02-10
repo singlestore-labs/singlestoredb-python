@@ -6,7 +6,6 @@ import re
 from typing import Any
 from typing import Callable
 from typing import Optional
-from typing import Sequence
 
 from sqlalchemy import util
 from sqlalchemy.engine import URL
@@ -263,7 +262,7 @@ class SingleStoreDialect_mysqlconnector(SingleStoreDialect):
         self,
         rp: S2Cursor,
         charset: Optional[str] = None,
-    ) -> Sequence[tuple[Any, ...]]:
+    ) -> Any:
         """Return all results from a cursor."""
         return rp.fetchall()
 
@@ -271,7 +270,7 @@ class SingleStoreDialect_mysqlconnector(SingleStoreDialect):
         self,
         rp: S2Cursor,
         charset: Optional[str] = None,
-    ) -> Optional[tuple[Any, ...]]:
+    ) -> Any:
         """Return one result from a cursor."""
         return rp.fetchone()
 

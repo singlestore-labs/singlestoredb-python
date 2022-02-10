@@ -96,7 +96,7 @@ class SingleStoreDialect_http(SingleStoreDialect):
         )
         if isinstance(e, exceptions):
             return (
-                e.errno in errnos
+                e.args[0] in errnos
                 or 'SingleStore Connection not available.' in str(e)
                 or 'Connection to SingleStore is not available' in str(e)
             )
