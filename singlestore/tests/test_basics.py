@@ -14,4 +14,11 @@ class BasicTests(unittest.TestCase):
         conn = s2.connect()
         cur = conn.cursor()
         cur.execute('show databases')
-        assert list(cur) == ['app']
+
+        dbs = set([x[0] for x in cur.fetchall()])
+        assert dbs == set(['app', 'cluster', 'information_schema', 'memsql']), str(dbs)
+
+
+if __name__ == '__main__':
+    import nose2
+    nose2.main()
