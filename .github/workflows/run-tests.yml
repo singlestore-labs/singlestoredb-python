@@ -13,6 +13,12 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
+        s2-driver: [pymysql]
+        s2-port: [3306]
+        include:
+          - python-version: 3.10
+            s2-driver: http
+            s2-port: 8080
 
     services:
       singlestore:
@@ -52,4 +58,4 @@ jobs:
       - name: Run tests
         run: nose2 -v singlestore.tests
         env:
-          SINGLESTORE_URL: "pymysql://root:root@localhost:3306/app"
+          SINGLESTORE_URL: "${s2-driver}://root:root@localhost:${s2-port}/app"
