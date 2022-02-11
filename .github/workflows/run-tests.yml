@@ -16,7 +16,7 @@ jobs:
         s2-driver: [pymysql]
         s2-port: [3306]
         include:
-          - python-version: 3.10
+          - python-version: "3.10"
             s2-driver: http
             s2-port: 8080
 
