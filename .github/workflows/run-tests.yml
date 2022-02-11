@@ -60,3 +60,4 @@ jobs:
         run: nose2 -v singlestore.tests
         env:
           SINGLESTORE_URL: "${{ matrix.s2-driver }}://root:root@localhost:${{ matrix.s2-port }}/app"
+          SINGLESTORE_HTTP_PORT: 9000
