@@ -8,7 +8,7 @@ on:
 
 jobs:
   container-job:
-    runs-on: ubuntu-latest
+    runs-on: [ubuntu-latest, macos-latest, windows-latest]
 
     strategy:
       matrix:
