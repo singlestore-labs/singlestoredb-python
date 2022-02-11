@@ -1,0 +1,4 @@
+PyMySQL
+requests
+sqlalchemy>=1.4.0,<2.0.0dev
+sqlparams
