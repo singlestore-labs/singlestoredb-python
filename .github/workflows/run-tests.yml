@@ -18,7 +18,7 @@ jobs:
         include:
           - python-version: "3.10"
             s2-driver: http
-            s2-port: 8080
+            s2-port: 9000
 
     services:
       singlestore:
@@ -26,6 +26,7 @@ jobs:
         ports:
           - 3306:3306
           - 8080:8080
+          - 9000:9000
         env:
           LICENSE_KEY: ${{ secrets.SINGLESTORE_LICENSE }}
           ROOT_PASSWORD: "root"

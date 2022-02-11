@@ -5,6 +5,12 @@ from __future__ import annotations
 import singlestore as s2
 
 commands = r'''
+SET GLOBAL HTTP_PROXY_PORT=9000;
+
+SET GLOBAL HTTP_API=ON;
+
+RESTART PROXY;
+
 DROP DATABASE IF EXISTS app;
 
 CREATE DATABASE app;
