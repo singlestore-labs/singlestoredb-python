@@ -56,6 +56,9 @@ jobs:
         env:
           SINGLESTORE_URL: "pymysql://root:root@localhost:3306"
 
+      - name: Test client
+        run: mysql --user=root --password=root --host=localhost --port=3306 --default-auth=mysql_native_password -e 'show databases;'
+
       - name: Run tests
         run: nose2 -v singlestore.tests
         env:
