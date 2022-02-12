@@ -13,12 +13,10 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
-        s2-driver: [mysqldb]
-        s2-port: [3306]
-        include:
-          - python-version: "3.10"
-            s2-driver: http
-            s2-port: 9000
+        singlestore-url:
+          - mysqldb://root:root@127.0.0.1:3306/app
+          - pymysql://root:root@127.0.0.1:3306/app
+          - http://root:root@127.0.0.1:9000/app
 
     services:
       singlestore:
@@ -52,16 +50,16 @@ jobs:
         run: |
           python setup.py install
 
-      - name: Initialize database
-        run: python singlestore/tests/init_db.py
-        env:
-          SINGLESTORE_URL: "pymysql://root:root@127.0.0.1:3306"
+#     - name: Initialize database
+#       run: python singlestore/tests/init_db.py
+#       env:
+#         SINGLESTORE_URL: "pymysql://root:root@127.0.0.1:3306"
 
-      - name: Test client
-        run: mysql --user=root --password=root --host=127.0.0.1 --port=3306 --default-auth=mysql_native_password -e 'show databases;'
+      - name: Initialize database
+        run: mysql --user=root --password=root --host=127.0.0.1 --port=3306 --default-auth=mysql_native_password < resources/test.sql
 
       - name: Run tests
         run: nose2 -v singlestore.tests
         env:
-          SINGLESTORE_URL: "${{ matrix.s2-driver }}://root:root@127.0.0.1:${{ matrix.s2-port }}/app"
+          SINGLESTORE_URL: "${{ matrix.singlestore-url }}"
           SINGLESTORE_HTTP_PORT: 9000
