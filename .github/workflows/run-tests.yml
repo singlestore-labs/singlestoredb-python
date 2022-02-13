@@ -7,12 +7,18 @@ on:
     branches: [ main ]
 
 jobs:
-  container-job:
-    runs-on: ubuntu-latest
+  job-name:
+    runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        os:
+          - ubuntu-latest
+          - windows-latest
+        python-version:
+          - "3.8"
+          - "3.9"
+          - "3.10"
         singlestore-url:
           - mysqldb://root:root@127.0.0.1:3306/app
           - pymysql://root:root@127.0.0.1:3306/app
