@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 from typing import Callable
+from typing import Dict
+from typing import Optional
 from typing import Sequence
 
 from sqlalchemy import util
+from sqlalchemy.engine import URL
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.engine.interfaces import Dialect
 
@@ -54,6 +57,30 @@ class SingleStoreDialect_cymysql(SingleStoreDialect_mysqldb):
     def dbapi(cls) -> Any:
         """Return DB-API module."""
         return __import__('cymysql')
+
+    def create_connect_args(
+        self,
+        url: URL,
+        _translate_args: Optional[Dict[str, Any]] = None,
+    ) -> list[Any]:
+        """
+        Map connection parameters.
+
+        Parameters
+        ----------
+        url : URL
+            SQLAlchemy connection URL
+
+        Returns
+        -------
+        list
+            Contains ??? and updated options
+
+        """
+        # TODO: fix docstring
+        opts = url.translate_connect_args(password='passwd', database='db')
+        opts.update(url.query)
+        return [[], opts]
 
     def _detect_charset(self, connection: Connection) -> str:
         """

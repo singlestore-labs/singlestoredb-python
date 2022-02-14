@@ -478,6 +478,8 @@ class Connection(object):
             import MySQLdb as connector
         elif drv_name == 'cymysql':
             import cymysql as connector
+            params['db'] = params.pop('database', None)
+            params['passwd'] = params.pop('password', None)
         elif drv_name == 'pymysql':
             import pymysql as connector  # type: ignore
         elif drv_name.startswith('pyodbc'):
