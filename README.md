@@ -1,5 +1,10 @@
 # <img src="resources/singlestore-logo.png" height="60" valign="middle"/> SingleStore Python Interface
 
+![PyPI](https://img.shields.io/pypi/v/singlestore)
+![Conda](https://img.shields.io/conda/v/singlestore/singlestore)
+![License](https://img.shields.io/github/license/singlestore-labs/singlestore-python)
+![Python Version](https://img.shields.io/pypi/pyversions/singlestore)
+
 This project contains a [DB-API 2.0](https://www.python.org/dev/peps/pep-0249/)
 compatible Python interface to the SingleStore database and cluster management API.
 

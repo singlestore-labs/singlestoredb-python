@@ -1,0 +1,67 @@
+name: Run smoke tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-coverage:
+    runs-on: ubuntu-latest
+
+    services:
+      singlestore:
+        image: singlestore/cluster-in-a-box:latest
+        ports:
+          - 3306:3306
+          - 8080:8080
+          - 9000:9000
+        env:
+          LICENSE_KEY: ${{ secrets.SINGLESTORE_LICENSE }}
+          ROOT_PASSWORD: "root"
+          START_AFTER_INIT: "Y"
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r test-requirements.txt
+
+      - name: Install SingleStore package
+        run: |
+          python setup.py install
+
+      - name: Initialize database
+        run: python singlestore/tests/init_db.py
+        env:
+          # Always use PyMySQL; HTTP doesn't support connections with out a db name.
+          SINGLESTORE_URL: "pymysql://root:root@127.0.0.1:3306"
+          SINGLESTORE_HTTP_PORT: 9000
+
+      - name: Run MySQL protocol tests
+        run: |
+          nose2 -q --with-coverage --coverage singlestore --coverage-report xml singlestore.tests
+          mv -f coverage.xml coverage-mysql.xml
+        env:
+          SINGLESTORE_URL: "mysqldb://root:@127.0.0.1:3306/app"
+
+      - name: Run HTTP protocol tests
+        run: |
+          nose2 -q --with-coverage --coverage singlestore --coverage-report xml singlestore.tests
+          mv -f coverage.xml coverage-http.xml
+        env:
+          SINGLESTORE_URL: "http://root:@127.0.0.1:3306/app"
+
+      - name: Combine results
+        run: |
+          coverage combine coverage-mysql.xml coverage-http.xml
