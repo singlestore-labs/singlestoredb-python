@@ -1,4 +1,4 @@
-name: Run unit tests
+name: Run smoke tests
 
 on:
   push:
@@ -59,8 +59,8 @@ jobs:
       - name: Initialize database
         run: python singlestore/tests/init_db.py
         env:
-          SINGLESTORE_URL: "${{ matrix.singlestore-url }}"
-          SINGLESTORE_HTTP_PORT: 9000
+          # Always use PyMySQL; HTTP doesn't support connections with out a db name.
+          SINGLESTORE_URL: "pymysql://root:root@127.0.0.1:3306"
 
       - name: Run tests
         run: nose2 -v singlestore.tests
