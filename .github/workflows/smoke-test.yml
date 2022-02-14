@@ -60,9 +60,9 @@ jobs:
         run: python singlestore/tests/init_db.py
         env:
           SINGLESTORE_URL: "${{ matrix.singlestore-url }}"
+          SINGLESTORE_HTTP_PORT: 9000
 
       - name: Run tests
         run: nose2 -v singlestore.tests
         env:
           SINGLESTORE_URL: "${{ matrix.singlestore-url }}/app"
-          #INGLESTORE_HTTP_PORT: 9000
