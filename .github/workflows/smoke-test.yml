@@ -15,9 +15,9 @@ jobs:
         os:
           - ubuntu-latest
         python-version:
-#         - "3.7"
-#         - "3.8"
-#         - "3.9"
+          - "3.7"
+          - "3.8"
+          - "3.9"
           - "3.10"
         singlestore-url:
           - mysqldb://root:root@127.0.0.1:3306
