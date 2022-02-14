@@ -1,0 +1,3 @@
+cymysql
+mysqlclient
+nose2
