@@ -62,6 +62,9 @@ jobs:
         env:
           SINGLESTORE_URL: "http://root:root@127.0.0.1:9000/app"
 
-      - name: Combine results
+      - name: Generate report
         run: |
           coverage combine coverage-mysql.xml coverage-http.xml
+          coverage report
+          coverage xml
+          coverage html
