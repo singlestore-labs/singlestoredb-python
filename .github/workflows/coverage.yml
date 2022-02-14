@@ -50,15 +50,15 @@ jobs:
 
       - name: Run MySQL protocol tests
         run: |
-          nose2 -q --with-coverage --coverage singlestore --coverage-report xml singlestore.tests
-          mv -f coverage.xml coverage-mysql.xml
+          nose2 -q --with-coverage --coverage singlestore singlestore.tests
+          mv -f .coverage coverage-mysql.xml
         env:
           SINGLESTORE_URL: "mysqldb://root:root@127.0.0.1:3306/app"
 
       - name: Run HTTP protocol tests
         run: |
-          nose2 -q --with-coverage --coverage singlestore --coverage-report xml singlestore.tests
-          mv -f coverage.xml coverage-http.xml
+          nose2 -q --with-coverage --coverage singlestore singlestore.tests
+          mv -f .coverage coverage-http.xml
         env:
           SINGLESTORE_URL: "http://root:root@127.0.0.1:9000/app"
 
