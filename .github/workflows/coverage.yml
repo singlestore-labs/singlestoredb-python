@@ -60,7 +60,7 @@ jobs:
           nose2 -q --with-coverage --coverage singlestore --coverage-report xml singlestore.tests
           mv -f coverage.xml coverage-http.xml
         env:
-          SINGLESTORE_URL: "http://root:root@127.0.0.1:3306/app"
+          SINGLESTORE_URL: "http://root:root@127.0.0.1:9000/app"
 
       - name: Combine results
         run: |
