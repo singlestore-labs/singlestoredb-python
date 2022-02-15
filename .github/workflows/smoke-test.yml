@@ -7,7 +7,21 @@ on:
     branches: [ main ]
 
 jobs:
+
+  setup-database:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Initialize database
+        run: |
+          mysql --user=root --password=${{ secrets.CLUSTER_PASSWORD }} --host=svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com --port=3306 ---default-auth=mysql_native_password < resources/test.sql
+
+
   smoke-test:
+    needs: setup-database
+
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -29,18 +43,6 @@ jobs:
 #         - cymysql://root:root@127.0.0.1:3306
 #         - http://root:root@127.0.0.1:9000
 
-#   services:
-#     singlestore:
-#       image: singlestore/cluster-in-a-box:latest
-#       ports:
-#         - 3306:3306
-#         - 8080:8080
-#         - 9000:9000
-#       env:
-#         LICENSE_KEY: ${{ secrets.SINGLESTORE_LICENSE }}
-#         ROOT_PASSWORD: "root"
-#         START_AFTER_INIT: "Y"
-
     steps:
       - uses: actions/checkout@v2
 
@@ -59,15 +61,6 @@ jobs:
       - name: Install SingleStore package
         run: |
           python setup.py install
-
-      - name: Initialize database
-        run: python singlestore/tests/init_db.py
-        env:
-          # Always use PyMySQL; HTTP doesn't support connections with out a db name.
-#         SINGLESTORE_URL: "pymysql://root:root@127.0.0.1:3306"
-          SINGLESTORE_URL: "pymysql://svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com:3306"
-          SINGLESTORE_USER: "admin"
-          SINGLESTORE_PASSWORD: "${{ secrets.CLUSTER_PASSWORD }}"
 
       - name: Run tests
         run: nose2 -v singlestore.tests
