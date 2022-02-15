@@ -15,27 +15,28 @@ jobs:
         os:
           - ubuntu-latest
         python-version:
-          - "3.7"
-          - "3.8"
-          - "3.9"
+#         - "3.7"
+#         - "3.8"
+#         - "3.9"
           - "3.10"
         singlestore-url:
-          - mysqldb://root:root@127.0.0.1:3306
-          - pymysql://root:root@127.0.0.1:3306
-          - cymysql://root:root@127.0.0.1:3306
-          - http://root:root@127.0.0.1:9000
+          - mysqldb://admin:${{ secrets.CLUSTER_PASSWORD }}@svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com:3306
+#         - mysqldb://root:root@127.0.0.1:3306
+#         - pymysql://root:root@127.0.0.1:3306
+#         - cymysql://root:root@127.0.0.1:3306
+#         - http://root:root@127.0.0.1:9000
 
-    services:
-      singlestore:
-        image: singlestore/cluster-in-a-box:latest
-        ports:
-          - 3306:3306
-          - 8080:8080
-          - 9000:9000
-        env:
-          LICENSE_KEY: ${{ secrets.SINGLESTORE_LICENSE }}
-          ROOT_PASSWORD: "root"
-          START_AFTER_INIT: "Y"
+#   services:
+#     singlestore:
+#       image: singlestore/cluster-in-a-box:latest
+#       ports:
+#         - 3306:3306
+#         - 8080:8080
+#         - 9000:9000
+#       env:
+#         LICENSE_KEY: ${{ secrets.SINGLESTORE_LICENSE }}
+#         ROOT_PASSWORD: "root"
+#         START_AFTER_INIT: "Y"
 
     steps:
       - uses: actions/checkout@v2
@@ -60,7 +61,8 @@ jobs:
         run: python singlestore/tests/init_db.py
         env:
           # Always use PyMySQL; HTTP doesn't support connections with out a db name.
-          SINGLESTORE_URL: "pymysql://root:root@127.0.0.1:3306"
+#         SINGLESTORE_URL: "pymysql://root:root@127.0.0.1:3306"
+          SINGLESTORE_URL: "pymysql://admin:${{ secrets.CLUSTER_PASSWORD }}@svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com:3306"
 
       - name: Run tests
         run: nose2 -v singlestore.tests
