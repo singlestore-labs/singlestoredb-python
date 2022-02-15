@@ -51,11 +51,11 @@ jobs:
           pip install -r test-requirements.txt
 
       - name: Initialize database
-        run: python singlestore/tests/init_db.py
+        run: |
+          PYTHONPATH=$GITHUB_WORKSPACE python singlestore/tests/init_db.py
         env:
           # Always use PyMySQL; HTTP doesn't support connections with out a db name.
           SINGLESTORE_URL: "pymysql://root:root@127.0.0.1:3306"
-          PYTHONPATH: "$GITHUB_WORKSPACE"
 
       - name: Build PyPI package
         run: |
