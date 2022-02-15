@@ -1,18 +1,15 @@
-{% set name = 'singlestore' %}
-{% set version = '0.1.0' %}
-{% set build = '0' %}
 
 package:
-    name: {{ name }}
-    version: {{ version }}
+    name: singlestore
+    version: 0.1.0
 
 source:
-#   url: https://github.com/singlestore-labs/singlestore-python/releases/download/v{{ version }}/singlestore-python-{{ version }}.tar.gz
+#   url: https://github.com/singlestore-labs/singlestore-python/releases/download/v0.1.0/singlestore-python-0.1.0.tar.gz
     path: ..
 
 build:
     noarch: python
-    number: {{ build }}
+    number: 0
     script: python -m pip install --no-deps --ignore-installed .
 
 requirements:
