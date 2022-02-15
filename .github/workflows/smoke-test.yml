@@ -60,7 +60,7 @@ jobs:
           pip install -r test-requirements.txt
 
       - name: Install MySQL libraries
-        if: ${{ matrix.os == "macos-latest" }}
+        if: ${{ matrix.os == 'macos-latest' }}
         run: |
           brew update
           brew install mysql
