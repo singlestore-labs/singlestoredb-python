@@ -6,34 +6,63 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: Upload PyPI Package
+name: Publish PyPI and Conda Packages
 
 on:
   release:
     types: [published]
 
 jobs:
-  deploy:
+  publish:
 
     runs-on: ubuntu-latest
 
+    services:
+      singlestore:
+        image: singlestore/cluster-in-a-box:latest
+        ports:
+          - 3306:3306
+          - 8080:8080
+        env:
+          LICENSE_KEY: ${{ secrets.SINGLESTORE_LICENSE }}
+          ROOT_PASSWORD: "root"
+          START_AFTER_INIT: "Y"
+
     steps:
     - uses: actions/checkout@v2
-    - name: Set up Python
+    - name: Set up Python 3.10
       uses: actions/setup-python@v2
       with:
-        python-version: '3.x'
+        python-version: "3.10"
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install build
 
-    - name: Build package
-      run: python -m build
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
+        conda update conda
+        conda install conda-build anaconda-client
 
-#    - name: Publish package
+    - name: Build PyPI package
+      run: |
+        python -m build
+
+    - name: Build Conda package
+      run: |
+        cd conda.recipe
+        mkdir artifacts
+        conda build -c singlestore -c conda-forge --no-anaconda-upload --output-folder artifacts .
+
+#    - name: Publish PyPI package
 #      uses: pypa/gh-action-pypi-publish@717ba43cfbb0387f6ce311b169a825772f54d295
 #      with:
 #        user: __token__
-#        password: ${{ secrets.PYPI_API_TOKEN }}
+#        password: ${{ secrets.PYPI_TOKEN }}
+#
+#    - name: Publish Conda package
+#      run: |
+#          anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main artifacts/noarch/singlestore-*.tar.bz2

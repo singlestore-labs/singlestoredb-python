@@ -1,0 +1,46 @@
+{% set name = 'singlestore' %}
+{% set version = '0.1.0' %}
+{% set build = '0' %}
+
+package:
+    name: {{ name }}
+    version: {{ version }}
+
+source:
+#   url: https://github.com/singlestore-labs/singlestore-python/releases/download/v{{ version }}/singlestore-python-{{ version }}.tar.gz
+    path: ..
+
+build:
+    noarch: python
+    number: {{ build }}
+    script: python -m pip install --no-deps --ignore-installed .
+
+requirements:
+    build:
+        - python {{ python }}
+        - pip
+    run:
+        - python
+        - PyMySQL
+        - requests
+        - sqlalchemy>=1.4.0,<2.0.0dev
+        - sqlparams
+
+test:
+    imports:
+        - singlestore
+    requires:
+        - coverage
+        - cymysql
+        - mysqlclient
+        - nose2
+    commands:
+        - nose2 -v singlestore.tests.test_basics
+
+about:
+    home: https://github.com/singlestore-labs/singlestore-python
+    license: Apache 2.0
+    license_file: ../LICENSE
+    summary: SingleStore Database Interface
+    doc_url: https://singlestore.github.io/singlestore-python/index.html
+    dev_url: https://github.com/singlestore/singlestore-python
