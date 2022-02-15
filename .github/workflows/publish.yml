@@ -55,6 +55,7 @@ jobs:
         env:
           # Always use PyMySQL; HTTP doesn't support connections with out a db name.
           SINGLESTORE_URL: "pymysql://root:root@127.0.0.1:3306"
+          PYTHONPATH: "${{ env.GITHUB_WORKSPACE }}"
 
       - name: Build PyPI package
         run: |
