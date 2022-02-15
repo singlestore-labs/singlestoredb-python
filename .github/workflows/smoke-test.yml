@@ -20,11 +20,13 @@ jobs:
 #         - "3.9"
           - "3.10"
         singlestore-url:
-          - "mysqldb://admin:${{ secrets.CLUSTER_PASSWORD }}@svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com:3306"
+          - mysqldb://admin:${{ env.CLUSTER_PASSWORD }}@svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com:3306
 #         - mysqldb://root:root@127.0.0.1:3306
 #         - pymysql://root:root@127.0.0.1:3306
 #         - cymysql://root:root@127.0.0.1:3306
 #         - http://root:root@127.0.0.1:9000
+      env:
+        CLUSTER_PASSWORD: "${{ secrets.CLUSTER_PASSWORD }}"
 
 #   services:
 #     singlestore:
