@@ -16,7 +16,7 @@ jobs:
 
       - name: Initialize database
         run: |
-          mysql --user=root --password=${{ secrets.CLUSTER_PASSWORD }} --host=svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com --port=3306 ---default-auth=mysql_native_password < resources/test.sql
+          mysql --user=root --password="${{ secrets.CLUSTER_PASSWORD }}" --host=svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com --port=3306 ---default-auth=mysql_native_password < resources/test.sql
 
 
   smoke-test:
