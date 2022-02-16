@@ -12,11 +12,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v2
+
       - name: Initialize database
+        id: initialize-database
         run: |
-          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X POST "https://api.singlestore.com/v0beta/clusters/${{ secrets.CLUSTER_ID }}/resume"
-          mysql --user="${{ secrets.CLUSTER_USER }}" --password="${{ secrets.CLUSTER_PASSWORD }}" --host="${{ secrets.CLUSTER_HOST }}" --port=3306 --default-auth=mysql_native_password < resources/test.sql
-#         mysql --user="${{ secrets.CLUSTER_USER }}" --password="${{ secrets.CLUSTER_PASSWORD }}" --host="${{ secrets.CLUSTER_HOST }}" --port=3306 --default-auth=mysql_native_password < resources/http_api.sql
+          cluster_info=$(PYTHONPATH="$GITHUB_WORKSPACE" python resources/create_test_cluster.py --password=${{ secrets.CLUSTER_PASSWORD }} --token=${{ secrets.CLUSTER_API_KEY }} --init-sql resources/test.sql)
+          echo "::set-output name=cluster-id::$(cut -d' ' -f1 $cluster_info)"
+          echo "::set-output name=cluster-host::$(cut -d' ' -f2 $cluster_info)"
+        outputs:
+          cluster-id: ${{ steps.initialize-database.outputs.cluster-id }}
+          cluster-host: ${{ steps.initialize-database.outputs.cluster-host }}
 
 
   smoke-test:
@@ -70,13 +76,13 @@ jobs:
         if: ${{ matrix.driver != 'http' }}
         run: nose2 -v singlestore.tests.test_basics
         env:
-          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ secrets.CLUSTER_HOST }}:3306/app"
+          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/app"
 
       - name: Run tests
         if: ${{ matrix.driver == 'http' }}
         run: nose2 -v singlestore.tests.test_basics
         env:
-          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ secrets.CLUSTER_HOST }}:8080/app"
+          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:8080/app"
 
 
   shutdown-database:
@@ -85,6 +91,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Suspend database
+      - name: Shutdown database
         run: |
-          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X POST "https://api.singlestore.com/v0beta/clusters/${{ secrets.CLUSTER_ID }}/suspend"
+          python resources/drop_test_cluster.py --token=${{ secrets.CLUSTER_API_KEY }} $CLUSTER_ID
+        env:
+          CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}

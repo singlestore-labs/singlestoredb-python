@@ -241,7 +241,7 @@ class Cluster(object):
         self,
         wait_on_suspended: bool = False,
         wait_interval: int = 20,
-        wait_timeout: int = 300,
+        wait_timeout: int = 600,
     ) -> None:
         """Suspend the cluster."""
         if self._manager is None:
@@ -261,7 +261,7 @@ class Cluster(object):
         self,
         wait_on_resumed: bool = False,
         wait_interval: int = 20,
-        wait_timeout: int = 300,
+        wait_timeout: int = 600,
     ) -> None:
         """Resume the cluster."""
         if self._manager is None:
@@ -281,7 +281,7 @@ class Cluster(object):
         self,
         wait_on_terminated: bool = False,
         wait_interval: int = 10,
-        wait_timeout: int = 300,
+        wait_timeout: int = 600,
     ) -> None:
         """Terminate the cluster."""
         if self._manager is None:
@@ -493,7 +493,7 @@ class ClusterManager(object):
         self, name: str, region_id: str, admin_password: str,
         firewall_ranges: Sequence[str], expires_at: Optional[str] = None,
         size: Optional[str] = None, plan: Optional[str] = None,
-        wait_on_active: bool = False, wait_timeout: int = 300,
+        wait_on_active: bool = False, wait_timeout: int = 600,
         wait_interval: int = 20,
     ) -> Cluster:
         """
@@ -548,7 +548,7 @@ class ClusterManager(object):
         out: Cluster,
         state: Union[str, List[str]],
         interval: int = 20,
-        timeout: int = 300,
+        timeout: int = 600,
     ) -> Cluster:
         """
         Wait on server state before continuing.
