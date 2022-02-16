@@ -77,3 +77,13 @@ register_option(
     'What form should the query results take?',
     environ='SINGLESTORE_RESULTS_FORMAT',
 )
+
+
+#
+# Cluster manager options
+#
+register_option(
+    'cluster_manager.token', 'string', check_str, None,
+    'Specifies the authentication token for the cluster manager API.',
+    environ=['SINGLESTORE_CLUSTER_MANAGER_TOKEN'],
+)
