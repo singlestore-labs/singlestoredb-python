@@ -20,9 +20,10 @@ jobs:
           cluster_info=$(PYTHONPATH="$GITHUB_WORKSPACE" python resources/create_test_cluster.py --password=${{ secrets.CLUSTER_PASSWORD }} --token=${{ secrets.CLUSTER_API_KEY }} --init-sql resources/test.sql "$GITHUB_WORKFLOW")
           echo "::set-output name=cluster-id::$(cut -d' ' -f1 $cluster_info)"
           echo "::set-output name=cluster-host::$(cut -d' ' -f2 $cluster_info)"
-        outputs:
-          cluster-id: ${{ steps.initialize-database.outputs.cluster-id }}
-          cluster-host: ${{ steps.initialize-database.outputs.cluster-host }}
+
+    outputs:
+      cluster-id: ${{ steps.initialize-database.outputs.cluster-id }}
+      cluster-host: ${{ steps.initialize-database.outputs.cluster-host }}
 
 
   smoke-test:
