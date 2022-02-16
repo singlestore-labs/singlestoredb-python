@@ -12,10 +12,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-
       - name: Initialize database
         run: |
+          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X POST "https://api.singlestore.com/v0beta/clusters/${{ secrets.CLUSTER_ID }}/resume"
           mysql --user="${{ secrets.CLUSTER_USER }}" --password="${{ secrets.CLUSTER_PASSWORD }}" --host="${{ secrets.CLUSTER_HOST }}" --port=3306 --default-auth=mysql_native_password < resources/test.sql
 #         mysql --user="${{ secrets.CLUSTER_USER }}" --password="${{ secrets.CLUSTER_PASSWORD }}" --host="${{ secrets.CLUSTER_HOST }}" --port=3306 --default-auth=mysql_native_password < resources/http_api.sql
 
@@ -78,3 +77,14 @@ jobs:
         run: nose2 -v singlestore.tests.test_basics
         env:
           SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ secrets.CLUSTER_HOST }}:8080/app"
+
+
+  shutdown-database:
+    needs: [setup-database, smoke-test]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Suspend database
+        run: |
+          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X POST "https://api.singlestore.com/v0beta/clusters/${{ secrets.CLUSTER_ID }}/suspend"
