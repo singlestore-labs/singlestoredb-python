@@ -92,10 +92,13 @@ clus = cm.create_cluster(
 )
 
 # TODO: When we can discover the hostname, change this.
-host = 'svc-{}-ddl.aws-virginia-2.svc.singlestore.com'.format(clus.id)
+host = f'svc-{clus.id}-ddl.aws-virginia-2.svc.singlestore.com'
 
 if options.http_port or options.init_sql:
-    with s2.connect('pymysql://admin:{options.password}@{host}:3306') as conn:
+    with s2.connect(
+        f'pymysql://{host}:3306', user='admin',
+        password=options.password,
+    ) as conn:
         with conn.cursor() as cur:
             if options.http_port:
                 cur.execute(
@@ -111,7 +114,6 @@ if options.http_port or options.init_sql:
                         cmd = cmd.strip()
                         if cmd:
                             cmd += ';'
-                            print(cmd)
                             cur.execute(cmd)
 
 print(clus.id, host)
