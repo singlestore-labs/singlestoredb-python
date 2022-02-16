@@ -1,4 +1,4 @@
-name: Run smoke tests
+name: Smoke test
 
 on:
   schedule:
@@ -16,7 +16,7 @@ jobs:
 
       - name: Initialize database
         run: |
-          mysql --user=admin --password="${{ secrets.CLUSTER_PASSWORD }}" --host=svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com --port=3306 --default-auth=mysql_native_password < resources/test.sql
+          mysql --user="${{ secrets.CLUSTER_USER }}" --password="${{ secrets.CLUSTER_PASSWORD }}" --host="${{ secrets.CLUSTER_HOST }}" --port=3306 --default-auth=mysql_native_password < resources/test.sql
 
 
   smoke-test:
@@ -35,11 +35,11 @@ jobs:
           - "3.8"
           - "3.9"
           - "3.10"
-        singlestore-url:
-          - cymysql://svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com:3306
-          - pymysql://svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com:3306
-          - mysqldb://svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com:3306
-#         - http://svc-fce74933-486c-4ce7-9580-dceb7819bb70-ddl.aws-oregon-2.svc.singlestore.com:9000
+        driver:
+          - cymysql
+          - pymysql
+          - mysqldb
+#         - http
 
     steps:
       - uses: actions/checkout@v2
@@ -67,8 +67,13 @@ jobs:
           python setup.py install
 
       - name: Run tests
-        run: nose2 -v singlestore.tests
+        if: ${{ matrix.driver != 'http' }}
+        run: nose2 -v singlestore.tests.test_basics
         env:
-          SINGLESTORE_URL: "${{ matrix.singlestore-url }}/app"
-          SINGLESTORE_USER: "admin"
-          SINGLESTORE_PASSWORD: "${{ secrets.CLUSTER_PASSWORD }}"
+          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ secrets.CLUSTER_HOST }}:3306/app"
+
+      - name: Run tests
+        if: ${{ matrix.driver == 'http' }}
+        run: nose2 -v singlestore.tests.test_basics
+        env:
+          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ secrets.CLUSTER_HOST }}:8080/app"

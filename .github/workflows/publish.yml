@@ -6,7 +6,7 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: Publish PyPI and Conda Packages
+name: Publish packages
 
 on:
   release:
@@ -76,12 +76,14 @@ jobs:
           SINGLESTORE_URL: "pymysql://root:root@127.0.0.1:3306"
 
 #      - name: Publish PyPI package
+#        if: ${{ github.event.inputs.publish }}
 #        uses: pypa/gh-action-pypi-publish@717ba43cfbb0387f6ce311b169a825772f54d295
 #        with:
 #          user: __token__
-#          password: ${{ secrets.PYPI_TOKEN }}
-#
+#          password: "${{ secrets.PYPI_TOKEN }}"
+
 #      - name: Publish Conda package
+#        if: ${{ github.event.inputs.publish }}
 #        run: |
-#            echo $CONDA/bin >> $GITHUB_PATH
-#            anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main artifacts/noarch/singlestore-*.tar.bz2
+#          echo $CONDA/bin >> $GITHUB_PATH
+#          anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main artifacts/noarch/singlestore-*.tar.bz2
