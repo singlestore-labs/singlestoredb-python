@@ -16,8 +16,8 @@ jobs:
 
       - name: Initialize database
         run: |
-          cat resources/test.sql | mysql --user="${{ secrets.CLUSTER_USER }}" --password="${{ secrets.CLUSTER_PASSWORD }}" --host="${{ secrets.CLUSTER_HOST }}" --port=3306 --default-auth=mysql_native_password
-#         sed 's/{PORT}/9000/' resources/http_api.sql | mysql --user="${{ secrets.CLUSTER_USER }}" --password="${{ secrets.CLUSTER_PASSWORD }}" --host="${{ secrets.CLUSTER_HOST }}" --port=3306 --default-auth=mysql_native_password
+          mysql --user="${{ secrets.CLUSTER_USER }}" --password="${{ secrets.CLUSTER_PASSWORD }}" --host="${{ secrets.CLUSTER_HOST }}" --port=3306 --default-auth=mysql_native_password < resources/test.sql
+#         mysql --user="${{ secrets.CLUSTER_USER }}" --password="${{ secrets.CLUSTER_PASSWORD }}" --host="${{ secrets.CLUSTER_HOST }}" --port=3306 --default-auth=mysql_native_password < resources/http_api.sql
 
 
   smoke-test:
