@@ -17,7 +17,7 @@ jobs:
       - name: Initialize database
         id: initialize-database
         run: |
-          cluster_info=$(PYTHONPATH="$GITHUB_WORKSPACE" python resources/create_test_cluster.py --password=${{ secrets.CLUSTER_PASSWORD }} --token=${{ secrets.CLUSTER_API_KEY }} --init-sql resources/test.sql)
+          cluster_info=$(PYTHONPATH="$GITHUB_WORKSPACE" python resources/create_test_cluster.py --password=${{ secrets.CLUSTER_PASSWORD }} --token=${{ secrets.CLUSTER_API_KEY }} --init-sql resources/test.sql "$GITHUB_WORKFLOW")
           echo "::set-output name=cluster-id::$(cut -d' ' -f1 $cluster_info)"
           echo "::set-output name=cluster-host::$(cut -d' ' -f2 $cluster_info)"
         outputs:
