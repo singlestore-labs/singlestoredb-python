@@ -464,12 +464,11 @@ class Connection(object):
                 driver = parts.scheme.lower()
 
         # Load requested driver
-        drv_name = re.sub(
-            r'^singlestore\+', r'', (  # type: ignore
-                driver or
-                os.environ.get('SINGLESTORE_DRIVER', type(self).default_driver)
-            ).lower(),
-        )
+        if not driver:
+            drv_name = os.environ.get('SINGLESTORE_DRIVER', type(self).default_driver)
+        else:
+            drv_name = driver
+        drv_name = re.sub(r'^singlestore\+', r'', drv_name).lower()
 
         if drv_name in ['mysqlconnector', 'mysql-connector', 'mysql.connector']:
             import mysql.connector as connector
