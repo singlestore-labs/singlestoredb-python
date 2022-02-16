@@ -38,6 +38,10 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Initialize database
+        run: |
+          cat resources/test.sql | mysql --user=root --password=root --host=127.0.0.1 --port=3306 --default-auth=mysql_native_password
+
       - name: Set up Python 3.10
         uses: actions/setup-python@v2
         with:
@@ -49,13 +53,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r test-requirements.txt
-
-      - name: Initialize database
-        run: |
-          PYTHONPATH=$GITHUB_WORKSPACE python singlestore/tests/init_db.py
-        env:
-          # Always use PyMySQL; HTTP doesn't support connections with out a db name.
-          SINGLESTORE_URL: "pymysql://root:root@127.0.0.1:3306"
 
       - name: Build PyPI package
         run: |

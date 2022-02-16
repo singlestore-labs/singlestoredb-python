@@ -25,6 +25,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Initialize database
+        run: |
+          cat resources/test.sql | mysql --user=root --password=root --host=127.0.0.1 --port=3306 --default-auth=mysql_native_password
+          sed 's/{PORT}/9000/' resources/http_api.sql | mysql --user=root --password=root --host=127.0.0.1 --port=3306 --default-auth=mysql_native_password
+
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
@@ -40,13 +45,6 @@ jobs:
       - name: Install SingleStore package
         run: |
           python setup.py install
-
-      - name: Initialize database
-        run: python singlestore/tests/init_db.py
-        env:
-          # Always use PyMySQL; HTTP doesn't support connections with out a db name.
-          SINGLESTORE_URL: "pymysql://root:root@127.0.0.1:3306"
-          SINGLESTORE_HTTP_PORT: 9000
 
       - name: Run MySQL protocol tests
         run: |
