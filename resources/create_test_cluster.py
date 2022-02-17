@@ -108,6 +108,8 @@ if options.init_sql:
     if options.http_port:
         init_db += ['--http-port', str(options.http_port)]
 
+    init_db.append(options.init_sql)
+
     subprocess.check_call(init_db)
 
 print(clus.id, host)
