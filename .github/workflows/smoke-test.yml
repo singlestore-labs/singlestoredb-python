@@ -22,7 +22,7 @@ jobs:
       - name: Initialize database
         id: initialize-database
         run: |
-          PYTHONPATH="$GITHUB_WORKSPACE" python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql resources/test.sql "$GITHUB_WORKFLOW" > cluster_info.txt
+          PYTHONPATH="$GITHUB_WORKSPACE" python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql resources/test.sql "singlestore-python - $GITHUB_WORKFLOW" > cluster_info.txt
           echo "::set-output name=cluster-id::$(cat cluster_info.txt | cut -d' ' -f1 $cluster_info)"
           echo "::set-output name=cluster-host::$(cat cluster_info.txt | cut -d' ' -f2 $cluster_info)"
 
@@ -65,7 +65,7 @@ jobs:
       - name: Install MySQL libraries
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          brew update
+          # brew update
           brew install mysql
 
       - name: Install dependencies
@@ -88,7 +88,7 @@ jobs:
         if: ${{ matrix.driver == 'http' }}
         run: nose2 -v singlestore.tests.test_basics
         env:
-          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:8080/app"
+          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:9000/app"
 
 
   shutdown-database:
@@ -97,8 +97,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Just use curl here so we don't have to check out the package source again.
       - name: Shutdown database
         run: |
-          python resources/drop_test_cluster.py --token=${{ secrets.CLUSTER_API_KEY }} $CLUSTER_ID
+          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v0beta/clusters/$CLUSTER_ID"
         env:
           CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}
