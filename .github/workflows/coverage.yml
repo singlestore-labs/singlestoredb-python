@@ -39,7 +39,7 @@ jobs:
 
       - name: Initialize database
         run: |
-          python resources/init_db.py --user=root --password=root --host=127.0.0.1 --port=3306 resources/test.sql
+          python resources/init_db.py --user=root --password=root --host=127.0.0.1 --port=3306 --http-port=9000 resources/test.sql
         env:
           PYTHONPATH: ${{ github.workspace }}
 
