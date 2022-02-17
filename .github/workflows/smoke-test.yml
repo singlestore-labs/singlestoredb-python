@@ -22,9 +22,7 @@ jobs:
       - name: Initialize database
         id: initialize-database
         run: |
-          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql resources/test.sql "singlestore-python - $GITHUB_WORKFLOW" > cluster_info.txt
-          echo "::set-output name=cluster-id::$(cat cluster_info.txt | cut -d' ' -f1 $cluster_info)"
-          echo "::set-output name=cluster-host::$(cat cluster_info.txt | cut -d' ' -f2 $cluster_info)"
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql resources/test.sql --output=github "singlestore-python - $GITHUB_WORKFLOW" > cluster_info.txt
         env:
           PYTHONPATH: ${{ github.workspace }}
 
@@ -102,6 +100,6 @@ jobs:
       # Just use curl here so we don't have to check out the package source again.
       - name: Shutdown database
         run: |
-          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v0beta/clusters/$CLUSTER_ID"
+          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v0beta/clusters/${{ env.CLUSTER_ID }}"
         env:
           CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}
