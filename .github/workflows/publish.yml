@@ -54,7 +54,7 @@ jobs:
         run: |
           python resources/init_db.py --user=root --password=root --host=127.0.0.1 --port=3306 resources/test.sql
         env:
-          PYTHONPATH: ${{ env.GITHUB_WORKSPACE }}
+          PYTHONPATH: ${{ github.workspace }}
 
       - name: Build PyPI package
         run: |
