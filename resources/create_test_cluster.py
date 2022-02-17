@@ -100,7 +100,7 @@ port = 3306
 # Initialize the database
 if options.init_sql:
     init_db = [
-        os.path.join(__file__, 'init_db.py'),
+        os.path.join(os.path.dirname(__file__), 'init_db.py'),
         '--host', str(host), '--port', str(port),
         '--user', 'admin', '--password', str(options.password),
     ]
