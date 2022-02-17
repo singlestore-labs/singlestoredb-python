@@ -103,15 +103,15 @@ host = f'svc-{clus.id}-ddl.aws-virginia-2.svc.singlestore.com'
 port = 3306
 
 # Print cluster information
-if options.format == 'env':
+if options.output == 'env':
     print(f'CLUSTER_ID={clus.id}')
     print(f'CLUSTER_HOST={clus.host}')
     print(f'CLUSTER_PORT={clus.port}')
-elif options.format == 'github':
+elif options.output == 'github':
     print(f'::set-output name=cluster-id::{clus.id}')
     print(f'::set-output name=cluster-host::{clus.host}')
     print(f'::set-output name=cluster-port::{clus.port}')
-elif options.format == 'json':
+elif options.output == 'json':
     print('{')
     print(f'  "cluster-id": "{clus.id}",')
     print(f'  "cluster-host": "{clus.host}",')
