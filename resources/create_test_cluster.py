@@ -105,17 +105,17 @@ port = 3306
 # Print cluster information
 if options.output == 'env':
     print(f'CLUSTER_ID={clus.id}')
-    print(f'CLUSTER_HOST={clus.host}')
-    print(f'CLUSTER_PORT={clus.port}')
+    print(f'CLUSTER_HOST={host}')
+    print(f'CLUSTER_PORT={port}')
 elif options.output == 'github':
     print(f'::set-output name=cluster-id::{clus.id}')
-    print(f'::set-output name=cluster-host::{clus.host}')
-    print(f'::set-output name=cluster-port::{clus.port}')
+    print(f'::set-output name=cluster-host::{host}')
+    print(f'::set-output name=cluster-port::{port}')
 elif options.output == 'json':
     print('{')
     print(f'  "cluster-id": "{clus.id}",')
-    print(f'  "cluster-host": "{clus.host}",')
-    print(f'  "cluster-port": {clus.port}')
+    print(f'  "cluster-host": "{host}",')
+    print(f'  "cluster-port": {port}')
     print('}')
 
 # Initialize the database
