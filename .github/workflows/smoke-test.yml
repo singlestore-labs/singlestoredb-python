@@ -55,15 +55,15 @@ jobs:
           - os: macos-latest
             python-version: "3.10"
             driver: cymysql
-          - os: macos-latest
-            python-version: "3.10"
-            driver: http
+#         - os: macos-latest
+#           python-version: "3.10"
+#           driver: http
           - os: windows-latest
             python-version: "3.10"
             driver: cymysql
-          - os: windows-latest
-            python-version: "3.10"
-            driver: http
+#         - os: windows-latest
+#           python-version: "3.10"
+#           driver: http
 
     steps:
       - uses: actions/checkout@v2
