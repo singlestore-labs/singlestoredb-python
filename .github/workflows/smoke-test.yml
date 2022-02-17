@@ -22,7 +22,7 @@ jobs:
       - name: Initialize database
         id: initialize-database
         run: |
-          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql resources/test.sql --output=github "singlestore-python - $GITHUB_WORKFLOW" > cluster_info.txt
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql resources/test.sql --output=github "singlestore-python - $GITHUB_WORKFLOW"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
@@ -40,8 +40,6 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - windows-latest
-          - macos-latest
         python-version:
           - "3.7"
           - "3.8"
@@ -52,6 +50,20 @@ jobs:
           - pymysql
           - mysqldb
 #         - http
+        # Manually include a couple of runs on Mac & Windows
+        include:
+          - os: macos-latest
+            python-version: "3.10"
+            driver: cymysql
+          - os: macos-latest
+            python-version: "3.10"
+            driver: http
+          - os: windows-latest
+            python-version: "3.10"
+            driver: cymysql
+          - os: windows-latest
+            python-version: "3.10"
+            driver: http
 
     steps:
       - uses: actions/checkout@v2
