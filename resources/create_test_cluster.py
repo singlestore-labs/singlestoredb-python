@@ -6,6 +6,7 @@ import os
 import random
 import re
 import secrets
+import subprocess
 import sys
 from optparse import OptionParser
 
@@ -56,6 +57,7 @@ if len(args) != 1:
 
 if options.init_sql and not os.path.isfile(options.init_sql):
     print('ERROR: Could not locate SQL file: {options.init_sql}', file=sys.stderr)
+    sys.exit(1)
 
 
 # Connect to cluster
@@ -83,7 +85,7 @@ clus = cm.create_cluster(
     args[0],
     region_id=options.region,
     admin_password=options.password,
-    #   firewall_ranges=requests.get('https://api.github.com/meta').json()['actions'],
+    # firewall_ranges=requests.get('https://api.github.com/meta').json()['actions'],
     firewall_ranges=['0.0.0.0/0'],
     expires_at=options.expires,
     size=options.size,
@@ -93,27 +95,19 @@ clus = cm.create_cluster(
 
 # TODO: When we can discover the hostname, change this.
 host = f'svc-{clus.id}-ddl.aws-virginia-2.svc.singlestore.com'
+port = 3306
 
-if options.http_port or options.init_sql:
-    with s2.connect(
-        f'pymysql://{host}:3306', user='admin',
-        password=options.password,
-    ) as conn:
-        with conn.cursor() as cur:
-            if options.http_port:
-                cur.execute(
-                    'SET GLOBAL HTTP_PROXY_PORT={};'.format(
-                        int(options.http_port),
-                    ),
-                )
-                cur.execute('SET GLOBAL HTTP_API=ON;')
-                cur.execute('RESTART PROXY;')
-            if options.init_sql:
-                with open(options.init_sql, 'r') as infile:
-                    for cmd in infile.read().split(';\n'):
-                        cmd = cmd.strip()
-                        if cmd:
-                            cmd += ';'
-                            cur.execute(cmd)
+# Initialize the database
+if options.init_sql:
+    init_db = [
+        os.path.join(__file__, 'init_db.py'),
+        '--host', host, '--port', port,
+        '--user', 'admin', '--password', options.password,
+    ]
+
+    if options.http_port:
+        init_db += ['--http-port', options.http_port]
+
+    subprocess.check_call(init_db)
 
 print(clus.id, host)

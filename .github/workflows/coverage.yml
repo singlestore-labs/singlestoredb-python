@@ -25,11 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Initialize database
-        run: |
-          mysql --user=root --password=root --host=0 --port=3306 --default-auth=mysql_native_password --protocol=tcp < resources/test.sql
-          mysql --user=root --password=root --host=0 --port=3306 --default-auth=mysql_native_password --protocol=tcp < resources/http_api.sql
-
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
@@ -41,6 +36,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r test-requirements.txt
+
+      - name: Initialize database
+        run: |
+          python resources/init_db.py --user=root --password=root --host=127.0.0.1 --port=3306 resources/test.sql
 
       - name: Install SingleStore package
         run: |
