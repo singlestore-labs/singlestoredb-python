@@ -101,12 +101,12 @@ port = 3306
 if options.init_sql:
     init_db = [
         os.path.join(__file__, 'init_db.py'),
-        '--host', host, '--port', port,
-        '--user', 'admin', '--password', options.password,
+        '--host', str(host), '--port', str(port),
+        '--user', 'admin', '--password', str(options.password),
     ]
 
     if options.http_port:
-        init_db += ['--http-port', options.http_port]
+        init_db += ['--http-port', str(options.http_port)]
 
     subprocess.check_call(init_db)
 
