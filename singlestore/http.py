@@ -2,6 +2,7 @@
 """SingleStore HTTP API interface."""
 from __future__ import annotations
 
+import base64
 import re
 from collections.abc import Mapping
 from collections.abc import Sequence
@@ -43,7 +44,9 @@ class Cursor(object):
 
     def __init__(self, connection: Connection):
         self.connection: Optional[Connection] = connection
-        self._rows: list[tuple[Any, ...]] = []
+        self._results: list[list[tuple[Any, ...]]] = [[]]
+        self._row_idx: int = -1
+        self._result_idx: int = -1
         self.description: Optional[list[tuple[Any, ...]]] = None
         self.arraysize: int = 1000
         self.rowcount: int = 0
@@ -185,7 +188,9 @@ class Cursor(object):
         out = res.json()
 
         self.description = None
-        self._rows = []
+        self._results = [[]]
+        self._row_idx = -1
+        self._result_idx = -1
         self.rowcount = 0
 
         if sql_type == 'query':
@@ -194,20 +199,40 @@ class Cursor(object):
             self.description = []
             convs = []
             for item in out['results'][0].get('columns', []):
-                col_type = types.ColumnType.get_name(item['dataType'])
-                convs.append(converters[col_type.split('(', 1)[0]])
+                data_type = item['dataType'].split('(')[0]
+                type_code = types.ColumnType.get_code(data_type)
+                converter = converters[type_code]
+                if 'BLOB' in data_type or 'BINARY' in data_type:
+                    def decode_base64_binary(x: Any, encoding: str = 'utf-8') -> Any:
+                        """Decode value before applying converter."""
+                        if x is None:
+                            return None
+                        if type(x) is str:
+                            return converter(base64.b64decode(x))
+                        return converter(base64.b64decode(str(x, encoding)))
+                    converter = decode_base64_binary
+                convs.append(converter)
                 self.description.append((
-                    item['name'], col_type,
+                    item['name'], type_code,
                     None, None, None, None,
                     item.get('nullable', False), 0, 0,
                 ))
 
             # Convert data to Python types
-            self._rows = out['results'][0]['rows']
-            for i, row in enumerate(self._rows):
-                self._rows[i] = tuple(x(y) for x, y in zip(convs, row))
+            self._results = [x['rows'] for x in out['results']]
+            if self._results and self._results[0]:
+                self._row_idx = 0
+                self._result_idx = 0
+            for result in self._results:
+                for i, row in enumerate(result):
+                    try:
+                        result[i] = tuple(x(y) for x, y in zip(convs, row))
+                    except ValueError:
+                        print(self.description[i])
+                        print(row)
+                        raise
 
-            self.rowcount = len(self._rows)
+            self.rowcount = len(self._results[0])
         else:
             self.rowcount = out['rowsAffected']
 
@@ -233,12 +258,31 @@ class Cursor(object):
             Sets of parameters to substitute into the SQL code
 
         """
-        # TODO: What to do with the results?
+        results = []
         if param_seq:
             for params in param_seq:
                 self.execute(query, params)
+                if self._rows is not None:
+                    results.append(self._rows)
+            self._results = results
         else:
             self.execute(query)
+
+    @property
+    def _has_row(self) -> bool:
+        """Determine if a row is available."""
+        if self._result_idx < 0 or self._result_idx >= len(self._results):
+            return False
+        if self._row_idx < 0 or self._row_idx >= len(self._results[self._result_idx]):
+            return False
+        return True
+
+    @property
+    def _rows(self) -> list[tuple[Any, ...]]:
+        """Return current set of rows."""
+        if not self._has_row:
+            return []
+        return self._results[self._result_idx]
 
     def fetchone(self) -> Optional[Result]:
         """
@@ -252,9 +296,11 @@ class Cursor(object):
             If there are no rows left to return
 
         """
-        if self._rows:
-            return self._rows.pop(0)
-        return None
+        if not self._has_row:
+            return None
+        out = self._rows[self._row_idx]
+        self._row_idx += 1
+        return out
 
     def fetchmany(
         self,
@@ -271,12 +317,12 @@ class Cursor(object):
             Values of the returned rows if there are rows remaining
 
         """
+        if not self._has_row:
+            return []
         if not size or int(size) <= 0:
             size = self.arraysize
-        out = []
-        while size > 0 and self._rows:
-            out.append(self._rows.pop(0))
-            size -= 1
+        out = self._rows[self._row_idx:self._row_idx+size]
+        self._row_idx += size
         return out
 
     def fetchall(self) -> Optional[Result]:
@@ -289,14 +335,18 @@ class Cursor(object):
             Values of the returned rows if there are rows remaining
 
         """
-        out = []
-        while self._rows:
-            out.append(self._rows.pop(0))
+        if not self._has_row:
+            return []
+        out = list(self._rows)
+        self._row_idx = -1
         return out
 
     def nextset(self) -> Optional[bool]:
         """Skip to the next available result set."""
-        raise NotImplementedError
+        if self._result_idx >= len(self._results):
+            self._result_idx = -1
+            return False
+        return True
 
     def setinputsizes(self, sizes: Sequence[int]) -> None:
         """Predefine memory areas for parameters."""
@@ -316,7 +366,7 @@ class Cursor(object):
         int
 
         """
-        return self.rowcount - len(self._rows)
+        return self._row_idx
 
     def scroll(self, value: int, mode: str = 'relative') -> None:
         """
@@ -330,7 +380,15 @@ class Cursor(object):
             Type of move that should be made: 'relative' or 'absolute'
 
         """
-        raise NotSupportedError(0, 'scroll is not supported')
+        if mode == 'relative':
+            self._row_idx += value
+        elif mode == 'absolute':
+            self._row_idx = value
+        else:
+            raise ValueError(
+                f'{mode} is not a valid mode, '
+                'expecting "relative" or "absolute"',
+            )
 
     def next(self) -> Optional[Result]:
         """

@@ -2,6 +2,7 @@
 """Data value conversion utilities."""
 from __future__ import annotations
 
+import base64
 import datetime
 import decimal
 import json
@@ -11,6 +12,30 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
+
+
+def bit_or_none(x: Any) -> Optional[int]:
+    """
+    Convert value to bit.
+
+    Parameters
+    ----------
+    x : Any
+        Arbitrary value
+
+    Returns
+    -------
+    int
+        If value can be cast to a bit
+    None
+        If input value is None
+
+    """
+    if x is None:
+        return None
+    if type(x) == str:
+        return int.from_bytes(base64.b64decode(x), 'little')
+    return int.from_bytes(x, 'little')
 
 
 def int_or_none(x: Any) -> Optional[int]:
@@ -171,6 +196,30 @@ def bytes_or_none(x: Any, encoding: str = 'utf-8') -> Optional[bytes]:
     return bytes(x, encoding=encoding)
 
 
+def base64_bytes_or_none(x: Any) -> Optional[bytes]:
+    """
+    Convert value to bytes.
+
+    Parameters
+    ----------
+    x : Any
+        Arbitrary value
+
+    Returns
+    -------
+    bytes
+        If value can be cast to bytes
+    None
+        If input value is None
+
+    """
+    if x is None:
+        return None
+    if isinstance(x, bytes):
+        x = str(x)
+    return base64.b64decode(x)
+
+
 def string_or_none(x: Any, encoding: str = 'utf-8') -> Optional[str]:
     """
     Convert value to str.
@@ -285,66 +334,33 @@ def geometry_or_none(x: Any) -> Optional[Any]:
 
 
 # Map of database types and conversion functions
-converters: Dict[str | int, Callable[..., Any]] = {
-    'DECIMAL': decimal_or_none,
-    0x00: decimal_or_none,
-    'TINY': int_or_none,
-    0x01: int_or_none,
-    'SHORT': int_or_none,
-    0x02: int_or_none,
-    'LONG': int_or_none,
-    0x03: int_or_none,
-    'INT': int_or_none,
-    'FLOAT': float_or_none,
-    0x04: float_or_none,
-    'DOUBLE': float_or_none,
-    0x05: float_or_none,
-    'NULL': none,
-    0x06: none,
-    'TIMESTAMP': datetime_or_none,
-    0x07: datetime_or_none,
-    'LONGLONG': int_or_none,
-    'BIGINT': int_or_none,
-    0x08: int_or_none,
-    'INT32': int_or_none,
-    0x09: int_or_none,
-    'DATE': date_or_none,
-    0x0a: date_or_none,
-    'TIME': time_or_none,
-    0x0b: time_or_none,
-    'DATETIME': datetime_or_none,
-    0x0c: datetime_or_none,
-    'YEAR': int_or_none,
-    0x0d: int_or_none,
-    'NEWDATE': date_or_none,
-    0x0e: date_or_none,
-    'VARCHAR': string_or_none,
-    0x0f: string_or_none,
-    'BIT': int_or_none,
-    0x10: int_or_none,
-    'JSON': json_or_none,
-    0xf5: json_or_none,
-    'NEWDECIMAL': decimal_or_none,
-    0xf6: decimal_or_none,
-    'ENUM': string_or_none,
-    0xf7: string_or_none,
-    'SET': set_or_none,
-    0xf8: set_or_none,
-    'TINY_BLOB': bytes_or_none,
-    0xf9: bytes_or_none,
-    'MEDIUM_BLOB': bytes_or_none,
-    0xfa: bytes_or_none,
-    'LONG_BLOB': bytes_or_none,
-    0xfb: bytes_or_none,
-    'BLOB': bytes_or_none,
-    0xfc: bytes_or_none,
-    'TEXT': string_or_none,
-    'LONGTEXT': string_or_none,
-    'CHAR': string_or_none,
-    'VAR_STRING': string_or_none,
-    0xfd: string_or_none,
-    'STRING': string_or_none,
-    0xfe: string_or_none,
-    'GEOMETRY': geometry_or_none,
-    0xff: geometry_or_none,
+converters: Dict[int, Callable[..., Any]] = {
+    0: decimal_or_none,
+    1: int_or_none,
+    2: int_or_none,
+    3: int_or_none,
+    4: float_or_none,
+    5: float_or_none,
+    6: none,
+    7: datetime_or_none,
+    8: int_or_none,
+    9: int_or_none,
+    10: date_or_none,
+    11: time_or_none,
+    12: datetime_or_none,
+    13: int_or_none,
+    14: date_or_none,
+    15: bytes_or_none,
+    16: bit_or_none,
+    245: json_or_none,
+    246: decimal_or_none,
+    247: string_or_none,
+    248: set_or_none,
+    249: bytes_or_none,
+    250: bytes_or_none,
+    251: bytes_or_none,
+    252: bytes_or_none,
+    253: string_or_none,
+    254: bytes_or_none,
+    255: geometry_or_none,
 }

@@ -129,11 +129,12 @@ class Cursor(object):
 
         """
         out = []
-        for item in self._cursor.description:
-            item = list(item)
-            item[1] = types.ColumnType.get_name(item[1])
-            item[6] = not(not(item[6]))
-            out.append(Description(*item[:7]))
+        if self._cursor.description:
+            for item in self._cursor.description:
+                item = list(item)
+                item[1] = types.ColumnType.get_name(item[1])
+                item[6] = not(not(item[6]))
+                out.append(Description(*item[:7]))
         return out
 
     @property
@@ -423,11 +424,13 @@ class Connection(object):
             password: Optional[str] = None, host: Optional[str] = None,
             port: Optional[int] = None, database: Optional[str] = None,
             driver: Optional[str] = None, pure_python: Optional[bool] = False,
+            local_infile: Optional[bool] = False,
     ):
         self._conn: Optional[Any] = None
         self.arraysize = type(self).arraysize
         self.errorhandler = None
         self._autocommit: bool = False
+        self.charset = 'utf8'
 
         # Setup connection parameters
         params: Dict[str, Any] = {}
@@ -475,12 +478,13 @@ class Connection(object):
             params['use_pure'] = pure_python
         elif drv_name == 'mysqldb':
             import MySQLdb as connector
+            params['local_infile'] = local_infile
         elif drv_name == 'cymysql':
             import cymysql as connector
-            params['db'] = params.pop('database', None)
-            params['passwd'] = params.pop('password', None)
+            params['local_infile'] = local_infile
         elif drv_name == 'pymysql':
             import pymysql as connector  # type: ignore
+            params['local_infile'] = local_infile
         elif drv_name.startswith('pyodbc'):
             import pyodbc as connector
             if '+' in drv_name:
@@ -710,6 +714,7 @@ def connect(
     password: Optional[str] = None, host: Optional[str] = None,
     port: Optional[int] = None, database: Optional[str] = None,
     driver: Optional[str] = None, pure_python: Optional[bool] = False,
+    local_infile: Optional[bool] = False,
 ) -> Connection:
     """
     Return a SingleStore database connection.
@@ -755,5 +760,5 @@ def connect(
     return Connection(
         url=url, user=user, password=password, host=host,
         port=port, database=database, driver=driver,
-        pure_python=pure_python,
+        pure_python=pure_python, local_infile=local_infile,
     )
