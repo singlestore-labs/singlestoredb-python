@@ -22,7 +22,7 @@ jobs:
       - name: Initialize database
         id: initialize-database
         run: |
-          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql resources/test.sql --output=github "singlestore-python - $GITHUB_WORKFLOW"
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql resources/test.sql --output=github --expires=2h "singlestore-python - $GITHUB_WORKFLOW"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
