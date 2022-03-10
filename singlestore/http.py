@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import functools
 import re
 from collections.abc import Mapping
 from collections.abc import Sequence
@@ -26,6 +27,15 @@ from .utils.results import Result
 
 # DB-API parameter style
 paramstyle = 'qmark'
+
+
+def b64decode_converter(converter: Any, x: Any, encoding: str = 'utf-8') -> Any:
+    """Decode value before applying converter."""
+    if x is None:
+        return None
+    if type(x) is str:
+        return converter(base64.b64decode(x))
+    return converter(base64.b64decode(str(x, encoding)))
 
 
 class Cursor(object):
@@ -203,14 +213,7 @@ class Cursor(object):
                 type_code = types.ColumnType.get_code(data_type)
                 converter = converters[type_code]
                 if 'BLOB' in data_type or 'BINARY' in data_type:
-                    def decode_base64_binary(x: Any, encoding: str = 'utf-8') -> Any:
-                        """Decode value before applying converter."""
-                        if x is None:
-                            return None
-                        if type(x) is str:
-                            return converter(base64.b64decode(x))
-                        return converter(base64.b64decode(str(x, encoding)))
-                    converter = decode_base64_binary
+                    converter = functools.partial(b64decode_converter, converter)
                 convs.append(converter)
                 self.description.append((
                     item['name'], type_code,

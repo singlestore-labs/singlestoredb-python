@@ -14,6 +14,11 @@ from typing import Optional
 from typing import Set
 
 
+def identity(x: Any) -> Optional[Any]:
+    """Return input value."""
+    return x
+
+
 def bit_or_none(x: Any) -> Optional[int]:
     """
     Convert value to bit.
@@ -350,17 +355,17 @@ converters: Dict[int, Callable[..., Any]] = {
     12: datetime_or_none,
     13: int_or_none,
     14: date_or_none,
-    15: bytes_or_none,
+    15: identity,
     16: bit_or_none,
     245: json_or_none,
     246: decimal_or_none,
-    247: string_or_none,
+    247: identity,
     248: set_or_none,
-    249: bytes_or_none,
-    250: bytes_or_none,
-    251: bytes_or_none,
-    252: bytes_or_none,
-    253: string_or_none,
-    254: bytes_or_none,
+    249: identity,
+    250: identity,
+    251: identity,
+    252: identity,
+    253: identity,
+    254: identity,
     255: geometry_or_none,
 }
