@@ -481,7 +481,9 @@ class Connection(object):
             params['local_infile'] = local_infile
         elif drv_name == 'cymysql':
             import cymysql as connector
-            params['local_infile'] = local_infile
+            params['passwd'] = params.pop('password')
+            params['db'] = params.pop('database')
+            # params['local_infile'] = local_infile
         elif drv_name == 'pymysql':
             import pymysql as connector  # type: ignore
             params['local_infile'] = local_infile
