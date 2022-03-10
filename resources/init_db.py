@@ -49,7 +49,7 @@ if sql_file and not os.path.isfile(sql_file):
     sys.exit(1)
 
 with s2.connect(
-    f'pymysql://{options.host}:{options.port}',
+    f'cymysql://{options.host}:{options.port}',
     user=options.user, password=options.password,
 ) as conn:
     with conn.cursor() as cur:
