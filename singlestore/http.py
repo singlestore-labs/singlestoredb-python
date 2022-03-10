@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import base64
 import functools
+import json
 import re
-from collections.abc import Mapping
-from collections.abc import Sequence
 from typing import Any
 from typing import Dict
 from typing import Iterable
+from typing import List
 from typing import Optional
+from typing import Tuple
 from typing import Union
 from urllib.parse import urljoin
 
-import requests
+import urllib3
+from urllib3.response import HTTPResponse
 
 from . import types
 from .converters import converters
@@ -63,7 +65,7 @@ class Cursor(object):
         self.messages: list[tuple[int, str]] = []
         self.lastrowid: Optional[int] = None
 
-    def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
+    def _get(self, path: str, *args: Any, **kwargs: Any) -> HTTPResponse:
         """
         Invoke a GET request on the HTTP connection.
 
@@ -78,14 +80,14 @@ class Cursor(object):
 
         Returns
         -------
-        requests.Response
+        HTTPResponse
 
         """
         if self.connection is None:
             raise InterfaceError(0, 'connection is closed')
         return self.connection._get(path, *args, **kwargs)
 
-    def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
+    def _post(self, path: str, *args: Any, **kwargs: Any) -> HTTPResponse:
         """
         Invoke a POST request on the HTTP connection.
 
@@ -100,14 +102,14 @@ class Cursor(object):
 
         Returns
         -------
-        requests.Response
+        HTTPResponse
 
         """
         if self.connection is None:
             raise InterfaceError(0, 'connection is closed')
         return self.connection._post(path, *args, **kwargs)
 
-    def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
+    def _delete(self, path: str, *args: Any, **kwargs: Any) -> HTTPResponse:
         """
         Invoke a DELETE request on the HTTP connection.
 
@@ -122,7 +124,7 @@ class Cursor(object):
 
         Returns
         -------
-        requests.Response
+        HTTPResponse
 
         """
         if self.connection is None:
@@ -131,7 +133,7 @@ class Cursor(object):
 
     def callproc(
         self, name: str,
-        params: Union[Sequence[Any], Mapping[str, Any]],
+        params: Union[List[Any], Dict[str, Any]],
     ) -> None:
         """
         Call a stored procedure.
@@ -153,7 +155,7 @@ class Cursor(object):
 
     def execute(
         self, query: str,
-        params: Optional[Union[Sequence[Any], Mapping[str, Any]]] = None,
+        params: Optional[Union[List[Any], Dict[str, Any]]] = None,
     ) -> None:
         """
         Execute a SQL statement.
@@ -180,22 +182,22 @@ class Cursor(object):
             sql_type = 'query'
 
         if sql_type == 'query':
-            res = self._post('query/tuples', json=data)
+            res = self._post('query/tuples', body=json.dumps(data))
         else:
-            res = self._post('exec', json=data)
+            res = self._post('exec', body=json.dumps(data))
 
-        if res.status_code >= 400:
-            if res.text:
-                if ':' in res.text:
-                    code, msg = res.text.split(':', 1)
-                    icode = int(code.split()[-1])
+        if res.status >= 400:
+            if res.data:
+                if b':' in res.data:
+                    code, msg = res.data.split(b':', 1)
+                    icode = int(str(code.split()[-1]))
                 else:
-                    icode = res.status_code
-                    msg = res.text
-                raise InterfaceError(icode, msg.strip())
-            raise InterfaceError(res.status_code, 'HTTP Error')
+                    icode = res.status
+                    msg = res.data
+                raise InterfaceError(icode, msg.strip().decode('utf-8'))
+            raise InterfaceError(res.status, 'HTTP Error')
 
-        out = res.json()
+        out = json.loads(res.data.decode('utf-8'))
 
         self.description = None
         self._results = [[]]
@@ -228,12 +230,7 @@ class Cursor(object):
                 self._result_idx = 0
             for result in self._results:
                 for i, row in enumerate(result):
-                    try:
-                        result[i] = tuple(x(y) for x, y in zip(convs, row))
-                    except ValueError:
-                        print(self.description[i])
-                        print(row)
-                        raise
+                    result[i] = tuple(x(y) for x, y in zip(convs, row))
 
             self.rowcount = len(self._results[0])
         else:
@@ -242,10 +239,10 @@ class Cursor(object):
     def executemany(
         self, query: str,
         param_seq: Optional[
-            Sequence[
+            List[
                 Union[
-                    Sequence[Any],
-                    Mapping[str, Any],
+                    List[Any],
+                    Dict[str, Any],
                 ]
             ]
         ] = None,
@@ -281,7 +278,7 @@ class Cursor(object):
         return True
 
     @property
-    def _rows(self) -> list[tuple[Any, ...]]:
+    def _rows(self) -> List[Tuple[Any, ...]]:
         """Return current set of rows."""
         if not self._has_row:
             return []
@@ -348,10 +345,12 @@ class Cursor(object):
         """Skip to the next available result set."""
         if self._result_idx >= len(self._results):
             self._result_idx = -1
+            self.rowcount = 0
             return False
+        self.rowcount = len(self._results[self._result_idx])
         return True
 
-    def setinputsizes(self, sizes: Sequence[int]) -> None:
+    def setinputsizes(self, sizes: List[int]) -> None:
         """Predefine memory areas for parameters."""
         pass
 
@@ -412,7 +411,7 @@ class Cursor(object):
 
     __next__ = next
 
-    def __iter__(self) -> Iterable[tuple[Any, ...]]:
+    def __iter__(self) -> Iterable[Tuple[Any, ...]]:
         """Return result iterator."""
         return iter(self._rows)
 
@@ -480,22 +479,42 @@ class Connection(object):
         host = host or 'localhost'
         port = port or 3306
 
-        self._sess: Optional[requests.Session] = requests.Session()
-        if user is not None and password is not None:
-            self._sess.auth = (user, password)
-        elif user is not None:
-            self._sess.auth = (user, '')
-        self._sess.headers.update({
+        headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-        })
+        }
 
+        if user is not None:
+            if password is None:
+                password = ''
+            headers['Authorization'] = \
+                'Basic ' + \
+                base64.b64encode((user + ':' + password).encode('utf-8')).decode('utf-8')
+
+        pool: Optional[
+            Union[
+                urllib3.HTTPConnectionPool,
+                urllib3.HTTPSConnectionPool,
+            ]
+        ] = None
+        if protocol == 'https':
+            pool = urllib3.HTTPSConnectionPool(
+                host, port=port, headers=headers, retries=3,
+            )
+        else:
+            pool = urllib3.HTTPConnectionPool(
+                host, port=port, headers=headers, retries=3,
+            )
+
+        self._pool: Optional[
+            Union[urllib3.HTTPConnectionPool, urllib3.HTTPSConnectionPool]
+        ] = pool
         self._database = database
         self._url = f'{protocol}://{host}:{port}/api/{version}/'
         self.messages: list[list[Any]] = []
         self.autocommit: bool = True
 
-    def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
+    def _get(self, path: str, *args: Any, **kwargs: Any) -> HTTPResponse:
         """
         Invoke a GET request on the HTTP connection.
 
@@ -510,14 +529,14 @@ class Connection(object):
 
         Returns
         -------
-        requests.Response
+        HTTPResponse
 
         """
-        if self._sess is None:
+        if self._pool is None:
             raise InterfaceError(0, 'connection is closed')
-        return self._sess.get(urljoin(self._url, path), *args, **kwargs)
+        return self._pool.request('GET', urljoin(self._url, path), *args, **kwargs)
 
-    def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
+    def _post(self, path: str, *args: Any, **kwargs: Any) -> HTTPResponse:
         """
         Invoke a POST request on the HTTP connection.
 
@@ -532,14 +551,14 @@ class Connection(object):
 
         Returns
         -------
-        requests.Response
+        HTTPResponse
 
         """
-        if self._sess is None:
+        if self._pool is None:
             raise InterfaceError(0, 'connection is closed')
-        return self._sess.post(urljoin(self._url, path), *args, **kwargs)
+        return self._pool.request('POST', urljoin(self._url, path), *args, **kwargs)
 
-    def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
+    def _delete(self, path: str, *args: Any, **kwargs: Any) -> HTTPResponse:
         """
         Invoke a DELETE request on the HTTP connection.
 
@@ -554,16 +573,16 @@ class Connection(object):
 
         Returns
         -------
-        requests.Response
+        HTTPResponse
 
         """
-        if self._sess is None:
+        if self._pool is None:
             raise InterfaceError(0, 'connection is closed')
-        return self._sess.delete(urljoin(self._url, path), *args, **kwargs)
+        return self._pool.request('DELETE', urljoin(self._url, path), *args, **kwargs)
 
     def close(self) -> None:
         """Close the connection."""
-        self._sess = None
+        self._pool = None
 
     def commit(self) -> None:
         """Commit the pending transaction."""
@@ -608,11 +627,11 @@ class Connection(object):
         bool
 
         """
-        if self._sess is None:
+        if self._pool is None:
             return False
         url = '/'.join(self._url.split('/')[:3]) + '/ping'
-        res = self._sess.get(url)
-        if res.status_code <= 400 and res.text == 'pong':
+        res = self._pool.request('GET', url)
+        if res.status <= 400 and str(res.data) == 'pong':
             return True
         return False
 

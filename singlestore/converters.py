@@ -12,6 +12,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
+from typing import Union
 
 
 def identity(x: Any) -> Optional[Any]:
@@ -175,82 +176,6 @@ def datetime_or_none(x: Any) -> Optional[datetime.datetime]:
     return datetime.datetime.fromisoformat(x)
 
 
-def bytes_or_none(x: Any, encoding: str = 'utf-8') -> Optional[bytes]:
-    """
-    Convert value to bytes.
-
-    Parameters
-    ----------
-    x : Any
-        Arbitrary value
-    encoding : str
-        Character encoding for input strings
-
-    Returns
-    -------
-    bytes
-        If value can be cast to bytes
-    None
-        If input value is None
-
-    """
-    if x is None:
-        return None
-    if isinstance(x, bytes):
-        return x
-    return bytes(x, encoding=encoding)
-
-
-def base64_bytes_or_none(x: Any) -> Optional[bytes]:
-    """
-    Convert value to bytes.
-
-    Parameters
-    ----------
-    x : Any
-        Arbitrary value
-
-    Returns
-    -------
-    bytes
-        If value can be cast to bytes
-    None
-        If input value is None
-
-    """
-    if x is None:
-        return None
-    if isinstance(x, bytes):
-        x = str(x)
-    return base64.b64decode(x)
-
-
-def string_or_none(x: Any, encoding: str = 'utf-8') -> Optional[str]:
-    """
-    Convert value to str.
-
-    Parameters
-    ----------
-    x : Any
-        Arbitrary value
-    encoding : str
-        Character encoding for input bytes
-
-    Returns
-    -------
-    str
-        If value can be cast to a str
-    None
-        If input value is None
-
-    """
-    if x is None:
-        return None
-    if isinstance(x, str):
-        return x
-    return str(x, encoding=encoding)
-
-
 def none(x: Any) -> None:
     """
     Return None.
@@ -268,7 +193,7 @@ def none(x: Any) -> None:
     return None
 
 
-def json_or_none(x: str) -> Optional[Dict[str, Any] | List[Any]]:
+def json_or_none(x: str) -> Optional[Union[Dict[str, Any], List[Any]]]:
     """
     Convert JSON to dict or list.
 

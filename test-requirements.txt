@@ -1,4 +1,2 @@
 coverage
-cymysql
-mysqlclient
 nose2
