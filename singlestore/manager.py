@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import json
 import time
 from collections.abc import Sequence
 from typing import Any
@@ -12,10 +11,8 @@ from typing import List
 from typing import Optional
 from typing import Union
 from urllib.parse import urljoin
-from urllib.parse import urlparse
 
-import urllib3
-from urllib3.response import HTTPResponse
+import requests
 
 from . import config
 from . import exceptions
@@ -326,44 +323,36 @@ class ClusterManager(object):
         )
         if not access_token:
             raise ValueError('No cluster management token was configured.')
-
-        headers = {
+        self._sess = requests.Session()
+        self._sess.headers.update({
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-        }
-
+        })
         self._base_url = urljoin(
             base_url or type(self).default_base_url,
             version or type(self).default_version,
         ) + '/'
 
-        url = urlparse(self._base_url)
-
-        self._pool = urllib3.HTTPSConnectionPool(
-            url.hostname, port=url.port or 80,
-            headers=headers, retries=3,
-        )
-
-    def _check(self, res: HTTPResponse) -> HTTPResponse:
+    def _check(self, res: requests.Response) -> requests.Response:
         """
         Check the HTTP response status code and raise an exception as needed.
 
         Parameters
         ----------
-        res : HTTPResponse
+        res : requests.Response
             HTTP response to check
 
         Returns
         -------
-        HTTPResponse
+        requests.Response
 
         """
-        if res.status >= 400:
-            raise exceptions.ClusterManagerError(res.status, res.data.decode('utf-8'))
+        if res.status_code >= 400:
+            raise exceptions.ClusterManagerError(res.status_code, res.text)
         return res
 
-    def _get(self, path: str, *args: Any, **kwargs: Any) -> HTTPResponse:
+    def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
         Invoke a GET request.
 
@@ -378,18 +367,17 @@ class ClusterManager(object):
 
         Returns
         -------
-        HTTPResponse
+        requests.Response
 
         """
         return self._check(
-            self._pool.request(
-                'GET',
+            self._sess.get(
                 urljoin(self._base_url, path),
                 *args, **kwargs,
             ),
         )
 
-    def _post(self, path: str, *args: Any, **kwargs: Any) -> HTTPResponse:
+    def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
         Invoke a POST request.
 
@@ -404,18 +392,17 @@ class ClusterManager(object):
 
         Returns
         -------
-        HTTPResponse
+        requests.Response
 
         """
         return self._check(
-            self._pool.request(
-                'POST',
+            self._sess.post(
                 urljoin(self._base_url, path),
                 *args, **kwargs,
             ),
         )
 
-    def _put(self, path: str, *args: Any, **kwargs: Any) -> HTTPResponse:
+    def _put(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
         Invoke a PUT request.
 
@@ -430,18 +417,17 @@ class ClusterManager(object):
 
         Returns
         -------
-        HTTPResponse
+        requests.Response
 
         """
         return self._check(
-            self._pool.request(
-                'PUT',
+            self._sess.put(
                 urljoin(self._base_url, path),
                 *args, **kwargs,
             ),
         )
 
-    def _delete(self, path: str, *args: Any, **kwargs: Any) -> HTTPResponse:
+    def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
         Invoke a DELETE request.
 
@@ -456,18 +442,17 @@ class ClusterManager(object):
 
         Returns
         -------
-        HTTPResponse
+        requests.Response
 
         """
         return self._check(
-            self._pool.request(
-                'DELETE',
+            self._sess.delete(
                 urljoin(self._base_url, path),
                 *args, **kwargs,
             ),
         )
 
-    def _patch(self, path: str, *args: Any, **kwargs: Any) -> HTTPResponse:
+    def _patch(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
         Invoke a PATCH request.
 
@@ -482,12 +467,11 @@ class ClusterManager(object):
 
         Returns
         -------
-        HTTPResponse
+        requests.Response
 
         """
         return self._check(
-            self._pool.request(
-                'PATCH',
+            self._sess.patch(
                 urljoin(self._base_url, path),
                 *args, **kwargs,
             ),
@@ -497,19 +481,13 @@ class ClusterManager(object):
     def clusters(self) -> Sequence[Cluster]:
         """Return a list of available clusters."""
         res = self._get('clusters')
-        return [
-            Cluster.from_dict(item, self)
-            for item in json.loads(res.data.decode('utf-8'))
-        ]
+        return [Cluster.from_dict(item, self) for item in res.json()]
 
     @property
     def regions(self) -> Sequence[Region]:
         """Return a list of available regions."""
         res = self._get('regions')
-        return [
-            Region.from_dict(item, self)
-            for item in json.loads(res.data.decode('utf-8'))
-        ]
+        return [Region.from_dict(item, self) for item in res.json()]
 
     def create_cluster(
         self, name: str, region_id: str, admin_password: str,
@@ -551,15 +529,13 @@ class ClusterManager(object):
 
         """
         res = self._post(
-            'clusters', body=json.dumps(
-                dict(
-                    name=name, regionID=region_id, adminPassword=admin_password,
-                    expiresAt=expires_at, size=size, firewallRanges=firewall_ranges,
-                    plan=plan,
-                ),
+            'clusters', json=dict(
+                name=name, regionID=region_id, adminPassword=admin_password,
+                expiresAt=expires_at, size=size, firewallRanges=firewall_ranges,
+                plan=plan,
             ),
         )
-        out = self.get_cluster(json.loads(res.data.decode('utf-8'))['clusterID'])
+        out = self.get_cluster(res.json()['clusterID'])
         if wait_on_active:
             out = self._wait_on_state(
                 out, 'Active', interval=wait_interval,
@@ -625,7 +601,7 @@ class ClusterManager(object):
 
         """
         res = self._get(f'clusters/{cluster_id}')
-        return Cluster.from_dict(json.loads(res.data.decode('utf-8')), manager=self)
+        return Cluster.from_dict(res.json(), manager=self)
 
 
 def manage_cluster(

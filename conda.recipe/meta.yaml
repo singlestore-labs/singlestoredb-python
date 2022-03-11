@@ -19,7 +19,7 @@ requirements:
     run:
         - python
         - cymysql
-        - urllib3
+        - requests
         - sqlalchemy>=1.4.0,<2.0.0dev
         - sqlparams
 
