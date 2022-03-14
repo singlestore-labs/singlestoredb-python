@@ -29,6 +29,26 @@ threadsafety = 1
 paramstyle = 'qmark'
 
 
+def wrap_exc(exc: Exception) -> Exception:
+    """
+    Wrap a database exception with the SingleStore implementation
+
+    Parameters
+    ----------
+    exc : Exception
+        Database exception to wrap
+
+    Returns
+    -------
+    Exception
+
+    """
+    new_exc = getattr(exceptions, type(exc).__name__.split('.')[-1], None)
+    if new_exc is None:
+        return exc
+    return new_exc(exc.args[0], exc.args[1])
+
+
 def _name_check(name: str) -> str:
     """
     Make sure the given name is a legal variable name.
@@ -166,11 +186,17 @@ class Cursor(object):
             Parameters to the stored procedure
 
         """
-        self._cursor.callproc(name, params)
+        try:
+            self._cursor.callproc(name, params)
+        except Exception as exc:
+            raise wrap_exc(exc)
 
     def close(self) -> None:
         """Close the cursor."""
-        self._cursor.close()
+        try:
+            self._cursor.close()
+        except Exception as exc:
+            raise wrap_exc(exc)
         self._conn = None
 
     def execute(
@@ -188,7 +214,10 @@ class Cursor(object):
             Parameters to substitute into the SQL code
 
         """
-        self._cursor.execute(*self._param_converter.format(oper, params or []))
+        try:
+            self._cursor.execute(*self._param_converter.format(oper, params or []))
+        except Exception as exc:
+            raise wrap_exc(exc)
         return self._cursor.rowcount
 
     def executemany(
@@ -206,7 +235,12 @@ class Cursor(object):
             Sets of parameters to substitute into the SQL code
 
         """
-        self._cursor.executemany(*self._param_converter.formatmany(oper, param_seq or []))
+        try:
+            self._cursor.executemany(
+                *self._param_converter.formatmany(oper, param_seq or []),
+            )
+        except Exception as exc:
+            raise wrap_exc(exc)
         return self._cursor.rowcount
 
     def fetchone(self) -> Optional[Result]:
@@ -221,7 +255,11 @@ class Cursor(object):
             If there are no rows left to return
 
         """
-        return format_results(self.description, self._cursor.fetchone(), single=True)
+        try:
+            out = self._cursor.fetchone()
+        except Exception as exc:
+            raise wrap_exc(exc)
+        return format_results(self.description, out, single=True)
 
     def fetchmany(self, size: Optional[int] = None) -> Optional[Result]:
         """
@@ -237,10 +275,11 @@ class Cursor(object):
             If there are no rows left to return
 
         """
-        return format_results(
-            self.description,
-            self._cursor.fetchmany(size=size or self.arraysize),
-        )
+        try:
+            out = self._cursor.fetchmany(size=size or self.arraysize)
+        except Exception as exc:
+            raise wrap_exc(exc)
+        return format_results(self.description, out)
 
     def fetchall(self) -> Optional[Result]:
         """
@@ -254,19 +293,32 @@ class Cursor(object):
             If there are no rows to return
 
         """
-        return format_results(self.description, self._cursor.fetchall())
+        try:
+            out = self._cursor.fetchall()
+        except Exception as exc:
+            raise wrap_exc(exc)
+        return format_results(self.description, out)
 
     def nextset(self) -> Optional[bool]:
         """Skip to the next available result set."""
-        raise NotImplementedError
+        try:
+            return self._cursor.nextset()
+        except Exception as exc:
+            raise wrap_exc(exc)
 
     def setinputsizes(self, sizes: Sequence[int]) -> None:
         """Predefine memory areas for parameters."""
-        self._cursor.setinputsizes(sizes)
+        try:
+            self._cursor.setinputsizes(sizes)
+        except Exception as exc:
+            raise wrap_exc(exc)
 
     def setoutputsize(self, size: int, column: Optional[str] = None) -> None:
         """Set a column buffer size for fetches of large columns."""
-        self._cursor.setoutputsize(size, column)
+        try:
+            self._cursor.setoutputsize(size, column)
+        except Exception as exc:
+            raise wrap_exc(exc)
 
     @property
     def rownumber(self) -> Optional[int]:
@@ -281,7 +333,7 @@ class Cursor(object):
             No result set is selected
 
         """
-        return self._cursor.rownumber
+        return getattr(self._cursor, 'rownumber', getattr(self._cursor, '_rownumber'))
 
     def scroll(self, value: int, mode: str = 'relative') -> None:
         """
@@ -295,7 +347,10 @@ class Cursor(object):
             Where to move the cursor from: 'relative' or 'absolute'
 
         """
-        self._cursor.scroll(mode=mode)
+        try:
+            self._cursor.scroll(mode=mode)
+        except Exception as exc:
+            raise wrap_exc(exc)
 
     @property
     def messages(self) -> Sequence[tuple[int, str]]:
@@ -322,7 +377,10 @@ class Cursor(object):
             If there are no more results
 
         """
-        return self._cursor.next()
+        try:
+            return self._cursor.next()
+        except Exception as exc:
+            raise wrap_exc(exc)
 
     __next__ = next
 
@@ -333,7 +391,10 @@ class Cursor(object):
     @property
     def lastrowid(self) -> Optional[int]:
         """Return the rowid of the last modified row."""
-        return self._cursor.lastrowid()
+        try:
+            return self._cursor.lastrowid()
+        except Exception as exc:
+            raise wrap_exc(exc)
 
     def __enter__(self) -> Cursor:
         """Enter a context."""
@@ -357,7 +418,10 @@ class Cursor(object):
         """
         if self._conn is None:
             return False
-        return self._conn.is_connected()
+        try:
+            return self._conn.is_connected()
+        except Exception as exc:
+            raise wrap_exc(exc)
 
 
 class Connection(object):
@@ -407,7 +471,7 @@ class Connection(object):
     """
 
     arraysize: int = 1000
-    default_driver: str = 'PyMySQL'
+    default_driver: str = 'mysql-connector'
 
     Warning = exceptions.Warning
     Error = exceptions.Error
@@ -512,7 +576,10 @@ class Connection(object):
 
         params = {k: v for k, v in params.items() if v is not None}
 
-        self._conn = connector.connect(**params)
+        try:
+            self._conn = connector.connect(**params)
+        except Exception as exc:
+            raise wrap_exc(exc)
         self._param_converter = sqlparams.SQLParams(
             paramstyle,
             connector.paramstyle,
@@ -526,20 +593,30 @@ class Connection(object):
         """Close the database connection."""
         if self._conn is None:
             return None
-        self._conn.close()
-        self._conn = None
+        try:
+            self._conn.close()
+        except Exception as exc:
+            raise wrap_exc(exc)
+        finally:
+            self._conn = None
 
     def commit(self) -> None:
         """Commit the pending transaction."""
         if self._conn is None:
             raise exceptions.InterfaceError(0, 'connection is closed')
-        self._conn.commit()
+        try:
+            self._conn.commit()
+        except Exception as exc:
+            raise wrap_exc(exc)
 
     def rollback(self) -> None:
         """Rollback the pending transaction."""
         if self._conn is None:
             raise exceptions.InterfaceError(0, 'connection is closed')
-        self._conn.rollback()
+        try:
+            self._conn.rollback()
+        except Exception as exc:
+            raise wrap_exc(exc)
 
     def cursor(self) -> Cursor:
         """
@@ -552,7 +629,11 @@ class Connection(object):
         """
         if self._conn is None:
             raise exceptions.InterfaceError(0, 'connection is closed')
-        return Cursor(self, self._conn.cursor(), self._param_converter)
+        try:
+            cur = self._conn.cursor()
+        except Exception as exc:
+            raise wrap_exc(exc)
+        return Cursor(self, cur, self._param_converter)
 
     @property
     def messages(self) -> Sequence[tuple[int, str]]:
@@ -592,8 +673,11 @@ class Connection(object):
         if self._conn is None:
             return False
         is_connected = getattr(self._conn, 'is_connected', None)
-        if is_connected is not None and is_connected():
-            return True
+        try:
+            if is_connected is not None and is_connected():
+                return True
+        except Exception as exc:
+            raise wrap_exc(exc)
         return False
 
     def ping(self, reconnect: bool = False) -> bool:
