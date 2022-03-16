@@ -212,7 +212,7 @@ class ColumnType(object):
             return name
         if not cls._type_name_map:
             cls._update_type_maps()
-        if type(name) is type:
+        if isinstance(name, type):
             return cls._type_type_map[name]
         return cls._type_name_map[name.upper()]
 
@@ -237,7 +237,7 @@ class ColumnType(object):
             return code.upper()
         if not cls._type_code_map:
             cls._update_type_maps()
-        if type(code) is type:
+        if isinstance(code, type):
             code = cls._type_type_map[code]
         return cls._type_code_map[code]
 
