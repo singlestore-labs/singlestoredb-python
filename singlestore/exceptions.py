@@ -18,16 +18,20 @@ class Error(Exception):
 
     def __init__(self, errno: int, message: str):
         self.errno = errno
-        self.message = message
+        self.errmsg = message
         super(Exception, self).__init__(errno, message)
 
     def __str__(self) -> str:
         """Return string representation."""
-        return '[{}] {}'.format(self.errno, self.message)
+        return '[{}] {}'.format(self.errno, self.errmsg)
 
     def __repr__(self) -> str:
         """Return string representation."""
         return str(self)
+
+    def msg(self) -> str:
+        """Return error message."""
+        return self.errmsg
 
 
 class Warning(Exception):

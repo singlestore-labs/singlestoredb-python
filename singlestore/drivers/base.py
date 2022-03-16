@@ -6,6 +6,24 @@ from typing import Dict
 from typing import Optional
 
 
+def _cast_bool(val: Any) -> bool:
+    """Cast value to a bool."""
+    if val is None:
+        return False
+
+    # Test ints
+    try:
+        return int(val) != 0
+    except Exception:
+        pass
+
+    # Lowercase strings
+    if hasattr(val, 'lower'):
+        return val.lower() in ['on']
+
+    return val is True
+
+
 class Driver(object):
     """
     Base driver class.
@@ -53,10 +71,10 @@ class Driver(object):
         self.host = host
         self.user = user
         self.password = password
-        self.port = port
+        self.port = port and int(port) or None
         self.database = database
-        self.local_infile = local_infile
-        self.pure_python = pure_python
+        self.local_infile = _cast_bool(local_infile)
+        self.pure_python = _cast_bool(pure_python)
         self.driver = driver
 
     def connect(self) -> Any:

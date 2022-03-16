@@ -12,6 +12,7 @@ from typing import Iterable
 from typing import List
 from typing import Optional
 from typing import Union
+from urllib.parse import parse_qs
 from urllib.parse import urlparse
 
 import sqlparams
@@ -50,7 +51,7 @@ def wrap_exc(exc: Exception) -> Exception:
     new_exc = getattr(exceptions, type(exc).__name__.split('.')[-1], None)
     if new_exc is None:
         return exc
-    return new_exc(exc.args[0], exc.args[1])
+    return new_exc(getattr(exc, 'errno', 0), getattr(exc, 'errmsg', str(exc)))
 
 
 def _name_check(name: str) -> str:
@@ -534,6 +535,7 @@ class Connection(object):
         params['database'] = database or os.environ.get('SINGLESTORE_DATABASE', None)
         params['user'] = user or os.environ.get('SINGLESTORE_USER', None)
         params['password'] = password or os.environ.get('SINGLESTORE_PASSWORD', None)
+        params['local_infile'] = local_infile
 
         # Check environment for url
         if not url:
@@ -557,6 +559,12 @@ class Connection(object):
             params['user'] = parts.username or params['user']
             if parts.password is not None:
                 params['password'] = parts.password
+
+            query = parse_qs(parts.query)
+            if 'local_infile' in query:
+                params['local_infile'] = query['local_infile'][-1].lower() in [
+                    '1', 'on', 'true',
+                ]
 
             if parts.scheme != 'singlestore':
                 driver = parts.scheme.lower()
