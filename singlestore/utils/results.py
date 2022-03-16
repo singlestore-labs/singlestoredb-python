@@ -20,8 +20,6 @@ except ImportError:
     has_pandas = False
     DataFrame = Any
 
-from ..config import options
-
 DBAPIResult = Union[List[Tuple[Any, ...]], Tuple[Any, ...]]
 OneResult = Union[Tuple[Any, ...], Dict[str, Any], DataFrame]
 ManyResult = Union[List[Tuple[Any, ...]], List[Dict[str, Any]], DataFrame]
@@ -191,6 +189,7 @@ _converters: Dict[
 
 
 def format_results(
+    format: str,
     desc: List[Description],
     res: Optional[DBAPIResult],
     single: bool = False,
@@ -215,4 +214,4 @@ def format_results(
         If single is True
 
     """
-    return _converters[options.results.format](desc, res, single)
+    return _converters[format](desc, res, single)

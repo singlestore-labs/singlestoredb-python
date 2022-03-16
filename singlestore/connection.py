@@ -16,8 +16,11 @@ from urllib.parse import urlparse
 
 import sqlparams
 
+from . import drivers
 from . import exceptions
 from . import types
+from .config import get_option
+from .drivers.base import Driver
 from .utils.results import Description
 from .utils.results import format_results
 from .utils.results import Result
@@ -26,7 +29,8 @@ from .utils.results import Result
 # DB-API settings
 apilevel = '2.0'
 threadsafety = 1
-paramstyle = 'qmark'
+paramstyle = map_paramstyle = 'named'
+positional_paramstyle = 'numeric'
 
 
 def wrap_exc(exc: Exception) -> Exception:
@@ -82,9 +86,8 @@ class Cursor(object):
         The connection the cursor belongs to
     cursor : Cursor
         The Cursor object from the underlying MySQL package
-    param_converter : sqlparams.SQLParams
-        The sqlparams converter used to convert parameter replacement
-        indicators in queries to the common type for this package
+    driver : Driver
+        Driver of the current database connector
 
     Returns
     -------
@@ -93,13 +96,13 @@ class Cursor(object):
     """
 
     def __init__(
-        self, connection: Connection, cursor: Any,
-        param_converter: sqlparams.SQLParams,
+            self, connection: Connection, cursor: Any, driver: Driver,
     ):
         self.errorhandler = connection.errorhandler
         self._conn: Optional[Connection] = connection
         self._cursor = cursor
-        self._param_converter = param_converter
+        self._driver = driver
+        self.description: Optional[List[Description]] = None
 
     @property
     def connection(self) -> Optional[Connection]:
@@ -138,8 +141,7 @@ class Cursor(object):
         """
         self._cursor.arraysize = val
 
-    @property
-    def description(self) -> List[Description]:
+    def _set_description(self) -> None:
         """
         Return column descriptions for the current result set.
 
@@ -148,14 +150,14 @@ class Cursor(object):
         list of Description
 
         """
-        out = []
         if self._cursor.description:
+            out = []
             for item in self._cursor.description:
                 item = list(item)
-                item[1] = types.ColumnType.get_name(item[1])
+                item[1] = types.ColumnType.get_code(item[1])
                 item[6] = not(not(item[6]))
                 out.append(Description(*item[:7]))
-        return out
+            self.description = out
 
     @property
     def rowcount(self) -> int:
@@ -214,10 +216,25 @@ class Cursor(object):
             Parameters to substitute into the SQL code
 
         """
+        self.description = None
+        self._format = get_option('results.format')
+
+        default: Union[Sequence[Any], Mapping[str, Any]] = []
+        if params is not None:
+            default = type(params)()
+
+        param_converter = sqlparams.SQLParams(
+            isinstance(params, Mapping) and map_paramstyle or positional_paramstyle,
+            self._driver.dbapi.paramstyle,
+        )
+
         try:
-            self._cursor.execute(*self._param_converter.format(oper, params or []))
+            self._cursor.execute(*param_converter.format(oper, params or default))
         except Exception as exc:
             raise wrap_exc(exc)
+
+        self._set_description()
+
         return self._cursor.rowcount
 
     def executemany(
@@ -235,12 +252,25 @@ class Cursor(object):
             Sets of parameters to substitute into the SQL code
 
         """
+        self.description = None
+        self._format = get_option('results.format')
+
+        param_seq = param_seq or [[]]
+
+        param_converter = sqlparams.SQLParams(
+            isinstance(
+                param_seq[0], Mapping,
+            ) and map_paramstyle or positional_paramstyle,
+            self._driver.dbapi.paramstyle,
+        )
+
         try:
-            self._cursor.executemany(
-                *self._param_converter.formatmany(oper, param_seq or []),
-            )
+            self._cursor.executemany(*param_converter.formatmany(oper, param_seq))
         except Exception as exc:
             raise wrap_exc(exc)
+
+        self._set_description()
+
         return self._cursor.rowcount
 
     def fetchone(self) -> Optional[Result]:
@@ -259,7 +289,7 @@ class Cursor(object):
             out = self._cursor.fetchone()
         except Exception as exc:
             raise wrap_exc(exc)
-        return format_results(self.description, out, single=True)
+        return format_results(self._format, self.description or [], out, single=True)
 
     def fetchmany(self, size: Optional[int] = None) -> Optional[Result]:
         """
@@ -279,7 +309,7 @@ class Cursor(object):
             out = self._cursor.fetchmany(size=size or self.arraysize)
         except Exception as exc:
             raise wrap_exc(exc)
-        return format_results(self.description, out)
+        return format_results(self._format, self.description or [], out)
 
     def fetchall(self) -> Optional[Result]:
         """
@@ -297,7 +327,7 @@ class Cursor(object):
             out = self._cursor.fetchall()
         except Exception as exc:
             raise wrap_exc(exc)
-        return format_results(self.description, out)
+        return format_results(self._format, self.description or [], out)
 
     def nextset(self) -> Optional[bool]:
         """Skip to the next available result set."""
@@ -487,14 +517,15 @@ class Connection(object):
             self, url: Optional[str] = None, user: Optional[str] = None,
             password: Optional[str] = None, host: Optional[str] = None,
             port: Optional[int] = None, database: Optional[str] = None,
-            driver: Optional[str] = None, pure_python: Optional[bool] = False,
-            local_infile: Optional[bool] = False,
+            driver: Optional[str] = None, pure_python: bool = False,
+            local_infile: bool = False,
     ):
         self._conn: Optional[Any] = None
         self.arraysize = type(self).arraysize
         self.errorhandler = None
         self._autocommit: bool = False
         self.charset = 'utf8'
+        self._format: str = get_option('results.format')
 
         # Setup connection parameters
         params: Dict[str, Any] = {}
@@ -535,55 +566,14 @@ class Connection(object):
             drv_name = os.environ.get('SINGLESTORE_DRIVER', type(self).default_driver)
         else:
             drv_name = driver
+
         drv_name = re.sub(r'^singlestore\+', r'', drv_name).lower()
-
-        if drv_name in ['mysqlconnector', 'mysql-connector', 'mysql.connector']:
-            import mysql.connector as connector
-            params['use_pure'] = pure_python
-        elif drv_name == 'mysqldb':
-            import MySQLdb as connector
-            params['local_infile'] = local_infile
-        elif drv_name == 'cymysql':
-            import cymysql as connector
-            params['passwd'] = params.pop('password')
-            params['db'] = params.pop('database')
-            # params['local_infile'] = local_infile
-        elif drv_name == 'pymysql':
-            import pymysql as connector  # type: ignore
-            params['local_infile'] = local_infile
-        elif drv_name.startswith('pyodbc'):
-            import pyodbc as connector
-            if '+' in drv_name:
-                params['driver'] = drv_name.split('+', 1)[1]
-            else:
-                params['driver'] = 'MySQL'
-        elif drv_name in ['http', 'https']:
-            from . import http as connector  # type: ignore
-            params['protocol'] = drv_name
-        else:
-            raise exceptions.Error(0, f'Unrecognized SingleStore driver: {drv_name}')
-
-        # Fill in port based on driver, if it wasn't specified
-        if not params['port']:
-            if driver == 'http':
-                params['port'] = 80
-            elif driver == 'https':
-                params['port'] = 443
-            else:
-                params['port'] = 3306
-
-        params['port'] = int(params['port'])
-
-        params = {k: v for k, v in params.items() if v is not None}
+        self._driver = drivers.get_driver(drv_name, params)
 
         try:
-            self._conn = connector.connect(**params)
+            self._conn = self._driver.connect()
         except Exception as exc:
             raise wrap_exc(exc)
-        self._param_converter = sqlparams.SQLParams(
-            paramstyle,
-            connector.paramstyle,
-        )
 
     def autocommit(self, value: bool = True) -> None:
         """Set autocommit mode."""
@@ -633,7 +623,7 @@ class Connection(object):
             cur = self._conn.cursor()
         except Exception as exc:
             raise wrap_exc(exc)
-        return Cursor(self, cur, self._param_converter)
+        return Cursor(self, cur, self._driver)
 
     @property
     def messages(self) -> Sequence[tuple[int, str]]:
@@ -799,8 +789,8 @@ def connect(
     url: Optional[str] = None, user: Optional[str] = None,
     password: Optional[str] = None, host: Optional[str] = None,
     port: Optional[int] = None, database: Optional[str] = None,
-    driver: Optional[str] = None, pure_python: Optional[bool] = False,
-    local_infile: Optional[bool] = False,
+    driver: Optional[str] = None, pure_python: bool = False,
+    local_infile: bool = False,
 ) -> Connection:
     """
     Return a SingleStore database connection.

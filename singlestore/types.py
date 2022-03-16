@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import decimal
 import time
 from typing import Dict
 from typing import List
@@ -77,8 +78,8 @@ class DBAPIType(object):
 
     """
 
-    def __init__(self, *values: int | str):
-        self.values: Set[int | str] = set()
+    def __init__(self, *values: int | str | type):
+        self.values: Set[int | str | type] = set()
         for item in values:
             if isinstance(item, DBAPIType):
                 self.values.update(item.values)
@@ -123,7 +124,7 @@ class DBAPIType(object):
         """Return string representation."""
         return '<{} object [{}]>'.format(
             type(self).__name__,
-            ', '.join(str(x) for x in sorted(self.values)),
+            ', '.join(sorted(str(x) for x in self.values)),
         )
 
     def __repr__(self) -> str:
@@ -152,23 +153,27 @@ class ColumnType(object):
 
     # Note that the first name given will be the name returned by
     # the `get_name` method.
-    DECIMAL = NumberDBAPIType('DECIMAL', 'DEC', 'FIXED', 'NUMERIC', 0)
+    DECIMAL = NumberDBAPIType(
+        'DECIMAL', 'DEC', 'FIXED', 'NUMERIC', 0, decimal.Decimal,
+    )
     DEC = FIXED = NUMERIC = DECIMAL
     TINY = TINYINT = NumberDBAPIType('TINY', 'TINYINT', 1)
     SHORT = SMALLINT = NumberDBAPIType('SHORT', 'SMALLINT', 2)
     LONG = INT = NumberDBAPIType('LONG', 'INT', 3)
     FLOAT = NumberDBAPIType('FLOAT', 4)
-    DOUBLE = REAL = NumberDBAPIType('DOUBLE', 5)
+    DOUBLE = REAL = NumberDBAPIType('DOUBLE', 5, float)
     NULL = DBAPIType('NULL', 6)
     TIMESTAMP = DatetimeDBAPIType('TIMESTAMP', 7)
-    LONGLONG = BIGINT = NumberDBAPIType('LONGLONG', 'BIGINT', 8)
+    LONGLONG = BIGINT = NumberDBAPIType('LONGLONG', 'BIGINT', 8, int)
     MEDIUMINT = INT24 = NumberDBAPIType('MEDIUMINT', 'INT24', 9)
-    DATE = DBAPIType('DATE', 10)
-    TIME = DBAPIType('TIME', 11)
-    DATETIME = DatetimeDBAPIType('DATETIME', 12)
+    DATE = DBAPIType('DATE', 10, datetime.date)
+    TIME = DBAPIType('TIME', 11, datetime.time)
+    DATETIME = DatetimeDBAPIType('DATETIME', 12, datetime.datetime)
     YEAR = DBAPIType('YEAR', 13)
     NEWDATE = DBAPIType('NEWDATE', 14)
-    VARCHAR = VARBINARY = StringDBAPIType('VARBINARY', 'VARCHAR', 15)
+    VARCHAR = VARBINARY = StringDBAPIType(
+        'VARBINARY', 'VARCHAR', 15, str, bytearray, bytes,
+    )
     BIT = NumberDBAPIType('BIT', 16)
     JSON = DBAPIType('JSON', 245)
     NEWDECIMAL = NumberDBAPIType('NEWDECIMAL', 246)
@@ -184,6 +189,7 @@ class ColumnType(object):
 
     _type_name_map: Dict[str, int] = {}
     _type_code_map: Dict[int, str] = {}
+    _type_type_map: Dict[type, int] = {}
 
     @classmethod
     def get_code(cls, name: str) -> int:
@@ -206,6 +212,8 @@ class ColumnType(object):
             return name
         if not cls._type_name_map:
             cls._update_type_maps()
+        if type(name) is type:
+            return cls._type_type_map[name]
         return cls._type_name_map[name.upper()]
 
     @classmethod
@@ -229,6 +237,8 @@ class ColumnType(object):
             return code.upper()
         if not cls._type_code_map:
             cls._update_type_maps()
+        if type(code) is type:
+            code = cls._type_type_map[code]
         return cls._type_code_map[code]
 
     @classmethod
@@ -239,10 +249,13 @@ class ColumnType(object):
                 continue
             names = [x.upper() for x in v.values if isinstance(x, str)]
             codes = [x for x in v.values if isinstance(x, int)]
-            for name in names:
-                for code in codes:
+            types = [x for x in v.values if isinstance(x, type)]
+            for code in codes:
+                for name in names:
                     cls._type_name_map[name] = code
                     cls._type_code_map[code] = name
+                for typ in types:
+                    cls._type_type_map[typ] = code
 
     @classmethod
     def get_string_types(cls) -> List[str]:
