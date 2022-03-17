@@ -17,4 +17,5 @@ class MySQLdbDriver(Driver):
     def remap_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         params.pop('driver', None)
         params.pop('pure_python', None)
+        params.pop('odbc_driver', None)
         return params

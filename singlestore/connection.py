@@ -2,7 +2,6 @@
 """SingleStore database connections and cursors."""
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Mapping
 from collections.abc import Sequence
@@ -34,6 +33,154 @@ paramstyle = map_paramstyle = 'named'
 positional_paramstyle = 'numeric'
 
 
+param_types = dict(
+    host=str,
+    port=int,
+    user=str,
+    password=str,
+    database=str,
+    driver=str,
+    pure_python=bool,
+    local_infile=bool,
+    charset=str,
+    odbc_driver=str,
+)
+
+
+def cast_bool_param(val: Any) -> bool:
+    """Cast value to a bool."""
+    if val is None or val is False:
+        return False
+
+    if val is True:
+        return True
+
+    # Test ints
+    try:
+        return int(val) != 0
+    except Exception:
+        pass
+
+    # Lowercase strings
+    if hasattr(val, 'lower'):
+        return val.lower() in ['on', 't', 'true', 'y', 'yes', 'enabled', 'enable']
+
+    raise TypeError('Unrecognized type for bool: {}'.format(val))
+
+
+def build_params(**kwargs: Any) -> Dict[str, Any]:
+    """
+    Construct connection parameters from given URL and arbitrary parameters.
+
+    Parameters
+    ----------
+    **kwargs : keyword-parameters, optional
+        Arbitrary keyword parameters corresponding to connection parameters
+
+    Returns
+    -------
+    dict
+
+    """
+    out: Dict[str, Any] = {}
+
+    # Set known parameters
+    out['host'] = kwargs.get('host', get_option('host'))
+    out['port'] = kwargs.get('port', get_option('port'))
+    out['database'] = kwargs.get('database', get_option('database'))
+    out['user'] = kwargs.get('user', get_option('user'))
+    out['password'] = kwargs.get('password', get_option('password'))
+    out['driver'] = kwargs.get('driver', get_option('driver'))
+    out['pure_python'] = kwargs.get('pure_python', get_option('pure_python'))
+    out['local_infile'] = kwargs.get('local_infile', get_option('local_infile'))
+    out['charset'] = kwargs.get('charset', get_option('charset'))
+    out['odbc_driver'] = kwargs.get('odbc_driver', get_option('odbc_driver'))
+
+    # See if host actually contains a URL; definitely not a perfect test.
+    host = out['host']
+    if ':' in host or '/' in host or '@' in host or '?' in host:
+        out.update(_parse_url(host))
+
+    return _cast_params(out)
+
+
+def _cast_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Cast known keys to appropriate values.
+
+    Parameters
+    ----------
+    params : dict
+        Dictionary of connection parameters
+
+    Returns
+    -------
+    dict
+
+    """
+    out = {}
+    for key, val in params.items():
+        key = key.lower()
+        if val is None:
+            continue
+        if key not in param_types:
+            raise ValueError('Unrecognized connection parameter: {}'.format(key))
+        dtype = param_types[key]
+        if dtype is bool:
+            val = cast_bool_param(val)
+        else:
+            val = dtype(val)
+        out[key] = val
+    return out
+
+
+def _parse_url(url: str) -> Dict[str, Any]:
+    """
+    Parse a connection URL and return only the defined parts.
+
+
+    Parameters
+    ----------
+    url : str
+        The URL passed in can be a full URL or a partial URL. At a minimum,
+        a host name must be specified. All other parts are optional.
+
+    Returns
+    -------
+    dict
+
+    """
+    out: Dict[str, Any] = {}
+
+    if '//' not in url:
+        url = '//' + url
+
+    parts = urlparse(url, scheme='singlestore', allow_fragments=True)
+
+    url_db = parts.path
+    if url_db.startswith('/'):
+        url_db = url_db.split('/')[1].strip()
+    url_db = url_db.split('/')[0].strip() or ''
+
+    # Retrieve basic connection parameters
+    out['host'] = parts.hostname or None
+    out['port'] = parts.port or None
+    out['database'] = url_db or None
+    out['user'] = parts.username or None
+
+    # Allow an empty string for password
+    if parts.password is not None:
+        out['password'] = parts.password
+
+    if parts.scheme != 'singlestore':
+        out['driver'] = parts.scheme.lower()
+
+    # Convert query string to parameters
+    out.update({k.lower(): v[-1] for k, v in parse_qs(parts.query).items()})
+
+    return _cast_params(out)
+
+
 def wrap_exc(exc: Exception) -> Exception:
     """
     Wrap a database exception with the SingleStore implementation
@@ -51,7 +198,7 @@ def wrap_exc(exc: Exception) -> Exception:
     new_exc = getattr(exceptions, type(exc).__name__.split('.')[-1], None)
     if new_exc is None:
         return exc
-    return new_exc(getattr(exc, 'errno', 0), getattr(exc, 'errmsg', str(exc)))
+    return new_exc(getattr(exc, 'errno', -1), getattr(exc, 'errmsg', str(exc)))
 
 
 def _name_check(name: str) -> str:
@@ -460,32 +607,9 @@ class Connection(object):
     SingleStore database connection.
 
     Instances of this object are typically created through the
-    `connection` function rather than creating them directly.
+    `connect` function rather than creating them directly.
+    See the `connect` function for parameter definitions.
 
-    Parameters
-    ----------
-    url : str, optional
-        URL that describes the connection. The scheme or protocol defines
-        which database connector to use. By default, the `PyMySQL`
-        is used. To connect to the HTTP API, the scheme can be set to `http`
-        or `https`. The username, password, host, and port are specified as
-        in a standard URL. The path indicates the database name. The overall
-        form of the URL is: `scheme://user:password@host:port/db_name`.
-        The scheme can typically be left off (unless you are using the HTTP
-        API): `user:password@host:port/db_name`.
-    user : str, optional
-        Database user name
-    password : str, optional
-        Database user password
-    host : str, optional
-        Database host name or IP address
-    port : int, optional
-        Database port. This defaults to 3306 for non-HTTP connections, 80
-        for HTTP connections, and 443 for HTTPS connections.
-    database : str, optional
-        Database name
-    pure_python : bool, optional
-        Use the connector in pure Python mode
 
     Examples
     --------
@@ -502,7 +626,6 @@ class Connection(object):
     """
 
     arraysize: int = 1000
-    default_driver: str = 'mysql-connector'
 
     Warning = exceptions.Warning
     Error = exceptions.Error
@@ -514,69 +637,16 @@ class Connection(object):
     ProgrammingError = exceptions.ProgrammingError
     NotSupportedError = exceptions.NotSupportedError
 
-    def __init__(
-            self, url: Optional[str] = None, user: Optional[str] = None,
-            password: Optional[str] = None, host: Optional[str] = None,
-            port: Optional[int] = None, database: Optional[str] = None,
-            driver: Optional[str] = None, pure_python: bool = False,
-            local_infile: bool = False,
-    ):
+    def __init__(self, **kwargs: Any):
         self._conn: Optional[Any] = None
         self.arraysize = type(self).arraysize
         self.errorhandler = None
         self._autocommit: bool = False
-        self.charset = 'utf8'
         self._format: str = get_option('results.format')
+        self.connection_params: Dict[str, Any] = build_params(**kwargs)
 
-        # Setup connection parameters
-        params: Dict[str, Any] = {}
-        params['host'] = host or os.environ.get('SINGLESTORE_HOST', '127.0.0.1')
-        params['port'] = port or os.environ.get('SINGLESTORE_PORT', None)
-        params['database'] = database or os.environ.get('SINGLESTORE_DATABASE', None)
-        params['user'] = user or os.environ.get('SINGLESTORE_USER', None)
-        params['password'] = password or os.environ.get('SINGLESTORE_PASSWORD', None)
-        params['local_infile'] = local_infile
-
-        # Check environment for url
-        if not url:
-            url = os.environ.get('SINGLESTORE_URL', None)
-
-        # If a url is supplied, it takes precedence
-        if url:
-            if '//' not in url:
-                url = '//' + url
-
-            parts = urlparse(url, scheme='singlestore', allow_fragments=True)
-
-            url_db = parts.path
-            if url_db.startswith('/'):
-                url_db = url_db.split('/')[1].strip()
-            url_db = url_db.split('/')[0].strip() or ''
-
-            params['host'] = parts.hostname or params['host']
-            params['port'] = parts.port or params['port']
-            params['database'] = url_db or params['database']
-            params['user'] = parts.username or params['user']
-            if parts.password is not None:
-                params['password'] = parts.password
-
-            query = parse_qs(parts.query)
-            if 'local_infile' in query:
-                params['local_infile'] = query['local_infile'][-1].lower() in [
-                    '1', 'on', 'true',
-                ]
-
-            if parts.scheme != 'singlestore':
-                driver = parts.scheme.lower()
-
-        # Load requested driver
-        if not driver:
-            drv_name = os.environ.get('SINGLESTORE_DRIVER', type(self).default_driver)
-        else:
-            drv_name = driver
-
-        drv_name = re.sub(r'^singlestore\+', r'', drv_name).lower()
-        self._driver = drivers.get_driver(drv_name, params)
+        drv_name = re.sub(r'^\w+\+', r'', self.connection_params['driver']).lower()
+        self._driver = drivers.get_driver(drv_name, self.connection_params)
 
         try:
             self._conn = self._driver.connect()
@@ -794,32 +864,31 @@ class Connection(object):
 
 
 def connect(
-    url: Optional[str] = None, user: Optional[str] = None,
-    password: Optional[str] = None, host: Optional[str] = None,
-    port: Optional[int] = None, database: Optional[str] = None,
-    driver: Optional[str] = None, pure_python: bool = False,
-    local_infile: bool = False,
+    host: Optional[str] = None, user: Optional[str] = None,
+    password: Optional[str] = None, port: Optional[int] = None,
+    database: Optional[str] = None, driver: Optional[str] = None,
+    pure_python: bool = False, local_infile: bool = False,
+    odbc_driver: Optional[str] = None, charset: Optional[str] = None,
 ) -> Connection:
     """
     Return a SingleStore database connection.
 
     Parameters
     ----------
-    url : str, optional
-        URL that describes the connection. The scheme or protocol defines
-        which database connector to use. By default, the `PyMySQL`
-        is used. To connect to the HTTP API, the scheme can be set to `http`
-        or `https`. The username, password, host, and port are specified as
-        in a standard URL. The path indicates the database name. The overall
-        form of the URL is: `scheme://user:password@host:port/db_name`.
-        The scheme can typically be left off (unless you are using the HTTP
-        API): `user:password@host:port/db_name`.
+    host : str, optional
+        Hostname, IP address, or URL that describes the connection.
+        The scheme or protocol defines which database connector to use.
+        By default, the `mysql-connector` scheme is used. To connect to the
+        HTTP API, the scheme can be set to `http` or `https`. The username,
+        password, host, and port are specified as in a standard URL. The path
+        indicates the database name. The overall form of the URL is:
+        `scheme://user:password@host:port/db_name`.  The scheme can
+        typically be left off (unless you are using the HTTP API):
+        `user:password@host:port/db_name`.
     user : str, optional
         Database user name
     password : str, optional
         Database user password
-    host : str, optional
-        Database host name or IP address
     port : int, optional
         Database port. This defaults to 3306 for non-HTTP connections, 80
         for HTTP connections, and 443 for HTTPS connections.
@@ -827,6 +896,10 @@ def connect(
         Database name
     pure_python : bool, optional
         Use the connector in pure Python mode
+    local_infile : bool, optional
+        Allow local file uploads
+    odbc_driver : str, optional
+        Name of the ODBC driver to use for ODBC connections
 
     Examples
     --------
@@ -841,8 +914,15 @@ def connect(
     Connection
 
     """
+    param_diffs = set(locals().keys()).difference(set(param_types.keys()))
+    if param_diffs:
+        raise ValueError(
+            'param_types does not match connection params: {}'
+            .format(', '.join(sorted(param_diffs))),
+        )
     return Connection(
-        url=url, user=user, password=password, host=host,
+        host=host, user=user, password=password,
         port=port, database=database, driver=driver,
         pure_python=pure_python, local_infile=local_infile,
+        charset=charset, odbc_driver=odbc_driver,
     )

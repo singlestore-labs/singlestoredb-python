@@ -16,5 +16,6 @@ class MariaDBDriver(Driver):
 
     def remap_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         params.pop('driver', None)
+        params.pop('odbc_driver', None)
         params.pop('pure_python', None)
         return params

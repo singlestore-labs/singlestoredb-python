@@ -24,21 +24,21 @@ from .utils.config import set_option  # noqa: F401
 # Connection options
 #
 register_option(
-    'url', 'string', check_url, None,
-    'Specifies the full connection URL just as in SQLAlchemy.',
-    environ=['SINGLESTORE_URL', 'SINGLESTORE_DSN'],
-)
-
-register_option(
-    'host', 'string', check_str, 'localhost',
+    'host', 'string', check_str, '127.0.0.1',
     'Specifies the database host name or IP address.',
-    environ='SINGLESTORE_HOST',
+    environ=['SINGLESTORE_HOST', 'SINGLESTORE_URL'],
 )
 
 register_option(
     'port', 'int', check_int, 0,
     'Specifies the database port number.',
     environ='SINGLESTORE_PORT',
+)
+
+register_option(
+    'http_port', 'int', check_int, 0,
+    'Specifies the database port number for the HTTP API.',
+    environ='SINGLESTORE_HTTP_PORT',
 )
 
 register_option(
@@ -54,10 +54,40 @@ register_option(
 )
 
 register_option(
-    'driver', 'string', check_str, None,
+    'driver', 'string', check_str, 'mysql-connector',
     'Specifies the Python DB-API module to use for communicating'
     'with the database.',
     environ='SINGLESTORE_DRIVER',
+)
+
+register_option(
+    'database', 'string', check_str, None,
+    'Name of the database to connect to.',
+    environ='SINGLESTORE_DATABASE',
+)
+
+register_option(
+    'pure_python', 'bool', check_bool, False,
+    'Should the driver use a pure Python implementation?',
+    environ='SINGLESTORE_PURE_PYTHON',
+)
+
+register_option(
+    'charset', 'string', check_str, 'utf8',
+    'Specifies the character set for the session.',
+    environ='SINGLESTORE_CHARSET',
+)
+
+register_option(
+    'local_infile', 'bool', check_bool, False,
+    'Should it be possible to load local files?',
+    environ='SINGLESTORE_LOCAL_INFILE',
+)
+
+register_option(
+    'odbc_driver', 'str', check_str, 'SingleStore ODBC 1.0 Unicode Driver',
+    'Name of the ODBC driver for ODBC connections',
+    environ='SINGLESTORE_ODBC_DRIVER',
 )
 
 

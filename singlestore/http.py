@@ -17,6 +17,7 @@ from urllib.parse import urljoin
 import requests
 
 from . import types
+from .config import get_option
 from .converters import converters
 from .exceptions import Error  # noqa: F401
 from .exceptions import InterfaceError
@@ -477,8 +478,8 @@ class Connection(object):
             user: Optional[str] = None, password: Optional[str] = None,
             database: Optional[str] = None, protocol: str = 'http', version: str = 'v1',
     ):
-        host = host or 'localhost'
-        port = port or 3306
+        host = host or get_option('host')
+        port = port or get_option('http_port')
 
         self._sess: Optional[requests.Session] = requests.Session()
         if user is not None and password is not None:

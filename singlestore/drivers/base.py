@@ -3,51 +3,10 @@ from __future__ import annotations
 import sys
 from typing import Any
 from typing import Dict
-from typing import Optional
-
-
-def _cast_bool(val: Any) -> bool:
-    """Cast value to a bool."""
-    if val is None:
-        return False
-
-    # Test ints
-    try:
-        return int(val) != 0
-    except Exception:
-        pass
-
-    # Lowercase strings
-    if hasattr(val, 'lower'):
-        return val.lower() in ['on']
-
-    return val is True
 
 
 class Driver(object):
-    """
-    Base driver class.
-
-    Parameters
-    ----------
-    host : str, optional
-        Hostname or IP address of the server
-    user : str, optional
-        Database user name
-    password : str, optional
-        Database user password
-    port : int, optional
-        Database port
-    database : str, optional
-        Database name
-    local_infile : bool, optional
-        Should local files be allowed to be uploaded?
-    pure_python : bool, optional
-        Use the connector in pure Python mode?
-    driver : str, optional
-        ODBC driver name (if using an ODBC interface)
-
-    """
+    """Base driver class."""
 
     # Name of driver used in connections
     name: str = ''
@@ -61,37 +20,13 @@ class Driver(object):
     # Name of the package on Anaconda.org
     anaconda: str = ''
 
-    def __init__(
-        self, host: Optional[str] = None,
-        user: Optional[str] = None, password: Optional[str] = None,
-        port: Optional[int] = None, database: Optional[str] = None,
-        local_infile: bool = False, pure_python: bool = False,
-        driver: Optional[str] = None,
-    ):
-        self.host = host
-        self.user = user
-        self.password = password
-        self.port = port and int(port) or None
-        self.database = database
-        self.local_infile = _cast_bool(local_infile)
-        self.pure_python = _cast_bool(pure_python)
-        self.driver = driver
+    def __init__(self, **kwargs: Any):
+        self._params = kwargs
 
     def connect(self) -> Any:
         """Create a new connection."""
         params = {
-            k: v for k, v in self.remap_params(
-                dict(
-                    host=self.host,
-                    port=self.port,
-                    user=self.user,
-                    password=self.password,
-                    database=self.database,
-                    local_infile=self.local_infile,
-                    pure_python=self.pure_python,
-                    driver=self.driver,
-                ),
-            ).items() if v is not None
+            k: v for k, v in self.remap_params(self._params).items() if v is not None
         }
         return self.dbapi.connect(**params)
 
@@ -123,10 +58,16 @@ class Driver(object):
             msg.append('{} is not available.'.format(type(self).pkg_name))
             msg.append(" Use 'pip install {}'".format(type(self).pypi))
             if type(self).anaconda:
-                msg.append(
-                    " or 'conda install {}' (for Anaconda)"
-                    .format(type(self).anaconda),
-                )
+                if '::' in type(self).anaconda:
+                    msg.append(
+                        " or 'conda install -c {} {}' (for Anaconda)"
+                        .format(*type(self).anaconda.split('::', 1)),
+                    )
+                else:
+                    msg.append(
+                        " or 'conda install {}' (for Anaconda)"
+                        .format(type(self).anaconda),
+                    )
             msg.append(' to install it.')
             print(''.join(msg), file=sys.stderr)
             raise
