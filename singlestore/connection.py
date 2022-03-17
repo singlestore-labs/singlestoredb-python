@@ -98,7 +98,7 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
 
     # See if host actually contains a URL; definitely not a perfect test.
     host = out['host']
-    if ':' in host or '/' in host or '@' in host or '?' in host:
+    if host and (':' in host or '/' in host or '@' in host or '?' in host):
         out.update(_parse_url(host))
 
     return _cast_params(out)
@@ -198,7 +198,14 @@ def wrap_exc(exc: Exception) -> Exception:
     new_exc = getattr(exceptions, type(exc).__name__.split('.')[-1], None)
     if new_exc is None:
         return exc
-    return new_exc(getattr(exc, 'errno', -1), getattr(exc, 'errmsg', str(exc)))
+    errno: int = -1
+    errmsg: str = str(exc)
+    if hasattr(exc, 'args'):
+        args = exc.args
+        if len(args) > 1:
+            errno = args[0]
+            errmsg = args[1]
+    return new_exc(getattr(exc, 'errno', errno), getattr(exc, 'errmsg', errmsg))
 
 
 def _name_check(name: str) -> str:
