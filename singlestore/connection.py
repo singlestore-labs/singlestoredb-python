@@ -928,8 +928,10 @@ def connect(
             .format(', '.join(sorted(param_diffs))),
         )
     return Connection(
-        host=host, user=user, password=password,
-        port=port, database=database, driver=driver,
-        pure_python=pure_python, local_infile=local_infile,
-        charset=charset, odbc_driver=odbc_driver,
+        **build_params(
+            host=host, user=user, password=password,
+            port=port, database=database, driver=driver,
+            pure_python=pure_python, local_infile=local_infile,
+            charset=charset, odbc_driver=odbc_driver,
+        ),
     )
