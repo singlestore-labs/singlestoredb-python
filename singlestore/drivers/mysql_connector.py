@@ -15,7 +15,6 @@ class MySQLConnectorDriver(Driver):
     anaconda = 'mysql-connector-python'
 
     def remap_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        print(params)
         params.pop('driver', None)
         params.pop('odbc_driver', None)
         params['use_pure'] = params.pop('pure_python', False)
