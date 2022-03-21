@@ -2,6 +2,7 @@
 """SingleStore database connections and cursors."""
 from __future__ import annotations
 
+import inspect
 import re
 from collections.abc import Mapping
 from collections.abc import Sequence
@@ -31,20 +32,6 @@ apilevel = '2.0'
 threadsafety = 1
 paramstyle = map_paramstyle = 'named'
 positional_paramstyle = 'numeric'
-
-
-param_types = dict(
-    host=str,
-    port=int,
-    user=str,
-    password=str,
-    database=str,
-    driver=str,
-    pure_python=bool,
-    local_infile=bool,
-    charset=str,
-    odbc_driver=str,
-)
 
 
 def cast_bool_param(val: Any) -> bool:
@@ -84,6 +71,8 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
     """
     out: Dict[str, Any] = {}
 
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+
     # Set known parameters
     out['host'] = kwargs.get('host', get_option('host'))
     out['port'] = kwargs.get('port', get_option('port'))
@@ -104,6 +93,36 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
     return _cast_params(out)
 
 
+def _get_param_types(func: Any) -> Dict[str, Any]:
+    """
+    Retrieve the types for the parameters to the given function.
+
+    Note that if a parameter has multiple possible types, only the
+    first one is returned.
+
+    Parameters
+    ----------
+    func : callable
+        Callable object to inspect the parameters of
+
+    Returns
+    -------
+    dict
+
+    """
+    out = {}
+    args = inspect.getfullargspec(func)
+    for name in args.args:
+        ann = args.annotations[name]
+        if isinstance(ann, str):
+            ann = eval(ann)
+        if hasattr(ann, '__args__'):
+            out[name] = ann.__args__[0]
+        else:
+            out[name] = ann
+    return out
+
+
 def _cast_params(params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Cast known keys to appropriate values.
@@ -118,6 +137,7 @@ def _cast_params(params: Dict[str, Any]) -> Dict[str, Any]:
     dict
 
     """
+    param_types = _get_param_types(connect)
     out = {}
     for key, val in params.items():
         key = key.lower()
@@ -645,6 +665,8 @@ class Connection(object):
     NotSupportedError = exceptions.NotSupportedError
 
     def __init__(self, **kwargs: Any):
+        kwargs = build_params(**kwargs)
+
         self._conn: Optional[Any] = None
         self.arraysize = type(self).arraysize
         self.errorhandler = None
@@ -870,11 +892,17 @@ class Connection(object):
         cur.execute('restart proxy')
 
 
+#
+# NOTE: When adding parameters to this function, you should always
+#       make the value optional with a default of None. The options
+#       processing framework will fill in the default value based
+#       on environment variables or other configuration sources.
+#
 def connect(
     host: Optional[str] = None, user: Optional[str] = None,
     password: Optional[str] = None, port: Optional[int] = None,
     database: Optional[str] = None, driver: Optional[str] = None,
-    pure_python: bool = False, local_infile: bool = False,
+    pure_python: Optional[bool] = None, local_infile: Optional[bool] = None,
     odbc_driver: Optional[str] = None, charset: Optional[str] = None,
 ) -> Connection:
     """
@@ -921,17 +949,4 @@ def connect(
     Connection
 
     """
-    param_diffs = set(locals().keys()).difference(set(param_types.keys()))
-    if param_diffs:
-        raise ValueError(
-            'param_types does not match connection params: {}'
-            .format(', '.join(sorted(param_diffs))),
-        )
-    return Connection(
-        **build_params(
-            host=host, user=user, password=password,
-            port=port, database=database, driver=driver,
-            pure_python=pure_python, local_infile=local_infile,
-            charset=charset, odbc_driver=odbc_driver,
-        ),
-    )
+    return Connection(**dict(locals()))
