@@ -2,6 +2,8 @@
 """Database exeception classes."""
 from __future__ import annotations
 
+from typing import Optional
+
 
 class Error(Exception):
     """
@@ -10,25 +12,31 @@ class Error(Exception):
     Parameters
     ----------
     errno : int
-        The database error code
-    message : str
-        The database error message
+        Database error code
+    msg : str
+        Database error message
+    sqlstate : str, optional
+        SQL engine state code
 
     """
 
-    def __init__(self, errno: int, message: str):
+    def __init__(self, errno: int, message: str, sqlstate: Optional[int] = None):
         self.errno = errno
         self.errmsg = message
-        super(Exception, self).__init__(errno, message)
+        self.sqlstate = sqlstate
+        super(Exception, self).__init__(errno, message, sqlstate)
 
     def __str__(self) -> str:
         """Return string representation."""
-        return '[{}] {}'.format(self.errno, self.errmsg)
+        if self.sqlstate:
+            return '{} ({}): {}'.format(self.errno, self.sqlstate, self.errmsg)
+        return '{}: {}'.format(self.errno, self.errmsg)
 
     def __repr__(self) -> str:
         """Return string representation."""
         return str(self)
 
+    @property
     def msg(self) -> str:
         """Return error message."""
         return self.errmsg

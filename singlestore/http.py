@@ -19,10 +19,16 @@ import requests
 from . import types
 from .config import get_option
 from .converters import converters
+from .exceptions import DatabaseError  # noqa: F401
+from .exceptions import DataError  # noqa: F401
 from .exceptions import Error  # noqa: F401
+from .exceptions import IntegrityError  # noqa: F401
 from .exceptions import InterfaceError
+from .exceptions import InternalError  # noqa: F401
 from .exceptions import NotSupportedError
 from .exceptions import OperationalError  # noqa: F401
+from .exceptions import ProgrammingError  # noqa: F401
+from .exceptions import Warning  # noqa: F401
 from .utils.results import Result
 
 
@@ -83,7 +89,7 @@ class Cursor(object):
 
         """
         if self.connection is None:
-            raise InterfaceError(0, 'connection is closed')
+            raise InterfaceError(2048, 'Connection is closed.')
         return self.connection._get(path, *args, **kwargs)
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -105,7 +111,7 @@ class Cursor(object):
 
         """
         if self.connection is None:
-            raise InterfaceError(0, 'connection is closed')
+            raise InterfaceError(2048, 'Connection is closed.')
         return self.connection._post(path, *args, **kwargs)
 
     def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -127,7 +133,7 @@ class Cursor(object):
 
         """
         if self.connection is None:
-            raise InterfaceError(0, 'connection is closed')
+            raise InterfaceError(2048, 'Connection is closed.')
         return self.connection._delete(path, *args, **kwargs)
 
     def callproc(
@@ -168,7 +174,7 @@ class Cursor(object):
 
         """
         if self.connection is None:
-            raise InterfaceError(0, 'connection is closed')
+            raise InterfaceError(2048, 'Connection is closed.')
 
         data: Dict[str, Any] = dict(sql=query)
         if params is not None:
@@ -187,13 +193,13 @@ class Cursor(object):
 
         if res.status_code >= 400:
             if res.text:
-                if ':' in res.text:
+                if re.match(r'^Error\s+\d+:', res.text):
                     code, msg = res.text.split(':', 1)
                     icode = int(code.split()[-1])
                 else:
                     icode = res.status_code
                     msg = res.text
-                raise InterfaceError(icode, msg.strip())
+                raise ProgrammingError(icode, msg.strip())
             raise InterfaceError(res.status_code, 'HTTP Error')
 
         out = res.json()
@@ -309,7 +315,7 @@ class Cursor(object):
     def fetchmany(
         self,
         size: Optional[int] = None,
-    ) -> Optional[Result]:
+    ) -> Result:
         """
         Fetch `size` rows from the result.
 
@@ -323,13 +329,15 @@ class Cursor(object):
         """
         if not self._has_row:
             return []
-        if not size or int(size) <= 0:
-            size = self.arraysize
+        if not size:
+            size = max(int(self.arraysize), 1)
+        else:
+            size = max(int(size), 1)
         out = self._rows[self._row_idx:self._row_idx+size]
         self._row_idx += size
         return out
 
-    def fetchall(self) -> Optional[Result]:
+    def fetchall(self) -> Result:
         """
         Fetch all rows in the result set.
 
@@ -516,7 +524,7 @@ class Connection(object):
 
         """
         if self._sess is None:
-            raise InterfaceError(0, 'connection is closed')
+            raise InterfaceError(2048, 'Connection is closed.')
         return self._sess.get(urljoin(self._url, path), *args, **kwargs)
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -538,7 +546,7 @@ class Connection(object):
 
         """
         if self._sess is None:
-            raise InterfaceError(0, 'connection is closed')
+            raise InterfaceError(2048, 'Connection is closed.')
         return self._sess.post(urljoin(self._url, path), *args, **kwargs)
 
     def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -560,7 +568,7 @@ class Connection(object):
 
         """
         if self._sess is None:
-            raise InterfaceError(0, 'connection is closed')
+            raise InterfaceError(2048, 'Connection is closed.')
         return self._sess.delete(urljoin(self._url, path), *args, **kwargs)
 
     def close(self) -> None:
@@ -618,7 +626,7 @@ class Connection(object):
             return True
         return False
 
-    def ping(self, reconnect: bool = False) -> None:
+    def ping(self, reconnect: bool = False) -> bool:
         """
         Check if the database server is still available.
 
@@ -628,8 +636,11 @@ class Connection(object):
             Should the server be reconnected?
 
         """
-        if not self.is_connected():
-            raise InterfaceError(2006, 'Could not connect to SingleStore database')
+        try:
+            return self.is_connected()
+        except Exception:
+            pass
+        return False
 
 
 def connect(

@@ -75,7 +75,7 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
 
     # Set known parameters
     out['host'] = kwargs.get('host', get_option('host'))
-    out['port'] = kwargs.get('port', get_option('port'))
+    out['port'] = kwargs.get('port', None)
     out['database'] = kwargs.get('database', get_option('database'))
     out['user'] = kwargs.get('user', get_option('user'))
     out['password'] = kwargs.get('password', get_option('password'))
@@ -90,7 +90,22 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
     if host and (':' in host or '/' in host or '@' in host or '?' in host):
         out.update(_parse_url(host))
 
-    return _cast_params(out)
+    out = _cast_params(out)
+
+    # Set default port based on driver.
+    if 'port' not in out or not out['port']:
+        if out['driver'] == 'http':
+            out['port'] = int(get_option('http_port') or 80)
+        elif out['driver'] == 'https':
+            out['port'] = int(get_option('http_port') or 443)
+        else:
+            out['port'] = int(get_option('port') or 3306)
+
+    # If there is no user and the password is empty, remove the password key.
+    if 'user' not in out and not out.get('password', None):
+        out.pop('password', None)
+
+    return out
 
 
 def _get_param_types(func: Any) -> Dict[str, Any]:
@@ -189,7 +204,7 @@ def _parse_url(url: str) -> Dict[str, Any]:
     out['user'] = parts.username or None
 
     # Allow an empty string for password
-    if parts.password is not None:
+    if out['user'] and parts.password is not None:
         out['password'] = parts.password
 
     if parts.scheme != 'singlestore':
@@ -198,15 +213,17 @@ def _parse_url(url: str) -> Dict[str, Any]:
     # Convert query string to parameters
     out.update({k.lower(): v[-1] for k, v in parse_qs(parts.query).items()})
 
-    return _cast_params(out)
+    return {k: v for k, v in out.items() if v is not None}
 
 
-def wrap_exc(exc: Exception) -> Exception:
+def wrap_exc(driver: Driver, exc: Exception) -> Exception:
     """
     Wrap a database exception with the SingleStore implementation
 
     Parameters
     ----------
+    driver : Driver
+        Driver for the connection
     exc : Exception
         Database exception to wrap
 
@@ -215,7 +232,27 @@ def wrap_exc(exc: Exception) -> Exception:
     Exception
 
     """
-    new_exc = getattr(exceptions, type(exc).__name__.split('.')[-1], None)
+    new_exc: Optional[type] = None
+    if isinstance(exc, driver.dbapi.NotSupportedError):
+        new_exc = exceptions.NotSupportedError
+    elif isinstance(exc, driver.dbapi.ProgrammingError):
+        new_exc = exceptions.ProgrammingError
+    elif isinstance(exc, driver.dbapi.InternalError):
+        new_exc = exceptions.InternalError
+    elif isinstance(exc, driver.dbapi.IntegrityError):
+        new_exc = exceptions.IntegrityError
+    elif isinstance(exc, driver.dbapi.OperationalError):
+        new_exc = exceptions.OperationalError
+    elif isinstance(exc, driver.dbapi.DataError):
+        new_exc = exceptions.DataError
+    elif isinstance(exc, driver.dbapi.DatabaseError):
+        new_exc = exceptions.DatabaseError
+    elif isinstance(exc, driver.dbapi.InterfaceError):
+        new_exc = exceptions.InterfaceError
+    elif isinstance(exc, driver.dbapi.Error):
+        new_exc = exceptions.Error
+    elif isinstance(exc, driver.dbapi.Warning):
+        new_exc = exceptions.Warning
     if new_exc is None:
         return exc
     errno: int = -1
@@ -223,7 +260,7 @@ def wrap_exc(exc: Exception) -> Exception:
     if hasattr(exc, 'args'):
         args = exc.args
         if len(args) > 1:
-            errno = args[0]
+            errno = int(args[0])
             errmsg = args[1]
     return new_exc(getattr(exc, 'errno', errno), getattr(exc, 'errmsg', errmsg))
 
@@ -270,6 +307,8 @@ class Cursor(object):
 
     """
 
+    arraysize: int = 100
+
     def __init__(
             self, connection: Connection, cursor: Any, driver: Driver,
     ):
@@ -277,7 +316,9 @@ class Cursor(object):
         self._conn: Optional[Connection] = connection
         self._cursor = cursor
         self._driver = driver
+        self._rownumber = None
         self.description: Optional[List[Description]] = None
+        self.arraysize = type(self).arraysize
 
     @property
     def connection(self) -> Optional[Connection]:
@@ -290,31 +331,6 @@ class Cursor(object):
 
         """
         return self._conn
-
-    @property
-    def arraysize(self) -> int:
-        """
-        Return the batch size used by `fetchmany`.
-
-        Returns
-        -------
-        int
-
-        """
-        return self._cursor.arraysize
-
-    @arraysize.setter
-    def arraysize(self, val: int) -> None:
-        """
-        Set the batch size used by `fetchmany`.
-
-        Parameters
-        ----------
-        val : int
-            Size of the batch
-
-        """
-        self._cursor.arraysize = val
 
     def _set_description(self) -> None:
         """
@@ -344,9 +360,7 @@ class Cursor(object):
         int
 
         """
-        if hasattr(self._cursor, '_rowcount'):
-            return self._cursor._rowcount
-        return self._cursor.rowcount
+        return getattr(self._cursor, 'rowcount', getattr(self._cursor, '_rowcount', -1))
 
     def callproc(
         self, name: str,
@@ -366,20 +380,24 @@ class Cursor(object):
         try:
             self._cursor.callproc(name, params)
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
 
     def close(self) -> None:
         """Close the cursor."""
         try:
             self._cursor.close()
+        # Ignore weak reference errors. It just means the connection
+        # was closed underneath us.
+        except ReferenceError:
+            pass
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
         self._conn = None
 
     def execute(
         self, oper: str,
         params: Optional[Union[Sequence[Any], Mapping[str, Any]]] = None,
-    ) -> int:
+    ) -> None:
         """
         Execute a SQL statement.
 
@@ -392,6 +410,7 @@ class Cursor(object):
 
         """
         self.description = None
+        self.rownumber = None
         self._format = get_option('results.format')
 
         default: Union[Sequence[Any], Mapping[str, Any]] = []
@@ -406,16 +425,16 @@ class Cursor(object):
         try:
             self._cursor.execute(*param_converter.format(oper, params or default))
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
 
         self._set_description()
 
-        return self._cursor.rowcount
+        self.rownumber = 0
 
     def executemany(
         self, oper: str,
         param_seq: Optional[Sequence[Union[Sequence[Any], Mapping[str, Any]]]] = None,
-    ) -> int:
+    ) -> None:
         """
         Execute SQL code against multiple sets of parameters.
 
@@ -428,6 +447,7 @@ class Cursor(object):
 
         """
         self.description = None
+        self.rownumber = None
         self._format = get_option('results.format')
 
         param_seq = param_seq or [[]]
@@ -442,11 +462,11 @@ class Cursor(object):
         try:
             self._cursor.executemany(*param_converter.formatmany(oper, param_seq))
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
 
         self._set_description()
 
-        return self._cursor.rowcount
+        self.rownumber = 0
 
     def fetchone(self) -> Optional[Result]:
         """
@@ -456,17 +476,19 @@ class Cursor(object):
         -------
         tuple
             Values of the returned row if there are rows remaining
-        None
-            If there are no rows left to return
 
         """
         try:
             out = self._cursor.fetchone()
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
+
+        if out is not None and self.rownumber is not None:
+            self.rownumber += 1
+
         return format_results(self._format, self.description or [], out, single=True)
 
-    def fetchmany(self, size: Optional[int] = None) -> Optional[Result]:
+    def fetchmany(self, size: Optional[int] = None) -> Result:
         """
         Fetch `size` rows from the result.
 
@@ -476,17 +498,28 @@ class Cursor(object):
         -------
         list of tuples
             Values of the returned rows if there are rows remaining
-        None
-            If there are no rows left to return
 
         """
+        if size is not None:
+            size = max(int(size), 1)
+        else:
+            size = max(int(self.arraysize), 1)
         try:
-            out = self._cursor.fetchmany(size=size or self.arraysize)
+            if size == 1:
+                out = [self._cursor.fetchone()]
+            else:
+                out = self._cursor.fetchmany(size=size)
         except Exception as exc:
-            raise wrap_exc(exc)
-        return format_results(self._format, self.description or [], out)
+            raise wrap_exc(self._driver, exc)
 
-    def fetchall(self) -> Optional[Result]:
+        formatted: Result = format_results(
+            self._format, self.description or [], out,
+        ) or []
+        if self.rownumber is not None:
+            self.rownumber += len(formatted)
+        return formatted
+
+    def fetchall(self) -> Result:
         """
         Fetch all rows in the result set.
 
@@ -501,44 +534,38 @@ class Cursor(object):
         try:
             out = self._cursor.fetchall()
         except Exception as exc:
-            raise wrap_exc(exc)
-        return format_results(self._format, self.description or [], out)
+            raise wrap_exc(self._driver, exc)
+
+        formatted: Result = format_results(
+            self._format, self.description or [], out,
+        ) or []
+        if self.rownumber is not None:
+            self.rownumber += len(formatted)
+        return formatted
 
     def nextset(self) -> Optional[bool]:
         """Skip to the next available result set."""
+        self.rownumber = None
         try:
-            return self._cursor.nextset()
+            out = self._cursor.nextset()
+            self.rownumber = 0
+            return out
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
 
     def setinputsizes(self, sizes: Sequence[int]) -> None:
         """Predefine memory areas for parameters."""
         try:
             self._cursor.setinputsizes(sizes)
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
 
     def setoutputsize(self, size: int, column: Optional[str] = None) -> None:
         """Set a column buffer size for fetches of large columns."""
         try:
             self._cursor.setoutputsize(size, column)
         except Exception as exc:
-            raise wrap_exc(exc)
-
-    @property
-    def rownumber(self) -> Optional[int]:
-        """
-        Return the zero-based index of the cursor in the result set.
-
-        Returns
-        -------
-        int
-            Position in current result set
-        None
-            No result set is selected
-
-        """
-        return getattr(self._cursor, 'rownumber', getattr(self._cursor, '_rownumber'))
+            raise wrap_exc(self._driver, exc)
 
     def scroll(self, value: int, mode: str = 'relative') -> None:
         """
@@ -552,10 +579,17 @@ class Cursor(object):
             Where to move the cursor from: 'relative' or 'absolute'
 
         """
+        assert mode in ('relative', 'absolute')
+        value = int(value)
         try:
-            self._cursor.scroll(mode=mode)
+            self._cursor.scroll(value, mode=mode)
+            if self.rownumber is not None:
+                if mode == 'relative':
+                    self.rownumber += value
+                else:
+                    self.rownumber = value
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
 
     @property
     def messages(self) -> Sequence[tuple[int, str]]:
@@ -585,7 +619,7 @@ class Cursor(object):
         try:
             return self._cursor.next()
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
 
     __next__ = next
 
@@ -597,9 +631,9 @@ class Cursor(object):
     def lastrowid(self) -> Optional[int]:
         """Return the rowid of the last modified row."""
         try:
-            return self._cursor.lastrowid()
+            return self._cursor.lastrowid or 0
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
 
     def __enter__(self) -> Cursor:
         """Enter a context."""
@@ -623,10 +657,7 @@ class Cursor(object):
         """
         if self._conn is None:
             return False
-        try:
-            return self._conn.is_connected()
-        except Exception as exc:
-            raise wrap_exc(exc)
+        return self._conn.is_connected()
 
 
 class Connection(object):
@@ -652,8 +683,6 @@ class Connection(object):
 
     """
 
-    arraysize: int = 1000
-
     Warning = exceptions.Warning
     Error = exceptions.Error
     InterfaceError = exceptions.InterfaceError
@@ -668,7 +697,6 @@ class Connection(object):
         kwargs = build_params(**kwargs)
 
         self._conn: Optional[Any] = None
-        self.arraysize = type(self).arraysize
         self.errorhandler = None
         self._autocommit: bool = False
         self._format: str = get_option('results.format')
@@ -680,7 +708,7 @@ class Connection(object):
         try:
             self._conn = self._driver.connect()
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
 
     def autocommit(self, value: bool = True) -> None:
         """Set autocommit mode."""
@@ -693,27 +721,27 @@ class Connection(object):
         try:
             self._conn.close()
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
         finally:
             self._conn = None
 
     def commit(self) -> None:
         """Commit the pending transaction."""
         if self._conn is None:
-            raise exceptions.InterfaceError(0, 'connection is closed')
+            raise exceptions.InterfaceError(2048, 'Connection is closed.')
         try:
             self._conn.commit()
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
 
     def rollback(self) -> None:
         """Rollback the pending transaction."""
         if self._conn is None:
-            raise exceptions.InterfaceError(0, 'connection is closed')
+            raise exceptions.InterfaceError(2048, 'Connection is closed.')
         try:
             self._conn.rollback()
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
 
     def cursor(self) -> Cursor:
         """
@@ -725,11 +753,11 @@ class Connection(object):
 
         """
         if self._conn is None:
-            raise exceptions.InterfaceError(0, 'connection is closed')
+            raise exceptions.InterfaceError(2048, 'Connection is closed.')
         try:
             cur = self._conn.cursor()
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
         return Cursor(self, cur, self._driver)
 
     @property
@@ -744,7 +772,7 @@ class Connection(object):
 
         """
         if self._conn is None:
-            raise exceptions.InterfaceError(0, 'connection is closed')
+            raise exceptions.InterfaceError(2048, 'Connection is closed.')
         return self._conn.messages
 
     def __enter__(self) -> Connection:
@@ -769,12 +797,14 @@ class Connection(object):
         """
         if self._conn is None:
             return False
-        is_connected = getattr(self._conn, 'is_connected', None)
         try:
-            if is_connected is not None and is_connected():
-                return True
+            if hasattr(self._conn, 'is_connected'):
+                return bool(self._conn.is_connected())
+            if hasattr(self._conn, 'ping'):
+                return not bool(self._conn.ping())
+            return bool(self._conn.open)
         except Exception as exc:
-            raise wrap_exc(exc)
+            raise wrap_exc(self._driver, exc)
         return False
 
     def ping(self, reconnect: bool = False) -> bool:
@@ -791,10 +821,11 @@ class Connection(object):
         bool
 
         """
-        # TODO: not sure how this is expected to work yet
-        if not self.is_connected():
-            raise exceptions.InterfaceError(2006, 'SingleStore server is not connected')
-        return True
+        try:
+            return self.is_connected()
+        except Exception:
+            pass
+        return False
 
     def set_global_var(self, **kwargs: Any) -> None:
         """
