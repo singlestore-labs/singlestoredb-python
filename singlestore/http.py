@@ -20,20 +20,90 @@ from . import types
 from .config import get_option
 from .converters import converters
 from .exceptions import DatabaseError  # noqa: F401
-from .exceptions import DataError  # noqa: F401
-from .exceptions import Error  # noqa: F401
-from .exceptions import IntegrityError  # noqa: F401
+from .exceptions import DataError
+from .exceptions import Error
+from .exceptions import IntegrityError
 from .exceptions import InterfaceError
-from .exceptions import InternalError  # noqa: F401
+from .exceptions import InternalError
 from .exceptions import NotSupportedError
-from .exceptions import OperationalError  # noqa: F401
-from .exceptions import ProgrammingError  # noqa: F401
+from .exceptions import OperationalError
+from .exceptions import ProgrammingError
 from .exceptions import Warning  # noqa: F401
 from .utils.results import Result
 
 
-# DB-API parameter style
+# DB-API settings
+apilevel = '2.0'
 paramstyle = 'qmark'
+threadsafety = 1
+
+
+_interface_errors = set([
+    0,
+    2013,  # CR_SERVER_LOST
+    2006,  # CR_SERVER_GONE_ERROR
+    2012,  # CR_HANDSHAKE_ERR
+    2004,  # CR_IPSOCK_ERROR
+    2014,  # CR_COMMANDS_OUT_OF_SYNC
+])
+_data_errors = set([
+    1406,  # ER_DATA_TOO_LONG
+    1441,  # ER_DATETIME_FUNCTION_OVERFLOW
+    1365,  # ER_DIVISION_BY_ZERO
+    1230,  # ER_NO_DEFAULT
+    1171,  # ER_PRIMARY_CANT_HAVE_NULL
+    1264,  # ER_WARN_DATA_OUT_OF_RANGE
+    1265,  # ER_WARN_DATA_TRUNCATED
+])
+_programming_errors = set([
+    1065,  # ER_EMPTY_QUERY
+    1179,  # ER_CANT_DO_THIS_DURING_AN_TRANSACTION
+    1007,  # ER_DB_CREATE_EXISTS
+    1110,  # ER_FIELD_SPECIFIED_TWICE
+    1111,  # ER_INVALID_GROUP_FUNC_USE
+    1082,  # ER_NO_SUCH_INDEX
+    1741,  # ER_NO_SUCH_KEY_VALUE
+    1146,  # ER_NO_SUCH_TABLE
+    1449,  # ER_NO_SUCH_USER
+    1064,  # ER_PARSE_ERROR
+    1149,  # ER_SYNTAX_ERROR
+    1113,  # ER_TABLE_MUST_HAVE_COLUMNS
+    1112,  # ER_UNSUPPORTED_EXTENSION
+    1102,  # ER_WRONG_DB_NAME
+    1103,  # ER_WRONG_TABLE_NAME
+    1049,  # ER_BAD_DB_ERROR
+])
+_integrity_errors = set([
+    1215,  # ER_CANNOT_ADD_FOREIGN
+    1062,  # ER_DUP_ENTRY
+    1169,  # ER_DUP_UNIQUE
+    1364,  # ER_NO_DEFAULT_FOR_FIELD
+    1216,  # ER_NO_REFERENCED_ROW
+    1452,  # ER_NO_REFERENCED_ROW_2
+    1217,  # ER_ROW_IS_REFERENCED
+    1451,  # ER_ROW_IS_REFERENCED_2
+    1460,  # ER_XAER_OUTSIDE
+    1401,  # ER_XAER_RMERR
+    1048,  # ER_BAD_NULL_ERROR
+    1264,  # ER_DATA_OUT_OF_RANGE
+    4025,  # ER_CONSTRAINT_FAILED
+    1826,  # ER_DUP_CONSTRAINT_NAME
+])
+
+
+def get_exc_type(code: int) -> type:
+    """Map error code to DB-API error type."""
+    if code in _interface_errors:
+        return InterfaceError
+    if code in _data_errors:
+        return DataError
+    if code in _programming_errors:
+        return ProgrammingError
+    if code in _integrity_errors:
+        return IntegrityError
+    if code >= 1000:
+        return OperationalError
+    return InternalError
 
 
 def b64decode_converter(converter: Any, x: Any, encoding: str = 'utf-8') -> Any:
@@ -199,7 +269,7 @@ class Cursor(object):
                 else:
                     icode = res.status_code
                     msg = res.text
-                raise ProgrammingError(icode, msg.strip())
+                raise get_exc_type(icode)(icode, msg.strip())
             raise InterfaceError(res.status_code, 'HTTP Error')
 
         out = res.json()
@@ -480,6 +550,16 @@ class Connection(object):
     `connect`
 
     """
+
+    Warning = Warning
+    Error = Error
+    InterfaceError = InterfaceError
+    DatabaseError = DatabaseError
+    OperationalError = OperationalError
+    IntegrityError = IntegrityError
+    InternalError = InternalError
+    ProgrammingError = ProgrammingError
+    NotSupportedError = NotSupportedError
 
     def __init__(
             self, host: Optional[str] = None, port: Optional[int] = None,

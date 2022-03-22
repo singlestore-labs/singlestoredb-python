@@ -579,15 +579,16 @@ class Cursor(object):
             Where to move the cursor from: 'relative' or 'absolute'
 
         """
-        assert mode in ('relative', 'absolute')
         value = int(value)
         try:
             self._cursor.scroll(value, mode=mode)
             if self.rownumber is not None:
                 if mode == 'relative':
                     self.rownumber += value
-                else:
+                elif mode == 'absolute':
                     self.rownumber = value
+                else:
+                    raise ValueError(f'Unrecognized scroll mode {mode}')
         except Exception as exc:
             raise wrap_exc(self._driver, exc)
 
