@@ -362,8 +362,10 @@ class BasicTests(unittest.TestCase):
         else:
             assert out['port'] in [get_option('port'), 3306], out['port']
         assert out['database'] == 'mydb', out['database']
-        assert out['user'] == get_option('user'), out['user']
-        assert out['password'] == get_option('password'), out['password']
+        assert 'user' not in out or out['user'] == get_option('user'), out['user']
+        assert 'password' not in out or out['password'] == get_option(
+            'password',
+        ), out['password']
 
         # Just hostname
         url = 's2host.com'
@@ -375,8 +377,10 @@ class BasicTests(unittest.TestCase):
         else:
             assert out['port'] in [get_option('port'), 3306], out['port']
         assert 'database' not in out
-        assert out['user'] == get_option('user'), out['user']
-        assert out['password'] == get_option('password'), out['password']
+        assert 'user' not in out or out['user'] == get_option('user'), out['user']
+        assert 'password' not in out or out['password'] == get_option(
+            'password',
+        ), out['password']
 
         # Just hostname and port
         url = 's2host.com:1000'
@@ -385,8 +389,10 @@ class BasicTests(unittest.TestCase):
         assert out['host'] == 's2host.com', out['host']
         assert out['port'] == 1000, out['port']
         assert 'database' not in out
-        assert out['user'] == get_option('user'), out['user']
-        assert out['password'] == get_option('password'), out['password']
+        assert 'user' not in out or out['user'] == get_option('user'), out['user']
+        assert 'password' not in out or out['password'] == get_option(
+            'password',
+        ), out['password']
 
         # Query options
         url = 's2host.com:1000?local_infile=1&charset=utf8'
@@ -395,8 +401,10 @@ class BasicTests(unittest.TestCase):
         assert out['host'] == 's2host.com', out['host']
         assert out['port'] == 1000, out['port']
         assert 'database' not in out
-        assert out['user'] == get_option('user'), out['user']
-        assert out['password'] == get_option('password'), out['password']
+        assert 'user' not in out or out['user'] == get_option('user'), out['user']
+        assert 'password' not in out or out['password'] == get_option(
+            'password',
+        ), out['password']
         assert out['local_infile'] is True, out['local_infile']
         assert out['charset'] == 'utf8', out['charset']
 
