@@ -3,10 +3,12 @@
 """Basic SingleStore connection testing."""
 from __future__ import annotations
 
-import traceback
+import datetime
+import decimal
 import unittest
 
 import singlestore as s2
+# import traceback
 
 
 class BasicTests(unittest.TestCase):
@@ -14,19 +16,22 @@ class BasicTests(unittest.TestCase):
     def setUp(self):
         self.conn = s2.connect(database='app')
         self.cur = self.conn.cursor()
+        self.driver = self.conn._driver.dbapi.__name__
 
     def tearDown(self):
         try:
             if self.cur is not None:
                 self.cur.close()
         except Exception:
-            traceback.print_exc()
+            #           traceback.print_exc()
+            pass
 
         try:
             if self.conn is not None:
                 self.conn.close()
         except Exception:
-            traceback.print_exc()
+            #           traceback.print_exc()
+            pass
 
     def test_connection(self):
         self.cur.execute('show databases')
@@ -53,7 +58,7 @@ class BasicTests(unittest.TestCase):
 
         assert rowcount == 5, rowcount
         assert rownumber == 5, rownumber
-        assert lastrowid == 0, lastrowid
+        assert lastrowid is None, lastrowid
         assert len(desc) == 3, desc
         assert desc[0].name == 'id', desc[0].name
         assert desc[0].type_code in [253, 15], desc[0].type_code
@@ -88,7 +93,7 @@ class BasicTests(unittest.TestCase):
 
         assert rowcount == 5, rowcount
         assert rownumber == 5, rownumber
-        assert lastrowid == 0, lastrowid
+        assert lastrowid is None, lastrowid
         assert len(desc) == 3, desc
         assert desc[0].name == 'id', desc[0].name
         assert desc[0].type_code in [253, 15], desc[0].type_code
@@ -124,7 +129,7 @@ class BasicTests(unittest.TestCase):
 
         assert rowcount == 5, rowcount
         assert rownumber == 5, rownumber
-        assert lastrowid == 0, lastrowid
+        assert lastrowid is None, lastrowid
         assert len(desc) == 3, desc
         assert desc[0].name == 'id'
         assert desc[0].type_code in [253, 15]
@@ -173,7 +178,7 @@ class BasicTests(unittest.TestCase):
         ]), out
 
         assert rowcount == 3, rowcount
-        assert lastrowid == 0, lastrowid
+        assert lastrowid is None, lastrowid
         assert len(desc) == 3, desc
         assert desc[0].name == 'id', desc[0].name
         assert desc[0].type_code in [253, 15], desc[0].type_code
@@ -197,7 +202,7 @@ class BasicTests(unittest.TestCase):
         ]), out
 
         assert rowcount == 3, rowcount
-        assert lastrowid == 0, lastrowid
+        assert lastrowid is None, lastrowid
         assert len(desc) == 3, desc
         assert desc[0].name == 'id', desc[0].name
         assert desc[0].type_code in [253, 15], desc[0].type_code
@@ -240,7 +245,7 @@ class BasicTests(unittest.TestCase):
         ]), out
 
         assert rowcount == 3, rowcount
-        assert lastrowid == 0, lastrowid
+        assert lastrowid is None, lastrowid
         assert len(desc) == 3, desc
         assert desc[0].name == 'id', desc[0].name
         assert desc[0].type_code in [253, 15], desc[0].type_code
@@ -393,8 +398,192 @@ class BasicTests(unittest.TestCase):
             self.cur.execute('garbage syntax')
 
         exc = cm.exception
-        assert exc.errno == 1064, exc.errno
+        if self.driver != 'pyodbc':
+            assert exc.errno == 1064, exc.errno
         assert 'You have an error in your SQL syntax' in exc.errmsg, exc.errmsg
+
+    def test_alltypes(self):
+        self.cur.execute('select * from alltypes')
+        names = [x[0] for x in self.cur.description]
+        types = [x[1] for x in self.cur.description]
+        out = self.cur.fetchone()
+        row = dict(zip(names, out))
+        typ = dict(zip(names, types))
+
+        bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+        if self.driver == 'pyodbc':
+            odbc_types = {
+                # int -> bigint
+                3: 8, 1: 8, 2: 8, 9: 8,
+                # float -> double
+                4: 5,
+                # timestamp -> datetime
+                7: 12,
+                # year -> bigint
+                13: 8,
+                # char/binary -> varchar/varbinary
+                249: 15, 250: 15, 251: 15, 252: 15, 253: 15, 254: 15, 255: 15,
+                # newdecimal -> decimal
+                246: 0,
+                # json -> varchar
+                245: 15,
+                # bit -> varchar
+                16: 15,
+            }
+        else:
+            odbc_types = {}
+
+        def otype(x):
+            return odbc_types.get(x, x)
+
+        assert row['id'] == 0, row['id']
+        assert typ['id'] == otype(3), typ['id']
+
+        assert row['tinyint'] == 80, row['tinyint']
+        assert typ['tinyint'] == otype(1), typ['tinyint']
+
+        assert row['bool'] == 0, row['bool']
+        assert typ['bool'] == otype(1), typ['bool']
+
+        assert row['boolean'] == 1, row['boolean']
+        assert typ['boolean'] == otype(1), typ['boolean']
+
+        assert row['smallint'] == -27897, row['smallint']
+        assert typ['smallint'] == otype(2), typ['smallint']
+
+        assert row['mediumint'] == 104729, row['mediumint']
+        assert typ['mediumint'] == otype(9), typ['mediumint']
+
+        assert row['int24'] == -200899, row['int24']
+        assert typ['int24'] == otype(9), typ['int24']
+
+        assert row['int'] == -1295369311, row['int']
+        assert typ['int'] == otype(3), typ['int']
+
+        assert row['integer'] == -1741727421, row['integer']
+        assert typ['integer'] == otype(3), typ['integer']
+
+        assert row['bigint'] == -266883847, row['bigint']
+        assert typ['bigint'] == otype(8), typ['bigint']
+
+        assert row['float'] == -146487000.0, row['float']
+        assert typ['float'] == otype(4), typ['float']
+
+        assert row['double'] == -474646154.719356, row['double']
+        assert typ['double'] == otype(5), typ['double']
+
+        assert row['real'] == -901409776.279346, row['real']
+        assert typ['real'] == otype(5), typ['real']
+
+        assert row['decimal'] == decimal.Decimal('28111097.610822'), row['decimal']
+        assert typ['decimal'] == otype(246), typ['decimal']
+
+        assert row['dec'] == decimal.Decimal('389451155.931428'), row['dec']
+        assert typ['dec'] == otype(246), typ['dec']
+
+        assert row['fixed'] == decimal.Decimal('-143773416.044092'), row['fixed']
+        assert typ['fixed'] == otype(246), typ['fixed']
+
+        assert row['numeric'] == decimal.Decimal('866689461.300046'), row['numeric']
+        assert typ['numeric'] == otype(246), typ['numeric']
+
+        assert row['date'] == datetime.date(8524, 11, 10), row['date']
+        assert typ['date'] == 10, typ['date']
+
+        if self.driver == 'pyodbc':
+            assert row['time'] == datetime.time(0, 7, 0), row['time']
+        else:
+            assert row['time'] == datetime.timedelta(minutes=7), row['time']
+        assert typ['time'] == 11, typ['time']
+
+        if self.driver == 'pyodbc':
+            assert row['time'] == datetime.time(0, 7, 0), row['time']
+        else:
+            assert row['time_6'] == datetime.timedelta(
+                hours=1, minutes=10, microseconds=2,
+            ), row['time']
+        assert typ['time_6'] == 11, typ['time_6']
+
+        assert row['datetime'] == datetime.datetime(
+            9948, 3, 11, 15, 29, 22,
+        ), row['datetime']
+        assert typ['datetime'] == 12, typ['datetime']
+
+        assert row['datetime_6'] == datetime.datetime(
+            1756, 10, 29, 2, 2, 42, 8,
+        ), row['datetime_6']
+        assert typ['datetime'] == 12, typ['datetime']
+
+        assert row['timestamp'] == datetime.datetime(
+            1980, 12, 31, 1, 10, 23,
+        ), row['timestamp']
+        assert typ['timestamp'] == otype(7), typ['timestamp']
+
+        assert row['timestamp_6'] == datetime.datetime(
+            1991, 1, 2, 22, 15, 10, 6,
+        ), row['timestamp_6']
+        assert typ['timestamp_6'] == otype(7), typ['timestamp_6']
+
+        assert row['year'] == 1923, row['year']
+        assert typ['year'] == otype(13), typ['year']
+
+        assert row['char_100'] == \
+            'This is a test of a 100 character column.', row['char_100']
+        assert typ['char_100'] == otype(254), typ['char_100']
+
+        assert row['binary_100'] == bytearray(bits + [0] * 84), row['binary_100']
+        assert typ['binary_100'] == otype(254), typ['binary_100']
+
+        assert row['varchar_200'] == \
+            'This is a test of a variable character column.', row['varchar_200']
+        assert typ['varchar_200'] == otype(253), typ['varchar_200']  # why not 15?
+
+        assert row['varbinary_200'] == bytearray(bits * 2), row['varbinary_200']
+        assert typ['varbinary_200'] == otype(253), typ['varbinary_200']  # why not 15?
+
+        assert row['longtext'] == 'This is a longtext column.', row['longtext']
+        assert typ['longtext'] == otype(251), typ['longtext']
+
+        assert row['mediumtext'] == 'This is a mediumtext column.', row['mediumtext']
+        assert typ['mediumtext'] == otype(250), typ['mediumtext']
+
+        assert row['text'] == 'This is a text column.', row['text']
+        assert typ['text'] == otype(252), typ['text']
+
+        assert row['tinytext'] == 'This is a tinytext column.'
+        assert typ['tinytext'] == otype(249), typ['tinytext']
+
+        assert row['longblob'] == bytearray(bits * 3), row['longblob']
+        assert typ['longblob'] == otype(251), typ['longblob']
+
+        assert row['mediumblob'] == bytearray(bits * 2), row['mediumblob']
+        assert typ['mediumblob'] == otype(250), typ['mediumblob']
+
+        assert row['blob'] == bytearray(bits), row['blob']
+        assert typ['blob'] == otype(252), typ['blob']
+
+        assert row['tinyblob'] == bytearray([10, 11, 12, 13, 14, 15]), row['tinyblob']
+        assert typ['tinyblob'] == otype(249), typ['tinyblob']
+
+        # TODO: HTTP returns an object rather than a string.
+        assert row['json'] in [
+            '{"a":10,"b":2.75,"c":"hello world"}',
+            {'a': 10, 'b': 2.75, 'c': 'hello world'},
+        ], row['json']
+        assert typ['json'] == otype(245), typ['json']
+
+        assert row['enum'] == 'one', row['enum']
+        assert typ['enum'] == otype(253), typ['enum']  # mysql code: 247
+
+        # TODO: HTTP sees this as a varchar, so it doesn't become a set.
+        assert row['set'] in [{'two'}, 'two'], row['set']
+        assert typ['set'] == otype(253), typ['set']  # mysql code: 248
+
+        # TODO: Some connectors return an int and others return bytes.
+        assert row['bit'] == 128, row['bit']
+#       assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+        assert typ['bit'] == otype(16), typ['bit']
 
 
 if __name__ == '__main__':

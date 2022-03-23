@@ -157,7 +157,9 @@ class ColumnType(object):
         'DECIMAL', 'DEC', 'FIXED', 'NUMERIC', 0, decimal.Decimal,
     )
     DEC = FIXED = NUMERIC = DECIMAL
-    TINY = TINYINT = NumberDBAPIType('TINY', 'TINYINT', 1)
+    TINY = TINYINT = BOOL = BOOLEAN = NumberDBAPIType(
+        'TINY', 'TINYINT', 'BOOL', 'BOOLEAN', 1,
+    )
     SHORT = SMALLINT = NumberDBAPIType('SHORT', 'SMALLINT', 2)
     LONG = INT = NumberDBAPIType('LONG', 'INT', 3)
     FLOAT = NumberDBAPIType('FLOAT', 4)

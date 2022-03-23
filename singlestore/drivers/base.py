@@ -28,7 +28,23 @@ class Driver(object):
         params = {
             k: v for k, v in self.remap_params(self._params).items() if v is not None
         }
-        return self.dbapi.connect(**params)
+        conn = self.dbapi.connect(**params)
+        self.after_connect(conn, self._params)
+        return conn
+
+    def after_connect(self, conn: Any, params: Dict[str, Any]) -> None:
+        """
+        Callback for immediately after making a connection.
+
+        Parameters
+        ----------
+        conn : Connection
+            Connection object
+        params : dict
+            Original connection parameters
+
+        """
+        return
 
     def remap_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """

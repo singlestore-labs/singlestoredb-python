@@ -4,6 +4,7 @@ from typing import Any
 from typing import Dict
 
 from .base import Driver
+# from ..converters import time_or_none
 
 
 class PyODBCDriver(Driver):
@@ -15,12 +16,19 @@ class PyODBCDriver(Driver):
     anaconda = 'pyodbc'
 
     def remap_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return dict(
-            server=params['host'],
-            port=params['port'] or 3306,
-            database=params['database'],
-            uid=params['user'],
-            pwd=params['password'],
-            charset=params.get('charset', None),
-            driver=params.get('odbc_driver', None),
-        )
+        return {
+            k: v for k, v in dict(
+                server=params.get('host', '127.0.0.1'),
+                port=params.get('port', 0) or 3306,
+                database=params.get('database'),
+                uid=params.get('user'),
+                pwd=params.get('password'),
+                charset=params.get('charset'),
+                driver=params.get('odbc_driver'),
+            ).items() if v is not None
+        }
+
+    def after_connect(self, conn: Any, params: Dict[str, Any]) -> None:
+        if params.get('raw_values'):
+            conn.clear_output_converters()
+#       conn.add_output_converter(self.dbapi.SQL_TYPE_TIME, time_or_none)

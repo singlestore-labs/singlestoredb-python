@@ -18,4 +18,7 @@ class MySQLdbDriver(Driver):
         params.pop('driver', None)
         params.pop('pure_python', None)
         params.pop('odbc_driver', None)
+        if params['raw_values']:
+            params['conv'] = {}
+        params.pop('raw_values', None)
         return params

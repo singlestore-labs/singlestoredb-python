@@ -106,6 +106,11 @@ def get_exc_type(code: int) -> type:
     return InternalError
 
 
+def identity(x: Any) -> Any:
+    """Return input value."""
+    return x
+
+
 def b64decode_converter(converter: Any, x: Any, encoding: str = 'utf-8') -> Any:
     """Decode value before applying converter."""
     if x is None:
@@ -285,12 +290,20 @@ class Cursor(object):
             #               precision, scale, null_ok, column_flags, ?)
             self.description = []
             convs = []
+
             for item in out['results'][0].get('columns', []):
                 data_type = item['dataType'].split('(')[0]
                 type_code = types.ColumnType.get_code(data_type)
-                converter = converters[type_code]
+                if self.connection._raw_values:
+                    converter = identity
+                else:
+                    converter = converters[type_code]
                 if 'BLOB' in data_type or 'BINARY' in data_type:
                     converter = functools.partial(b64decode_converter, converter)
+                if type_code == 0:  # DECIMAL
+                    type_code = types.ColumnType.get_code('NEWDECIMAL')
+                elif type_code == 15:  # VARCHAR / VARBINARY
+                    type_code = types.ColumnType.get_code('VARSTRING')
                 convs.append(converter)
                 self.description.append((
                     item['name'], type_code,
@@ -565,6 +578,7 @@ class Connection(object):
             self, host: Optional[str] = None, port: Optional[int] = None,
             user: Optional[str] = None, password: Optional[str] = None,
             database: Optional[str] = None, protocol: str = 'http', version: str = 'v1',
+            raw_values: bool = False,
     ):
         host = host or get_option('host')
         port = port or get_option('http_port')
@@ -584,6 +598,7 @@ class Connection(object):
         self._url = f'{protocol}://{host}:{port}/api/{version}/'
         self.messages: list[list[Any]] = []
         self.autocommit: bool = True
+        self._raw_values = raw_values
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
@@ -727,6 +742,7 @@ def connect(
     host: Optional[str] = None, port: Optional[int] = None,
     user: Optional[str] = None, password: Optional[str] = None,
     database: Optional[str] = None, protocol: str = 'http', version: str = 'v1',
+    raw_values: bool = False,
 ) -> Connection:
     """
     Connect to a SingleStore database using HTTP.
@@ -748,13 +764,12 @@ def connect(
         HTTP protocol: `http` or `https`
     version : str, optional
         Version of the HTTP API
+    raw_values : bool, optional
+        Should raw values be returned rather than converted Python objects?
 
     Returns
     -------
     Connection
 
     """
-    return Connection(
-        host=host, port=port, user=user, password=password,
-        database=database, protocol=protocol, version=version,
-    )
+    return Connection(**dict(locals()))

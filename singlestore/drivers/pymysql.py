@@ -19,4 +19,7 @@ class PyMySQLDriver(Driver):
         params.pop('odbc_driver', None)
         params.pop('pure_python', None)
         params['port'] = params['port'] or 3306
+        if params['raw_values']:
+            params['conv'] = {}
+        params.pop('raw_values', None)
         return params

@@ -107,6 +107,8 @@ def decimal_or_none(x: Any) -> Optional[decimal.Decimal]:
     """
     if x is None:
         return None
+    if type(x) is decimal.Decimal:
+        return x
     return decimal.Decimal(x)
 
 
@@ -129,12 +131,14 @@ def date_or_none(x: Any) -> Optional[datetime.date]:
     """
     if x is None:
         return None
+    if type(x) is datetime.date:
+        return x
     return datetime.date.fromisoformat(x)
 
 
-def time_or_none(x: Any) -> Optional[datetime.time]:
+def time_or_none(x: Any) -> Optional[datetime.timedelta]:
     """
-    Convert value to a time.
+    Convert value to a timedelta.
 
     Parameters
     ----------
@@ -143,7 +147,7 @@ def time_or_none(x: Any) -> Optional[datetime.time]:
 
     Returns
     -------
-    datetime.time
+    datetime.timedelta
         If value can be cast to a time
     None
         If input value is None
@@ -151,7 +155,19 @@ def time_or_none(x: Any) -> Optional[datetime.time]:
     """
     if x is None:
         return None
-    return datetime.time.fromisoformat(x)
+    if type(x) is datetime.timedelta:
+        return x
+    if type(x) is bytes or type(x) is bytearray:
+        x = x.decode('utf8')
+    if '.' in x:
+        x, ms = x.split('.', 1)
+    else:
+        ms = '0'
+    hours, mins, secs = [int(y) for y in x.split(':')]
+    return datetime.timedelta(
+        hours=hours, minutes=mins,
+        seconds=secs, microseconds=int(ms),
+    )
 
 
 def datetime_or_none(x: Any) -> Optional[datetime.datetime]:
@@ -173,6 +189,8 @@ def datetime_or_none(x: Any) -> Optional[datetime.datetime]:
     """
     if x is None:
         return None
+    if type(x) is datetime.datetime:
+        return x
     return datetime.datetime.fromisoformat(x)
 
 

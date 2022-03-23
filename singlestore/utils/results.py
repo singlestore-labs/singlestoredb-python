@@ -172,7 +172,15 @@ def results_to_tuple(
         If single is False
 
     """
-    return res
+    if not res:
+        return res
+    if single:
+        if type(res) is tuple:
+            return res
+        return tuple(res)
+    if type(res[0]) is tuple:
+        return res
+    return [tuple(x) for x in res]
 
 
 _converters: Dict[

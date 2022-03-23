@@ -13,11 +13,11 @@ import singlestore as s2
 usage = 'usage: %prog [options] sql-file'
 parser = OptionParser(usage=usage, add_help_option=False)
 parser.add_option(
-    '-h', '--host',
+    '-h', '--host', default='127.0.0.1',
     help='database hostname or IP address',
 )
 parser.add_option(
-    '-P', '--port',
+    '-P', '--port', type='int', default=3306,
     help='database port',
 )
 parser.add_option(
@@ -29,7 +29,7 @@ parser.add_option(
     help='username',
 )
 parser.add_option(
-    '-H', '--http-port',
+    '-H', '--http-port', type='int',
     help='enable HTTP API on given port',
 )
 parser.add_option(

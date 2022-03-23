@@ -8,7 +8,6 @@ from collections.abc import Mapping
 from collections.abc import Sequence
 from typing import Any
 from typing import Dict
-from typing import Iterable
 from typing import List
 from typing import Optional
 from typing import Union
@@ -74,16 +73,8 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
     # Set known parameters
-    out['host'] = kwargs.get('host', get_option('host'))
-    out['port'] = kwargs.get('port', None)
-    out['database'] = kwargs.get('database', get_option('database'))
-    out['user'] = kwargs.get('user', get_option('user'))
-    out['password'] = kwargs.get('password', get_option('password'))
-    out['driver'] = kwargs.get('driver', get_option('driver'))
-    out['pure_python'] = kwargs.get('pure_python', get_option('pure_python'))
-    out['local_infile'] = kwargs.get('local_infile', get_option('local_infile'))
-    out['charset'] = kwargs.get('charset', get_option('charset'))
-    out['odbc_driver'] = kwargs.get('odbc_driver', get_option('odbc_driver'))
+    for name in inspect.getfullargspec(connect).args:
+        out[name] = kwargs.get(name, get_option(name))
 
     # See if host actually contains a URL; definitely not a perfect test.
     host = out['host']
@@ -413,17 +404,16 @@ class Cursor(object):
         self.rownumber = None
         self._format = get_option('results.format')
 
-        default: Union[Sequence[Any], Mapping[str, Any]] = []
-        if params is not None:
-            default = type(params)()
-
-        param_converter = sqlparams.SQLParams(
-            isinstance(params, Mapping) and map_paramstyle or positional_paramstyle,
-            self._driver.dbapi.paramstyle,
-        )
-
         try:
-            self._cursor.execute(*param_converter.format(oper, params or default))
+            if params:
+                param_converter = sqlparams.SQLParams(
+                    isinstance(params, Mapping) and
+                    map_paramstyle or positional_paramstyle,
+                    self._driver.dbapi.paramstyle,
+                )
+                self._cursor.execute(*param_converter.format(oper, params))
+            else:
+                self._cursor.execute(oper)
         except Exception as exc:
             raise wrap_exc(self._driver, exc)
 
@@ -452,15 +442,17 @@ class Cursor(object):
 
         param_seq = param_seq or [[]]
 
-        param_converter = sqlparams.SQLParams(
-            isinstance(
-                param_seq[0], Mapping,
-            ) and map_paramstyle or positional_paramstyle,
-            self._driver.dbapi.paramstyle,
-        )
-
         try:
-            self._cursor.executemany(*param_converter.formatmany(oper, param_seq))
+            if param_seq[0]:
+                param_converter = sqlparams.SQLParams(
+                    isinstance(
+                        param_seq[0], Mapping,
+                    ) and map_paramstyle or positional_paramstyle,
+                    self._driver.dbapi.paramstyle,
+                )
+                self._cursor.executemany(*param_converter.formatmany(oper, param_seq))
+            else:
+                self._cursor.executemany(oper, param_seq)
         except Exception as exc:
             raise wrap_exc(self._driver, exc)
 
@@ -505,10 +497,13 @@ class Cursor(object):
         else:
             size = max(int(self.arraysize), 1)
         try:
+            # This is to get around a bug in mysql.connector. For some reason,
+            # fetchmany(1) returns the same row over and over again.
             if size == 1:
                 out = [self._cursor.fetchone()]
             else:
-                out = self._cursor.fetchmany(size=size)
+                # Don't use a keyword parameter for size=. Pyodbc fails with that.
+                out = self._cursor.fetchmany(size)
         except Exception as exc:
             raise wrap_exc(self._driver, exc)
 
@@ -605,7 +600,7 @@ class Cursor(object):
         """
         return self._cursor.messages
 
-    def next(self) -> Optional[Sequence[Any]]:
+    def next(self) -> Optional[Result]:
         """
         Return the next row from the result set for use in iterators.
 
@@ -618,23 +613,28 @@ class Cursor(object):
 
         """
         try:
-            return self._cursor.next()
+            out = self.fetchone()
+            if out is None:
+                raise StopIteration
+            return out
+        except StopIteration:
+            raise
         except Exception as exc:
             raise wrap_exc(self._driver, exc)
 
     __next__ = next
 
-    def __iter__(self) -> Iterable[Sequence[Any]]:
+    def __iter__(self) -> Any:
         """Return result iterator."""
-        return self._cursor.__iter__()
+        return self
 
     @property
     def lastrowid(self) -> Optional[int]:
         """Return the rowid of the last modified row."""
-        try:
-            return self._cursor.lastrowid or 0
-        except Exception as exc:
-            raise wrap_exc(self._driver, exc)
+        return getattr(
+            self._cursor, 'lastrowid',
+            getattr(self._cursor, '_lastrowid', None),
+        ) or None
 
     def __enter__(self) -> Cursor:
         """Enter a context."""
@@ -803,7 +803,11 @@ class Connection(object):
                 return bool(self._conn.is_connected())
             if hasattr(self._conn, 'ping'):
                 return not bool(self._conn.ping())
-            return bool(self._conn.open)
+            if hasattr(self._conn, 'open'):
+                return bool(self._conn.open)
+            if hasattr(self._conn, 'closed'):
+                return not bool(self._conn.closed)
+            raise NotImplementedError
         except Exception as exc:
             raise wrap_exc(self._driver, exc)
         return False
@@ -875,7 +879,7 @@ class Connection(object):
         """
         cur = self.cursor()
         cur.execute('select @@global.{}'.format(_name_check(name)))
-        return list(cur)[0][0]  # type: ignore
+        return list(cur)[0][0]
 
     def get_session_var(self, name: str) -> Any:
         """
@@ -888,7 +892,7 @@ class Connection(object):
         """
         cur = self.cursor()
         cur.execute('select @@session.{}'.format(_name_check(name)))
-        return list(cur)[0][0]  # type: ignore
+        return list(cur)[0][0]
 
     def enable_http_api(self, port: Optional[int] = None) -> int:
         """
@@ -936,6 +940,7 @@ def connect(
     database: Optional[str] = None, driver: Optional[str] = None,
     pure_python: Optional[bool] = None, local_infile: Optional[bool] = None,
     odbc_driver: Optional[str] = None, charset: Optional[str] = None,
+    raw_values: Optional[bool] = None,
 ) -> Connection:
     """
     Return a SingleStore database connection.
@@ -967,6 +972,11 @@ def connect(
         Allow local file uploads
     odbc_driver : str, optional
         Name of the ODBC driver to use for ODBC connections
+    charset : str, optional
+        Character set for string values
+    raw_values : bool, optional
+        Return raw values from queries rather than values converted to
+        Python objects
 
     Examples
     --------

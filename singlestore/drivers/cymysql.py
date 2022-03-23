@@ -21,4 +21,7 @@ class CyMySQLDriver(Driver):
         params['port'] = params['port'] or 3306
         params['db'] = params.pop('database')
         params['passwd'] = params.pop('password')
+        if params['raw_values']:
+            params['conv'] = {}
+        params.pop('raw_values', None)
         return params

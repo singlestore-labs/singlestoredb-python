@@ -20,4 +20,5 @@ class MySQLConnectorDriver(Driver):
         params['use_pure'] = params.pop('pure_python', False)
         params['port'] = params['port'] or 3306
         params['allow_local_infile'] = params.pop('local_infile')
+        params['raw'] = params.pop('raw_values')
         return params

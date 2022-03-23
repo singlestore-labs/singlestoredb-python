@@ -90,6 +90,12 @@ register_option(
     environ='SINGLESTORE_ODBC_DRIVER',
 )
 
+register_option(
+    'raw_values', 'bool', check_bool, False,
+    'Return raw values from queries rather than converting values to Python objects',
+    environ='SINGLESTORE_RAW_VALUES',
+)
+
 
 #
 # Query results options
