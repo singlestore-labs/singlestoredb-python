@@ -4,7 +4,11 @@ import json
 from typing import Any
 from typing import Dict
 
-from mysql.connector.conversion import MySQLConverter
+try:
+    from mysql.connector.conversion import MySQLConverter
+except ImportError:
+    class MySQLConverter(object):  # type: ignore
+        """Dummy class."""
 
 from .base import Driver
 

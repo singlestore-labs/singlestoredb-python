@@ -4,7 +4,10 @@ import json
 from typing import Any
 from typing import Dict
 
-from pymysql.converters import decoders
+try:
+    from pymysql.converters import decoders
+except ImportError:
+    decoders = {}
 
 from .base import Driver
 
