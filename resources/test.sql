@@ -111,7 +111,7 @@ INSERT INTO alltypes SET
 ;
 
 INSERT INTO alltypes SET
-    `id`=NULL,
+    `id`=1,
     `tinyint`=NULL,
     `bool`=NULL,
     `boolean`=NULL,

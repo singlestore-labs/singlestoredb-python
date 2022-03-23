@@ -410,7 +410,7 @@ class BasicTests(unittest.TestCase):
         assert 'You have an error in your SQL syntax' in exc.errmsg, exc.errmsg
 
     def test_alltypes(self):
-        self.cur.execute('select * from alltypes')
+        self.cur.execute('select * from alltypes where id = 0')
         names = [x[0] for x in self.cur.description]
         types = [x[1] for x in self.cur.description]
         out = self.cur.fetchone()
@@ -598,10 +598,9 @@ class BasicTests(unittest.TestCase):
         assert typ['bit'] == otype(16), typ['bit']
 
     def test_alltypes_nulls(self):
-        self.cur.execute('select * from alltypes')
+        self.cur.execute('select * from alltypes where id = 1')
         names = [x[0] for x in self.cur.description]
         types = [x[1] for x in self.cur.description]
-        out = self.cur.fetchone()
         out = self.cur.fetchone()
         row = dict(zip(names, out))
         typ = dict(zip(names, types))
@@ -631,7 +630,7 @@ class BasicTests(unittest.TestCase):
         def otype(x):
             return odbc_types.get(x, x)
 
-        assert row['id'] is None, row['id']
+        assert row['id'] == 1, row['id']
         assert typ['id'] == otype(3), typ['id']
 
         assert row['tinyint'] is None, row['tinyint']
