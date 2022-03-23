@@ -721,22 +721,6 @@ class Connection(object):
             return True
         return False
 
-    def ping(self, reconnect: bool = False) -> bool:
-        """
-        Check if the database server is still available.
-
-        Parameters
-        ----------
-        reconnect : bool
-            Should the server be reconnected?
-
-        """
-        try:
-            return self.is_connected()
-        except Exception:
-            pass
-        return False
-
 
 def connect(
     host: Optional[str] = None, port: Optional[int] = None,

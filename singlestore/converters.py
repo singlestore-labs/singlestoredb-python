@@ -20,7 +20,7 @@ def identity(x: Any) -> Optional[Any]:
     return x
 
 
-def bit_or_none(x: Any) -> Optional[int]:
+def bit_or_none(x: Any) -> Optional[bytes]:
     """
     Convert value to bit.
 
@@ -40,8 +40,8 @@ def bit_or_none(x: Any) -> Optional[int]:
     if x is None:
         return None
     if type(x) == str:
-        return int.from_bytes(base64.b64decode(x), 'little')
-    return int.from_bytes(x, 'little')
+        return base64.b64decode(x)
+    return x
 
 
 def int_or_none(x: Any) -> Optional[int]:

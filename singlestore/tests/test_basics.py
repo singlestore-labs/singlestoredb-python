@@ -388,11 +388,6 @@ class BasicTests(unittest.TestCase):
         assert out['user'] == get_option('user'), out['user']
         assert out['password'] == get_option('password'), out['password']
 
-    def test_ping(self):
-        assert self.conn.ping()
-        self.conn.close()
-        assert not self.conn.ping()
-
     def test_wrap_exc(self):
         with self.assertRaises(s2.ProgrammingError) as cm:
             self.cur.execute('garbage syntax')
@@ -491,12 +486,15 @@ class BasicTests(unittest.TestCase):
         assert row['date'] == datetime.date(8524, 11, 10), row['date']
         assert typ['date'] == 10, typ['date']
 
+        # pyodbc uses time rather than timedelta. In addition, if you try to
+        # put your own converter in, it changes the type code to 15!!!
         if self.driver == 'pyodbc':
             assert row['time'] == datetime.time(0, 7, 0), row['time']
         else:
             assert row['time'] == datetime.timedelta(minutes=7), row['time']
         assert typ['time'] == 11, typ['time']
 
+        # Same as above
         if self.driver == 'pyodbc':
             assert row['time'] == datetime.time(0, 7, 0), row['time']
         else:
@@ -566,11 +564,11 @@ class BasicTests(unittest.TestCase):
         assert row['tinyblob'] == bytearray([10, 11, 12, 13, 14, 15]), row['tinyblob']
         assert typ['tinyblob'] == otype(249), typ['tinyblob']
 
-        # TODO: HTTP returns an object rather than a string.
-        assert row['json'] in [
-            '{"a":10,"b":2.75,"c":"hello world"}',
-            {'a': 10, 'b': 2.75, 'c': 'hello world'},
-        ], row['json']
+        # pyodbc surfaces json as varchar
+        if self.driver == 'pyodbc':
+            assert row['json'] == '{"a":10,"b":2.75,"c":"hello world"}', row['json']
+        else:
+            assert row['json'] == {'a': 10, 'b': 2.75, 'c': 'hello world'}, row['json']
         assert typ['json'] == otype(245), typ['json']
 
         assert row['enum'] == 'one', row['enum']
@@ -580,9 +578,11 @@ class BasicTests(unittest.TestCase):
         assert row['set'] in [{'two'}, 'two'], row['set']
         assert typ['set'] == otype(253), typ['set']  # mysql code: 248
 
-        # TODO: Some connectors return an int and others return bytes.
-        assert row['bit'] == 128, row['bit']
-#       assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+        # pyodbc uses the opposite endianness of all other drivers
+        if self.driver == 'pyodbc':
+            assert row['bit'] == b'\x80\x00\x00\x00\x00\x00\x00\x00', row['bit']
+        else:
+            assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
         assert typ['bit'] == otype(16), typ['bit']
 
 

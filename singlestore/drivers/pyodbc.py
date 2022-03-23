@@ -4,6 +4,7 @@ from typing import Any
 from typing import Dict
 
 from .base import Driver
+# import json
 # from ..converters import time_or_none
 
 
@@ -32,3 +33,7 @@ class PyODBCDriver(Driver):
         if params.get('raw_values'):
             conn.clear_output_converters()
 #       conn.add_output_converter(self.dbapi.SQL_TYPE_TIME, time_or_none)
+#       conn.add_output_converter(245, json.loads)
+
+    def is_connected(self, conn: Any, reconnect: bool = False) -> bool:
+        return not conn.closed

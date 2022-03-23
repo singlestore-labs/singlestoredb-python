@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 from typing import Dict
 
 from .base import Driver
+
+
+converter = {245: json.loads}
 
 
 class MariaDBDriver(Driver):
@@ -22,4 +26,12 @@ class MariaDBDriver(Driver):
         if params['raw_values']:
             params['converter'] = {}
         params.pop('raw_values', None)
+        params['converter'] = converter
         return params
+
+    def is_connected(self, conn: Any, reconnect: bool = False) -> bool:
+        try:
+            conn.ping()
+            return True
+        except conn.InterfaceError:
+            return False

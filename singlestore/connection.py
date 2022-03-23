@@ -799,37 +799,9 @@ class Connection(object):
         if self._conn is None:
             return False
         try:
-            if hasattr(self._conn, 'is_connected'):
-                return bool(self._conn.is_connected())
-            if hasattr(self._conn, 'ping'):
-                return not bool(self._conn.ping())
-            if hasattr(self._conn, 'open'):
-                return bool(self._conn.open)
-            if hasattr(self._conn, 'closed'):
-                return not bool(self._conn.closed)
-            raise NotImplementedError
+            return self._driver.is_connected(self._conn)
         except Exception as exc:
             raise wrap_exc(self._driver, exc)
-        return False
-
-    def ping(self, reconnect: bool = False) -> bool:
-        """
-        Check to see if server is still available.
-
-        Parameters
-        ----------
-        reconnect : bool
-            Should a reconnection be attempted?
-
-        Returns
-        -------
-        bool
-
-        """
-        try:
-            return self.is_connected()
-        except Exception:
-            pass
         return False
 
     def set_global_var(self, **kwargs: Any) -> None:

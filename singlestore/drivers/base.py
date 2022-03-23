@@ -46,6 +46,24 @@ class Driver(object):
         """
         return
 
+    def is_connected(self, conn: Any, reconnect: bool = False) -> bool:
+        """
+        Determine if the server is still connected.
+
+        Parameters
+        ----------
+        conn : Connection
+            Connection object to test
+        reconnect : bool, optional
+            If the server is not connected, should a reconnection be attempted?
+
+        Returns
+        -------
+        bool
+
+        """
+        raise NotImplementedError
+
     def remap_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Map generalized parameters to package-specific parameters.

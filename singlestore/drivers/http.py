@@ -29,6 +29,9 @@ class HTTPDriver(Driver):
                 params['port'] = 80
         return params
 
+    def is_connected(self, conn: Any, reconnect: bool = False) -> bool:
+        return conn.is_connected()
+
 
 class HTTPSDriver(HTTPDriver):
 
