@@ -388,6 +388,18 @@ class BasicTests(unittest.TestCase):
         assert out['user'] == get_option('user'), out['user']
         assert out['password'] == get_option('password'), out['password']
 
+        # Query options
+        url = 's2host.com:1000?local_infile=1&charset=utf8'
+        out = build_params(host=url)
+        assert out['driver'] == get_option('driver'), out['driver']
+        assert out['host'] == 's2host.com', out['host']
+        assert out['port'] == 1000, out['port']
+        assert 'database' not in out
+        assert out['user'] == get_option('user'), out['user']
+        assert out['password'] == get_option('password'), out['password']
+        assert out['local_infile'] is True, out['local_infile']
+        assert out['charset'] == 'utf8', out['charset']
+
     def test_wrap_exc(self):
         with self.assertRaises(s2.ProgrammingError) as cm:
             self.cur.execute('garbage syntax')
