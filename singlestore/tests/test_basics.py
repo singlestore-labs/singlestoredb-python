@@ -585,6 +585,163 @@ class BasicTests(unittest.TestCase):
             assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
         assert typ['bit'] == otype(16), typ['bit']
 
+    def test_alltypes_nulls(self):
+        self.cur.execute('select * from alltypes')
+        names = [x[0] for x in self.cur.description]
+        types = [x[1] for x in self.cur.description]
+        out = self.cur.fetchone()
+        out = self.cur.fetchone()
+        row = dict(zip(names, out))
+        typ = dict(zip(names, types))
+
+        if self.driver == 'pyodbc':
+            odbc_types = {
+                # int -> bigint
+                3: 8, 1: 8, 2: 8, 9: 8,
+                # float -> double
+                4: 5,
+                # timestamp -> datetime
+                7: 12,
+                # year -> bigint
+                13: 8,
+                # char/binary -> varchar/varbinary
+                249: 15, 250: 15, 251: 15, 252: 15, 253: 15, 254: 15, 255: 15,
+                # newdecimal -> decimal
+                246: 0,
+                # json -> varchar
+                245: 15,
+                # bit -> varchar
+                16: 15,
+            }
+        else:
+            odbc_types = {}
+
+        def otype(x):
+            return odbc_types.get(x, x)
+
+        assert row['id'] is None, row['id']
+        assert typ['id'] == otype(3), typ['id']
+
+        assert row['tinyint'] is None, row['tinyint']
+        assert typ['tinyint'] == otype(1), typ['tinyint']
+
+        assert row['bool'] is None, row['bool']
+        assert typ['bool'] == otype(1), typ['bool']
+
+        assert row['boolean'] is None, row['boolean']
+        assert typ['boolean'] == otype(1), typ['boolean']
+
+        assert row['smallint'] is None, row['smallint']
+        assert typ['smallint'] == otype(2), typ['smallint']
+
+        assert row['mediumint'] is None, row['mediumint']
+        assert typ['mediumint'] == otype(9), typ['mediumint']
+
+        assert row['int24'] is None, row['int24']
+        assert typ['int24'] == otype(9), typ['int24']
+
+        assert row['int'] is None, row['int']
+        assert typ['int'] == otype(3), typ['int']
+
+        assert row['integer'] is None, row['integer']
+        assert typ['integer'] == otype(3), typ['integer']
+
+        assert row['bigint'] is None, row['bigint']
+        assert typ['bigint'] == otype(8), typ['bigint']
+
+        assert row['float'] is None, row['float']
+        assert typ['float'] == otype(4), typ['float']
+
+        assert row['double'] is None, row['double']
+        assert typ['double'] == otype(5), typ['double']
+
+        assert row['real'] is None, row['real']
+        assert typ['real'] == otype(5), typ['real']
+
+        assert row['decimal'] is None, row['decimal']
+        assert typ['decimal'] == otype(246), typ['decimal']
+
+        assert row['dec'] is None, row['dec']
+        assert typ['dec'] == otype(246), typ['dec']
+
+        assert row['fixed'] is None, row['fixed']
+        assert typ['fixed'] == otype(246), typ['fixed']
+
+        assert row['numeric'] is None, row['numeric']
+        assert typ['numeric'] == otype(246), typ['numeric']
+
+        assert row['date'] is None, row['date']
+        assert typ['date'] == 10, typ['date']
+
+        assert row['time'] is None, row['time']
+        assert typ['time'] == 11, typ['time']
+
+        assert row['time'] is None, row['time']
+        assert typ['time_6'] == 11, typ['time_6']
+
+        assert row['datetime'] is None, row['datetime']
+        assert typ['datetime'] == 12, typ['datetime']
+
+        assert row['datetime_6'] is None, row['datetime_6']
+        assert typ['datetime'] == 12, typ['datetime']
+
+        assert row['timestamp'] is None, row['timestamp']
+        assert typ['timestamp'] == otype(7), typ['timestamp']
+
+        assert row['timestamp_6'] is None, row['timestamp_6']
+        assert typ['timestamp_6'] == otype(7), typ['timestamp_6']
+
+        assert row['year'] is None, row['year']
+        assert typ['year'] == otype(13), typ['year']
+
+        assert row['char_100'] is None, row['char_100']
+        assert typ['char_100'] == otype(254), typ['char_100']
+
+        assert row['binary_100'] is None, row['binary_100']
+        assert typ['binary_100'] == otype(254), typ['binary_100']
+
+        assert row['varchar_200'] is None, typ['varchar_200']
+        assert typ['varchar_200'] == otype(253), typ['varchar_200']  # why not 15?
+
+        assert row['varbinary_200'] is None, row['varbinary_200']
+        assert typ['varbinary_200'] == otype(253), typ['varbinary_200']  # why not 15?
+
+        assert row['longtext'] is None, row['longtext']
+        assert typ['longtext'] == otype(251), typ['longtext']
+
+        assert row['mediumtext'] is None, row['mediumtext']
+        assert typ['mediumtext'] == otype(250), typ['mediumtext']
+
+        assert row['text'] is None, row['text']
+        assert typ['text'] == otype(252), typ['text']
+
+        assert row['tinytext'] is None, row['tinytext']
+        assert typ['tinytext'] == otype(249), typ['tinytext']
+
+        assert row['longblob'] is None, row['longblob']
+        assert typ['longblob'] == otype(251), typ['longblob']
+
+        assert row['mediumblob'] is None, row['mediumblob']
+        assert typ['mediumblob'] == otype(250), typ['mediumblob']
+
+        assert row['blob'] is None, row['blob']
+        assert typ['blob'] == otype(252), typ['blob']
+
+        assert row['tinyblob'] is None, row['tinyblob']
+        assert typ['tinyblob'] == otype(249), typ['tinyblob']
+
+        assert row['json'] is None, row['json']
+        assert typ['json'] == otype(245), typ['json']
+
+        assert row['enum'] is None, row['enum']
+        assert typ['enum'] == otype(253), typ['enum']  # mysql code: 247
+
+        assert row['set'] is None, row['set']
+        assert typ['set'] == otype(253), typ['set']  # mysql code: 248
+
+        assert row['bit'] is None, row['bit']
+        assert typ['bit'] == otype(16), typ['bit']
+
 
 if __name__ == '__main__':
     import nose2

@@ -36,7 +36,6 @@ from typing import Optional
 from typing import Union
 from urllib.parse import urlparse
 
-from .args import iteroptions
 from .xdict import xdict
 
 
@@ -117,6 +116,44 @@ def _delenv(names: Union[str, list[str]]) -> None:
     for name in names:
         os.environ.pop(name, None)
         os.environ.pop(name.replace('_', ''), None)
+
+
+def iteroptions(*args: Any, **kwargs: Any) -> Iterator[tuple[str, Any]]:
+    """
+    Iterate through name / value pairs of options
+
+    Options can come in several forms.  They can be consecutive arguments
+    where the first argument is the name and the following argument is
+    the value.  They can be two-element tuples (or lists) where the first
+    element is the name and the second element is the value.  You can
+    also pass in a dictionary of key / value pairs.  And finally, you can
+    use keyword arguments.
+
+    Parameters
+    ----------
+    *args : any, optional
+        See description above.
+    **kwargs : key / value pairs, optional
+        Arbitrary keyword arguments.
+
+    Returns
+    -------
+    generator
+        Each iteration returns a name / value pair in a tuple
+
+    """
+    items = list(args)
+    while items:
+        item = items.pop(0)
+        if isinstance(item, (list, tuple)):
+            yield item[0], item[1]
+        elif isinstance(item, dict):
+            for key, value in item.items():
+                yield key, value
+        else:
+            yield item, items.pop(0)
+    for key, value in kwargs.items():
+        yield key, value
 
 
 @contextlib.contextmanager
