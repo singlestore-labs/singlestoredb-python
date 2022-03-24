@@ -5,16 +5,29 @@ from __future__ import annotations
 
 import datetime
 import decimal
+import os
 import unittest
 
 import singlestore as s2
+from . import utils
 # import traceback
 
 
 class BasicTests(unittest.TestCase):
 
+    dbname: str = ''
+
+    @classmethod
+    def setUpClass(cls):
+        sql_file = os.path.join(os.path.dirname(__file__), 'test.sql')
+        cls.dbname = utils.load_sql(sql_file)
+
+    @classmethod
+    def tearDownClass(cls):
+        utils.drop_database(cls.dbname)
+
     def setUp(self):
-        self.conn = s2.connect(database='app')
+        self.conn = s2.connect(database=type(self).dbname)
         self.cur = self.conn.cursor()
         self.driver = self.conn._driver.dbapi.__name__
 
@@ -23,20 +36,20 @@ class BasicTests(unittest.TestCase):
             if self.cur is not None:
                 self.cur.close()
         except Exception:
-            #           traceback.print_exc()
+            # traceback.print_exc()
             pass
 
         try:
             if self.conn is not None:
                 self.conn.close()
         except Exception:
-            #           traceback.print_exc()
+            # traceback.print_exc()
             pass
 
     def test_connection(self):
         self.cur.execute('show databases')
         dbs = set([x[0] for x in self.cur.fetchall()])
-        assert 'app' in dbs, dbs
+        assert type(self).dbname in dbs, dbs
 
     def test_fetchall(self):
         self.cur.execute('select * from data')
