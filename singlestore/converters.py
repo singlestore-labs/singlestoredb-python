@@ -159,14 +159,10 @@ def time_or_none(x: Any) -> Optional[datetime.timedelta]:
         return x
     if type(x) is bytes or type(x) is bytearray:
         x = x.decode('utf8')
-    if '.' in x:
-        x, ms = x.split('.', 1)
-    else:
-        ms = '0'
-    hours, mins, secs = [int(y) for y in x.split(':')]
+    tm = datetime.time.fromisoformat(x)
     return datetime.timedelta(
-        hours=hours, minutes=mins,
-        seconds=secs, microseconds=int(ms),
+        hours=tm.hour, minutes=tm.minute,
+        seconds=tm.second, microseconds=tm.microsecond,
     )
 
 
@@ -311,4 +307,6 @@ converters: Dict[int, Callable[..., Any]] = {
     253: identity,
     254: identity,
     255: geometry_or_none,
+
+
 }
