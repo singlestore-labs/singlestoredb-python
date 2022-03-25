@@ -25,10 +25,14 @@ def load_sql(sql_file: str) -> str:
     """
     dbname = 'TEST_{}'.format(uuid.uuid4()).replace('-', '_')
 
+    args = {}
+    if 'SINGLESTORE_INIT_DB_URL' in os.environ:
+        args['host'] = os.environ['SINGLESTORE_INIT_DB_URL']
+
     # Always use the default driver since not all operations are
     # permitted in the HTTP API.
     with open(sql_file, 'r') as infile:
-        with s2.connect(driver='mysql-connector') as conn:
+        with s2.connect(**args) as conn:
             with conn.cursor() as cur:
                 cur.execute(f'CREATE DATABASE {dbname};')
                 cur.execute(f'USE {dbname};')
@@ -55,6 +59,9 @@ def load_sql(sql_file: str) -> str:
 def drop_database(name: str) -> None:
     """Drop a database with the given name."""
     if name:
-        with s2.connect(driver='mysql-connector') as conn:
+        args = {}
+        if 'SINGLESTORE_INIT_DB_URL' in os.environ:
+            args['host'] = os.environ['SINGLESTORE_INIT_DB_URL']
+        with s2.connect(**args) as conn:
             with conn.cursor() as cur:
                 cur.execute(f'DROP DATABASE {name};')

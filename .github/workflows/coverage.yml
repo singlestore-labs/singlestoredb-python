@@ -47,7 +47,6 @@ jobs:
           mv -f .coverage coverage-mysql.xml
         env:
           SINGLESTORE_URL: "root:root@127.0.0.1:3306"
-          SINGLESTORE_HTTP_PORT: 9000
 
       - name: Run HTTP protocol tests
         run: |
@@ -55,6 +54,7 @@ jobs:
           mv -f .coverage coverage-http.xml
         env:
           SINGLESTORE_URL: "http://root:root@127.0.0.1:9000"
+          SINGLESTORE_INI_DB_URL: "root:root@127.0.0.1:3306"
           SINGLESTORE_HTTP_PORT: 9000
 
       - name: Generate report
