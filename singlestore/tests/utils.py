@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from urllib.parse import urlparse
 
 import singlestore as s2
 from singlestore.connection import build_params
@@ -41,6 +42,17 @@ def load_sql(sql_file: str) -> str:
     if not dbname and 'SINGLESTORE_INIT_DB_URL' in os.environ:
         args['host'] = os.environ['SINGLESTORE_INIT_DB_URL']
 
+    http_port = 0
+    if 'SINGLESTORE_URL' in os.environ:
+        url = os.environ['SINGLESTORE_URL']
+        if url.startswith('http:') or url.startswith('https:'):
+            urlp = urlparse(url)
+            if urlp.port:
+                http_port = urlp.port
+
+    if 'SINGLESTORE_HTTP_PORT' in os.environ:
+        http_port = int(os.environ['SINGLESTORE_HTTP_PORT'])
+
     # Always use the default driver since not all operations are
     # permitted in the HTTP API.
     with open(sql_file, 'r') as infile:
@@ -52,11 +64,8 @@ def load_sql(sql_file: str) -> str:
                     cur.execute(f'USE {dbname};')
 
                 # Start HTTP server as needed.
-                if 'SINGLESTORE_HTTP_PORT' in os.environ:
-                    cur.execute(
-                        'SET GLOBAL HTTP_PROXY_PORT={};'
-                        .format(os.environ['SINGLESTORE_HTTP_PORT']),
-                    )
+                if http_port:
+                    cur.execute(f'SET GLOBAL HTTP_PROXY_PORT={http_port};')
                     cur.execute('SET GLOBAL HTTP_API=ON;')
                     cur.execute('RESTART PROXY;')
 

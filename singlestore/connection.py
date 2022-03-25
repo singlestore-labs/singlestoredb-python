@@ -79,7 +79,10 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
     # See if host actually contains a URL; definitely not a perfect test.
     host = out['host']
     if host and (':' in host or '/' in host or '@' in host or '?' in host):
-        out.update(_parse_url(host))
+        urlp = _parse_url(host)
+        if 'driver' not in urlp:
+            urlp['driver'] = get_option('driver')
+        out.update(urlp)
 
     out = _cast_params(out)
 

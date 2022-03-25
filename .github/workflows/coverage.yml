@@ -58,7 +58,6 @@ jobs:
           # used to create the database and the generated database name will
           # be applied to the above URL.
           SINGLESTORE_INIT_DB_URL: "root:root@127.0.0.1:3306"
-          SINGLESTORE_HTTP_PORT: 9000
 
       - name: Generate report
         run: |
