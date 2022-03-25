@@ -8,6 +8,7 @@ import re
 import secrets
 import subprocess
 import sys
+import uuid
 from optparse import OptionParser
 
 import singlestore as s2
@@ -52,6 +53,10 @@ parser.add_option(
     '-o', '--output',
     default='env', choices=['env', 'github', 'json'],
     help='report cluster information in the requested format: github, env, json',
+)
+parser.add_option(
+    '-d', '--database',
+    help='database name to create',
 )
 
 (options, args) = parser.parse_args()
@@ -98,6 +103,11 @@ clus = cm.create_cluster(
     wait_on_active=True,
 )
 
+database = options.database
+if not database:
+    database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
+
+
 # TODO: When we can discover the hostname, change this.
 host = f'svc-{clus.id}-ddl.aws-virginia-2.svc.singlestore.com'
 port = 3306
@@ -107,15 +117,18 @@ if options.output == 'env':
     print(f'CLUSTER_ID={clus.id}')
     print(f'CLUSTER_HOST={host}')
     print(f'CLUSTER_PORT={port}')
+    print(f'CLUSTER_DATABASE={database}')
 elif options.output == 'github':
     print(f'::set-output name=cluster-id::{clus.id}')
     print(f'::set-output name=cluster-host::{host}')
     print(f'::set-output name=cluster-port::{port}')
+    print(f'::set-output name=cluster-database::{database}')
 elif options.output == 'json':
     print('{')
     print(f'  "cluster-id": "{clus.id}",')
     print(f'  "cluster-host": "{host}",')
     print(f'  "cluster-port": {port}')
+    print(f'  "cluster-database": {database}')
     print('}')
 
 # Initialize the database
@@ -124,6 +137,7 @@ if options.init_sql:
         os.path.join(os.path.dirname(__file__), 'init_db.py'),
         '--host', str(host), '--port', str(port),
         '--user', 'admin', '--password', str(options.password),
+        '--database', database,
     ]
 
     if options.http_port:

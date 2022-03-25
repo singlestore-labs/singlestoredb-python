@@ -7,6 +7,7 @@ import os
 import uuid
 
 import singlestore as s2
+from singlestore.connection import build_params
 
 
 def load_sql(sql_file: str) -> str:
@@ -23,10 +24,21 @@ def load_sql(sql_file: str) -> str:
     str : name of database created for SQL file
 
     """
-    dbname = 'TEST_{}'.format(uuid.uuid4()).replace('-', '_')
+    dbname = None
 
+    # Use an existing database name if given.
+    if 'SINGLESTORE_URL' in os.environ:
+        dbname = build_params(host=os.environ['SINGLESTORE_URL']).get('database')
+    elif 'SINGLESTORE_HOST' in os.environ:
+        dbname = build_params(host=os.environ['SINGLESTORE_HOST']).get('database')
+    elif 'SINGLESTORE_DATABASE' in os.environ:
+        dbname = os.environ['SINGLESTORE_DATBASE']
+
+    # If no database name was specified, use initializer URL if given.
+    # HTTP can't change databases, so you can't initialize from HTTP
+    # while also creating a database.
     args = {}
-    if 'SINGLESTORE_INIT_DB_URL' in os.environ:
+    if not dbname and 'SINGLESTORE_INIT_DB_URL' in os.environ:
         args['host'] = os.environ['SINGLESTORE_INIT_DB_URL']
 
     # Always use the default driver since not all operations are
@@ -34,8 +46,10 @@ def load_sql(sql_file: str) -> str:
     with open(sql_file, 'r') as infile:
         with s2.connect(**args) as conn:
             with conn.cursor() as cur:
-                cur.execute(f'CREATE DATABASE {dbname};')
-                cur.execute(f'USE {dbname};')
+                if not dbname:
+                    dbname = 'TEST_{}'.format(uuid.uuid4()).replace('-', '_')
+                    cur.execute(f'CREATE DATABASE {dbname};')
+                    cur.execute(f'USE {dbname};')
 
                 # Start HTTP server as needed.
                 if 'SINGLESTORE_HTTP_PORT' in os.environ:

@@ -22,13 +22,14 @@ jobs:
       - name: Initialize database
         id: initialize-database
         run: |
-          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql resources/test.sql --output=github --expires=2h "singlestore-python - $GITHUB_WORKFLOW"
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql singlestore/tests/test.sql --output=github --expires=2h "singlestore-python - $GITHUB_WORKFLOW"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
     outputs:
       cluster-id: ${{ steps.initialize-database.outputs.cluster-id }}
       cluster-host: ${{ steps.initialize-database.outputs.cluster-host }}
+      cluster-database: ${{ steps.initialize-database.outputs.cluster-database }}
 
 
   smoke-test:
@@ -94,13 +95,13 @@ jobs:
         if: ${{ matrix.driver != 'http' }}
         run: nose2 -v singlestore.tests.test_basics
         env:
-          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/app"
+          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}"
 
       - name: Run tests
         if: ${{ matrix.driver == 'http' }}
         run: nose2 -v singlestore.tests.test_basics
         env:
-          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:9000/app"
+          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:9000/${{ needs.setup-database.outputs.cluster-database }}"
 
 
   shutdown-database:

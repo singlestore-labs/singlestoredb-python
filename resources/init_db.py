@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import uuid
 from optparse import OptionParser
 
 import singlestore as s2
@@ -29,6 +30,10 @@ parser.add_option(
     help='username',
 )
 parser.add_option(
+    '-d', '--database',
+    help='database name to use',
+)
+parser.add_option(
     '-H', '--http-port', type='int',
     help='enable HTTP API on given port',
 )
@@ -48,11 +53,17 @@ if sql_file and not os.path.isfile(sql_file):
     print('ERROR: Could not locate SQL file: {sql_file}', file=sys.stderr)
     sys.exit(1)
 
+database = options.database
+if not database:
+    database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
+
 with s2.connect(
     f'mysql-connector://{options.host}:{options.port}',
     user=options.user, password=options.password,
 ) as conn:
     with conn.cursor() as cur:
+        cur.execute(f'CREATE DATABASE IF NOT EXISTS {database};')
+        cur.execute(f'USE {database};')
         if options.http_port:
             cur.execute(
                 'SET GLOBAL HTTP_PROXY_PORT={};'.format(
