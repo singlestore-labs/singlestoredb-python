@@ -514,7 +514,7 @@ class Cursor(object):
 
         formatted: Result = format_results(
             self._format, self.description or [], out,
-        ) or []
+        )
         if self.rownumber is not None:
             self.rownumber += len(formatted)
         return formatted
@@ -538,7 +538,7 @@ class Cursor(object):
 
         formatted: Result = format_results(
             self._format, self.description or [], out,
-        ) or []
+        )
         if self.rownumber is not None:
             self.rownumber += len(formatted)
         return formatted

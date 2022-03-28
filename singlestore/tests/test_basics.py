@@ -13,7 +13,7 @@ from . import utils
 # import traceback
 
 
-class BasicTests(unittest.TestCase):
+class TestBasics(unittest.TestCase):
 
     dbname: str = ''
 
