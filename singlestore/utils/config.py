@@ -200,7 +200,7 @@ def _get_option_leaf_node(key: str) -> str:
 
     Raises
     ------
-    ValueError
+    KeyError
         If more than one option matches
 
     """
@@ -210,9 +210,12 @@ def _get_option_leaf_node(key: str) -> str:
         return key
     keys = [k for k in flatkeys if k.endswith('.' + key)]
     if len(keys) > 1:
-        raise ValueError('There is more than one option with the name %s.' % key)
+        raise KeyError('There is more than one option with the name %s.' % key)
     if not keys:
-        raise ValueError('%s is not a valid option name.' % key)
+        if '.' in key:
+            raise KeyError('%s is not a valid option name.' % key)
+        else:
+            raise TypeError('%s is not a valid option name.' % key)
     return keys[0]
 
 
@@ -232,7 +235,7 @@ def set_option(*args: Any, **kwargs: Any) -> None:
         key = _get_option_leaf_node(key)
         opt = _config[key]
         if not isinstance(opt, Option):
-            raise ValueError('%s is not a valid option name' % key)
+            raise TypeError('%s is not a valid option name' % key)
         opt.set(value)
 
 
@@ -257,7 +260,7 @@ def get_option(key: str) -> Any:
     key = _get_option_leaf_node(key)
     opt = _config[key]
     if not isinstance(opt, Option):
-        raise ValueError('%s is not a valid option name' % key)
+        raise TypeError('%s is not a valid option name' % key)
     return opt.get()
 
 
@@ -277,10 +280,10 @@ def get_suboptions(key: str) -> dict[str, Any]:
 
     """
     if key not in _config:
-        raise ValueError('%s is not a valid option name' % key)
+        raise KeyError('%s is not a valid option name' % key)
     opt = _config[key]
     if isinstance(opt, Option):
-        raise ValueError('%s does not have sub-options' % key)
+        raise TypeError('%s does not have sub-options' % key)
     return opt
 
 
@@ -302,7 +305,7 @@ def get_default(key: str) -> Any:
     key = _get_option_leaf_node(key)
     opt = _config[key]
     if not isinstance(opt, Option):
-        raise ValueError('%s is not a valid option name' % key)
+        raise TypeError('%s is not a valid option name' % key)
     return opt.get_default()
 
 
@@ -330,13 +333,13 @@ def describe_option(*keys: str, **kwargs: Any) -> Optional[str]:
         for k in keys:
             try:
                 newkeys.append(_get_option_leaf_node(k))
-            except ValueError:
+            except (KeyError, TypeError):
                 newkeys.append(k)
 
     for key in keys:
 
         if key not in _config:
-            raise ValueError('%s is not a valid option name' % key)
+            raise KeyError('%s is not a valid option name' % key)
 
         opt = _config[key]
         if isinstance(opt, xdict):
@@ -380,11 +383,11 @@ def reset_option(*keys: str) -> None:
     for key in keys:
 
         if key not in _config:
-            raise ValueError('%s is not a valid option name' % key)
+            raise KeyError('%s is not a valid option name' % key)
 
         opt = _config[key]
         if not isinstance(opt, Option):
-            raise ValueError('%s is not a valid option name' % key)
+            raise TypeError('%s is not a valid option name' % key)
 
         # Reset options
         set_option(key, get_default(key))
