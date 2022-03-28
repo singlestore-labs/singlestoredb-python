@@ -224,6 +224,60 @@ class BasicTests(unittest.TestCase):
         assert desc[2].name == 'value', desc[2].name
         assert desc[2].type_code == 8, desc[2].type_code
 
+    def test_execute_with_escaped_positional_substitutions(self):
+        self.cur.execute(
+            'select `id`, `time` from alltypes where `time` = :1', ['00:07:00'],
+        )
+        out = self.cur.fetchall()
+        assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
+
+        self.cur.execute('select `id`, `time` from alltypes where `time` = "00:07:00"')
+        out = self.cur.fetchall()
+        assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
+
+        with self.assertRaises(IndexError):
+            self.cur.execute(
+                'select `id`, `time` from alltypes where `id` = :1 '
+                'or `time` = "00:07:00"', [0],
+            )
+
+        self.cur.execute(
+            'select `id`, `time` from alltypes where `id` = :1 '
+            'or `time` = "00::07::00"', [0],
+        )
+        out = self.cur.fetchall()
+        assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
+
+    def test_execute_with_escaped_substitutions(self):
+        self.cur.execute(
+            'select `id`, `time` from alltypes where `time` = :time',
+            dict(time='00:07:00'),
+        )
+        out = self.cur.fetchall()
+        assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
+
+        self.cur.execute(
+            'select `id`, `time` from alltypes where `time` = :time',
+            dict(time='00::07::00'),
+        )
+        out = self.cur.fetchall()
+        assert len(out) == 0, out
+
+        with self.assertRaises(KeyError):
+            self.cur.execute(
+                'select `id`, `time`, `char_100` from alltypes '
+                'where `time` = :time or `char_100` like "foo:bar"',
+                dict(time='00:07:00'),
+            )
+
+        self.cur.execute(
+            'select `id`, `time`, `char_100` from alltypes '
+            'where `time` = :time or `char_100` like "foo::bar"',
+            dict(time='00:07:00'),
+        )
+        out = self.cur.fetchall()
+        assert out[0][:2] == (0, datetime.timedelta(seconds=420)), out[0]
+
     def test_is_connected(self):
         assert self.conn.is_connected()
         assert self.cur.is_connected()

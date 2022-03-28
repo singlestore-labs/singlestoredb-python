@@ -413,6 +413,7 @@ class Cursor(object):
                     isinstance(params, Mapping) and
                     map_paramstyle or positional_paramstyle,
                     self._driver.dbapi.paramstyle,
+                    escape_char=True,
                 )
                 self._cursor.execute(*param_converter.format(oper, params))
             else:
@@ -452,6 +453,7 @@ class Cursor(object):
                         param_seq[0], Mapping,
                     ) and map_paramstyle or positional_paramstyle,
                     self._driver.dbapi.paramstyle,
+                    escape_char=True,
                 )
                 self._cursor.executemany(*param_converter.formatmany(oper, param_seq))
             else:
