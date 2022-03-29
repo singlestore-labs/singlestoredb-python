@@ -13,6 +13,19 @@ INSERT INTO data SET id='e', name='elephants', value=0;
 
 COMMIT;
 
+CREATE OR REPLACE PROCEDURE get_animal(nm VARCHAR(255) NOT NULL COLLATE utf8_unicode_ci) AS
+BEGIN
+    ECHO SELECT value FROM data WHERE name = nm; --
+    ECHO SELECT 1, 2, 3; --
+END ;
+
+CREATE OR REPLACE PROCEDURE no_args() AS
+BEGIN
+    ECHO SELECT 4, 5, 6; --
+END ;
+
+COMMIT;
+
 CREATE TABLE IF NOT EXISTS alltypes (
     `id` INT(11),
     `tinyint` TINYINT,

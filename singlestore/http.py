@@ -11,6 +11,7 @@ from typing import Any
 from typing import Dict
 from typing import Iterable
 from typing import Optional
+from typing import Tuple
 from typing import Union
 from urllib.parse import urljoin
 
@@ -36,6 +37,12 @@ from .utils.results import Result
 apilevel = '2.0'
 paramstyle = 'qmark'
 threadsafety = 1
+
+
+Description = Tuple[
+    str, int, Optional[int], Optional[int], Optional[int],
+    Optional[int], bool, Optional[int], Optional[int],
+]
 
 
 _interface_errors = set([
@@ -72,6 +79,7 @@ _programming_errors = set([
     1102,  # ER_WRONG_DB_NAME
     1103,  # ER_WRONG_TABLE_NAME
     1049,  # ER_BAD_DB_ERROR
+    1582,  # ER_??? Wrong number of args
 ])
 _integrity_errors = set([
     1215,  # ER_CANNOT_ADD_FOREIGN
@@ -139,33 +147,20 @@ class Cursor(object):
         self._results: list[list[tuple[Any, ...]]] = [[]]
         self._row_idx: int = -1
         self._result_idx: int = -1
-        self.description: Optional[list[tuple[Any, ...]]] = None
+        self._descriptions: list[list[Description]] = []
         self.arraysize: int = 1000
         self.rowcount: int = 0
         self.messages: list[tuple[int, str]] = []
         self.lastrowid: Optional[int] = None
 
-    def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        """
-        Invoke a GET request on the HTTP connection.
-
-        Parameters
-        ----------
-        path : str
-            The path of the resource
-        *args : positional parameters, optional
-            Extra parameters to the GET request
-        **kwargs : keyword parameters, optional
-            Extra keyword parameters to the GET request
-
-        Returns
-        -------
-        requests.Response
-
-        """
-        if self.connection is None:
-            raise InterfaceError(2048, 'Connection is closed.')
-        return self.connection._get(path, *args, **kwargs)
+    @property
+    def description(self) -> Optional[list[Description]]:
+        """Return description for current result set."""
+        if not self._descriptions:
+            return None
+        if self._result_idx >= 0 and self._result_idx < len(self._descriptions):
+            return self._descriptions[self._result_idx]
+        return None
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
@@ -186,30 +181,8 @@ class Cursor(object):
 
         """
         if self.connection is None:
-            raise InterfaceError(2048, 'Connection is closed.')
+            raise InterfaceError(errno=2048, msg='Connection is closed.')
         return self.connection._post(path, *args, **kwargs)
-
-    def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        """
-        Invoke a DELETE request on the HTTP connection.
-
-        Parameters
-        ----------
-        path : str
-            The path of the resource
-        *args : positional parameters, optional
-            Extra parameters to the DELETE request
-        **kwargs : keyword parameters, optional
-            Extra keyword parameters to the DELETE request
-
-        Returns
-        -------
-        requests.Response
-
-        """
-        if self.connection is None:
-            raise InterfaceError(2048, 'Connection is closed.')
-        return self.connection._delete(path, *args, **kwargs)
 
     def callproc(
         self, name: str,
@@ -249,7 +222,7 @@ class Cursor(object):
 
         """
         if self.connection is None:
-            raise InterfaceError(2048, 'Connection is closed.')
+            raise InterfaceError(errno=2048, msg='Connection is closed.')
 
         data: Dict[str, Any] = dict(sql=query)
         if params is not None:
@@ -258,7 +231,7 @@ class Cursor(object):
             data['database'] = self.connection._database
 
         sql_type = 'exec'
-        if re.match(r'^\s*(select|show)\s+', query, flags=re.I):
+        if re.match(r'^\s*(select|show|call)\s+', query, flags=re.I):
             sql_type = 'query'
 
         if sql_type == 'query':
@@ -275,12 +248,12 @@ class Cursor(object):
                     icode = res.status_code
                     msg = res.text
                 raise get_exc_type(icode)(icode, msg.strip())
-            raise InterfaceError(res.status_code, 'HTTP Error')
+            raise InterfaceError(errno=res.status_code, msg='HTTP Error')
 
         out = res.json()
 
-        self.description = None
-        self._results = [[]]
+        self._descriptions = []
+        self._results = []
         self._row_idx = -1
         self._result_idx = -1
         self.rowcount = 0
@@ -288,42 +261,48 @@ class Cursor(object):
         if sql_type == 'query':
             # description: (name, type_code, display_size, internal_size,
             #               precision, scale, null_ok, column_flags, ?)
-            self.description = []
             convs = []
 
-            for item in out['results'][0].get('columns', []):
-                data_type = item['dataType'].split('(')[0]
-                type_code = types.ColumnType.get_code(data_type)
-                if self.connection._raw_values:
-                    converter = identity
-                else:
-                    converter = converters[type_code]
-                if 'BLOB' in data_type or 'BINARY' in data_type:
-                    converter = functools.partial(b64decode_converter, converter)
-                if type_code == 0:  # DECIMAL
-                    type_code = types.ColumnType.get_code('NEWDECIMAL')
-                elif type_code == 15:  # VARCHAR / VARBINARY
-                    type_code = types.ColumnType.get_code('VARSTRING')
-                convs.append(converter)
-                self.description.append((
-                    item['name'], type_code,
-                    None, None, None, None,
-                    item.get('nullable', False), 0, 0,
-                ))
+            results = out['results']
 
             # Convert data to Python types
-            self._results = [x['rows'] for x in out['results']]
-            if self._results and self._results[0]:
+            if results and results[0]:
                 self._row_idx = 0
                 self._result_idx = 0
-            for result in self._results:
-                for i, row in enumerate(result):
-                    try:
-                        result[i] = tuple(x(y) for x, y in zip(convs, row))
-                    except ValueError:
-                        print(self.description[i])
-                        print(row)
-                        raise
+
+                for result in results:
+
+                    description: list[Description] = []
+                    for col in result.get('columns', []):
+                        data_type = col['dataType'].split('(')[0]
+                        type_code = types.ColumnType.get_code(data_type)
+                        if self.connection._raw_values:
+                            converter = identity
+                        else:
+                            converter = converters[type_code]
+                        if 'BLOB' in data_type or 'BINARY' in data_type:
+                            converter = functools.partial(b64decode_converter, converter)
+                        if type_code == 0:  # DECIMAL
+                            type_code = types.ColumnType.get_code('NEWDECIMAL')
+                        elif type_code == 15:  # VARCHAR / VARBINARY
+                            type_code = types.ColumnType.get_code('VARSTRING')
+                        convs.append(converter)
+                        description.append((
+                            col['name'], type_code,
+                            None, None, None, None,
+                            col.get('nullable', False), 0, 0,
+                        ))
+                    self._descriptions.append(description)
+
+                    rows = result.get('rows', [])
+                    for i, row in enumerate(rows):
+                        try:
+                            rows[i] = tuple(x(y) for x, y in zip(convs, row))
+                        except ValueError:
+                            print(self._descriptions[-1][i])
+                            print(row)
+                            raise
+                    self._results.append(rows)
 
             self.rowcount = len(self._results[0])
         else:
@@ -353,11 +332,15 @@ class Cursor(object):
         """
         results = []
         if param_seq:
+            description = []
             for params in param_seq:
                 self.execute(query, params)
+                if self._descriptions:
+                    description = self._descriptions[-1]
                 if self._rows is not None:
                     results.append(self._rows)
             self._results = results
+            self._descriptions = [description for _ in range(len(results))]
         else:
             self.execute(query)
 
@@ -438,9 +421,18 @@ class Cursor(object):
 
     def nextset(self) -> Optional[bool]:
         """Skip to the next available result set."""
+        if self._result_idx < 0:
+            self._row_idx = -1
+            return False
+
+        self._result_idx += 1
+        self._row_idx = 0
+
         if self._result_idx >= len(self._results):
             self._result_idx = -1
+            self._row_idx = -1
             return False
+
         return True
 
     def setinputsizes(self, sizes: Sequence[int]) -> None:
@@ -568,6 +560,7 @@ class Connection(object):
     Error = Error
     InterfaceError = InterfaceError
     DatabaseError = DatabaseError
+    DataError = DataError
     OperationalError = OperationalError
     IntegrityError = IntegrityError
     InternalError = InternalError
@@ -597,30 +590,8 @@ class Connection(object):
         self._database = database
         self._url = f'{protocol}://{host}:{port}/api/{version}/'
         self.messages: list[list[Any]] = []
-        self.autocommit: bool = True
+        self._autocommit: bool = True
         self._raw_values = raw_values
-
-    def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        """
-        Invoke a GET request on the HTTP connection.
-
-        Parameters
-        ----------
-        path : str
-            The path of the resource
-        *args : positional parameters, optional
-            Extra parameters to the GET request
-        **kwargs : keyword parameters, optional
-            Extra keyword parameters to the GET request
-
-        Returns
-        -------
-        requests.Response
-
-        """
-        if self._sess is None:
-            raise InterfaceError(2048, 'Connection is closed.')
-        return self._sess.get(urljoin(self._url, path), *args, **kwargs)
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
@@ -641,46 +612,28 @@ class Connection(object):
 
         """
         if self._sess is None:
-            raise InterfaceError(2048, 'Connection is closed.')
+            raise InterfaceError(errno=2048, msg='Connection is closed.')
         return self._sess.post(urljoin(self._url, path), *args, **kwargs)
-
-    def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        """
-        Invoke a DELETE request on the HTTP connection.
-
-        Parameters
-        ----------
-        path : str
-            The path of the resource
-        *args : positional parameters, optional
-            Extra parameters to the DELETE request
-        **kwargs : keyword parameters, optional
-            Extra keyword parameters to the DELETE request
-
-        Returns
-        -------
-        requests.Response
-
-        """
-        if self._sess is None:
-            raise InterfaceError(2048, 'Connection is closed.')
-        return self._sess.delete(urljoin(self._url, path), *args, **kwargs)
 
     def close(self) -> None:
         """Close the connection."""
         self._sess = None
 
+    def autocommit(self, value: bool) -> None:
+        """Set autocommit mode."""
+        self._autocommit = value
+
     def commit(self) -> None:
         """Commit the pending transaction."""
-        if self.autocommit:
+        if self._autocommit:
             return
-        raise NotSupportedError(0, 'operation not supported')
+        raise NotSupportedError(msg='operation not supported')
 
     def rollback(self) -> None:
         """Rollback the pending transaction."""
-        if self.autocommit:
+        if self._autocommit:
             return
-        raise NotSupportedError(0, 'operation not supported')
+        raise NotSupportedError(msg='operation not supported')
 
     def cursor(self) -> Cursor:
         """

@@ -9,11 +9,12 @@ import os
 import unittest
 
 import singlestore as s2
-from . import utils
+from singlestore import connection as sc
+from singlestore.tests import utils
 # import traceback
 
 
-class TestBasics(unittest.TestCase):
+class TestConnection(unittest.TestCase):
 
     dbname: str = ''
 
@@ -29,7 +30,7 @@ class TestBasics(unittest.TestCase):
     def setUp(self):
         self.conn = s2.connect(database=type(self).dbname)
         self.cur = self.conn.cursor()
-        self.driver = self.conn._driver.dbapi.__name__
+        self.driver = self.conn._driver.dbapi.__name__.replace('singlestore.', '')
 
     def tearDown(self):
         try:
@@ -50,6 +51,49 @@ class TestBasics(unittest.TestCase):
         self.cur.execute('show databases')
         dbs = set([x[0] for x in self.cur.fetchall()])
         assert type(self).dbname in dbs, dbs
+
+    def test_cast_bool_param(self):
+        cbp = sc.cast_bool_param
+
+        assert cbp(0) is False, cbp(0)
+        assert cbp(1) is True, cbp(1)
+        with self.assertRaises(ValueError):
+            cbp(10)
+
+        assert cbp(True) is True, cbp(True)
+        assert cbp(False) is False, cbp(False)
+        assert cbp(None) is False, cbp(None)
+
+        assert cbp('true') is True, cbp('true')
+        assert cbp('t') is True, cbp('t')
+        assert cbp('True') is True, cbp('True')
+        assert cbp('T') is True, cbp('T')
+        assert cbp('TRUE') is True, cbp('TRUE')
+
+        assert cbp('on') is True, cbp('on')
+        assert cbp('yes') is True, cbp('yes')
+        assert cbp('enable') is True, cbp('enable')
+        assert cbp('enabled') is True, cbp('enabled')
+
+        assert cbp('false') is True, cbp('false')
+        assert cbp('f') is True, cbp('f')
+        assert cbp('False') is True, cbp('False')
+        assert cbp('F') is True, cbp('F')
+        assert cbp('FALSE') is True, cbp('FALSE')
+
+        assert cbp('off') is True, cbp('off')
+        assert cbp('no') is True, cbp('no')
+        assert cbp('disable') is True, cbp('disable')
+        assert cbp('disabled') is True, cbp('disabled')
+
+        with self.assertRaises(ValueError):
+            cbp('nein')
+
+        with self.assertRaises(ValueError):
+            cbp(b'no')
+
+        with self.assertRaises(ValueError):
+            cbp(['no'])
 
     def test_fetchall(self):
         self.cur.execute('select * from data')
@@ -306,7 +350,6 @@ class TestBasics(unittest.TestCase):
     def test_connection_attr(self):
         assert self.cur.connection is self.conn
 
-    @unittest.skip('Not consistently supported in MySQL drivers.')
     def test_executemany(self):
         self.cur.executemany(
             'select * from data where id < :name',
@@ -335,6 +378,64 @@ class TestBasics(unittest.TestCase):
         assert desc[1].type_code in [253, 15], desc[1].type_code
         assert desc[2].name == 'value', desc[2].name
         assert desc[2].type_code == 8, desc[2].type_code
+
+        # Second set
+        self.cur.nextset()
+
+        out = self.cur.fetchall()
+
+        desc = self.cur.description
+        rowcount = self.cur.rowcount
+        lastrowid = self.cur.lastrowid
+
+        assert sorted(out) == sorted([
+            ('a', 'antelopes', 2),
+            ('b', 'bears', 2),
+            ('c', 'cats', 5),
+            ('d', 'dogs', 4),
+        ]), out
+
+        assert rowcount == 4, rowcount
+        assert lastrowid is None, lastrowid
+        assert len(desc) == 3, desc
+        assert desc[0].name == 'id', desc[0].name
+        assert desc[0].type_code in [253, 15], desc[0].type_code
+        assert desc[1].name == 'name', desc[1].name
+        assert desc[1].type_code in [253, 15], desc[1].type_code
+        assert desc[2].name == 'value', desc[2].name
+        assert desc[2].type_code == 8, desc[2].type_code
+
+        out = self.cur.nextset()
+        assert out is False, out
+
+    def test_executemany_no_args(self):
+        self.cur.executemany('select * from data where id < "d"')
+
+        # First set
+        out = self.cur.fetchall()
+
+        desc = self.cur.description
+        rowcount = self.cur.rowcount
+        lastrowid = self.cur.lastrowid
+
+        assert sorted(out) == sorted([
+            ('a', 'antelopes', 2),
+            ('b', 'bears', 2),
+            ('c', 'cats', 5),
+        ]), out
+
+        assert rowcount == 3, rowcount
+        assert lastrowid is None, lastrowid
+        assert len(desc) == 3, desc
+        assert desc[0].name == 'id', desc[0].name
+        assert desc[0].type_code in [253, 15], desc[0].type_code
+        assert desc[1].name == 'name', desc[1].name
+        assert desc[1].type_code in [253, 15], desc[1].type_code
+        assert desc[2].name == 'value', desc[2].name
+        assert desc[2].type_code == 8, desc[2].type_code
+
+        out = self.cur.nextset()
+        assert out is False, out
 
     def test_context_managers(self):
         with s2.connect() as conn:
@@ -490,15 +591,9 @@ class TestBasics(unittest.TestCase):
         assert out['local_infile'] is True, out['local_infile']
         assert out['charset'] == 'utf8', out['charset']
 
-        # Bad query option
-        url = 's2host.com:1000?bad_param=10'
-        with self.assertRaises(ValueError):
-            build_params(host=url)
-
-    def test_wrap_exc(self):
+    def test_exception(self):
         with self.assertRaises(s2.ProgrammingError) as cm:
             self.cur.execute('garbage syntax')
-
         exc = cm.exception
         if self.driver != 'pyodbc':
             assert exc.errno == 1064, exc.errno
@@ -847,6 +942,322 @@ class TestBasics(unittest.TestCase):
 
         assert row['bit'] is None, row['bit']
         assert typ['bit'] == otype(16), typ['bit']
+
+    def test_convert_exception(self):
+        driver = self.conn._driver
+        dbapi = driver.dbapi
+
+        if self.driver in ['mysql.connector', 'http', 'https']:
+            exc_args = tuple()
+            exc_kwargs = dict(errno=-1, msg='hi there')
+        else:
+            exc_args = (-1, 'hi there')
+            exc_kwargs = {}
+
+        exc = driver.convert_exception(dbapi.NotSupportedError(*exc_args, **exc_kwargs))
+        assert exc.args[0] == -1
+        assert exc.args[1] == 'hi there'
+        assert exc.errno == -1
+        assert exc.errmsg == 'hi there'
+        assert exc.msg == 'hi there'
+
+        with self.assertRaises(s2.NotSupportedError):
+            raise driver.convert_exception(
+                dbapi.NotSupportedError(*exc_args, **exc_kwargs),
+            )
+
+        with self.assertRaises(s2.ProgrammingError):
+            raise driver.convert_exception(
+                dbapi.ProgrammingError(*exc_args, **exc_kwargs),
+            )
+
+        with self.assertRaises(s2.InternalError):
+            raise driver.convert_exception(dbapi.InternalError(*exc_args, **exc_kwargs))
+
+        with self.assertRaises(s2.IntegrityError):
+            raise driver.convert_exception(dbapi.IntegrityError(*exc_args, **exc_kwargs))
+
+        with self.assertRaises(s2.OperationalError):
+            raise driver.convert_exception(
+                dbapi.OperationalError(*exc_args, **exc_kwargs),
+            )
+
+        with self.assertRaises(s2.DataError):
+            raise driver.convert_exception(dbapi.DataError(*exc_args, **exc_kwargs))
+
+        with self.assertRaises(s2.DatabaseError):
+            raise driver.convert_exception(dbapi.DatabaseError(*exc_args, **exc_kwargs))
+
+        with self.assertRaises(s2.InterfaceError):
+            raise driver.convert_exception(dbapi.InterfaceError(*exc_args, **exc_kwargs))
+
+        with self.assertRaises(s2.Error):
+            raise driver.convert_exception(dbapi.Error(*exc_args, **exc_kwargs))
+
+        with self.assertRaises(s2.Warning):
+            raise driver.convert_exception(dbapi.Warning('hi there'))
+
+    def test_name_check(self):
+        nc = sc._name_check
+        assert nc('foo') == 'foo'
+        assert nc('Foo') == 'Foo'
+        assert nc('Foo_Bar') == 'Foo_Bar'
+        assert nc('Foo_Bar2') == 'Foo_Bar2'
+
+        with self.assertRaises(ValueError):
+            assert nc('foo.bar')
+
+        with self.assertRaises(ValueError):
+            assert nc('2foo')
+
+        with self.assertRaises(ValueError):
+            assert nc('')
+
+    def test_callproc(self):
+        self.cur.callproc('get_animal', ['cats'])
+
+        out = self.cur.fetchall()
+        assert list(out) == [(5,)], out
+
+        self.cur.nextset()
+        out = self.cur.fetchall()
+        assert list(out) == [(1, 2, 3)], out
+
+        # These take an extra `nextset` for some reason
+        if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:
+            self.cur.nextset()
+
+        out = self.cur.nextset()
+        assert out is False, out
+
+    def test_callproc_no_args(self):
+        self.cur.callproc('no_args')
+
+        out = self.cur.fetchall()
+        assert list(out) == [(4, 5, 6)], out
+
+        # These take an extra `nextset` for some reason
+        if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:
+            self.cur.nextset()
+
+        out = self.cur.nextset()
+        assert out is False, out
+
+    def test_callproc_bad_args(self):
+        self.cur.callproc('get_animal', [10])
+
+        out = self.cur.fetchall()
+        assert list(out) == [], out
+
+        self.cur.nextset()
+        out = self.cur.fetchall()
+        assert list(out) == [(1, 2, 3)], out
+
+        # These take an extra `nextset` for some reason
+        if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:
+            self.cur.nextset()
+
+        out = self.cur.nextset()
+        assert out is False, out
+
+    def test_callproc_too_many_args(self):
+        with self.assertRaises((s2.ProgrammingError, s2.OperationalError)):
+            self.cur.callproc('get_animal', ['cats', 'dogs'])
+
+        with self.assertRaises((s2.ProgrammingError, s2.OperationalError)):
+            self.cur.callproc('get_animal', [])
+
+        with self.assertRaises((s2.ProgrammingError, s2.OperationalError)):
+            self.cur.callproc('get_animal')
+
+    def test_cursor_close(self):
+        self.cur.close()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.close()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.rowcount
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.callproc('foo')
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.execute('select 1')
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.executemany('select 1')
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.fetchone()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.fetchall()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.fetchmany()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.nextset()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.setinputsizes([])
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.setoutputsize(10)
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.scroll(2)
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.messages
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.next()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.cur.lastrowid
+
+    def test_setinputsizes(self):
+        self.cur.setinputsizes([10, 20, 30])
+
+    def test_setoutputsize(self):
+        if self.driver in ['MySQLdb', 'pymysql', 'cymysql']:
+            self.skipTest('scroll is not supported')
+
+        self.cur.setoutputsize(100)
+
+    def test_scroll(self):
+        if self.driver in ['mysql.connector', 'pyodbc', 'mariadb']:
+            self.skipTest('scroll is not supported')
+
+        self.cur.execute('select * from data order by name')
+
+        out = self.cur.fetchone()
+        assert out[1] == 'antelopes', out[1]
+
+        self.cur.scroll(3)
+
+        out = self.cur.fetchone()
+        assert out[1] == 'elephants', out[1]
+
+        self.cur.scroll(0, mode='absolute')
+
+        out = self.cur.fetchone()
+        assert out[1] == 'antelopes', out[1]
+
+        with self.assertRaises((ValueError, s2.ProgrammingError)):
+            self.cur.scroll(0, mode='badmode')
+
+    def test_autocommit(self):
+        if self.driver in ['http', 'https']:
+            self.skipTest('Can not set autocommit in HTTP')
+
+        orig = self.conn.get_session_var('autocommit')
+
+        self.conn.autocommit(True)
+        val = self.conn.get_session_var('autocommit')
+        assert val == 1, val
+
+        self.conn.autocommit(False)
+        val = self.conn.get_session_var('autocommit')
+        assert val == 0, val
+
+        self.conn.set_session_var(autocommit=orig)
+
+    def test_conn_close(self):
+        self.conn.close()
+
+        self.conn.close()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.conn.autocommit()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.conn.commit()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.conn.rollback()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.conn.cursor()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.conn.messages
+
+        with self.assertRaises(s2.InterfaceError):
+            self.conn.set_global_var(autocommit=True)
+
+        with self.assertRaises(s2.InterfaceError):
+            self.conn.get_global_var('autocommit')
+
+        with self.assertRaises(s2.InterfaceError):
+            self.conn.set_session_var(autocommit=True)
+
+        with self.assertRaises(s2.InterfaceError):
+            self.conn.get_session_var('autocommit')
+
+        with self.assertRaises(s2.InterfaceError):
+            self.conn.enable_http_api()
+
+        with self.assertRaises(s2.InterfaceError):
+            self.conn.disable_http_api()
+
+    def test_rollback(self):
+        if self.driver in ['http', 'https']:
+            self.skipTest('Can not set autocommit in HTTP')
+
+        self.conn.autocommit(False)
+
+        self.cur.execute('select * from data')
+        out = self.cur.fetchall()
+        assert len(out) == 5, len(out)
+
+        self.cur.execute("INSERT INTO data SET id='f', name='frogs', value=3")
+
+        self.cur.execute('select * from data')
+        out = self.cur.fetchall()
+        assert len(out) == 6, len(out)
+
+        self.conn.rollback()
+
+        self.cur.execute('select * from data')
+        out = self.cur.fetchall()
+        assert len(out) == 5, len(out)
+
+    def test_commit(self):
+        if self.driver in ['http', 'https']:
+            self.skipTest('Can not set autocommit in HTTP')
+
+        self.conn.autocommit(False)
+
+        self.cur.execute('select * from data')
+        out = self.cur.fetchall()
+        assert len(out) == 5, len(out)
+
+        self.cur.execute("INSERT INTO data SET id='f', name='frogs', value=3")
+
+        self.cur.execute('select * from data')
+        out = self.cur.fetchall()
+        assert len(out) == 6, len(out)
+
+        self.conn.commit()
+
+        self.cur.execute('select * from data')
+        out = self.cur.fetchall()
+        assert len(out) == 6, len(out)
+
+        self.cur.execute("delete from data where id='f'")
+
+        self.cur.execute('select * from data')
+        out = self.cur.fetchall()
+        assert len(out) == 5, len(out)
+
+        self.conn.commit()
+
+        self.cur.execute('select * from data')
+        out = self.cur.fetchall()
+        assert len(out) == 5, len(out)
 
 
 if __name__ == '__main__':

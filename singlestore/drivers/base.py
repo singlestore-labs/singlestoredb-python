@@ -3,6 +3,9 @@ from __future__ import annotations
 import sys
 from typing import Any
 from typing import Dict
+from typing import Optional
+
+from .. import exceptions
 
 
 class Driver(object):
@@ -79,6 +82,54 @@ class Driver(object):
 
         """
         return params
+
+    def convert_exception(self, exc: Exception) -> Exception:
+        """Convert driver-specific exception to SingleStore exception."""
+        dbapi = self.dbapi
+        if not isinstance(exc, dbapi.Error) and not isinstance(exc, dbapi.Warning):
+            return exc
+        new_exc: Optional[type] = None
+        if isinstance(exc, dbapi.NotSupportedError):
+            new_exc = exceptions.NotSupportedError
+        elif isinstance(exc, dbapi.ProgrammingError):
+            new_exc = exceptions.ProgrammingError
+        elif isinstance(exc, dbapi.InternalError):
+            new_exc = exceptions.InternalError
+        elif isinstance(exc, dbapi.IntegrityError):
+            new_exc = exceptions.IntegrityError
+        elif isinstance(exc, dbapi.OperationalError):
+            new_exc = exceptions.OperationalError
+        elif isinstance(exc, dbapi.DataError):
+            new_exc = exceptions.DataError
+        elif isinstance(exc, dbapi.DatabaseError):
+            new_exc = exceptions.DatabaseError
+        elif isinstance(exc, dbapi.InterfaceError):
+            new_exc = exceptions.InterfaceError
+        elif isinstance(exc, dbapi.Error):
+            new_exc = exceptions.Error
+        elif isinstance(exc, dbapi.Warning):
+            new_exc = exceptions.Warning
+        if new_exc is None:
+            return exc
+
+        # Check for exceptions with errno / msg first
+        errno = getattr(exc, 'errno', None)
+        msg = getattr(exc, 'msg', None)
+        if msg:
+            return new_exc(
+                errno=errno, msg=msg,
+                sqlstate=getattr(exc, 'sqlstate', None),
+            )
+
+        # Check for exceptions with just args
+        args = getattr(exc, 'args', [])
+        if len(args) > 1:
+            return new_exc(args[0], args[1])
+        if len(args):
+            return new_exc(args[0])
+
+        # Don't know what type it is
+        raise ValueError(f'Unrecognized exception format: {exc}')
 
     @property
     def dbapi(self) -> Any:

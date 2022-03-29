@@ -20,24 +20,31 @@ class Error(Exception):
 
     """
 
-    def __init__(self, errno: int, message: str, sqlstate: Optional[int] = None):
+    def __init__(
+        self, errno: Optional[int] = None, msg: Optional[str] = None,
+        sqlstate: Optional[int] = None,
+    ):
         self.errno = errno
-        self.errmsg = message
+        self.errmsg = msg
         self.sqlstate = sqlstate
-        super(Exception, self).__init__(errno, message, sqlstate)
+        super(Exception, self).__init__(errno, msg, sqlstate)
 
     def __str__(self) -> str:
         """Return string representation."""
         if self.sqlstate:
+            if self.errno is not None:
+                return '{} ({}): {}'.format(self.errno, self.sqlstate, self.errmsg)
             return '{} ({}): {}'.format(self.errno, self.sqlstate, self.errmsg)
-        return '{}: {}'.format(self.errno, self.errmsg)
+        if self.errno is not None:
+            return '{}: {}'.format(self.errno, self.errmsg)
+        return '{}'.format(self.errmsg)
 
     def __repr__(self) -> str:
         """Return string representation."""
         return str(self)
 
     @property
-    def msg(self) -> str:
+    def msg(self) -> Optional[str]:
         """Return error message."""
         return self.errmsg
 

@@ -5,15 +5,15 @@ from typing import Any
 from typing import Dict
 
 try:
-    from pymysql.converters import decoders
+    from pymysql.converters import conversions
 except ImportError:
-    decoders = {}
+    conversions = {}
 
 from .base import Driver
 
 
-decoders = dict(decoders)
-decoders[245] = json.loads
+conversions = dict(conversions)
+conversions[245] = json.loads
 
 
 class PyMySQLDriver(Driver):
@@ -29,7 +29,7 @@ class PyMySQLDriver(Driver):
         params.pop('odbc_driver', None)
         params.pop('pure_python', None)
         params['port'] = params['port'] or 3306
-        params['conv'] = decoders
+        params['conv'] = conversions
         if params['raw_values']:
             params['conv'] = {}
         params.pop('raw_values', None)

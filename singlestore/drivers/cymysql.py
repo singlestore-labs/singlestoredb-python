@@ -5,15 +5,15 @@ from typing import Any
 from typing import Dict
 
 try:
-    from cymysql.converters import decoders
+    from cymysql.converters import conversions
 except ImportError:
-    decoders = {}
+    conversions = {}
 
 from .base import Driver
 
 
-decoders = dict(decoders)
-decoders[245] = json.loads
+conversions = dict(conversions)
+conversions[245] = json.loads
 
 
 class CyMySQLDriver(Driver):
@@ -31,7 +31,7 @@ class CyMySQLDriver(Driver):
         params['port'] = params['port'] or 3306
         params['db'] = params.pop('database', None)
         params['passwd'] = params.pop('password', None)
-        params['conv'] = decoders
+        params['conv'] = conversions
         if params['raw_values']:
             params['conv'] = {}
         params.pop('raw_values', None)
