@@ -86,7 +86,7 @@ class Driver(object):
     def convert_exception(self, exc: Exception) -> Exception:
         """Convert driver-specific exception to SingleStore exception."""
         dbapi = self.dbapi
-        if not isinstance(exc, dbapi.Error) and not isinstance(exc, dbapi.Warning):
+        if not isinstance(exc, (dbapi.Error, dbapi.Warning)):
             return exc
         new_exc: Optional[type] = None
         if isinstance(exc, dbapi.NotSupportedError):

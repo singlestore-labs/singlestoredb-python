@@ -268,10 +268,11 @@ class Cursor(object):
         self._conn: Optional[Connection] = connection
         self._cursor = cursor
         self._driver = driver
-        self._rownumber = None
+        self.rownumber: Optional[int] = None
         self.description: Optional[List[Description]] = None
         self.arraysize = type(self).arraysize
         self._many_queries: Optional[Iterator[Any]] = None
+        self._format: str = get_option('results.format')
 
     @property
     def connection(self) -> Optional[Connection]:
@@ -320,7 +321,7 @@ class Cursor(object):
     def callproc(
         self, name: str,
         params: Optional[Sequence[Any]] = None,
-    ) -> Optional[Sequence[Any]]:
+    ) -> None:
         """
         Call a stored procedure.
 
@@ -341,15 +342,27 @@ class Cursor(object):
         name = _name_check(name)
 
         try:
-            if params is None:
+            proc_params = []
+            for i, arg in enumerate(params or []):
+                self.execute('select :{} into @_{}_arg{}'.format(i, name, i), [arg])
+                proc_params.append('@_{}_arg{}'.format(name, i))
+
+            keys = ', '.join(proc_params)
+
+            if not proc_params:
                 self.execute(f'CALL {name}();')
             else:
-                keys = ', '.join(f':{i}' for i in range(1, len(params)+1))
-                self.execute(f'CALL {name}({keys});', params)
+                self.execute(f'CALL {name}({keys});')
+
+            # TODO: Determine if procedure returns values or result sets.
+            #       If values are returned, select them here.
+            # has_return = True
+            # if has_return:
+            #     self.execute(f'select {keys};')
+            #     print(self.fetchall())
+
         except Exception as exc:
             raise self._driver.convert_exception(exc)
-
-        return params
 
     def close(self) -> None:
         """Close the cursor."""

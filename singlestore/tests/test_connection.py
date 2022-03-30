@@ -1065,13 +1065,25 @@ class TestConnection(unittest.TestCase):
         assert out is False, out
 
     def test_callproc_too_many_args(self):
-        with self.assertRaises((s2.ProgrammingError, s2.OperationalError)):
+        with self.assertRaises((
+            s2.ProgrammingError,
+            s2.OperationalError,
+            s2.InternalError,
+        )):
             self.cur.callproc('get_animal', ['cats', 'dogs'])
 
-        with self.assertRaises((s2.ProgrammingError, s2.OperationalError)):
+        with self.assertRaises((
+            s2.ProgrammingError,
+            s2.OperationalError,
+            s2.InternalError,
+        )):
             self.cur.callproc('get_animal', [])
 
-        with self.assertRaises((s2.ProgrammingError, s2.OperationalError)):
+        with self.assertRaises((
+            s2.ProgrammingError,
+            s2.OperationalError,
+            s2.InternalError,
+        )):
             self.cur.callproc('get_animal')
 
     def test_cursor_close(self):
@@ -1127,12 +1139,12 @@ class TestConnection(unittest.TestCase):
 
     def test_setoutputsize(self):
         if self.driver in ['MySQLdb', 'pymysql', 'cymysql']:
-            self.skipTest('scroll is not supported')
+            self.skipTest('outputsize is not supported')
 
         self.cur.setoutputsize(100)
 
     def test_scroll(self):
-        if self.driver in ['mysql.connector', 'pyodbc', 'mariadb']:
+        if self.driver in ['mysql.connector', 'pyodbc', 'mariadb', 'cymysql']:
             self.skipTest('scroll is not supported')
 
         self.cur.execute('select * from data order by name')

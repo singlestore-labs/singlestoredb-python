@@ -15,6 +15,8 @@ Examples
 from __future__ import annotations
 
 import ssl
+# Always import this first to get the system libssl.
+# mysql.connector bundles its own and we don't want that.
 
 __version__ = '0.1.0'
 
