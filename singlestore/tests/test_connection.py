@@ -1019,7 +1019,9 @@ class TestConnection(unittest.TestCase):
         out = self.cur.fetchall()
         assert list(out) == [(5,)], out
 
-        self.cur.nextset()
+        out = self.cur.nextset()
+        assert out is True, out
+
         out = self.cur.fetchall()
         assert list(out) == [(1, 2, 3)], out
 
@@ -1049,7 +1051,9 @@ class TestConnection(unittest.TestCase):
         out = self.cur.fetchall()
         assert list(out) == [], out
 
-        self.cur.nextset()
+        out = self.cur.nextset()
+        assert out is True, out
+
         out = self.cur.fetchall()
         assert list(out) == [(1, 2, 3)], out
 
