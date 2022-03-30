@@ -199,6 +199,8 @@ class Cursor(object):
             Parameters to the stored procedure
 
         """
+        if self.connection is None:
+            raise InterfaceError(errno=2048, msg='Connection is closed.')
         raise NotImplementedError
 
     def close(self) -> None:
@@ -330,6 +332,9 @@ class Cursor(object):
             Sets of parameters to substitute into the SQL code
 
         """
+        if self.connection is None:
+            raise InterfaceError(errno=2048, msg='Connection is closed.')
+
         results = []
         if param_seq:
             description = []

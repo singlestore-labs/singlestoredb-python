@@ -7,6 +7,7 @@ import base64
 import os
 import unittest
 
+import singlestore as s2
 import singlestore.connection as sc
 from singlestore import config
 from singlestore import http
@@ -43,6 +44,7 @@ class TestHTTP(unittest.TestCase):
                 user=params.get('user'),
                 password=params.get('password'),
                 protocol=params.get('driver'),
+                raw_values=params.get('raw_values'),
             ).items() if v is not None
         }
         return http.connect(database=type(self).dbname, **self.params)
@@ -107,8 +109,12 @@ class TestHTTP(unittest.TestCase):
     def test_executemany(self):
         self.cur.executemany('select * from data where id < ?', [['d'], ['e']])
 
+        assert self.cur.rownumber == 0, self.cur.rownumber
+
         # First set
         out = self.cur.fetchall()
+
+        assert self.cur.rownumber == -1, self.cur.rownumber
 
         desc = self.cur.description
         rowcount = self.cur.rowcount
@@ -188,10 +194,27 @@ class TestHTTP(unittest.TestCase):
         out = self.cur.nextset()
         assert out is False, out
 
-    def test_close(self):
+    def test_is_connected(self):
         assert self.cur.is_connected() is True
         self.cur.close()
         assert self.cur.is_connected() is False
+
+    def test_close(self):
+        self.cur.close()
+        assert self.cur.is_connected() is False
+
+        with self.assertRaises(http.InterfaceError):
+            self.cur.execute('select 1')
+
+        with self.assertRaises(http.InterfaceError):
+            self.cur.executemany('select 1')
+
+        with self.assertRaises(http.InterfaceError):
+            self.cur.callproc('get_animal', ['cats'])
+
+    def test_callproc(self):
+        with self.assertRaises(NotImplementedError):
+            self.cur.callproc('get_animal', ['cats'])
 
     def test_iter(self):
         self.cur.execute('select * from data')
@@ -243,6 +266,31 @@ class TestHTTP(unittest.TestCase):
         self.conn.autocommit(False)
         with self.assertRaises(http.NotSupportedError):
             self.conn.rollback()
+
+    def test_http_error(self):
+        # Break content type
+        self.conn._sess.headers.update({
+            'Content-Type': 'GaRbAge',
+        })
+        with self.assertRaises(http.InternalError) as cm:
+            self.cur.execute('select 1')
+        exc = cm.exception
+        assert exc.errno == 415, exc.errno
+        assert 'Content-Type' in exc.msg, exc.msg
+
+    def test_raw_values(self):
+        with s2.options(raw_values=True):
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute('select * from alltypes where id = 0')
+                    out = cur.fetchall()[0]
+                    assert out[0] == 0
+                    assert out[1] == 80
+                    assert out[13] == '28111097.610822'
+                    assert out[17] == '8524-11-10'
+                    assert out[18] == '00:07:00'
+                    assert out[19] == '01:10:00.000002'
+                    assert out[20] == '9948-03-11 15:29:22'
 
 
 if __name__ == '__main__':

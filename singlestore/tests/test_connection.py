@@ -1151,16 +1151,21 @@ class TestConnection(unittest.TestCase):
 
         out = self.cur.fetchone()
         assert out[1] == 'antelopes', out[1]
+        assert self.cur.rownumber == 1, self.cur.rownumber
 
         self.cur.scroll(3)
 
         out = self.cur.fetchone()
         assert out[1] == 'elephants', out[1]
+        assert self.cur.rownumber == 5, self.cur.rownumber
 
         self.cur.scroll(0, mode='absolute')
 
+        assert self.cur.rownumber == 0, self.cur.rownumber
+
         out = self.cur.fetchone()
         assert out[1] == 'antelopes', out[1]
+        assert self.cur.rownumber == 1, self.cur.rownumber
 
         with self.assertRaises((ValueError, s2.ProgrammingError)):
             self.cur.scroll(0, mode='badmode')
