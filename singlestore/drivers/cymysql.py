@@ -5,15 +5,15 @@ from typing import Any
 from typing import Dict
 
 try:
-    from cymysql.converters import conversions
+    from cymysql.converters import decoders
 except ImportError:
-    conversions = {}
+    decoders = {}
 
 from .base import Driver
 
 
-conversions = dict(conversions)
-conversions[245] = json.loads
+decoders = dict(decoders)
+decoders[245] = json.loads
 
 
 class CyMySQLDriver(Driver):
@@ -28,14 +28,15 @@ class CyMySQLDriver(Driver):
         params.pop('driver', None)
         params.pop('pure_python', None)
         params.pop('odbc_driver', None)
+        params.pop('local_infile', None)
         params['port'] = params['port'] or 3306
         params['db'] = params.pop('database', None)
         params['passwd'] = params.pop('password', None)
-        params['conv'] = conversions
+        params['conv'] = decoders
         if params['raw_values']:
             params['conv'] = {}
         params.pop('raw_values', None)
         return params
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:
-        return conn.open
+        return conn.ping(reconnect=reconnect)
