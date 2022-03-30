@@ -341,6 +341,8 @@ class Cursor(object):
                     results.append(self._rows)
             self._results = results
             self._descriptions = [description for _ in range(len(results))]
+            if self._results:
+                self.rowcount = len(self._results[0])
         else:
             self.execute(query)
 
@@ -432,6 +434,8 @@ class Cursor(object):
             self._result_idx = -1
             self._row_idx = -1
             return False
+
+        self.rowcount = len(self._results[self._result_idx])
 
         return True
 

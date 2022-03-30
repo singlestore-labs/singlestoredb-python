@@ -7,7 +7,8 @@ import base64
 import os
 import unittest
 
-import singlestore as s2
+import singlestore.connection as sc
+from singlestore import config
 from singlestore import http
 from singlestore.tests import utils
 # import traceback
@@ -27,9 +28,22 @@ class TestHTTP(unittest.TestCase):
         utils.drop_database(cls.dbname)
 
     def setUp(self):
-        self.conn = s2.connect(database=type(self).dbname)
+        self.conn = self._connect()
         self.cur = self.conn.cursor()
-        self.driver = self.conn._driver.dbapi.__name__
+        self.driver = self.params['protocol'] or 'http'
+
+    def _connect(self):
+        params = sc.build_params(host=config.get_option('host'))
+        self.params = {
+            k: v for k, v in dict(
+                host=params.get('host'),
+                port=params.get('port'),
+                user=params.get('user'),
+                password=params.get('password'),
+                protocol=params.get('driver'),
+            ).items() if v is not None
+        }
+        return http.connect(database=type(self).dbname, **self.params)
 
     def tearDown(self):
         try:
@@ -48,25 +62,25 @@ class TestHTTP(unittest.TestCase):
 
     def test_get_exc_type(self):
         exc = http.get_exc_type(0)
-        assert exc is s2.InterfaceError, exc
+        assert exc is http.InterfaceError, exc
 
         exc = http.get_exc_type(2012)
-        assert exc is s2.InterfaceError, exc
+        assert exc is http.InterfaceError, exc
 
         exc = http.get_exc_type(1230)
-        assert exc is s2.DataError, exc
+        assert exc is http.DataError, exc
 
         exc = http.get_exc_type(1110)
-        assert exc is s2.ProgrammingError, exc
+        assert exc is http.ProgrammingError, exc
 
         exc = http.get_exc_type(1452)
-        assert exc is s2.IntegrityError, exc
+        assert exc is http.IntegrityError, exc
 
         exc = http.get_exc_type(9999)
-        assert exc is s2.OperationalError, exc
+        assert exc is http.OperationalError, exc
 
         exc = http.get_exc_type(222)
-        assert exc is s2.InternalError, exc
+        assert exc is http.InternalError, exc
 
     def test_identity(self):
         out = http.identity(1)
@@ -87,6 +101,146 @@ class TestHTTP(unittest.TestCase):
 
         out = http.b64decode_converter(http.identity, str(data, 'utf8'))
         assert out == b'hi there', out
+
+    def test_executemany(self):
+        self.cur.executemany('select * from data where id < ?', [['d'], ['e']])
+
+        # First set
+        out = self.cur.fetchall()
+
+        desc = self.cur.description
+        rowcount = self.cur.rowcount
+        lastrowid = self.cur.lastrowid
+
+        assert sorted(out) == sorted([
+            ('a', 'antelopes', 2),
+            ('b', 'bears', 2),
+            ('c', 'cats', 5),
+        ]), out
+
+        assert rowcount == 3, rowcount
+        assert lastrowid is None, lastrowid
+        assert len(desc) == 3, desc
+        assert desc[0][0] == 'id', desc[0][0]
+        assert desc[0][1] in [253, 15], desc[0][1]
+        assert desc[1][0] == 'name', desc[1][0]
+        assert desc[1][1] in [253, 15], desc[1][1]
+        assert desc[2][0] == 'value', desc[2][0]
+        assert desc[2][1] == 8, desc[2][1]
+
+        # Second set
+        self.cur.nextset()
+
+        out = self.cur.fetchall()
+
+        desc = self.cur.description
+        rowcount = self.cur.rowcount
+        lastrowid = self.cur.lastrowid
+
+        assert sorted(out) == sorted([
+            ('a', 'antelopes', 2),
+            ('b', 'bears', 2),
+            ('c', 'cats', 5),
+            ('d', 'dogs', 4),
+        ]), out
+
+        assert rowcount == 4, rowcount
+        assert lastrowid is None, lastrowid
+        assert len(desc) == 3, desc
+        assert desc[0][0] == 'id', desc[0][0]
+        assert desc[0][1] in [253, 15], desc[0][1]
+        assert desc[1][0] == 'name', desc[1][0]
+        assert desc[1][1] in [253, 15], desc[1][1]
+        assert desc[2][0] == 'value', desc[2][0]
+        assert desc[2][1] == 8, desc[2][1]
+
+        out = self.cur.nextset()
+        assert out is False, out
+
+    def test_executemany_no_args(self):
+        self.cur.executemany('select * from data where id < "d"')
+
+        # First set
+        out = self.cur.fetchall()
+
+        desc = self.cur.description
+        rowcount = self.cur.rowcount
+        lastrowid = self.cur.lastrowid
+
+        assert sorted(out) == sorted([
+            ('a', 'antelopes', 2),
+            ('b', 'bears', 2),
+            ('c', 'cats', 5),
+        ]), out
+
+        assert rowcount == 3, rowcount
+        assert lastrowid is None, lastrowid
+        assert len(desc) == 3, desc
+        assert desc[0][0] == 'id', desc[0][0]
+        assert desc[0][1] in [253, 15], desc[0][1]
+        assert desc[1][0] == 'name', desc[1][0]
+        assert desc[1][1] in [253, 15], desc[1][1]
+        assert desc[2][0] == 'value', desc[2][0]
+        assert desc[2][1] == 8, desc[2][1]
+
+        out = self.cur.nextset()
+        assert out is False, out
+
+    def test_close(self):
+        assert self.cur.is_connected() is True
+        self.cur.close()
+        assert self.cur.is_connected() is False
+
+    def test_iter(self):
+        self.cur.execute('select * from data')
+
+        out = list(self.cur)
+
+        assert sorted(out) == sorted([
+            ('a', 'antelopes', 2),
+            ('b', 'bears', 2),
+            ('c', 'cats', 5),
+            ('d', 'dogs', 4),
+            ('e', 'elephants', 0),
+        ]), out
+
+    def test_next(self):
+        self.cur.execute('select * from data')
+
+        out = [next(self.cur) for i in range(5)]
+
+        assert sorted(out) == sorted([
+            ('a', 'antelopes', 2),
+            ('b', 'bears', 2),
+            ('c', 'cats', 5),
+            ('d', 'dogs', 4),
+            ('e', 'elephants', 0),
+        ]), out
+
+        with self.assertRaises(StopIteration):
+            next(self.cur)
+
+    def test_context_manager(self):
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                assert conn.is_connected()
+                assert cur.is_connected()
+        assert not conn.is_connected()
+        assert not cur.is_connected()
+
+    def test_commit(self):
+        self.conn.autocommit(True)
+        assert self.conn.commit() is None
+        self.conn.autocommit(False)
+        with self.assertRaises(http.NotSupportedError):
+            self.conn.commit()
+
+    def test_rollback(self):
+        self.conn.autocommit(True)
+        assert self.conn.rollback() is None
+        self.conn.autocommit(False)
+        with self.assertRaises(http.NotSupportedError):
+            self.conn.rollback()
 
 
 if __name__ == '__main__':
