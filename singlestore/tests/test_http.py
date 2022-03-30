@@ -30,6 +30,8 @@ class TestHTTP(unittest.TestCase):
     def setUp(self):
         self.conn = self._connect()
         self.cur = self.conn.cursor()
+        if self.params['protocol'] not in ['http', 'https']:
+            self.skipTest('Tests must be run using HTTP connection')
         self.driver = self.params['protocol'] or 'http'
 
     def _connect(self):
