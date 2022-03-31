@@ -1280,6 +1280,45 @@ class TestConnection(unittest.TestCase):
         out = self.cur.fetchall()
         assert len(out) == 5, len(out)
 
+    def test_global_var(self):
+        orig = self.conn.get_global_var('enable_external_functions')
+
+        trues = [True, 1, 'on', 'ON', 'true', 'TRUE']
+        falses = [False, 0, 'off', 'OFF', 'false', 'FALSE']
+
+        self.conn.set_global_var(enable_external_functions=True)
+        val = self.conn.get_global_var('enable_external_functions')
+        assert val in trues, val
+
+        self.conn.set_global_var(enable_external_functions=False)
+        val = self.conn.get_global_var('enable_external_functions')
+        assert val in falses, val
+
+        self.conn.set_global_var(enable_external_functions=orig)
+        val = self.conn.get_global_var('enable_external_functions')
+        assert val == orig, val
+
+    def test_session_var(self):
+        if self.driver in ['http', 'https']:
+            self.skipTest('Can not change session variable in HTTP')
+
+        orig = self.conn.get_session_var('enable_multipartition_queries')
+
+        trues = [True, 1, 'on', 'ON', 'true', 'TRUE']
+        falses = [False, 0, 'off', 'OFF', 'false', 'FALSE']
+
+        self.conn.set_session_var(enable_multipartition_queries=True)
+        val = self.conn.get_session_var('enable_multipartition_queries')
+        assert val in trues, val
+
+        self.conn.set_session_var(enable_multipartition_queries=False)
+        val = self.conn.get_session_var('enable_multipartition_queries')
+        assert val in falses, val
+
+        self.conn.set_session_var(enable_multipartition_queries=orig)
+        val = self.conn.get_session_var('enable_multipartition_queries')
+        assert val == orig, val
+
 
 if __name__ == '__main__':
     import nose2

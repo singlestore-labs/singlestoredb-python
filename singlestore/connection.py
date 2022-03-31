@@ -232,7 +232,7 @@ def _name_check(name: str) -> str:
 
     """
     name = name.strip()
-    if not re.match(r'^[A-Za-z][\w+_]*$', name):
+    if not re.match(r'^[A-Za-z_][\w+_]*$', name):
         raise ValueError('Name contains invalid characters')
     return name
 
@@ -868,10 +868,6 @@ class Connection(object):
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
         with self.cursor() as cur:
             for name, value in kwargs.items():
-                if value is True:
-                    value = 'on'
-                elif value is False:
-                    value = 'off'
                 cur.execute('set global {}=:1'.format(_name_check(name)), [value])
 
     def set_session_var(self, **kwargs: Any) -> None:
@@ -888,10 +884,6 @@ class Connection(object):
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
         with self.cursor() as cur:
             for name, value in kwargs.items():
-                if value is True:
-                    value = 'on'
-                elif value is False:
-                    value = 'off'
                 cur.execute('set session {}=:1'.format(_name_check(name)), [value])
 
     def get_global_var(self, name: str) -> Any:
