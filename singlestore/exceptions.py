@@ -31,13 +31,18 @@ class Error(Exception):
 
     def __str__(self) -> str:
         """Return string representation."""
-        if self.sqlstate:
-            if self.errno is not None:
-                return '{} ({}): {}'.format(self.errno, self.sqlstate, self.errmsg)
-            return '{} ({}): {}'.format(self.errno, self.sqlstate, self.errmsg)
+        prefix = []
         if self.errno is not None:
-            return '{}: {}'.format(self.errno, self.errmsg)
-        return '{}'.format(self.errmsg)
+            prefix.append(f'{self.errno}')
+        if self.sqlstate is not None:
+            prefix.append(f'({self.sqlstate})')
+        if prefix and self.errmsg:
+            return ' '.join(prefix) + ': ' + self.errmsg
+        elif prefix:
+            return ' '.join(prefix)
+        elif self.errmsg:
+            return f'{self.errmsg}'
+        return 'Unknown error'
 
     def __repr__(self) -> str:
         """Return string representation."""

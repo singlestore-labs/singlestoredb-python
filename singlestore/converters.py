@@ -307,6 +307,4 @@ converters: Dict[int, Callable[..., Any]] = {
     253: identity,
     254: identity,
     255: geometry_or_none,
-
-
 }

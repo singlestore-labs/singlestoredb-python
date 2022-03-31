@@ -78,13 +78,27 @@ class DBAPIType(object):
 
     """
 
-    def __init__(self, *values: int | str | type):
+    def __init__(self, *values: int | str | type | DBAPIType):
         self.values: Set[int | str | type] = set()
+        name: str = ''
+        code: int = -1
         for item in values:
             if isinstance(item, DBAPIType):
                 self.values.update(item.values)
+                if not name:
+                    for item in item.values:
+                        if not name and isinstance(item, str):
+                            name = item
+                        if code == -1 and isinstance(item, int):
+                            code = item
             else:
                 self.values.add(item)
+                if not name and isinstance(item, str):
+                    name = item
+                if code == -1 and isinstance(item, int):
+                    code = item
+        self.name = name or '<unknown>'
+        self.code = code
 
     def __eq__(self, other: object) -> bool:
         """
@@ -100,7 +114,10 @@ class DBAPIType(object):
         bool
 
         """
-        if other in self.values:
+        if isinstance(other, DBAPIType):
+            if other.values.intersection(self.values):
+                return True
+        elif other in self.values:
             return True
         return False
 
@@ -160,37 +177,56 @@ class ColumnType(object):
     TINY = TINYINT = BOOL = BOOLEAN = NumberDBAPIType(
         'TINY', 'TINYINT', 'BOOL', 'BOOLEAN', 1,
     )
-    SHORT = SMALLINT = NumberDBAPIType('SHORT', 'SMALLINT', 2)
+    SHORT = SMALLINT = NumberDBAPIType('SMALLINT', 'SHORT', 2)
     LONG = INT = NumberDBAPIType('LONG', 'INT', 3)
     FLOAT = NumberDBAPIType('FLOAT', 4)
     DOUBLE = REAL = NumberDBAPIType('DOUBLE', 5, float)
     NULL = DBAPIType('NULL', 6)
     TIMESTAMP = DatetimeDBAPIType('TIMESTAMP', 7)
-    LONGLONG = BIGINT = NumberDBAPIType('LONGLONG', 'BIGINT', 8, int)
+    LONGLONG = BIGINT = NumberDBAPIType('BIGINT', 'LONGLONG', 8, int)
     MEDIUMINT = INT24 = NumberDBAPIType('MEDIUMINT', 'INT24', 9)
     DATE = DBAPIType('DATE', 10, datetime.date)
     TIME = DBAPIType('TIME', 11, datetime.time)
     DATETIME = DatetimeDBAPIType('DATETIME', 12, datetime.datetime)
     YEAR = DBAPIType('YEAR', 13)
     NEWDATE = DBAPIType('NEWDATE', 14)
-    VARCHAR = VARBINARY = StringDBAPIType(
-        'VARBINARY', 'VARCHAR', 15, str, bytearray, bytes,
-    )
+    VARCHAR = StringDBAPIType('VARCHAR', 15, str)
+    VARBINARY = BinaryDBAPIType('VARBINARY', 15, bytearray, bytes)
     BIT = NumberDBAPIType('BIT', 16)
     JSON = DBAPIType('JSON', 245)
     NEWDECIMAL = NumberDBAPIType('NEWDECIMAL', 246)
     ENUM = StringDBAPIType('ENUM', 247)
-    SET = DBAPIType('SET', 248)
-    TINYBLOB = TINYTEXT = BinaryDBAPIType('TINYBLOB', 'TINYTEXT', 249)
-    MEDIUMBLOB = MEDIUMTEXT = BinaryDBAPIType('MEDIUMBLOB', 'MEDIUMTEXT', 250)
-    LONGBLOB = LONGTEXT = BinaryDBAPIType('LONGBLOB', 'LONGTEXT', 251)
-    BLOB = TEXT = BinaryDBAPIType('BLOB', 'TEXT', 252)
+    SET = StringDBAPIType('SET', 248)
+    TINYBLOB = BinaryDBAPIType('TINYBLOB', 249)
+    TINYTEXT = StringDBAPIType('TINYTEXT', 249)
+    MEDIUMBLOB = BinaryDBAPIType('MEDIUMBLOB', 250)
+    MEDIUMTEXT = StringDBAPIType('MEDIUMTEXT', 250)
+    LONGBLOB = BinaryDBAPIType('LONGBLOB', 251)
+    LONGTEXT = StringDBAPIType('LONGTEXT', 251)
+    BLOB = BinaryDBAPIType('BLOB', 252)
+    TEXT = StringDBAPIType('TEXT', 252)
     VARSTRING = StringDBAPIType('VARSTRING', 253)
-    STRING = CHAR = BINARY = StringDBAPIType('BINARY', 'STRING', 'CHAR', 254)
+    BINARY = BinaryDBAPIType('BINARY', 254)
+    STRING = CHAR = StringDBAPIType('STRING', 'CHAR', 254)
     GEOMETRY = DBAPIType('GEOMETRY', 255)
 
+    # Codes that map to multiple names must have a default specified
+    _default_name: Dict[int, str] = {
+        15: 'VARBINARY',
+        249: 'TINYBLOB',
+        250: 'MEDIUMBLOB',
+        251: 'LONGBLOB',
+        252: 'BLOB',
+        254: 'BINARY',
+    }
+
+    # Map of type name to type code
     _type_name_map: Dict[str, int] = {}
+
+    # Map of type code to all type names
     _type_code_map: Dict[int, str] = {}
+
+    # Map of Python type to type code
     _type_type_map: Dict[type, int] = {}
 
     @classmethod
@@ -235,11 +271,11 @@ class ColumnType(object):
         str
 
         """
-        if isinstance(code, str):
-            return code.upper()
         if not cls._type_code_map:
             cls._update_type_maps()
-        if isinstance(code, type):
+        if isinstance(code, str):
+            code = cls._type_name_map[code.upper()]
+        elif isinstance(code, type):
             code = cls._type_type_map[code]
         return cls._type_code_map[code]
 
@@ -249,18 +285,19 @@ class ColumnType(object):
         for k, v in vars(cls).items():
             if not isinstance(v, DBAPIType):
                 continue
+            default_name = v.name
             names = [x.upper() for x in v.values if isinstance(x, str)]
             codes = [x for x in v.values if isinstance(x, int)]
             types = [x for x in v.values if isinstance(x, type)]
             for code in codes:
                 for name in names:
                     cls._type_name_map[name] = code
-                    cls._type_code_map[code] = name
+                    cls._type_code_map[code] = cls._default_name.get(code, default_name)
                 for typ in types:
                     cls._type_type_map[typ] = code
 
     @classmethod
-    def get_string_types(cls) -> List[str]:
+    def get_string_types(cls) -> List[DBAPIType]:
         """
         Return all database types that correspond to DB-API strings.
 
@@ -269,10 +306,10 @@ class ColumnType(object):
         list of StringDBAPIType instances
 
         """
-        return [k for k, v in vars(cls).items() if type(v) is StringDBAPIType]
+        return [v for k, v in vars(cls).items() if type(v) is StringDBAPIType]
 
     @classmethod
-    def get_binary_types(cls) -> List[str]:
+    def get_binary_types(cls) -> List[DBAPIType]:
         """
         Return all database types that correspond to DB-API binary objects.
 
@@ -281,10 +318,10 @@ class ColumnType(object):
         list of BinaryDBAPIType instances
 
         """
-        return [k for k, v in vars(cls).items() if type(v) is BinaryDBAPIType]
+        return [v for k, v in vars(cls).items() if type(v) is BinaryDBAPIType]
 
     @classmethod
-    def get_number_types(cls) -> List[str]:
+    def get_number_types(cls) -> List[DBAPIType]:
         """
         Return all database types that correspond to DB-API number objects.
 
@@ -293,10 +330,10 @@ class ColumnType(object):
         list of NumberDBAPIType instances
 
         """
-        return [k for k, v in vars(cls).items() if type(v) is NumberDBAPIType]
+        return [v for k, v in vars(cls).items() if type(v) is NumberDBAPIType]
 
     @classmethod
-    def get_datetime_types(cls) -> List[str]:
+    def get_datetime_types(cls) -> List[DBAPIType]:
         """
         Return all database types that correspond to DB-API datetime objects.
 
@@ -305,10 +342,10 @@ class ColumnType(object):
         list of DatetimeDBAPIType instances
 
         """
-        return [k for k, v in vars(cls).items() if type(v) is DatetimeDBAPIType]
+        return [v for k, v in vars(cls).items() if type(v) is DatetimeDBAPIType]
 
     @classmethod
-    def get_non_dbapi_types(cls) -> List[str]:
+    def get_non_dbapi_types(cls) -> List[DBAPIType]:
         """
         Return all database types that do not correspond to DB-API typed objects.
 
@@ -317,7 +354,7 @@ class ColumnType(object):
         list of DBAPIType instances
 
         """
-        return [k for k, v in vars(cls).items() if type(v) is DBAPIType]
+        return [v for k, v in vars(cls).items() if type(v) is DBAPIType]
 
 
 # DB-API type constants
@@ -325,4 +362,5 @@ STRING = DBAPIType(*ColumnType.get_string_types())
 BINARY = DBAPIType(*ColumnType.get_binary_types())
 NUMBER = DBAPIType(*ColumnType.get_number_types())
 DATETIME = DBAPIType(*ColumnType.get_datetime_types())
+UNKNOWN = DBAPIType(*ColumnType.get_non_dbapi_types())
 ROWID = DBAPIType()
