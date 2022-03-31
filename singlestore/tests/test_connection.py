@@ -7,6 +7,7 @@ import datetime
 import decimal
 import os
 import unittest
+import warnings
 
 import singlestore as s2
 from singlestore import connection as sc
@@ -994,8 +995,12 @@ class TestConnection(unittest.TestCase):
         with self.assertRaises(s2.Error):
             raise driver.convert_exception(dbapi.Error(*exc_args, **exc_kwargs))
 
-        with self.assertRaises(s2.Warning):
-            raise driver.convert_exception(dbapi.Warning('hi there'))
+        if self.driver == 'mariadb':
+            with self.assertRaises(s2.Error):
+                raise driver.convert_exception(dbapi.Warning('hi there'))
+        else:
+            with self.assertRaises(s2.Warning):
+                raise driver.convert_exception(dbapi.Warning('hi there'))
 
     def test_name_check(self):
         nc = sc._name_check
@@ -1018,6 +1023,13 @@ class TestConnection(unittest.TestCase):
 
         out = self.cur.fetchall()
         assert list(out) == [(5,)], out
+
+        if self.driver == 'mysql.connector' and s2.get_option('pure_python'):
+            warnings.warn(
+                'The mysql.connector in pure python mode does not '
+                'support multiple result sets.',
+            )
+            return
 
         out = self.cur.nextset()
         assert out is True, out
@@ -1050,6 +1062,13 @@ class TestConnection(unittest.TestCase):
 
         out = self.cur.fetchall()
         assert list(out) == [], out
+
+        if self.driver == 'mysql.connector' and s2.get_option('pure_python'):
+            warnings.warn(
+                'The mysql.connector in pure python mode does not '
+                'support multiple result sets.',
+            )
+            return
 
         out = self.cur.nextset()
         assert out is True, out

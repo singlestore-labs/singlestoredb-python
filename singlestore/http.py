@@ -233,7 +233,7 @@ class Cursor(object):
             data['database'] = self.connection._database
 
         sql_type = 'exec'
-        if re.match(r'^\s*(select|show|call)\s+', query, flags=re.I):
+        if re.match(r'^\s*(select|show|call|echo)\s+', query, flags=re.I):
             sql_type = 'query'
 
         if sql_type == 'query':
@@ -462,6 +462,8 @@ class Cursor(object):
         int
 
         """
+        if self._row_idx < 0:
+            return None
         return self._row_idx
 
     def scroll(self, value: int, mode: str = 'relative') -> None:

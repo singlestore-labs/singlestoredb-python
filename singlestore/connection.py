@@ -342,24 +342,11 @@ class Cursor(object):
         name = _name_check(name)
 
         try:
-            proc_params = []
-            for i, arg in enumerate(params or []):
-                self.execute('select :{} into @_{}_arg{}'.format(i, name, i), [arg])
-                proc_params.append('@_{}_arg{}'.format(name, i))
-
-            keys = ', '.join(proc_params)
-
-            if not proc_params:
+            if not params:
                 self.execute(f'CALL {name}();')
             else:
-                self.execute(f'CALL {name}({keys});')
-
-            # TODO: Determine if procedure returns values or result sets.
-            #       If values are returned, select them here.
-            # has_return = True
-            # if has_return:
-            #     self.execute(f'select {keys};')
-            #     print(self.fetchall())
+                keys = ', '.join([f':{i+1}' for i in range(len(params))])
+                self.execute(f'CALL {name}({keys});', params)
 
         except Exception as exc:
             raise self._driver.convert_exception(exc)

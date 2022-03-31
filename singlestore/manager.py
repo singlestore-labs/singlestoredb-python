@@ -236,6 +236,7 @@ class Cluster(object):
             ).items() if v is not None
         }
         self._manager._patch(f'clusters/{self.id}', json=data)
+        self.refresh()
 
     def suspend(
         self,
@@ -397,31 +398,6 @@ class ClusterManager(object):
         """
         return self._check(
             self._sess.post(
-                urljoin(self._base_url, path),
-                *args, **kwargs,
-            ),
-        )
-
-    def _put(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
-        """
-        Invoke a PUT request.
-
-        Parameters
-        ----------
-        path : str
-            Path of the resource
-        *args : positional arguments, optional
-            Arguments to add to the PUT request
-        **kwargs : keyword arguments, optional
-            Keyword arguments to add to the PUT request
-
-        Returns
-        -------
-        requests.Response
-
-        """
-        return self._check(
-            self._sess.put(
                 urljoin(self._base_url, path),
                 *args, **kwargs,
             ),

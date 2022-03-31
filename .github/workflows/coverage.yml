@@ -48,6 +48,14 @@ jobs:
         env:
           SINGLESTORE_URL: "root:root@127.0.0.1:3306"
 
+      - name: Run MySQL protocol tests (pure Python)
+        run: |
+          nose2 -q --with-coverage --coverage singlestore singlestore.tests
+          mv -f .coverage coverage-mysql.xml
+        env:
+          SINGLESTORE_URL: "root:root@127.0.0.1:3306"
+          SINGLESTORE_PURE_PYTHON: 1
+
       - name: Run HTTP protocol tests
         run: |
           nose2 -q --with-coverage --coverage singlestore singlestore.tests

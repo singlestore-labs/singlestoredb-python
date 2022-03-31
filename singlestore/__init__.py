@@ -20,7 +20,7 @@ import ssl
 
 __version__ = '0.1.0'
 
-from .config import options
+from .config import options, get_option, set_option, describe_option
 from .connection import connect, apilevel, threadsafety, paramstyle
 from .exceptions import (
     Warning, Error, InterfaceError, DatabaseError, OperationalError,

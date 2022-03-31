@@ -101,9 +101,9 @@ class TestConfig(unittest.TestCase):
 
         reset_option('token')
 
-        self.assertEqual(get_option('token'), None)
-        self.assertEqual(get_option('cluster_manager.token'), None)
-        self.assertEqual(options.token, None)
+        self.assertEqual(get_option('token'), token)
+        self.assertEqual(get_option('cluster_manager.token'), token)
+        self.assertEqual(options.token, token)
 
     def test_missing_options(self):
         with self.assertRaises(KeyError):
