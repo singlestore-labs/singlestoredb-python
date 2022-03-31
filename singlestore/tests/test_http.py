@@ -114,7 +114,7 @@ class TestHTTP(unittest.TestCase):
         # First set
         out = self.cur.fetchall()
 
-        assert self.cur.rownumber == -1, self.cur.rownumber
+        assert self.cur.rownumber is None, self.cur.rownumber
 
         desc = self.cur.description
         rowcount = self.cur.rowcount
