@@ -55,16 +55,16 @@ jobs:
         # Manually include a couple of runs on Mac & Windows
         include:
           - os: macos-latest
-            python-version: "3.10"
+            python-version: "3.9"
             driver: mysql.connector
 #         - os: macos-latest
-#           python-version: "3.10"
+#           python-version: "3.9"
 #           driver: http
           - os: windows-latest
-            python-version: "3.10"
+            python-version: "3.9"
             driver: mysql.connector
 #         - os: windows-latest
-#           python-version: "3.10"
+#           python-version: "3.9"
 #           driver: http
 
     steps:
