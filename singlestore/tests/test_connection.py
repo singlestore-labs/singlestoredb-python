@@ -1039,6 +1039,13 @@ class TestConnection(unittest.TestCase):
         out = self.cur.fetchall()
         assert out == [(5,)], out
 
+        if self.driver == 'mysql.connector' and s2.get_option('pure_python'):
+            warnings.warn(
+                'The mysql.connector in pure python mode does not '
+                'support multiple result sets.',
+            )
+            return
+
         out = self.cur.nextset()
         assert out is True, out
 

@@ -1,4 +1,3 @@
 coverage
-mysqlclient
 nose2
 pandas
