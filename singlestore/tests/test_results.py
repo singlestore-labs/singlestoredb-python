@@ -16,15 +16,17 @@ from singlestore.tests import utils
 class TestResults(unittest.TestCase):
 
     dbname: str = ''
+    dbexisted: bool = False
 
     @classmethod
     def setUpClass(cls):
         sql_file = os.path.join(os.path.dirname(__file__), 'test.sql')
-        cls.dbname = utils.load_sql(sql_file)
+        cls.dbname, cls.dbexisted = utils.load_sql(sql_file)
 
     @classmethod
     def tearDownClass(cls):
-        utils.drop_database(cls.dbname)
+        if not cls.dbexisted:
+            utils.drop_database(cls.dbname)
 
     def setUp(self):
         self.conn = s2.connect(database=type(self).dbname)

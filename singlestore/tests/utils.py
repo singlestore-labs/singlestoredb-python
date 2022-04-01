@@ -22,7 +22,10 @@ def load_sql(sql_file: str) -> str:
 
     Returns
     -------
-    str : name of database created for SQL file
+    (str, bool)
+        Name of database created for SQL file and a boolean indicating
+        whether the database already existed (meaning that it should not
+        be deleted when tests are finished).
 
     """
     dbname = None
@@ -53,6 +56,8 @@ def load_sql(sql_file: str) -> str:
     if 'SINGLESTORE_HTTP_PORT' in os.environ:
         http_port = int(os.environ['SINGLESTORE_HTTP_PORT'])
 
+    dbexisted = bool(dbname)
+
     # Always use the default driver since not all operations are
     # permitted in the HTTP API.
     with open(sql_file, 'r') as infile:
@@ -76,7 +81,7 @@ def load_sql(sql_file: str) -> str:
                     cur.execute('SET GLOBAL HTTP_API=ON;')
                     cur.execute('RESTART PROXY;')
 
-    return dbname
+    return dbname, dbexisted
 
 
 def drop_database(name: str) -> None:
