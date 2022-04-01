@@ -25,7 +25,7 @@ from .connection import connect, apilevel, threadsafety, paramstyle
 from .exceptions import (
     Warning, Error, InterfaceError, DatabaseError, OperationalError,
     IntegrityError, InternalError, ProgrammingError, NotSupportedError,
-    DataError,
+    DataError, ClusterManagerError,
 )
 from .manager import manage_cluster
 from .types import (

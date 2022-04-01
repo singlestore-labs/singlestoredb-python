@@ -15,7 +15,7 @@ from urllib.parse import urljoin
 import requests
 
 from . import config
-from . import exceptions
+from .exceptions import ClusterManagerError
 
 
 def to_datetime(
@@ -196,8 +196,10 @@ class Cluster(object):
 
     def refresh(self) -> Cluster:
         """Update the object to the current state."""
-        if not self._manager:
-            raise ValueError('No cluster manager is associated with this object.')
+        if self._manager is None:
+            raise ClusterManagerError(
+                msg='No cluster manager is associated with this object.',
+            )
         new_obj = self._manager.get_cluster(self.id)
         for name, value in vars(new_obj).items():
             setattr(self, name, value)
@@ -227,7 +229,9 @@ class Cluster(object):
 
         """
         if self._manager is None:
-            raise ValueError('No cluster manager is associated with this object.')
+            raise ClusterManagerError(
+                msg='No cluster manager is associated with this object.',
+            )
         data = {
             k: v for k, v in dict(
                 name=name, adminPassword=admin_password,
@@ -246,7 +250,9 @@ class Cluster(object):
     ) -> None:
         """Suspend the cluster."""
         if self._manager is None:
-            raise ValueError('No cluster manager is associated with this object.')
+            raise ClusterManagerError(
+                msg='No cluster manager is associated with this object.',
+            )
         self._manager._post(
             f'clusters/{self.id}/suspend',
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
@@ -266,7 +272,9 @@ class Cluster(object):
     ) -> None:
         """Resume the cluster."""
         if self._manager is None:
-            raise ValueError('No cluster manager is associated with this object.')
+            raise ClusterManagerError(
+                msg='No cluster manager is associated with this object.',
+            )
         self._manager._post(
             f'clusters/{self.id}/resume',
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
@@ -274,7 +282,7 @@ class Cluster(object):
         if wait_on_resumed:
             self._manager._wait_on_state(
                 self._manager.get_cluster(self.id),
-                'Resumed', interval=wait_interval, timeout=wait_timeout,
+                ['Resumed', 'Active'], interval=wait_interval, timeout=wait_timeout,
             )
             self.refresh()
 
@@ -286,7 +294,9 @@ class Cluster(object):
     ) -> None:
         """Terminate the cluster."""
         if self._manager is None:
-            raise ValueError('No cluster manager is associated with this object.')
+            raise ClusterManagerError(
+                msg='No cluster manager is associated with this object.',
+            )
         self._manager._delete(f'clusters/{self.id}')
         if wait_on_terminated:
             self._manager._wait_on_state(
@@ -323,7 +333,7 @@ class ClusterManager(object):
             config.get_option('cluster_manager.token')
         )
         if not access_token:
-            raise ValueError('No cluster management token was configured.')
+            raise ClusterManagerError(msg='No cluster management token was configured.')
         self._sess = requests.Session()
         self._sess.headers.update({
             'Authorization': f'Bearer {access_token}',
@@ -350,7 +360,7 @@ class ClusterManager(object):
 
         """
         if res.status_code >= 400:
-            raise exceptions.ClusterManagerError(res.status_code, res.text)
+            raise ClusterManagerError(errno=res.status_code, msg=res.text)
         return res
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -553,9 +563,9 @@ class ClusterManager(object):
             if out.state.lower() in states:
                 break
             if timeout <= 0:
-                raise RuntimeError(
-                    'Exceeded waiting time for cluster to become '
-                    '{}.'.format(', '.join(states)),
+                raise ClusterManagerError(
+                    msg='Exceeded waiting time for cluster to become '
+                        '{}.'.format(', '.join(states)),
                 )
             time.sleep(interval)
             timeout -= interval
