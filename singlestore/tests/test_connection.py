@@ -1020,6 +1020,44 @@ class TestConnection(unittest.TestCase):
         with self.assertRaises(ValueError):
             assert nc('')
 
+    def test_echo(self):
+        self.cur.execute('echo return_int()')
+
+        out = self.cur.fetchall()
+        assert out == [(1234567890,)], out
+
+        # These take an extra `nextset` for some reason
+        if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:
+            self.cur.nextset()
+
+        out = self.cur.nextset()
+        assert out is False, out
+
+    def test_echo_with_result_set(self):
+        self.cur.execute('echo result_set_and_return_int()')
+
+        out = self.cur.fetchall()
+        assert out == [(5,)], out
+
+        out = self.cur.nextset()
+        assert out is True, out
+
+        out = self.cur.fetchall()
+        assert out == [(1, 2, 3)], out
+
+        out = self.cur.nextset()
+        assert out is True, out
+
+        out = self.cur.fetchall()
+        assert out == [(1234567890,)], out
+
+        # These take an extra `nextset` for some reason
+        if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:
+            self.cur.nextset()
+
+        out = self.cur.nextset()
+        assert out is False, out
+
     def test_callproc(self):
         self.cur.callproc('get_animal', ['cats'])
 
@@ -1051,6 +1089,25 @@ class TestConnection(unittest.TestCase):
 
         out = self.cur.fetchall()
         assert list(out) == [(4, 5, 6)], out
+
+        # These take an extra `nextset` for some reason
+        if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:
+            self.cur.nextset()
+
+        out = self.cur.nextset()
+        assert out is False, out
+
+    def test_callproc_return_int(self):
+        self.cur.callproc('result_set_and_return_int')
+
+        out = self.cur.fetchall()
+        assert out == [(5,)], out
+
+        out = self.cur.nextset()
+        assert out is True, out
+
+        out = self.cur.fetchall()
+        assert out == [(1, 2, 3)], out
 
         # These take an extra `nextset` for some reason
         if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:

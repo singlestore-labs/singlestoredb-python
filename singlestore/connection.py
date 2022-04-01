@@ -341,15 +341,11 @@ class Cursor(object):
 
         name = _name_check(name)
 
-        try:
-            if not params:
-                self.execute(f'CALL {name}();')
-            else:
-                keys = ', '.join([f':{i+1}' for i in range(len(params))])
-                self.execute(f'CALL {name}({keys});', params)
-
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
+        if not params:
+            self.execute(f'CALL {name}();')
+        else:
+            keys = ', '.join([f':{i+1}' for i in range(len(params))])
+            self.execute(f'CALL {name}({keys});', params)
 
     def close(self) -> None:
         """Close the cursor."""

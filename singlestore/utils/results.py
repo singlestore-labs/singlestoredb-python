@@ -179,7 +179,7 @@ def results_to_tuple(
             return res
         return tuple(res)
     if type(res[0]) is tuple:
-        return res
+        return list(res)
     return [tuple(x) for x in res]
 
 
