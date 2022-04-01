@@ -63,18 +63,18 @@ def load_sql(sql_file: str) -> str:
                     cur.execute(f'CREATE DATABASE {dbname};')
                     cur.execute(f'USE {dbname};')
 
+                    # Execute lines in SQL.
+                    for cmd in infile.read().split(';\n'):
+                        cmd = cmd.strip()
+                        if cmd:
+                            cmd += ';'
+                            cur.execute(cmd)
+
                 # Start HTTP server as needed.
                 if http_port:
                     cur.execute(f'SET GLOBAL HTTP_PROXY_PORT={http_port};')
                     cur.execute('SET GLOBAL HTTP_API=ON;')
                     cur.execute('RESTART PROXY;')
-
-                # Execute lines in SQL.
-                for cmd in infile.read().split(';\n'):
-                    cmd = cmd.strip()
-                    if cmd:
-                        cmd += ';'
-                        cur.execute(cmd)
 
     return dbname
 
