@@ -90,7 +90,7 @@ class TestManager(unittest.TestCase):
         if not do_test:
             self.skipTest(
                 'Suspend / resume tests skipped by default due to '
-                'being time consuming; set SINGLESTORE_TEST_SUSPEND=1'
+                'being time consuming; set SINGLESTORE_TEST_SUSPEND=1 '
                 'to enable',
             )
 

@@ -796,6 +796,24 @@ class Connection(object):
             raise self._driver.convert_exception(exc)
         return Cursor(self, cur, self._driver)
 
+    def _i_cursor(self) -> Cursor:
+        """
+        Create a cursor for internal use.
+
+        Internal cursors always return tuples in results.
+        These are used to ensure that methods that query the database
+        have a consistent results structure regardless of the
+        `results.format` option.
+
+        Returns
+        -------
+        Cursor
+
+        """
+        out = self.cursor()
+        out._format = 'tuple'
+        return out
+
     @property
     def messages(self) -> Sequence[tuple[int, str]]:
         """
@@ -850,7 +868,7 @@ class Connection(object):
         """
         if self._conn is None:
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        with self.cursor() as cur:
+        with self._i_cursor() as cur:
             for name, value in kwargs.items():
                 cur.execute('set global {}=:1'.format(_name_check(name)), [value])
 
@@ -866,7 +884,7 @@ class Connection(object):
         """
         if self._conn is None:
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        with self.cursor() as cur:
+        with self._i_cursor() as cur:
             for name, value in kwargs.items():
                 cur.execute('set session {}=:1'.format(_name_check(name)), [value])
 
@@ -881,7 +899,7 @@ class Connection(object):
         """
         if self._conn is None:
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        with self.cursor() as cur:
+        with self._i_cursor() as cur:
             cur.execute('select @@global.{}'.format(_name_check(name)))
             return list(cur)[0][0]
 
@@ -896,7 +914,7 @@ class Connection(object):
         """
         if self._conn is None:
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        with self.cursor() as cur:
+        with self._i_cursor() as cur:
             cur.execute('select @@session.{}'.format(_name_check(name)))
             return list(cur)[0][0]
 
@@ -922,7 +940,7 @@ class Connection(object):
         """
         if self._conn is None:
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        with self.cursor() as cur:
+        with self._i_cursor() as cur:
             if port is not None:
                 self.set_global_var(http_proxy_port=int(port))
             self.set_global_var(http_api=True)
@@ -933,7 +951,7 @@ class Connection(object):
         """Disable the HTTP API."""
         if self._conn is None:
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        with self.cursor() as cur:
+        with self._i_cursor() as cur:
             self.set_global_var(http_api=False)
             cur.execute('restart proxy')
 
