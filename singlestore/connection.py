@@ -390,7 +390,6 @@ class Cursor(object):
 
         self.description = None
         self.rownumber = None
-        self._format = get_option('results.format')
 
         try:
             if params:
@@ -430,7 +429,6 @@ class Cursor(object):
 
         self.description = None
         self.rownumber = None
-        self._format = get_option('results.format')
 
         param_seq = param_seq or [[]]
 
@@ -736,7 +734,6 @@ class Connection(object):
 
         self._conn: Optional[Any] = None
         self.errorhandler = None
-        self._format: str = get_option('results.format')
         self.connection_params: Dict[str, Any] = build_params(**kwargs)
 
         drv_name = re.sub(r'^\w+\+', r'', self.connection_params['driver']).lower()
