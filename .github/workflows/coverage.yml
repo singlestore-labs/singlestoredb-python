@@ -47,6 +47,7 @@ jobs:
           mv -f .coverage coverage-mysql.xml
         env:
           SINGLESTORE_URL: "root:root@127.0.0.1:3306"
+          SINGLESTORE_CLUSTER_MANAGER_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
 
       - name: Run MySQL protocol tests (pure Python)
         run: |
@@ -55,6 +56,7 @@ jobs:
         env:
           SINGLESTORE_URL: "root:root@127.0.0.1:3306"
           SINGLESTORE_PURE_PYTHON: 1
+          SINGLESTORE_CLUSTER_MANAGER_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
 
       - name: Run HTTP protocol tests
         run: |
@@ -62,6 +64,7 @@ jobs:
           mv -f .coverage coverage-http.xml
         env:
           SINGLESTORE_URL: "http://root:root@127.0.0.1:9000"
+          SINGLESTORE_CLUSTER_MANAGER_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
           # Can not change databases using HTTP API. The URL below will be
           # used to create the database and the generated database name will
           # be applied to the above URL.
