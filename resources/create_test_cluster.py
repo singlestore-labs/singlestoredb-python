@@ -99,7 +99,6 @@ clus = cm.create_cluster(
     firewall_ranges=['0.0.0.0/0'],
     expires_at=options.expires,
     size=options.size,
-    plan='poc',
     wait_on_active=True,
 )
 
