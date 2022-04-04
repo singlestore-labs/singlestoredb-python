@@ -133,7 +133,10 @@ def date_or_none(x: Any) -> Optional[datetime.date]:
         return None
     if type(x) is datetime.date:
         return x
-    return datetime.date.fromisoformat(x)
+    try:
+        return datetime.date.fromisoformat(x)
+    except ValueError:
+        return None
 
 
 def time_or_none(x: Any) -> Optional[datetime.timedelta]:
@@ -159,7 +162,10 @@ def time_or_none(x: Any) -> Optional[datetime.timedelta]:
         return x
     if type(x) is bytes or type(x) is bytearray:
         x = x.decode('utf8')
-    tm = datetime.time.fromisoformat(x)
+    try:
+        tm = datetime.time.fromisoformat(x)
+    except ValueError:
+        return None
     return datetime.timedelta(
         hours=tm.hour, minutes=tm.minute,
         seconds=tm.second, microseconds=tm.microsecond,
@@ -187,7 +193,10 @@ def datetime_or_none(x: Any) -> Optional[datetime.datetime]:
         return None
     if type(x) is datetime.datetime:
         return x
-    return datetime.datetime.fromisoformat(x)
+    try:
+        return datetime.datetime.fromisoformat(x)
+    except ValueError:
+        return None
 
 
 def none(x: Any) -> None:

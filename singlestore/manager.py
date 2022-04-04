@@ -15,6 +15,7 @@ from urllib.parse import urljoin
 import requests
 
 from . import config
+from . import connection
 from .exceptions import ClusterManagerError
 
 
@@ -26,7 +27,13 @@ def to_datetime(
         return None
     if isinstance(obj, datetime.datetime):
         return obj
-    return datetime.datetime.fromisoformat(obj.replace('Z', ''))
+    obj = obj.replace('Z', '')
+    # Fix datetimes with truncated zeros
+    if '.' in obj:
+        obj, micros = obj.split('.', 1)
+        micros = micros + '0' * (6 - len(micros))
+        obj = obj + '.' + micros
+    return datetime.datetime.fromisoformat(obj)
 
 
 def vars_to_str(obj: Any) -> str:
@@ -129,6 +136,9 @@ class Cluster(object):
         List of allowed incoming IP addresses
     terminated_at : str or datetime.datetime, optional
         Timestamp of when the cluster was terminated
+    endpoint : str, optional
+        The hostname (or IP address) and port number of the cluster server
+        in the form hostname:port
 
     See Also
     --------
@@ -143,6 +153,7 @@ class Cluster(object):
         expires_at: Optional[Union[str, datetime.datetime]] = None,
         firewall_ranges: Optional[Sequence[str]] = None,
         terminated_at: Optional[Union[str, datetime.datetime]] = None,
+        endpoint: Optional[str] = None,
     ):
         self.name = name.strip()
         self.id = cluster_id.strip()
@@ -155,6 +166,7 @@ class Cluster(object):
         self.expires_at = to_datetime(expires_at)
         self.firewall_ranges = firewall_ranges
         self.terminated_at = to_datetime(terminated_at)
+        self.endpoint = endpoint
         self._manager: Optional[ClusterManager] = None
 
     def __str__(self) -> str:
@@ -190,6 +202,7 @@ class Cluster(object):
             created_at=obj['createdAt'], expires_at=obj.get('expiresAt'),
             firewall_ranges=obj.get('firewallRanges'),
             terminated_at=obj.get('terminatedAt'),
+            endpoint=obj.get('endpoint'),
         )
         out._manager = manager
         return out
@@ -304,6 +317,29 @@ class Cluster(object):
                 'Terminated', interval=wait_interval, timeout=wait_timeout,
             )
             self.refresh()
+
+    def connect(self, **kwargs: Any) -> connection.Connection:
+        """
+        Create a connection to the database server for this cluster.
+
+        Parameters
+        ----------
+        **kwargs : keyword-arguments, optional
+            Parameters to the SingleStore `connect` function except host
+            and port which are supplied by the cluster object
+
+        Returns
+        -------
+        connection.Connection
+
+        """
+        if not self.endpoint:
+            raise ClusterManagerError(
+                msg='An endpoint has not been set in '
+                'this cluster configuration',
+            )
+        kwargs['host'] = self.endpoint
+        return connection.connect(**kwargs)
 
 
 class ClusterManager(object):

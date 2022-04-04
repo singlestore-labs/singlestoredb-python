@@ -1,28 +1,41 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 from typing import Dict
 
 try:
     from mysql.connector.conversion import MySQLConverter
+    from mysql.connector.constants import FieldFlag
+    from mysql.connector.constants import FieldType
 except ImportError:
+    FieldFlag = 0
+
+    class FieldType(object):  # type: ignore
+        """Dummy class."""
     class MySQLConverter(object):  # type: ignore
         """Dummy class."""
 
 from .base import Driver
+from ..converters import converters as conv
+
+
+maybe_blobs = set([249, 250, 251, 252, 253, 254])
 
 
 class Converter(MySQLConverter):
 
-    def _BIT_to_python(self, value: Any, dsc: Any = None) -> Any:
-        """Return bit value as-is."""
-        return value
-
-    def _JSON_to_python(self, value: Any, dsc: Any = None) -> Any:
-        """Return Python object from JSON."""
-        val = self._STRING_to_python(value, dsc)
-        return json.loads(val)
+    def to_python(self, vtype: tuple[Any, ...], value: Any) -> Any:
+        """Convert value bytearray value to Python object."""
+        if value is None:
+            return None
+        if value == 0 and vtype[1] != FieldType.BIT:
+            return None
+        if vtype[1] == FieldType.BIT or \
+                (vtype[7] & FieldFlag.BINARY and vtype[1] in maybe_blobs):
+            #           print('binary', vtype, value)
+            return conv[vtype[1]](value)
+#       print('text', vtype, value)
+        return conv[vtype[1]](value.decode(self.charset))
 
 
 class MySQLConnectorDriver(Driver):

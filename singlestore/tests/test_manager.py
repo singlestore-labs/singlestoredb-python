@@ -15,17 +15,19 @@ class TestManager(unittest.TestCase):
 
     manager = None
     cluster = None
+    password = None
 
     @classmethod
     def setUpClass(cls):
         cls.manager = s2.manage_cluster()
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.region]
+        cls.password = secrets.token_urlsafe(20)
 
         cls.cluster = cls.manager.create_cluster(
             'CM-TEST-{}'.format(secrets.token_urlsafe(20)),
             region_id=random.choice(us_regions).id,
-            admin_password=secrets.token_urlsafe(20),
+            admin_password=cls.password,
             firewall_ranges=['0.0.0.0/0'],
             expires_at='1h',
             size='S-00',
@@ -36,9 +38,9 @@ class TestManager(unittest.TestCase):
     def tearDownClass(cls):
         if cls.cluster is not None:
             cls.cluster.terminate()
-            cls.cluster = None
-        if cls.manager is not None:
-            cls.manager = None
+        cls.cluster = None
+        cls.manager = None
+        cls.password = None
 
     def test_str(self):
         assert self.cluster.name in str(self.cluster.name)
@@ -130,6 +132,21 @@ class TestManager(unittest.TestCase):
             clus.terminate()
 
         assert 'No cluster manager' in cm.exception.msg, cm.exception.msg
+
+    def test_connect(self):
+        with self.cluster.connect(user='admin', password=self.password) as conn:
+            with conn.cursor() as cur:
+                cur.execute('show databases')
+                assert 'cluster' in [x[0] for x in list(cur)]
+
+        # Test missing endpoint
+        clus = self.manager.get_cluster(self.cluster.id)
+        clus.endpoint = None
+
+        with self.assertRaises(s2.ClusterManagerError) as cm:
+            clus.connect(user='admin', password=self.password)
+
+        assert 'endpoint' in cm.exception.msg, cm.exception.msg
 
 
 if __name__ == '__main__':
