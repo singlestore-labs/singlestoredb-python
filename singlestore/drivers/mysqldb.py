@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 from typing import Dict
 
+from ..converters import converters
 from .base import Driver
 
 
@@ -19,15 +19,13 @@ class MySQLdbDriver(Driver):
         params.pop('driver', None)
         params.pop('pure_python', None)
         params.pop('odbc_driver', None)
-        if params['raw_values']:
-            params['conv'] = {}
-        params.pop('raw_values', None)
+        params['conv'] = dict(converters)
         return params
 
     def after_connect(self, conn: Any, params: Dict[str, Any]) -> None:
         # This must be done afterward because use_unicode= whacks the
         # json converter if you try to put it in earlier.
-        conn.converter[245] = json.loads
+        conn.converter[245] = converters[245]
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:
         try:

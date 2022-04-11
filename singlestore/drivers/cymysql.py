@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 from typing import Dict
 
 try:
-    from cymysql.converters import decoders
+    from cymysql.converters import encoders
 except ImportError:
-    decoders = {}
+    encoders = {}
 
 from .base import Driver
+from ..converters import converters
 
 
-decoders = dict(decoders)
-decoders[245] = json.loads
+converters = dict(converters)
+converters.update(encoders)
 
 
 class CyMySQLDriver(Driver):
@@ -32,10 +32,7 @@ class CyMySQLDriver(Driver):
         params['port'] = params['port'] or 3306
         params['db'] = params.pop('database', None)
         params['passwd'] = params.pop('password', None)
-        params['conv'] = decoders
-        if params['raw_values']:
-            params['conv'] = {}
-        params.pop('raw_values', None)
+        params['conv'] = converters
         return params
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:

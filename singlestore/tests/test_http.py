@@ -7,7 +7,6 @@ import base64
 import os
 import unittest
 
-import singlestore as s2
 import singlestore.connection as sc
 from singlestore import config
 from singlestore import http
@@ -46,7 +45,6 @@ class TestHTTP(unittest.TestCase):
                 user=params.get('user'),
                 password=params.get('password'),
                 protocol=params.get('driver'),
-                raw_values=params.get('raw_values'),
             ).items() if v is not None
         }
         return http.connect(database=type(self).dbname, **self.params)
@@ -279,20 +277,6 @@ class TestHTTP(unittest.TestCase):
         exc = cm.exception
         assert exc.errno == 415, exc.errno
         assert 'Content-Type' in exc.msg, exc.msg
-
-    def test_raw_values(self):
-        with s2.options(raw_values=True):
-            with self._connect() as conn:
-                with conn.cursor() as cur:
-                    cur.execute('select * from alltypes where id = 0')
-                    out = cur.fetchall()[0]
-                    assert out[0] == 0
-                    assert out[1] == 80
-                    assert out[13] == '28111097.610822'
-                    assert out[17] == '8524-11-10'
-                    assert out[18] == '00:07:00'
-                    assert out[19] == '01:10:00.000002'
-                    assert out[20] == '9948-03-11 15:29:22'
 
 
 if __name__ == '__main__':

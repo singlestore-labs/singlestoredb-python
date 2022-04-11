@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-import json
 from typing import Any
+from typing import Callable
 from typing import Dict
 
 try:
-    from pymysql.converters import conversions
+    from pymysql.converters import encoders
 except ImportError:
-    conversions = {}
+    encoders = {}
 
 from .base import Driver
+from ..converters import converters as convs
 
 
-conversions = dict(conversions)
-conversions[245] = json.loads
+converters: Dict[Any, Callable[..., Any]] = dict(convs)
+converters.update(encoders)
 
 
 class PyMySQLDriver(Driver):
@@ -29,10 +30,7 @@ class PyMySQLDriver(Driver):
         params.pop('odbc_driver', None)
         params.pop('pure_python', None)
         params['port'] = params['port'] or 3306
-        params['conv'] = conversions
-        if params['raw_values']:
-            params['conv'] = {}
-        params.pop('raw_values', None)
+        params['conv'] = converters
         return params
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:

@@ -106,10 +106,12 @@ database = options.database
 if not database:
     database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
 
-
-# TODO: When we can discover the hostname, change this.
-host = f'svc-{clus.id}-ddl.aws-virginia-2.svc.singlestore.com'
-port = 3306
+host = clus.endpoint
+if ':' in host:
+    host, port = host.split(':', 1)
+    port = int(port)
+else:
+    port = 3306
 
 # Print cluster information
 if options.output == 'env':

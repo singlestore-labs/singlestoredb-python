@@ -2,17 +2,26 @@
 """Data value conversion utilities."""
 from __future__ import annotations
 
-import base64
 import datetime
-import decimal
-import json
+from base64 import b64decode
+from decimal import Decimal
+from json import loads as json_loads
 from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
+from typing import Tuple
 from typing import Union
+
+
+datetime_fromisoformat = datetime.datetime.fromisoformat
+time_fromisoformat = datetime.time.fromisoformat
+date_fromisoformat = datetime.date.fromisoformat
+datetime_min = datetime.datetime.min
+date_min = datetime.date.min
+datetime_combine = datetime.datetime.combine
 
 
 def identity(x: Any) -> Optional[Any]:
@@ -39,8 +48,8 @@ def bit_or_none(x: Any) -> Optional[bytes]:
     """
     if x is None:
         return None
-    if type(x) == str:
-        return base64.b64decode(x)
+    if type(x) is str:
+        return b64decode(x)
     return x
 
 
@@ -88,7 +97,7 @@ def float_or_none(x: Any) -> Optional[float]:
     return float(x)
 
 
-def decimal_or_none(x: Any) -> Optional[decimal.Decimal]:
+def decimal_or_none(x: Any) -> Optional[Decimal]:
     """
     Convert value to decimal.
 
@@ -107,12 +116,10 @@ def decimal_or_none(x: Any) -> Optional[decimal.Decimal]:
     """
     if x is None:
         return None
-    if type(x) is decimal.Decimal:
-        return x
-    return decimal.Decimal(x)
+    return Decimal(x)
 
 
-def date_or_none(x: Any) -> Optional[datetime.date]:
+def date_or_none(x: Optional[str]) -> Optional[datetime.date]:
     """
     Convert value to a date.
 
@@ -131,15 +138,13 @@ def date_or_none(x: Any) -> Optional[datetime.date]:
     """
     if x is None:
         return None
-    if type(x) is datetime.date:
-        return x
     try:
-        return datetime.date.fromisoformat(x)
+        return date_fromisoformat(x)
     except ValueError:
         return None
 
 
-def time_or_none(x: Any) -> Optional[datetime.timedelta]:
+def time_or_none(x: Optional[str]) -> Optional[datetime.timedelta]:
     """
     Convert value to a timedelta.
 
@@ -158,21 +163,13 @@ def time_or_none(x: Any) -> Optional[datetime.timedelta]:
     """
     if x is None:
         return None
-    if type(x) is datetime.timedelta:
-        return x
-    if type(x) is bytes or type(x) is bytearray:
-        x = x.decode('utf8')
     try:
-        tm = datetime.time.fromisoformat(x)
+        return datetime_combine(date_min, time_fromisoformat(x)) - datetime_min
     except ValueError:
         return None
-    return datetime.timedelta(
-        hours=tm.hour, minutes=tm.minute,
-        seconds=tm.second, microseconds=tm.microsecond,
-    )
 
 
-def datetime_or_none(x: Any) -> Optional[datetime.datetime]:
+def datetime_or_none(x: Optional[str]) -> Optional[datetime.datetime]:
     """
     Convert value to a datetime.
 
@@ -191,10 +188,8 @@ def datetime_or_none(x: Any) -> Optional[datetime.datetime]:
     """
     if x is None:
         return None
-    if type(x) is datetime.datetime:
-        return x
     try:
-        return datetime.datetime.fromisoformat(x)
+        return datetime_fromisoformat(x)
     except ValueError:
         return None
 
@@ -216,7 +211,7 @@ def none(x: Any) -> None:
     return None
 
 
-def json_or_none(x: str) -> Optional[Union[Dict[str, Any], List[Any]]]:
+def json_or_none(x: Optional[str]) -> Optional[Union[Dict[str, Any], List[Any]]]:
     """
     Convert JSON to dict or list.
 
@@ -237,12 +232,10 @@ def json_or_none(x: str) -> Optional[Union[Dict[str, Any], List[Any]]]:
     """
     if x is None:
         return None
-    if isinstance(x, (dict, list, tuple)):
-        return x
-    return json.loads(x)
+    return json_loads(x)
 
 
-def set_or_none(x: str) -> Optional[Set[str]]:
+def set_or_none(x: Optional[str]) -> Optional[Set[str]]:
     """
     Convert value to set of strings.
 
@@ -264,7 +257,7 @@ def set_or_none(x: str) -> Optional[Set[str]]:
     return set(y.strip() for y in x.split(','))
 
 
-def geometry_or_none(x: Any) -> Optional[Any]:
+def geometry_or_none(x: Optional[str]) -> Optional[Any]:
     """
     Convert value to geometry coordinates.
 
@@ -284,6 +277,63 @@ def geometry_or_none(x: Any) -> Optional[Any]:
     if x is None:
         return None
     return x
+
+
+def convert_row(
+    values: Optional[Tuple[Any, ...]],
+    converters: List[Any],
+) -> Optional[Tuple[Any, ...]]:
+    """
+    Convert a row of data values.
+
+    Parameters
+    ----------
+    values : tuple or None
+        Tuple containing values in a row of data
+    converters : list[tuple]
+        List of two-element tuples containing a column index and a converter
+        function. The column index specifies which column to apply the function to.
+
+    Returns
+    -------
+    tuple or None
+
+    """
+    if values is None:
+        return None
+    if not converters:
+        return values
+    out = list(values)
+    for i in range(len(converters)):
+        conv = converters[i]
+        idx = conv[0]
+        out[idx] = conv[1](out[idx])
+    return tuple(out)
+
+
+def convert_rows(rows: List[Any], converters: List[Any]) -> List[Any]:
+    """
+    Convert rows of data values.
+
+    Parameters
+    ----------
+    rows : list of tuples or None
+        Rows of data from a query
+    converters : list[tuple]
+        List of two-element tuples containing a column index and a converter
+        function. The column index specifies which column to apply the function to.
+
+    Returns
+    -------
+    list of tuples
+
+    """
+    if not rows or not converters:
+        return rows
+    rows = list(rows)
+    for i in range(len(rows)):
+        rows[i] = convert_row(rows[i], converters=converters)
+    return rows
 
 
 # Map of database types and conversion functions

@@ -276,17 +276,11 @@ class TestConnection(unittest.TestCase):
             'select `id`, `time` from alltypes where `time` = :1', ['00:07:00'],
         )
         out = self.cur.fetchall()
-        if self.driver == 'pyodbc':
-            assert out[0] == (0, datetime.time(0, 7)), out[0]
-        else:
-            assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
+        assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
         self.cur.execute('select `id`, `time` from alltypes where `time` = "00:07:00"')
         out = self.cur.fetchall()
-        if self.driver == 'pyodbc':
-            assert out[0] == (0, datetime.time(0, 7)), out[0]
-        else:
-            assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
+        assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
         with self.assertRaises(IndexError):
             self.cur.execute(
@@ -299,10 +293,7 @@ class TestConnection(unittest.TestCase):
             'or `time` = "00::07::00"', [0],
         )
         out = self.cur.fetchall()
-        if self.driver == 'pyodbc':
-            assert out[0] == (0, datetime.time(0, 7)), out[0]
-        else:
-            assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
+        assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
     def test_execute_with_escaped_substitutions(self):
         self.cur.execute(
@@ -310,10 +301,7 @@ class TestConnection(unittest.TestCase):
             dict(time='00:07:00'),
         )
         out = self.cur.fetchall()
-        if self.driver == 'pyodbc':
-            assert out[0] == (0, datetime.time(0, 7)), out[0]
-        else:
-            assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
+        assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
         self.cur.execute(
             'select `id`, `time` from alltypes where `time` = :time',
@@ -335,10 +323,7 @@ class TestConnection(unittest.TestCase):
             dict(time='00:07:00'),
         )
         out = self.cur.fetchall()
-        if self.driver == 'pyodbc':
-            assert out[0][:2] == (0, datetime.time(0, 7)), out[0]
-        else:
-            assert out[0][:2] == (0, datetime.timedelta(seconds=420)), out[0]
+        assert out[0][:2] == (0, datetime.timedelta(seconds=420)), out[0]
 
     def test_is_connected(self):
         assert self.conn.is_connected()
@@ -691,21 +676,14 @@ class TestConnection(unittest.TestCase):
         assert row['date'] == datetime.date(8524, 11, 10), row['date']
         assert typ['date'] == 10, typ['date']
 
-        # pyodbc uses time rather than timedelta. In addition, if you try to
-        # put your own converter in, it changes the type code to 15!!!
-        if self.driver == 'pyodbc':
-            assert row['time'] == datetime.time(0, 7, 0), row['time']
-        else:
-            assert row['time'] == datetime.timedelta(minutes=7), row['time']
+        assert row['time'] == datetime.timedelta(minutes=7), row['time']
         assert typ['time'] == 11, typ['time']
 
-        # Same as above
-        if self.driver == 'pyodbc':
-            assert row['time'] == datetime.time(0, 7, 0), row['time']
-        else:
+        # pyodbc doesn't support microseconds on times
+        if not self.driver == 'pyodbc':
             assert row['time_6'] == datetime.timedelta(
                 hours=1, minutes=10, microseconds=2,
-            ), row['time']
+            ), row['time_6']
         assert typ['time_6'] == 11, typ['time_6']
 
         assert row['datetime'] == datetime.datetime(
@@ -771,7 +749,7 @@ class TestConnection(unittest.TestCase):
 
         # pyodbc surfaces json as varchar
         if self.driver == 'pyodbc':
-            assert row['json'] == '{"a":10,"b":2.75,"c":"hello world"}', row['json']
+            assert row['json'] == {'a': 10, 'b': 2.75, 'c': 'hello world'}, row['json']
         else:
             assert row['json'] == {'a': 10, 'b': 2.75, 'c': 'hello world'}, row['json']
         assert typ['json'] == otype(245), typ['json']
@@ -779,15 +757,10 @@ class TestConnection(unittest.TestCase):
         assert row['enum'] == 'one', row['enum']
         assert typ['enum'] == otype(253), typ['enum']  # mysql code: 247
 
-        # TODO: HTTP sees this as a varchar, so it doesn't become a set.
-        assert row['set'] in [{'two'}, 'two'], row['set']
+        assert row['set'] == 'two', row['set']
         assert typ['set'] == otype(253), typ['set']  # mysql code: 248
 
-        # pyodbc uses the opposite endianness of all other drivers
-        if self.driver == 'pyodbc':
-            assert row['bit'] == b'\x80\x00\x00\x00\x00\x00\x00\x00', row['bit']
-        else:
-            assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+        assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
         assert typ['bit'] == otype(16), typ['bit']
 
     def test_alltypes_nulls(self):
@@ -1270,11 +1243,11 @@ class TestConnection(unittest.TestCase):
 
         self.conn.autocommit(True)
         val = self.conn.get_session_var('autocommit')
-        assert val == 1, val
+        assert val is True, val
 
         self.conn.autocommit(False)
         val = self.conn.get_session_var('autocommit')
-        assert val == 0, val
+        assert val is False, val
 
         self.conn.set_session_var(autocommit=orig)
 
@@ -1375,16 +1348,13 @@ class TestConnection(unittest.TestCase):
     def test_global_var(self):
         orig = self.conn.get_global_var('enable_external_functions')
 
-        trues = [True, 1, 'on', 'ON', 'true', 'TRUE']
-        falses = [False, 0, 'off', 'OFF', 'false', 'FALSE']
-
         self.conn.set_global_var(enable_external_functions=True)
         val = self.conn.get_global_var('enable_external_functions')
-        assert val in trues, val
+        assert val is True, val
 
         self.conn.set_global_var(enable_external_functions=False)
         val = self.conn.get_global_var('enable_external_functions')
-        assert val in falses, val
+        assert val is False, val
 
         self.conn.set_global_var(enable_external_functions=orig)
         val = self.conn.get_global_var('enable_external_functions')
@@ -1396,16 +1366,13 @@ class TestConnection(unittest.TestCase):
 
         orig = self.conn.get_session_var('enable_multipartition_queries')
 
-        trues = [True, 1, 'on', 'ON', 'true', 'TRUE']
-        falses = [False, 0, 'off', 'OFF', 'false', 'FALSE']
-
         self.conn.set_session_var(enable_multipartition_queries=True)
         val = self.conn.get_session_var('enable_multipartition_queries')
-        assert val in trues, val
+        assert val is True, val
 
         self.conn.set_session_var(enable_multipartition_queries=False)
         val = self.conn.get_session_var('enable_multipartition_queries')
-        assert val in falses, val
+        assert val is False, val
 
         self.conn.set_session_var(enable_multipartition_queries=orig)
         val = self.conn.get_session_var('enable_multipartition_queries')

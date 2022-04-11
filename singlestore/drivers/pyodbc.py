@@ -1,11 +1,31 @@
 from __future__ import annotations
 
+import datetime
+import json
 from typing import Any
 from typing import Dict
+from typing import Optional
 
 from .base import Driver
-# import json
-# from ..converters import time_or_none
+
+
+datetime_min = datetime.datetime.min
+date_min = datetime.date.min
+datetime_combine = datetime.datetime.combine
+
+
+def convert_time(value: Optional[datetime.time]) -> Optional[datetime.timedelta]:
+    """Convert time to timedelta."""
+    if value is None:
+        return None
+    return datetime_combine(date_min, value) - datetime_min
+
+
+def convert_json(value: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Convert JSON str to dict."""
+    if value is None:
+        return None
+    return json.loads(value)
 
 
 class PyODBCDriver(Driver):
@@ -17,7 +37,7 @@ class PyODBCDriver(Driver):
     anaconda = 'pyodbc'
 
     def remap_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {
+        out = {
             k: v for k, v in dict(
                 server=params.get('host', '127.0.0.1'),
                 port=params.get('port', 0) or 3306,
@@ -29,11 +49,15 @@ class PyODBCDriver(Driver):
             ).items() if v is not None
         }
 
-    def after_connect(self, conn: Any, params: Dict[str, Any]) -> None:
-        if params.get('raw_values'):
-            conn.clear_output_converters()
-#       conn.add_output_converter(self.dbapi.SQL_TYPE_TIME, time_or_none)
-#       conn.add_output_converter(245, json.loads)
+        convs = params.pop('converters', {})
+        self.converters = self.merge_converters(
+            convs, {
+                11: convert_time,
+                245: convert_json,
+            },
+        )
+
+        return out
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:
         return not conn.closed

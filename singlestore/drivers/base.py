@@ -2,10 +2,25 @@ from __future__ import annotations
 
 import sys
 from typing import Any
+from typing import Callable
 from typing import Dict
 from typing import Optional
 
 from .. import exceptions
+
+
+def wrap_converter(
+    outer: Optional[Callable[[Any], Any]],
+    conv: Callable[[Any], Any],
+) -> Callable[[Any], Any]:
+    """Create a pipeline from two functions."""
+    if outer is None:
+        return conv
+
+    def converter(value: Any) -> Any:
+        return outer(conv(value))  # type: ignore
+
+    return converter
 
 
 class Driver(object):
@@ -25,6 +40,7 @@ class Driver(object):
 
     def __init__(self, **kwargs: Any):
         self._params = kwargs
+        self.converters: Dict[int, Callable[[Any], Any]] = {}
 
     def connect(self) -> Any:
         """Create a new connection."""
@@ -34,6 +50,17 @@ class Driver(object):
         conn = self.dbapi.connect(**params)
         self.after_connect(conn, self._params)
         return conn
+
+    def merge_converters(
+        self,
+        user_converters: Dict[int, Callable[[Any], Any]],
+        driver_converters: Dict[int, Callable[[Any], Any]],
+    ) -> Dict[int, Callable[[Any], Any]]:
+        """Merge two sets of converters into pipelines as needed."""
+        out = dict(driver_converters)
+        for key, value in user_converters.items():
+            out[key] = wrap_converter(out.get(key), value)
+        return out
 
     def after_connect(self, conn: Any, params: Dict[str, Any]) -> None:
         """

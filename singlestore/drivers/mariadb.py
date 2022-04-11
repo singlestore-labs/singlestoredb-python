@@ -23,9 +23,6 @@ class MariaDBDriver(Driver):
         params.pop('charset', None)
         params.pop('odbc_driver', None)
         params.pop('pure_python', None)
-        if params['raw_values']:
-            params['converter'] = {}
-        params.pop('raw_values', None)
         params['converter'] = converter
         return params
 

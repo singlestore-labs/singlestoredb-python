@@ -1,41 +1,31 @@
 from __future__ import annotations
 
+from json import loads as json_loads
 from typing import Any
 from typing import Dict
-
-try:
-    from mysql.connector.conversion import MySQLConverter
-    from mysql.connector.constants import FieldFlag
-    from mysql.connector.constants import FieldType
-except ImportError:
-    FieldFlag = 0
-
-    class FieldType(object):  # type: ignore
-        """Dummy class."""
-    class MySQLConverter(object):  # type: ignore
-        """Dummy class."""
+from typing import Optional
 
 from .base import Driver
-from ..converters import converters as conv
 
 
-maybe_blobs = set([249, 250, 251, 252, 253, 254])
+def convert_bit(value: Optional[int]) -> Optional[bytes]:
+    if value is None:
+        return None
+    return value.to_bytes(8, byteorder='big')
 
 
-class Converter(MySQLConverter):
+def convert_json(value: Optional[str]) -> Optional[Dict[str, Any]]:
+    if value is None:
+        return None
+    return json_loads(value)
 
-    def to_python(self, vtype: tuple[Any, ...], value: Any) -> Any:
-        """Convert value bytearray value to Python object."""
-        if value is None:
-            return None
-        if value == 0 and vtype[1] != FieldType.BIT:
-            return None
-        if vtype[1] == FieldType.BIT or \
-                (vtype[7] & FieldFlag.BINARY and vtype[1] in maybe_blobs):
-            #           print('binary', vtype, value)
-            return conv[vtype[1]](value)
-#       print('text', vtype, value)
-        return conv[vtype[1]](value.decode(self.charset))
+
+def convert_set(value: Optional[set[str]]) -> Optional[str]:
+    if value is None:
+        return None
+    if type(value) is set:
+        return ','.join(value)
+    return value  # type: ignore
 
 
 class MySQLConnectorDriver(Driver):
@@ -53,8 +43,16 @@ class MySQLConnectorDriver(Driver):
             params['use_pure'] = True
         params['port'] = params['port'] or 3306
         params['allow_local_infile'] = params.pop('local_infile')
-        params['raw'] = params.pop('raw_values')
-        params['converter_class'] = Converter
+
+        convs = params.pop('converters', {})
+        self.converters = self.merge_converters(
+            convs, {
+                16: convert_bit,
+                245: convert_json,
+                253: convert_set,
+            },
+        )
+
         return params
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:

@@ -36,6 +36,8 @@ class Description(NamedTuple):
     precision: Optional[int]
     scale: Optional[int]
     null_ok: Optional[bool]
+    flags: Optional[int]
+    charset: Optional[int]
 
 
 def results_to_dataframe(

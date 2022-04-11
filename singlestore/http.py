@@ -2,12 +2,14 @@
 """SingleStore HTTP API interface."""
 from __future__ import annotations
 
-import base64
 import functools
+import json
 import re
+from base64 import b64decode
 from collections.abc import Mapping
 from collections.abc import Sequence
 from typing import Any
+from typing import Callable
 from typing import Dict
 from typing import Iterable
 from typing import Optional
@@ -19,6 +21,7 @@ import requests
 
 from . import types
 from .config import get_option
+from .converters import convert_rows
 from .converters import converters
 from .exceptions import DatabaseError  # noqa: F401
 from .exceptions import DataError
@@ -119,13 +122,17 @@ def identity(x: Any) -> Any:
     return x
 
 
-def b64decode_converter(converter: Any, x: Any, encoding: str = 'utf-8') -> Any:
+def b64decode_converter(
+    converter: Callable[..., Any],
+    x: Optional[str],
+    encoding: str = 'utf-8',
+) -> Optional[bytes]:
     """Decode value before applying converter."""
     if x is None:
         return None
-    if type(x) is str:
-        return converter(base64.b64decode(x))
-    return converter(base64.b64decode(str(x, encoding)))
+    if converter is None:
+        return b64decode(x)
+    return converter(b64decode(x))
 
 
 class Cursor(object):
@@ -252,7 +259,7 @@ class Cursor(object):
                 raise get_exc_type(icode)(icode, msg.strip())
             raise InterfaceError(errno=res.status_code, msg='HTTP Error')
 
-        out = res.json()
+        out = json.loads(res.text)
 
         self._descriptions = []
         self._results = []
@@ -262,8 +269,22 @@ class Cursor(object):
 
         if sql_type == 'query':
             # description: (name, type_code, display_size, internal_size,
-            #               precision, scale, null_ok, column_flags, ?)
-            convs = []
+            #               precision, scale, null_ok, column_flags, charset)
+
+            # Remove converters for things the JSON parser already converted
+            http_converters = dict(converters)
+            del http_converters[4]
+            del http_converters[5]
+            del http_converters[6]
+            del http_converters[15]
+            del http_converters[245]
+            del http_converters[247]
+            del http_converters[249]
+            del http_converters[250]
+            del http_converters[251]
+            del http_converters[252]
+            del http_converters[253]
+            del http_converters[254]
 
             results = out['results']
 
@@ -274,21 +295,21 @@ class Cursor(object):
 
                 for result in results:
 
+                    convs = []
+
                     description: list[Description] = []
-                    for col in result.get('columns', []):
+                    for i, col in enumerate(result.get('columns', [])):
                         data_type = col['dataType'].split('(')[0]
                         type_code = types.ColumnType.get_code(data_type)
-                        if self.connection._raw_values:
-                            converter = identity
-                        else:
-                            converter = converters[type_code]
-                        if 'BLOB' in data_type or 'BINARY' in data_type:
+                        converter = http_converters.get(type_code, None)
+                        if data_type.endswith('BLOB') or data_type.endswith('BINARY'):
                             converter = functools.partial(b64decode_converter, converter)
                         if type_code == 0:  # DECIMAL
                             type_code = types.ColumnType.get_code('NEWDECIMAL')
                         elif type_code == 15:  # VARCHAR / VARBINARY
                             type_code = types.ColumnType.get_code('VARSTRING')
-                        convs.append(converter)
+                        if converter is not None:
+                            convs.append((i, converter))
                         description.append((
                             col['name'], type_code,
                             None, None, None, None,
@@ -296,14 +317,8 @@ class Cursor(object):
                         ))
                     self._descriptions.append(description)
 
-                    rows = result.get('rows', [])
-                    for i, row in enumerate(rows):
-                        try:
-                            rows[i] = tuple(x(y) for x, y in zip(convs, row))
-                        except ValueError:
-                            print(self._descriptions[-1][i])
-                            print(row)
-                            raise
+                    rows = convert_rows(result.get('rows', []), convs)
+
                     self._results.append(rows)
 
             self.rowcount = len(self._results[0])
@@ -582,7 +597,6 @@ class Connection(object):
             self, host: Optional[str] = None, port: Optional[int] = None,
             user: Optional[str] = None, password: Optional[str] = None,
             database: Optional[str] = None, protocol: str = 'http', version: str = 'v1',
-            raw_values: bool = False,
     ):
         host = host or get_option('host')
         port = port or get_option('http_port')
@@ -602,7 +616,6 @@ class Connection(object):
         self._url = f'{protocol}://{host}:{port}/api/{version}/'
         self.messages: list[list[Any]] = []
         self._autocommit: bool = True
-        self._raw_values = raw_values
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
@@ -690,7 +703,6 @@ def connect(
     host: Optional[str] = None, port: Optional[int] = None,
     user: Optional[str] = None, password: Optional[str] = None,
     database: Optional[str] = None, protocol: str = 'http', version: str = 'v1',
-    raw_values: bool = False,
 ) -> Connection:
     """
     Connect to a SingleStore database using HTTP.
@@ -712,8 +724,6 @@ def connect(
         HTTP protocol: `http` or `https`
     version : str, optional
         Version of the HTTP API
-    raw_values : bool, optional
-        Should raw values be returned rather than converted Python objects?
 
     Returns
     -------

@@ -7,6 +7,7 @@ import re
 from collections.abc import Mapping
 from collections.abc import Sequence
 from typing import Any
+from typing import Callable
 from typing import Dict
 from typing import Iterator
 from typing import List
@@ -21,6 +22,8 @@ from . import drivers
 from . import exceptions
 from . import types
 from .config import get_option
+from .converters import convert_row
+from .converters import convert_rows
 from .drivers.base import Driver
 from .utils.results import Description
 from .utils.results import format_results
@@ -32,6 +35,16 @@ apilevel = '2.0'
 threadsafety = 1
 paramstyle = map_paramstyle = 'named'
 positional_paramstyle = 'numeric'
+
+
+def nested_converter(
+    conv: Callable[[Any], Any],
+    inner: Callable[[Any], Any],
+) -> Callable[[Any], Any]:
+    """Create a pipeline of two functions."""
+    def converter(value: Any) -> Any:
+        return conv(inner(value))
+    return converter
 
 
 def cast_bool_param(val: Any) -> bool:
@@ -273,6 +286,7 @@ class Cursor(object):
         self.arraysize = type(self).arraysize
         self._many_queries: Optional[Iterator[Any]] = None
         self._format: str = get_option('results.format')
+        self._convetrers: List[Any] = []
 
     @property
     def connection(self) -> Optional[Connection]:
@@ -296,12 +310,19 @@ class Cursor(object):
 
         """
         if self._cursor.description:
+            self._converters = []
             out = []
-            for item in self._cursor.description:
-                item = list(item)
+            for i, item in enumerate(self._cursor.description):
+                item = list(item) + [None, None]
                 item[1] = types.ColumnType.get_code(item[1])
                 item[6] = not(not(item[6]))
-                out.append(Description(*item[:7]))
+                out.append(Description(*item[:9]))
+
+                # Setup override converters
+                conv = self._driver.converters.get(item[1], None)
+                if conv is not None:
+                    self._converters.append((i, conv))
+
             self.description = out
 
     @property
@@ -464,6 +485,8 @@ class Cursor(object):
         if out is not None and self.rownumber is not None:
             self.rownumber += 1
 
+        out = convert_row(out, self._converters)
+
         return format_results(self._format, self.description or [], out, single=True)
 
     def fetchmany(self, size: Optional[int] = None) -> Result:
@@ -485,6 +508,7 @@ class Cursor(object):
             size = max(int(size), 1)
         else:
             size = max(int(self.arraysize), 1)
+
         try:
             # This is to get around a bug in mysql.connector. For some reason,
             # fetchmany(1) returns the same row over and over again.
@@ -496,11 +520,15 @@ class Cursor(object):
         except Exception as exc:
             raise self._driver.convert_exception(exc)
 
+        out = convert_rows(out, self._converters)
+
         formatted: Result = format_results(
             self._format, self.description or [], out,
         )
+
         if self.rownumber is not None:
             self.rownumber += len(formatted)
+
         return formatted
 
     def fetchall(self) -> Result:
@@ -523,11 +551,15 @@ class Cursor(object):
         except Exception as exc:
             raise self._driver.convert_exception(exc)
 
+        out = convert_rows(out, self._converters)
+
         formatted: Result = format_results(
             self._format, self.description or [], out,
         )
+
         if self.rownumber is not None:
             self.rownumber += len(formatted)
+
         return formatted
 
     def nextset(self) -> Optional[bool]:
@@ -548,6 +580,7 @@ class Cursor(object):
 
         try:
             out = self._cursor.nextset()
+            self._set_description()
             if out:
                 self.rownumber = 0
                 return True
@@ -734,11 +767,27 @@ class Connection(object):
 
         drv_name = re.sub(r'^\w+\+', r'', self.connection_params['driver']).lower()
         self._driver = drivers.get_driver(drv_name, self.connection_params)
+        # TODO: converters parameter
+        self._merge_converters(None)
 
         try:
             self._conn = self._driver.connect()
         except Exception as exc:
             raise self._driver.convert_exception(exc)
+
+    def _merge_converters(
+        self,
+        user_converters: Optional[Dict[int, Callable[[Any], Any]]] = None,
+    ) -> None:
+        """Merge user-defined converters with driver converters."""
+        self._converters = dict(self._driver.converters)
+        for code, conv in (user_converters or {}).items():
+            if conv is None:
+                continue
+            if code in self._converters:
+                self._converters[code] = nested_converter(conv, self._converters[code])
+            else:
+                self._converters[code] = conv
 
     def autocommit(self, value: bool = True) -> None:
         """Set autocommit mode."""
@@ -866,7 +915,12 @@ class Connection(object):
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
         with self._i_cursor() as cur:
             for name, value in kwargs.items():
-                cur.execute('set global {}=:1'.format(_name_check(name)), [value])
+                if value is True:
+                    value = 'ON'
+                elif value is False:
+                    value = 'OFF'
+                name = _name_check(name)
+                cur.execute('set global {}=:1;'.format(name), [value])
 
     def set_session_var(self, **kwargs: Any) -> None:
         """
@@ -882,7 +936,12 @@ class Connection(object):
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
         with self._i_cursor() as cur:
             for name, value in kwargs.items():
-                cur.execute('set session {}=:1'.format(_name_check(name)), [value])
+                if value is True:
+                    value = 'ON'
+                elif value is False:
+                    value = 'OFF'
+                name = _name_check(name)
+                cur.execute('set session {}=:1;'.format(name), [value])
 
     def get_global_var(self, name: str) -> Any:
         """
@@ -895,9 +954,15 @@ class Connection(object):
         """
         if self._conn is None:
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
+        name = _name_check(name)
         with self._i_cursor() as cur:
-            cur.execute('select @@global.{}'.format(_name_check(name)))
-            return list(cur)[0][0]
+            cur.execute('show global variables like "{}";'.format(name))
+            out = list(cur)[0][1]
+            if out.lower() in ['on', 'true']:
+                return True
+            elif out.lower() in ['off', 'false']:
+                return False
+            return out
 
     def get_session_var(self, name: str) -> Any:
         """
@@ -910,9 +975,15 @@ class Connection(object):
         """
         if self._conn is None:
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
+        name = _name_check(name)
         with self._i_cursor() as cur:
-            cur.execute('select @@session.{}'.format(_name_check(name)))
-            return list(cur)[0][0]
+            cur.execute('show local variables like "{}";'.format(name))
+            out = list(cur)[0][1]
+            if out.lower() in ['on', 'true']:
+                return True
+            elif out.lower() in ['off', 'false']:
+                return False
+            return out
 
     def enable_http_api(self, port: Optional[int] = None) -> int:
         """
@@ -964,7 +1035,6 @@ def connect(
     database: Optional[str] = None, driver: Optional[str] = None,
     pure_python: Optional[bool] = None, local_infile: Optional[bool] = None,
     odbc_driver: Optional[str] = None, charset: Optional[str] = None,
-    raw_values: Optional[bool] = None,
 ) -> Connection:
     """
     Return a SingleStore database connection.
@@ -998,9 +1068,6 @@ def connect(
         Name of the ODBC driver to use for ODBC connections
     charset : str, optional
         Character set for string values
-    raw_values : bool, optional
-        Return raw values from queries rather than values converted to
-        Python objects
 
     Examples
     --------
