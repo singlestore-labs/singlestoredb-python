@@ -135,9 +135,9 @@ class TestManager(unittest.TestCase):
 
     def test_connect(self):
         trues = ['1', 'on', 'true']
-        do_test = os.environ.get('SINGLESTORE_PURE_PYTHON', '0').lower() in trues
+        pure_python = os.environ.get('SINGLESTORE_PURE_PYTHON', '0').lower() in trues
 
-        if not do_test:
+        if pure_python:
             self.skipTest('Connections through managed service are disabled')
 
         with self.cluster.connect(user='admin', password=self.password) as conn:
