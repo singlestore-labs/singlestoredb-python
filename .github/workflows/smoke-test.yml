@@ -51,21 +51,30 @@ jobs:
           - pymysql
           - mysqldb
 #         - http
-#         - cymysql
+        pure-python:
+          - 0
         # Manually include a couple of runs on Mac & Windows
         include:
+          - os: ubuntu-latest
+            python-version: "3.9"
+            driver: mysql.connector
+            pure-python: 1
           - os: macos-latest
             python-version: "3.9"
             driver: mysql.connector
+            pure-python: 0
 #         - os: macos-latest
 #           python-version: "3.9"
 #           driver: http
+#           pure-python: 0
           - os: windows-latest
             python-version: "3.9"
             driver: mysql.connector
+            pure-python: 0
 #         - os: windows-latest
 #           python-version: "3.9"
 #           driver: http
+#           pure-python: 0
 
     steps:
       - uses: actions/checkout@v2
@@ -97,13 +106,13 @@ jobs:
         if: ${{ matrix.driver != 'http' }}
         run: nose2 -v singlestore.tests.test_basics
         env:
-          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}"
+          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{pure-python}}"
 
       - name: Run tests
         if: ${{ matrix.driver == 'http' }}
         run: nose2 -v singlestore.tests.test_basics
         env:
-          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:9000/${{ needs.setup-database.outputs.cluster-database }}"
+          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:9000/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{pure-python}}"
 
 
   shutdown-database:
