@@ -7,6 +7,7 @@ import datetime
 import decimal
 import os
 import unittest
+import uuid
 import warnings
 
 import singlestore as s2
@@ -31,9 +32,11 @@ class TestConnection(unittest.TestCase):
             utils.drop_database(cls.dbname)
 
     def setUp(self):
-        self.conn = s2.connect(database=type(self).dbname)
+        self.conn = s2.connect(database=type(self).dbname, local_infile=True)
         self.cur = self.conn.cursor()
-        self.driver = self.conn._driver.dbapi.__name__.replace('singlestore.', '')
+        self.driver = self.conn._driver.dbapi.__name__.replace(
+            'singlestore.', '',
+        )
 
     def tearDown(self):
         try:
@@ -273,12 +276,16 @@ class TestConnection(unittest.TestCase):
 
     def test_execute_with_escaped_positional_substitutions(self):
         self.cur.execute(
-            'select `id`, `time` from alltypes where `time` = :1', ['00:07:00'],
+            'select `id`, `time` from alltypes where `time` = :1', [
+                '00:07:00',
+            ],
         )
         out = self.cur.fetchall()
         assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
-        self.cur.execute('select `id`, `time` from alltypes where `time` = "00:07:00"')
+        self.cur.execute(
+            'select `id`, `time` from alltypes where `time` = "00:07:00"',
+        )
         out = self.cur.fetchall()
         assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
@@ -478,7 +485,11 @@ class TestConnection(unittest.TestCase):
         assert out['driver'] == get_option('driver'), out['driver']
         assert out['host'] == 's2host.com', out['host']
         if out['driver'] in ['http', 'https']:
-            assert out['port'] in [get_option('http_port'), 80, 443], out['port']
+            assert out['port'] in [
+                get_option(
+                    'http_port',
+                ), 80, 443,
+            ], out['port']
         else:
             assert out['port'] in [get_option('port'), 3306], out['port']
         assert out['database'] == 'mydb', out['database']
@@ -516,7 +527,11 @@ class TestConnection(unittest.TestCase):
         assert out['driver'] == get_option('driver'), out['driver']
         assert out['host'] == 's2host.com', out['host']
         if out['driver'] in ['http', 'https']:
-            assert out['port'] in [get_option('http_port'), 80, 443], out['port']
+            assert out['port'] in [
+                get_option(
+                    'http_port',
+                ), 80, 443,
+            ], out['port']
         else:
             assert out['port'] in [get_option('port'), 3306], out['port']
         assert out['database'] == 'mydb', out['database']
@@ -529,11 +544,17 @@ class TestConnection(unittest.TestCase):
         assert out['driver'] == get_option('driver'), out['driver']
         assert out['host'] == 's2host.com', out['host']
         if out['driver'] in ['http', 'https']:
-            assert out['port'] in [get_option('http_port'), 80, 443], out['port']
+            assert out['port'] in [
+                get_option(
+                    'http_port',
+                ), 80, 443,
+            ], out['port']
         else:
             assert out['port'] in [get_option('port'), 3306], out['port']
         assert out['database'] == 'mydb', out['database']
-        assert 'user' not in out or out['user'] == get_option('user'), out['user']
+        assert 'user' not in out or out['user'] == get_option(
+            'user',
+        ), out['user']
         assert 'password' not in out or out['password'] == get_option(
             'password',
         ), out['password']
@@ -544,11 +565,17 @@ class TestConnection(unittest.TestCase):
         assert out['driver'] == get_option('driver'), out['driver']
         assert out['host'] == 's2host.com', out['host']
         if out['driver'] in ['http', 'https']:
-            assert out['port'] in [get_option('http_port'), 80, 443], out['port']
+            assert out['port'] in [
+                get_option(
+                    'http_port',
+                ), 80, 443,
+            ], out['port']
         else:
             assert out['port'] in [get_option('port'), 3306], out['port']
         assert 'database' not in out
-        assert 'user' not in out or out['user'] == get_option('user'), out['user']
+        assert 'user' not in out or out['user'] == get_option(
+            'user',
+        ), out['user']
         assert 'password' not in out or out['password'] == get_option(
             'password',
         ), out['password']
@@ -560,7 +587,9 @@ class TestConnection(unittest.TestCase):
         assert out['host'] == 's2host.com', out['host']
         assert out['port'] == 1000, out['port']
         assert 'database' not in out
-        assert 'user' not in out or out['user'] == get_option('user'), out['user']
+        assert 'user' not in out or out['user'] == get_option(
+            'user',
+        ), out['user']
         assert 'password' not in out or out['password'] == get_option(
             'password',
         ), out['password']
@@ -572,7 +601,9 @@ class TestConnection(unittest.TestCase):
         assert out['host'] == 's2host.com', out['host']
         assert out['port'] == 1000, out['port']
         assert 'database' not in out
-        assert 'user' not in out or out['user'] == get_option('user'), out['user']
+        assert 'user' not in out or out['user'] == get_option(
+            'user',
+        ), out['user']
         assert 'password' not in out or out['password'] == get_option(
             'password',
         ), out['password']
@@ -661,16 +692,22 @@ class TestConnection(unittest.TestCase):
         assert row['real'] == -901409776.279346, row['real']
         assert typ['real'] == otype(5), typ['real']
 
-        assert row['decimal'] == decimal.Decimal('28111097.610822'), row['decimal']
+        assert row['decimal'] == decimal.Decimal(
+            '28111097.610822',
+        ), row['decimal']
         assert typ['decimal'] == otype(246), typ['decimal']
 
         assert row['dec'] == decimal.Decimal('389451155.931428'), row['dec']
         assert typ['dec'] == otype(246), typ['dec']
 
-        assert row['fixed'] == decimal.Decimal('-143773416.044092'), row['fixed']
+        assert row['fixed'] == decimal.Decimal(
+            '-143773416.044092',
+        ), row['fixed']
         assert typ['fixed'] == otype(246), typ['fixed']
 
-        assert row['numeric'] == decimal.Decimal('866689461.300046'), row['numeric']
+        assert row['numeric'] == decimal.Decimal(
+            '866689461.300046',
+        ), row['numeric']
         assert typ['numeric'] == otype(246), typ['numeric']
 
         assert row['date'] == datetime.date(8524, 11, 10), row['date']
@@ -713,15 +750,23 @@ class TestConnection(unittest.TestCase):
             'This is a test of a 100 character column.', row['char_100']
         assert typ['char_100'] == otype(254), typ['char_100']
 
-        assert row['binary_100'] == bytearray(bits + [0] * 84), row['binary_100']
+        assert row['binary_100'] == bytearray(
+            bits + [0] * 84,
+        ), row['binary_100']
         assert typ['binary_100'] == otype(254), typ['binary_100']
 
         assert row['varchar_200'] == \
             'This is a test of a variable character column.', row['varchar_200']
-        assert typ['varchar_200'] == otype(253), typ['varchar_200']  # why not 15?
+        assert typ['varchar_200'] == otype(
+            253,
+        ), typ['varchar_200']  # why not 15?
 
-        assert row['varbinary_200'] == bytearray(bits * 2), row['varbinary_200']
-        assert typ['varbinary_200'] == otype(253), typ['varbinary_200']  # why not 15?
+        assert row['varbinary_200'] == bytearray(
+            bits * 2,
+        ), row['varbinary_200']
+        assert typ['varbinary_200'] == otype(
+            253,
+        ), typ['varbinary_200']  # why not 15?
 
         assert row['longtext'] == 'This is a longtext column.', row['longtext']
         assert typ['longtext'] == otype(251), typ['longtext']
@@ -744,14 +789,19 @@ class TestConnection(unittest.TestCase):
         assert row['blob'] == bytearray(bits), row['blob']
         assert typ['blob'] == otype(252), typ['blob']
 
-        assert row['tinyblob'] == bytearray([10, 11, 12, 13, 14, 15]), row['tinyblob']
+        assert row['tinyblob'] == bytearray(
+            [10, 11, 12, 13, 14, 15],
+        ), row['tinyblob']
         assert typ['tinyblob'] == otype(249), typ['tinyblob']
 
         # pyodbc surfaces json as varchar
         if self.driver == 'pyodbc':
             assert row['json'] == '{"a":10,"b":2.75,"c":"hello world"}', row['json']
         else:
-            assert row['json'] == {'a': 10, 'b': 2.75, 'c': 'hello world'}, row['json']
+            assert row['json'] == {
+                'a': 10, 'b': 2.75,
+                'c': 'hello world',
+            }, row['json']
         assert typ['json'] == otype(245), typ['json']
 
         assert row['enum'] == 'one', row['enum']
@@ -881,10 +931,14 @@ class TestConnection(unittest.TestCase):
         assert typ['binary_100'] == otype(254), typ['binary_100']
 
         assert row['varchar_200'] is None, typ['varchar_200']
-        assert typ['varchar_200'] == otype(253), typ['varchar_200']  # why not 15?
+        assert typ['varchar_200'] == otype(
+            253,
+        ), typ['varchar_200']  # why not 15?
 
         assert row['varbinary_200'] is None, row['varbinary_200']
-        assert typ['varbinary_200'] == otype(253), typ['varbinary_200']  # why not 15?
+        assert typ['varbinary_200'] == otype(
+            253,
+        ), typ['varbinary_200']  # why not 15?
 
         assert row['longtext'] is None, row['longtext']
         assert typ['longtext'] == otype(251), typ['longtext']
@@ -933,7 +987,9 @@ class TestConnection(unittest.TestCase):
             exc_args = (-1, 'hi there')
             exc_kwargs = {}
 
-        exc = driver.convert_exception(dbapi.NotSupportedError(*exc_args, **exc_kwargs))
+        exc = driver.convert_exception(
+            dbapi.NotSupportedError(*exc_args, **exc_kwargs),
+        )
         assert exc.args[0] == -1
         assert exc.args[1] == 'hi there'
         assert exc.errno == -1
@@ -951,10 +1007,14 @@ class TestConnection(unittest.TestCase):
             )
 
         with self.assertRaises(s2.InternalError):
-            raise driver.convert_exception(dbapi.InternalError(*exc_args, **exc_kwargs))
+            raise driver.convert_exception(
+                dbapi.InternalError(*exc_args, **exc_kwargs),
+            )
 
         with self.assertRaises(s2.IntegrityError):
-            raise driver.convert_exception(dbapi.IntegrityError(*exc_args, **exc_kwargs))
+            raise driver.convert_exception(
+                dbapi.IntegrityError(*exc_args, **exc_kwargs),
+            )
 
         with self.assertRaises(s2.OperationalError):
             raise driver.convert_exception(
@@ -962,16 +1022,24 @@ class TestConnection(unittest.TestCase):
             )
 
         with self.assertRaises(s2.DataError):
-            raise driver.convert_exception(dbapi.DataError(*exc_args, **exc_kwargs))
+            raise driver.convert_exception(
+                dbapi.DataError(*exc_args, **exc_kwargs),
+            )
 
         with self.assertRaises(s2.DatabaseError):
-            raise driver.convert_exception(dbapi.DatabaseError(*exc_args, **exc_kwargs))
+            raise driver.convert_exception(
+                dbapi.DatabaseError(*exc_args, **exc_kwargs),
+            )
 
         with self.assertRaises(s2.InterfaceError):
-            raise driver.convert_exception(dbapi.InterfaceError(*exc_args, **exc_kwargs))
+            raise driver.convert_exception(
+                dbapi.InterfaceError(*exc_args, **exc_kwargs),
+            )
 
         with self.assertRaises(s2.Error):
-            raise driver.convert_exception(dbapi.Error(*exc_args, **exc_kwargs))
+            raise driver.convert_exception(
+                dbapi.Error(*exc_args, **exc_kwargs),
+            )
 
         if self.driver == 'mariadb':
             with self.assertRaises(s2.Error):
@@ -1380,6 +1448,38 @@ class TestConnection(unittest.TestCase):
         self.conn.set_session_var(enable_multipartition_queries=orig)
         val = self.conn.get_session_var('enable_multipartition_queries')
         assert val == orig, val
+
+    def test_local_infile(self):
+        if self.driver in ['http', 'https']:
+            self.skipTest('Can not load local files in HTTP')
+
+        path = os.path.join(os.path.dirname(__file__), 'local_infile.csv')
+        tblname = ('TEST_' + str(uuid.uuid4())).replace('-', '_')
+
+        self.cur.execute(f'''
+            create table `{tblname}` (
+                first_name char(20) not null,
+                last_name char(30) not null,
+                age  int not null
+            ) collate="utf8_unicode_ci";
+        ''')
+
+        try:
+            self.cur.execute(
+                f'load data local infile :1 into table {tblname} '
+                'fields terminated by "," lines terminated by "\n";', [path],
+            )
+
+            self.cur.execute(f'select * from {tblname};')
+            out = list(self.cur)
+            assert out == [
+                ('John', 'Doe', 34),
+                ('Sandy', 'Smith', 24),
+                ('Patty', 'Jones', 57),
+            ], out
+
+        finally:
+            self.cur.execute(f'drop table {tblname};')
 
 
 if __name__ == '__main__':
