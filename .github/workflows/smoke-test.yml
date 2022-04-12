@@ -106,13 +106,13 @@ jobs:
         if: ${{ matrix.driver != 'http' }}
         run: nose2 -v singlestore.tests.test_basics
         env:
-          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{pure-python}}"
+          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{matrix.pure-python}}"
 
       - name: Run tests
         if: ${{ matrix.driver == 'http' }}
         run: nose2 -v singlestore.tests.test_basics
         env:
-          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:9000/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{pure-python}}"
+          SINGLESTORE_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:9000/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{matrix.pure-python}}"
 
 
   shutdown-database:
