@@ -22,9 +22,9 @@ from . import drivers
 from . import exceptions
 from . import types
 from .config import get_option
-from .converters import convert_row
-from .converters import convert_rows
 from .drivers.base import Driver
+from .utils.convert_rows import convert_row
+from .utils.convert_rows import convert_rows
 from .utils.results import Description
 from .utils.results import format_results
 from .utils.results import Result
@@ -318,8 +318,12 @@ class Cursor(object):
                 item[6] = not(not(item[6]))
                 out.append(Description(*item[:9]))
 
-                # Setup override converters
-                conv = self._driver.converters.get(item[1], None)
+                # Setup override converters, if the SET flag is set use that
+                # converter but keep the same type code.
+                if item[7] and item[7] & 2048:  # SET_FLAG = 2048
+                    conv = self._driver.converters.get(247, None)  # SET CODE = 247
+                else:
+                    conv = self._driver.converters.get(item[1], None)
                 if conv is not None:
                     self._converters.append((i, conv))
 
@@ -485,7 +489,8 @@ class Cursor(object):
         if out is not None and self.rownumber is not None:
             self.rownumber += 1
 
-        out = convert_row(out, self._converters)
+        if out is not None:
+            out = convert_row(tuple(out), self._converters)
 
         return format_results(self._format, self.description or [], out, single=True)
 

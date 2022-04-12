@@ -49,7 +49,7 @@ class MySQLConnectorDriver(Driver):
             convs, {
                 16: convert_bit,
                 245: convert_json,
-                253: convert_set,
+                247: convert_set,
             },
         )
 

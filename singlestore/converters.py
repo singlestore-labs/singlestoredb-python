@@ -12,7 +12,6 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
-from typing import Tuple
 from typing import Union
 
 
@@ -277,63 +276,6 @@ def geometry_or_none(x: Optional[str]) -> Optional[Any]:
     if x is None:
         return None
     return x
-
-
-def convert_row(
-    values: Optional[Tuple[Any, ...]],
-    converters: List[Any],
-) -> Optional[Tuple[Any, ...]]:
-    """
-    Convert a row of data values.
-
-    Parameters
-    ----------
-    values : tuple or None
-        Tuple containing values in a row of data
-    converters : list[tuple]
-        List of two-element tuples containing a column index and a converter
-        function. The column index specifies which column to apply the function to.
-
-    Returns
-    -------
-    tuple or None
-
-    """
-    if values is None:
-        return None
-    if not converters:
-        return values
-    out = list(values)
-    for i in range(len(converters)):
-        conv = converters[i]
-        idx = conv[0]
-        out[idx] = conv[1](out[idx])
-    return tuple(out)
-
-
-def convert_rows(rows: List[Any], converters: List[Any]) -> List[Any]:
-    """
-    Convert rows of data values.
-
-    Parameters
-    ----------
-    rows : list of tuples or None
-        Rows of data from a query
-    converters : list[tuple]
-        List of two-element tuples containing a column index and a converter
-        function. The column index specifies which column to apply the function to.
-
-    Returns
-    -------
-    list of tuples
-
-    """
-    if not rows or not converters:
-        return rows
-    rows = list(rows)
-    for i in range(len(rows)):
-        rows[i] = convert_row(rows[i], converters=converters)
-    return rows
 
 
 # Map of database types and conversion functions

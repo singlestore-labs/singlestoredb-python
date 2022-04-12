@@ -21,7 +21,6 @@ import requests
 
 from . import types
 from .config import get_option
-from .converters import convert_rows
 from .converters import converters
 from .exceptions import DatabaseError  # noqa: F401
 from .exceptions import DataError
@@ -33,6 +32,7 @@ from .exceptions import NotSupportedError
 from .exceptions import OperationalError
 from .exceptions import ProgrammingError
 from .exceptions import Warning  # noqa: F401
+from .utils.convert_rows import convert_rows
 from .utils.results import Result
 
 
