@@ -749,7 +749,7 @@ class TestConnection(unittest.TestCase):
 
         # pyodbc surfaces json as varchar
         if self.driver == 'pyodbc':
-            assert row['json'] == {'a': 10, 'b': 2.75, 'c': 'hello world'}, row['json']
+            assert row['json'] == '{"a":10,"b":2.75,"c":"hello world"}', row['json']
         else:
             assert row['json'] == {'a': 10, 'b': 2.75, 'c': 'hello world'}, row['json']
         assert typ['json'] == otype(245), typ['json']
@@ -760,7 +760,10 @@ class TestConnection(unittest.TestCase):
         assert row['set'] == 'two', row['set']
         assert typ['set'] == otype(253), typ['set']  # mysql code: 248
 
-        assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+        if self.driver == 'pyodbc':
+            assert row['bit'] == b'\x80\x00\x00\x00\x00\x00\x00\x00', row['bit']
+        else:
+            assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
         assert typ['bit'] == otype(16), typ['bit']
 
     def test_alltypes_nulls(self):

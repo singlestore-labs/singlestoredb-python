@@ -12,6 +12,7 @@ from typing import Dict
 from typing import Iterator
 from typing import List
 from typing import Optional
+from typing import Tuple
 from typing import Union
 from urllib.parse import parse_qs
 from urllib.parse import urlparse
@@ -35,6 +36,10 @@ apilevel = '2.0'
 threadsafety = 1
 paramstyle = map_paramstyle = 'named'
 positional_paramstyle = 'numeric'
+
+
+# Type codes for character-based columns
+CHAR_COLUMNS = set(list(range(247, 256)) + [245])
 
 
 def nested_converter(
@@ -286,7 +291,12 @@ class Cursor(object):
         self.arraysize = type(self).arraysize
         self._many_queries: Optional[Iterator[Any]] = None
         self._format: str = get_option('results.format')
-        self._convetrers: List[Any] = []
+        self._convetrers: List[
+            Tuple[
+                int, Optional[str],
+                Optional[Callable[..., Any]],
+            ]
+        ] = []
 
     @property
     def connection(self) -> Optional[Connection]:
@@ -310,7 +320,12 @@ class Cursor(object):
 
         """
         if self._cursor.description:
-            self._converters = []
+            self._converters: List[
+                Tuple[
+                    int, Optional[str],
+                    Optional[Callable[..., Any]],
+                ]
+            ] = []
             out = []
             for i, item in enumerate(self._cursor.description):
                 item = list(item) + [None, None]
@@ -324,8 +339,27 @@ class Cursor(object):
                     conv = self._driver.converters.get(247, None)  # SET CODE = 247
                 else:
                     conv = self._driver.converters.get(item[1], None)
+
+                encoding = None
+
+                # Determine proper encoding for character fields as needed
+                if self._driver.returns_bytes:
+                    if item[1] in CHAR_COLUMNS:
+                        if item[8] and item[8] == 63:  # BINARY / BLOB
+                            pass
+                        elif self._conn is not None:
+                            encoding = self._conn.encoding
+                        else:
+                            encoding = 'utf-8'
+                    elif item[1] == 16:  # BIT
+                        pass
+                    else:
+                        encoding = 'ascii'
+
                 if conv is not None:
-                    self._converters.append((i, conv))
+                    self._converters.append((i, encoding, conv))
+                elif encoding is not None:
+                    self._converters.append((i, encoding, None))
 
             self.description = out
 
@@ -769,6 +803,7 @@ class Connection(object):
         self._conn: Optional[Any] = None
         self.errorhandler = None
         self.connection_params: Dict[str, Any] = build_params(**kwargs)
+        self.encoding = 'utf-8'
 
         drv_name = re.sub(r'^\w+\+', r'', self.connection_params['driver']).lower()
         self._driver = drivers.get_driver(drv_name, self.connection_params)

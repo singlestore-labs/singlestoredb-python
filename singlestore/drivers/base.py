@@ -38,6 +38,12 @@ class Driver(object):
     # Name of the package on Anaconda.org
     anaconda: str = ''
 
+    # Does the driver return bytes for all data values?
+    # If true and flags are available in the description to deterimine
+    # if a character field is text or binary, the text will be automatically
+    # decoded before conversion functions are run.
+    returns_bytes: bool = False
+
     def __init__(self, **kwargs: Any):
         self._params = kwargs
         self.converters: Dict[int, Callable[[Any], Any]] = {}

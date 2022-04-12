@@ -309,7 +309,7 @@ class Cursor(object):
                         elif type_code == 15:  # VARCHAR / VARBINARY
                             type_code = types.ColumnType.get_code('VARSTRING')
                         if converter is not None:
-                            convs.append((i, converter))
+                            convs.append((i, None, converter))
                         description.append((
                             col['name'], type_code,
                             None, None, None, None,

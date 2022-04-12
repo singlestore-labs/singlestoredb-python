@@ -1,31 +1,10 @@
 from __future__ import annotations
 
-from json import loads as json_loads
 from typing import Any
 from typing import Dict
-from typing import Optional
 
+from ..converters import converters
 from .base import Driver
-
-
-def convert_bit(value: Optional[int]) -> Optional[bytes]:
-    if value is None:
-        return None
-    return value.to_bytes(8, byteorder='big')
-
-
-def convert_json(value: Optional[str]) -> Optional[Dict[str, Any]]:
-    if value is None:
-        return None
-    return json_loads(value)
-
-
-def convert_set(value: Optional[set[str]]) -> Optional[str]:
-    if value is None:
-        return None
-    if type(value) is set:
-        return ','.join(value)
-    return value  # type: ignore
 
 
 class MySQLConnectorDriver(Driver):
@@ -36,6 +15,9 @@ class MySQLConnectorDriver(Driver):
     pypi = 'mysql-connector-python'
     anaconda = 'mysql-connector-python'
 
+    # This flag lets the connection do the decoding of text / binary accordingly
+    returns_bytes = True
+
     def remap_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         params.pop('driver', None)
         params.pop('odbc_driver', None)
@@ -44,14 +26,11 @@ class MySQLConnectorDriver(Driver):
         params['port'] = params['port'] or 3306
         params['allow_local_infile'] = params.pop('local_infile')
 
+        # Always use raw, we're doing the conversions ourselves
+        params['raw'] = True
+
         convs = params.pop('converters', {})
-        self.converters = self.merge_converters(
-            convs, {
-                16: convert_bit,
-                245: convert_json,
-                247: convert_set,
-            },
-        )
+        self.converters = self.merge_converters(convs, converters)
 
         return params
 
