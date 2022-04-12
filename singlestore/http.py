@@ -273,18 +273,18 @@ class Cursor(object):
 
             # Remove converters for things the JSON parser already converted
             http_converters = dict(converters)
-            del http_converters[4]
-            del http_converters[5]
-            del http_converters[6]
-            del http_converters[15]
-            del http_converters[245]
-            del http_converters[247]
-            del http_converters[249]
-            del http_converters[250]
-            del http_converters[251]
-            del http_converters[252]
-            del http_converters[253]
-            del http_converters[254]
+            http_converters.pop(4, None)
+            http_converters.pop(5, None)
+            http_converters.pop(6, None)
+            http_converters.pop(15, None)
+            http_converters.pop(245, None)
+            http_converters.pop(247, None)
+            http_converters.pop(249, None)
+            http_converters.pop(250, None)
+            http_converters.pop(251, None)
+            http_converters.pop(252, None)
+            http_converters.pop(253, None)
+            http_converters.pop(254, None)
 
             results = out['results']
 
