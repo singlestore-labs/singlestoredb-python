@@ -134,6 +134,12 @@ class TestManager(unittest.TestCase):
         assert 'No cluster manager' in cm.exception.msg, cm.exception.msg
 
     def test_connect(self):
+        trues = ['1', 'on', 'true']
+        do_test = os.environ.get('SINGLESTORE_PURE_PYTHON', '0').lower() in trues
+
+        if not do_test:
+            self.skipTest('Connections through managed service are disabled')
+
         with self.cluster.connect(user='admin', password=self.password) as conn:
             with conn.cursor() as cur:
                 cur.execute('show databases')
