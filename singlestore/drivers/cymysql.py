@@ -31,7 +31,7 @@ class CyMySQLDriver(Driver):
         params['port'] = params['port'] or 3306
         params['db'] = params.pop('database', None)
         params['passwd'] = params.pop('password', None)
-        params['conv'] = converters
+        params['conv'] = self.merge_converters(params.pop('converters', {}), converters)
         return params
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:

@@ -1481,6 +1481,52 @@ class TestConnection(unittest.TestCase):
         finally:
             self.cur.execute(f'drop table {tblname};')
 
+    def test_converters(self):
+        def upper(x):
+            if isinstance(x, str):
+                return x.upper()
+            return x
+
+        convs = {
+            15: upper,
+            249: upper,
+            250: upper,
+            251: upper,
+            252: upper,
+            253: upper,
+            254: upper,
+        }
+
+        with s2.connect(database=type(self).dbname, converters=convs) as conn:
+            with conn.cursor() as cur:
+                cur.execute('select * from alltypes where id = 0')
+                names = [x[0] for x in cur.description]
+                out = cur.fetchone()
+                row = dict(zip(names, out))
+                assert row['longtext'] == 'THIS IS A LONGTEXT COLUMN.', \
+                    row['longtext']
+                assert row['mediumtext'] == 'THIS IS A MEDIUMTEXT COLUMN.', \
+                    row['mediumtext']
+                assert row['text'] == 'THIS IS A TEXT COLUMN.', \
+                    row['text']
+                assert row['tinytext'] == 'THIS IS A TINYTEXT COLUMN.', \
+                    row['tinytext']
+
+        with s2.connect(database=type(self).dbname) as conn:
+            with conn.cursor() as cur:
+                cur.execute('select * from alltypes where id = 0')
+                names = [x[0] for x in cur.description]
+                out = cur.fetchone()
+                row = dict(zip(names, out))
+                assert row['longtext'] == 'This is a longtext column.', \
+                    row['longtext']
+                assert row['mediumtext'] == 'This is a mediumtext column.', \
+                    row['mediumtext']
+                assert row['text'] == 'This is a text column.', \
+                    row['text']
+                assert row['tinytext'] == 'This is a tinytext column.', \
+                    row['tinytext']
+
 
 if __name__ == '__main__':
     import nose2

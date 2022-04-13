@@ -30,7 +30,7 @@ class PyMySQLDriver(Driver):
         params.pop('odbc_driver', None)
         params.pop('pure_python', None)
         params['port'] = params['port'] or 3306
-        params['conv'] = converters
+        params['conv'] = self.merge_converters(params.pop('converters', {}), converters)
         return params
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:

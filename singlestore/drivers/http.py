@@ -31,6 +31,8 @@ class HTTPDriver(Driver):
             else:
                 params['port'] = 80
 
+        self.converters = params.pop('converters', {})
+
         return params
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:

@@ -11,11 +11,14 @@ from .. import exceptions
 
 def wrap_converter(
     outer: Optional[Callable[[Any], Any]],
-    conv: Callable[[Any], Any],
-) -> Callable[[Any], Any]:
+    conv: Optional[Callable[[Any], Any]],
+) -> Optional[Callable[[Any], Any]]:
     """Create a pipeline from two functions."""
     if outer is None:
         return conv
+
+    if conv is None:
+        return outer
 
     def converter(value: Any) -> Any:
         return outer(conv(value))  # type: ignore
@@ -65,7 +68,9 @@ class Driver(object):
         """Merge two sets of converters into pipelines as needed."""
         out = dict(driver_converters)
         for key, value in user_converters.items():
-            out[key] = wrap_converter(out.get(key), value)
+            func = wrap_converter(value, out.get(key))
+            if func is not None:
+                out[key] = func
         return out
 
     def after_connect(self, conn: Any, params: Dict[str, Any]) -> None:

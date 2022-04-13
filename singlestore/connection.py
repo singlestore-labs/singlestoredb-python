@@ -100,7 +100,10 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
 
     # Set known parameters
     for name in inspect.getfullargspec(connect).args:
-        out[name] = kwargs.get(name, get_option(name))
+        if name == 'converters':
+            out[name] = kwargs.get(name, {})
+        else:
+            out[name] = kwargs.get(name, get_option(name))
 
     # See if host actually contains a URL; definitely not a perfect test.
     host = out['host']
@@ -183,6 +186,12 @@ def _cast_params(params: Dict[str, Any]) -> Dict[str, Any]:
         dtype = param_types[key]
         if dtype is bool:
             val = cast_bool_param(val)
+        elif getattr(dtype, '_name', '') in ['Dict', 'Mapping']:
+            val = dict(val)
+        elif getattr(dtype, '_name', '') == 'List':
+            val = list(val)
+        elif getattr(dtype, '_name', '') == 'Tuple':
+            val = tuple(val)
         else:
             val = dtype(val)
         out[key] = val
@@ -807,27 +816,11 @@ class Connection(object):
 
         drv_name = re.sub(r'^\w+\+', r'', self.connection_params['driver']).lower()
         self._driver = drivers.get_driver(drv_name, self.connection_params)
-        # TODO: converters parameter
-        self._merge_converters(None)
 
         try:
             self._conn = self._driver.connect()
         except Exception as exc:
             raise self._driver.convert_exception(exc)
-
-    def _merge_converters(
-        self,
-        user_converters: Optional[Dict[int, Callable[[Any], Any]]] = None,
-    ) -> None:
-        """Merge user-defined converters with driver converters."""
-        self._converters = dict(self._driver.converters)
-        for code, conv in (user_converters or {}).items():
-            if conv is None:
-                continue
-            if code in self._converters:
-                self._converters[code] = nested_converter(conv, self._converters[code])
-            else:
-                self._converters[code] = conv
 
     def autocommit(self, value: bool = True) -> None:
         """Set autocommit mode."""
@@ -1077,6 +1070,7 @@ def connect(
     odbc_driver: Optional[str] = None, charset: Optional[str] = None,
     ssl_key: Optional[str] = None, ssl_cert: Optional[str] = None,
     ssl_ca: Optional[str] = None, ssl_disabled: Optional[bool] = None,
+    converters: Optional[Dict[int, Callable[..., Any]]] = None,
 ) -> Connection:
     """
     Return a SingleStore database connection.
@@ -1118,6 +1112,8 @@ def connect(
         File containing SSL certificate authority
     ssl_disabled : bool, optional
         Disable SSL usage
+    converters : dict[int, Callable], optional
+        Dictionary of data conversion functions
 
     Examples
     --------

@@ -7,7 +7,7 @@ from typing import Dict
 from .base import Driver
 
 
-converter = {245: json.loads}
+converters = {245: json.loads}
 
 
 class MariaDBDriver(Driver):
@@ -23,10 +23,14 @@ class MariaDBDriver(Driver):
         params.pop('charset', None)
         params.pop('odbc_driver', None)
         params.pop('pure_python', None)
-        params['converter'] = converter
+        params['converter'] = self.merge_converters(
+            params.pop('converters', {}),
+            dict(converters),
+        )
         if params.pop('ssl_disabled', False):
             params['ssl'] = False
             params['ssl_verify_cert'] = False
+
         return params
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:
