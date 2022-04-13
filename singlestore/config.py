@@ -90,6 +90,29 @@ register_option(
     environ='SINGLESTORE_ODBC_DRIVER',
 )
 
+register_option(
+    'ssl_key', 'str', check_str, None,
+    'File containing SSL key',
+    environ='SINGLESTORE_SSL_KEY',
+)
+
+register_option(
+    'ssl_cert', 'str', check_str, None,
+    'File containing SSL certificate',
+    environ='SINGLESTORE_SSL_CERT',
+)
+
+register_option(
+    'ssl_ca', 'str', check_str, None,
+    'File containing SSL certificate authority',
+    environ='SINGLESTORE_SSL_CA',
+)
+
+register_option(
+    'ssl_disabled', 'bool', check_bool, False,
+    'Disable SSL usage',
+    environ='SINGLESTORE_SSL_DISABLED',
+)
 
 #
 # Query results options

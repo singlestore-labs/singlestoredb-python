@@ -1075,6 +1075,8 @@ def connect(
     database: Optional[str] = None, driver: Optional[str] = None,
     pure_python: Optional[bool] = None, local_infile: Optional[bool] = None,
     odbc_driver: Optional[str] = None, charset: Optional[str] = None,
+    ssl_key: Optional[str] = None, ssl_cert: Optional[str] = None,
+    ssl_ca: Optional[str] = None, ssl_disabled: Optional[bool] = None,
 ) -> Connection:
     """
     Return a SingleStore database connection.
@@ -1108,6 +1110,14 @@ def connect(
         Name of the ODBC driver to use for ODBC connections
     charset : str, optional
         Character set for string values
+    ssl_key : str, optional
+        File containing SSL key
+    ssl_cert : str, optional
+        File containing SSL certificate
+    ssl_ca : str, optional
+        File containing SSL certificate authority
+    ssl_disabled : bool, optional
+        Disable SSL usage
 
     Examples
     --------

@@ -558,24 +558,6 @@ class Connection(object):
     Instances of this object are typically created through the
     `connection` function rather than creating them directly.
 
-    Parameters
-    ----------
-    user : str, optional
-        Database user name
-    password : str, optional
-        Database user password
-    host : str, optional
-        Database host name or IP address
-    port : int, optional
-        Database port. This defaults to 3306 for non-HTTP connections, 80
-        for HTTP connections, and 443 for HTTPS connections.
-    database : str, optional
-        Database name
-    protocol : str, optional
-        HTTP protocol: `http` or `https`
-    version : str, optional
-        Version of the HTTP API
-
     See Also
     --------
     `connect`
@@ -593,15 +575,14 @@ class Connection(object):
     ProgrammingError = ProgrammingError
     NotSupportedError = NotSupportedError
 
-    def __init__(
-            self, host: Optional[str] = None, port: Optional[int] = None,
-            user: Optional[str] = None, password: Optional[str] = None,
-            database: Optional[str] = None, protocol: str = 'http', version: str = 'v1',
-    ):
-        host = host or get_option('host')
-        port = port or get_option('http_port')
+    def __init__(self, **kwargs: Any):
+        host = kwargs.get('host', get_option('host'))
+        port = kwargs.get('port', get_option('http_port'))
 
         self._sess: Optional[requests.Session] = requests.Session()
+
+        user = kwargs.get('user', get_option('user'))
+        password = kwargs.get('password', get_option('password'))
         if user is not None and password is not None:
             self._sess.auth = (user, password)
         elif user is not None:
@@ -612,7 +593,24 @@ class Connection(object):
             'Accept-Encoding': 'compress,identity',
         })
 
-        self._database = database
+        if kwargs.get('ssl_disabled', get_option('ssl_disabled')):
+            self._sess.verify = False
+        else:
+            ssl_key = kwargs.get('ssl_key', get_option('ssl_key'))
+            ssl_cert = kwargs.get('ssl_cert', get_option('ssl_cert'))
+            if ssl_key and ssl_cert:
+                self._sess.cert = (ssl_key, ssl_cert)
+            elif ssl_cert:
+                self._sess.cert = ssl_cert
+
+            ssl_ca = kwargs.get('ssl_ca', get_option('ssl_ca'))
+            if ssl_ca:
+                self._sess.verify = ssl_ca
+
+        version = kwargs.get('version', 'v1')
+        protocol = kwargs.get('protocol', 'https')
+
+        self._database = kwargs.get('database', get_option('database'))
         self._url = f'{protocol}://{host}:{port}/api/{version}/'
         self.messages: list[list[Any]] = []
         self._autocommit: bool = True
@@ -702,7 +700,9 @@ class Connection(object):
 def connect(
     host: Optional[str] = None, port: Optional[int] = None,
     user: Optional[str] = None, password: Optional[str] = None,
-    database: Optional[str] = None, protocol: str = 'http', version: str = 'v1',
+    database: Optional[str] = None, protocol: str = 'https', version: str = 'v1',
+    ssl_key: Optional[str] = None, ssl_cert: Optional[str] = None,
+    ssl_ca: Optional[str] = None, ssl_disabled: Optional[bool] = None,
 ) -> Connection:
     """
     Connect to a SingleStore database using HTTP.
@@ -724,6 +724,14 @@ def connect(
         HTTP protocol: `http` or `https`
     version : str, optional
         Version of the HTTP API
+    ssl_key : str, optional
+        File containing SSL key
+    ssl_cert : str, optional
+        File containing SSL certificate
+    ssl_ca : str, optional
+        File containing SSL certificate authority
+    ssl_disabled : bool, optional
+        Disable SSL usage
 
     Returns
     -------

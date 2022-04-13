@@ -20,6 +20,15 @@ class MySQLdbDriver(Driver):
         params.pop('pure_python', None)
         params.pop('odbc_driver', None)
         params['conv'] = dict(converters)
+        params['ssl'] = {
+            k: v for k, v in {
+                'ssl_key': params.get('ssl_key', None),
+                'ssl_cert': params.get('ssl_cert', None),
+                'ssl_ca': params.get('ssl_ca', None),
+            }.items()
+        } or None
+        if params.pop('ssl_disabled', False):
+            params['ssl_mode'] = 'DISABLED'
         return params
 
     def after_connect(self, conn: Any, params: Dict[str, Any]) -> None:

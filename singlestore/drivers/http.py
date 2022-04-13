@@ -17,16 +17,20 @@ class HTTPDriver(Driver):
 
     def remap_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         params.pop('pure_python', False)
-        params.pop('driver', None)
         params.pop('charset', None)
         params.pop('odbc_driver', None)
+
+        params['protocol'] = params.pop('driver', None)
+
         if params.pop('local_infile', False):
             warnings.warn('The HTTP driver does not support file uploads.')
+
         if params['port'] is None:
             if type(self).name == 'https':
                 params['port'] = 443
             else:
                 params['port'] = 80
+
         return params
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:

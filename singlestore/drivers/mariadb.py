@@ -24,6 +24,9 @@ class MariaDBDriver(Driver):
         params.pop('odbc_driver', None)
         params.pop('pure_python', None)
         params['converter'] = converter
+        if params.pop('ssl_disabled', False):
+            params['ssl'] = False
+            params['ssl_verify_cert'] = False
         return params
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:
