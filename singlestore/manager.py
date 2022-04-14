@@ -142,7 +142,7 @@ class Cluster(object):
 
     See Also
     --------
-    `ClusterManager.create_cluster`
+    :func:`ClusterManager.create_cluster`
 
     """
 

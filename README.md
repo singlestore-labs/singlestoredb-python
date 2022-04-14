@@ -15,11 +15,17 @@ This package can be install from PyPI using `pip`:
 pip install singlestore
 ```
 
+If you are using Anaconda, you can install with `conda`:
+```
+conda install -c singlestore singlestore
+```
+
 ## Usage
 
-Connections to the SingleStore database are made using URLs that specify
-the connection driver package, server hostname, server port, and user
-credentials.
+Connections to the SingleStore database are made using the DB-API parameters
+`host`, `port`, `user`, `password`, etc, but they may also be done using
+URLs that specify these parameters as well (much like the
+[SQLAlchemy](https://www.sqlalchemy.org) package).
 ```
 import singlestore as s2
 
@@ -44,7 +50,7 @@ conn.close()
 Connecting to the HTTP API is done as follows:
 ```
 # Use the HTTP API connector
-conn = s2.connect('http://user:password@host:8080/db_name')
+conn = s2.connect('https://user:password@host:8080/db_name')
 ```
 
 

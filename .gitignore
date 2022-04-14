@@ -72,7 +72,6 @@ Icon?
 Thumbs.db
 
 ## Documentation generated files
-doc/build
-doc/source/generated
+docs/_build/doctrees
 
 dask-worker-space
