@@ -155,7 +155,10 @@ class TestConfig(unittest.TestCase):
         self.assertRegex(out, r'\bcharset :')
 
     def test_suboptions(self):
-        self.assertEqual(list(sorted(get_suboptions('results').keys())), ['format'])
+        self.assertEqual(
+            list(sorted(get_suboptions('results').keys())),
+            ['arraysize', 'format'],
+        )
 
         with self.assertRaises(KeyError):
             get_suboptions('results.foo')

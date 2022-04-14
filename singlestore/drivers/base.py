@@ -49,6 +49,10 @@ class Driver(object):
 
     def __init__(self, **kwargs: Any):
         self._params = kwargs
+
+        # These converters get applied after the driver does its own
+        # conversions. This allows each driver to decide which conversions
+        # get handled internally and which get applied by this framework.
         self.converters: Dict[int, Callable[[Any], Any]] = {}
 
     def connect(self) -> Any:

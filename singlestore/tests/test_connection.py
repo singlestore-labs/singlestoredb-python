@@ -10,6 +10,8 @@ import unittest
 import uuid
 import warnings
 
+import pandas as pd
+
 import singlestore as s2
 from singlestore import connection as sc
 from singlestore.tests import utils
@@ -1526,6 +1528,45 @@ class TestConnection(unittest.TestCase):
                     row['text']
                 assert row['tinytext'] == 'This is a tinytext column.', \
                     row['tinytext']
+
+    def test_results_format(self):
+        columns = [
+            'id', 'tinyint', 'bool', 'boolean', 'smallint', 'mediumint',
+            'int24', 'int', 'integer', 'bigint', 'float', 'double', 'real',
+            'decimal', 'dec', 'fixed', 'numeric', 'date', 'time', 'time_6',
+            'datetime', 'datetime_6', 'timestamp', 'timestamp_6', 'year',
+            'char_100', 'binary_100', 'varchar_200', 'varbinary_200',
+            'longtext', 'mediumtext', 'text', 'tinytext', 'longblob',
+            'mediumblob', 'blob', 'tinyblob', 'json', 'enum', 'set', 'bit',
+        ]
+
+        with s2.connect(database=type(self).dbname, results_format='tuple') as conn:
+            with conn.cursor() as cur:
+                cur.execute('select * from alltypes')
+                out = cur.fetchall()
+                assert type(out[0]) is tuple, type(out[0])
+                assert len(out[0]) == len(columns), len(out[0])
+
+        with s2.connect(database=type(self).dbname, results_format='namedtuple') as conn:
+            with conn.cursor() as cur:
+                cur.execute('select * from alltypes')
+                out = cur.fetchall()
+                assert type(out[0]).__name__ == 'Row', type(out)
+                assert list(out[0]._fields) == columns, out[0]._fields
+
+        with s2.connect(database=type(self).dbname, results_format='dict') as conn:
+            with conn.cursor() as cur:
+                cur.execute('select * from alltypes')
+                out = cur.fetchall()
+                assert type(out[0]) is dict, type(out)
+                assert list(out[0].keys()) == columns, out[0].keys()
+
+        with s2.connect(database=type(self).dbname, results_format='dataframe') as conn:
+            with conn.cursor() as cur:
+                cur.execute('select * from alltypes')
+                out = cur.fetchall()
+                assert type(out) is pd.DataFrame, type(out)
+                assert list(out.columns) == columns, out.columns
 
 
 if __name__ == '__main__':

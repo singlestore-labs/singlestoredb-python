@@ -102,6 +102,8 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
     for name in inspect.getfullargspec(connect).args:
         if name == 'converters':
             out[name] = kwargs.get(name, {})
+        elif name == 'results_format':
+            out[name] = kwargs.get(name, get_option('results.format'))
         else:
             out[name] = kwargs.get(name, get_option(name))
 
@@ -286,8 +288,6 @@ class Cursor(object):
 
     """
 
-    arraysize: int = 100
-
     def __init__(
             self, connection: Connection, cursor: Any, driver: Driver,
     ):
@@ -297,9 +297,9 @@ class Cursor(object):
         self._driver = driver
         self.rownumber: Optional[int] = None
         self.description: Optional[List[Description]] = None
-        self.arraysize = type(self).arraysize
+        self.arraysize = get_option('results.arraysize')
         self._many_queries: Optional[Iterator[Any]] = None
-        self._format: str = get_option('results.format')
+        self._results_format: str = self._conn.results_format
         self._convetrers: List[
             Tuple[
                 int, Optional[str],
@@ -535,7 +535,11 @@ class Cursor(object):
         if out is not None:
             out = convert_row(tuple(out), self._converters)
 
-        return format_results(self._format, self.description or [], out, single=True)
+        return format_results(
+            self._results_format,
+            self.description or [],
+            out, single=True,
+        )
 
     def fetchmany(self, size: Optional[int] = None) -> Result:
         """
@@ -571,7 +575,7 @@ class Cursor(object):
         out = convert_rows(out, self._converters)
 
         formatted: Result = format_results(
-            self._format, self.description or [], out,
+            self._results_format, self.description or [], out,
         )
 
         if self.rownumber is not None:
@@ -602,7 +606,7 @@ class Cursor(object):
         out = convert_rows(out, self._converters)
 
         formatted: Result = format_results(
-            self._format, self.description or [], out,
+            self._results_format, self.description or [], out,
         )
 
         if self.rownumber is not None:
@@ -811,8 +815,13 @@ class Connection(object):
 
         self._conn: Optional[Any] = None
         self.errorhandler = None
+
         self.connection_params: Dict[str, Any] = build_params(**kwargs)
-        self.encoding = 'utf-8'
+        self.results_format = self.connection_params.pop(
+            'results_format',
+            get_option('results.format'),
+        )
+        self.encoding = self.connection_params.get('charset', 'utf-8').replace('mb4', '')
 
         drv_name = re.sub(r'^\w+\+', r'', self.connection_params['driver']).lower()
         self._driver = drivers.get_driver(drv_name, self.connection_params)
@@ -889,7 +898,7 @@ class Connection(object):
 
         """
         out = self.cursor()
-        out._format = 'tuple'
+        out._results_format = 'tuple'
         return out
 
     @property
@@ -1071,6 +1080,7 @@ def connect(
     ssl_key: Optional[str] = None, ssl_cert: Optional[str] = None,
     ssl_ca: Optional[str] = None, ssl_disabled: Optional[bool] = None,
     converters: Optional[Dict[int, Callable[..., Any]]] = None,
+    results_format: Optional[str] = None,
 ) -> Connection:
     """
     Return a SingleStore database connection.
@@ -1114,6 +1124,8 @@ def connect(
         Disable SSL usage
     converters : dict[int, Callable], optional
         Dictionary of data conversion functions
+    results_format : str, optional
+        Format of query results: tuple, namedtuple, dict, or dataframe
 
     Examples
     --------

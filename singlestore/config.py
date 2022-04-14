@@ -131,6 +131,12 @@ register_option(
     environ='SINGLESTORE_RESULTS_FORMAT',
 )
 
+register_option(
+    'results.arraysize', 'int', check_int, 100,
+    'Number of result rows to download in `fetchmany` calls',
+    environ='SINGLESTORE_RESULTS_ARRAYSIZE',
+)
+
 
 #
 # Cluster manager options
