@@ -73,5 +73,6 @@ Thumbs.db
 
 ## Documentation generated files
 docs/_build/doctrees
+docs/generated
 
 dask-worker-space
