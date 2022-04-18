@@ -7,6 +7,7 @@
   <title>singlestore.manage_cluster &mdash; SingleStore 0.1.0 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="../_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -18,7 +19,7 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="singlestore.manager.ClusterManager.clusters" href="singlestore.manager.ClusterManager.clusters.html" />
+    <link rel="next" title="singlestore.manager.ClusterManager" href="singlestore.manager.ClusterManager.html" />
     <link rel="prev" title="singlestore.connection.Cursor.is_connected" href="singlestore.connection.Cursor.is_connected.html" />
 </head>
 
@@ -89,18 +90,18 @@
 <h1>singlestore.manage_cluster<a class="headerlink" href="#singlestore-manage-cluster" title="Permalink to this headline">¶</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="singlestore.manage_cluster">
-<span class="sig-prename descclassname"><span class="pre">singlestore.</span></span><span class="sig-name descname"><span class="pre">manage_cluster</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">access_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'v0beta'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_url</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'https://api.singlestore.com'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">singlestore.manager.ClusterManager</span></span></span><a class="headerlink" href="#singlestore.manage_cluster" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">singlestore.</span></span><span class="sig-name descname"><span class="pre">manage_cluster</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">access_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.10)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'v0beta'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_url</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'https://api.singlestore.com'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="singlestore.manager.ClusterManager.html#singlestore.manager.ClusterManager" title="singlestore.manager.ClusterManager"><span class="pre">singlestore.manager.ClusterManager</span></a></span></span><a class="headerlink" href="#singlestore.manage_cluster" title="Permalink to this definition">¶</a></dt>
 <dd><p>Retrieve a SingleStore cluster manager.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>access_token</strong> (<em>str</em><em>, </em><em>optional</em>) – The API key or other access token for the cluster management API</p></li>
-<li><p><strong>version</strong> (<em>str</em><em>, </em><em>optional</em>) – Version of the API to use</p></li>
-<li><p><strong>base_url</strong> (<em>str</em><em>, </em><em>optional</em>) – Base URL of the cluster management API</p></li>
+<li><p><strong>access_token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><em>str</em></a><em>, </em><em>optional</em>) – The API key or other access token for the cluster management API</p></li>
+<li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><em>str</em></a><em>, </em><em>optional</em>) – Version of the API to use</p></li>
+<li><p><strong>base_url</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><em>str</em></a><em>, </em><em>optional</em>) – Base URL of the cluster management API</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type</dt>
-<dd class="field-even"><p>ClusterManager</p>
+<dd class="field-even"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">ClusterManager</span></code></p>
 </dd>
 </dl>
 </dd></dl>
@@ -112,7 +113,7 @@
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="singlestore.connection.Cursor.is_connected.html" class="btn btn-neutral float-left" title="singlestore.connection.Cursor.is_connected" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="singlestore.manager.ClusterManager.clusters.html" class="btn btn-neutral float-right" title="singlestore.manager.ClusterManager.clusters" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="singlestore.manager.ClusterManager.html" class="btn btn-neutral float-right" title="singlestore.manager.ClusterManager" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

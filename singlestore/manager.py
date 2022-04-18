@@ -53,21 +53,23 @@ class Region(object):
     This object is not directly instantiated. It is used in results
     of `ClusterManager` API calls.
 
-    Parameters
-    ----------
-    region_id : str
-        Unique ID of the region
-    region : str
-        Name of the region
-    provider : str
-        Name of the cloud provider
+    See Also
+    --------
+    :attr:`ClusterManager.regions`
 
     """
 
     def __init__(self, region_id: str, region: str, provider: str):
+        """Use :attr:`ClusterManager.regions` instead."""
+        #: Unique ID of the region
         self.id = region_id
+
+        #: Name of the region
         self.region = region
+
+        #: Name of the cloud provider
         self.provider = provider
+
         self._manager: Optional[ClusterManager] = None
 
     def __str__(self) -> str:
@@ -81,7 +83,7 @@ class Region(object):
     @classmethod
     def from_dict(cls, obj: Dict[str, str], manager: 'ClusterManager') -> Region:
         """
-        Convert dictionary to a `Region` object.
+        Convert dictionary to a ``Region`` object.
 
         Parameters
         ----------
@@ -92,7 +94,7 @@ class Region(object):
 
         Returns
         -------
-        Region
+        :class:`Region`
 
         """
         out = cls(
@@ -109,40 +111,15 @@ class Cluster(object):
     SingleStore cluster definition.
 
     This object is not instantiated directly. It is used in the results
-    of API calls on the `ClusterManager`.
-
-    Parameters
-    ----------
-    name : str
-        Name of the cluster
-    cluster_id : str
-        Unique ID of the cluster
-    region : Region
-        The region of the cluster
-    size : str
-        Cluster size in cluster size notation (S-00, S-1, etc.)
-    units : float
-        Size of the cluster in units such as 0.25, 1.0, etc.
-    state : str
-        State of the cluster: PendingCreation, Transitioning, Active,
-        Terminated, Suspended, Resuming, Failed
-    version : str
-        The SingleStore version
-    created_at : str or datetime.datetime
-        Timestamp of when the cluster was created
-    expires_at : str or datetime.datetime, optional
-        Timestamp of when the cluster expires
-    firewall_ranges : Sequence[str], optional
-        List of allowed incoming IP addresses
-    terminated_at : str or datetime.datetime, optional
-        Timestamp of when the cluster was terminated
-    endpoint : str, optional
-        The hostname (or IP address) and port number of the cluster server
-        in the form hostname:port
+    of API calls on the :class:`ClusterManager`. Clusters are created using
+    :meth:`ClusterManager.create_cluster`, or existing clusters are accessed by either
+    :attr:`ClusterManager.clusters` or by calling :meth:`ClusterManager.get_cluster`.
 
     See Also
     --------
-    :func:`ClusterManager.create_cluster`
+    :meth:`ClusterManager.create_cluster`
+    :meth:`ClusterManager.get_cluster`
+    :attr:`ClusterManager.clusters`
 
     """
 
@@ -155,18 +132,44 @@ class Cluster(object):
         terminated_at: Optional[Union[str, datetime.datetime]] = None,
         endpoint: Optional[str] = None,
     ):
+        """Use :attr:`ClusterManager.clusters` or :meth:`ClusterManager.get_cluster`."""
+        #: Name of the cluster
         self.name = name.strip()
+
+        #: Unique ID of the cluster
         self.id = cluster_id.strip()
+
+        #: Region of the cluster (see :class:`Region`)
         self.region = region
+
+        #: Size of the cluster in cluster size notation (S-00, S-1, etc.)
         self.size = size
+
+        #: Size of the cluster in units such as 0.25, 1.0, etc.
         self.units = units
+
+        #: State of the cluster: PendingCreation, Transitioning, Active,
+        #: Terminated, Suspended, Resuming, Failed
         self.state = state.strip()
+
+        #: Version of the SingleStore server
         self.version = version.strip()
+
+        #: Timestamp of when the cluster was created
         self.created_at = to_datetime(created_at)
+
+        #: Timestamp of when the cluster expires
         self.expires_at = to_datetime(expires_at)
+
+        #: List of allowed incoming IP addresses / ranges
         self.firewall_ranges = firewall_ranges
+
+        #: Timestamp of when the cluster was terminated
         self.terminated_at = to_datetime(terminated_at)
+
+        #: Hostname (or IP address) of the cluster database server
         self.endpoint = endpoint
+
         self._manager: Optional[ClusterManager] = None
 
     def __str__(self) -> str:
@@ -191,7 +194,7 @@ class Cluster(object):
 
         Returns
         -------
-        Cluster
+        :class:`Cluster`
 
         """
         out = cls(
@@ -346,6 +349,8 @@ class ClusterManager(object):
     """
     SingleStore cluster manager.
 
+    This class should be instantiated using :func:`singlestore.manage_cluster`.
+
     Parameters
     ----------
     access_token : str, optional
@@ -355,9 +360,16 @@ class ClusterManager(object):
     base_url : str, optional
         Base URL of the cluster management API
 
+    See Also
+    --------
+    :func:`singlestore.manage_cluster`
+
     """
 
+    #: Cluster management API version if none is specified.
     default_version = 'v0beta'
+
+    #: Base URL if none is specified.
     default_base_url = 'https://api.singlestore.com'
 
     def __init__(
@@ -547,7 +559,7 @@ class ClusterManager(object):
 
         Returns
         -------
-        Cluster
+        :class:`Cluster`
 
         """
         res = self._post(
@@ -588,7 +600,7 @@ class ClusterManager(object):
 
         Returns
         -------
-        Cluster
+        :class:`Cluster`
 
         """
         states = [
@@ -619,7 +631,7 @@ class ClusterManager(object):
 
         Returns
         -------
-        Cluster
+        :class:`Cluster`
 
         """
         res = self._get(f'clusters/{cluster_id}')
@@ -645,7 +657,7 @@ def manage_cluster(
 
     Returns
     -------
-    ClusterManager
+    :class:`ClusterManager`
 
     """
     return ClusterManager(access_token=access_token, base_url=base_url, version=version)

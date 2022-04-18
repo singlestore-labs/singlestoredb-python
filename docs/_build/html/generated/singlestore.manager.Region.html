@@ -7,6 +7,7 @@
   <title>singlestore.manager.Region &mdash; SingleStore 0.1.0 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="../_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -92,23 +93,19 @@
 <h1>singlestore.manager.Region<a class="headerlink" href="#singlestore-manager-region" title="Permalink to this headline">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="singlestore.manager.Region">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">singlestore.manager.</span></span><span class="sig-name descname"><span class="pre">Region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">region_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">region</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">provider</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestore.manager.Region" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">singlestore.manager.</span></span><span class="sig-name descname"><span class="pre">Region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">region_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">region</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">provider</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestore.manager.Region" title="Permalink to this definition">¶</a></dt>
 <dd><p>Cluster region information.</p>
 <p>This object is not directly instantiated. It is used in results
 of <cite>ClusterManager</cite> API calls.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>region_id</strong> (<em>str</em>) – Unique ID of the region</p></li>
-<li><p><strong>region</strong> (<em>str</em>) – Name of the region</p></li>
-<li><p><strong>provider</strong> (<em>str</em>) – Name of the cloud provider</p></li>
-</ul>
-</dd>
-</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="singlestore.manager.ClusterManager.regions.html#singlestore.manager.ClusterManager.regions" title="singlestore.manager.ClusterManager.regions"><code class="xref py py-attr docutils literal notranslate"><span class="pre">ClusterManager.regions</span></code></a></p>
+</div>
 <dl class="py method">
 <dt class="sig sig-object py" id="singlestore.manager.Region.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">region_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">region</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">provider</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestore.manager.Region.__init__" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">region_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">region</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">provider</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestore.manager.Region.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Use <a class="reference internal" href="singlestore.manager.ClusterManager.regions.html#singlestore.manager.ClusterManager.regions" title="singlestore.manager.ClusterManager.regions"><code class="xref py py-attr docutils literal notranslate"><span class="pre">ClusterManager.regions</span></code></a> instead.</p>
+</dd></dl>
 
 <p class="rubric">Methods</p>
 <table class="longtable docutils align-default">
@@ -118,10 +115,28 @@ of <cite>ClusterManager</cite> API calls.</p>
 </colgroup>
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#singlestore.manager.Region.__init__" title="singlestore.manager.Region.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(region_id, region, provider)</p></td>
-<td><p></p></td>
+<td><p>Use <a class="reference internal" href="singlestore.manager.ClusterManager.regions.html#singlestore.manager.ClusterManager.regions" title="singlestore.manager.ClusterManager.regions"><code class="xref py py-attr docutils literal notranslate"><span class="pre">ClusterManager.regions</span></code></a> instead.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_dict</span></code>(obj, manager)</p></td>
-<td><p>Convert dictionary to a <cite>Region</cite> object.</p></td>
+<td><p>Convert dictionary to a <code class="docutils literal notranslate"><span class="pre">Region</span></code> object.</p></td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Attributes</p>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">id</span></code></p></td>
+<td><p>Unique ID of the region</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">region</span></code></p></td>
+<td><p>Name of the region</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">provider</span></code></p></td>
+<td><p>Name of the cloud provider</p></td>
 </tr>
 </tbody>
 </table>

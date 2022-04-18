@@ -225,7 +225,7 @@ def set_option(*args: Any, **kwargs: Any) -> None:
 
     Parameters
     ----------
-    *args : str / any pairs
+    *args : str or Any
         The name and value of an option in consecutive arguments (not tuples)
     **kwargs : dict
         Arbitrary keyword / value pairs
@@ -315,6 +315,9 @@ get_default_val = get_default
 def describe_option(*keys: str, **kwargs: Any) -> Optional[str]:
     """
     Print the description of one or more options.
+
+    To print the descriptions of all options, execute this function
+    with no parameters.
 
     Parameters
     ----------

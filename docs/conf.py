@@ -39,6 +39,7 @@ extensions = [
     'sphinx.ext.githubpages',
     'IPython.sphinxext.ipython_directive',
     'IPython.sphinxext.ipython_console_highlighting',
+    'sphinx.ext.intersphinx',
 ]
 
 autosummary_generate = True
@@ -69,9 +70,13 @@ import sphinx_rtd_theme  # noqa: E402
 
 html_theme = 'sphinx_rtd_theme'
 
-# html_context = {
-#    'css_files': ['_static/custom.css'],
-# }
+html_context = {
+    'css_files': [
+        '_static/pygments.css',
+        '_static/css/theme.css',
+        '_static/custom.css',
+    ],
+}
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the

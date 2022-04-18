@@ -7,6 +7,7 @@
   <title>Getting Started &mdash; SingleStore 0.1.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -45,7 +46,24 @@
 <li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="whatsnew.html">What’s New</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Getting Started</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#executing-queries">Executing Queries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#executing-queries">Executing Queries</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#parameter-substitution">Parameter Substitution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#named-substitution">Named Substitution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#numeric-substitution">Numeric Substitution</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#fetching-results">Fetching Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#result-formats">Result Formats</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#tuples-default">Tuples (Default)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#named-tuples">Named Tuples</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#dictionaries">Dictionaries</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#dataframes">DataFrames</a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
@@ -95,23 +113,164 @@ the Python DB-API.</p>
 <div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [4]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;https://user:password@host:port/database&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>Connection parameters can be set either in the URL or
+as parameters. Here <code class="docutils literal notranslate"><span class="pre">local_infile=</span></code> is set as a URL parameter.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [5]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;https://user:password@host:port/database?local_infile=True&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In this example, <code class="docutils literal notranslate"><span class="pre">local_infile=</span></code> and user credentials are specified
+as keyword parameters.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [6]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;https://host:port/database&#39;</span><span class="p">,</span> <span class="n">user</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">,</span>
+<span class="gp">   ...: </span>                  <span class="n">local_infile</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">   ...: </span>
+</pre></div>
+</div>
 <section id="executing-queries">
 <h2>Executing Queries<a class="headerlink" href="#executing-queries" title="Permalink to this headline">¶</a></h2>
 <p>Once you have a connection established, you can query the database.
 As defined in the DB-API, a cursor is used to execute queries and fetch
 the results.</p>
-<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [5]: </span><span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [7]: </span><span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
 <span class="gp">   ...: </span>     <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
 <span class="gp">   ...: </span>     <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
-<span class="gp">   ...: </span>         <span class="nb">print</span><span class="p">(</span><span class="o">*</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ...: </span>         <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
 <span class="gp">   ...: </span>
-<span class="go">auto_attach ON</span>
-<span class="go">auto_increment_increment 1</span>
-<span class="go">auto_increment_offset 1</span>
-<span class="go">auto_replicate OFF</span>
-<span class="go">autocommit OFF</span>
+<span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
+<span class="go">(&#39;autocommit&#39;, &#39;OFF&#39;)</span>
 </pre></div>
 </div>
+<section id="parameter-substitution">
+<h3>Parameter Substitution<a class="headerlink" href="#parameter-substitution" title="Permalink to this headline">¶</a></h3>
+<p>If your queries require parameter substitutions, they can be specified in
+one of two formats: named (<code class="docutils literal notranslate"><span class="pre">:varname</span></code>) or numbered (<code class="docutils literal notranslate"><span class="pre">:1</span></code>).</p>
+<section id="named-substitution">
+<h4>Named Substitution<a class="headerlink" href="#named-substitution" title="Permalink to this headline">¶</a></h4>
+<p>When named parameters
+are used, the data structure passed to the <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.execute()</span></code> method
+must be a dictionary, where the keys map to the names given in the substitutions
+and the values are the values to substitute.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [8]: </span><span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ...: </span>    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like :pattern&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">pattern</span><span class="o">=</span><span class="s1">&#39;auto%&#39;</span><span class="p">))</span>
+<span class="gp">   ...: </span>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+<span class="gp">   ...: </span>        <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ...: </span>
+<span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
+<span class="go">(&#39;autocommit&#39;, &#39;OFF&#39;)</span>
+</pre></div>
+</div>
+</section>
+<section id="numeric-substitution">
+<h4>Numeric Substitution<a class="headerlink" href="#numeric-substitution" title="Permalink to this headline">¶</a></h4>
+<p>If numbered parameters are used, the data structure passed to the
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.execute()</span></code> method must be a list or tuple, where the substitution
+numbers correspond to the 1-based position in the list / tuple.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [9]: </span><span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ...: </span>    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like :1&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;auto%&#39;</span><span class="p">])</span>
+<span class="gp">   ...: </span>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+<span class="gp">   ...: </span>        <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ...: </span>
+<span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
+<span class="go">(&#39;autocommit&#39;, &#39;OFF&#39;)</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<section id="fetching-results">
+<h2>Fetching Results<a class="headerlink" href="#fetching-results" title="Permalink to this headline">¶</a></h2>
+<p>Fetching results can be done in a number of ways. The DB-API specifies three methods
+that can be used to fetch results: <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchone()</span></code>, <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchall()</span></code>,
+and <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchmany()</span></code>.</p>
+<p>The <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchone()</span></code> method fetches a single row of data returned by a query.
+The <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchall()</span></code> method fetches all of the results of a query. The
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchmany()</span></code> method fetches a specified number of rows to retrieve.
+The choice of which one to use depends mostly on the expected size of the result.
+If the result is expected to be fairly small, fetching the entire result in one
+call may be fine. However, if the query result will be large enough to put a strain
+on the client computer’s memory, it may be a better idea to fetch smaller batches
+using <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchmany()</span></code>.</p>
+<section id="result-formats">
+<h3>Result Formats<a class="headerlink" href="#result-formats" title="Permalink to this headline">¶</a></h3>
+<p>In addition to being able to specify the amount of data to be retrieved, you can also
+specify the data structure that the results are returned in. By default, each row of
+data is a tuple with one element per column from the query. However, it is also possible
+to get results back as named tuples, dicts, or <a class="reference external" href="https://pandas.pydata.org/pandas-docs/version/0.19.2/generated/pandas.DataFrame.html#pandas.DataFrame" title="(in pandas v0.19.2)"><code class="xref py py-class docutils literal notranslate"><span class="pre">pandas.DataFrame</span></code></a>.</p>
+<section id="tuples-default">
+<h4>Tuples (Default)<a class="headerlink" href="#tuples-default" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [10]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_format</span><span class="o">=</span><span class="s1">&#39;tuple&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+<span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
+<span class="gp">   ....: </span>        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+<span class="gp">   ....: </span>            <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ....: </span>
+<span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
+<span class="go">(&#39;autocommit&#39;, &#39;OFF&#39;)</span>
+</pre></div>
+</div>
+</section>
+<section id="named-tuples">
+<h4>Named Tuples<a class="headerlink" href="#named-tuples" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [11]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_format</span><span class="o">=</span><span class="s1">&#39;namedtuple&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+<span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
+<span class="gp">   ....: </span>        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+<span class="gp">   ....: </span>            <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ....: </span>
+<span class="go">Row(Variable_name=&#39;auto_attach&#39;, Value=&#39;ON&#39;)</span>
+<span class="go">Row(Variable_name=&#39;auto_increment_increment&#39;, Value=&#39;1&#39;)</span>
+<span class="go">Row(Variable_name=&#39;auto_increment_offset&#39;, Value=&#39;1&#39;)</span>
+<span class="go">Row(Variable_name=&#39;auto_replicate&#39;, Value=&#39;OFF&#39;)</span>
+<span class="go">Row(Variable_name=&#39;autocommit&#39;, Value=&#39;OFF&#39;)</span>
+</pre></div>
+</div>
+</section>
+<section id="dictionaries">
+<h4>Dictionaries<a class="headerlink" href="#dictionaries" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [12]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_format</span><span class="o">=</span><span class="s1">&#39;dict&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+<span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
+<span class="gp">   ....: </span>        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+<span class="gp">   ....: </span>            <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ....: </span>
+<span class="go">{&#39;Variable_name&#39;: &#39;auto_attach&#39;, &#39;Value&#39;: &#39;ON&#39;}</span>
+<span class="go">{&#39;Variable_name&#39;: &#39;auto_increment_increment&#39;, &#39;Value&#39;: &#39;1&#39;}</span>
+<span class="go">{&#39;Variable_name&#39;: &#39;auto_increment_offset&#39;, &#39;Value&#39;: &#39;1&#39;}</span>
+<span class="go">{&#39;Variable_name&#39;: &#39;auto_replicate&#39;, &#39;Value&#39;: &#39;OFF&#39;}</span>
+<span class="go">{&#39;Variable_name&#39;: &#39;autocommit&#39;, &#39;Value&#39;: &#39;OFF&#39;}</span>
+</pre></div>
+</div>
+</section>
+<section id="dataframes">
+<h4>DataFrames<a class="headerlink" href="#dataframes" title="Permalink to this headline">¶</a></h4>
+<p>Note that in this example, we do not loop through the rows to print each one
+separately. The entire result of <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchall()</span></code> is a <code class="docutils literal notranslate"><span class="pre">DataFrame</span></code>.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [13]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_format</span><span class="o">=</span><span class="s1">&#39;dataframe&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+<span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
+<span class="gp">   ....: </span>        <span class="nb">print</span><span class="p">(</span><span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
+<span class="gp">   ....: </span>
+<span class="go">              Variable_name Value</span>
+<span class="go">0               auto_attach    ON</span>
+<span class="go">1  auto_increment_increment     1</span>
+<span class="go">2     auto_increment_offset     1</span>
+<span class="go">3            auto_replicate   OFF</span>
+<span class="go">4                autocommit   OFF</span>
+</pre></div>
+</div>
+</section>
+</section>
 </section>
 </section>
 

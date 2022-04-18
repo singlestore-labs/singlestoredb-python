@@ -7,6 +7,7 @@
   <title>API Reference &mdash; SingleStore 0.1.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -49,21 +50,19 @@
 <li class="toctree-l2"><a class="reference internal" href="#connections">Connections</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="generated/singlestore.connect.html">singlestore.connect</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#connection">Connection</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.html">Connection</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.autocommit.html">Connection.autocommit</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.close.html">Connection.close</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.commit.html">Connection.commit</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.rollback.html">Connection.rollback</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.cursor.html">Connection.cursor</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.is_connected.html">Connection.is_connected</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.set_global_var.html">Connection.set_global_var</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.get_global_var.html">Connection.get_global_var</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.set_session_var.html">Connection.set_session_var</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.get_session_var.html">Connection.get_session_var</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.enable_http_api.html">Connection.enable_http_api</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.disable_http_api.html">Connection.disable_http_api</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#cursor">Cursor</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.html">Cursor</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.callproc.html">Cursor.callproc</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.close.html">Cursor.close</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.execute.html">Cursor.execute</a></li>
@@ -84,6 +83,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#cluster-management">Cluster Management</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="generated/singlestore.manage_cluster.html">singlestore.manage_cluster</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#clustermanager">ClusterManager</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.manager.ClusterManager.html">ClusterManager</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.manager.ClusterManager.clusters.html">ClusterManager.clusters</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.manager.ClusterManager.regions.html">ClusterManager.regions</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.manager.ClusterManager.create_cluster.html">ClusterManager.create_cluster</a></li>
@@ -169,40 +169,31 @@ used to create <code class="xref py py-class docutils literal notranslate"><span
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.autocommit.html#singlestore.connection.Connection.autocommit" title="singlestore.connection.Connection.autocommit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.autocommit</span></code></a>([value])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.html#singlestore.connection.Connection" title="singlestore.connection.Connection"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection</span></code></a>(**kwargs)</p></td>
+<td><p>SingleStore database connection.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.autocommit.html#singlestore.connection.Connection.autocommit" title="singlestore.connection.Connection.autocommit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.autocommit</span></code></a>([value])</p></td>
 <td><p>Set autocommit mode.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.close.html#singlestore.connection.Connection.close" title="singlestore.connection.Connection.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.close</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.close.html#singlestore.connection.Connection.close" title="singlestore.connection.Connection.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.close</span></code></a>()</p></td>
 <td><p>Close the database connection.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.commit.html#singlestore.connection.Connection.commit" title="singlestore.connection.Connection.commit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.commit</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.commit.html#singlestore.connection.Connection.commit" title="singlestore.connection.Connection.commit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.commit</span></code></a>()</p></td>
 <td><p>Commit the pending transaction.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.rollback.html#singlestore.connection.Connection.rollback" title="singlestore.connection.Connection.rollback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.rollback</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.rollback.html#singlestore.connection.Connection.rollback" title="singlestore.connection.Connection.rollback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.rollback</span></code></a>()</p></td>
 <td><p>Rollback the pending transaction.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.cursor.html#singlestore.connection.Connection.cursor" title="singlestore.connection.Connection.cursor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.cursor</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.cursor.html#singlestore.connection.Connection.cursor" title="singlestore.connection.Connection.cursor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.cursor</span></code></a>()</p></td>
 <td><p>Create a new cursor object.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.is_connected.html#singlestore.connection.Connection.is_connected" title="singlestore.connection.Connection.is_connected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.is_connected</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.is_connected.html#singlestore.connection.Connection.is_connected" title="singlestore.connection.Connection.is_connected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.is_connected</span></code></a>()</p></td>
 <td><p>Determine if the database is still connected.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.set_global_var.html#singlestore.connection.Connection.set_global_var" title="singlestore.connection.Connection.set_global_var"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.set_global_var</span></code></a>(**kwargs)</p></td>
-<td><p>Set one or more global variables in the database.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.get_global_var.html#singlestore.connection.Connection.get_global_var" title="singlestore.connection.Connection.get_global_var"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.get_global_var</span></code></a>(name)</p></td>
-<td><p>Retrieve the value of a global variable.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.set_session_var.html#singlestore.connection.Connection.set_session_var" title="singlestore.connection.Connection.set_session_var"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.set_session_var</span></code></a>(**kwargs)</p></td>
-<td><p>Set one or more session variables in the database.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.get_session_var.html#singlestore.connection.Connection.get_session_var" title="singlestore.connection.Connection.get_session_var"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.get_session_var</span></code></a>(name)</p></td>
-<td><p>Retrieve the value of a session variable.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.enable_http_api.html#singlestore.connection.Connection.enable_http_api" title="singlestore.connection.Connection.enable_http_api"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.enable_http_api</span></code></a>([port])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.enable_http_api.html#singlestore.connection.Connection.enable_http_api" title="singlestore.connection.Connection.enable_http_api"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.enable_http_api</span></code></a>([port])</p></td>
 <td><p>Enable the HTTP API in the server.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.disable_http_api.html#singlestore.connection.Connection.disable_http_api" title="singlestore.connection.Connection.disable_http_api"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.disable_http_api</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.disable_http_api.html#singlestore.connection.Connection.disable_http_api" title="singlestore.connection.Connection.disable_http_api"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.disable_http_api</span></code></a>()</p></td>
 <td><p>Disable the HTTP API.</p></td>
 </tr>
 </tbody>
@@ -218,43 +209,46 @@ created using the <a class="reference internal" href="generated/singlestore.conn
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.callproc.html#singlestore.connection.Cursor.callproc" title="singlestore.connection.Cursor.callproc"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.callproc</span></code></a>(name[, params])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.html#singlestore.connection.Cursor" title="singlestore.connection.Cursor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor</span></code></a>(connection, cursor, driver)</p></td>
+<td><p>Database cursor for submitting commands and queries.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.callproc.html#singlestore.connection.Cursor.callproc" title="singlestore.connection.Cursor.callproc"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.callproc</span></code></a>(name[, params])</p></td>
 <td><p>Call a stored procedure.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.close.html#singlestore.connection.Cursor.close" title="singlestore.connection.Cursor.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.close</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.close.html#singlestore.connection.Cursor.close" title="singlestore.connection.Cursor.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.close</span></code></a>()</p></td>
 <td><p>Close the cursor.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.execute.html#singlestore.connection.Cursor.execute" title="singlestore.connection.Cursor.execute"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.execute</span></code></a>(oper[, params])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.execute.html#singlestore.connection.Cursor.execute" title="singlestore.connection.Cursor.execute"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.execute</span></code></a>(oper[, params])</p></td>
 <td><p>Execute a SQL statement.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.executemany.html#singlestore.connection.Cursor.executemany" title="singlestore.connection.Cursor.executemany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.executemany</span></code></a>(oper[, param_seq])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.executemany.html#singlestore.connection.Cursor.executemany" title="singlestore.connection.Cursor.executemany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.executemany</span></code></a>(oper[, param_seq])</p></td>
 <td><p>Execute SQL code against multiple sets of parameters.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.fetchone.html#singlestore.connection.Cursor.fetchone" title="singlestore.connection.Cursor.fetchone"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchone</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.fetchone.html#singlestore.connection.Cursor.fetchone" title="singlestore.connection.Cursor.fetchone"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchone</span></code></a>()</p></td>
 <td><p>Fetch a single row from the result set.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.fetchmany.html#singlestore.connection.Cursor.fetchmany" title="singlestore.connection.Cursor.fetchmany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchmany</span></code></a>([size])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.fetchmany.html#singlestore.connection.Cursor.fetchmany" title="singlestore.connection.Cursor.fetchmany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchmany</span></code></a>([size])</p></td>
 <td><p>Fetch <cite>size</cite> rows from the result.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.fetchall.html#singlestore.connection.Cursor.fetchall" title="singlestore.connection.Cursor.fetchall"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchall</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.fetchall.html#singlestore.connection.Cursor.fetchall" title="singlestore.connection.Cursor.fetchall"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchall</span></code></a>()</p></td>
 <td><p>Fetch all rows in the result set.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.nextset.html#singlestore.connection.Cursor.nextset" title="singlestore.connection.Cursor.nextset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.nextset</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.nextset.html#singlestore.connection.Cursor.nextset" title="singlestore.connection.Cursor.nextset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.nextset</span></code></a>()</p></td>
 <td><p>Skip to the next available result set.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.setinputsizes.html#singlestore.connection.Cursor.setinputsizes" title="singlestore.connection.Cursor.setinputsizes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.setinputsizes</span></code></a>(sizes)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.setinputsizes.html#singlestore.connection.Cursor.setinputsizes" title="singlestore.connection.Cursor.setinputsizes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.setinputsizes</span></code></a>(sizes)</p></td>
 <td><p>Predefine memory areas for parameters.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.setoutputsize.html#singlestore.connection.Cursor.setoutputsize" title="singlestore.connection.Cursor.setoutputsize"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.setoutputsize</span></code></a>(size[, column])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.setoutputsize.html#singlestore.connection.Cursor.setoutputsize" title="singlestore.connection.Cursor.setoutputsize"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.setoutputsize</span></code></a>(size[, column])</p></td>
 <td><p>Set a column buffer size for fetches of large columns.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.scroll.html#singlestore.connection.Cursor.scroll" title="singlestore.connection.Cursor.scroll"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.scroll</span></code></a>(value[, mode])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.scroll.html#singlestore.connection.Cursor.scroll" title="singlestore.connection.Cursor.scroll"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.scroll</span></code></a>(value[, mode])</p></td>
 <td><p>Scroll the cursor to the position in the result set.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.next.html#singlestore.connection.Cursor.next" title="singlestore.connection.Cursor.next"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.next</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.next.html#singlestore.connection.Cursor.next" title="singlestore.connection.Cursor.next"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.next</span></code></a>()</p></td>
 <td><p>Return the next row from the result set for use in iterators.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.is_connected.html#singlestore.connection.Cursor.is_connected" title="singlestore.connection.Cursor.is_connected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.is_connected</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.is_connected.html#singlestore.connection.Cursor.is_connected" title="singlestore.connection.Cursor.is_connected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.is_connected</span></code></a>()</p></td>
 <td><p>Check if the cursor is connected.</p></td>
 </tr>
 </tbody>
@@ -287,16 +281,19 @@ create new ones.</p>
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.manager.ClusterManager.clusters.html#singlestore.manager.ClusterManager.clusters" title="singlestore.manager.ClusterManager.clusters"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.clusters</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.manager.ClusterManager.html#singlestore.manager.ClusterManager" title="singlestore.manager.ClusterManager"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager</span></code></a>([access_token, version, base_url])</p></td>
+<td><p>SingleStore cluster manager.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.manager.ClusterManager.clusters.html#singlestore.manager.ClusterManager.clusters" title="singlestore.manager.ClusterManager.clusters"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.clusters</span></code></a></p></td>
 <td><p>Return a list of available clusters.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.manager.ClusterManager.regions.html#singlestore.manager.ClusterManager.regions" title="singlestore.manager.ClusterManager.regions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.regions</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.manager.ClusterManager.regions.html#singlestore.manager.ClusterManager.regions" title="singlestore.manager.ClusterManager.regions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.regions</span></code></a></p></td>
 <td><p>Return a list of available regions.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.manager.ClusterManager.create_cluster.html#singlestore.manager.ClusterManager.create_cluster" title="singlestore.manager.ClusterManager.create_cluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.create_cluster</span></code></a>(name, ...[, ...])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.manager.ClusterManager.create_cluster.html#singlestore.manager.ClusterManager.create_cluster" title="singlestore.manager.ClusterManager.create_cluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.create_cluster</span></code></a>(name, ...[, ...])</p></td>
 <td><p>Create a new cluster.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.manager.ClusterManager.get_cluster.html#singlestore.manager.ClusterManager.get_cluster" title="singlestore.manager.ClusterManager.get_cluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.get_cluster</span></code></a>(cluster_id)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.manager.ClusterManager.get_cluster.html#singlestore.manager.ClusterManager.get_cluster" title="singlestore.manager.ClusterManager.get_cluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.get_cluster</span></code></a>(cluster_id)</p></td>
 <td><p>Retrieve a cluster definition.</p></td>
 </tr>
 </tbody>
@@ -355,8 +352,8 @@ by retrieving an element from <code class="xref py py-attr docutils literal notr
 <section id="configuration">
 <h2>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h2>
 <p>The following functions are used to get and set package configuration settings.
-Execute the <code class="xref py py-func docutils literal notranslate"><span class="pre">describe_option()</span></code> function with no parameters to see the
-documentation for all options.</p>
+Execute the <a class="reference internal" href="generated/singlestore.describe_option.html#singlestore.describe_option" title="singlestore.describe_option"><code class="xref py py-func docutils literal notranslate"><span class="pre">singlestore.describe_option()</span></code></a> function with no parameters to
+see the documentation for all options.</p>
 <table class="longtable docutils align-default">
 <colgroup>
 <col style="width: 10%" />
@@ -374,6 +371,29 @@ documentation for all options.</p>
 </tr>
 </tbody>
 </table>
+<p>In addition to the function above, you can access options through the
+<code class="docutils literal notranslate"><span class="pre">singlestore.options</span></code> object. This gives you attribute-like access to the option
+values.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [1]: </span><span class="kn">import</span> <span class="nn">singlestore</span> <span class="k">as</span> <span class="nn">s2</span>
+
+<span class="gp">In [2]: </span><span class="n">s2</span><span class="o">.</span><span class="n">describe_option</span><span class="p">(</span><span class="s1">&#39;results.format&#39;</span><span class="p">)</span>
+<span class="go">results.format : string</span>
+<span class="go">    What form should the query results take?</span>
+<span class="go">    [default: tuple] [currently: tuple]</span>
+
+
+
+<span class="gp">In [3]: </span><span class="n">s2</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">format</span>
+<span class="gh">Out[3]: </span><span class="go">&#39;tuple&#39;</span>
+
+<span class="gp">In [4]: </span><span class="n">s2</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">format</span> <span class="o">=</span> <span class="s1">&#39;namedtuple&#39;</span>
+
+<span class="gp">In [5]: </span><span class="n">s2</span><span class="o">.</span><span class="n">describe_option</span><span class="p">(</span><span class="s1">&#39;results.format&#39;</span><span class="p">)</span>
+<span class="go">results.format : string</span>
+<span class="go">    What form should the query results take?</span>
+<span class="go">    [default: tuple] [currently: namedtuple]</span>
+</pre></div>
+</div>
 </section>
 </section>
 

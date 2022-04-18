@@ -346,34 +346,29 @@ class Cursor(object):
     Database cursor for submitting commands and queries.
 
     This object should not be instantiated directly.
-    The `Connection.cursor` method should be used.
-
-    Parameters
-    ----------
-    connection : Connection
-        The connection the cursor belongs to
-    cursor : Cursor
-        The Cursor object from the underlying MySQL package
-    driver : Driver
-        Driver of the current database connector
-
-    Returns
-    -------
-    Cursor
+    The ``Connection.cursor`` method should be used.
 
     """
 
     def __init__(
             self, connection: Connection, cursor: Any, driver: Driver,
     ):
+        """Call ``Connection.cursor`` instead."""
         self.errorhandler = connection.errorhandler
         self._results_format: str = connection.results_format
         self._conn: Optional[Connection] = weakref.proxy(connection)
         self._cursor = cursor
         self._driver = driver
+
+        #: Current row of the cursor.
         self.rownumber: Optional[int] = None
+
+        #: Description of columns in the last executed query.
         self.description: Optional[List[Description]] = None
+
+        #: Default batch size of ``fetchmany`` calls.
         self.arraysize = get_option('results.arraysize')
+
         self._many_queries: Optional[Iterator[Any]] = None
         self._converters: List[
             Tuple[
@@ -851,21 +846,12 @@ class Connection(object):
     SingleStore database connection.
 
     Instances of this object are typically created through the
-    `connect` function rather than creating them directly.
-    See the `connect` function for parameter definitions.
-
-
-    Examples
-    --------
-    # Standard database connection
-    >>> conn = s2.connect('me:p455w0rd@s2-host.com/my_db')
-
-    # Connect to HTTP API on port 8080
-    >>> conn = s2.connect('http://me:p455w0rd@s2-host.com:8080/my_db')
+    :func:`singlestore.connect` function rather than creating them directly.
+    See the :func:`connect` function for parameter definitions.
 
     See Also
     --------
-    `connect`
+    :func:`singlestore.connect`
 
     """
 
@@ -881,16 +867,21 @@ class Connection(object):
     NotSupportedError = exceptions.NotSupportedError
 
     def __init__(self, **kwargs: Any):
+        """Call :func:`singlestore.connect` instead."""
         kwargs = build_params(**kwargs)
 
         self._conn: Optional[Any] = None
         self.errorhandler = None
 
         self.connection_params: Dict[str, Any] = build_params(**kwargs)
+
+        #: Query results format ('tuple', 'namedtuple', 'dict', 'dataframe')
         self.results_format = self.connection_params.pop(
             'results_format',
             get_option('results.format'),
         )
+
+        #: Session encoding
         self.encoding = self.connection_params.get('charset', 'utf-8').replace('mb4', '')
 
         drv_name = re.sub(r'^\w+\+', r'', self.connection_params['driver']).lower()
@@ -901,11 +892,22 @@ class Connection(object):
         except Exception as exc:
             raise self._driver.convert_exception(exc)
 
+        #: Attribute-like access to global server variables
         self.globals = VariableAccessor(self, 'global')
+
+        #: Attribute-like access to local / session server variables
         self.locals = VariableAccessor(self, 'local')
+
+        #: Attribute-like access to cluster global server variables
         self.cluster_globals = VariableAccessor(self, 'cluster global')
+
+        #: Attribute-like access to cluster local / session server variables
         self.cluster_locals = VariableAccessor(self, 'cluster local')
+
+        #: Attribute-like access to all server variables
         self.vars = VariableAccessor(self, '')
+
+        #: Attribute-like access to all cluster server variables
         self.cluster_vars = VariableAccessor(self, 'cluster')
 
     def autocommit(self, value: bool = True) -> None:
@@ -1150,9 +1152,28 @@ def connect(
 
     >>> conn = s2.connect('s2-host.com/my_db?local_infile=True&charset=utf8')
 
+    Connecting within a context manager
+
+    >>> with s2.connect('...') as conn:
+    ...     with conn.cursor() as cur:
+    ...         cur.execute('...')
+
+    Setting session variables, the code below sets the ``autocommit`` option
+
+    >>> conn.locals.autocommit = True
+
+    Getting session variables
+
+    >>> conn.locals.autocommit
+    True
+
+    See Also
+    --------
+    :class:`Connection`
+
     Returns
     -------
-    Connection
+    :class:`Connection`
 
     """
     return Connection(**dict(locals()))

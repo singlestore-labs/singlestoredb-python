@@ -31,16 +31,13 @@ used to create :class:`Cursor` objects for querying the database.
 .. autosummary::
    :toctree: generated/
 
+   Connection
    Connection.autocommit
    Connection.close
    Connection.commit
    Connection.rollback
    Connection.cursor
    Connection.is_connected
-   Connection.set_global_var
-   Connection.get_global_var
-   Connection.set_session_var
-   Connection.get_session_var
    Connection.enable_http_api
    Connection.disable_http_api
 
@@ -56,6 +53,7 @@ created using the :meth:`Connection.cursor` method.
 .. autosummary::
    :toctree: generated/
 
+   Cursor
    Cursor.callproc
    Cursor.close
    Cursor.execute
@@ -96,6 +94,7 @@ create new ones.
 .. autosummary::
    :toctree: generated/
 
+   ClusterManager
    ClusterManager.clusters
    ClusterManager.regions
    ClusterManager.create_cluster
@@ -133,8 +132,8 @@ Configuration
 -------------
 
 The following functions are used to get and set package configuration settings.
-Execute the :func:`describe_option` function with no parameters to see the
-documentation for all options.
+Execute the :func:`singlestore.describe_option` function with no parameters to
+see the documentation for all options.
 
 .. currentmodule:: singlestore
 
@@ -144,3 +143,24 @@ documentation for all options.
    get_option
    set_option
    describe_option
+
+In addition to the function above, you can access options through the
+``singlestore.options`` object. This gives you attribute-like access to the option
+values.
+
+.. ipython:: python
+
+   import singlestore as s2
+
+   s2.describe_option('results.format')
+
+   s2.options.results.format
+
+   s2.options.results.format = 'namedtuple'
+
+   s2.describe_option('results.format')
+
+.. ipython:: python
+   :suppress:
+
+   s2.options.results.format = 'tuple'

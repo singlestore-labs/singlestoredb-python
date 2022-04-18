@@ -21,3 +21,24 @@
       ~Cluster.suspend
       ~Cluster.terminate
       ~Cluster.update
+
+
+
+
+
+   .. rubric:: Attributes
+
+   .. autosummary::
+
+      ~Cluster.name
+      ~Cluster.id
+      ~Cluster.region
+      ~Cluster.size
+      ~Cluster.units
+      ~Cluster.state
+      ~Cluster.version
+      ~Cluster.created_at
+      ~Cluster.expires_at
+      ~Cluster.firewall_ranges
+      ~Cluster.terminated_at
+      ~Cluster.endpoint

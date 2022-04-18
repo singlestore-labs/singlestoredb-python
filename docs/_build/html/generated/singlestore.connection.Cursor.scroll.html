@@ -7,6 +7,7 @@
   <title>singlestore.connection.Cursor.scroll &mdash; SingleStore 0.1.0 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="../_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -50,6 +51,7 @@
 <li class="toctree-l3"><a class="reference internal" href="singlestore.connect.html">singlestore.connect</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#connection">Connection</a></li>
 <li class="toctree-l3 current"><a class="reference internal" href="../api.html#cursor">Cursor</a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Cursor.html">Cursor</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Cursor.callproc.html">Cursor.callproc</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Cursor.close.html">Cursor.close</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Cursor.execute.html">Cursor.execute</a></li>
@@ -103,13 +105,13 @@
 <h1>singlestore.connection.Cursor.scroll<a class="headerlink" href="#singlestore-connection-cursor-scroll" title="Permalink to this headline">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="singlestore.connection.Cursor.scroll">
-<span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">scroll</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'relative'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#singlestore.connection.Cursor.scroll" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">scroll</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.10)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'relative'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.10)"><span class="pre">None</span></a></span></span><a class="headerlink" href="#singlestore.connection.Cursor.scroll" title="Permalink to this definition">¶</a></dt>
 <dd><p>Scroll the cursor to the position in the result set.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>value</strong> (<em>int</em>) – Value of the positional move</p></li>
-<li><p><strong>mode</strong> (<em>str</em>) – Where to move the cursor from: ‘relative’ or ‘absolute’</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.10)"><em>int</em></a>) – Value of the positional move</p></li>
+<li><p><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><em>str</em></a>) – Where to move the cursor from: ‘relative’ or ‘absolute’</p></li>
 </ul>
 </dd>
 </dl>

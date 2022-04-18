@@ -15,3 +15,15 @@
 
       ~Region.__init__
       ~Region.from_dict
+
+
+
+
+
+   .. rubric:: Attributes
+
+   .. autosummary::
+
+      ~Region.id
+      ~Region.region
+      ~Region.provider

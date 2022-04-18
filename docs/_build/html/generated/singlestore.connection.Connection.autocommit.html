@@ -7,6 +7,7 @@
   <title>singlestore.connection.Connection.autocommit &mdash; SingleStore 0.1.0 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="../_static/js/html5shiv.min.js"></script>
   <![endif]-->
@@ -19,7 +20,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="singlestore.connection.Connection.close" href="singlestore.connection.Connection.close.html" />
-    <link rel="prev" title="singlestore.connect" href="singlestore.connect.html" />
+    <link rel="prev" title="singlestore.connection.Connection" href="singlestore.connection.Connection.html" />
 </head>
 
 <body class="wy-body-for-nav">
@@ -49,16 +50,13 @@
 <li class="toctree-l2 current"><a class="reference internal" href="../api.html#connections">Connections</a><ul class="current">
 <li class="toctree-l3"><a class="reference internal" href="singlestore.connect.html">singlestore.connect</a></li>
 <li class="toctree-l3 current"><a class="reference internal" href="../api.html#connection">Connection</a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.html">Connection</a></li>
 <li class="toctree-l4 current"><a class="current reference internal" href="#">Connection.autocommit</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.close.html">Connection.close</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.commit.html">Connection.commit</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.rollback.html">Connection.rollback</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.cursor.html">Connection.cursor</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.is_connected.html">Connection.is_connected</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.set_global_var.html">Connection.set_global_var</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.get_global_var.html">Connection.get_global_var</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.set_session_var.html">Connection.set_session_var</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.get_session_var.html">Connection.get_session_var</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.enable_http_api.html">Connection.enable_http_api</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.disable_http_api.html">Connection.disable_http_api</a></li>
 </ul>
@@ -102,7 +100,7 @@
 <h1>singlestore.connection.Connection.autocommit<a class="headerlink" href="#singlestore-connection-connection-autocommit" title="Permalink to this headline">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="singlestore.connection.Connection.autocommit">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">autocommit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#singlestore.connection.Connection.autocommit" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">autocommit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.10)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.10)"><span class="pre">None</span></a></span></span><a class="headerlink" href="#singlestore.connection.Connection.autocommit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Set autocommit mode.</p>
 </dd></dl>
 
@@ -112,7 +110,7 @@
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="singlestore.connect.html" class="btn btn-neutral float-left" title="singlestore.connect" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="singlestore.connection.Connection.html" class="btn btn-neutral float-left" title="singlestore.connection.Connection" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="singlestore.connection.Connection.close.html" class="btn btn-neutral float-right" title="singlestore.connection.Connection.close" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
