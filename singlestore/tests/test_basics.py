@@ -306,7 +306,9 @@ class TestBasics(unittest.TestCase):
         assert not self.conn.is_connected()
 
     def test_connection_attr(self):
-        assert self.cur.connection is self.conn
+        # Use context manager to get to underlying object (self.conn is a weakref.proxy)
+        with self.conn as conn:
+            assert conn is self.conn
 
     def test_executemany(self):
         self.cur.executemany(

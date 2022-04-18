@@ -345,7 +345,9 @@ class TestConnection(unittest.TestCase):
         assert not self.conn.is_connected()
 
     def test_connection_attr(self):
-        assert self.cur.connection is self.conn
+        # Use context manager to get to underlying object (self.conn is a weakref.proxy)
+        with self.conn as conn:
+            assert conn is self.conn
 
     def test_executemany(self):
         self.cur.executemany(
@@ -1312,17 +1314,17 @@ class TestConnection(unittest.TestCase):
         if self.driver in ['http', 'https']:
             self.skipTest('Can not set autocommit in HTTP')
 
-        orig = self.conn.get_session_var('autocommit')
+        orig = self.conn.locals.autocommit
 
         self.conn.autocommit(True)
-        val = self.conn.get_session_var('autocommit')
+        val = self.conn.locals.autocommit
         assert val is True, val
 
         self.conn.autocommit(False)
-        val = self.conn.get_session_var('autocommit')
+        val = self.conn.locals.autocommit
         assert val is False, val
 
-        self.conn.set_session_var(autocommit=orig)
+        self.conn.locals.autocommit = orig
 
     def test_conn_close(self):
         self.conn.close()
@@ -1345,16 +1347,16 @@ class TestConnection(unittest.TestCase):
             self.conn.messages
 
         with self.assertRaises(s2.InterfaceError):
-            self.conn.set_global_var(autocommit=True)
+            self.conn.globals.autocommit = True
 
         with self.assertRaises(s2.InterfaceError):
-            self.conn.get_global_var('autocommit')
+            self.conn.globals.autocommit
 
         with self.assertRaises(s2.InterfaceError):
-            self.conn.set_session_var(autocommit=True)
+            self.conn.locals.autocommit = True
 
         with self.assertRaises(s2.InterfaceError):
-            self.conn.get_session_var('autocommit')
+            self.conn.locals.autocommit
 
         with self.assertRaises(s2.InterfaceError):
             self.conn.enable_http_api()
@@ -1419,36 +1421,36 @@ class TestConnection(unittest.TestCase):
         assert len(out) == 5, len(out)
 
     def test_global_var(self):
-        orig = self.conn.get_global_var('enable_external_functions')
+        orig = self.conn.globals.enable_external_functions
 
-        self.conn.set_global_var(enable_external_functions=True)
-        val = self.conn.get_global_var('enable_external_functions')
+        self.conn.globals.enable_external_functions = True
+        val = self.conn.globals.enable_external_functions
         assert val is True, val
 
-        self.conn.set_global_var(enable_external_functions=False)
-        val = self.conn.get_global_var('enable_external_functions')
+        self.conn.globals.enable_external_functions = False
+        val = self.conn.globals.enable_external_functions
         assert val is False, val
 
-        self.conn.set_global_var(enable_external_functions=orig)
-        val = self.conn.get_global_var('enable_external_functions')
+        self.conn.globals.enable_external_functions = orig
+        val = self.conn.globals.enable_external_functions
         assert val == orig, val
 
     def test_session_var(self):
         if self.driver in ['http', 'https']:
             self.skipTest('Can not change session variable in HTTP')
 
-        orig = self.conn.get_session_var('enable_multipartition_queries')
+        orig = self.conn.locals.enable_multipartition_queries
 
-        self.conn.set_session_var(enable_multipartition_queries=True)
-        val = self.conn.get_session_var('enable_multipartition_queries')
+        self.conn.locals.enable_multipartition_queries = True
+        val = self.conn.locals.enable_multipartition_queries
         assert val is True, val
 
-        self.conn.set_session_var(enable_multipartition_queries=False)
-        val = self.conn.get_session_var('enable_multipartition_queries')
+        self.conn.locals.enable_multipartition_queries = False
+        val = self.conn.locals.enable_multipartition_queries
         assert val is False, val
 
-        self.conn.set_session_var(enable_multipartition_queries=orig)
-        val = self.conn.get_session_var('enable_multipartition_queries')
+        self.conn.locals.enable_multipartition_queries = orig
+        val = self.conn.locals.enable_multipartition_queries
         assert val == orig, val
 
     def test_local_infile(self):

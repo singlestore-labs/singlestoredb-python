@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import inspect
 import re
+import weakref
 from collections.abc import Mapping
+from collections.abc import MutableMapping
 from collections.abc import Sequence
 from typing import Any
 from typing import Callable
@@ -266,6 +268,79 @@ def _name_check(name: str) -> str:
     return name
 
 
+class VariableAccessor(MutableMapping[str, Any]):
+    """Variable accessor class."""
+
+    def __init__(self, conn: Connection, vtype: str):
+        object.__setattr__(self, 'connection', weakref.proxy(conn))
+        object.__setattr__(self, 'vtype', vtype.lower())
+        if self.vtype not in [
+            'global', 'local', '',
+            'cluster', 'cluster global', 'cluster local',
+        ]:
+            raise ValueError(
+                'Variable type must be global, local, cluster, '
+                'cluster global, cluster local, or empty',
+            )
+
+    def _cast_value(self, value: Any) -> Any:
+        if isinstance(value, str):
+            if value.lower() in ['on', 'true']:
+                return True
+            if value.lower() in ['off', 'false']:
+                return False
+        return value
+
+    def __getitem__(self, name: str) -> Any:
+        name = _name_check(name)
+        with self.connection._i_cursor() as cur:
+            cur.execute('show {} variables like "{}";'.format(self.vtype, name))
+            out = list(cur)
+            if not out:
+                raise KeyError(f"No variable found with the name '{name}'.")
+            if len(out) > 1:
+                raise KeyError(f"Multiple variables found with the name '{name}'.")
+            return self._cast_value(out[0][1])
+
+    def __setitem__(self, name: str, value: Any) -> None:
+        name = _name_check(name)
+        with self.connection._i_cursor() as cur:
+            if value is True:
+                value = 'ON'
+            elif value is False:
+                value = 'OFF'
+            if 'local' in self.vtype:
+                cur.execute(
+                    'set {} {}=:1;'.format(
+                        self.vtype.replace('local', 'session'), name,
+                    ), [value],
+                )
+            else:
+                cur.execute('set {} {}=:1;'.format(self.vtype, name), [value])
+
+    def __delitem__(self, name: str) -> None:
+        raise TypeError('Variables can not be deleted.')
+
+    def __getattr__(self, name: str) -> Any:
+        return self[name]
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        self[name] = value
+
+    def __delattr__(self, name: str) -> None:
+        del self[name]
+
+    def __len__(self) -> int:
+        with self.connection._i_cursor() as cur:
+            cur.execute('show {} variables;'.format(self.vtype))
+            return len(list(cur))
+
+    def __iter__(self) -> Iterator[str]:
+        with self.connection._i_cursor() as cur:
+            cur.execute('show {} variables;'.format(self.vtype))
+            return iter(x[0] for x in list(cur))
+
+
 class Cursor(object):
     """
     Database cursor for submitting commands and queries.
@@ -292,15 +367,15 @@ class Cursor(object):
             self, connection: Connection, cursor: Any, driver: Driver,
     ):
         self.errorhandler = connection.errorhandler
-        self._conn: Optional[Connection] = connection
+        self._results_format: str = connection.results_format
+        self._conn: Optional[Connection] = weakref.proxy(connection)
         self._cursor = cursor
         self._driver = driver
         self.rownumber: Optional[int] = None
         self.description: Optional[List[Description]] = None
         self.arraysize = get_option('results.arraysize')
         self._many_queries: Optional[Iterator[Any]] = None
-        self._results_format: str = self._conn.results_format
-        self._convetrers: List[
+        self._converters: List[
             Tuple[
                 int, Optional[str],
                 Optional[Callable[..., Any]],
@@ -329,12 +404,7 @@ class Cursor(object):
 
         """
         if self._cursor.description:
-            self._converters: List[
-                Tuple[
-                    int, Optional[str],
-                    Optional[Callable[..., Any]],
-                ]
-            ] = []
+            self._converters.clear()
             out = []
             for i, item in enumerate(self._cursor.description):
                 item = list(item) + [None, None]
@@ -831,11 +901,18 @@ class Connection(object):
         except Exception as exc:
             raise self._driver.convert_exception(exc)
 
+        self.globals = VariableAccessor(self, 'global')
+        self.locals = VariableAccessor(self, 'local')
+        self.cluster_globals = VariableAccessor(self, 'cluster global')
+        self.cluster_locals = VariableAccessor(self, 'cluster local')
+        self.vars = VariableAccessor(self, '')
+        self.cluster_vars = VariableAccessor(self, 'cluster')
+
     def autocommit(self, value: bool = True) -> None:
         """Set autocommit mode."""
         if self._conn is None:
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        self.set_session_var(autocommit=bool(value))
+        self.locals.autocommit = bool(value)
 
     def close(self) -> None:
         """Close the database connection."""
@@ -943,90 +1020,6 @@ class Connection(object):
         except Exception as exc:
             raise self._driver.convert_exception(exc)
 
-    def set_global_var(self, **kwargs: Any) -> None:
-        """
-        Set one or more global variables in the database.
-
-        Parameters
-        ----------
-        **kwargs : key-value pairs
-            Keyword parameters specify the variable names and values to set
-
-        """
-        if self._conn is None:
-            raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        with self._i_cursor() as cur:
-            for name, value in kwargs.items():
-                if value is True:
-                    value = 'ON'
-                elif value is False:
-                    value = 'OFF'
-                name = _name_check(name)
-                cur.execute('set global {}=:1;'.format(name), [value])
-
-    def set_session_var(self, **kwargs: Any) -> None:
-        """
-        Set one or more session variables in the database.
-
-        Parameters
-        ----------
-        **kwargs : key-value pairs
-            Keyword parameters specify the variable names and values to set
-
-        """
-        if self._conn is None:
-            raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        with self._i_cursor() as cur:
-            for name, value in kwargs.items():
-                if value is True:
-                    value = 'ON'
-                elif value is False:
-                    value = 'OFF'
-                name = _name_check(name)
-                cur.execute('set session {}=:1;'.format(name), [value])
-
-    def get_global_var(self, name: str) -> Any:
-        """
-        Retrieve the value of a global variable.
-
-        Returns
-        -------
-        Any
-
-        """
-        if self._conn is None:
-            raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        name = _name_check(name)
-        with self._i_cursor() as cur:
-            cur.execute('show global variables like "{}";'.format(name))
-            out = list(cur)[0][1]
-            if out.lower() in ['on', 'true']:
-                return True
-            elif out.lower() in ['off', 'false']:
-                return False
-            return out
-
-    def get_session_var(self, name: str) -> Any:
-        """
-        Retrieve the value of a session variable.
-
-        Returns
-        -------
-        Any
-
-        """
-        if self._conn is None:
-            raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        name = _name_check(name)
-        with self._i_cursor() as cur:
-            cur.execute('show local variables like "{}";'.format(name))
-            out = list(cur)[0][1]
-            if out.lower() in ['on', 'true']:
-                return True
-            elif out.lower() in ['off', 'false']:
-                return False
-            return out
-
     def enable_http_api(self, port: Optional[int] = None) -> int:
         """
         Enable the HTTP API in the server.
@@ -1051,17 +1044,17 @@ class Connection(object):
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
         with self._i_cursor() as cur:
             if port is not None:
-                self.set_global_var(http_proxy_port=int(port))
-            self.set_global_var(http_api=True)
+                self.globals.http_proxy_port = int(port)
+            self.globals.http_api = True
             cur.execute('restart proxy')
-            return self.get_global_var('http_proxy_port')
+            return self.globals.http_proxy_port
 
     def disable_http_api(self) -> None:
         """Disable the HTTP API."""
         if self._conn is None:
             raise exceptions.InterfaceError(2048, 'Connection is closed.')
         with self._i_cursor() as cur:
-            self.set_global_var(http_api=False)
+            self.globals.http_api = False
             cur.execute('restart proxy')
 
 
@@ -1090,13 +1083,13 @@ def connect(
     host : str, optional
         Hostname, IP address, or URL that describes the connection.
         The scheme or protocol defines which database connector to use.
-        By default, the `mysql-connector` scheme is used. To connect to the
-        HTTP API, the scheme can be set to `http` or `https`. The username,
+        By default, the ``mysql-connector`` scheme is used. To connect to the
+        HTTP API, the scheme can be set to ``http`` or ``https``. The username,
         password, host, and port are specified as in a standard URL. The path
         indicates the database name. The overall form of the URL is:
-        `scheme://user:password@host:port/db_name`.  The scheme can
+        ``scheme://user:password@host:port/db_name``.  The scheme can
         typically be left off (unless you are using the HTTP API):
-        `user:password@host:port/db_name`.
+        ``user:password@host:port/db_name``.
     user : str, optional
         Database user name
     password : str, optional
@@ -1129,11 +1122,33 @@ def connect(
 
     Examples
     --------
-    # Standard database connection
+    Standard database connection
+
     >>> conn = s2.connect('me:p455w0rd@s2-host.com/my_db')
 
-    # Connect to HTTP API on port 8080
+    Connect to HTTP API on port 8080
+
     >>> conn = s2.connect('http://me:p455w0rd@s2-host.com:8080/my_db')
+
+    Using an environment variable for connection string
+
+    >>> os.environ['SINGLESTORE_URL'] = 'me:p455w0rd@s2-host.com/my_db'
+    >>> conn = s2.connect()
+
+    Specifying credentials using environment variables
+
+    >>> os.environ['SINGLESTORE_USER'] = 'me'
+    >>> os.environ['SINGLESTORE_PASSWORD'] = 'p455w0rd'
+    >>> conn = s2.connect('s2-host.com/my_db')
+
+    Specifying options with keyword parameters
+
+    >>> conn = s2.connect('s2-host.com/my_db', user='me', password='p455w0rd',
+                          local_infile=True)
+
+    Specifying options with URL parameters
+
+    >>> conn = s2.connect('s2-host.com/my_db?local_infile=True&charset=utf8')
 
     Returns
     -------
