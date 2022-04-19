@@ -268,7 +268,7 @@ def _name_check(name: str) -> str:
     return name
 
 
-class VariableAccessor(MutableMapping[str, Any]):
+class VariableAccessor(MutableMapping):  # type: ignore
     """Variable accessor class."""
 
     def __init__(self, conn: Connection, vtype: str):
