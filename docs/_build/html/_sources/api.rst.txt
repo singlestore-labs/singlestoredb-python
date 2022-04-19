@@ -11,8 +11,9 @@ Connections
 -----------
 
 The `connect` function is the primary entry point for the SingleStore
-package. It connects to a SingleStore database using either DB-API
-compliant parameters, or a connection string in the form of a URL.
+package. It connects to a SingleStore database using either
+`DB-API <https://peps.python.org/pep-0249/>`_ compliant parameters,
+or a connection string in the form of a URL.
 
 .. autosummary::
    :toctree: generated/

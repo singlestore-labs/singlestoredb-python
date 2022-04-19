@@ -24,7 +24,7 @@ author = 'SingleStore'
 
 import singlestore as s2  # noqa: W291,E402
 
-version = '.'.join(s2.__version__.split('.')[:2])
+version = s2.__version__
 release = s2.__version__
 
 

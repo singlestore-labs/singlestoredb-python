@@ -1,16 +1,32 @@
 .. currentmodule:: singlestore
 
-Getting Started
-===============
-
-Connections to SingleStore can be made using the parameters described in
-the Python DB-API.
-
 .. ipython:: python
    :suppress:
 
    import singlestore as s2
    conn = s2.connect()
+
+Getting Started
+===============
+
+Database connections can be made using either keyword parameters or
+a URL as described in the following sections.
+
+
+Connect using DB-API Parameters
+-------------------------------
+
+Connections to SingleStore can be made using the parameters described in
+the `Python DB-API <https://peps.python.org/pep-0249/>`_. The ``host=``
+parameter can be either a hostname or IP address (it can also be a
+URL as shown in the following section). The ``port=`` parameter is an
+integer value of the database server port number. The ``user=`` and
+``password=`` parameters specify the database user credentials. The
+``database=`` parameter, optionally, specifies the name of the database
+to connect to.
+
+A full list of connection parameters can be seen in the API documentation
+for the :func:`singlestore.connect` function.
 
 .. ipython:: python
    :verbatim:
@@ -19,6 +35,9 @@ the Python DB-API.
    conn = s2.connect(host='...', port='...', user='...',
                      password='...', database='...')
 
+Connect using a URL
+-------------------
+
 In addition, you can user a URL like in the SQLAlchemy package.
 
 .. ipython:: python
@@ -26,13 +45,16 @@ In addition, you can user a URL like in the SQLAlchemy package.
 
    conn = s2.connect('user:password@host:port/database')
 
-URLs work equally well to connect to the HTTP API.
+URLs work equally well to connect to the
+`HTTP API <https://docs.singlestore.com/db/v7.8/en/reference/http-api.html>`_.
 
 .. ipython:: python
    :verbatim:
 
    conn = s2.connect('https://user:password@host:port/database')
 
+Specifying Additional Connection Parameters
+-------------------------------------------
 
 Connection parameters can be set either in the URL or
 as parameters. Here ``local_infile=`` is set as a URL parameter.
@@ -83,6 +105,9 @@ are used, the data structure passed to the :meth:`Cursor.execute` method
 must be a dictionary, where the keys map to the names given in the substitutions
 and the values are the values to substitute.
 
+In the example below, ``:pattern`` is replaced with the value ``"auto%"``. All
+escaping and quoting of the substituted data values is done automatically.
+
 .. ipython:: python
 
    with conn.cursor() as cur:
@@ -97,6 +122,9 @@ Numeric Substitution
 If numbered parameters are used, the data structure passed to the
 :meth:`Cursor.execute` method must be a list or tuple, where the substitution
 numbers correspond to the 1-based position in the list / tuple.
+
+In the example below, ``:1`` is replade with the value ``"auto%"``. All
+escaping and quoting of the substituted data values is done automatically.
 
 .. ipython:: python
 
@@ -121,6 +149,17 @@ If the result is expected to be fairly small, fetching the entire result in one
 call may be fine. However, if the query result will be large enough to put a strain
 on the client computer's memory, it may be a better idea to fetch smaller batches
 using :meth:`Cursor.fetchmany`.
+
+In additon to the DB-API methods for fetching results, a :class:`Cursor` can be
+iterated over itself.
+
+.. ipython:: python
+
+   with conn.cursor() as cur:
+       cur.execute('show variables like "auto%"')
+       for row in cur:
+           print(row)
+
 
 Result Formats
 ..............

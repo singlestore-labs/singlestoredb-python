@@ -264,7 +264,24 @@ class Cluster(object):
         wait_interval: int = 20,
         wait_timeout: int = 600,
     ) -> None:
-        """Suspend the cluster."""
+        """
+        Suspend the cluster.
+
+        Parameters
+        ----------
+        wait_on_suspended : bool, optional
+            Wait for the cluster to go into 'Suspended' mode before returning
+        wait_interval : int, optional
+            Number of seconds between each server check
+        wait_timeout : int, optional
+            Total number of seconds to check server before giving up
+
+        Raises
+        ------
+        ClusterManagerError
+            If timeout is reached
+
+        """
         if self._manager is None:
             raise ClusterManagerError(
                 msg='No cluster manager is associated with this object.',
@@ -286,7 +303,24 @@ class Cluster(object):
         wait_interval: int = 20,
         wait_timeout: int = 600,
     ) -> None:
-        """Resume the cluster."""
+        """
+        Resume the cluster.
+
+        Parameters
+        ----------
+        wait_on_resumed : bool, optional
+            Wait for the cluster to go into 'Resumed' or 'Active' mode before returning
+        wait_interval : int, optional
+            Number of seconds between each server check
+        wait_timeout : int, optional
+            Total number of seconds to check server before giving up
+
+        Raises
+        ------
+        ClusterManagerError
+            If timeout is reached
+
+        """
         if self._manager is None:
             raise ClusterManagerError(
                 msg='No cluster manager is associated with this object.',
@@ -308,7 +342,24 @@ class Cluster(object):
         wait_interval: int = 10,
         wait_timeout: int = 600,
     ) -> None:
-        """Terminate the cluster."""
+        """
+        Terminate the cluster.
+
+        Parameters
+        ----------
+        wait_on_terminated : bool, optional
+            Wait for the cluster to go into 'Terminated' mode before returning
+        wait_interval : int, optional
+            Number of seconds between each server check
+        wait_timeout : int, optional
+            Total number of seconds to check server before giving up
+
+        Raises
+        ------
+        ClusterManagerError
+            If timeout is reached
+
+        """
         if self._manager is None:
             raise ClusterManagerError(
                 msg='No cluster manager is associated with this object.',
@@ -333,7 +384,7 @@ class Cluster(object):
 
         Returns
         -------
-        connection.Connection
+        :class:`Connection`
 
         """
         if not self.endpoint:
@@ -512,13 +563,13 @@ class ClusterManager(object):
         )
 
     @property
-    def clusters(self) -> Sequence[Cluster]:
+    def clusters(self) -> List[Cluster]:
         """Return a list of available clusters."""
         res = self._get('clusters')
         return [Cluster.from_dict(item, self) for item in res.json()]
 
     @property
-    def regions(self) -> Sequence[Region]:
+    def regions(self) -> List[Region]:
         """Return a list of available regions."""
         res = self._get('regions')
         return [Region.from_dict(item, self) for item in res.json()]
@@ -587,6 +638,7 @@ class ClusterManager(object):
         """
         Wait on server state before continuing.
 
+
         Parameters
         ----------
         out : Cluster
@@ -597,6 +649,11 @@ class ClusterManager(object):
             Interval between each server poll
         timeout : int, optional
             Maximum time to wait before raising an exception
+
+        Raises
+        ------
+        ClusterManagerError
+            If timeout is reached
 
         Returns
         -------

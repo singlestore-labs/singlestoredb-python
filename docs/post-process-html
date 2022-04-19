@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 from __future__ import annotations
 
+import glob
 import os
 import re
 import sys
+from typing import Any
 
 
 BASE = sys.argv[1]
@@ -64,9 +66,30 @@ html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(
 '''
 
 
+def check_link(m: Any) -> str:
+    link, pre, txt, post = m.groups()
+    if not link and txt in links:
+        return f'<a href="{links[txt]}">{pre}{txt}{post}</a>'
+    return m.group(0)
+
+
+os.chdir(BASE)
+
+# Get list of generated HTML files and the class / method they belong to
+links = {}
+for f in glob.glob(os.path.join('generated', '*.html')):
+    m = re.search(r'([A-Z]\w+)\.html$', f)
+    if m:
+        links[m.group(1)] = f.split(os.sep)[-1]
+        continue
+
+    m = re.search(r'([A-Z]\w+\.[a-z]\w+)\.html$', f)
+    if m:
+        links[m.group(1)] = f.split(os.sep)[-1]
+
 # Get list of HTML files
 html_files = []
-for root, dirs, files in os.walk(BASE):
+for root, dirs, files in os.walk('.'):
     for file in files:
         if file.lower().endswith('.html'):
             html_files.append(os.path.join(root, file))
@@ -81,8 +104,14 @@ for file in html_files:
             r'(">)singlestore\.(manager|connection)\.([\w\.]+</a>)', r'\1\3', txt,
         )
 
+        # Fix class / method links
+        txt = re.sub(
+            r'(<a\s+[^>]+>)?(\s*<code[^>]*>\s*<span\s+class="pre">\s*)([\w\.]+)(\s*</span>\s*</code>)',
+            check_link, txt,
+        )
+
     with open(file, 'w') as html_file:
         html_file.write(txt)
 
-with open(os.path.join(BASE, 'html', '_static', 'custom.css'), 'w') as custom_css:
+with open(os.path.join('_static', 'custom.css'), 'w') as custom_css:
     custom_css.write(CUSTOM_CSS.strip())
