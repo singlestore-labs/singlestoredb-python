@@ -20,7 +20,7 @@ class HTTPDriver(Driver):
         params.pop('charset', None)
         params.pop('odbc_driver', None)
 
-        params['protocol'] = params.pop('driver', None)
+        params['protocol'] = params.pop('driver', '').replace('singlestore+', '') or None
 
         if params.pop('local_infile', False):
             warnings.warn('The HTTP driver does not support file uploads.')

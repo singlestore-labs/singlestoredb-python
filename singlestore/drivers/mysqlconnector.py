@@ -9,7 +9,7 @@ from .base import Driver
 
 class MySQLConnectorDriver(Driver):
 
-    name = 'mysql.connector'
+    name = 'mysqlconnector'
 
     pkg_name = 'mysql.connector'
     pypi = 'mysql-connector-python'

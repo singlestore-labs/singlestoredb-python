@@ -311,91 +311,14 @@ class TestBasics(unittest.TestCase):
             assert conn is self.conn
 
     def test_executemany(self):
+        # NOTE: Doesn't actually do anything since no rows match
         self.cur.executemany(
-            'select * from data where id < :name',
-            [dict(name='d'), dict(name='e')],
+            'delete from data where id > :name',
+            [dict(name='z'), dict(name='y')],
         )
 
-        # First set
-        out = self.cur.fetchall()
-
-        desc = self.cur.description
-        rowcount = self.cur.rowcount
-        lastrowid = self.cur.lastrowid
-
-        assert sorted(out) == sorted([
-            ('a', 'antelopes', 2),
-            ('b', 'bears', 2),
-            ('c', 'cats', 5),
-        ]), out
-
-        assert rowcount == 3, rowcount
-        assert lastrowid is None, lastrowid
-        assert len(desc) == 3, desc
-        assert desc[0].name == 'id', desc[0].name
-        assert desc[0].type_code in [253, 15], desc[0].type_code
-        assert desc[1].name == 'name', desc[1].name
-        assert desc[1].type_code in [253, 15], desc[1].type_code
-        assert desc[2].name == 'value', desc[2].name
-        assert desc[2].type_code == 8, desc[2].type_code
-
-        # Second set
-        self.cur.nextset()
-
-        out = self.cur.fetchall()
-
-        desc = self.cur.description
-        rowcount = self.cur.rowcount
-        lastrowid = self.cur.lastrowid
-
-        assert sorted(out) == sorted([
-            ('a', 'antelopes', 2),
-            ('b', 'bears', 2),
-            ('c', 'cats', 5),
-            ('d', 'dogs', 4),
-        ]), out
-
-        assert rowcount == 4, rowcount
-        assert lastrowid is None, lastrowid
-        assert len(desc) == 3, desc
-        assert desc[0].name == 'id', desc[0].name
-        assert desc[0].type_code in [253, 15], desc[0].type_code
-        assert desc[1].name == 'name', desc[1].name
-        assert desc[1].type_code in [253, 15], desc[1].type_code
-        assert desc[2].name == 'value', desc[2].name
-        assert desc[2].type_code == 8, desc[2].type_code
-
-        out = self.cur.nextset()
-        assert out is False, out
-
     def test_executemany_no_args(self):
-        self.cur.executemany('select * from data where id < "d"')
-
-        # First set
-        out = self.cur.fetchall()
-
-        desc = self.cur.description
-        rowcount = self.cur.rowcount
-        lastrowid = self.cur.lastrowid
-
-        assert sorted(out) == sorted([
-            ('a', 'antelopes', 2),
-            ('b', 'bears', 2),
-            ('c', 'cats', 5),
-        ]), out
-
-        assert rowcount == 3, rowcount
-        assert lastrowid is None, lastrowid
-        assert len(desc) == 3, desc
-        assert desc[0].name == 'id', desc[0].name
-        assert desc[0].type_code in [253, 15], desc[0].type_code
-        assert desc[1].name == 'name', desc[1].name
-        assert desc[1].type_code in [253, 15], desc[1].type_code
-        assert desc[2].name == 'value', desc[2].name
-        assert desc[2].type_code == 8, desc[2].type_code
-
-        out = self.cur.nextset()
-        assert out is False, out
+        self.cur.executemany('select * from data where id > "z"')
 
     def test_context_managers(self):
         with s2.connect() as conn:

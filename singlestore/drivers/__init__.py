@@ -9,7 +9,7 @@ from .cymysql import CyMySQLDriver
 from .http import HTTPDriver
 from .http import HTTPSDriver
 from .mariadb import MariaDBDriver
-from .mysql_connector import MySQLConnectorDriver
+from .mysqlconnector import MySQLConnectorDriver
 from .mysqldb import MySQLdbDriver
 from .pymysql import PyMySQLDriver
 from .pyodbc import PyODBCDriver
@@ -23,7 +23,7 @@ def get_driver(name: str, params: Dict[str, Any]) -> base.Driver:
     ----------
     name : str
         Name of the driver. All non-letters/digits will be removed
-        from the name when matching. For example, 'mysql-connector'
+        from the name when matching. For example, 'mysqlconnector'
         will match 'mysql.connector' or 'mysqlconnector'. Matches
         are also case-insensitive.
     params : dict

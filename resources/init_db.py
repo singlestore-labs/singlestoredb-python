@@ -58,7 +58,7 @@ if not database:
     database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
 
 with s2.connect(
-    f'mysql-connector://{options.host}:{options.port}',
+    f'mysqlconnector://{options.host}:{options.port}',
     user=options.user, password=options.password,
 ) as conn:
     with conn.cursor() as cur:

@@ -222,6 +222,9 @@ def _parse_url(url: str) -> Dict[str, Any]:
     if '//' not in url:
         url = '//' + url
 
+    if url.startswith('singlestore+'):
+        url = re.sub(r'^singlestore\+', r'', url)
+
     parts = urlparse(url, scheme='singlestore', allow_fragments=True)
 
     url_db = parts.path
@@ -369,7 +372,6 @@ class Cursor(object):
         #: Default batch size of ``fetchmany`` calls.
         self.arraysize = get_option('results.arraysize')
 
-        self._many_queries: Optional[Iterator[Any]] = None
         self._converters: List[
             Tuple[
                 int, Optional[str],
@@ -570,8 +572,8 @@ class Cursor(object):
         try:
             # NOTE: Just implement using `execute` to cover driver inconsistencies
             if param_seq[0]:
-                self._many_queries = ((oper, params) for params in param_seq)
-                self.execute(*next(self._many_queries))
+                for params in param_seq:
+                    self.execute(oper, params)
             else:
                 self.execute(oper)
 
@@ -701,15 +703,6 @@ class Cursor(object):
             raise exceptions.InterfaceError(2048, 'Cursor is closed.')
 
         self.rownumber = None
-
-        # If we still have `executemany` results pending, use those
-        if self._many_queries is not None:
-            try:
-                self.execute(*next(self._many_queries))
-                return True
-            except StopIteration:
-                self._many_queries = None
-                return False
 
         try:
             out = self._cursor.nextset()
@@ -1118,7 +1111,7 @@ def connect(
     host : str, optional
         Hostname, IP address, or URL that describes the connection.
         The scheme or protocol defines which database connector to use.
-        By default, the ``mysql-connector`` scheme is used. To connect to the
+        By default, the ``mysqlconnector`` scheme is used. To connect to the
         HTTP API, the scheme can be set to ``http`` or ``https``. The username,
         password, host, and port are specified as in a standard URL. The path
         indicates the database name. The overall form of the URL is:
