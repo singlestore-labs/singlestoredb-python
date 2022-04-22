@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'SingleStore'
-copyright = '2022 SingleStore. All Rights Reserved.'
+copyright = '2022 SingleStore. All Rights Reserved'
 author = 'SingleStore'
 
 
