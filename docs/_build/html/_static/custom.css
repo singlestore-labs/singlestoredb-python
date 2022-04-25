@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inconsolata&display=swap');
 code.docutils > .pre {
     color: #505050 !important
 }
@@ -93,4 +94,19 @@ html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(
 }
 .rst-content .note, .rst-content .seealso, .rst-content .wy-alert-info.admonition, .rst-content .wy-alert-info.admonition-todo, .rst-content .wy-alert-info.attention, .rst-content .wy-alert-info.caution, .rst-content .wy-alert-info.danger, .rst-content .wy-alert-info.error, .rst-content .wy-alert-info.hint, .rst-content .wy-alert-info.important, .rst-content .wy-alert-info.tip, .rst-content .wy-alert-info.warning, .wy-alert.wy-alert-info {
     background-color: #f3f2fc;
+}
+.rst-content .linenodiv pre, .rst-content div[class^=highlight] pre, .rst-content pre.literal-block {
+    -webkit-font-smoothing: antialiased;
+    font-family: Inconsolata, monospace;
+    font-weight: light;
+    font-size: 13px;
+}
+.highlight .s1 {
+    color: #ffcf64 !important;
+}
+.highlight .gp {
+    color: #aaa !important;
+}
+.highlight .o {
+    color: #aaa !important;
 }

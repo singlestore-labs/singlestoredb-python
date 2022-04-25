@@ -20,6 +20,12 @@ from urllib.parse import parse_qs
 from urllib.parse import urlparse
 
 import sqlparams
+try:
+    from pandas import DataFrame
+except ImportError:
+    class DataFrame(object):  # type: ignore
+        def itertuples(self, *args: Any, **kwargs: Any) -> None:
+            pass
 
 from . import drivers
 from . import exceptions
@@ -567,11 +573,19 @@ class Cursor(object):
         self.description = None
         self.rownumber = None
 
-        param_seq = param_seq or [[]]
+        is_dataframe = False
+        if isinstance(param_seq, DataFrame):
+            is_dataframe = True
+        else:
+            param_seq = param_seq or [[]]
 
         try:
             # NOTE: Just implement using `execute` to cover driver inconsistencies
-            if param_seq[0]:
+            if is_dataframe:
+                for params in param_seq.itertuples(index=False):
+                    self.execute(oper, params)
+
+            elif param_seq[0]:
                 for params in param_seq:
                     self.execute(oper, params)
             else:
@@ -1068,7 +1082,7 @@ class Connection(object):
                 self.globals.http_proxy_port = int(port)
             self.globals.http_api = True
             cur.execute('restart proxy')
-            return self.globals.http_proxy_port
+            return int(self.globals.http_proxy_port)
 
     def disable_http_api(self) -> None:
         """
