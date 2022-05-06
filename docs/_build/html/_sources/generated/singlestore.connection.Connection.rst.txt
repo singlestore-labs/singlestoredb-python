@@ -18,7 +18,9 @@
       ~Connection.close
       ~Connection.commit
       ~Connection.cursor
+      ~Connection.disable_data_api
       ~Connection.disable_http_api
+      ~Connection.enable_data_api
       ~Connection.enable_http_api
       ~Connection.is_connected
       ~Connection.rollback

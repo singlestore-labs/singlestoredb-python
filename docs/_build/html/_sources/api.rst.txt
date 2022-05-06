@@ -10,7 +10,7 @@ API Reference
 Connections
 -----------
 
-The `connect` function is the primary entry point for the SingleStore
+The :func:`connect` function is the primary entry point for the SingleStore
 package. It connects to a SingleStore database using either
 `DB-API <https://peps.python.org/pep-0249/>`_ compliant parameters,
 or a connection string in the form of a URL.
@@ -39,8 +39,8 @@ used to create :class:`Cursor` objects for querying the database.
    Connection.rollback
    Connection.cursor
    Connection.is_connected
-   Connection.enable_http_api
-   Connection.disable_http_api
+   Connection.enable_data_api
+   Connection.disable_data_api
 
 
 Cursor
@@ -133,7 +133,7 @@ Configuration
 -------------
 
 The following functions are used to get and set package configuration settings.
-Execute the :func:`singlestore.describe_option` function with no parameters to
+Execute the :func:`describe_option` function with no parameters to
 see the documentation for all options.
 
 .. currentmodule:: singlestore

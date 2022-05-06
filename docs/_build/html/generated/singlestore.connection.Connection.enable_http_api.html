@@ -19,8 +19,6 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="singlestore.connection.Connection.disable_http_api" href="singlestore.connection.Connection.disable_http_api.html" />
-    <link rel="prev" title="singlestore.connection.Connection.is_connected" href="singlestore.connection.Connection.is_connected.html" />
 </head>
 
 <body class="wy-body-for-nav">
@@ -42,32 +40,11 @@
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul class="current">
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="../install.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../whatsnew.html">What’s New</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../getting-started.html">Getting Started</a></li>
-<li class="toctree-l1 current"><a class="reference internal" href="../api.html">API Reference</a><ul class="current">
-<li class="toctree-l2 current"><a class="reference internal" href="../api.html#connections">Connections</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="singlestore.connect.html">singlestore.connect</a></li>
-<li class="toctree-l3 current"><a class="reference internal" href="../api.html#connection">Connection</a><ul class="current">
-<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.html">Connection</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.autocommit.html">Connection.autocommit</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.close.html">Connection.close</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.commit.html">Connection.commit</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.rollback.html">Connection.rollback</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.cursor.html">Connection.cursor</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.is_connected.html">Connection.is_connected</a></li>
-<li class="toctree-l4 current"><a class="current reference internal" href="#">Connection.enable_http_api</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestore.connection.Connection.disable_http_api.html">Connection.disable_http_api</a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="../api.html#cursor">Cursor</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="../api.html#cluster-management">Cluster Management</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api.html#configuration">Configuration</a></li>
-</ul>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API Reference</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
 </ul>
 
@@ -85,7 +62,6 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
-          <li><a href="../api.html">API Reference</a> &raquo;</li>
       <li>singlestore.connection.Connection.enable_http_api</li>
       <li class="wy-breadcrumbs-aside">
             <a href="../_sources/generated/singlestore.connection.Connection.enable_http_api.rst.txt" rel="nofollow"> View page source</a>
@@ -101,7 +77,7 @@
 <dl class="py method">
 <dt class="sig sig-object py" id="singlestore.connection.Connection.enable_http_api">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">enable_http_api</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.10)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.10)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.10)"><span class="pre">int</span></a></span></span><a class="headerlink" href="#singlestore.connection.Connection.enable_http_api" title="Permalink to this definition">¶</a></dt>
-<dd><p>Enable the HTTP API in the server.</p>
+<dd><p>Enable the data API in the server.</p>
 <p>Use of this method requires privileges that allow setting global
 variables and starting the HTTP proxy.</p>
 <dl class="field-list simple">
@@ -113,7 +89,7 @@ value is not specified, the current value of the
 </dl>
 <div class="admonition seealso">
 <p class="admonition-title">See also</p>
-<p><a class="reference internal" href="singlestore.connection.Connection.disable_http_api.html#singlestore.connection.Connection.disable_http_api" title="singlestore.connection.Connection.disable_http_api"><code class="xref py py-meth docutils literal notranslate"><span class="pre">disable_http_api()</span></code></a></p>
+<p><a class="reference internal" href="singlestore.connection.Connection.disable_data_api.html#singlestore.connection.Connection.disable_data_api" title="singlestore.connection.Connection.disable_data_api"><code class="xref py py-meth docutils literal notranslate"><span class="pre">disable_data_api()</span></code></a></p>
 </div>
 <dl class="field-list simple">
 <dt class="field-odd">Returns</dt>
@@ -130,10 +106,7 @@ value is not specified, the current value of the
 
            </div>
           </div>
-          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="singlestore.connection.Connection.is_connected.html" class="btn btn-neutral float-left" title="singlestore.connection.Connection.is_connected" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="singlestore.connection.Connection.disable_http_api.html" class="btn btn-neutral float-right" title="singlestore.connection.Connection.disable_http_api" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
-    </div>
+          <footer>
 
   <hr/>
 
