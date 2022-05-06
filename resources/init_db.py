@@ -65,7 +65,7 @@ with s2.connect(
         cur.execute(f'CREATE DATABASE IF NOT EXISTS {database};')
         cur.execute(f'USE {database};')
         if options.http_port:
-            conn.enable_http_api(int(options.http_port))
+            conn.enable_data_api(int(options.http_port))
         with open(sql_file, 'r') as infile:
             for cmd in infile.read().split(';\n'):
                 cmd = cmd.strip()
