@@ -1,5 +1,5 @@
 
-.. image:: ../resources/singlestore-logo.png
+.. image:: ../../resources/singlestore-logo.png
    :align: left
    :height: 50
    :width: 50

@@ -40,7 +40,7 @@ MANIFEST
 # setup.py working directory
 build
 # sphinx build directory
-doc/_build
+docs/src/_build
 # setup.py dist directory
 dist
 # Egg metadata
@@ -72,7 +72,7 @@ Icon?
 Thumbs.db
 
 ## Documentation generated files
-docs/_build/doctrees
-docs/generated
+docs/src/_build/doctrees
+docs/src/generated
 
 dask-worker-space

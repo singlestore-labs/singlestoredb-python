@@ -19,3 +19,9 @@ help:
 %: Makefile
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 	./post-process-html "$(BUILDDIR)/html"
+	rm -rf ../_images
+	rm -rf ../_sources
+	rm -rf ../_static
+	rm -rf ../generated
+	mv "$(BUILDDIR)"/html/* ..
+	mv "$(BUILDDIR)"/html/.[!.]* ..
