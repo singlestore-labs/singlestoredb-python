@@ -1282,10 +1282,10 @@ class TestConnection(unittest.TestCase):
             self.conn.locals.autocommit
 
         with self.assertRaises(s2.InterfaceError):
-            self.conn.enable_http_api()
+            self.conn.enable_data_api()
 
         with self.assertRaises(s2.InterfaceError):
-            self.conn.disable_http_api()
+            self.conn.disable_data_api()
 
     def test_rollback(self):
         if self.driver in ['http', 'https']:

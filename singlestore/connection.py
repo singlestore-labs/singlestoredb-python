@@ -1051,9 +1051,9 @@ class Connection(object):
         except Exception as exc:
             raise self._driver.convert_exception(exc)
 
-    def enable_http_api(self, port: Optional[int] = None) -> int:
+    def enable_data_api(self, port: Optional[int] = None) -> int:
         """
-        Enable the HTTP API in the server.
+        Enable the data API in the server.
 
         Use of this method requires privileges that allow setting global
         variables and starting the HTTP proxy.
@@ -1067,7 +1067,7 @@ class Connection(object):
 
         See Also
         --------
-        :meth:`disable_http_api`
+        :meth:`disable_data_api`
 
         Returns
         -------
@@ -1084,13 +1084,15 @@ class Connection(object):
             cur.execute('restart proxy')
             return int(self.globals.http_proxy_port)
 
-    def disable_http_api(self) -> None:
+    enable_http_api = enable_data_api
+
+    def disable_data_api(self) -> None:
         """
-        Disable the HTTP API.
+        Disable the data API.
 
         See Also
         --------
-        :meth:`enable_http_api`
+        :meth:`enable_data_api`
 
         """
         if self._conn is None:
@@ -1098,6 +1100,8 @@ class Connection(object):
         with self._i_cursor() as cur:
             self.globals.http_api = False
             cur.execute('restart proxy')
+
+    disable_http_api = disable_data_api
 
 
 #
