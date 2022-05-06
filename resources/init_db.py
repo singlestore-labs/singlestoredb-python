@@ -65,13 +65,7 @@ with s2.connect(
         cur.execute(f'CREATE DATABASE IF NOT EXISTS {database};')
         cur.execute(f'USE {database};')
         if options.http_port:
-            cur.execute(
-                'SET GLOBAL HTTP_PROXY_PORT={};'.format(
-                    int(options.http_port),
-                ),
-            )
-            cur.execute('SET GLOBAL HTTP_API=ON;')
-            cur.execute('RESTART PROXY;')
+            conn.enable_http_api(int(options.http_port))
         with open(sql_file, 'r') as infile:
             for cmd in infile.read().split(';\n'):
                 cmd = cmd.strip()
