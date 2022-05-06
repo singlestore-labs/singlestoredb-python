@@ -56,5 +56,6 @@ conn = s2.connect('https://user:password@host:8080/db_name')
 
 ## Resources
 
+* [Documentation](https://singlestore-labs.github.io/singlestore-python)
 * [SingleStore](https://singlestore.com)
 * [Python](https://python.org)
