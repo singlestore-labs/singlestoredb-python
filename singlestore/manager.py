@@ -575,7 +575,7 @@ class ClusterManager(object):
         return [Region.from_dict(item, self) for item in res.json()]
 
     def create_cluster(
-        self, name: str, region_id: str, admin_password: str,
+        self, name: str, region_id: Union[str, Region], admin_password: str,
         firewall_ranges: Sequence[str], expires_at: Optional[str] = None,
         size: Optional[str] = None, plan: Optional[str] = None,
         wait_on_active: bool = False, wait_timeout: int = 600,
@@ -588,7 +588,7 @@ class ClusterManager(object):
         ----------
         name : str
             Name of the cluster
-        region_id : str
+        region_id : str or Region
             The region ID of the cluster
         admin_password : str
             Admin password for the cluster
@@ -613,6 +613,8 @@ class ClusterManager(object):
         :class:`Cluster`
 
         """
+        if isinstance(region_id, Region):
+            region_id = region_id.id
         res = self._post(
             'clusters', json=dict(
                 name=name, regionID=region_id, adminPassword=admin_password,
