@@ -18,9 +18,8 @@ requirements:
         - pip
     run:
         - python
-        - cymysql
+        - mysql-connector-python
         - requests
-        - sqlalchemy>=1.4.0,<2.0.0dev
         - sqlparams
 
 test:
@@ -28,10 +27,8 @@ test:
         - singlestore
     requires:
         - coverage
-        - pymysql
-        - cymysql
-        - mysqlclient
         - nose2
+        - pandas
     commands:
         - nose2 -v singlestore.tests.test_basics
 
