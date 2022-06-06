@@ -80,8 +80,6 @@ jobs:
         with:
           user: __token__
           password: "${{ secrets.PYPI_TOKEN }}"
-        run: |
-          twine upload dist/*
 
       - name: Publish Conda package
         if: ${{ github.event.inputs.publish_anaconda }}
