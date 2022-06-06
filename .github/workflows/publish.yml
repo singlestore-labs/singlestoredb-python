@@ -86,4 +86,6 @@ jobs:
         if: ${{ github.event.inputs.publish_anaconda == 'true' }}
         run: |
           echo $CONDA/bin >> $GITHUB_PATH
+          ls
+          ls artifacts
           anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main artifacts/noarch/singlestore-*.tar.bz2
