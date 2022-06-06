@@ -75,7 +75,7 @@ jobs:
           SINGLESTORE_URL: "root:root@127.0.0.1:3306"
 
       - name: Publish PyPI package
-        if: ${{ github.event.inputs.publish_pypi }}
+        if: ${{ github.event.inputs.publish_pypi == 'true' }}
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
@@ -83,7 +83,7 @@ jobs:
           twine upload dist/*
 
       - name: Publish Conda package
-        if: ${{ github.event.inputs.publish_anaconda }}
+        if: ${{ github.event.inputs.publish_anaconda == 'true' }}
         run: |
           echo $CONDA/bin >> $GITHUB_PATH
           anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main artifacts/noarch/singlestore-*.tar.bz2
