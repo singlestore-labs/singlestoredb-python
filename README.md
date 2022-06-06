@@ -1,17 +1,9 @@
-# <img src="resources/singlestore-logo.png" height="60" valign="middle"/> SingleStore Python Interface
+# <img src="https://github.com/singlestore-labs/singlestore-python/blob/main/resources/singlestore-logo.png" height="60" valign="middle"/> SingleStore Python Interface
 
 This project contains a [DB-API 2.0](https://www.python.org/dev/peps/pep-0249/)
 compatible Python interface to the SingleStore database and cluster management API.
 
 ## Install
-
-Currently, this package can only be installed from Github using the following
-command. This will install the most up-to-date code from the repository.
-```
-pip install https://github.com/singlestore-labs/singlestore-python/archive/refs/heads/main.zip
-```
-
-Once a production release has been created, the following methods will also work.
 
 This package can be install from PyPI using `pip`:
 ```
