@@ -76,10 +76,11 @@ jobs:
 
       - name: Publish PyPI package
         if: ${{ github.event.inputs.publish_pypi }}
-        uses: pypa/gh-action-pypi-publish@717ba43cfbb0387f6ce311b169a825772f54d295
-        with:
-          user: __token__
-          password: "${{ secrets.PYPI_TOKEN }}"
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
+        run: |
+          twine upload dist/*
 
       - name: Publish Conda package
         if: ${{ github.event.inputs.publish_anaconda }}
