@@ -67,7 +67,7 @@ jobs:
           # $CONDA is an environment variable pointing to the root of the miniconda directory
           echo $CONDA/bin >> $GITHUB_PATH
           conda update conda
-          conda install conda-build anaconda-client
+          conda install conda-build anaconda-client conda-verify
           mkdir artifacts
           cd conda.recipe
           conda build -c singlestore -c conda-forge --no-anaconda-upload --output-folder ../artifacts .

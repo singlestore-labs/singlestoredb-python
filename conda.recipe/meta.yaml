@@ -37,5 +37,5 @@ about:
     license: Apache 2.0
     license_file: ../LICENSE
     summary: SingleStore Database Interface
-    doc_url: https://singlestore.github.io/singlestore-python/index.html
-    dev_url: https://github.com/singlestore/singlestore-python
+    doc_url: https://singlestore-labs.github.io/singlestore-python/index.html
+    dev_url: https://github.com/singlestore-labs/singlestore-python
