@@ -70,6 +70,7 @@ jobs:
           conda install conda-build anaconda-client
           cd conda.recipe
           mkdir artifacts
+          pwd
           conda build -c singlestore -c conda-forge --no-anaconda-upload --output-folder artifacts .
         env:
           SINGLESTORE_URL: "root:root@127.0.0.1:3306"
@@ -86,6 +87,5 @@ jobs:
         if: ${{ github.event.inputs.publish_anaconda == 'true' }}
         run: |
           echo $CONDA/bin >> $GITHUB_PATH
-          ls
-          ls artifacts
+          pwd
           anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main artifacts/noarch/singlestore-*.tar.bz2
