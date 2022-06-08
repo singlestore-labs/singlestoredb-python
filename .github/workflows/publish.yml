@@ -23,6 +23,11 @@ on:
         required: true
         type: boolean
         default: true
+      build_number:
+        description: "Package build number"
+        required: true
+        type: string
+        default: 0
 
 jobs:
   publish:
@@ -84,6 +89,8 @@ jobs:
 
       - name: Publish Conda package
         if: ${{ github.event.inputs.publish_anaconda == 'true' }}
+        env:
+          PACKAGE_BUILD_NUMBER: ${{ github.event.inputs.build_number }}
         run: |
           echo $CONDA/bin >> $GITHUB_PATH
           anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main artifacts/noarch/singlestore-*.tar.bz2

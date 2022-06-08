@@ -1,14 +1,15 @@
+{% set data = load_setup_py_data() %}
 
 package:
     name: singlestore
-    version: 0.1.0
+    version: {{ data.get('version') }}
 
 source:
-#   url: https://github.com/singlestore-labs/singlestore-python/releases/download/v0.1.0/singlestore-python-0.1.0.tar.gz
     path: ..
 
 build:
-    number: 0
+    noarch: python
+    number: {{ PACKAGE_BUILD_NUMBER }}
     script: python -m pip install --no-deps --ignore-installed .
 
 requirements:
