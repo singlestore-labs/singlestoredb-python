@@ -19,6 +19,7 @@ class HTTPDriver(Driver):
         params.pop('pure_python', False)
         params.pop('charset', None)
         params.pop('odbc_driver', None)
+        params.pop('credential_type', None)
 
         params['protocol'] = params.pop('driver', '').replace('singlestore+', '') or None
 

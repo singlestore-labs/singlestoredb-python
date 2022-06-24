@@ -19,6 +19,7 @@ class MySQLdbDriver(Driver):
         params.pop('driver', None)
         params.pop('pure_python', None)
         params.pop('odbc_driver', None)
+        params.pop('credential_type', None)
 
         params['conv'] = dict(converters)
 

@@ -23,6 +23,7 @@ class MariaDBDriver(Driver):
         params.pop('charset', None)
         params.pop('odbc_driver', None)
         params.pop('pure_python', None)
+        params.pop('credential_type', None)
         params['converter'] = self.merge_converters(
             params.pop('converters', {}),
             dict(converters),

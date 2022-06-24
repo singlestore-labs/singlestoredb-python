@@ -28,6 +28,7 @@ class CyMySQLDriver(Driver):
         params.pop('driver', None)
         params.pop('pure_python', None)
         params.pop('odbc_driver', None)
+        params.pop('credential_type', None)
         params['port'] = params['port'] or 3306
         params['db'] = params.pop('database', None)
         params['passwd'] = params.pop('password', None)

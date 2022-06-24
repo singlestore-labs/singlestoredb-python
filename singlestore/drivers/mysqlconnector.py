@@ -32,6 +32,11 @@ class MySQLConnectorDriver(Driver):
         convs = params.pop('converters', {})
         self.converters = self.merge_converters(convs, converters)
 
+        # Check authentication method
+        params.pop('credential_type', None)
+#       if cred in [auth.BROWSER_SSO, auth.JWT]:
+#           params['auth_plugin'] = 'mysql_clear_password'
+
         return params
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:

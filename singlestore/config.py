@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 
+from . import auth
 from .utils.config import check_bool  # noqa: F401
 from .utils.config import check_float  # noqa: F401
 from .utils.config import check_int  # noqa: F401
@@ -112,6 +113,20 @@ register_option(
     'ssl_disabled', 'bool', check_bool, False,
     'Disable SSL usage',
     environ='SINGLESTORE_SSL_DISABLED',
+)
+
+register_option(
+    'credential_type', 'str',
+    functools.partial(
+        check_str, valid_values=[
+            auth.PASSWORD,
+            auth.JWT,
+            auth.BROWSER_SSO,
+        ],
+    ),
+    None,
+    'Type of authentication method to use.',
+    environ='SINGLESTORE_CREDENTIAL_TYPE',
 )
 
 #

@@ -29,6 +29,7 @@ class PyMySQLDriver(Driver):
         params.pop('driver', None)
         params.pop('odbc_driver', None)
         params.pop('pure_python', None)
+        params.pop('credential_type', None)
         params['port'] = params['port'] or 3306
         params['conv'] = self.merge_converters(params.pop('converters', {}), converters)
         return params

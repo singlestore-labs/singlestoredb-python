@@ -27,6 +27,7 @@ except ImportError:
         def itertuples(self, *args: Any, **kwargs: Any) -> None:
             pass
 
+from . import auth
 from . import drivers
 from . import exceptions
 from . import types
@@ -893,11 +894,8 @@ class Connection(object):
 
     def __init__(self, **kwargs: Any):
         """Call :func:`singlestore.connect` instead."""
-        kwargs = build_params(**kwargs)
-
         self._conn: Optional[Any] = None
         self.errorhandler = None
-
         self.connection_params: Dict[str, Any] = build_params(**kwargs)
 
         #: Query results format ('tuple', 'namedtuple', 'dict', 'dataframe')
@@ -908,6 +906,14 @@ class Connection(object):
 
         #: Session encoding
         self.encoding = self.connection_params.get('charset', 'utf-8').replace('mb4', '')
+
+        # Handle various authentication types
+        credential_type = self.connection_params.get('credential_type', None)
+        if credential_type == auth.BROWSER_SSO:
+            # TODO: Cache info for token refreshes
+            info = auth.get_jwt(self.connection_params['user'])
+            self.connection_params['password'] = str(info)
+            self.connection_params['credential_type'] = auth.JWT
 
         drv_name = re.sub(r'^\w+\+', r'', self.connection_params['driver']).lower()
         self._driver = drivers.get_driver(drv_name, self.connection_params)
@@ -1120,6 +1126,7 @@ def connect(
     ssl_ca: Optional[str] = None, ssl_disabled: Optional[bool] = None,
     converters: Optional[Dict[int, Callable[..., Any]]] = None,
     results_format: Optional[str] = None,
+    credential_type: Optional[str] = None,
 ) -> Connection:
     """
     Return a SingleStore database connection.
@@ -1165,6 +1172,8 @@ def connect(
         Dictionary of data conversion functions
     results_format : str, optional
         Format of query results: tuple, namedtuple, dict, or dataframe
+    credential_type : str, optional
+        Type of authentication to use
 
     Examples
     --------
