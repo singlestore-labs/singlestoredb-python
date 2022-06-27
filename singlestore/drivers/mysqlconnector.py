@@ -5,6 +5,7 @@ from typing import Dict
 
 from ..converters import converters
 from .base import Driver
+# from .. import auth
 
 
 class MySQLConnectorDriver(Driver):
@@ -34,8 +35,11 @@ class MySQLConnectorDriver(Driver):
 
         # Check authentication method
         params.pop('credential_type', None)
+#       cred = params.pop('credential_type', None)
 #       if cred in [auth.BROWSER_SSO, auth.JWT]:
 #           params['auth_plugin'] = 'mysql_clear_password'
+#           params['option_files'] = [os.path.join(os.path.dirname(__file__),
+#                                                  'enable_cleartext_plugin.cnf')]
 
         return params
 

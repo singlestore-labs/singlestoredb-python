@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import datetime
 from typing import Any
-from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Union
@@ -12,9 +11,9 @@ import jwt
 
 
 # Credential types
-PASSWORD = 'PASSWORD'
-JWT = 'JWT'
-BROWSER_SSO = 'BROWSER_SSO'
+PASSWORD = 'password'
+JWT = 'jwt'
+BROWSER_SSO = 'browser_sso'
 
 # Single Sign-On URL
 SSO_URL = 'https://portal.singlestore.com/engine-sso'
@@ -23,11 +22,13 @@ SSO_URL = 'https://portal.singlestore.com/engine-sso'
 class JSONWebToken(object):
     """Container for JWT information."""
 
-    def __init__(self, token: str, expires: datetime.datetime,
-            email: str, username: str, url: str = SSO_URL,
-            clusters: Optional[Union[str, List[str]]] = None,
-            databases: Optional[Union[str, List[str]]] = None,
-            timeout: int = 60):
+    def __init__(
+        self, token: str, expires: datetime.datetime,
+        email: str, username: str, url: str = SSO_URL,
+        clusters: Optional[Union[str, List[str]]] = None,
+        databases: Optional[Union[str, List[str]]] = None,
+        timeout: int = 60,
+    ):
         self.token = token
         self.expires = expires
         self.email = email
@@ -53,9 +54,8 @@ class JSONWebToken(object):
             raise ValueError("Missing 'exp' in claims")
         try:
             expires = datetime.datetime.fromtimestamp(info['exp'], datetime.timezone.utc)
-        except:
-            raise
-            raise ValueError("Invalid 'exp' in claims")
+        except Exception as exc:
+            raise ValueError("Invalid 'exp' in claims: {}".format(str(exc)))
 
         username = info.get('username', info.get('sub', None))
         email = info['email']
@@ -89,8 +89,10 @@ class JSONWebToken(object):
 
         """
         if force or self.is_expired:
-            out = get_jwt(self.email, url=self.url, clusters=self.clusters,
-                          databases=self.databases, timeout=self.timeout)
+            out = get_jwt(
+                self.email, url=self.url, clusters=self.clusters,
+                databases=self.databases, timeout=self.timeout,
+            )
             self.token = out.token
             self.expires = out.expires
             return True
@@ -106,10 +108,12 @@ def _listify(s: Optional[Union[str, List[str]]]) -> Optional[str]:
     return s
 
 
-def get_jwt(email: str, url: str = SSO_URL,
-            clusters: Optional[Union[str, List[str]]] = None,
-            databases: Optional[Union[str, List[str]]] = None,
-            timeout: int = 60) -> JSONWebToken:
+def get_jwt(
+    email: str, url: str = SSO_URL,
+    clusters: Optional[Union[str, List[str]]] = None,
+    databases: Optional[Union[str, List[str]]] = None,
+    timeout: int = 60,
+) -> JSONWebToken:
     """
     Retrieve a JWT token from the SingleStore single-sign-on URL.
 
@@ -171,12 +175,14 @@ def get_jwt(email: str, url: str = SSO_URL,
         server = HTTPServer(('127.0.0.1', 0), AuthServer)
         threading.Thread(target=server.serve_forever).start()
 
-        query = urllib.parse.urlencode({k: v for k, v in dict(
-            email=email,
-            returnTo=f'http://{server.server_address[0]}:{server.server_address[1]}',
-            db=_listify(databases),
-            cluster=_listify(clusters)
-        ).items() if v is not None})
+        query = urllib.parse.urlencode({
+            k: v for k, v in dict(
+                email=email,
+                returnTo=f'http://{server.server_address[0]}:{server.server_address[1]}',
+                db=_listify(databases),
+                cluster=_listify(clusters),
+            ).items() if v is not None
+        })
         webbrowser.open(f'{url}?{query}')
 
         for i in range(timeout * 2):
