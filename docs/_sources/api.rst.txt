@@ -81,7 +81,7 @@ workspaces in the SingleStoreDB Cloud.
 .. autosummary::
    :toctree: generated/
 
-   manage_cluster
+   manage_workspace
 
 WorkspaceManager
 ................
@@ -114,8 +114,8 @@ or by retrieving an element from :attr:`WorkspaceManager.workspace_groups`.
    :toctree: generated/
 
    WorkspaceGroup
-   WorkspaceGroup.create_workspace
    WorkspaceGroup.workspaces
+   WorkspaceGroup.create_workspace
    WorkspaceGroup.refresh
    WorkspaceGroup.update
    WorkspaceGroup.terminate
@@ -140,7 +140,9 @@ Workspaces are created within WorkspaceGroups. They can be created using either
 Region
 ......
 
-Region objects are accessed from the :attr:`ClusterManager.regions` attribute.
+Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
+
+.. currentmodule:: singlestore.management.region
 
 .. autosummary::
    :toctree: generated/

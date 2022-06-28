@@ -81,7 +81,7 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#management-api">Management API</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="generated/singlestore.manage_cluster.html">singlestore.manage_cluster</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestore.manage_workspace.html">singlestore.manage_workspace</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#workspacemanager">WorkspaceManager</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.html">singlestore.management.workspace.WorkspaceManager</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.workspace_groups.html">singlestore.management.workspace.WorkspaceManager.workspace_groups</a></li>
@@ -94,8 +94,8 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#workspacegroup">WorkspaceGroup</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.html">singlestore.management.workspace.WorkspaceGroup</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.create_workspace.html">singlestore.management.workspace.WorkspaceGroup.create_workspace</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.workspaces.html">singlestore.management.workspace.WorkspaceGroup.workspaces</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.create_workspace.html">singlestore.management.workspace.WorkspaceGroup.create_workspace</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.refresh.html">singlestore.management.workspace.WorkspaceGroup.refresh</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.update.html">singlestore.management.workspace.WorkspaceGroup.update</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.terminate.html">singlestore.management.workspace.WorkspaceGroup.terminate</a></li>
@@ -109,7 +109,7 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#region">Region</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.Region.html">singlestore.management.workspace.Region</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.region.Region.html">singlestore.management.region.Region</a></li>
 </ul>
 </li>
 </ul>
@@ -274,14 +274,14 @@ workspaces in the SingleStoreDB Cloud.</p>
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.manage_cluster.html#singlestore.manage_cluster" title="singlestore.manage_cluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">manage_cluster</span></code></a>([access_token, version, base_url])</p></td>
-<td><p>Retrieve a SingleStore cluster manager.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.manage_workspace.html#singlestore.manage_workspace" title="singlestore.manage_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">manage_workspace</span></code></a>([access_token, version, ...])</p></td>
+<td><p>Retrieve a SingleStore workspace manager.</p></td>
 </tr>
 </tbody>
 </table>
 <section id="workspacemanager">
 <h3>WorkspaceManager<a class="headerlink" href="#workspacemanager" title="Permalink to this headline">¶</a></h3>
-<p>WorkspaceManager objects are returned by the <code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspace()</span></code> function.
+<p>WorkspaceManager objects are returned by the <a class="reference internal" href="generated/singlestore.manage_workspace.html#singlestore.manage_workspace" title="singlestore.manage_workspace"><code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspace()</span></code></a> function.
 They allow you to retrieve information about workspaces in your account, or
 create new ones.</p>
 <table class="longtable docutils align-default">
@@ -327,11 +327,11 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.html#singlestore.management.workspace.WorkspaceGroup" title="singlestore.management.workspace.WorkspaceGroup"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup</span></code></a>(name, id, created_at, region, ...)</p></td>
 <td><p>SingleStore workspace group definition.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.create_workspace.html#singlestore.management.workspace.WorkspaceGroup.create_workspace" title="singlestore.management.workspace.WorkspaceGroup.create_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.create_workspace</span></code></a>(name[, ...])</p></td>
-<td><p>Create a new workspace.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.workspaces.html#singlestore.management.workspace.WorkspaceGroup.workspaces" title="singlestore.management.workspace.WorkspaceGroup.workspaces"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.workspaces</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.workspaces.html#singlestore.management.workspace.WorkspaceGroup.workspaces" title="singlestore.management.workspace.WorkspaceGroup.workspaces"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.workspaces</span></code></a></p></td>
 <td><p>Return a list of available workspaces.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.create_workspace.html#singlestore.management.workspace.WorkspaceGroup.create_workspace" title="singlestore.management.workspace.WorkspaceGroup.create_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.create_workspace</span></code></a>(name[, ...])</p></td>
+<td><p>Create a new workspace.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.refresh.html#singlestore.management.workspace.WorkspaceGroup.refresh" title="singlestore.management.workspace.WorkspaceGroup.refresh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.refresh</span></code></a>()</p></td>
 <td><p>Update teh object to the current state.</p></td>
@@ -373,14 +373,14 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 </section>
 <section id="region">
 <h3>Region<a class="headerlink" href="#region" title="Permalink to this headline">¶</a></h3>
-<p>Region objects are accessed from the <code class="xref py py-attr docutils literal notranslate"><span class="pre">ClusterManager.regions</span></code> attribute.</p>
+<p>Region objects are accessed from the <a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.regions.html#singlestore.management.workspace.WorkspaceManager.regions" title="singlestore.management.workspace.WorkspaceManager.regions"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a> attribute.</p>
 <table class="longtable docutils align-default">
 <colgroup>
 <col style="width: 10%" />
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.Region.html#singlestore.management.workspace.Region" title="singlestore.management.workspace.Region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Region</span></code></a>(id, name, provider)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.region.Region.html#singlestore.management.region.Region" title="singlestore.management.region.Region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Region</span></code></a>(id, name, provider)</p></td>
 <td><p>Cluster region information.</p></td>
 </tr>
 </tbody>
