@@ -18,7 +18,7 @@ import ssl
 # Always import this first to get the system libssl.
 # mysql.connector bundles its own and we don't want that.
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 from .config import options, get_option, set_option, describe_option
 from .connection import connect, apilevel, threadsafety, paramstyle
