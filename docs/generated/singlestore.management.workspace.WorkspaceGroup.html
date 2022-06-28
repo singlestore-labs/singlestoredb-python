@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>singlestore.management.workspace.WorkspaceGroup &mdash; SingleStore 0.1.0 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="singlestore.management.workspace.WorkspaceGroup.create_workspace" href="singlestore.management.workspace.WorkspaceGroup.create_workspace.html" />
+    <link rel="prev" title="singlestore.management.workspace.WorkspaceManager.get_workspace" href="singlestore.management.workspace.WorkspaceManager.get_workspace.html" />
+</head>
+
+<body class="wy-body-for-nav">
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> SingleStore
+          </a>
+              <div class="version">
+                0.1.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../whatsnew.html">What’s New</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started.html">Getting Started</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../api.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../api.html#connections">Connections</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../api.html#management-api">Management API</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="singlestore.manage_cluster.html">singlestore.manage_cluster</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#workspacemanager">WorkspaceManager</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="../api.html#workspacegroup">WorkspaceGroup</a><ul class="current">
+<li class="toctree-l4 current"><a class="current reference internal" href="#">singlestore.management.workspace.WorkspaceGroup</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestore.management.workspace.WorkspaceGroup.create_workspace.html">singlestore.management.workspace.WorkspaceGroup.create_workspace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestore.management.workspace.WorkspaceGroup.workspaces.html">singlestore.management.workspace.WorkspaceGroup.workspaces</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestore.management.workspace.WorkspaceGroup.refresh.html">singlestore.management.workspace.WorkspaceGroup.refresh</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestore.management.workspace.WorkspaceGroup.update.html">singlestore.management.workspace.WorkspaceGroup.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestore.management.workspace.WorkspaceGroup.terminate.html">singlestore.management.workspace.WorkspaceGroup.terminate</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#workspace">Workspace</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#region">Region</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../api.html#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SingleStore</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+          <li><a href="../api.html">API Reference</a> &raquo;</li>
+      <li>singlestore.management.workspace.WorkspaceGroup</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/generated/singlestore.management.workspace.WorkspaceGroup.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+
+  <section id="singlestore-management-workspace-workspacegroup">
+<h1>singlestore.management.workspace.WorkspaceGroup<a class="headerlink" href="#singlestore-management-workspace-workspacegroup" title="Permalink to this headline">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="singlestore.management.workspace.WorkspaceGroup">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">singlestore.management.workspace.</span></span><span class="sig-name descname"><span class="pre">WorkspaceGroup</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">created_at</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.10)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.10)"><span class="pre">datetime.datetime</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">region</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="singlestore.management.workspace.Region.html#singlestore.management.workspace.Region" title="singlestore.management.region.Region"><span class="pre">singlestore.management.region.Region</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">firewall_ranges</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.10)"><span class="pre">collections.abc.Sequence</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">terminated_at</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.10)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.10)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.10)"><span class="pre">datetime.datetime</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestore.management.workspace.WorkspaceGroup" title="Permalink to this definition">¶</a></dt>
+<dd><p>SingleStore workspace group definition.</p>
+<p>This object is not instantiated directly. It is used in the results
+of API calls on the <a class="reference internal" href="singlestore.management.workspace.WorkspaceManager.html#singlestore.management.workspace.WorkspaceManager" title="singlestore.management.workspace.WorkspaceManager"><code class="xref py py-class docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a>. Workspace groups are created using
+<a class="reference internal" href="singlestore.management.workspace.WorkspaceManager.create_workspace_group.html#singlestore.management.workspace.WorkspaceManager.create_workspace_group" title="singlestore.management.workspace.WorkspaceManager.create_workspace_group"><code class="xref py py-meth docutils literal notranslate"><span class="pre">WorkspaceManager.create_workspace_group()</span></code></a>, or existing workspace groups are
+accessed by either <a class="reference internal" href="singlestore.management.workspace.WorkspaceManager.workspace_groups.html#singlestore.management.workspace.WorkspaceManager.workspace_groups" title="singlestore.management.workspace.WorkspaceManager.workspace_groups"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.workspace_groups</span></code></a> or by calling
+<a class="reference internal" href="singlestore.management.workspace.WorkspaceManager.get_workspace_group.html#singlestore.management.workspace.WorkspaceManager.get_workspace_group" title="singlestore.management.workspace.WorkspaceManager.get_workspace_group"><code class="xref py py-meth docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace_group()</span></code></a>.</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="singlestore.management.workspace.WorkspaceManager.create_workspace_group.html#singlestore.management.workspace.WorkspaceManager.create_workspace_group" title="singlestore.management.workspace.WorkspaceManager.create_workspace_group"><code class="xref py py-meth docutils literal notranslate"><span class="pre">WorkspaceManager.create_workspace_group()</span></code></a>, <a class="reference internal" href="singlestore.management.workspace.WorkspaceManager.get_workspace_group.html#singlestore.management.workspace.WorkspaceManager.get_workspace_group" title="singlestore.management.workspace.WorkspaceManager.get_workspace_group"><code class="xref py py-meth docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace_group()</span></code></a>, <a class="reference internal" href="singlestore.management.workspace.WorkspaceManager.workspace_groups.html#singlestore.management.workspace.WorkspaceManager.workspace_groups" title="singlestore.management.workspace.WorkspaceManager.workspace_groups"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.workspace_groups</span></code></a></p>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="singlestore.management.workspace.WorkspaceGroup.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">created_at</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.10)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.10)"><span class="pre">datetime.datetime</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">region</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="singlestore.management.workspace.Region.html#singlestore.management.workspace.Region" title="singlestore.management.region.Region"><span class="pre">singlestore.management.region.Region</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">firewall_ranges</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence" title="(in Python v3.10)"><span class="pre">collections.abc.Sequence</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">terminated_at</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Optional" title="(in Python v3.10)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Union" title="(in Python v3.10)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.10)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.10)"><span class="pre">datetime.datetime</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestore.management.workspace.WorkspaceGroup.__init__" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p class="rubric">Methods</p>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#singlestore.management.workspace.WorkspaceGroup.__init__" title="singlestore.management.workspace.WorkspaceGroup.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(name, id, created_at, region, ...)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestore.management.workspace.WorkspaceGroup.create_workspace.html#singlestore.management.workspace.WorkspaceGroup.create_workspace" title="singlestore.management.workspace.WorkspaceGroup.create_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_workspace</span></code></a>(name[, size, ...])</p></td>
+<td><p>Create a new workspace.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_dict</span></code>(obj, manager)</p></td>
+<td><p>Construct a WorkspaceGroup from a dictionary of values.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestore.management.workspace.WorkspaceGroup.refresh.html#singlestore.management.workspace.WorkspaceGroup.refresh" title="singlestore.management.workspace.WorkspaceGroup.refresh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">refresh</span></code></a>()</p></td>
+<td><p>Update teh object to the current state.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="singlestore.management.workspace.WorkspaceGroup.terminate.html#singlestore.management.workspace.WorkspaceGroup.terminate" title="singlestore.management.workspace.WorkspaceGroup.terminate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">terminate</span></code></a>([force, wait_on_terminated, ...])</p></td>
+<td><p>Terminate the workspace group.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestore.management.workspace.WorkspaceGroup.update.html#singlestore.management.workspace.WorkspaceGroup.update" title="singlestore.management.workspace.WorkspaceGroup.update"><code class="xref py py-obj docutils literal notranslate"><span class="pre">update</span></code></a>([name, admin_password, firewall_ranges])</p></td>
+<td><p>Update the cluster definition.</p></td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Attributes</p>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="singlestore.management.workspace.WorkspaceGroup.workspaces.html#singlestore.management.workspace.WorkspaceGroup.workspaces" title="singlestore.management.workspace.WorkspaceGroup.workspaces"><code class="xref py py-obj docutils literal notranslate"><span class="pre">workspaces</span></code></a></p></td>
+<td><p>Return a list of available workspaces.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">name</span></code></p></td>
+<td><p>Name of the workspace group</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">id</span></code></p></td>
+<td><p>Unique ID of the workspace group</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">created_at</span></code></p></td>
+<td><p>Timestamp of when the workspace group was created</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">region</span></code></p></td>
+<td><p>Region of the cluster (see <a class="reference internal" href="singlestore.management.workspace.Region.html#singlestore.management.workspace.Region" title="singlestore.management.workspace.Region"><code class="xref py py-class docutils literal notranslate"><span class="pre">Region</span></code></a>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">firewall_ranges</span></code></p></td>
+<td><p>List of allowed incoming IP addresses / ranges</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">terminated_at</span></code></p></td>
+<td><p>Timestamp of when the workspace group was terminated</p></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="singlestore.management.workspace.WorkspaceManager.get_workspace.html" class="btn btn-neutral float-left" title="singlestore.management.workspace.WorkspaceManager.get_workspace" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="singlestore.management.workspace.WorkspaceGroup.create_workspace.html" class="btn btn-neutral float-right" title="singlestore.management.workspace.WorkspaceGroup.create_workspace" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2022 SingleStore. All Rights Reserved.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+</body>
+</html>

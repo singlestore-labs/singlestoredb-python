@@ -90,5 +90,5 @@ class NotSupportedError(DatabaseError):
     """Exception for using unsupported features of the database."""
 
 
-class ClusterManagerError(Error):
-    """Exception for errors in the cluster management API."""
+class ManagementError(Error):
+    """Exception for errors in the management API."""

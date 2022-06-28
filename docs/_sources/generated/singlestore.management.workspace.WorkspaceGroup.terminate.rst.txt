@@ -1,0 +1,6 @@
+﻿singlestore.management.workspace.WorkspaceGroup.terminate
+=========================================================
+
+.. currentmodule:: singlestore.management.workspace
+
+.. automethod:: WorkspaceGroup.terminate

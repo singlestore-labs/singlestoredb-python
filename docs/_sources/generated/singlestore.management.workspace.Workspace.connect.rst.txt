@@ -1,0 +1,6 @@
+﻿singlestore.management.workspace.Workspace.connect
+==================================================
+
+.. currentmodule:: singlestore.management.workspace
+
+.. automethod:: Workspace.connect

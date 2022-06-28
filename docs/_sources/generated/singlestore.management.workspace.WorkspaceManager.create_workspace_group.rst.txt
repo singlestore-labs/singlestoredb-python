@@ -1,0 +1,6 @@
+﻿singlestore.management.workspace.WorkspaceManager.create\_workspace\_group
+==========================================================================
+
+.. currentmodule:: singlestore.management.workspace
+
+.. automethod:: WorkspaceManager.create_workspace_group

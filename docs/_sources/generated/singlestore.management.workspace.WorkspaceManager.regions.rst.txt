@@ -1,0 +1,6 @@
+﻿singlestore.management.workspace.WorkspaceManager.regions
+=========================================================
+
+.. currentmodule:: singlestore.management.workspace
+
+.. autoproperty:: WorkspaceManager.regions

@@ -78,7 +78,7 @@ class TestConfig(unittest.TestCase):
 
     def test_shortcut_options(self):
         format = get_option('results.format')
-        token = get_option('cluster_manager.token')
+        token = get_option('management.token')
 
         self.assertEqual(get_option('format'), format)
         self.assertEqual(options.format, format)
@@ -90,19 +90,19 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(options.format, 'tuple')
 
         self.assertEqual(get_option('token'), token)
-        self.assertEqual(get_option('cluster_manager.token'), token)
+        self.assertEqual(get_option('management.token'), token)
         self.assertEqual(options.token, token)
 
         options.token = 'Foo'
 
         self.assertEqual(get_option('token'), 'Foo')
-        self.assertEqual(get_option('cluster_manager.token'), 'Foo')
+        self.assertEqual(get_option('management.token'), 'Foo')
         self.assertEqual(options.token, 'Foo')
 
         reset_option('token')
 
         self.assertEqual(get_option('token'), token)
-        self.assertEqual(get_option('cluster_manager.token'), token)
+        self.assertEqual(get_option('management.token'), token)
         self.assertEqual(options.token, token)
 
     def test_missing_options(self):
@@ -137,17 +137,17 @@ class TestConfig(unittest.TestCase):
             self.assertRegex(line, r'^(results\.format|local_infile)')
 
         # Displays entire option hierarchy
-        out = describe_option('cluster_manager', _print_desc=False)
+        out = describe_option('management', _print_desc=False)
         for line in out.split('\n'):
             if not line or line.startswith(' '):
                 continue
-            self.assertRegex(line, r'^cluster_manager\.')
+            self.assertRegex(line, r'^management\.')
 
         with self.assertRaises(KeyError):
-            describe_option('cluster_manager.foo')
+            describe_option('management.foo')
 
         out = describe_option(_print_desc=False)
-        self.assertRegex(out, r'\bcluster_manager\.token :')
+        self.assertRegex(out, r'\bmanagement\.token :')
         self.assertRegex(out, r'\bhost :')
         self.assertRegex(out, r'\bport :')
         self.assertRegex(out, r'\buser :')

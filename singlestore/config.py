@@ -157,7 +157,7 @@ register_option(
 # Cluster manager options
 #
 register_option(
-    'cluster_manager.token', 'string', check_str, None,
-    'Specifies the authentication token for the cluster manager API.',
-    environ=['SINGLESTORE_CLUSTER_MANAGER_TOKEN'],
+    'management.token', 'string', check_str, None,
+    'Specifies the authentication token for the management API.',
+    environ=['SINGLESTORE_MANAGEMENT_TOKEN'],
 )

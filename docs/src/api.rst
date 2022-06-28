@@ -70,11 +70,11 @@ created using the :meth:`Connection.cursor` method.
    Cursor.is_connected
 
 
-Cluster Management
-------------------
+Management API
+--------------
 
-The cluster management objects allow you to create, destroy, and interact with
-clusters in the SingleStore managed service.
+The management objects allow you to create, destroy, and interact with
+workspaces in the SingleStoreDB Cloud.
 
 .. currentmodule:: singlestore
 
@@ -83,40 +83,59 @@ clusters in the SingleStore managed service.
 
    manage_cluster
 
-ClusterManager
-..............
+WorkspaceManager
+................
 
-ClusterManager objects are returned by the :func:`manage_cluster` function.
-They allow you to retrieve information about clusters in your account, or
+WorkspaceManager objects are returned by the :func:`manage_workspace` function.
+They allow you to retrieve information about workspaces in your account, or
 create new ones.
 
-.. currentmodule:: singlestore.manager
+.. currentmodule:: singlestore.management.workspace
 
 .. autosummary::
    :toctree: generated/
 
-   ClusterManager
-   ClusterManager.clusters
-   ClusterManager.regions
-   ClusterManager.create_cluster
-   ClusterManager.get_cluster
+   WorkspaceManager
+   WorkspaceManager.workspace_groups
+   WorkspaceManager.regions
+   WorkspaceManager.create_workspace_group
+   WorkspaceManager.create_workspace
+   WorkspaceManager.get_workspace_group
+   WorkspaceManager.get_workspace
 
-Cluster
-.......
 
-Cluster objects are retrieved from :meth:`ClusterManager.get_cluster` or
-by retrieving an element from :attr:`CluterManager.clusters`.
+WorkspaceGroup
+..............
+
+WorkspaceGroup objects are retrieved from :meth:`WorkspaceManager.get_workspace_group`
+or by retrieving an element from :attr:`WorkspaceManager.workspace_groups`.
 
 .. autosummary::
    :toctree: generated/
 
-   Cluster
-   Cluster.refresh
-   Cluster.update
-   Cluster.suspend
-   Cluster.resume
-   Cluster.terminate
-   Cluster.connect
+   WorkspaceGroup
+   WorkspaceGroup.create_workspace
+   WorkspaceGroup.workspaces
+   WorkspaceGroup.refresh
+   WorkspaceGroup.update
+   WorkspaceGroup.terminate
+
+
+Workspace
+.........
+
+Workspaces are created within WorkspaceGroups. They can be created using either
+:meth:`WorkspaceGroup.create_workspace` or retrieved from
+:attr:`WorkspaceManager.workspaces`.
+
+.. autosummary::
+   :toctree: generated/
+
+   Workspace
+   Workspace.connect
+   Workspace.refresh
+   Workspace.terminate
+
 
 Region
 ......

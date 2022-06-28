@@ -25,9 +25,11 @@ from .connection import connect, apilevel, threadsafety, paramstyle
 from .exceptions import (
     Warning, Error, InterfaceError, DatabaseError, OperationalError,
     IntegrityError, InternalError, ProgrammingError, NotSupportedError,
-    DataError, ClusterManagerError,
+    DataError, ManagementError,
 )
-from .manager import manage_cluster
+from .management import (
+    manage_cluster, manage_workspace,
+)
 from .types import (
     Date, Time, Timestamp, DateFromTicks, TimeFromTicks, TimestampFromTicks,
     Binary, STRING, BINARY, NUMBER, DATETIME, ROWID,

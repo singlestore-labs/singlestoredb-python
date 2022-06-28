@@ -1,0 +1,6 @@
+﻿singlestore.management.workspace.WorkspaceGroup.update
+======================================================
+
+.. currentmodule:: singlestore.management.workspace
+
+.. automethod:: WorkspaceGroup.update
