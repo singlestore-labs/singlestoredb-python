@@ -5,10 +5,16 @@ from __future__ import annotations
 
 import os
 import random
+import re
 import secrets
 import unittest
 
 import singlestore as s2
+
+
+def clean_name(s):
+    """Change all non-word characters to -."""
+    return re.sub(r'[^\w]', r'-', s).lower()
 
 
 class TestCluster(unittest.TestCase):
@@ -25,7 +31,7 @@ class TestCluster(unittest.TestCase):
         cls.password = secrets.token_urlsafe(20)
 
         cls.cluster = cls.manager.create_cluster(
-            'cm-test-{}'.format(secrets.token_urlsafe(20)),
+            clean_name('cm-test-{}'.format(secrets.token_urlsafe(20)[:20])),
             region=random.choice(us_regions).id,
             admin_password=cls.password,
             firewall_ranges=['0.0.0.0/0'],
@@ -173,7 +179,7 @@ class TestWorkspace(unittest.TestCase):
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
         cls.password = secrets.token_urlsafe(20)
 
-        name = secrets.token_urlsafe(20).lower()[:20]
+        name = clean_name(secrets.token_urlsafe(20)[:20])
 
         cls.workspace_group = cls.manager.create_workspace_group(
             f'wg-test-{name}',
