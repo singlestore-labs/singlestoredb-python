@@ -140,10 +140,14 @@ class TestCluster(unittest.TestCase):
         if pure_python:
             self.skipTest('Connections through managed service are disabled')
 
-        with self.cluster.connect(user='admin', password=self.password) as conn:
-            with conn.cursor() as cur:
-                cur.execute('show databases')
-                assert 'cluster' in [x[0] for x in list(cur)]
+        try:
+            with self.cluster.connect(user='admin', password=self.password) as conn:
+                with conn.cursor() as cur:
+                    cur.execute('show databases')
+                    assert 'cluster' in [x[0] for x in list(cur)]
+        except s2.ManagementError as exc:
+            if 'endpoint has not been set' not in str(exc):
+                self.skipTest('No endpoint in response. Skipping connection test.')
 
         # Test missing endpoint
         clus = self.manager.get_cluster(self.cluster.id)
