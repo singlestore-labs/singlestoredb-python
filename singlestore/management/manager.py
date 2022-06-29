@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from typing import Any
+from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Union
@@ -48,7 +49,9 @@ class Manager(object):
             version or type(self).default_version,
         ) + '/'
 
-    def _check(self, res: requests.Response) -> requests.Response:
+    def _check(
+        self, res: requests.Response, url: str, params: Dict[str, Any],
+    ) -> requests.Response:
         """
         Check the HTTP response status code and raise an exception as needed.
 
@@ -63,7 +66,10 @@ class Manager(object):
 
         """
         if res.status_code >= 400:
-            raise ManagementError(errno=res.status_code, msg=res.text)
+            msg = f'{res.text}: {url}'
+            if params:
+                msg += ': {}'.format(str(params))
+            raise ManagementError(errno=res.status_code, msg=msg)
         return res
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -89,6 +95,7 @@ class Manager(object):
                 urljoin(self._base_url, path),
                 *args, **kwargs,
             ),
+            path, kwargs,
         )
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -114,6 +121,7 @@ class Manager(object):
                 urljoin(self._base_url, path),
                 *args, **kwargs,
             ),
+            path, kwargs,
         )
 
     def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -139,6 +147,7 @@ class Manager(object):
                 urljoin(self._base_url, path),
                 *args, **kwargs,
             ),
+            path, kwargs,
         )
 
     def _patch(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -164,6 +173,7 @@ class Manager(object):
                 urljoin(self._base_url, path),
                 *args, **kwargs,
             ),
+            path, kwargs,
         )
 
     def _wait_on_state(
