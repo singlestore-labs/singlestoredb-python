@@ -392,7 +392,7 @@ class WorkspaceManager(Manager):
     """
     SingleStore workspace manager.
 
-    This class should be instantiated using :func:`singlestore.manage_workspace`.
+    This class should be instantiated using :func:`singlestore.manage_workspaces`.
 
     Parameters
     ----------
@@ -405,7 +405,7 @@ class WorkspaceManager(Manager):
 
     See Also
     --------
-    :func:`singlestore.manage_workspace`
+    :func:`singlestore.manage_workspaces`
 
     """
 
@@ -546,7 +546,7 @@ class WorkspaceManager(Manager):
         return Workspace.from_dict(res.json(), manager=self)
 
 
-def manage_workspace(
+def manage_workspaces(
     access_token: Optional[str] = None,
     version: str = WorkspaceManager.default_version,
     base_url: str = WorkspaceManager.default_base_url,

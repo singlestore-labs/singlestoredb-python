@@ -14,7 +14,7 @@ import singlestore as s2
 
 def clean_name(s):
     """Change all non-word characters to -."""
-    return re.sub(r'[^\w]', r'-', s).lower()
+    return re.sub(r'[^\w]', r'-', s).replace('_', '-').lower()
 
 
 class TestCluster(unittest.TestCase):
@@ -174,7 +174,7 @@ class TestWorkspace(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspace()
+        cls.manager = s2.manage_workspaces()
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
         cls.password = secrets.token_urlsafe(20)
@@ -188,10 +188,14 @@ class TestWorkspace(unittest.TestCase):
             firewall_ranges=['0.0.0.0/0'],
         )
 
-        cls.workspace = cls.workspace_group.create_workspace(
-            f'ws-test-{name}',
-            wait_on_active=True,
-        )
+        try:
+            cls.workspace = cls.workspace_group.create_workspace(
+                f'ws-test-{name}',
+                wait_on_active=True,
+            )
+        except Exception:
+            cls.workspace_group.terminate(force=True)
+            raise
 
     @classmethod
     def tearDownClass(cls):

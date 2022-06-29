@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import warnings
 from collections.abc import Sequence
 from typing import Any
 from typing import Dict
@@ -446,4 +447,9 @@ def manage_cluster(
     :class:`ClusterManager`
 
     """
+    warnings.warn(
+        'The cluster management API is deprecated; '
+        'use manage_workspace instead.',
+        category=DeprecationWarning,
+    )
     return ClusterManager(access_token=access_token, base_url=base_url, version=version)

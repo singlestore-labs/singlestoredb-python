@@ -28,7 +28,7 @@ from .exceptions import (
     DataError, ManagementError,
 )
 from .management import (
-    manage_cluster, manage_workspace,
+    manage_cluster, manage_workspaces,
 )
 from .types import (
     Date, Time, Timestamp, DateFromTicks, TimeFromTicks, TimestampFromTicks,
