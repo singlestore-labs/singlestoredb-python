@@ -67,9 +67,9 @@ class Manager(object):
         """
         if res.status_code >= 400:
             txt = res.text.strip()
-            msg = f'{txt}: {url}'
-            if params:
-                msg += ': {}'.format(str(params))
+            msg = f'{txt}: /{url}'
+#           if params:
+#               msg += ': {}'.format(str(params))
             raise ManagementError(errno=res.status_code, msg=msg)
         return res
 
