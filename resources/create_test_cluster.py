@@ -78,7 +78,7 @@ if '::' in options.region:
     pattern = options.region.replace('*', '.*')
     regions = cm.regions
     for item in random.sample(regions, k=len(regions)):
-        region_name = '{}::{}'.format(item.provider, item.region)
+        region_name = '{}::{}'.format(item.provider, item.name)
         if re.match(pattern, region_name):
             options.region = item.id
             break
@@ -93,7 +93,7 @@ if '::' in options.region:
 # Create cluster
 clus = cm.create_cluster(
     args[0],
-    region_id=options.region,
+    region=options.region,
     admin_password=options.password,
     # firewall_ranges=requests.get('https://api.github.com/meta').json()['actions'],
     firewall_ranges=['0.0.0.0/0'],
