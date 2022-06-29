@@ -81,12 +81,13 @@ workspaces in the SingleStoreDB Cloud.
 .. autosummary::
    :toctree: generated/
 
-   manage_workspace
+   manage_workspaces
+
 
 WorkspaceManager
 ................
 
-WorkspaceManager objects are returned by the :func:`manage_workspace` function.
+WorkspaceManager objects are returned by the :func:`manage_workspaces` function.
 They allow you to retrieve information about workspaces in your account, or
 create new ones.
 

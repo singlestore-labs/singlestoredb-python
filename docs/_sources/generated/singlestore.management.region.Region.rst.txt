@@ -1,7 +1,7 @@
-﻿singlestore.management.workspace.Region
-=======================================
+﻿singlestore.management.region.Region
+====================================
 
-.. currentmodule:: singlestore.management.workspace
+.. currentmodule:: singlestore.management.region
 
 .. autoclass:: Region
 
