@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any
 from typing import Dict
 
+from .. import auth
 from ..converters import converters
 from .base import Driver
-# from .. import auth
 
 
 class MySQLConnectorDriver(Driver):
@@ -26,6 +26,8 @@ class MySQLConnectorDriver(Driver):
             params['use_pure'] = True
         params['port'] = params['port'] or 3306
         params['allow_local_infile'] = params.pop('local_infile')
+        params['ssl_verify_identity'] = True
+        params['ssl_verify_cert'] = True
 
         # Always use raw, we're doing the conversions ourselves
         params['raw'] = True
@@ -34,12 +36,9 @@ class MySQLConnectorDriver(Driver):
         self.converters = self.merge_converters(convs, converters)
 
         # Check authentication method
-        params.pop('credential_type', None)
-#       cred = params.pop('credential_type', None)
-#       if cred in [auth.BROWSER_SSO, auth.JWT]:
-#           params['auth_plugin'] = 'mysql_clear_password'
-#           params['option_files'] = [os.path.join(os.path.dirname(__file__),
-#                                                  'enable_cleartext_plugin.cnf')]
+        cred = params.pop('credential_type', None)
+        if cred in [auth.BROWSER_SSO, auth.JWT] and not params.get('use_pure', False):
+            params['auth_plugin'] = 'mysql_clear_password'
 
         return params
 

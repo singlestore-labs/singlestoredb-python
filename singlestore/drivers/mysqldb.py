@@ -23,13 +23,21 @@ class MySQLdbDriver(Driver):
 
         params['conv'] = dict(converters)
 
-        params['ssl'] = {
-            k: v for k, v in {
-                'ssl_key': params.get('ssl_key', None),
-                'ssl_cert': params.get('ssl_cert', None),
-                'ssl_ca': params.get('ssl_ca', None),
-            }.items()
-        } or None
+        ssl = dict()
+
+        if params.get('ssl_key', None):
+            ssl['key'] = params.get('ssl_key')
+        if params.get('ssl_cert', None):
+            ssl['cert'] = params.get('ssl_cert')
+        if params.get('ssl_ca', None):
+            ssl['ca'] = params.get('ssl_ca')
+
+        params.pop('ssl_key', None)
+        params.pop('ssl_cert', None)
+        params.pop('ssl_ca', None)
+
+        if ssl:
+            params['ssl'] = dict(ssl=ssl)
 
         if params.pop('ssl_disabled', False):
             params['ssl_mode'] = 'DISABLED'

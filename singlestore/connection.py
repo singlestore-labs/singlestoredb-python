@@ -1173,7 +1173,7 @@ def connect(
     results_format : str, optional
         Format of query results: tuple, namedtuple, dict, or dataframe
     credential_type : str, optional
-        Type of authentication to use: auth.PASSWORD, auth.JWT, or ath.BROWSER_SSO
+        Type of authentication to use: auth.PASSWORD, auth.JWT, or auth.BROWSER_SSO
 
     Examples
     --------
