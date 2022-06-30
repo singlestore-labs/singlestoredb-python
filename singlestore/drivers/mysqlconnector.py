@@ -36,7 +36,7 @@ class MySQLConnectorDriver(Driver):
         # Check authentication method
         cred = params.pop('credential_type', None)
         if cred in [auth.BROWSER_SSO, auth.JWT] and not params.get('use_pure', False):
-            params['auth_plugin'] = 'mysql_clear_password'
+            #           params['auth_plugin'] = 'mysql_clear_password'
             params['ssl_verify_identity'] = True
             params['ssl_verify_cert'] = True
 
