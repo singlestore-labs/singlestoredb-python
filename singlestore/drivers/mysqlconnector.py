@@ -26,8 +26,6 @@ class MySQLConnectorDriver(Driver):
             params['use_pure'] = True
         params['port'] = params['port'] or 3306
         params['allow_local_infile'] = params.pop('local_infile')
-        params['ssl_verify_identity'] = True
-        params['ssl_verify_cert'] = True
 
         # Always use raw, we're doing the conversions ourselves
         params['raw'] = True
@@ -39,6 +37,8 @@ class MySQLConnectorDriver(Driver):
         cred = params.pop('credential_type', None)
         if cred in [auth.BROWSER_SSO, auth.JWT] and not params.get('use_pure', False):
             params['auth_plugin'] = 'mysql_clear_password'
+            params['ssl_verify_identity'] = True
+            params['ssl_verify_cert'] = True
 
         return params
 
