@@ -70,9 +70,10 @@ class Manager(object):
             msg = f'{txt}: /{url}'
             if params:
                 new_params = params.copy()
-                for k, v in new_params.items():
-                    if 'password' in k.lower():
-                        new_params[k] = '*' * len(v)
+                if 'json' in new_params:
+                    for k, v in new_params['json'].items():
+                        if 'password' in k.lower():
+                            new_params[k] = '*' * len(v)
                 msg += ': {}'.format(str(new_params))
             raise ManagementError(errno=res.status_code, msg=msg)
         return res

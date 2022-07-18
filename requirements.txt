@@ -1,3 +1,4 @@
-mysql-connector-python
+PyJWT
+PyMySQL
 requests
 sqlparams
