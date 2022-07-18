@@ -73,7 +73,7 @@ class Manager(object):
                 if 'json' in new_params:
                     for k, v in new_params['json'].items():
                         if 'password' in k.lower():
-                            new_params[k] = '*' * len(v)
+                            new_params['json'][k] = '*' * len(v)
                 msg += ': {}'.format(str(new_params))
             raise ManagementError(errno=res.status_code, msg=msg)
         return res
