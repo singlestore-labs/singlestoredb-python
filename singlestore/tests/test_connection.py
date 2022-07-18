@@ -1156,9 +1156,6 @@ class TestConnection(unittest.TestCase):
             self.cur.close()
 
         with self.assertRaises(s2.InterfaceError):
-            self.cur.rowcount
-
-        with self.assertRaises(s2.InterfaceError):
             self.cur.callproc('foo')
 
         with self.assertRaises(s2.InterfaceError):
@@ -1189,13 +1186,15 @@ class TestConnection(unittest.TestCase):
             self.cur.scroll(2)
 
         with self.assertRaises(s2.InterfaceError):
-            self.cur.messages
-
-        with self.assertRaises(s2.InterfaceError):
             self.cur.next()
 
-        with self.assertRaises(s2.InterfaceError):
-            self.cur.lastrowid
+        # The following attributes are still accessible after close.
+
+        assert isinstance(self.cur.messages, list), self.cur.messages
+
+        assert isinstance(self.cur.rowcount, (int, type(None))), self.cur.rowcount
+
+        assert isinstance(self.cur.lastrowid, (int, type(None))), self.cur.lastrowid
 
     def test_setinputsizes(self):
         self.cur.setinputsizes([10, 20, 30])

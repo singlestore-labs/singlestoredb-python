@@ -48,8 +48,8 @@ jobs:
           - "3.9"
           - "3.10"
         driver:
-          - mysql.connector
           - pymysql
+          - mysql.connector
           - mysqldb
 #         - http
         pure-python:
@@ -58,11 +58,11 @@ jobs:
         include:
           - os: ubuntu-latest
             python-version: "3.9"
-            driver: mysql.connector
+            driver: pymysql
             pure-python: 1
           - os: macos-latest
             python-version: "3.9"
-            driver: mysql.connector
+            driver: pymysql
             pure-python: 0
 #         - os: macos-latest
 #           python-version: "3.9"
@@ -70,7 +70,7 @@ jobs:
 #           pure-python: 0
           - os: windows-latest
             python-version: "3.9"
-            driver: mysql.connector
+            driver: pymysql
             pure-python: 0
 #         - os: windows-latest
 #           python-version: "3.9"

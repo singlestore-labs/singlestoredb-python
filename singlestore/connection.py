@@ -386,6 +386,15 @@ class Cursor(object):
             ]
         ] = []
 
+        #: Number of rows affected by the last query.
+        self.rowcount: int = -1
+
+        #: Messages generated during last query.
+        self.messages: List[str] = []
+
+        #: Row ID of the last modified row.
+        self.lastrowid: Optional[int] = None
+
     @property
     def connection(self) -> Optional[Connection]:
         """
@@ -446,19 +455,19 @@ class Cursor(object):
 
             self.description = out
 
-    @property
-    def rowcount(self) -> int:
-        """
-        Return the number of rows the last execute produced or affected.
-
-        Returns
-        -------
-        int
-
-        """
+    def _update_attrs(self) -> None:
+        """Update cursor attributes from the last query."""
         if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
-        return getattr(self._cursor, 'rowcount', getattr(self._cursor, '_rowcount', -1))
+            return
+        self.messages[:] = getattr(self._cursor, 'messages', [])
+        self.lastrowid = getattr(
+            self._cursor, 'lastrowid',
+            getattr(self._cursor, '_lastrowid', None),
+        ) or None
+        self.rowcount = getattr(
+            self._cursor, 'rowcount',
+            getattr(self._cursor, '_rowcount', -1),
+        )
 
     def callproc(
         self, name: str,
@@ -550,7 +559,7 @@ class Cursor(object):
             raise self._driver.convert_exception(exc)
 
         self._set_description()
-
+        self._update_attrs()
         self.rownumber = 0
 
     def executemany(
@@ -596,7 +605,7 @@ class Cursor(object):
             raise self._driver.convert_exception(exc)
 
         self._set_description()
-
+        self._update_attrs()
         self.rownumber = 0
 
     def fetchone(self) -> Optional[Result]:
@@ -782,22 +791,6 @@ class Cursor(object):
         except Exception as exc:
             raise self._driver.convert_exception(exc)
 
-    @property
-    def messages(self) -> Sequence[tuple[int, str]]:
-        """
-        List of received messages.
-
-        Returns
-        -------
-        list of tuples
-            Tuples contain a numeric code and a message
-
-        """
-        if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
-
-        return self._cursor.messages
-
     def next(self) -> Optional[Result]:
         """
         Return the next row from the result set for use in iterators.
@@ -830,17 +823,6 @@ class Cursor(object):
     def __iter__(self) -> Any:
         """Return result iterator."""
         return self
-
-    @property
-    def lastrowid(self) -> Optional[int]:
-        """Return the rowid of the last modified row."""
-        if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
-
-        return getattr(
-            self._cursor, 'lastrowid',
-            getattr(self._cursor, '_lastrowid', None),
-        ) or None
 
     def __enter__(self) -> Cursor:
         """Enter a context."""
@@ -1136,7 +1118,7 @@ def connect(
     host : str, optional
         Hostname, IP address, or URL that describes the connection.
         The scheme or protocol defines which database connector to use.
-        By default, the ``mysqlconnector`` scheme is used. To connect to the
+        By default, the ``pymysql`` scheme is used. To connect to the
         HTTP API, the scheme can be set to ``http`` or ``https``. The username,
         password, host, and port are specified as in a standard URL. The path
         indicates the database name. The overall form of the URL is:

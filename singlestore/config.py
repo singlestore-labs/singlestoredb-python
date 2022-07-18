@@ -55,7 +55,7 @@ register_option(
 )
 
 register_option(
-    'driver', 'string', check_str, 'mysqlconnector',
+    'driver', 'string', check_str, 'pymysql',
     'Specifies the Python DB-API module to use for communicating'
     'with the database.',
     environ='SINGLESTORE_DRIVER',
