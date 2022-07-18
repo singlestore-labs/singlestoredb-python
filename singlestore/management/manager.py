@@ -69,7 +69,11 @@ class Manager(object):
             txt = res.text.strip()
             msg = f'{txt}: /{url}'
             if params:
-                msg += ': {}'.format(str(params))
+                new_params = params.copy()
+                for k, v in new_params.items():
+                    if 'password' in k.lower():
+                        new_params[k] = '*' * len(v)
+                msg += ': {}'.format(str(new_params))
             raise ManagementError(errno=res.status_code, msg=msg)
         return res
 
