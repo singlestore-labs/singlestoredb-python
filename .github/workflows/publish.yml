@@ -93,4 +93,4 @@ jobs:
           PACKAGE_BUILD_NUMBER: ${{ github.event.inputs.build_number }}
         run: |
           echo $CONDA/bin >> $GITHUB_PATH
-          anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main artifacts/noarch/singlestore-*.tar.bz2
+          anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main artifacts/noarch/singlestoredb-*.tar.bz2
