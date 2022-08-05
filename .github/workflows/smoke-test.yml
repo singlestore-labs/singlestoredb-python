@@ -23,7 +23,7 @@ jobs:
       - name: Initialize database
         id: initialize-database
         run: |
-          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql singlestore/tests/test.sql --output=github --expires=2h "singlestore-python - $GITHUB_WORKFLOW"
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "singlestore-python - $GITHUB_WORKFLOW"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
@@ -105,13 +105,13 @@ jobs:
 
       - name: Run tests
         if: ${{ matrix.driver != 'http' }}
-        run: nose2 -v singlestore.tests.test_basics
+        run: nose2 -v singlestoredb.tests.test_basics
         env:
           SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{matrix.pure-python}}"
 
       - name: Run tests
         if: ${{ matrix.driver == 'http' }}
-        run: nose2 -v singlestore.tests.test_basics
+        run: nose2 -v singlestoredb.tests.test_basics
         env:
           SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:9000/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{matrix.pure-python}}"
 
