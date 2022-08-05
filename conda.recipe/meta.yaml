@@ -18,7 +18,8 @@ requirements:
         - pip
     run:
         - python
-        - mysql-connector-python
+        - pymysql
+        - pyjwt
         - requests
         - sqlparams
 
