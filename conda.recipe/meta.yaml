@@ -1,7 +1,7 @@
 {% set data = load_setup_py_data() %}
 
 package:
-    name: singlestore
+    name: singlestoredb
     version: {{ data.get('version') }}
 
 source:
@@ -24,13 +24,13 @@ requirements:
 
 test:
     imports:
-        - singlestore
+        - singlestoredb
     requires:
         - coverage
         - nose2
         - pandas
     commands:
-        - nose2 -v singlestore.tests.test_basics
+        - nose2 -v singlestoredb.tests.test_basics
 
 about:
     home: https://github.com/singlestore-labs/singlestore-python
