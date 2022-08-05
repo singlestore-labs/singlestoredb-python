@@ -1,0 +1,6 @@
+﻿singlestoredb.auth.get\_jwt
+===========================
+
+.. currentmodule:: singlestoredb.auth
+
+.. autofunction:: get_jwt

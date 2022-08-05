@@ -70,6 +70,17 @@ created using the :meth:`Connection.cursor` method.
    Cursor.is_connected
 
 
+Utiliites
+---------
+
+.. currentmodule:: singlestoredb.auth
+
+.. autosummary::
+   :toctree: generated/
+
+   get_jwt
+
+
 Management API
 --------------
 

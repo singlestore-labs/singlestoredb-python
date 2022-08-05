@@ -80,6 +80,10 @@
 </li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#utiliites">Utiliites</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.auth.get_jwt.html">singlestoredb.auth.get_jwt</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#management-api">Management API</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.manage_workspaces.html">singlestoredb.manage_workspaces</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#workspacemanager">WorkspaceManager</a><ul>
@@ -171,7 +175,7 @@ or a connection string in the form of a URL.</p>
 <section id="connection">
 <h3>Connection<a class="headerlink" href="#connection" title="Permalink to this headline">¶</a></h3>
 <p>Connection objects are created by the <a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">connect()</span></code></a> function. They are
-used to create<a href="singlestore.connection.Cursor.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Cursor</span></code></a> objects for querying the database.</p>
+used to create<a href="singlestoredb.connection.Cursor.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Cursor</span></code></a> objects for querying the database.</p>
 <table class="longtable docutils align-default">
 <colgroup>
 <col style="width: 10%" />
@@ -263,6 +267,20 @@ created using the <a class="reference internal" href="generated/singlestoredb.co
 </tbody>
 </table>
 </section>
+</section>
+<section id="utiliites">
+<h2>Utiliites<a class="headerlink" href="#utiliites" title="Permalink to this headline">¶</a></h2>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.auth.get_jwt.html#singlestoredb.auth.get_jwt" title="singlestoredb.auth.get_jwt"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_jwt</span></code></a>(email[, url, clusters, databases, ...])</p></td>
+<td><p>Retrieve a JWT token from the SingleStoreDB single-sign-on URL.</p></td>
+</tr>
+</tbody>
+</table>
 </section>
 <section id="management-api">
 <h2>Management API<a class="headerlink" href="#management-api" title="Permalink to this headline">¶</a></h2>

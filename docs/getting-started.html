@@ -225,7 +225,7 @@ If the result is expected to be fairly small, fetching the entire result in one
 call may be fine. However, if the query result will be large enough to put a strain
 on the client computer’s memory, it may be a better idea to fetch smaller batches
 using <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchmany()</span></code>.</p>
-<p>In additon to the DB-API methods for fetching results, a<a href="singlestore.connection.Cursor.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Cursor</span></code></a> can be
+<p>In additon to the DB-API methods for fetching results, a<a href="singlestoredb.connection.Cursor.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Cursor</span></code></a> can be
 iterated over itself.</p>
 <div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [10]: </span><span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
 <span class="gp">   ....: </span>    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
