@@ -11,7 +11,7 @@ import sys
 import uuid
 from optparse import OptionParser
 
-import singlestore as s2
+import singlestoredb as s2
 
 
 # Handle command-line options

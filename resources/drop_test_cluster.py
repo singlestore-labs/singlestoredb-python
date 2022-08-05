@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from optparse import OptionParser
 
-import singlestore as s2
+import singlestoredb as s2
 
 
 # Handle command-line options
