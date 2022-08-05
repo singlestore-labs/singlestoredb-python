@@ -1,4 +1,4 @@
-# <img src="https://github.com/singlestore-labs/singlestoredb-python/blob/main/resources/singlestore-logo.png" height="60" valign="middle"/> SingleStoreDB Python Interface
+# <img src="https://github.com/singlestore-labs/singlestore-python/blob/main/resources/singlestore-logo.png" height="60" valign="middle"/> SingleStoreDB Python Interface
 
 This project contains a [DB-API 2.0](https://www.python.org/dev/peps/pep-0249/)
 compatible Python interface to the SingleStore database and workspace management API.
@@ -54,7 +54,7 @@ This library is licensed under the [Apache 2.0 License](https://raw.githubuserco
 
 ## Resources
 
-* [Documentation](https://singlestore-labs.github.io/singlestoredb-python)
+* [Documentation](https://singlestore-labs.github.io/singlestore-python)
 * [SingleStore](https://singlestore.com)
 * [Python](https://python.org)
 
