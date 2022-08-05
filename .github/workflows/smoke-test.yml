@@ -97,7 +97,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r test-requirements.txt
-          pip install cymysql pymysql mysqlclient
+          pip install cymysql pymysql mysqlclient mysql-connector-python
 
       - name: Install SingleStore package
         run: |
