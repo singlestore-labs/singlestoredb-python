@@ -1,0 +1,6 @@
+﻿singlestoredb.management.workspace.WorkspaceGroup.refresh
+=========================================================
+
+.. currentmodule:: singlestoredb.management.workspace
+
+.. automethod:: WorkspaceGroup.refresh

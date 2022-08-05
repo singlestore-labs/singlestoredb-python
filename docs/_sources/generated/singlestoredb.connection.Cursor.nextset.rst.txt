@@ -1,0 +1,6 @@
+﻿singlestoredb.connection.Cursor.nextset
+=======================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. automethod:: Cursor.nextset

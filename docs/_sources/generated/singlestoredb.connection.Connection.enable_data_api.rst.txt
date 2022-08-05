@@ -1,0 +1,6 @@
+﻿singlestoredb.connection.Connection.enable\_data\_api
+=====================================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. automethod:: Connection.enable_data_api

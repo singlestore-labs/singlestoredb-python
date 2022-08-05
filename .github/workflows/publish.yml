@@ -77,7 +77,7 @@ jobs:
           cd conda.recipe
           conda build -c singlestore -c conda-forge --no-anaconda-upload --output-folder ../artifacts .
         env:
-          SINGLESTORE_URL: "root:root@127.0.0.1:3306"
+          SINGLESTOREDB_URL: "root:root@127.0.0.1:3306"
 
       - name: Publish PyPI package
         if: ${{ github.event.inputs.publish_pypi == 'true' }}

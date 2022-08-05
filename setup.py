@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""SingleStore package installer."""
+"""SingleStoreDB package installer."""
 from __future__ import annotations
 
 from setuptools import setup

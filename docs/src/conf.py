@@ -17,12 +17,12 @@ sys.path.insert(0, os.path.abspath('../..'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'SingleStore'
+project = 'SingleStoreDB'
 copyright = '2022 SingleStore. All Rights Reserved'
 author = 'SingleStore'
 
 
-import singlestore as s2  # noqa: W291,E402
+import singlestoredb as s2  # noqa: W291,E402
 
 version = s2.__version__
 release = s2.__version__

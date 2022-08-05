@@ -1,0 +1,6 @@
+﻿singlestoredb.management.workspace.WorkspaceGroup.workspaces
+============================================================
+
+.. currentmodule:: singlestoredb.management.workspace
+
+.. autoproperty:: WorkspaceGroup.workspaces

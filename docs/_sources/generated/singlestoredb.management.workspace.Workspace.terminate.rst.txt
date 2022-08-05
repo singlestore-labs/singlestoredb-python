@@ -1,0 +1,6 @@
+﻿singlestoredb.management.workspace.Workspace.terminate
+======================================================
+
+.. currentmodule:: singlestoredb.management.workspace
+
+.. automethod:: Workspace.terminate

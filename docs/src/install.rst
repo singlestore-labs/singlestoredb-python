@@ -2,14 +2,14 @@
 Installation
 ============
 
-The SingleStore Python client can be installed using ``pip``:
+The SingleStoreDB Python client can be installed using ``pip``:
 
 .. code-block:: sh
 
-    pip install singlestore
+    pip install singlestoredb
 
 If you are using Anaconda, you can also install using ``conda``:
 
 .. code-block:: sh
 
-    conda install -c singlestore singlestore
+    conda install -c singlestore singlestoredb

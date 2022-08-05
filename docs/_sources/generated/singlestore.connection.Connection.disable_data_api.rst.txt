@@ -1,6 +1,0 @@
-﻿singlestore.connection.Connection.disable\_data\_api
-====================================================
-
-.. currentmodule:: singlestore.connection
-
-.. automethod:: Connection.disable_data_api

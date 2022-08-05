@@ -1,0 +1,6 @@
+﻿singlestoredb.manage\_workspaces
+================================
+
+.. currentmodule:: singlestoredb
+
+.. autofunction:: manage_workspaces

@@ -1,0 +1,6 @@
+﻿singlestoredb.management.workspace.WorkspaceManager.get\_workspace
+==================================================================
+
+.. currentmodule:: singlestoredb.management.workspace
+
+.. automethod:: WorkspaceManager.get_workspace

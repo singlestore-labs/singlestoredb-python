@@ -1,0 +1,36 @@
+﻿singlestoredb.management.workspace.Workspace
+============================================
+
+.. currentmodule:: singlestoredb.management.workspace
+
+.. autoclass:: Workspace
+
+
+   .. automethod:: __init__
+
+
+   .. rubric:: Methods
+
+   .. autosummary::
+
+      ~Workspace.__init__
+      ~Workspace.connect
+      ~Workspace.from_dict
+      ~Workspace.refresh
+      ~Workspace.terminate
+
+
+
+
+
+   .. rubric:: Attributes
+
+   .. autosummary::
+
+      ~Workspace.name
+      ~Workspace.id
+      ~Workspace.size
+      ~Workspace.state
+      ~Workspace.created_at
+      ~Workspace.terminated_at
+      ~Workspace.endpoint

@@ -1,0 +1,6 @@
+﻿singlestoredb.connection.Cursor.scroll
+======================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. automethod:: Cursor.scroll

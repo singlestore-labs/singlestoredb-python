@@ -1,9 +1,9 @@
-.. currentmodule:: singlestore
+.. currentmodule:: singlestoredb
 
 .. ipython:: python
    :suppress:
 
-   import singlestore as s2
+   import singlestoredb as s2
    conn = s2.connect()
 
 Getting Started
@@ -16,7 +16,7 @@ a URL as described in the following sections.
 Connect using DB-API Parameters
 -------------------------------
 
-Connections to SingleStore can be made using the parameters described in
+Connections to SingleStoreDB can be made using the parameters described in
 the `Python DB-API <https://peps.python.org/pep-0249/>`_. The ``host=``
 parameter can be either a hostname or IP address (it can also be a
 URL as shown in the following section). The ``port=`` parameter is an
@@ -26,12 +26,12 @@ integer value of the database server port number. The ``user=`` and
 to connect to.
 
 A full list of connection parameters can be seen in the API documentation
-for the :func:`singlestore.connect` function.
+for the :func:`singlestoredb.connect` function.
 
 .. ipython:: python
    :verbatim:
 
-   import singlestore as s2
+   import singlestoredb as s2
    conn = s2.connect(host='...', port='...', user='...',
                      password='...', database='...')
 
@@ -46,7 +46,7 @@ In addition, you can user a URL like in the SQLAlchemy package.
    conn = s2.connect('user:password@host:port/database')
 
 URLs work equally well to connect to the
-`HTTP API <https://docs.singlestore.com/db/v7.8/en/reference/http-api.html>`_.
+`HTTP API <https://docs.singlestoredb.com/db/v7.8/en/reference/http-api.html>`_.
 
 .. ipython:: python
    :verbatim:

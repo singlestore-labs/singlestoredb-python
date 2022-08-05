@@ -1,0 +1,6 @@
+﻿singlestoredb.connection.Cursor.is\_connected
+=============================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. automethod:: Cursor.is_connected

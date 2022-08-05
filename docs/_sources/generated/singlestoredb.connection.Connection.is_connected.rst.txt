@@ -1,0 +1,6 @@
+﻿singlestoredb.connection.Connection.is\_connected
+=================================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. automethod:: Connection.is_connected

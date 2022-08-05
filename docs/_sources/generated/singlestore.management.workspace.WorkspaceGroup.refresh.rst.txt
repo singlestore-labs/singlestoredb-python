@@ -1,6 +1,0 @@
-﻿singlestore.management.workspace.WorkspaceGroup.refresh
-=======================================================
-
-.. currentmodule:: singlestore.management.workspace
-
-.. automethod:: WorkspaceGroup.refresh

@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Getting Started &mdash; SingleStore 0.2.0 documentation</title>
+  <title>Getting Started &mdash; SingleStoreDB 0.2.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
@@ -28,7 +28,7 @@
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-            <a href="index.html" class="icon icon-home"> SingleStore
+            <a href="index.html" class="icon icon-home"> SingleStoreDB
           </a>
               <div class="version">
                 0.2.0
@@ -79,7 +79,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="index.html">SingleStore</a>
+          <a href="index.html">SingleStoreDB</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -103,7 +103,7 @@
 a URL as described in the following sections.</p>
 <section id="connect-using-db-api-parameters">
 <h2>Connect using DB-API Parameters<a class="headerlink" href="#connect-using-db-api-parameters" title="Permalink to this headline">¶</a></h2>
-<p>Connections to SingleStore can be made using the parameters described in
+<p>Connections to SingleStoreDB can be made using the parameters described in
 the <a class="reference external" href="https://peps.python.org/pep-0249/">Python DB-API</a>. The <code class="docutils literal notranslate"><span class="pre">host=</span></code>
 parameter can be either a hostname or IP address (it can also be a
 URL as shown in the following section). The <code class="docutils literal notranslate"><span class="pre">port=</span></code> parameter is an
@@ -112,8 +112,8 @@ integer value of the database server port number. The <code class="docutils lite
 <code class="docutils literal notranslate"><span class="pre">database=</span></code> parameter, optionally, specifies the name of the database
 to connect to.</p>
 <p>A full list of connection parameters can be seen in the API documentation
-for the <a class="reference internal" href="generated/singlestore.connect.html#singlestore.connect" title="singlestore.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">singlestore.connect()</span></code></a> function.</p>
-<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [1]: </span><span class="kn">import</span> <span class="nn">singlestore</span> <span class="k">as</span> <span class="nn">s2</span>
+for the <a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">singlestoredb.connect()</span></code></a> function.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [1]: </span><span class="kn">import</span> <span class="nn">singlestoredb</span> <span class="k">as</span> <span class="nn">s2</span>
 
 <span class="gp">In [2]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">,</span> <span class="n">user</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">,</span>
 <span class="gp">   ...: </span>                  <span class="n">password</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">,</span> <span class="n">database</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">)</span>
@@ -128,7 +128,7 @@ for the <a class="reference internal" href="generated/singlestore.connect.html#s
 </pre></div>
 </div>
 <p>URLs work equally well to connect to the
-<a class="reference external" href="https://docs.singlestore.com/db/v7.8/en/reference/http-api.html">HTTP API</a>.</p>
+<a class="reference external" href="https://docs.singlestoredb.com/db/v7.8/en/reference/http-api.html">HTTP API</a>.</p>
 <div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [4]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;https://user:password@host:port/database&#39;</span><span class="p">)</span>
 </pre></div>
 </div>

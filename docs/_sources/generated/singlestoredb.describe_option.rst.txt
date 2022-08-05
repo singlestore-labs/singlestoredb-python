@@ -1,0 +1,6 @@
+﻿singlestoredb.describe\_option
+==============================
+
+.. currentmodule:: singlestoredb
+
+.. autofunction:: describe_option

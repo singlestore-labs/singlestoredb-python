@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStore 0.2.0 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 0.2.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
@@ -19,7 +19,7 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="singlestore.connect" href="generated/singlestore.connect.html" />
+    <link rel="next" title="singlestoredb.connect" href="generated/singlestoredb.connect.html" />
     <link rel="prev" title="Getting Started" href="getting-started.html" />
 </head>
 
@@ -28,7 +28,7 @@
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-            <a href="index.html" class="icon icon-home"> SingleStore
+            <a href="index.html" class="icon icon-home"> SingleStoreDB
           </a>
               <div class="version">
                 0.2.0
@@ -48,76 +48,76 @@
 <li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting Started</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">API Reference</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#connections">Connections</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="generated/singlestore.connect.html">singlestore.connect</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.connect.html">singlestoredb.connect</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#connection">Connection</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.html">Connection</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.autocommit.html">Connection.autocommit</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.close.html">Connection.close</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.commit.html">Connection.commit</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.rollback.html">Connection.rollback</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.cursor.html">Connection.cursor</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.is_connected.html">Connection.is_connected</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.enable_data_api.html">Connection.enable_data_api</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Connection.disable_data_api.html">Connection.disable_data_api</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.html">Connection</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.autocommit.html">Connection.autocommit</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.close.html">Connection.close</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.commit.html">Connection.commit</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.rollback.html">Connection.rollback</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.cursor.html">Connection.cursor</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.is_connected.html">Connection.is_connected</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.enable_data_api.html">Connection.enable_data_api</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.disable_data_api.html">Connection.disable_data_api</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#cursor">Cursor</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.html">Cursor</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.callproc.html">Cursor.callproc</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.close.html">Cursor.close</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.execute.html">Cursor.execute</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.executemany.html">Cursor.executemany</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.fetchone.html">Cursor.fetchone</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.fetchmany.html">Cursor.fetchmany</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.fetchall.html">Cursor.fetchall</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.nextset.html">Cursor.nextset</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.setinputsizes.html">Cursor.setinputsizes</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.setoutputsize.html">Cursor.setoutputsize</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.scroll.html">Cursor.scroll</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.next.html">Cursor.next</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.connection.Cursor.is_connected.html">Cursor.is_connected</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.html">Cursor</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.callproc.html">Cursor.callproc</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.close.html">Cursor.close</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.execute.html">Cursor.execute</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.executemany.html">Cursor.executemany</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchone.html">Cursor.fetchone</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchmany.html">Cursor.fetchmany</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchall.html">Cursor.fetchall</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.nextset.html">Cursor.nextset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.setinputsizes.html">Cursor.setinputsizes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.setoutputsize.html">Cursor.setoutputsize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.scroll.html">Cursor.scroll</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.next.html">Cursor.next</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.is_connected.html">Cursor.is_connected</a></li>
 </ul>
 </li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#management-api">Management API</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="generated/singlestore.manage_workspaces.html">singlestore.manage_workspaces</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.manage_workspaces.html">singlestoredb.manage_workspaces</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#workspacemanager">WorkspaceManager</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.html">singlestore.management.workspace.WorkspaceManager</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.workspace_groups.html">singlestore.management.workspace.WorkspaceManager.workspace_groups</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.regions.html">singlestore.management.workspace.WorkspaceManager.regions</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.create_workspace_group.html">singlestore.management.workspace.WorkspaceManager.create_workspace_group</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.create_workspace.html">singlestore.management.workspace.WorkspaceManager.create_workspace</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.get_workspace_group.html">singlestore.management.workspace.WorkspaceManager.get_workspace_group</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.get_workspace.html">singlestore.management.workspace.WorkspaceManager.get_workspace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.html">singlestoredb.management.workspace.WorkspaceManager</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.workspace_groups.html">singlestoredb.management.workspace.WorkspaceManager.workspace_groups</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html">singlestoredb.management.workspace.WorkspaceManager.regions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace_group.html">singlestoredb.management.workspace.WorkspaceManager.create_workspace_group</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace.html">singlestoredb.management.workspace.WorkspaceManager.create_workspace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace_group.html">singlestoredb.management.workspace.WorkspaceManager.get_workspace_group</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace.html">singlestoredb.management.workspace.WorkspaceManager.get_workspace</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#workspacegroup">WorkspaceGroup</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.html">singlestore.management.workspace.WorkspaceGroup</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.workspaces.html">singlestore.management.workspace.WorkspaceGroup.workspaces</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.create_workspace.html">singlestore.management.workspace.WorkspaceGroup.create_workspace</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.refresh.html">singlestore.management.workspace.WorkspaceGroup.refresh</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.update.html">singlestore.management.workspace.WorkspaceGroup.update</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.terminate.html">singlestore.management.workspace.WorkspaceGroup.terminate</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.html">singlestoredb.management.workspace.WorkspaceGroup</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.workspaces.html">singlestoredb.management.workspace.WorkspaceGroup.workspaces</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.create_workspace.html">singlestoredb.management.workspace.WorkspaceGroup.create_workspace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.refresh.html">singlestoredb.management.workspace.WorkspaceGroup.refresh</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.update.html">singlestoredb.management.workspace.WorkspaceGroup.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.terminate.html">singlestoredb.management.workspace.WorkspaceGroup.terminate</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#workspace">Workspace</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.Workspace.html">singlestore.management.workspace.Workspace</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.Workspace.connect.html">singlestore.management.workspace.Workspace.connect</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.Workspace.refresh.html">singlestore.management.workspace.Workspace.refresh</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.workspace.Workspace.terminate.html">singlestore.management.workspace.Workspace.terminate</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.html">singlestoredb.management.workspace.Workspace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.connect.html">singlestoredb.management.workspace.Workspace.connect</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.refresh.html">singlestoredb.management.workspace.Workspace.refresh</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.terminate.html">singlestoredb.management.workspace.Workspace.terminate</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#region">Region</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestore.management.region.Region.html">singlestore.management.region.Region</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.region.Region.html">singlestoredb.management.region.Region</a></li>
 </ul>
 </li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="generated/singlestore.get_option.html">singlestore.get_option</a></li>
-<li class="toctree-l3"><a class="reference internal" href="generated/singlestore.set_option.html">singlestore.set_option</a></li>
-<li class="toctree-l3"><a class="reference internal" href="generated/singlestore.describe_option.html">singlestore.describe_option</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.get_option.html">singlestoredb.get_option</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.set_option.html">singlestoredb.set_option</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.describe_option.html">singlestoredb.describe_option</a></li>
 </ul>
 </li>
 </ul>
@@ -131,7 +131,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="index.html">SingleStore</a>
+          <a href="index.html">SingleStoreDB</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -149,11 +149,11 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
 
-  <span class="target" id="module-singlestore"></span><section id="api-reference">
+  <span class="target" id="module-singlestoredb"></span><section id="api-reference">
 <span id="api"></span><h1>API Reference<a class="headerlink" href="#api-reference" title="Permalink to this headline">¶</a></h1>
 <section id="connections">
 <span id="api-functions"></span><h2>Connections<a class="headerlink" href="#connections" title="Permalink to this headline">¶</a></h2>
-<p>The <a class="reference internal" href="generated/singlestore.connect.html#singlestore.connect" title="singlestore.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">connect()</span></code></a> function is the primary entry point for the SingleStore
+<p>The <a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">connect()</span></code></a> function is the primary entry point for the SingleStore
 package. It connects to a SingleStore database using either
 <a class="reference external" href="https://peps.python.org/pep-0249/">DB-API</a> compliant parameters,
 or a connection string in the form of a URL.</p>
@@ -163,14 +163,14 @@ or a connection string in the form of a URL.</p>
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connect.html#singlestore.connect" title="singlestore.connect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">connect</span></code></a>([host, user, password, port, ...])</p></td>
-<td><p>Return a SingleStore database connection.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">connect</span></code></a>([host, user, password, port, ...])</p></td>
+<td><p>Return a SingleStoreDB connection.</p></td>
 </tr>
 </tbody>
 </table>
 <section id="connection">
 <h3>Connection<a class="headerlink" href="#connection" title="Permalink to this headline">¶</a></h3>
-<p>Connection objects are created by the <a class="reference internal" href="generated/singlestore.connect.html#singlestore.connect" title="singlestore.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">connect()</span></code></a> function. They are
+<p>Connection objects are created by the <a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">connect()</span></code></a> function. They are
 used to create<a href="singlestore.connection.Cursor.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Cursor</span></code></a> objects for querying the database.</p>
 <table class="longtable docutils align-default">
 <colgroup>
@@ -178,31 +178,31 @@ used to create<a href="singlestore.connection.Cursor.html"> <code class="xref py
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.html#singlestore.connection.Connection" title="singlestore.connection.Connection"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection</span></code></a>(**kwargs)</p></td>
-<td><p>SingleStore database connection.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.html#singlestoredb.connection.Connection" title="singlestoredb.connection.Connection"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection</span></code></a>(**kwargs)</p></td>
+<td><p>SingleStoreDB connection.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.autocommit.html#singlestore.connection.Connection.autocommit" title="singlestore.connection.Connection.autocommit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.autocommit</span></code></a>([value])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.autocommit.html#singlestoredb.connection.Connection.autocommit" title="singlestoredb.connection.Connection.autocommit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.autocommit</span></code></a>([value])</p></td>
 <td><p>Set autocommit mode.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.close.html#singlestore.connection.Connection.close" title="singlestore.connection.Connection.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.close</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.close.html#singlestoredb.connection.Connection.close" title="singlestoredb.connection.Connection.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.close</span></code></a>()</p></td>
 <td><p>Close the database connection.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.commit.html#singlestore.connection.Connection.commit" title="singlestore.connection.Connection.commit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.commit</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.commit.html#singlestoredb.connection.Connection.commit" title="singlestoredb.connection.Connection.commit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.commit</span></code></a>()</p></td>
 <td><p>Commit the pending transaction.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.rollback.html#singlestore.connection.Connection.rollback" title="singlestore.connection.Connection.rollback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.rollback</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.rollback.html#singlestoredb.connection.Connection.rollback" title="singlestoredb.connection.Connection.rollback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.rollback</span></code></a>()</p></td>
 <td><p>Rollback the pending transaction.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.cursor.html#singlestore.connection.Connection.cursor" title="singlestore.connection.Connection.cursor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.cursor</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.cursor.html#singlestoredb.connection.Connection.cursor" title="singlestoredb.connection.Connection.cursor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.cursor</span></code></a>()</p></td>
 <td><p>Create a new cursor object.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.is_connected.html#singlestore.connection.Connection.is_connected" title="singlestore.connection.Connection.is_connected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.is_connected</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.is_connected.html#singlestoredb.connection.Connection.is_connected" title="singlestoredb.connection.Connection.is_connected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.is_connected</span></code></a>()</p></td>
 <td><p>Determine if the database is still connected.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.enable_data_api.html#singlestore.connection.Connection.enable_data_api" title="singlestore.connection.Connection.enable_data_api"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.enable_data_api</span></code></a>([port])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.enable_data_api.html#singlestoredb.connection.Connection.enable_data_api" title="singlestoredb.connection.Connection.enable_data_api"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.enable_data_api</span></code></a>([port])</p></td>
 <td><p>Enable the data API in the server.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Connection.disable_data_api.html#singlestore.connection.Connection.disable_data_api" title="singlestore.connection.Connection.disable_data_api"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.disable_data_api</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.disable_data_api.html#singlestoredb.connection.Connection.disable_data_api" title="singlestoredb.connection.Connection.disable_data_api"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.disable_data_api</span></code></a>()</p></td>
 <td><p>Disable the data API.</p></td>
 </tr>
 </tbody>
@@ -211,53 +211,53 @@ used to create<a href="singlestore.connection.Cursor.html"> <code class="xref py
 <section id="cursor">
 <h3>Cursor<a class="headerlink" href="#cursor" title="Permalink to this headline">¶</a></h3>
 <p>Cursors are used to query the database and download results.  They are
-created using the <a class="reference internal" href="generated/singlestore.connection.Connection.cursor.html#singlestore.connection.Connection.cursor" title="singlestore.connection.Connection.cursor"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Connection.cursor()</span></code></a> method.</p>
+created using the <a class="reference internal" href="generated/singlestoredb.connection.Connection.cursor.html#singlestoredb.connection.Connection.cursor" title="singlestoredb.connection.Connection.cursor"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Connection.cursor()</span></code></a> method.</p>
 <table class="longtable docutils align-default">
 <colgroup>
 <col style="width: 10%" />
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.html#singlestore.connection.Cursor" title="singlestore.connection.Cursor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor</span></code></a>(connection, cursor, driver)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.html#singlestoredb.connection.Cursor" title="singlestoredb.connection.Cursor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor</span></code></a>(connection, cursor, driver)</p></td>
 <td><p>Database cursor for submitting commands and queries.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.callproc.html#singlestore.connection.Cursor.callproc" title="singlestore.connection.Cursor.callproc"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.callproc</span></code></a>(name[, params])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.callproc.html#singlestoredb.connection.Cursor.callproc" title="singlestoredb.connection.Cursor.callproc"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.callproc</span></code></a>(name[, params])</p></td>
 <td><p>Call a stored procedure.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.close.html#singlestore.connection.Cursor.close" title="singlestore.connection.Cursor.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.close</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.close.html#singlestoredb.connection.Cursor.close" title="singlestoredb.connection.Cursor.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.close</span></code></a>()</p></td>
 <td><p>Close the cursor.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.execute.html#singlestore.connection.Cursor.execute" title="singlestore.connection.Cursor.execute"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.execute</span></code></a>(oper[, params])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.execute.html#singlestoredb.connection.Cursor.execute" title="singlestoredb.connection.Cursor.execute"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.execute</span></code></a>(oper[, params])</p></td>
 <td><p>Execute a SQL statement.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.executemany.html#singlestore.connection.Cursor.executemany" title="singlestore.connection.Cursor.executemany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.executemany</span></code></a>(oper[, param_seq])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.executemany.html#singlestoredb.connection.Cursor.executemany" title="singlestoredb.connection.Cursor.executemany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.executemany</span></code></a>(oper[, param_seq])</p></td>
 <td><p>Execute SQL code against multiple sets of parameters.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.fetchone.html#singlestore.connection.Cursor.fetchone" title="singlestore.connection.Cursor.fetchone"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchone</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchone.html#singlestoredb.connection.Cursor.fetchone" title="singlestoredb.connection.Cursor.fetchone"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchone</span></code></a>()</p></td>
 <td><p>Fetch a single row from the result set.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.fetchmany.html#singlestore.connection.Cursor.fetchmany" title="singlestore.connection.Cursor.fetchmany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchmany</span></code></a>([size])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchmany.html#singlestoredb.connection.Cursor.fetchmany" title="singlestoredb.connection.Cursor.fetchmany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchmany</span></code></a>([size])</p></td>
 <td><p>Fetch <cite>size</cite> rows from the result.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.fetchall.html#singlestore.connection.Cursor.fetchall" title="singlestore.connection.Cursor.fetchall"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchall</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchall.html#singlestoredb.connection.Cursor.fetchall" title="singlestoredb.connection.Cursor.fetchall"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchall</span></code></a>()</p></td>
 <td><p>Fetch all rows in the result set.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.nextset.html#singlestore.connection.Cursor.nextset" title="singlestore.connection.Cursor.nextset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.nextset</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.nextset.html#singlestoredb.connection.Cursor.nextset" title="singlestoredb.connection.Cursor.nextset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.nextset</span></code></a>()</p></td>
 <td><p>Skip to the next available result set.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.setinputsizes.html#singlestore.connection.Cursor.setinputsizes" title="singlestore.connection.Cursor.setinputsizes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.setinputsizes</span></code></a>(sizes)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.setinputsizes.html#singlestoredb.connection.Cursor.setinputsizes" title="singlestoredb.connection.Cursor.setinputsizes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.setinputsizes</span></code></a>(sizes)</p></td>
 <td><p>Predefine memory areas for parameters.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.setoutputsize.html#singlestore.connection.Cursor.setoutputsize" title="singlestore.connection.Cursor.setoutputsize"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.setoutputsize</span></code></a>(size[, column])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.setoutputsize.html#singlestoredb.connection.Cursor.setoutputsize" title="singlestoredb.connection.Cursor.setoutputsize"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.setoutputsize</span></code></a>(size[, column])</p></td>
 <td><p>Set a column buffer size for fetches of large columns.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.scroll.html#singlestore.connection.Cursor.scroll" title="singlestore.connection.Cursor.scroll"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.scroll</span></code></a>(value[, mode])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.scroll.html#singlestoredb.connection.Cursor.scroll" title="singlestoredb.connection.Cursor.scroll"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.scroll</span></code></a>(value[, mode])</p></td>
 <td><p>Scroll the cursor to the position in the result set.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.next.html#singlestore.connection.Cursor.next" title="singlestore.connection.Cursor.next"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.next</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.next.html#singlestoredb.connection.Cursor.next" title="singlestoredb.connection.Cursor.next"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.next</span></code></a>()</p></td>
 <td><p>Return the next row from the result set for use in iterators.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.connection.Cursor.is_connected.html#singlestore.connection.Cursor.is_connected" title="singlestore.connection.Cursor.is_connected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.is_connected</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.is_connected.html#singlestoredb.connection.Cursor.is_connected" title="singlestoredb.connection.Cursor.is_connected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.is_connected</span></code></a>()</p></td>
 <td><p>Check if the cursor is connected.</p></td>
 </tr>
 </tbody>
@@ -274,14 +274,14 @@ workspaces in the SingleStoreDB Cloud.</p>
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.manage_workspaces.html#singlestore.manage_workspaces" title="singlestore.manage_workspaces"><code class="xref py py-obj docutils literal notranslate"><span class="pre">manage_workspaces</span></code></a>([access_token, version, ...])</p></td>
-<td><p>Retrieve a SingleStore workspace manager.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.manage_workspaces.html#singlestoredb.manage_workspaces" title="singlestoredb.manage_workspaces"><code class="xref py py-obj docutils literal notranslate"><span class="pre">manage_workspaces</span></code></a>([access_token, version, ...])</p></td>
+<td><p>Retrieve a SingleStoreDB workspace manager.</p></td>
 </tr>
 </tbody>
 </table>
 <section id="workspacemanager">
 <h3>WorkspaceManager<a class="headerlink" href="#workspacemanager" title="Permalink to this headline">¶</a></h3>
-<p>WorkspaceManager objects are returned by the <a class="reference internal" href="generated/singlestore.manage_workspaces.html#singlestore.manage_workspaces" title="singlestore.manage_workspaces"><code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code></a> function.
+<p>WorkspaceManager objects are returned by the <a class="reference internal" href="generated/singlestoredb.manage_workspaces.html#singlestoredb.manage_workspaces" title="singlestoredb.manage_workspaces"><code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code></a> function.
 They allow you to retrieve information about workspaces in your account, or
 create new ones.</p>
 <table class="longtable docutils align-default">
@@ -290,25 +290,25 @@ create new ones.</p>
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.html#singlestore.management.workspace.WorkspaceManager" title="singlestore.management.workspace.WorkspaceManager"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a>([access_token, version, ...])</p></td>
-<td><p>SingleStore workspace manager.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.html#singlestoredb.management.workspace.WorkspaceManager" title="singlestoredb.management.workspace.WorkspaceManager"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a>([access_token, version, ...])</p></td>
+<td><p>SingleStoreDB workspace manager.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.workspace_groups.html#singlestore.management.workspace.WorkspaceManager.workspace_groups" title="singlestore.management.workspace.WorkspaceManager.workspace_groups"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.workspace_groups</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.workspace_groups.html#singlestoredb.management.workspace.WorkspaceManager.workspace_groups" title="singlestoredb.management.workspace.WorkspaceManager.workspace_groups"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.workspace_groups</span></code></a></p></td>
 <td><p>Return a list of available workspace groups.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.regions.html#singlestore.management.workspace.WorkspaceManager.regions" title="singlestore.management.workspace.WorkspaceManager.regions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html#singlestoredb.management.workspace.WorkspaceManager.regions" title="singlestoredb.management.workspace.WorkspaceManager.regions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a></p></td>
 <td><p>Return a list of available regions.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.create_workspace_group.html#singlestore.management.workspace.WorkspaceManager.create_workspace_group" title="singlestore.management.workspace.WorkspaceManager.create_workspace_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.create_workspace_group</span></code></a>(...)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace_group.html#singlestoredb.management.workspace.WorkspaceManager.create_workspace_group" title="singlestoredb.management.workspace.WorkspaceManager.create_workspace_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.create_workspace_group</span></code></a>(...)</p></td>
 <td><p>Create a new workspace group.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.create_workspace.html#singlestore.management.workspace.WorkspaceManager.create_workspace" title="singlestore.management.workspace.WorkspaceManager.create_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.create_workspace</span></code></a>(name, ...)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace.html#singlestoredb.management.workspace.WorkspaceManager.create_workspace" title="singlestoredb.management.workspace.WorkspaceManager.create_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.create_workspace</span></code></a>(name, ...)</p></td>
 <td><p>Create a new workspace.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.get_workspace_group.html#singlestore.management.workspace.WorkspaceManager.get_workspace_group" title="singlestore.management.workspace.WorkspaceManager.get_workspace_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace_group</span></code></a>(id)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace_group.html#singlestoredb.management.workspace.WorkspaceManager.get_workspace_group" title="singlestoredb.management.workspace.WorkspaceManager.get_workspace_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace_group</span></code></a>(id)</p></td>
 <td><p>Retrieve a workspace group definition.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.get_workspace.html#singlestore.management.workspace.WorkspaceManager.get_workspace" title="singlestore.management.workspace.WorkspaceManager.get_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace</span></code></a>(id)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace.html#singlestoredb.management.workspace.WorkspaceManager.get_workspace" title="singlestoredb.management.workspace.WorkspaceManager.get_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace</span></code></a>(id)</p></td>
 <td><p>Retrieve a workspace definition.</p></td>
 </tr>
 </tbody>
@@ -316,30 +316,30 @@ create new ones.</p>
 </section>
 <section id="workspacegroup">
 <h3>WorkspaceGroup<a class="headerlink" href="#workspacegroup" title="Permalink to this headline">¶</a></h3>
-<p>WorkspaceGroup objects are retrieved from <a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.get_workspace_group.html#singlestore.management.workspace.WorkspaceManager.get_workspace_group" title="singlestore.management.workspace.WorkspaceManager.get_workspace_group"><code class="xref py py-meth docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace_group()</span></code></a>
-or by retrieving an element from <a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.workspace_groups.html#singlestore.management.workspace.WorkspaceManager.workspace_groups" title="singlestore.management.workspace.WorkspaceManager.workspace_groups"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.workspace_groups</span></code></a>.</p>
+<p>WorkspaceGroup objects are retrieved from <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace_group.html#singlestoredb.management.workspace.WorkspaceManager.get_workspace_group" title="singlestoredb.management.workspace.WorkspaceManager.get_workspace_group"><code class="xref py py-meth docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace_group()</span></code></a>
+or by retrieving an element from <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.workspace_groups.html#singlestoredb.management.workspace.WorkspaceManager.workspace_groups" title="singlestoredb.management.workspace.WorkspaceManager.workspace_groups"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.workspace_groups</span></code></a>.</p>
 <table class="longtable docutils align-default">
 <colgroup>
 <col style="width: 10%" />
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.html#singlestore.management.workspace.WorkspaceGroup" title="singlestore.management.workspace.WorkspaceGroup"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup</span></code></a>(name, id, created_at, region, ...)</p></td>
-<td><p>SingleStore workspace group definition.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.html#singlestoredb.management.workspace.WorkspaceGroup" title="singlestoredb.management.workspace.WorkspaceGroup"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup</span></code></a>(name, id, created_at, region, ...)</p></td>
+<td><p>SingleStoreDB workspace group definition.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.workspaces.html#singlestore.management.workspace.WorkspaceGroup.workspaces" title="singlestore.management.workspace.WorkspaceGroup.workspaces"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.workspaces</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.workspaces.html#singlestoredb.management.workspace.WorkspaceGroup.workspaces" title="singlestoredb.management.workspace.WorkspaceGroup.workspaces"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.workspaces</span></code></a></p></td>
 <td><p>Return a list of available workspaces.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.create_workspace.html#singlestore.management.workspace.WorkspaceGroup.create_workspace" title="singlestore.management.workspace.WorkspaceGroup.create_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.create_workspace</span></code></a>(name[, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.create_workspace.html#singlestoredb.management.workspace.WorkspaceGroup.create_workspace" title="singlestoredb.management.workspace.WorkspaceGroup.create_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.create_workspace</span></code></a>(name[, ...])</p></td>
 <td><p>Create a new workspace.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.refresh.html#singlestore.management.workspace.WorkspaceGroup.refresh" title="singlestore.management.workspace.WorkspaceGroup.refresh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.refresh</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.refresh.html#singlestoredb.management.workspace.WorkspaceGroup.refresh" title="singlestoredb.management.workspace.WorkspaceGroup.refresh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.refresh</span></code></a>()</p></td>
 <td><p>Update teh object to the current state.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.update.html#singlestore.management.workspace.WorkspaceGroup.update" title="singlestore.management.workspace.WorkspaceGroup.update"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.update</span></code></a>([name, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.update.html#singlestoredb.management.workspace.WorkspaceGroup.update" title="singlestoredb.management.workspace.WorkspaceGroup.update"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.update</span></code></a>([name, ...])</p></td>
 <td><p>Update the cluster definition.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.terminate.html#singlestore.management.workspace.WorkspaceGroup.terminate" title="singlestore.management.workspace.WorkspaceGroup.terminate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.terminate</span></code></a>([force, ...])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.terminate.html#singlestoredb.management.workspace.WorkspaceGroup.terminate" title="singlestoredb.management.workspace.WorkspaceGroup.terminate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.terminate</span></code></a>([force, ...])</p></td>
 <td><p>Terminate the workspace group.</p></td>
 </tr>
 </tbody>
@@ -348,7 +348,7 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 <section id="workspace">
 <h3>Workspace<a class="headerlink" href="#workspace" title="Permalink to this headline">¶</a></h3>
 <p>Workspaces are created within WorkspaceGroups. They can be created using either
-<a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceGroup.create_workspace.html#singlestore.management.workspace.WorkspaceGroup.create_workspace" title="singlestore.management.workspace.WorkspaceGroup.create_workspace"><code class="xref py py-meth docutils literal notranslate"><span class="pre">WorkspaceGroup.create_workspace()</span></code></a> or retrieved from
+<a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.create_workspace.html#singlestoredb.management.workspace.WorkspaceGroup.create_workspace" title="singlestoredb.management.workspace.WorkspaceGroup.create_workspace"><code class="xref py py-meth docutils literal notranslate"><span class="pre">WorkspaceGroup.create_workspace()</span></code></a> or retrieved from
 <code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.workspaces</span></code>.</p>
 <table class="longtable docutils align-default">
 <colgroup>
@@ -356,16 +356,16 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.Workspace.html#singlestore.management.workspace.Workspace" title="singlestore.management.workspace.Workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace</span></code></a>(name, workspace_id, ...[, ...])</p></td>
-<td><p>SingleStore workspace definition.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.html#singlestoredb.management.workspace.Workspace" title="singlestoredb.management.workspace.Workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace</span></code></a>(name, workspace_id, ...[, ...])</p></td>
+<td><p>SingleStoreDB workspace definition.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.Workspace.connect.html#singlestore.management.workspace.Workspace.connect" title="singlestore.management.workspace.Workspace.connect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace.connect</span></code></a>(**kwargs)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.connect.html#singlestoredb.management.workspace.Workspace.connect" title="singlestoredb.management.workspace.Workspace.connect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace.connect</span></code></a>(**kwargs)</p></td>
 <td><p>Create a connection to the database server for this workspace.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.Workspace.refresh.html#singlestore.management.workspace.Workspace.refresh" title="singlestore.management.workspace.Workspace.refresh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace.refresh</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.refresh.html#singlestoredb.management.workspace.Workspace.refresh" title="singlestoredb.management.workspace.Workspace.refresh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace.refresh</span></code></a>()</p></td>
 <td><p>Update the object to the current state.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.management.workspace.Workspace.terminate.html#singlestore.management.workspace.Workspace.terminate" title="singlestore.management.workspace.Workspace.terminate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace.terminate</span></code></a>([wait_on_terminated, ...])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.terminate.html#singlestoredb.management.workspace.Workspace.terminate" title="singlestoredb.management.workspace.Workspace.terminate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace.terminate</span></code></a>([wait_on_terminated, ...])</p></td>
 <td><p>Terminate the workspace.</p></td>
 </tr>
 </tbody>
@@ -373,14 +373,14 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 </section>
 <section id="region">
 <h3>Region<a class="headerlink" href="#region" title="Permalink to this headline">¶</a></h3>
-<p>Region objects are accessed from the <a class="reference internal" href="generated/singlestore.management.workspace.WorkspaceManager.regions.html#singlestore.management.workspace.WorkspaceManager.regions" title="singlestore.management.workspace.WorkspaceManager.regions"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a> attribute.</p>
+<p>Region objects are accessed from the <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html#singlestoredb.management.workspace.WorkspaceManager.regions" title="singlestoredb.management.workspace.WorkspaceManager.regions"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a> attribute.</p>
 <table class="longtable docutils align-default">
 <colgroup>
 <col style="width: 10%" />
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.management.region.Region.html#singlestore.management.region.Region" title="singlestore.management.region.Region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Region</span></code></a>(id, name, provider)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.region.Region.html#singlestoredb.management.region.Region" title="singlestoredb.management.region.Region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Region</span></code></a>(id, name, provider)</p></td>
 <td><p>Cluster region information.</p></td>
 </tr>
 </tbody>
@@ -398,21 +398,21 @@ see the documentation for all options.</p>
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.get_option.html#singlestore.get_option" title="singlestore.get_option"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_option</span></code></a>(key)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.get_option.html#singlestoredb.get_option" title="singlestoredb.get_option"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_option</span></code></a>(key)</p></td>
 <td><p>Get the value of an option.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestore.set_option.html#singlestore.set_option" title="singlestore.set_option"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_option</span></code></a>(*args, **kwargs)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.set_option.html#singlestoredb.set_option" title="singlestoredb.set_option"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_option</span></code></a>(*args, **kwargs)</p></td>
 <td><p>Set the value of an option.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestore.describe_option.html#singlestore.describe_option" title="singlestore.describe_option"><code class="xref py py-obj docutils literal notranslate"><span class="pre">describe_option</span></code></a>(*keys, **kwargs)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.describe_option.html#singlestoredb.describe_option" title="singlestoredb.describe_option"><code class="xref py py-obj docutils literal notranslate"><span class="pre">describe_option</span></code></a>(*keys, **kwargs)</p></td>
 <td><p>Print the description of one or more options.</p></td>
 </tr>
 </tbody>
 </table>
 <p>In addition to the function above, you can access options through the
-<code class="docutils literal notranslate"><span class="pre">singlestore.options</span></code> object. This gives you attribute-like access to the option
+<code class="docutils literal notranslate"><span class="pre">singlestoredb.options</span></code> object. This gives you attribute-like access to the option
 values.</p>
-<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [1]: </span><span class="kn">import</span> <span class="nn">singlestore</span> <span class="k">as</span> <span class="nn">s2</span>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [1]: </span><span class="kn">import</span> <span class="nn">singlestoredb</span> <span class="k">as</span> <span class="nn">s2</span>
 
 <span class="gp">In [2]: </span><span class="n">s2</span><span class="o">.</span><span class="n">describe_option</span><span class="p">(</span><span class="s1">&#39;results.format&#39;</span><span class="p">)</span>
 <span class="go">results.format : string</span>
@@ -440,7 +440,7 @@ values.</p>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="getting-started.html" class="btn btn-neutral float-left" title="Getting Started" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="generated/singlestore.connect.html" class="btn btn-neutral float-right" title="singlestore.connect" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="generated/singlestoredb.connect.html" class="btn btn-neutral float-right" title="singlestoredb.connect" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

@@ -1,0 +1,29 @@
+﻿singlestoredb.management.region.Region
+======================================
+
+.. currentmodule:: singlestoredb.management.region
+
+.. autoclass:: Region
+
+
+   .. automethod:: __init__
+
+
+   .. rubric:: Methods
+
+   .. autosummary::
+
+      ~Region.__init__
+      ~Region.from_dict
+
+
+
+
+
+   .. rubric:: Attributes
+
+   .. autosummary::
+
+      ~Region.id
+      ~Region.name
+      ~Region.provider

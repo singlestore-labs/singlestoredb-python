@@ -1,4 +1,4 @@
-.. module:: singlestore
+.. module:: singlestoredb
 .. _api:
 
 API Reference
@@ -27,7 +27,7 @@ Connection
 Connection objects are created by the :func:`connect` function. They are
 used to create :class:`Cursor` objects for querying the database.
 
-.. currentmodule:: singlestore.connection
+.. currentmodule:: singlestoredb.connection
 
 .. autosummary::
    :toctree: generated/
@@ -49,7 +49,7 @@ Cursor
 Cursors are used to query the database and download results.  They are
 created using the :meth:`Connection.cursor` method.
 
-.. currentmodule:: singlestore.connection
+.. currentmodule:: singlestoredb.connection
 
 .. autosummary::
    :toctree: generated/
@@ -76,7 +76,7 @@ Management API
 The management objects allow you to create, destroy, and interact with
 workspaces in the SingleStoreDB Cloud.
 
-.. currentmodule:: singlestore
+.. currentmodule:: singlestoredb
 
 .. autosummary::
    :toctree: generated/
@@ -91,7 +91,7 @@ WorkspaceManager objects are returned by the :func:`manage_workspaces` function.
 They allow you to retrieve information about workspaces in your account, or
 create new ones.
 
-.. currentmodule:: singlestore.management.workspace
+.. currentmodule:: singlestoredb.management.workspace
 
 .. autosummary::
    :toctree: generated/
@@ -143,7 +143,7 @@ Region
 
 Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
 
-.. currentmodule:: singlestore.management.region
+.. currentmodule:: singlestoredb.management.region
 
 .. autosummary::
    :toctree: generated/
@@ -158,7 +158,7 @@ The following functions are used to get and set package configuration settings.
 Execute the :func:`describe_option` function with no parameters to
 see the documentation for all options.
 
-.. currentmodule:: singlestore
+.. currentmodule:: singlestoredb
 
 .. autosummary::
    :toctree: generated/
@@ -168,12 +168,12 @@ see the documentation for all options.
    describe_option
 
 In addition to the function above, you can access options through the
-``singlestore.options`` object. This gives you attribute-like access to the option
+``singlestoredb.options`` object. This gives you attribute-like access to the option
 values.
 
 .. ipython:: python
 
-   import singlestore as s2
+   import singlestoredb as s2
 
    s2.describe_option('results.format')
 

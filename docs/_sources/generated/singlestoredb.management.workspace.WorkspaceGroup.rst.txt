@@ -1,0 +1,37 @@
+﻿singlestoredb.management.workspace.WorkspaceGroup
+=================================================
+
+.. currentmodule:: singlestoredb.management.workspace
+
+.. autoclass:: WorkspaceGroup
+
+
+   .. automethod:: __init__
+
+
+   .. rubric:: Methods
+
+   .. autosummary::
+
+      ~WorkspaceGroup.__init__
+      ~WorkspaceGroup.create_workspace
+      ~WorkspaceGroup.from_dict
+      ~WorkspaceGroup.refresh
+      ~WorkspaceGroup.terminate
+      ~WorkspaceGroup.update
+
+
+
+
+
+   .. rubric:: Attributes
+
+   .. autosummary::
+
+      ~WorkspaceGroup.workspaces
+      ~WorkspaceGroup.name
+      ~WorkspaceGroup.id
+      ~WorkspaceGroup.created_at
+      ~WorkspaceGroup.region
+      ~WorkspaceGroup.firewall_ranges
+      ~WorkspaceGroup.terminated_at
