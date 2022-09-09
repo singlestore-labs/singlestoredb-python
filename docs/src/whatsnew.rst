@@ -4,6 +4,10 @@ What's New
 
 This document outlines features and improvements from each release.
 
+v0.3.1 - September 9, 2022
+--------------------------
+* Changed cipher in PyMySQL connection for SingleStoreDB Cloud compatibility
+
 v0.3.0 - September 9, 2022
 --------------------------
 * Changed autocommit=True by default
