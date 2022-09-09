@@ -29,9 +29,8 @@ class PyMySQLDriver(Driver):
         params.pop('odbc_driver', None)
         params.pop('pure_python', None)
         params.pop('credential_type', None)
-        # This is a dummy set of options used to create the side-effect of
-        # SSL being enabled if the server also has it enabled.
-        params['ssl'] = dict(enable=True)
+        # The cipher must be set to this level for SingleStoreDB Cloud.
+        params['ssl'] = dict(cipher='HIGH')
         params['port'] = params['port'] or 3306
         params['conv'] = self.merge_converters(params.pop('converters', {}), converters)
         return params
