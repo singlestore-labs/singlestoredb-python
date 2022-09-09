@@ -20,6 +20,7 @@ class HTTPDriver(Driver):
         params.pop('charset', None)
         params.pop('odbc_driver', None)
         params.pop('credential_type', None)
+        params.pop('autocommit', None)
 
         params['protocol'] = params.pop('driver', '').replace(
             'singlestoredb+', '',
