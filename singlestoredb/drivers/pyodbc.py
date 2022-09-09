@@ -59,5 +59,9 @@ class PyODBCDriver(Driver):
 
         return out
 
+    def after_connect(self, conn: Any, params: Dict[str, Any]) -> None:
+        if params.get('autocommit'):
+            conn.autocommit(True)
+
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:
         return not conn.closed

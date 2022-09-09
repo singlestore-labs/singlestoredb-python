@@ -587,11 +587,11 @@ class TestBasics(unittest.TestCase):
 
         # Same as above
         if self.driver == 'pyodbc':
-            assert row['time'] == datetime.time(0, 7, 0), row['time']
+            assert row['time_6'] == datetime.time(0, 7, 0), row['time_6']
         else:
             assert row['time_6'] == datetime.timedelta(
                 hours=1, minutes=10, microseconds=2,
-            ), row['time']
+            ), row['time_6']
         assert typ['time_6'] == 11, typ['time_6']
 
         assert row['datetime'] == datetime.datetime(
@@ -602,7 +602,7 @@ class TestBasics(unittest.TestCase):
         assert row['datetime_6'] == datetime.datetime(
             1756, 10, 29, 2, 2, 42, 8,
         ), row['datetime_6']
-        assert typ['datetime'] == 12, typ['datetime']
+        assert typ['datetime_6'] == 12, typ['datetime_6']
 
         assert row['timestamp'] == datetime.datetime(
             1980, 12, 31, 1, 10, 23,

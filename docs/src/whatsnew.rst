@@ -4,6 +4,10 @@ What's New
 
 This document outlines features and improvements from each release.
 
+v0.3.0 - September 9, 2022
+--------------------------
+* Changed autocommit=True by default
+
 v0.2.0 - Pre-Release
 --------------------
 * Changed to pure Python driver

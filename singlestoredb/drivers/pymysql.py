@@ -12,7 +12,6 @@ except ImportError:
 from .base import Driver
 from ..converters import converters as convs
 
-
 converters: Dict[Any, Callable[..., Any]] = dict(convs)
 converters.update(encoders)
 

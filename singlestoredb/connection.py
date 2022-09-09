@@ -1109,6 +1109,7 @@ def connect(
     converters: Optional[Dict[int, Callable[..., Any]]] = None,
     results_format: Optional[str] = None,
     credential_type: Optional[str] = None,
+    autocommit: Optional[bool] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1156,6 +1157,8 @@ def connect(
         Format of query results: tuple, namedtuple, dict, or dataframe
     credential_type : str, optional
         Type of authentication to use: auth.PASSWORD, auth.JWT, or auth.BROWSER_SSO
+    autocommit : bool, optional
+        Enable autocommits
 
     Examples
     --------

@@ -586,6 +586,9 @@ class TestConnection(unittest.TestCase):
         assert row['tinyint'] == 80, row['tinyint']
         assert typ['tinyint'] == otype(1), typ['tinyint']
 
+        assert row['unsigned_tinyint'] == 85, row['unsigned_tinyint']
+        assert typ['unsigned_tinyint'] == otype(1), typ['unsigned_tinyint']
+
         assert row['bool'] == 0, row['bool']
         assert typ['bool'] == otype(1), typ['bool']
 
@@ -595,20 +598,38 @@ class TestConnection(unittest.TestCase):
         assert row['smallint'] == -27897, row['smallint']
         assert typ['smallint'] == otype(2), typ['smallint']
 
+        assert row['unsigned_smallint'] == 27897, row['unsigned_smallint']
+        assert typ['unsigned_smallint'] == otype(2), typ['unsigned_smallint']
+
         assert row['mediumint'] == 104729, row['mediumint']
         assert typ['mediumint'] == otype(9), typ['mediumint']
+
+        assert row['unsigned_mediumint'] == 120999, row['unsigned_mediumint']
+        assert typ['unsigned_mediumint'] == otype(9), typ['unsigned_mediumint']
 
         assert row['int24'] == -200899, row['int24']
         assert typ['int24'] == otype(9), typ['int24']
 
+        assert row['unsigned_int24'] == 407709, row['unsigned_int24']
+        assert typ['unsigned_int24'] == otype(9), typ['unsigned_int24']
+
         assert row['int'] == -1295369311, row['int']
         assert typ['int'] == otype(3), typ['int']
+
+        assert row['unsigned_int'] == 3872362332, row['unsigned_int']
+        assert typ['unsigned_int'] == otype(3), typ['unsigned_int']
 
         assert row['integer'] == -1741727421, row['integer']
         assert typ['integer'] == otype(3), typ['integer']
 
+        assert row['unsigned_integer'] == 3198387363, row['unsigned_integer']
+        assert typ['unsigned_integer'] == otype(3), typ['unsigned_integer']
+
         assert row['bigint'] == -266883847, row['bigint']
         assert typ['bigint'] == otype(8), typ['bigint']
+
+        assert row['unsigned_bigint'] == 980007287362, row['unsigned_bigint']
+        assert typ['unsigned_bigint'] == otype(8), typ['unsigned_bigint']
 
         assert row['float'] == -146487000.0, row['float']
         assert typ['float'] == otype(4), typ['float']
@@ -658,7 +679,7 @@ class TestConnection(unittest.TestCase):
         assert row['datetime_6'] == datetime.datetime(
             1756, 10, 29, 2, 2, 42, 8,
         ), row['datetime_6']
-        assert typ['datetime'] == 12, typ['datetime']
+        assert typ['datetime_6'] == 12, typ['datetime_6']
 
         assert row['timestamp'] == datetime.datetime(
             1980, 12, 31, 1, 10, 23,
@@ -1455,13 +1476,16 @@ class TestConnection(unittest.TestCase):
 
     def test_results_format(self):
         columns = [
-            'id', 'tinyint', 'bool', 'boolean', 'smallint', 'mediumint',
-            'int24', 'int', 'integer', 'bigint', 'float', 'double', 'real',
-            'decimal', 'dec', 'fixed', 'numeric', 'date', 'time', 'time_6',
-            'datetime', 'datetime_6', 'timestamp', 'timestamp_6', 'year',
-            'char_100', 'binary_100', 'varchar_200', 'varbinary_200',
-            'longtext', 'mediumtext', 'text', 'tinytext', 'longblob',
-            'mediumblob', 'blob', 'tinyblob', 'json', 'enum', 'set', 'bit',
+            'id', 'tinyint', 'unsigned_tinyint', 'bool', 'boolean',
+            'smallint', 'unsigned_smallint', 'mediumint', 'unsigned_mediumint',
+            'int24', 'unsigned_int24', 'int', 'unsigned_int',
+            'integer', 'unsigned_integer', 'bigint', 'unsigned_bigint',
+            'float', 'double', 'real', 'decimal', 'dec', 'fixed', 'numeric',
+            'date', 'time', 'time_6', 'datetime', 'datetime_6', 'timestamp',
+            'timestamp_6', 'year', 'char_100', 'binary_100', 'varchar_200',
+            'varbinary_200', 'longtext', 'mediumtext', 'text', 'tinytext',
+            'longblob', 'mediumblob', 'blob', 'tinyblob', 'json', 'enum',
+            'set', 'bit',
         ]
 
         with s2.connect(database=type(self).dbname, results_format='tuple') as conn:

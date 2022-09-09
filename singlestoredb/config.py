@@ -136,6 +136,12 @@ register_option(
     environ='SINGLESTOREDB_SSO_BROWSER',
 )
 
+register_option(
+    'autocommit', 'bool', check_bool, True,
+    'Enable autocommits',
+    environ='SINGLESTOREDB_AUTOCOMMIT',
+)
+
 #
 # Query results options
 #
