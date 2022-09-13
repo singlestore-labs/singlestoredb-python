@@ -5,10 +5,20 @@ from __future__ import annotations
 
 import os
 import uuid
+from typing import Any
+from typing import Dict
 from urllib.parse import urlparse
 
 import singlestoredb as s2
 from singlestoredb.connection import build_params
+
+
+def apply_template(content: str, vars: Dict[str, Any]) -> str:
+    for k, v in vars.items():
+        key = '{{%s}}' % k
+        if key in content:
+            content = content.replace(key, v)
+    return content
 
 
 def load_sql(sql_file: str) -> str:
@@ -41,7 +51,7 @@ def load_sql(sql_file: str) -> str:
     # If no database name was specified, use initializer URL if given.
     # HTTP can't change databases, so you can't initialize from HTTP
     # while also creating a database.
-    args = {}
+    args = {'local_infile': True}
     if not dbname and 'SINGLESTOREDB_INIT_DB_URL' in os.environ:
         args['host'] = os.environ['SINGLESTOREDB_INIT_DB_URL']
 
@@ -58,6 +68,8 @@ def load_sql(sql_file: str) -> str:
 
     dbexisted = bool(dbname)
 
+    template_vars = dict(DATABASE_NAME=dbname, TEST_PATH=os.path.dirname(sql_file))
+
     # Always use the default driver since not all operations are
     # permitted in the HTTP API.
     with open(sql_file, 'r') as infile:
@@ -66,14 +78,16 @@ def load_sql(sql_file: str) -> str:
                 if not dbname:
                     dbname = 'TEST_{}'.format(uuid.uuid4()).replace('-', '_')
                     cur.execute(f'CREATE DATABASE {dbname};')
-                    cur.execute(f'USE {dbname};')
 
-                    # Execute lines in SQL.
-                    for cmd in infile.read().split(';\n'):
-                        cmd = cmd.strip()
-                        if cmd:
-                            cmd += ';'
-                            cur.execute(cmd)
+                cur.execute(f'USE {dbname};')
+                template_vars['DATABASE_NAME'] = dbname
+
+                # Execute lines in SQL.
+                for cmd in infile.read().split(';\n'):
+                    cmd = apply_template(cmd.strip(), template_vars)
+                    if cmd:
+                        cmd += ';'
+                        cur.execute(cmd)
 
                 # Start HTTP server as needed.
                 if http_port:
@@ -93,3 +107,27 @@ def drop_database(name: str) -> None:
         with s2.connect(**args) as conn:
             with conn.cursor() as cur:
                 cur.execute(f'DROP DATABASE {name};')
+
+
+def create_user(name: str, password: str, dbname: str) -> None:
+    """Create a user for the test database."""
+    if name:
+        args = {}
+        if 'SINGLESTOREDB_INIT_DB_URL' in os.environ:
+            args['host'] = os.environ['SINGLESTOREDB_INIT_DB_URL']
+        with s2.connect(**args) as conn:
+            with conn.cursor() as cur:
+                cur.execute(f'DROP USER IF EXISTS {name};')
+                cur.execute(f'CREATE USER "{name}"@"%" IDENTIFIED BY "{password}"')
+                cur.execute(f'GRANT ALL ON {dbname}.* to "{name}"@"%"')
+
+
+def drop_user(name: str) -> None:
+    """Drop a database with the given name."""
+    if name:
+        args = {}
+        if 'SINGLESTOREDB_INIT_DB_URL' in os.environ:
+            args['host'] = os.environ['SINGLESTOREDB_INIT_DB_URL']
+        with s2.connect(**args) as conn:
+            with conn.cursor() as cur:
+                cur.execute(f'DROP USER IF EXISTS {name};')
