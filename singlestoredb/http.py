@@ -44,7 +44,7 @@ threadsafety = 1
 
 Description = Tuple[
     str, int, Optional[int], Optional[int], Optional[int],
-    Optional[int], bool, Optional[int], Optional[int],
+    Optional[int], bool,
 ]
 
 
@@ -102,6 +102,19 @@ _integrity_errors = set([
 ])
 
 
+def get_precision_scale(type_code: str) -> tuple[Optional[int], Optional[int]]:
+    """Parse the precision and scale from a data type."""
+    if '(' not in type_code:
+        return (None, None)
+    m = re.search(r'\(\s*(\d+)\s*,\s*(\d+)\s*\)', type_code)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    m = re.search(r'\(\s*(\d+)\s*\)', type_code)
+    if m:
+        return (int(m.group(1)), None)
+    raise ValueError(f'Unrecognized type code: {type_code}')
+
+
 def get_exc_type(code: int) -> type:
     """Map error code to DB-API error type."""
     if code in _interface_errors:
@@ -135,6 +148,25 @@ def b64decode_converter(
     return converter(b64decode(x))
 
 
+class PyMyField(object):
+    """Field for PyMySQL compatibility."""
+
+    def __init__(self, name: str, flags: int, charset: int) -> None:
+        self.name = name
+        self.flags = flags
+        self.charsetnr = charset
+
+
+class PyMyResult(object):
+    """Result for PyMySQL compatibility."""
+
+    def __init__(self) -> None:
+        self.fields: list[PyMyField] = []
+
+    def append(self, item: PyMyField) -> None:
+        self.fields.append(item)
+
+
 class Cursor(object):
     """
     SingleStoreDB HTTP database cursor.
@@ -159,6 +191,14 @@ class Cursor(object):
         self.rowcount: int = 0
         self.messages: list[tuple[int, str]] = []
         self.lastrowid: Optional[int] = None
+        self._pymy_results: list[PyMyResult] = []
+
+    @property
+    def _result(self) -> Optional[PyMyResult]:
+        """Return Result object for PyMySQL compatibility."""
+        if self._result_idx < 0:
+            return None
+        return self._pymy_results[self._result_idx]
 
     @property
     def description(self) -> Optional[list[Description]]:
@@ -295,31 +335,44 @@ class Cursor(object):
 
                 for result in results:
 
+                    pymy_res = PyMyResult()
                     convs = []
 
                     description: list[Description] = []
                     for i, col in enumerate(result.get('columns', [])):
+                        charset = 0
+                        flags = 0
                         data_type = col['dataType'].split('(')[0]
                         type_code = types.ColumnType.get_code(data_type)
+                        prec, scale = get_precision_scale(col['dataType'])
                         converter = http_converters.get(type_code, None)
+                        if 'UNSIGNED' in data_type:
+                            flags = 32
                         if data_type.endswith('BLOB') or data_type.endswith('BINARY'):
                             converter = functools.partial(b64decode_converter, converter)
+                            charset = 63  # BINARY
                         if type_code == 0:  # DECIMAL
                             type_code = types.ColumnType.get_code('NEWDECIMAL')
                         elif type_code == 15:  # VARCHAR / VARBINARY
                             type_code = types.ColumnType.get_code('VARSTRING')
+                        if type_code == 246 and prec is not None:  # NEWDECIMAL
+                            prec += 1  # for sign
+                            if scale is not None and scale > 0:
+                                prec += 1  # for decimal
                         if converter is not None:
                             convs.append((i, None, converter))
                         description.append((
-                            col['name'], type_code,
-                            None, None, None, None,
-                            col.get('nullable', False), 0, 0,
+                            str(col['name']), type_code,
+                            None, None, prec, scale,
+                            col.get('nullable', False),
                         ))
+                        pymy_res.append(PyMyField(col['name'], flags, charset))
                     self._descriptions.append(description)
 
                     rows = convert_rows(result.get('rows', []), convs)
 
                     self._results.append(rows)
+                    self._pymy_results.append(pymy_res)
 
             self.rowcount = len(self._results[0])
         else:
