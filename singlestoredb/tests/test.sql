@@ -5,7 +5,6 @@ CREATE ROWSTORE TABLE IF NOT EXISTS data (
     PRIMARY KEY (id) USING HASH
 ) DEFAULT CHARSET = utf8 COLLATE = utf8_unicode_ci;
 
-DELETE FROM data WHERE 1;
 INSERT INTO data SET id='a', name='antelopes', value=2;
 INSERT INTO data SET id='b', name='bears', value=2;
 INSERT INTO data SET id='c', name='cats', value=5;

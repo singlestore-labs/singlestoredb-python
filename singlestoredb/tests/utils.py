@@ -78,16 +78,18 @@ def load_sql(sql_file: str) -> str:
                 if not dbname:
                     dbname = 'TEST_{}'.format(uuid.uuid4()).replace('-', '_')
                     cur.execute(f'CREATE DATABASE {dbname};')
+                    cur.execute(f'USE {dbname};')
 
-                cur.execute(f'USE {dbname};')
-                template_vars['DATABASE_NAME'] = dbname
+                    template_vars['DATABASE_NAME'] = dbname
 
-                # Execute lines in SQL.
-                for cmd in infile.read().split(';\n'):
-                    cmd = apply_template(cmd.strip(), template_vars)
-                    if cmd:
-                        cmd += ';'
-                        cur.execute(cmd)
+                    # Execute lines in SQL.
+                    for cmd in infile.read().split(';\n'):
+                        cmd = apply_template(cmd.strip(), template_vars)
+                        if cmd:
+                            cmd += ';'
+                            cur.execute(cmd)
+                else:
+                    cur.execute(f'USE {dbname};')
 
                 # Start HTTP server as needed.
                 if http_port:
