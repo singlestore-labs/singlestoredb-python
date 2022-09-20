@@ -22,6 +22,7 @@ class MySQLConnectorDriver(Driver):
     def remap_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         params.pop('driver', None)
         params.pop('odbc_driver', None)
+        params.pop('ssl_cipher', None)
         if params.pop('pure_python', False):
             params['use_pure'] = True
         params['port'] = params['port'] or 3306

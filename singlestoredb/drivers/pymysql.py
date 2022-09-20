@@ -30,7 +30,7 @@ class PyMySQLDriver(Driver):
         params.pop('pure_python', None)
         params.pop('credential_type', None)
         # The cipher must be set to this level for SingleStoreDB Cloud.
-        params['ssl'] = dict(cipher='HIGH')
+        params['ssl'] = dict(cipher=params.pop('ssl_cipher'))
         params['port'] = params['port'] or 3306
         params['conv'] = self.merge_converters(params.pop('converters', {}), converters)
         return params

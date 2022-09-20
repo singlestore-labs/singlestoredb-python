@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import re
 import weakref
+from collections import namedtuple
 from collections.abc import Mapping
 from collections.abc import MutableMapping
 from collections.abc import Sequence
@@ -49,6 +50,24 @@ positional_paramstyle = 'numeric'
 
 # Type codes for character-based columns
 CHAR_COLUMNS = set(list(range(247, 256)) + [245])
+
+
+def under2camel(s: str) -> str:
+    """Format underscore-delimited strings to camel-case."""
+
+    def upper_mid(m: Any) -> str:
+        """Uppercase middle group of matches."""
+        return m.group(1) + m.group(2).upper() + m.group(3)
+
+    def upper(m: Any) -> str:
+        """Uppercase match."""
+        return m.group(1).upper()
+
+    s = re.sub(r'(\b|_)(xml|sql|json)(\b|_)', upper_mid, s, flags=re.I)
+    s = re.sub(r'(?:^|_+)(\w)', upper, s)
+    s = re.sub(r'_+$', r'', s)
+
+    return s
 
 
 def nested_converter(
@@ -276,6 +295,11 @@ def _name_check(name: str) -> str:
     if not re.match(r'^[A-Za-z_][\w+_]*$', name):
         raise ValueError('Name contains invalid characters')
     return name
+
+
+def quote_identifier(name: str) -> str:
+    """Escape identifier value."""
+    return '`{name}`'
 
 
 class VariableAccessor(MutableMapping):  # type: ignore
@@ -849,6 +873,203 @@ class Cursor(object):
         return self._conn.is_connected()
 
 
+class ShowResult(Sequence[Any]):
+    """
+    Simple result object.
+
+    Parameters
+    ----------
+    *args : Any
+        Parameters to send to underlying list constructor
+    **kwargs : Any
+        Keyword parameters to send to underlying list constructor
+
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self._data: List[Any] = []
+        item: Any = None
+        for item in list(*args, **kwargs):
+            self._data.append(item)
+
+    def __getitem__(self, item: Union[int, slice]) -> Any:
+        return self._data[item]
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def _repr_html_(self) -> Optional[str]:
+        if not self._data:
+            return None
+        cell_style = 'style="text-align: left; vertical-align: top"'
+        out = []
+        out.append('<table>')
+        out.append('<thead>')
+        out.append('<tr>')
+        for name in self._data[0]._fields:
+            out.append(f'<th {cell_style}>{name}</th>')
+        out.append('</tr>')
+        out.append('</thead>')
+        out.append('<tbody>')
+        for row in self._data:
+            out.append('<tr>')
+            for item in row:
+                out.append(f'<td {cell_style}>{item}</td>')
+            out.append('</tr>')
+        out.append('</tbody>')
+        out.append('</table>')
+        return ''.join(out)
+
+
+class ShowAccessor(object):
+    """Accessor for ``SHOW`` commands."""
+
+    def __init__(self, conn: Connection):
+        self._conn = conn
+
+    def columns(self, table: str, full: bool = False) -> ShowResult:
+        """Show the column information for the given table."""
+        table = quote_identifier(table)
+        if full:
+            return self._query(f'full columns in {table}')
+        return self._query(f'columns in {table}')
+
+    def tables(self, extended: bool = False) -> ShowResult:
+        """Show tables in the current database."""
+        if extended:
+            return self._query('tables extended')
+        return self._query('tables')
+
+    def warnings(self) -> ShowResult:
+        """Show warnings."""
+        return self._query('warnings')
+
+    def errors(self) -> ShowResult:
+        """Show errors."""
+        return self._query('errors')
+
+    def databases(self, extended: bool = False) -> ShowResult:
+        """Show all databases in the server."""
+        if extended:
+            return self._query('databases extended')
+        return self._query('databases')
+
+    def database_status(self) -> ShowResult:
+        """Show status of the current database."""
+        return self._query('database status')
+
+    def global_status(self) -> ShowResult:
+        """Show global status of the current server."""
+        return self._query('global status')
+
+    def indexes(self, table: str) -> ShowResult:
+        """Show all indexes in the given table."""
+        table = quote_identifier(table)
+        return self._query('indexes in {table}')
+
+    def functions(self) -> ShowResult:
+        """Show all functions in the current database."""
+        return self._query('functions')
+
+    def partitions(self, extended: bool = False) -> ShowResult:
+        """Show partitions in the current database."""
+        if extended:
+            return self._query('partitions extended')
+        return self._query('partitions')
+
+    def pipelines(self) -> ShowResult:
+        """Show all pipelines in the current database."""
+        return self._query('pipelines')
+
+    def plan(self, plan_id: str, json: bool = False) -> ShowResult:
+        """Show the plan for the given plan ID."""
+        plan_id = quote_identifier(plan_id)
+        if json:
+            return self._query(f'plan json {plan_id}')
+        return self._query(f'plan {plan_id}')
+
+    def plancache(self) -> ShowResult:
+        """Show all query statements compiled and executed."""
+        return self._query('plancache')
+
+    def processlist(self) -> ShowResult:
+        """Show details about currently running threads."""
+        return self._query('processlist')
+
+    def reproduction(self, outfile: Optional[str] = None) -> ShowResult:
+        """Show troubleshooting data for query optimizer and code generation."""
+        if outfile:
+            outfile = outfile.replace('"', r'\"')
+            return self._query('reproduction into outfile "{outfile}"')
+        return self._query('reproduction')
+
+    def schemas(self) -> ShowResult:
+        """Show schemas in the server."""
+        return self._query('schemas')
+
+    def session_status(self) -> ShowResult:
+        """Show server status information for a session."""
+        return self._query('session status')
+
+    def status(self, extended: bool = False) -> ShowResult:
+        """Show server status information."""
+        if extended:
+            return self._query('status extended')
+        return self._query('status')
+
+    def table_status(self) -> ShowResult:
+        """Show table status information for the current database."""
+        return self._query('table status')
+
+    def procedures(self) -> ShowResult:
+        """Show all procedures in the current database."""
+        return self._query('procedures')
+
+    def aggregates(self) -> ShowResult:
+        """Show all aggregate functions in the current database."""
+        return self._query('aggregates')
+
+    def create_aggregate(self, name: str) -> ShowResult:
+        """Show the function creation code for the given aggregate function."""
+        name = quote_identifier(name)
+        return self._query(f'create aggregate {name}')
+
+    def create_function(self, name: str) -> ShowResult:
+        """Show the function creation code for the given function."""
+        name = quote_identifier(name)
+        return self._query(f'create function {name}')
+
+    def create_pipeline(self, name: str, extended: bool = False) -> ShowResult:
+        """Show the pipeline creation code for the given pipeline."""
+        name = quote_identifier(name)
+        if extended:
+            return self._query(f'create pipeline {name} extended')
+        return self._query(f'create pipeline {name}')
+
+    def create_table(self, name: str) -> ShowResult:
+        """Show the table creation code for the given table."""
+        name = quote_identifier(name)
+        return self._query(f'create table {name}')
+
+    def create_view(self, name: str) -> ShowResult:
+        """Show the view creation code for the given view."""
+        name = quote_identifier(name)
+        return self._query(f'create view {name}')
+
+    def _query(self, qtype: str) -> ShowResult:
+        """Query the given object type."""
+        with self._conn._i_cursor() as cur:
+            cur.execute(f'show {qtype}')
+            out = []
+            if cur.description:
+                names = [under2camel(str(x[0]).replace(' ', '')) for x in cur.description]
+                names[0] = 'Name'
+                item_type = namedtuple('Row', names)  # type: ignore
+                for item in cur.fetchall():
+                    out.append(item_type(*item))
+            return ShowResult(out)
+
+
 class Connection(object):
     """
     SingleStoreDB connection.
@@ -1091,6 +1312,11 @@ class Connection(object):
 
     disable_http_api = disable_data_api
 
+    @property
+    def show(self) -> ShowAccessor:
+        """Access server properties managed by the SHOW statement."""
+        return ShowAccessor(self)
+
 
 #
 # NOTE: When adding parameters to this function, you should always
@@ -1106,6 +1332,7 @@ def connect(
     odbc_driver: Optional[str] = None, charset: Optional[str] = None,
     ssl_key: Optional[str] = None, ssl_cert: Optional[str] = None,
     ssl_ca: Optional[str] = None, ssl_disabled: Optional[bool] = None,
+    ssl_cipher: Optional[str] = None,
     converters: Optional[Dict[int, Callable[..., Any]]] = None,
     results_format: Optional[str] = None,
     credential_type: Optional[str] = None,
@@ -1149,6 +1376,8 @@ def connect(
         File containing SSL certificate
     ssl_ca : str, optional
         File containing SSL certificate authority
+    ssl_cipher : str, optional
+        Sets the SSL cipher list
     ssl_disabled : bool, optional
         Disable SSL usage
     converters : dict[int, Callable], optional

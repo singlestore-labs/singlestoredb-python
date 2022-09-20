@@ -110,6 +110,12 @@ register_option(
 )
 
 register_option(
+    'ssl_cipher', 'str', check_str, 'HIGH',
+    'Sets the SSL cipher list',
+    environ='SINGLESTOREDB_SSL_CIPHER',
+)
+
+register_option(
     'ssl_disabled', 'bool', check_bool, False,
     'Disable SSL usage',
     environ='SINGLESTOREDB_SSL_DISABLED',

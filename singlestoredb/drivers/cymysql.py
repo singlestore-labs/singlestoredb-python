@@ -33,6 +33,7 @@ class CyMySQLDriver(Driver):
         params['db'] = params.pop('database', None)
         params['passwd'] = params.pop('password', None)
         params['conv'] = self.merge_converters(params.pop('converters', {}), converters)
+        params['ssl'] = dict(cipher=params.pop('ssl_cipher'))
         return params
 
     def is_connected(self, conn: Any, reconnect: bool = False) -> bool:
