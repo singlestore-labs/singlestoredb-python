@@ -299,7 +299,7 @@ def _name_check(name: str) -> str:
 
 def quote_identifier(name: str) -> str:
     """Escape identifier value."""
-    return '`{name}`'
+    return f'`{name}`'
 
 
 class VariableAccessor(MutableMapping):  # type: ignore
