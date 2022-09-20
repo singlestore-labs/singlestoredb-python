@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import pprint
 import re
 import weakref
 from collections import namedtuple
@@ -898,9 +899,20 @@ class ShowResult(Sequence[Any]):
     def __len__(self) -> int:
         return len(self._data)
 
-    def _repr_html_(self) -> Optional[str]:
+    def _repr_pretty_(self, p: Any, cycle: bool) -> None:
+        if cycle:
+            p.text('[...]')
+        else:
+            p.text('[\n')
+            for item in self._data:
+                p.text('    ')
+                p.text(pprint.pformat(item))
+                p.text('\n')
+            p.text(']')
+
+    def _repr_html_(self) -> str:
         if not self._data:
-            return None
+            return ''
         cell_style = 'style="text-align: left; vertical-align: top"'
         out = []
         out.append('<table>')
