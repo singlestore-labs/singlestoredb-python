@@ -896,6 +896,12 @@ class ShowResult(Sequence[Any]):
     def __getitem__(self, item: Union[int, slice]) -> Any:
         return self._data[item]
 
+    def __getattr__(self, name: str) -> List[Any]:
+        out = []
+        for item in self._data:
+            out.append(getattr(item, name))
+        return out
+
     def __len__(self) -> int:
         return len(self._data)
 
