@@ -9,13 +9,13 @@ import weakref
 from collections import namedtuple
 from collections.abc import Mapping
 from collections.abc import MutableMapping
-from collections.abc import Sequence
 from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import Iterator
 from typing import List
 from typing import Optional
+from typing import Sequence
 from typing import Tuple
 from typing import Union
 from urllib.parse import parse_qs
