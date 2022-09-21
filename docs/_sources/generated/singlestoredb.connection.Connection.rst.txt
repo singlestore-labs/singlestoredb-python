@@ -34,6 +34,7 @@
    .. autosummary::
 
       ~Connection.messages
+      ~Connection.show
       ~Connection.results_format
       ~Connection.encoding
       ~Connection.globals

@@ -14,7 +14,7 @@ Examples
 """
 from __future__ import annotations
 
-__version__ = '0.3.2'
+__version__ = '0.3.3'
 
 from .config import options, get_option, set_option, describe_option
 from .connection import connect, apilevel, threadsafety, paramstyle

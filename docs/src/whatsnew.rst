@@ -4,6 +4,11 @@ What's New
 
 This document outlines features and improvements from each release.
 
+v0.3.3 - September 21, 2022
+---------------------------
+* Add ``ssl_cipher`` option to connections
+* Add ``show`` accessor for database ``SHOW`` commands
+
 v0.3.2 - September 14, 2022
 ---------------------------
 * Fixes for PyMySQL compatibility
