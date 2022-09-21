@@ -31,13 +31,16 @@ class MySQLdbDriver(Driver):
             ssl['cert'] = params.get('ssl_cert')
         if params.get('ssl_ca', None):
             ssl['ca'] = params.get('ssl_ca')
+        if params.get('ssl_cipher', None):
+            ssl['cipher'] = params.get('ssl_cipher')
 
         params.pop('ssl_key', None)
         params.pop('ssl_cert', None)
         params.pop('ssl_ca', None)
+        params.pop('ssl_cipher', None)
 
         if ssl:
-            params['ssl'] = dict(ssl=ssl, cipher=params.pop('ssl_cipher'))
+            params['ssl'] = dict(ssl=ssl)
 
         if params.pop('ssl_disabled', False):
             params['ssl_mode'] = 'DISABLED'
