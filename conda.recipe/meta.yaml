@@ -34,9 +34,9 @@ test:
         - nose2 -v singlestoredb.tests.test_basics
 
 about:
-    home: https://github.com/singlestore-labs/singlestore-python
+    home: https://github.com/singlestore-labs/singlestoredb-python
     license: Apache 2.0
     license_file: ../LICENSE
     summary: SingleStore Database Interface
-    doc_url: https://singlestore-labs.github.io/singlestore-python/index.html
-    dev_url: https://github.com/singlestore-labs/singlestore-python
+    doc_url: https://singlestoredb-python.labs.singlestore.com/index.html
+    dev_url: https://github.com/singlestore-labs/singlestoredb-python
