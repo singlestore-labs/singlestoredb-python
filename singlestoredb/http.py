@@ -158,7 +158,7 @@ class PyMyResult(object):
     """Result for PyMySQL compatibility."""
 
     def __init__(self) -> None:
-        self.fields: list[PyMyField] = []
+        self.fields: List[PyMyField] = []
 
     def append(self, item: PyMyField) -> None:
         self.fields.append(item)
@@ -180,15 +180,15 @@ class Cursor(object):
 
     def __init__(self, connection: 'Connection'):
         self.connection: Optional[Connection] = connection
-        self._results: list[list[tuple[Any, ...]]] = [[]]
+        self._results: List[List[Tuple[Any, ...]]] = [[]]
         self._row_idx: int = -1
         self._result_idx: int = -1
-        self._descriptions: list[list[Description]] = []
+        self._descriptions: List[List[Description]] = []
         self.arraysize: int = 1000
         self.rowcount: int = 0
-        self.messages: list[tuple[int, str]] = []
+        self.messages: List[Tuple[int, str]] = []
         self.lastrowid: Optional[int] = None
-        self._pymy_results: list[PyMyResult] = []
+        self._pymy_results: List[PyMyResult] = []
 
     @property
     def _result(self) -> Optional[PyMyResult]:
@@ -335,7 +335,7 @@ class Cursor(object):
                     pymy_res = PyMyResult()
                     convs = []
 
-                    description: list[Description] = []
+                    description: List[Description] = []
                     for i, col in enumerate(result.get('columns', [])):
                         charset = 0
                         flags = 0
@@ -662,7 +662,7 @@ class Connection(object):
 
         self._database = kwargs.get('database', get_option('database'))
         self._url = f'{protocol}://{host}:{port}/api/{version}/'
-        self.messages: list[list[Any]] = []
+        self.messages: List[List[Any]] = []
         self._autocommit: bool = True
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
