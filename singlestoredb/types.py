@@ -134,7 +134,7 @@ class DBAPIType(object):
         bool
 
         """
-        return not(self.__eq__(other))
+        return not (self.__eq__(other))
 
     def __str__(self) -> str:
         """Return string representation."""

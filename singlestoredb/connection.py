@@ -446,7 +446,7 @@ class Cursor(object):
             for i, item in enumerate(self._cursor.description):
                 item = list(item) + [None, None]
                 item[1] = types.ColumnType.get_code(item[1])
-                item[6] = not(not(item[6]))
+                item[6] = not (not (item[6]))
                 out.append(Description(*item[:9]))
 
                 # Setup override converters, if the SET flag is set use that
