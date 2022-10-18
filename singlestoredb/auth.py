@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-from __future__ import annotations
-
 import datetime
 from typing import Any
 from typing import List
@@ -42,7 +40,7 @@ class JSONWebToken(object):
         self.timeout = timeout
 
     @classmethod
-    def from_token(cls, token: bytes, verify_signature: bool = False) -> JSONWebToken:
+    def from_token(cls, token: bytes, verify_signature: bool = False) -> 'JSONWebToken':
         """Validate the contents of the JWT."""
         info = jwt.decode(token, options={'verify_signature': verify_signature})
 

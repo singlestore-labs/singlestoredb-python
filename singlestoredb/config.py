@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 """SingleStoreDB package options."""
-from __future__ import annotations
-
 import functools
 
 from . import auth
@@ -55,7 +53,7 @@ register_option(
 )
 
 register_option(
-    'driver', 'string', check_str, 'pymysql',
+    'driver', 'string', check_str, 'pymysqlsv',
     'Specifies the Python DB-API module to use for communicating'
     'with the database.',
     environ='SINGLESTOREDB_DRIVER',

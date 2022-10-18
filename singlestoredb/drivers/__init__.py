@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import re
 from typing import Any
 from typing import Dict
@@ -12,6 +10,7 @@ from .mariadb import MariaDBDriver
 from .mysqlconnector import MySQLConnectorDriver
 from .mysqldb import MySQLdbDriver
 from .pymysql import PyMySQLDriver
+from .pymysqlsv import PyMySQLsvDriver
 from .pyodbc import PyODBCDriver
 
 

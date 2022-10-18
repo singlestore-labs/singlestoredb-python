@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # type: ignore
 """Test SingleStoreDB exceptions."""
-from __future__ import annotations
-
 import unittest
 
 import singlestoredb as s2

@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # type: ignore
 """Test SingleStoreDB results."""
-from __future__ import annotations
-
 import os
 import unittest
 

@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 """SingleStoreDB Workspace Management."""
-from __future__ import annotations
-
 import datetime
-from collections.abc import Sequence
 from typing import Any
 from typing import Dict
 from typing import List
@@ -38,7 +35,7 @@ class Workspace(object):
 
     def __init__(
         self, name: str, workspace_id: str,
-        workspace_group: Union[str, WorkspaceGroup],
+        workspace_group: Union[str, 'WorkspaceGroup'],
         size: str, state: str,
         created_at: Union[str, datetime.datetime],
         terminated_at: Optional[Union[str, datetime.datetime]] = None,
@@ -83,7 +80,7 @@ class Workspace(object):
         return str(self)
 
     @classmethod
-    def from_dict(cls, obj: Dict[str, Any], manager: 'WorkspaceManager') -> Workspace:
+    def from_dict(cls, obj: Dict[str, Any], manager: 'WorkspaceManager') -> 'Workspace':
         """
         Construct a Workspace from a dictionary of values.
 
@@ -109,7 +106,7 @@ class Workspace(object):
         out._manager = manager
         return out
 
-    def refresh(self) -> Workspace:
+    def refresh(self) -> 'Workspace':
         """Update the object to the current state."""
         if self._manager is None:
             raise ManagementError(
@@ -201,7 +198,7 @@ class WorkspaceGroup(object):
         self, name: str, id: str,
         created_at: Union[str, datetime.datetime],
         region: Region,
-        firewall_ranges: Sequence[str],
+        firewall_ranges: List[str],
         terminated_at: Optional[Union[str, datetime.datetime]],
     ):
         #: Name of the workspace group
@@ -235,7 +232,7 @@ class WorkspaceGroup(object):
     @classmethod
     def from_dict(
         cls, obj: Dict[str, Any], manager: 'WorkspaceManager',
-    ) -> WorkspaceGroup:
+    ) -> 'WorkspaceGroup':
         """
         Construct a WorkspaceGroup from a dictionary of values.
 
@@ -261,7 +258,7 @@ class WorkspaceGroup(object):
         out._manager = manager
         return out
 
-    def refresh(self) -> WorkspaceGroup:
+    def refresh(self) -> 'WorkspaceGroup':
         """Update teh object to the current state."""
         if self._manager is None:
             raise ManagementError(
@@ -275,7 +272,7 @@ class WorkspaceGroup(object):
     def update(
         self, name: Optional[str] = None,
         admin_password: Optional[str] = None,
-        firewall_ranges: Optional[Sequence[str]] = None,
+        firewall_ranges: Optional[List[str]] = None,
     ) -> None:
         """
         Update the cluster definition.
@@ -432,7 +429,7 @@ class WorkspaceManager(Manager):
 
     def create_workspace_group(
         self, name: str, region: Union[str, Region],
-        firewall_ranges: Sequence[str], admin_password: Optional[str] = None,
+        firewall_ranges: List[str], admin_password: Optional[str] = None,
     ) -> WorkspaceGroup:
         """
         Create a new workspace group.

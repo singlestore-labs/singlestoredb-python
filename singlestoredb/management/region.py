@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 """SingleStoreDB Cluster Management."""
-from __future__ import annotations
-
 from typing import Dict
 from typing import Optional
 
@@ -44,7 +42,7 @@ class Region(object):
         return str(self)
 
     @classmethod
-    def from_dict(cls, obj: Dict[str, str], manager: Manager) -> Region:
+    def from_dict(cls, obj: Dict[str, str], manager: Manager) -> 'Region':
         """
         Convert dictionary to a ``Region`` object.
 

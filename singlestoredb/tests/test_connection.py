@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # type: ignore
 """Basic SingleStoreDB connection testing."""
-from __future__ import annotations
-
 import datetime
 import decimal
 import os
@@ -1019,7 +1017,10 @@ class TestConnection(unittest.TestCase):
         assert out == [(1234567890,)], out
 
         # These take an extra `nextset` for some reason
-        if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:
+        if self.driver in [
+            'pymysql', 'clients.pymysqlsv',
+            'MySQLdb', 'cymysql', 'pyodbc',
+        ]:
             self.cur.nextset()
 
         out = self.cur.nextset()
@@ -1051,7 +1052,10 @@ class TestConnection(unittest.TestCase):
         assert out == [(1234567890,)], out
 
         # These take an extra `nextset` for some reason
-        if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:
+        if self.driver in [
+            'pymysql', 'clients.pymysqlsv',
+            'MySQLdb', 'cymysql', 'pyodbc',
+        ]:
             self.cur.nextset()
 
         out = self.cur.nextset()
@@ -1077,7 +1081,10 @@ class TestConnection(unittest.TestCase):
         assert list(out) == [(1, 2, 3)], out
 
         # These take an extra `nextset` for some reason
-        if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:
+        if self.driver in [
+            'pymysql', 'clients.pymysqlsv',
+            'MySQLdb', 'cymysql', 'pyodbc',
+        ]:
             self.cur.nextset()
 
         out = self.cur.nextset()
@@ -1090,7 +1097,10 @@ class TestConnection(unittest.TestCase):
         assert list(out) == [(4, 5, 6)], out
 
         # These take an extra `nextset` for some reason
-        if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:
+        if self.driver in [
+            'pymysql', 'clients.pymysqlsv',
+            'MySQLdb', 'cymysql', 'pyodbc',
+        ]:
             self.cur.nextset()
 
         out = self.cur.nextset()
@@ -1116,7 +1126,10 @@ class TestConnection(unittest.TestCase):
         assert out == [(1, 2, 3)], out
 
         # These take an extra `nextset` for some reason
-        if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:
+        if self.driver in [
+            'pymysql', 'clients.pymysqlsv',
+            'MySQLdb', 'cymysql', 'pyodbc',
+        ]:
             self.cur.nextset()
 
         out = self.cur.nextset()
@@ -1142,7 +1155,10 @@ class TestConnection(unittest.TestCase):
         assert list(out) == [(1, 2, 3)], out
 
         # These take an extra `nextset` for some reason
-        if self.driver in ['pymysql', 'MySQLdb', 'cymysql', 'pyodbc']:
+        if self.driver in [
+            'pymysql', 'clients.pymysqlsv',
+            'MySQLdb', 'cymysql', 'pyodbc',
+        ]:
             self.cur.nextset()
 
         out = self.cur.nextset()
@@ -1221,7 +1237,7 @@ class TestConnection(unittest.TestCase):
         self.cur.setinputsizes([10, 20, 30])
 
     def test_setoutputsize(self):
-        if self.driver in ['MySQLdb', 'pymysql', 'cymysql']:
+        if self.driver in ['MySQLdb', 'pymysql', 'clients.pymysqlsv', 'cymysql']:
             self.skipTest('outputsize is not supported')
 
         self.cur.setoutputsize(100)

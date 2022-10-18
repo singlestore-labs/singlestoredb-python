@@ -17,8 +17,6 @@
 #  This file originally copied from https://github.com/sassoftware/python-swat
 #
 """Dictionary that allows setting nested keys by period (.) delimited strings."""
-from __future__ import annotations
-
 import copy
 import re
 from typing import Any
@@ -26,6 +24,8 @@ from typing import Dict
 from typing import ItemsView
 from typing import Iterable
 from typing import KeysView
+from typing import List
+from typing import Tuple
 from typing import ValuesView
 
 
@@ -74,7 +74,7 @@ class xdict(Dict[str, Any]):
 
     """
 
-    _dir: list[str]
+    _dir: List[str]
 
     def __init__(self, *args: Any, **kwargs: Any):
         super(xdict, self).__init__()
@@ -86,7 +86,7 @@ class xdict(Dict[str, Any]):
             return list(self._dir)
         return super(xdict, self).__dir__()
 
-    def set_dir_values(self, values: list[str]) -> None:
+    def set_dir_values(self, values: List[str]) -> None:
         """
         Set the valid values for keys to display in tab-completion.
 
@@ -102,11 +102,11 @@ class xdict(Dict[str, Any]):
         """Set the docstring for the xdict."""
         super(xdict, self).__setattr__('__doc__', docstring)
 
-    def __copy__(self) -> xdict:
+    def __copy__(self) -> 'xdict':
         """Return a copy of self."""
         return type(self)(**self)
 
-    def __deepcopy__(self, memo: Any) -> xdict:
+    def __deepcopy__(self, memo: Any) -> 'xdict':
         """Return a deep copy of self."""
         out = type(self)()
         for key, value in self.items():
@@ -116,7 +116,7 @@ class xdict(Dict[str, Any]):
         return out
 
     @classmethod
-    def from_json(cls, jsonstr: str) -> xdict:
+    def from_json(cls, jsonstr: str) -> 'xdict':
         """
         Create an xdict object from a JSON string.
 
@@ -309,7 +309,7 @@ class xdict(Dict[str, Any]):
         self._flatten(self, output)
         return output
 
-    def allkeys(self) -> list[str]:
+    def allkeys(self) -> List[str]:
         """Return a list of all possible keys (even sub-keys) in the xdict."""
         out = set()
         for key in self.flatkeys():
@@ -321,15 +321,15 @@ class xdict(Dict[str, Any]):
                     out.add(re.sub(r'\[\d+\]', r'', key))
         return list(out)
 
-    def flatkeys(self) -> list[str]:
+    def flatkeys(self) -> List[str]:
         """Return a list of flattened keys in the xdict."""
         return list(self.flattened().keys())
 
-    def flatvalues(self) -> list[Any]:
+    def flatvalues(self) -> List[Any]:
         """Return a list of flattened values in the xdict."""
         return list(self.flattened().values())
 
-    def flatitems(self) -> list[tuple[str, Any]]:
+    def flatitems(self) -> List[Tuple[str, Any]]:
         """Return tuples of flattened key/value pairs."""
         return list(self.flattened().items())
 
@@ -341,7 +341,7 @@ class xdict(Dict[str, Any]):
         """Return iterator of flattened values."""
         return iter(self.flattened().values())
 
-    def iterflatitems(self) -> Iterable[tuple[str, Any]]:
+    def iterflatitems(self) -> Iterable[Tuple[str, Any]]:
         """Return iterator of flattened items."""
         return iter(self.flattened().items())
 

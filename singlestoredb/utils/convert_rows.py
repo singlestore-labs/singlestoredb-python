@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 """Data value conversion utilities."""
-from __future__ import annotations
-
 from typing import Any
 from typing import List
 from typing import Optional

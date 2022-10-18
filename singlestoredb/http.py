@@ -1,17 +1,14 @@
 #!/usr/bin/env python
 """SingleStoreDB HTTP API interface."""
-from __future__ import annotations
-
 import functools
 import json
 import re
 from base64 import b64decode
-from collections.abc import Mapping
-from collections.abc import Sequence
 from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import Iterable
+from typing import List
 from typing import Optional
 from typing import Tuple
 from typing import Union
@@ -102,7 +99,7 @@ _integrity_errors = set([
 ])
 
 
-def get_precision_scale(type_code: str) -> tuple[Optional[int], Optional[int]]:
+def get_precision_scale(type_code: str) -> Tuple[Optional[int], Optional[int]]:
     """Parse the precision and scale from a data type."""
     if '(' not in type_code:
         return (None, None)
@@ -181,7 +178,7 @@ class Cursor(object):
 
     """
 
-    def __init__(self, connection: Connection):
+    def __init__(self, connection: 'Connection'):
         self.connection: Optional[Connection] = connection
         self._results: list[list[tuple[Any, ...]]] = [[]]
         self._row_idx: int = -1
@@ -201,7 +198,7 @@ class Cursor(object):
         return self._pymy_results[self._result_idx]
 
     @property
-    def description(self) -> Optional[list[Description]]:
+    def description(self) -> Optional[List[Description]]:
         """Return description for current result set."""
         if not self._descriptions:
             return None
@@ -233,7 +230,7 @@ class Cursor(object):
 
     def callproc(
         self, name: str,
-        params: Union[Sequence[Any], Mapping[str, Any]],
+        params: Union[List[Any], Dict[str, Any]],
     ) -> None:
         """
         Call a stored procedure.
@@ -257,7 +254,7 @@ class Cursor(object):
 
     def execute(
         self, query: str,
-        params: Optional[Union[Sequence[Any], Mapping[str, Any]]] = None,
+        params: Optional[Union[List[Any], Dict[str, Any]]] = None,
     ) -> None:
         """
         Execute a SQL statement.
@@ -381,10 +378,10 @@ class Cursor(object):
     def executemany(
         self, query: str,
         param_seq: Optional[
-            Sequence[
+            List[
                 Union[
-                    Sequence[Any],
-                    Mapping[str, Any],
+                    List[Any],
+                    Dict[str, Any],
                 ]
             ]
         ] = None,
@@ -429,7 +426,7 @@ class Cursor(object):
         return True
 
     @property
-    def _rows(self) -> list[tuple[Any, ...]]:
+    def _rows(self) -> List[Tuple[Any, ...]]:
         """Return current set of rows."""
         if not self._has_row:
             return []
@@ -512,7 +509,7 @@ class Cursor(object):
 
         return True
 
-    def setinputsizes(self, sizes: Sequence[int]) -> None:
+    def setinputsizes(self, sizes: List[int]) -> None:
         """Predefine memory areas for parameters."""
         pass
 
@@ -575,11 +572,11 @@ class Cursor(object):
 
     __next__ = next
 
-    def __iter__(self) -> Iterable[tuple[Any, ...]]:
+    def __iter__(self) -> Iterable[Tuple[Any, ...]]:
         """Return result iterator."""
         return iter(self._rows)
 
-    def __enter__(self) -> Cursor:
+    def __enter__(self) -> 'Cursor':
         """Enter a context."""
         return self
 
@@ -721,7 +718,7 @@ class Connection(object):
         """
         return Cursor(self)
 
-    def __enter__(self) -> Connection:
+    def __enter__(self) -> 'Connection':
         """Enter a context."""
         return self
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 """SingleStoreDB Cluster Management."""
-from __future__ import annotations
-
 import datetime
 from typing import Any
 from typing import Optional
 from typing import Union
+
+from .. import converters
 
 
 def to_datetime(
@@ -22,7 +22,7 @@ def to_datetime(
         obj, micros = obj.split('.', 1)
         micros = micros + '0' * (6 - len(micros))
         obj = obj + '.' + micros
-    return datetime.datetime.fromisoformat(obj)
+    return converters.datetime_fromisoformat(obj)
 
 
 def vars_to_str(obj: Any) -> str:

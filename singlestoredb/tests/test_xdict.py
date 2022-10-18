@@ -18,8 +18,6 @@
 #
 #  This file originally copied from https://github.com/sassoftware/python-swat
 #
-from __future__ import annotations
-
 import copy
 import unittest
 

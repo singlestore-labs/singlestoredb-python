@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 """SingleStoreDB data type utilities."""
-from __future__ import annotations
-
 import datetime
 import decimal
 import time
 from typing import Dict
 from typing import List
 from typing import Set
+from typing import Union
 
 
 Date = datetime.date
@@ -78,8 +77,8 @@ class DBAPIType(object):
 
     """
 
-    def __init__(self, *values: int | str | type | DBAPIType):
-        self.values: Set[int | str | type] = set()
+    def __init__(self, *values: Union[int, str, type, 'DBAPIType']):
+        self.values: Set[Union[int, str, type]] = set()
         name: str = ''
         code: int = -1
         for item in values:

@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # type: ignore
 """SingleStoreDB HTTP connection testing."""
-from __future__ import annotations
-
 import base64
 import os
 import unittest

@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # type: ignore
 """Basic SingleStoreDB connection testing."""
-from __future__ import annotations
-
 import datetime
 import decimal
 import os

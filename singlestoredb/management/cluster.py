@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 """SingleStoreDB Cluster Management."""
-from __future__ import annotations
-
 import datetime
 import warnings
-from collections.abc import Sequence
 from typing import Any
 from typing import Dict
 from typing import List
@@ -41,7 +38,7 @@ class Cluster(object):
         units: float, state: str, version: str,
         created_at: Union[str, datetime.datetime],
         expires_at: Optional[Union[str, datetime.datetime]] = None,
-        firewall_ranges: Optional[Sequence[str]] = None,
+        firewall_ranges: Optional[List[str]] = None,
         terminated_at: Optional[Union[str, datetime.datetime]] = None,
         endpoint: Optional[str] = None,
     ):
@@ -94,7 +91,7 @@ class Cluster(object):
         return str(self)
 
     @classmethod
-    def from_dict(cls, obj: Dict[str, Any], manager: 'ClusterManager') -> Cluster:
+    def from_dict(cls, obj: Dict[str, Any], manager: 'ClusterManager') -> 'Cluster':
         """
         Construct a Cluster from a dictionary of values.
 
@@ -123,7 +120,7 @@ class Cluster(object):
         out._manager = manager
         return out
 
-    def refresh(self) -> Cluster:
+    def refresh(self) -> 'Cluster':
         """Update the object to the current state."""
         if self._manager is None:
             raise ManagementError(
@@ -138,7 +135,7 @@ class Cluster(object):
         self, name: Optional[str] = None,
         admin_password: Optional[str] = None,
         expires_at: Optional[str] = None,
-        size: Optional[str] = None, firewall_ranges: Optional[Sequence[str]] = None,
+        size: Optional[str] = None, firewall_ranges: Optional[List[str]] = None,
     ) -> None:
         """
         Update the cluster definition.
@@ -353,7 +350,7 @@ class ClusterManager(Manager):
 
     def create_cluster(
         self, name: str, region: Union[str, Region], admin_password: str,
-        firewall_ranges: Sequence[str], expires_at: Optional[str] = None,
+        firewall_ranges: List[str], expires_at: Optional[str] = None,
         size: Optional[str] = None, plan: Optional[str] = None,
         wait_on_active: bool = False, wait_timeout: int = 600,
         wait_interval: int = 20,

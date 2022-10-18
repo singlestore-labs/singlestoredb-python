@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # type: ignore
 """Utilities for testing."""
-from __future__ import annotations
-
 import os
 import uuid
 from typing import Any

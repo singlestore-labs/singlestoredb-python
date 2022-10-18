@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 """Database exeception classes."""
-from __future__ import annotations
-
 from typing import Optional
 
 

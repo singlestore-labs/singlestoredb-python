@@ -24,15 +24,16 @@ reset_option(...).  The describe_option(...) function can be used to display
 a description of one or more options.
 
 """
-from __future__ import annotations
-
 import contextlib
 import os
 import re
 from typing import Any
 from typing import Callable
+from typing import Dict
 from typing import Iterator
+from typing import List
 from typing import Optional
+from typing import Tuple
 from typing import Union
 from urllib.parse import urlparse
 
@@ -45,7 +46,7 @@ _config = xdict()
 items_types = (list, tuple, set)
 
 
-def _getenv(names: Union[str, list[str]], *args: Any) -> str:
+def _getenv(names: Union[str, List[str]], *args: Any) -> str:
     """
     Check for multiple environment variable values.
 
@@ -79,7 +80,7 @@ def _getenv(names: Union[str, list[str]], *args: Any) -> str:
     raise KeyError(names[0])
 
 
-def _setenv(names: Union[str, list[str]], value: Any) -> None:
+def _setenv(names: Union[str, List[str]], value: Any) -> None:
     """
     Set environment variable.
 
@@ -109,7 +110,7 @@ def _setenv(names: Union[str, list[str]], value: Any) -> None:
             os.environ[name] = value
 
 
-def _delenv(names: Union[str, list[str]]) -> None:
+def _delenv(names: Union[str, List[str]]) -> None:
     """Delete given environment variables."""
     if not isinstance(names, items_types):
         names = [names]
@@ -118,7 +119,7 @@ def _delenv(names: Union[str, list[str]]) -> None:
         os.environ.pop(name.replace('_', ''), None)
 
 
-def iteroptions(*args: Any, **kwargs: Any) -> Iterator[tuple[str, Any]]:
+def iteroptions(*args: Any, **kwargs: Any) -> Iterator[Tuple[str, Any]]:
     """
     Iterate through name / value pairs of options
 
@@ -264,7 +265,7 @@ def get_option(key: str) -> Any:
     return opt.get()
 
 
-def get_suboptions(key: str) -> dict[str, Any]:
+def get_suboptions(key: str) -> Dict[str, Any]:
     """
     Get the dictionary of options at the level `key`.
 
@@ -566,7 +567,7 @@ def check_str(
     pattern: Optional[str] = None,
     max_length: Optional[int] = None,
     min_length: Optional[int] = None,
-    valid_values: Optional[list[str]] = None,
+    valid_values: Optional[List[str]] = None,
 ) -> Optional[str]:
     """
     Validate a string value.
@@ -627,7 +628,7 @@ def check_url(
     pattern: Optional[str] = None,
     max_length: Optional[int] = None,
     min_length: Optional[int] = None,
-    valid_values: Optional[list[str]] = None,
+    valid_values: Optional[List[str]] = None,
 ) -> Optional[str]:
     """
     Validate a URL value.
@@ -696,7 +697,7 @@ class Option(object):
         validator: Callable[[str], Any],
         default: Any,
         doc: str,
-        environ: Optional[Union[str, list[str]]] = None,
+        environ: Optional[Union[str, List[str]]] = None,
     ):
         self._name = name
         self._typedesc = typedesc
@@ -776,7 +777,7 @@ def register_option(
     validator: Callable[[Any], Any],
     default: Any,
     doc: str,
-    environ: Optional[Union[str, list[str]]] = None,
+    environ: Optional[Union[str, List[str]]] = None,
 ) -> None:
     """
     Register a new option.
@@ -819,7 +820,7 @@ class AttrOption(object):
     def __init__(self, name: str):
         object.__setattr__(self, '_name', name)
 
-    def __dir__(self) -> list[str]:
+    def __dir__(self) -> List[str]:
         """Return list of flattened keys."""
         if self._name in _config:
             return _config[self._name].flatkeys()
