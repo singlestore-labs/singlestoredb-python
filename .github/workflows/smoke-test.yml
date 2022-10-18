@@ -19,6 +19,7 @@ jobs:
           python --version
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pymysql
 
       - name: Initialize database
         id: initialize-database
@@ -49,7 +50,7 @@ jobs:
           - "3.9"
           - "3.10"
         driver:
-          - pymysql
+          - pymysqlsv
 #         - mysql.connector
           - mysqldb
 #         - http
@@ -59,11 +60,11 @@ jobs:
         include:
           - os: ubuntu-latest
             python-version: "3.9"
-            driver: pymysql
+            driver: pymysqlsv
             pure-python: 1
           - os: macos-latest
             python-version: "3.9"
-            driver: pymysql
+            driver: pymysqlsv
             pure-python: 0
 #         - os: macos-latest
 #           python-version: "3.9"
@@ -71,7 +72,7 @@ jobs:
 #           pure-python: 0
           - os: windows-latest
             python-version: "3.9"
-            driver: pymysql
+            driver: pymysqlsv
             pure-python: 0
 #         - os: windows-latest
 #           python-version: "3.9"
@@ -98,7 +99,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r test-requirements.txt
-          pip install cymysql pymysql mysqlclient
+          pip install mysqlclient
 
       - name: Install SingleStore package
         run: |
