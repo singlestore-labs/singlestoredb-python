@@ -188,7 +188,7 @@ class TestWorkspace(unittest.TestCase):
 
         try:
             cls.workspace = cls.workspace_group.create_workspace(
-                f'ws-test-{name}',
+                f'ws-test-{name}-x',
                 wait_on_active=True,
             )
         except Exception:
