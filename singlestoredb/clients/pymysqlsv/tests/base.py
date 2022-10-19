@@ -22,13 +22,13 @@ class PyMySQLTestCase(unittest.TestCase):
                 'host': '127.0.0.1',
                 'user': 'root',
                 'passwd': 'root',
-                'database': 'pymysqlsv-test1',
+                'database': 'pymysqlsv_test1',
                 'use_unicode': True,
                 'local_infile': True,
             },
             {
                 'host': '127.0.0.1', 'user': 'root',
-                'passwd': 'root', 'database': 'pymysqlsv-test2',
+                'passwd': 'root', 'database': 'pymysqlsv_test2',
             },
         ]
 
