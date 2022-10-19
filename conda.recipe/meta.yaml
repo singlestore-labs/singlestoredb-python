@@ -27,10 +27,10 @@ test:
         - singlestoredb
     requires:
         - coverage
-        - nose2
         - pandas
+        - pytest
     commands:
-        - nose2 -v singlestoredb.tests.test_basics
+        - pytest -q singlestoredb/tests/test_basics.py
 
 about:
     home: https://github.com/singlestore-labs/singlestoredb-python
