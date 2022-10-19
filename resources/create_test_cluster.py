@@ -120,10 +120,11 @@ if options.output == 'env':
     print(f'CLUSTER_PORT={port}')
     print(f'CLUSTER_DATABASE={database}')
 elif options.output == 'github':
-    print(f'::set-output name=cluster-id::{clus.id}')
-    print(f'::set-output name=cluster-host::{host}')
-    print(f'::set-output name=cluster-port::{port}')
-    print(f'::set-output name=cluster-database::{database}')
+    with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+        print(f'cluster-id={clus.id}', file=output)
+        print(f'cluster-host={host}', file=output)
+        print(f'cluster-port={port}', file=output)
+        print(f'cluster-database={database}', file=output)
 elif options.output == 'json':
     print('{')
     print(f'  "cluster-id": "{clus.id}",')
