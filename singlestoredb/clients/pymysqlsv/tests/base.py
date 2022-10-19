@@ -19,14 +19,17 @@ class PyMySQLTestCase(unittest.TestCase):
     else:
         databases = [
             {
-                'host': 'localhost',
+                'host': '127.0.0.1',
                 'user': 'root',
-                'passwd': '',
-                'database': 'test1',
+                'passwd': 'root',
+                'database': 'pymysqlsv-test1',
                 'use_unicode': True,
                 'local_infile': True,
             },
-            {'host': 'localhost', 'user': 'root', 'passwd': '', 'database': 'test2'},
+            {
+                'host': '127.0.0.1', 'user': 'root',
+                'passwd': 'root', 'database': 'pymysqlsv-test2',
+            },
         ]
 
     def mysql_server_is(self, conn, version_tuple):
@@ -57,7 +60,13 @@ class PyMySQLTestCase(unittest.TestCase):
         if self._connections is None:
             self._connections = []
             for params in self.databases:
-                self._connections.append(sv.connect(**params))
+                params = params.copy()
+                db = params.pop('database')
+                conn = sv.connect(**params)
+                cur = conn.cursor()
+                cur.execute(f'create database if not exists `{db}`')
+                cur.execute(f'use `{db}`')
+                self._connections.append(conn)
             self.addCleanup(self._teardown_connections)
         return self._connections
 
