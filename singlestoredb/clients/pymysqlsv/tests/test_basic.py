@@ -75,7 +75,7 @@ class TestConversion(base.PyMySQLTestCase):
                     'select l from test_datatypes where i in %s order by i', (seq,),
                 )
                 r = c.fetchall()
-                self.assertEqual([(4,), (8,)], r)
+                self.assertEqual(((4,), (8,)), r)
                 c.execute('delete from test_datatypes')
 
         finally:

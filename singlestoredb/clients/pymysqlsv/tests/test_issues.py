@@ -409,7 +409,8 @@ class TestGitHubIssues(base.PyMySQLTestCase):
             'insert into issue321 (value_1, value_2) '
             'values (%(value_1)s, %(value_2)s)'
         )
-        sql_select = 'select * from issue321 where ' 'value_1 in %s and value_2=%s'
+        sql_select = 'select * from issue321 ' + \
+                     'where value_1 in %s and value_2=%s order by value_1'
         data = [
             [('a',), '\u0430'],
             [['b'], '\u0430'],

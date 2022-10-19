@@ -96,7 +96,10 @@ class DatabaseTest(unittest.TestCase):
         self.cursor.executemany(insert_statement, data)
         self.connection.commit()
         # verify
-        self.cursor.execute('select * from %s' % self.table)
+        self.cursor.execute(
+            'select * from %s ORDER BY %s' %
+            (self.table, columndefs[0].split()[0]),
+        )
         l = self.cursor.fetchall()
         if self.debug:
             print(l)
@@ -129,7 +132,10 @@ class DatabaseTest(unittest.TestCase):
         self.cursor.executemany(insert_statement, data)
         # verify
         self.connection.commit()
-        self.cursor.execute('select * from %s' % self.table)
+        self.cursor.execute(
+            'select * from %s ORDER BY %s' %
+            (self.table, columndefs[0].split()[0]),
+        )
         l = self.cursor.fetchall()
         self.assertEqual(len(l), self.rows)
         for i in range(self.rows):

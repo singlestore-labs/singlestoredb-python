@@ -70,17 +70,17 @@ class TestDictCursor(base.PyMySQLTestCase):
                 bob, r, 'fetch a 1 row result via iteration failed via DictCursor',
             )
         # get all 3 row via fetchall
-        c.execute('SELECT * from dictcursor')
+        c.execute('SELECT * from dictcursor ORDER BY name')
         r = c.fetchall()
-        self.assertEqual([bob, jim, fred], r, 'fetchall failed via DictCursor')
+        self.assertEqual([bob, fred, jim], r, 'fetchall failed via DictCursor')
         # same test again but do a list comprehension
-        c.execute('SELECT * from dictcursor')
+        c.execute('SELECT * from dictcursor ORDER BY name')
         r = list(c)
-        self.assertEqual([bob, jim, fred], r, 'DictCursor should be iterable')
+        self.assertEqual([bob, fred, jim], r, 'DictCursor should be iterable')
         # get all 2 row via fetchmany
-        c.execute('SELECT * from dictcursor')
+        c.execute('SELECT * from dictcursor ORDER BY name')
         r = c.fetchmany(2)
-        self.assertEqual([bob, jim], r, 'fetchmany failed via DictCursor')
+        self.assertEqual([bob, fred], r, 'fetchmany failed via DictCursor')
         self._ensure_cursor_expired(c)
 
     def test_custom_dict(self):
@@ -101,17 +101,17 @@ class TestDictCursor(base.PyMySQLTestCase):
         self.assertEqual(bob, r, 'fetchone() returns MyDictCursor')
         self._ensure_cursor_expired(cur)
 
-        cur.execute('SELECT * FROM dictcursor')
+        cur.execute('SELECT * FROM dictcursor ORDER BY name')
         r = cur.fetchall()
-        self.assertEqual([bob, jim, fred], r, 'fetchall failed via MyDictCursor')
+        self.assertEqual([bob, fred, jim], r, 'fetchall failed via MyDictCursor')
 
-        cur.execute('SELECT * FROM dictcursor')
+        cur.execute('SELECT * FROM dictcursor ORDER BY name')
         r = list(cur)
-        self.assertEqual([bob, jim, fred], r, 'list failed via MyDictCursor')
+        self.assertEqual([bob, fred, jim], r, 'list failed via MyDictCursor')
 
-        cur.execute('SELECT * FROM dictcursor')
+        cur.execute('SELECT * FROM dictcursor ORDER BY name')
         r = cur.fetchmany(2)
-        self.assertEqual([bob, jim], r, 'list failed via MyDictCursor')
+        self.assertEqual([bob, fred], r, 'list failed via MyDictCursor')
         self._ensure_cursor_expired(cur)
 
 

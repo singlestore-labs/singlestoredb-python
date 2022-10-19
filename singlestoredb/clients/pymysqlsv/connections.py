@@ -29,8 +29,8 @@ from .cursors import (
     SSCursor,
     DictCursor,
     SSDictCursor,
-    SSCursorSV,
-    SSDictCursorSV,
+    #   SSCursorSV,
+    #   SSDictCursorSV,
 )
 from .optionfile import Parser
 from .protocol import (
@@ -349,15 +349,15 @@ class Connection:
         self.resultclass = MySQLResult
 
         # The C extension handles these types internally.
-        if _pymysqlsv is not None and not self.pure_python:
-            self.resultclass = MySQLResultSV
-            if self.cursorclass is SSCursor:
-                self.cursorclass = SSCursorSV
-            elif self.cursorclass is DictCursor:
-                self.output_type = 'dicts'
-            elif self.cursorclass is SSDictCursor:
-                self.cursorclass = SSDictCursorSV
-                self.output_type = 'dicts'
+#       if _pymysqlsv is not None and not self.pure_python:
+#           self.resultclass = MySQLResultSV
+#           if self.cursorclass is SSCursor:
+#               self.cursorclass = SSCursorSV
+#           elif self.cursorclass is DictCursor:
+#               self.output_type = 'dicts'
+#           elif self.cursorclass is SSDictCursor:
+#               self.cursorclass = SSDictCursorSV
+#               self.output_type = 'dicts'
 
         self._result = None
         self._affected_rows = 0
@@ -584,15 +584,15 @@ class Connection:
         :type cursor: :py:class:`Cursor`, :py:class:`SSCursor`, :py:class:`DictCursor`, or :py:class:`SSDictCursor`.
         """
         if cursor:
-            if cursor is SSCursor:
-                cursor = SSCursorSV
-            elif cursor is DictCursor:
-                # TODO: Passing in a cursor shouldn't affect connection output type
-                self.output_type = 'dicts'
-            elif cursor is SSDictCursor:
-                cursor = SSDictCursorSV
-                # TODO: Passing in a cursor shouldn't affect connection output type
-                self.output_type = 'dicts'
+            #           if cursor is SSCursor:
+            #               cursor = SSCursorSV
+            #           elif cursor is DictCursor:
+            #               # TODO: Passing in a cursor shouldn't affect connection output type
+            #               self.output_type = 'dicts'
+            #           elif cursor is SSDictCursor:
+            #               cursor = SSDictCursorSV
+            #               # TODO: Passing in a cursor shouldn't affect connection output type
+            #               self.output_type = 'dicts'
             return cursor(self)
         return self.cursorclass(self)
 
