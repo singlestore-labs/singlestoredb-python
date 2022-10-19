@@ -12,15 +12,14 @@ jobs:
 
     services:
       singlestore:
-        image: singlestore/cluster-in-a-box:latest
+        image: ghcr.io/singlestore-labs/singlestoredb-dev:latest
         ports:
           - 3306:3306
           - 8080:8080
           - 9000:9000
         env:
-          LICENSE_KEY: ${{ secrets.SINGLESTORE_LICENSE }}
+          SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
           ROOT_PASSWORD: "root"
-          START_AFTER_INIT: "Y"
 
     steps:
       - uses: actions/checkout@v3
