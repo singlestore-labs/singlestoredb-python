@@ -4,6 +4,10 @@ What's New
 
 This document outlines features and improvements from each release.
 
+v0.4.0 - October 19, 2022
+-------------------------
+* Add Python 3.6 support
+
 v0.3.3 - September 21, 2022
 ---------------------------
 * Add ``ssl_cipher`` option to connections
