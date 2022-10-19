@@ -70,8 +70,12 @@ class TestAuthentication(base.PyMySQLTestCase):
         '127.0.0.1',
     )
 
+    dbname = db.pop('database')
+
     cur = sv.connect(**db).cursor()
     db.pop('user', None)
+    cur.execute(f'CREATE DATABASE IF NOT EXISTS `{dbname}`')
+    cur.execute(f'USE `{dbname}`')
     cur.execute('SHOW PLUGINS')
     for r in cur:
         if (r[1], r[2]) != ('ACTIVE', 'AUTHENTICATION'):
