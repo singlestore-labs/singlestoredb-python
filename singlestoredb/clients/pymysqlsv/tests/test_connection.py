@@ -64,17 +64,24 @@ class TestAuthentication(base.PyMySQLTestCase):
     # socket auth requires the current user and for the connection to be a socket
     # rest do grants @localhost due to incomplete logic - TODO change to @% then
     db = base.PyMySQLTestCase.databases[0].copy()
+    db2 = base.PyMySQLTestCase.databases[1].copy()
 
     socket_auth = db.get('unix_socket') is not None and db.get('host') in (
         'localhost',
         '127.0.0.1',
     )
+    socket_auth2 = db2.get('unix_socket') is not None and db2.get('host') in (
+        'localhost',
+        '127.0.0.1',
+    )
 
-    dbname = db.pop('database')
+    dbname = db['database']
+    dbname2 = db['database']
 
     cur = sv.connect(**db).cursor()
     db.pop('user', None)
     cur.execute(f'CREATE DATABASE IF NOT EXISTS `{dbname}`')
+    cur.execute(f'CREATE DATABASE IF NOT EXISTS `{dbname2}`')
     cur.execute(f'USE `{dbname}`')
     cur.execute('SHOW PLUGINS')
     for r in cur:

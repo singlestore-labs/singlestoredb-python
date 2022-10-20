@@ -7,6 +7,7 @@ import unittest
 import warnings
 
 import singlestoredb.clients.pymysqlsv as sv
+from singlestoredb.connection import build_params
 
 
 class PyMySQLTestCase(unittest.TestCase):
@@ -17,18 +18,19 @@ class PyMySQLTestCase(unittest.TestCase):
         with open(fname) as f:
             databases = json.load(f)
     else:
+        params = build_params()
         databases = [
             {
-                'host': '127.0.0.1',
-                'user': 'root',
-                'passwd': 'root',
+                'host': params['host'],
+                'user': params['user'],
+                'passwd': params['password'],
                 'database': 'pymysqlsv_test1',
                 'use_unicode': True,
                 'local_infile': True,
             },
             {
-                'host': '127.0.0.1', 'user': 'root',
-                'passwd': 'root', 'database': 'pymysqlsv_test2',
+                'host': params['host'], 'user': params['user'],
+                'passwd': params['password'], 'database': 'pymysqlsv_test2',
             },
         ]
 
