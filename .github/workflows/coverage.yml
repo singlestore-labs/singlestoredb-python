@@ -39,7 +39,7 @@ jobs:
       - name: Create test databases
         run: |
           mysql -h 127.0.0.1 -u root --password=root -e 'create database if not exists pymysqlsv_test1'
-          mysql -h 127.0.0.1 -u root --password=root -e 'create database if not exists pymysqlsv_test1'
+          mysql -h 127.0.0.1 -u root --password=root -e 'create database if not exists pymysqlsv_test2'
 
       - name: Install SingleStore package
         run: |
