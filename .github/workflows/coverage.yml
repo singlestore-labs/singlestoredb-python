@@ -36,6 +36,11 @@ jobs:
           pip install -r requirements.txt
           pip install -r test-requirements.txt
 
+      - name: Create test databases
+        run: |
+          mysql -h 127.0.0.1 -u root --password=root -e 'create database if not exists pymysqlsv_test1'
+          mysql -h 127.0.0.1 -u root --password=root -e 'create database if not exists pymysqlsv_test1'
+
       - name: Install SingleStore package
         run: |
           python setup.py install
@@ -57,7 +62,7 @@ jobs:
 
       - name: Run HTTP protocol tests
         run: |
-          pytest -q --cov=singlestoredb --cov-report=xml:coverage-http.xml singlestoredb/tests singlestoredb/clients/pymysqlsv/tests
+          pytest -q --cov=singlestoredb --cov-report=xml:coverage-http.xml singlestoredb/tests
         env:
           SINGLESTOREDB_URL: "http://root:root@127.0.0.1:9000"
           SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
