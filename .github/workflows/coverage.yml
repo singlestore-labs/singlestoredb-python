@@ -74,6 +74,11 @@ jobs:
           # be applied to the above URL.
           SINGLESTOREDB_INIT_DB_URL: "root:root@127.0.0.1:3306"
 
+      - name: Drop test databases
+        run: |
+          mysql -h 127.0.0.1 -u root --password=root -e 'drop database pymysqlsv_test1'
+          mysql -h 127.0.0.1 -u root --password=root -e 'drop database pymysqlsv_test2'
+
       - name: Generate report
         run: |
           coverage combine coverage-mysql.cov coverage-http.cov coverage-mysql-py.cov
