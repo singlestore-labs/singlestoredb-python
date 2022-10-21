@@ -50,7 +50,7 @@ jobs:
 
       - name: Run MySQL protocol tests (pure Python)
         run: |
-          pytest -q --cov=singlestoredb singlestoredb/tests
+          pytest -q -m 'not management' --cov=singlestoredb singlestoredb/tests
         env:
           COVERAGE_FILE: "coverage-mysql-py.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3306"
@@ -59,7 +59,7 @@ jobs:
 
       - name: Run HTTP protocol tests
         run: |
-          pytest -q --cov=singlestoredb singlestoredb/tests
+          pytest -q -m 'not management' --cov=singlestoredb singlestoredb/tests
         env:
           COVERAGE_FILE: "coverage-http.cov"
           SINGLESTOREDB_URL: "http://root:root@127.0.0.1:9000"

@@ -7,6 +7,8 @@ import re
 import secrets
 import unittest
 
+import pytest
+
 import singlestoredb as s2
 
 
@@ -15,6 +17,7 @@ def clean_name(s):
     return re.sub(r'[^\w]', r'-', s).replace('_', '-').lower()
 
 
+@pytest.mark.management
 class TestCluster(unittest.TestCase):
 
     manager = None
@@ -163,6 +166,7 @@ class TestCluster(unittest.TestCase):
         assert 'endpoint' in cm.exception.msg, cm.exception.msg
 
 
+@pytest.mark.management
 class TestWorkspace(unittest.TestCase):
 
     manager = None
