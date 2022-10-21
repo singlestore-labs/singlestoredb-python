@@ -12,16 +12,14 @@ jobs:
 
     services:
       singlestore:
-        image: singlestore/cluster-in-a-box:latest
+        image: ghcr.io/singlestore-labs/singlestoredb-dev:latest
         ports:
           - 3306:3306
           - 8080:8080
           - 9000:9000
         env:
-          LICENSE_KEY: ${{ secrets.SINGLESTORE_LICENSE }}
           SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
           ROOT_PASSWORD: "root"
-          START_AFTER_INIT: "Y"
 
     steps:
       - uses: actions/checkout@v3
@@ -44,7 +42,7 @@ jobs:
 
       - name: Run MySQL protocol tests
         run: |
-          pytest -q --cov=singlestoredb singlestoredb/tests singlestoredb/clients/pymysqlsv/tests
+          pytest -q --cov=singlestoredb singlestoredb/tests
         env:
           COVERAGE_FILE: "coverage-mysql.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3306"
@@ -52,7 +50,7 @@ jobs:
 
       - name: Run MySQL protocol tests (pure Python)
         run: |
-          pytest -q --cov=singlestoredb singlestoredb/tests singlestoredb/clients/pymysqlsv/tests
+          pytest -q --cov=singlestoredb singlestoredb/tests
         env:
           COVERAGE_FILE: "coverage-mysql-py.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3306"
