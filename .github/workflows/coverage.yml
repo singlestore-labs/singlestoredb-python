@@ -36,11 +36,6 @@ jobs:
           pip install -r requirements.txt
           pip install -r test-requirements.txt
 
-      - name: Create test databases
-        run: |
-          mysql -h 127.0.0.1 -u root --password=root -e 'create database if not exists pymysqlsv_test1'
-          mysql -h 127.0.0.1 -u root --password=root -e 'create database if not exists pymysqlsv_test2'
-
       - name: Install SingleStore package
         run: |
           python setup.py install
@@ -73,11 +68,6 @@ jobs:
           # used to create the database and the generated database name will
           # be applied to the above URL.
           SINGLESTOREDB_INIT_DB_URL: "root:root@127.0.0.1:3306"
-
-      - name: Drop test databases
-        run: |
-          mysql -h 127.0.0.1 -u root --password=root -e 'drop database pymysqlsv_test1'
-          mysql -h 127.0.0.1 -u root --password=root -e 'drop database pymysqlsv_test2'
 
       - name: Generate report
         run: |

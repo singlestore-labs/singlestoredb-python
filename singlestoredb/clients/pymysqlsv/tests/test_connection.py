@@ -61,60 +61,51 @@ class TestAuthentication(base.PyMySQLTestCase):
 
     osuser = os.environ.get('USER')
 
-    # socket auth requires the current user and for the connection to be a socket
-    # rest do grants @localhost due to incomplete logic - TODO change to @% then
-    db = base.PyMySQLTestCase.databases[0].copy()
-    db2 = base.PyMySQLTestCase.databases[1].copy()
+#   # socket auth requires the current user and for the connection to be a socket
+#   # rest do grants @localhost due to incomplete logic - TODO change to @% then
+#   db = base.PyMySQLTestCase.databases[0].copy()
 
-    socket_auth = db.get('unix_socket') is not None and db.get('host') in (
-        'localhost',
-        '127.0.0.1',
-    )
-    socket_auth2 = db2.get('unix_socket') is not None and db2.get('host') in (
-        'localhost',
-        '127.0.0.1',
-    )
+#   socket_auth = db.get('unix_socket') is not None and db.get('host') in (
+#       'localhost',
+#       '127.0.0.1',
+#   )
 
-    dbname = db['database']
-    dbname2 = db['database']
+#   dbname = db['database']
 
-    cur = sv.connect(**db).cursor()
-    db.pop('user', None)
-    cur.execute(f'CREATE DATABASE IF NOT EXISTS `{dbname}`')
-    cur.execute(f'CREATE DATABASE IF NOT EXISTS `{dbname2}`')
-    cur.execute(f'USE `{dbname}`')
-    cur.execute('SHOW PLUGINS')
-    for r in cur:
-        if (r[1], r[2]) != ('ACTIVE', 'AUTHENTICATION'):
-            continue
-        if r[3] == 'auth_socket.so' or r[0] == 'unix_socket':
-            socket_plugin_name = r[0]
-            socket_found = True
-        elif r[3] == 'dialog_examples.so':
-            if r[0] == 'two_questions':
-                two_questions_found = True
-            elif r[0] == 'three_attempts':
-                three_attempts_found = True
-        elif r[0] == 'pam':
-            pam_found = True
-            pam_plugin_name = r[3].split('.')[0]
-            if pam_plugin_name == 'auth_pam':
-                pam_plugin_name = 'pam'
-            # MySQL: authentication_pam
-            # https://dev.mysql.com/doc/refman/5.5/en/pam-authentication-plugin.html
+#   cur = sv.connect(**db).cursor()
+#   db.pop('user', None)
+#   cur.execute('SHOW PLUGINS')
+#   for r in cur:
+#       if (r[1], r[2]) != ('ACTIVE', 'AUTHENTICATION'):
+#           continue
+#       if r[3] == 'auth_socket.so' or r[0] == 'unix_socket':
+#           socket_plugin_name = r[0]
+#           socket_found = True
+#       elif r[3] == 'dialog_examples.so':
+#           if r[0] == 'two_questions':
+#               two_questions_found = True
+#           elif r[0] == 'three_attempts':
+#               three_attempts_found = True
+#       elif r[0] == 'pam':
+#           pam_found = True
+#           pam_plugin_name = r[3].split('.')[0]
+#           if pam_plugin_name == 'auth_pam':
+#               pam_plugin_name = 'pam'
+#           # MySQL: authentication_pam
+#           # https://dev.mysql.com/doc/refman/5.5/en/pam-authentication-plugin.html
 
-            # MariaDB: pam
-            # https://mariadb.com/kb/en/mariadb/pam-authentication-plugin/
+#           # MariaDB: pam
+#           # https://mariadb.com/kb/en/mariadb/pam-authentication-plugin/
 
-            # Names differ but functionality is close
-        elif r[0] == 'mysql_old_password':
-            mysql_old_password_found = True
-        elif r[0] == 'sha256_password':
-            sha256_password_found = True
-        elif r[0] == 'ed25519':
-            ed25519_found = True
-        # else:
-        #    print("plugin: %r" % r[0])
+#           # Names differ but functionality is close
+#       elif r[0] == 'mysql_old_password':
+#           mysql_old_password_found = True
+#       elif r[0] == 'sha256_password':
+#           sha256_password_found = True
+#       elif r[0] == 'ed25519':
+#           ed25519_found = True
+#       # else:
+#       #    print("plugin: %r" % r[0])
 
     @pytest.mark.skip(reason='not currently supported in SingleStoreDB')
     def test_plugin(self):

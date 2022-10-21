@@ -2,6 +2,8 @@
 import datetime
 import warnings
 
+import pytest
+
 import singlestoredb.clients.pymysqlsv.cursors as cursors
 from singlestoredb.clients.pymysqlsv.tests import base
 
@@ -15,8 +17,8 @@ class TestDictCursor(base.PyMySQLTestCase):
 
     def setUp(self):
         super(TestDictCursor, self).setUp()
-        self.conn = conn = self.connect()
-        c = conn.cursor(self.cursor_type)
+        self.conn = conn = self.connect(cursorclass=self.cursor_type)
+        c = conn.cursor()
 
         # create a table ane some data to query
         with warnings.catch_warnings():
@@ -46,7 +48,7 @@ class TestDictCursor(base.PyMySQLTestCase):
         bob, jim, fred = self.bob.copy(), self.jim.copy(), self.fred.copy()
         # all assert test compare to the structure as would come out from MySQLdb
         conn = self.conn
-        c = conn.cursor(self.cursor_type)
+        c = conn.cursor()
 
         # try an update which should return no rows
         c.execute("update dictcursor set age=20 where name='bob'")
@@ -54,6 +56,7 @@ class TestDictCursor(base.PyMySQLTestCase):
         # pull back the single row dict for bob and check
         c.execute("SELECT * from dictcursor where name='bob'")
         r = c.fetchone()
+        print(bob, r)
         self.assertEqual(bob, r, 'fetchone via DictCursor failed')
         self._ensure_cursor_expired(c)
 
@@ -83,6 +86,7 @@ class TestDictCursor(base.PyMySQLTestCase):
         self.assertEqual([bob, fred], r, 'fetchmany failed via DictCursor')
         self._ensure_cursor_expired(c)
 
+    @pytest.mark.skip('Custom cursors are only available when creating a connection')
     def test_custom_dict(self):
         class MyDict(dict):
             pass

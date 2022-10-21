@@ -484,7 +484,23 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         // Get field name.
         PyObject *py_field_name = PyObject_GetAttrString(py_field, "name");
         if (!py_field_name) goto error;
-        self->py_names[i] = py_field_name;
+
+        // Make sure field name is not a duplicate.
+        int dup_found = 0;
+        for (unsigned long j = 0; j < i; j++) {
+            if (PyUnicode_Compare(self->py_names[j], py_field_name) == 0) {
+                dup_found = 1;
+                break;
+            }
+        }
+        if (dup_found) {
+            PyObject *py_table_name = PyObject_GetAttrString(py_field, "table_name");
+            self->py_names[i] = PyUnicode_FromFormat("%U.%U", py_table_name, py_field_name);
+            Py_XDECREF(py_table_name);
+            if (!self->py_names[i]) goto error;
+        } else {
+            self->py_names[i] = py_field_name;
+        }
 
         // Get field encodings (NULL means binary) and default converters.
         PyObject *py_tmp = PyList_GetItem(py_converters, i);

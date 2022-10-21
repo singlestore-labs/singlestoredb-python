@@ -307,8 +307,8 @@ class TestGitHubIssues(base.PyMySQLTestCase):
 
     def test_issue_79(self):
         """Duplicate field overwrites the previous one in the result of DictCursor"""
-        conn = self.connect()
-        c = conn.cursor(sv.cursors.DictCursor)
+        conn = self.connect(cursorclass=sv.cursors.DictCursor)
+        c = conn.cursor()
 
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore')

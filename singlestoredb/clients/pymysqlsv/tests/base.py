@@ -2,12 +2,21 @@
 import gc
 import json
 import os
+import platform
 import re
 import unittest
 import warnings
 
+import pytest
+
 import singlestoredb.clients.pymysqlsv as sv
 from singlestoredb.connection import build_params
+
+DBNAME_BASE = 'pymysqlsv__test_%s_%s_%s_%s_' % \
+              (
+                  *platform.python_version_tuple()[:2],
+                  platform.system(), platform.machine(),
+              )
 
 
 class PyMySQLTestCase(unittest.TestCase):
@@ -22,15 +31,17 @@ class PyMySQLTestCase(unittest.TestCase):
         databases = [
             {
                 'host': params['host'],
+                'port': params['port'],
                 'user': params['user'],
                 'passwd': params['password'],
-                'database': 'pymysqlsv_test1',
+                'database': DBNAME_BASE + '1',
                 'use_unicode': True,
                 'local_infile': True,
             },
             {
                 'host': params['host'], 'user': params['user'],
-                'passwd': params['password'], 'database': 'pymysqlsv_test2',
+                'port': params['port'], 'passwd': params['password'],
+                'database': DBNAME_BASE + '2',
             },
         ]
 
@@ -62,12 +73,7 @@ class PyMySQLTestCase(unittest.TestCase):
         if self._connections is None:
             self._connections = []
             for params in self.databases:
-                params = params.copy()
-                db = params.pop('database')
                 conn = sv.connect(**params)
-                cur = conn.cursor()
-                cur.execute(f'create database if not exists `{db}`')
-                cur.execute(f'use `{db}`')
                 self._connections.append(conn)
             self.addCleanup(self._teardown_connections)
         return self._connections

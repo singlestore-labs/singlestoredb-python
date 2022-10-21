@@ -378,6 +378,10 @@ class Cursor:
     NotSupportedError = err.NotSupportedError
 
 
+class CursorSV(Cursor):
+    """Cursor class for C extension."""
+
+
 class DictCursorMixin:
     # You can override this to use OrderedDict or other dict-like types.
     dict_type = dict
@@ -404,6 +408,10 @@ class DictCursorMixin:
 
 class DictCursor(DictCursorMixin, Cursor):
     """A cursor which returns results as a dictionary"""
+
+
+class DictCursorSV(Cursor):
+    """A cursor which returns results as a dictionary for C extension."""
 
 
 class SSCursor(Cursor):

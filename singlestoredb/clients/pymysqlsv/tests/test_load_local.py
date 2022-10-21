@@ -47,8 +47,8 @@ class TestLoadLocal(base.PyMySQLTestCase):
 
     def test_unbuffered_load_file(self):
         """Test unbuffered load local infile with a valid file"""
-        conn = self.connect()
-        c = conn.cursor(cursors.SSCursor)
+        conn = self.connect(cursorclass=cursors.SSCursor)
+        c = conn.cursor()
         c.execute('CREATE TABLE test_load_local (a INTEGER, b INTEGER, c TEXT)')
         filename = os.path.join(
             os.path.dirname(os.path.realpath(__file__)), 'data', 'load_local_data.txt',

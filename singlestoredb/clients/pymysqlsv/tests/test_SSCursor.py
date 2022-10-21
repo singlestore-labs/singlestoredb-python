@@ -19,7 +19,10 @@ class TestSSCursor(base.PyMySQLTestCase):
     def test_SSCursor(self):
         affected_rows = 18446744073709551615
 
-        conn = self.connect(client_flag=CLIENT.MULTI_STATEMENTS)
+        conn = self.connect(
+            client_flag=CLIENT.MULTI_STATEMENTS,
+            cursorclass=cursors.SSCursor,
+        )
         data = [
             ('America', '', 'America/Jamaica'),
             ('America', '', 'America/Los_Angeles'),
@@ -33,7 +36,7 @@ class TestSSCursor(base.PyMySQLTestCase):
             ('America', '', 'America/Detroit'),
         ]
 
-        cursor = conn.cursor(cursors.SSCursor)
+        cursor = conn.cursor()
 
         cursor.execute('DROP TABLE IF EXISTS tz_data')
 

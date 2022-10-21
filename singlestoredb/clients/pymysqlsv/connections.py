@@ -26,11 +26,13 @@ from .constants import CLIENT, COMMAND, CR, ER, FIELD_TYPE, SERVER_STATUS
 from . import converters
 from .cursors import (
     Cursor,
+    CursorSV,
     SSCursor,
+    SSCursorSV,
     DictCursor,
+    DictCursorSV,
     SSDictCursor,
-    #   SSCursorSV,
-    #   SSDictCursorSV,
+    SSDictCursorSV,
 )
 from .optionfile import Parser
 from .protocol import (
@@ -349,15 +351,18 @@ class Connection:
         self.resultclass = MySQLResult
 
         # The C extension handles these types internally.
-#       if _pymysqlsv is not None and not self.pure_python:
-#           self.resultclass = MySQLResultSV
-#           if self.cursorclass is SSCursor:
-#               self.cursorclass = SSCursorSV
-#           elif self.cursorclass is DictCursor:
-#               self.output_type = 'dicts'
-#           elif self.cursorclass is SSDictCursor:
-#               self.cursorclass = SSDictCursorSV
-#               self.output_type = 'dicts'
+        if _pymysqlsv is not None and not self.pure_python:
+            self.resultclass = MySQLResultSV
+            if self.cursorclass is Cursor:
+                self.cursorclass = CursorSV
+            elif self.cursorclass is SSCursor:
+                self.cursorclass = SSCursorSV
+            elif self.cursorclass is DictCursor:
+                self.cursorclass = DictCursorSV
+                self.output_type = 'dicts'
+            elif self.cursorclass is SSDictCursor:
+                self.cursorclass = SSDictCursorSV
+                self.output_type = 'dicts'
 
         self._result = None
         self._affected_rows = 0
@@ -576,24 +581,8 @@ class Connection:
             return "'%s'" % (s.replace(b"'", b"''").decode('ascii', 'surrogateescape'),)
         return converters.escape_bytes(s)
 
-    def cursor(self, cursor=None):
-        """
-        Create a new cursor to execute queries with.
-
-        :param cursor: The type of cursor to create. None means use Cursor.
-        :type cursor: :py:class:`Cursor`, :py:class:`SSCursor`, :py:class:`DictCursor`, or :py:class:`SSDictCursor`.
-        """
-        if cursor:
-            #           if cursor is SSCursor:
-            #               cursor = SSCursorSV
-            #           elif cursor is DictCursor:
-            #               # TODO: Passing in a cursor shouldn't affect connection output type
-            #               self.output_type = 'dicts'
-            #           elif cursor is SSDictCursor:
-            #               cursor = SSDictCursorSV
-            #               # TODO: Passing in a cursor shouldn't affect connection output type
-            #               self.output_type = 'dicts'
-            return cursor(self)
+    def cursor(self):
+        """Create a new cursor to execute queries with."""
         return self.cursorclass(self)
 
     # The following methods are INTERNAL USE ONLY (called from Cursor)

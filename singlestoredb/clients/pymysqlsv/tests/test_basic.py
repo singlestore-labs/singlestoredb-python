@@ -75,7 +75,8 @@ class TestConversion(base.PyMySQLTestCase):
                     'select l from test_datatypes where i in %s order by i', (seq,),
                 )
                 r = c.fetchall()
-                self.assertEqual(((4,), (8,)), r)
+                # NOTE: C extension returns a list, not a tuple
+                self.assertEqual(((4,), (8,)), tuple(r))
                 c.execute('delete from test_datatypes')
 
         finally:
@@ -320,8 +321,8 @@ class TestBulkInserts(base.PyMySQLTestCase):
 
     def setUp(self):
         super(TestBulkInserts, self).setUp()
-        self.conn = conn = self.connect()
-        c = conn.cursor(self.cursor_type)
+        self.conn = conn = self.connect(cursorclass=self.cursor_type)
+        c = conn.cursor()
 
         # create a table ane some data to query
         self.safe_create_table(
