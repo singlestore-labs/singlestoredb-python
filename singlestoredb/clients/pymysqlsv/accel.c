@@ -877,9 +877,9 @@ static int check_packet_is_eof(
 ) {
     uint16_t server_status = 0;
     if (!data || !data_l) {
-        return 0;
         if (has_next) *has_next = 0;
         if (warning_count) *warning_count = 0;
+        return 0;
     }
     if (!is_eof_packet(*data, *data_l)) {
         return 0;
