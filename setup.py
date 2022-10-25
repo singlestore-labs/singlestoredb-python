@@ -3,8 +3,6 @@
 from setuptools import Extension
 from setuptools import setup
 
-setup()
-
 setup(
     ext_modules=[
         Extension(
