@@ -15,8 +15,9 @@ build:
 requirements:
     build:
         - {{ compiler('c') }}
-        - python {{ python }}
         - pip
+    host:
+        - python {{ python }}
     run:
         - python
         - pyjwt
