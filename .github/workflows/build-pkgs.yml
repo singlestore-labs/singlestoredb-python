@@ -13,8 +13,8 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-#         - macos-latest
-#         - windows-latest
+          - macos-latest
+          - windows-latest
         python-version:
           - "3.10"
 
@@ -50,24 +50,24 @@ jobs:
           conda install conda-build anaconda-client conda-verify
           mkdir artifacts
           cd conda.recipe
-          conda build -c singlestore -c conda-forge --output-folder ../artifacts --build-only .
+          conda build -c singlestore -c conda-forge --output-folder ../conda-bld --build-only .
 
-#     - name: Build conda (Windows)
-#       if: ${{ matrix.os == 'windows-latest' }}
-#       run: |
-#         C:\Miniconda\condabin\conda.bat update conda
-#         C:\Miniconda\condabin\conda.bat install conda-build anaconda-client conda-verify
-#         mkdir artifacts
-#         cd conda.recipe
-#         C:\Miniconda\condabin\conda.bat build -c singlestore -c conda-forge --output-folder ../artifacts --build-only .
+      - name: Build conda (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          C:\Miniconda\condabin\conda.bat update conda
+          C:\Miniconda\condabin\conda.bat install conda-build anaconda-client conda-verify
+          mkdir conda-bld
+          cd conda.recipe
+          C:\Miniconda\condabin\conda.bat build -c singlestore -c conda-forge --output-folder ../conda-bld --build-only .
 
       - name: Archive artifacts
         uses: actions/upload-artifact@v3
         with:
           name: packages
           path: |
-            dist/*.tar.gz
-            dist/*.whl
-            artifacts/*/*.bz2
+            dist/singlestoredb-*.tar.gz
+            dist/singlestoredb-*.whl
+            conda-bld/*/singlestoredb-*.bz2
         env:
           ACTIONS_STEP_DEBUG: true
