@@ -69,3 +69,5 @@ jobs:
             dist/*.tar.gz
             dist/*.whl
             artifacts/*/*.bz2
+        env:
+          ACTIONS_STEP_DEBUG: true
