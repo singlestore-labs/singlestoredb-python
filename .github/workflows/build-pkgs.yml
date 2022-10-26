@@ -64,7 +64,7 @@ jobs:
       - name: Archive artifacts
         uses: actions/upload-artifact@v3
         with:
-          name:
+          name: packages
           path: |
             dist/*.tar.gz
             dist/*.whl
