@@ -52,14 +52,14 @@ jobs:
           cd conda.recipe
           conda build -c singlestore -c conda-forge --output-folder ../artifacts --build-only .
 
-      - name: Build conda (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: |
-          C:\Miniconda\condabin\conda.bat update conda
-          C:\Miniconda\condabin\conda.bat install conda-build anaconda-client conda-verify
-          mkdir artifacts
-          cd conda.recipe
-          C:\Miniconda\condabin\conda.bat build -c singlestore -c conda-forge --output-folder ../artifacts --build-only .
+#     - name: Build conda (Windows)
+#       if: ${{ matrix.os == 'windows-latest' }}
+#       run: |
+#         C:\Miniconda\condabin\conda.bat update conda
+#         C:\Miniconda\condabin\conda.bat install conda-build anaconda-client conda-verify
+#         mkdir artifacts
+#         cd conda.recipe
+#         C:\Miniconda\condabin\conda.bat build -c singlestore -c conda-forge --output-folder ../artifacts --build-only .
 
       - name: Archive artifacts
         uses: actions/upload-artifact@v3
