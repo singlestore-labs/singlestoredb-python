@@ -45,11 +45,11 @@ jobs:
         run: |
           # $CONDA is an environment variable pointing to the root of the miniconda directory
           echo $CONDA/bin >> $GITHUB_PATH
-          conda update conda
-          conda install conda-build anaconda-client conda-verify
+          $CONDA/bin/conda update conda
+          $CONDA/bin/conda install conda-build anaconda-client conda-verify
           mkdir artifacts
           cd conda.recipe
-          conda build -c singlestore -c conda-forge --output-folder ../artifacts --build-only .
+          $CONDA/bin/conda build -c singlestore -c conda-forge --output-folder ../artifacts --build-only .
 
       - name: Archive artifacts
         uses: actions/upload-artifact@v3
