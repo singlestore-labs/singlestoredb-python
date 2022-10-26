@@ -42,15 +42,25 @@ jobs:
           python setup.py build bdist_wheel
 
       - name: Build conda
-        shell: bash -l {0}
+        if: ${{ matrix.os != 'windows-latest' }}
         run: |
           # $CONDA is an environment variable pointing to the root of the miniconda directory
           echo $CONDA/bin >> $GITHUB_PATH
-          $CONDA/bin/conda update conda
-          $CONDA/bin/conda install conda-build anaconda-client conda-verify
+          conda update conda
+          conda install conda-build anaconda-client conda-verify
           mkdir artifacts
           cd conda.recipe
-          $CONDA/bin/conda build -c singlestore -c conda-forge --output-folder ../artifacts --build-only .
+          conda build -c singlestore -c conda-forge --output-folder ../artifacts --build-only .
+
+      - name: Build conda (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: bash -l {0}
+        run: |
+          C:\Miniconda\condabin\conda.bat update conda
+          C:\Miniconda\condabin\conda.bat install conda-build anaconda-client conda-verify
+          mkdir artifacts
+          cd conda.recipe
+          C:\Miniconda\condabin\conda.bat build -c singlestore -c conda-forge --output-folder ../artifacts --build-only .
 
       - name: Archive artifacts
         uses: actions/upload-artifact@v3
