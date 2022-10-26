@@ -1,0 +1,56 @@
+name: Build packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        python-version:
+          - "3.10"
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Build source dist
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          python setup.py build sdist
+
+      - name: Build wheel
+        run: |
+          python setup.py build bdist_wheel
+
+      - name: Build conda
+        run: |
+          # $CONDA is an environment variable pointing to the root of the miniconda directory
+          echo $CONDA/bin >> $GITHUB_PATH
+          conda update conda
+          conda install conda-build anaconda-client conda-verify
+          mkdir artifacts
+          cd conda.recipe
+          conda build -c singlestore -c conda-forge --output-folder ../artifacts --build-only
+
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name:
+          path: |
+            dist/*.tar.gz
+            dist/*.whl
+            artifacts/*/*.bz2
