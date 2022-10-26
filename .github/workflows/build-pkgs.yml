@@ -48,9 +48,9 @@ jobs:
           echo $CONDA/bin >> $GITHUB_PATH
           conda update conda
           conda install conda-build anaconda-client conda-verify
-          mkdir artifacts
+          mkdir conda-bld
           cd conda.recipe
-          conda build -c singlestore -c conda-forge --output-folder ../conda-bld --build-only .
+          conda build -c singlestore -c conda-forge --output-folder ../conda-bld --no-test --no-anaconda-upload .
 
       - name: Build conda (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
@@ -59,7 +59,7 @@ jobs:
           C:\Miniconda\condabin\conda.bat install conda-build anaconda-client conda-verify
           mkdir conda-bld
           cd conda.recipe
-          C:\Miniconda\condabin\conda.bat build -c singlestore -c conda-forge --output-folder ../conda-bld --build-only .
+          C:\Miniconda\condabin\conda.bat build -c singlestore -c conda-forge --output-folder ../conda-bld --no-test --no-anaconda-upload .
 
       - name: Archive artifacts
         uses: actions/upload-artifact@v3
