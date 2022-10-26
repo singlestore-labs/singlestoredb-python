@@ -42,6 +42,7 @@ jobs:
           python setup.py build bdist_wheel
 
       - name: Build conda
+        shell: bash -l {0}
         run: |
           # $CONDA is an environment variable pointing to the root of the miniconda directory
           echo $CONDA/bin >> $GITHUB_PATH
