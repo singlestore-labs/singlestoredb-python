@@ -562,6 +562,28 @@ def check_bool(value: Union[bool, int]) -> bool:
     raise ValueError('%s is not a recognized bool value')
 
 
+def check_optional_bool(value: Optional[Union[bool, int]]) -> Optional[bool]:
+    """
+    Validate an optional bool value.
+
+    Parameters
+    ----------
+    value : int or bool or None
+        The value to validate.  If specified as an integer, it must
+        be either 0 for False or 1 for True.
+
+    Returns
+    -------
+    bool
+        The validated bool
+
+    """
+    if value is None:
+        return None
+
+    return check_bool(value)
+
+
 def check_str(
     value: Any,
     pattern: Optional[str] = None,

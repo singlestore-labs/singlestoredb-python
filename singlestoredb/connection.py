@@ -157,6 +157,9 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
     if 'user' not in out and not out.get('password', None):
         out.pop('password', None)
 
+    if out.get('ssl_ca', '') and not out.get('ssl_verify_cert', None):
+        out['ssl_verify_cert'] = True
+
     return out
 
 
@@ -1349,7 +1352,8 @@ def connect(
     odbc_driver: Optional[str] = None, charset: Optional[str] = None,
     ssl_key: Optional[str] = None, ssl_cert: Optional[str] = None,
     ssl_ca: Optional[str] = None, ssl_disabled: Optional[bool] = None,
-    ssl_cipher: Optional[str] = None,
+    ssl_cipher: Optional[str] = None, ssl_verify_cert: Optional[bool] = None,
+    ssl_verify_identity: Optional[bool] = None,
     converters: Optional[Dict[int, Callable[..., Any]]] = None,
     results_format: Optional[str] = None,
     credential_type: Optional[str] = None,
@@ -1397,6 +1401,11 @@ def connect(
         Sets the SSL cipher list
     ssl_disabled : bool, optional
         Disable SSL usage
+    ssl_verify_cert : bool, optional
+        Verify the server's certificate. This is automatically enabled if
+        ``ssl_ca`` is also specified.
+    ssl_verify_identity : bool, optional
+        Verify the server's identity
     converters : dict[int, Callable], optional
         Dictionary of data conversion functions
     results_format : str, optional

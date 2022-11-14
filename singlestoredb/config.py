@@ -6,6 +6,7 @@ from . import auth
 from .utils.config import check_bool  # noqa: F401
 from .utils.config import check_float  # noqa: F401
 from .utils.config import check_int  # noqa: F401
+from .utils.config import check_optional_bool  # noqa: F401
 from .utils.config import check_str  # noqa: F401
 from .utils.config import check_url  # noqa: F401
 from .utils.config import describe_option  # noqa: F401
@@ -117,6 +118,18 @@ register_option(
     'ssl_disabled', 'bool', check_bool, False,
     'Disable SSL usage',
     environ='SINGLESTOREDB_SSL_DISABLED',
+)
+
+register_option(
+    'ssl_verify_cert', 'bool', check_optional_bool, None,
+    'Verify the server\'s certificate',
+    environ='SINGLESTOREDB_SSL_VERIFY_CERT',
+)
+
+register_option(
+    'ssl_verify_identity', 'bool', check_optional_bool, None,
+    'Verify the server\'s identity',
+    environ='SINGLESTOREDB_SSL_VERIFY_IDENTITY',
 )
 
 register_option(

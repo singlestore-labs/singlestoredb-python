@@ -657,6 +657,10 @@ class Connection(object):
             if ssl_ca:
                 self._sess.verify = ssl_ca
 
+            ssl_verify_cert = kwargs.get('ssl_verify_cert', True)
+            if not ssl_verify_cert:
+                self._sess.verify = False
+
         version = kwargs.get('version', 'v1')
         protocol = kwargs.get('protocol', 'https')
 
