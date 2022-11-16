@@ -16,8 +16,10 @@ try:
     import _pymysqlsv
 except (ImportError, ModuleNotFoundError):
     _pymysqlsv = None
-#   warnings.warn('Accelerator extension could not be loaded; '
-#                 'running in pure Python mode.', RuntimeWarning)
+    warnings.warn(
+        'Accelerator extension could not be loaded; '
+        'running in pure Python mode.', RuntimeWarning,
+    )
 
 from . import _auth
 

@@ -8,17 +8,17 @@ source:
     path: ..
 
 build:
-    noarch: python
     number: {{ environ.get('PACKAGE_BUILD_NUMBER', '0') }}
     script: python -m pip install --no-deps --ignore-installed .
 
 requirements:
     build:
         - {{ compiler('c') }}
-        - pip
     host:
         - python {{ python }}
+        - pip
     run:
+        - python
         - pyjwt
         - requests
         - sqlparams

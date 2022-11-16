@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
+#define Py_LIMITED_API 0x03060000
 #include <Python.h>
 #include <datetime.h>
 
@@ -257,12 +258,28 @@ typedef struct {
 inline int IMAX(int a, int b) { return((a) > (b) ? a : b); }
 inline int IMIN(int a, int b) { return((a) < (b) ? a : b); }
 
+char *PyUnicode_AsUTF8(PyObject *unicode) {
+    PyObject *bytes = PyUnicode_AsEncodedString(unicode, "utf-8", "strict");
+    if (!bytes) return NULL;
+
+    char *str = NULL;
+    Py_ssize_t str_l = 0;
+    if (PyBytes_AsStringAndSize(bytes, &str, &str_l) < 0) {
+	return NULL;
+    }
+
+    char *out = calloc(str_l + 1, 1);
+    memcpy(out, str, str_l);
+    return out;
+}
+
 //
 // State
 //
 
+static PyTypeObject *StateType = NULL;
+
 typedef struct {
-    PyObject_HEAD
     PyObject *py_conn; // Database connection
     PyObject *py_fields; // List of table fields
     PyObject *py_decimal_mod; // decimal module
@@ -302,16 +319,26 @@ typedef struct {
 
 static void read_options(MySQLAccelOptions *options, PyObject *dict);
 
-#define DESTROY(x) do { if (x) { free(x); (x) = NULL; } } while (0)
+#define DESTROY(x) do { if (x) { free((void*)x); (x) = NULL; } } while (0)
 
 static void State_clear_fields(StateObject *self) {
     if (!self) return;
-    DESTROY(self->namedtuple_desc.fields);
     DESTROY(self->offsets);
     DESTROY(self->scales);
     DESTROY(self->flags);
     DESTROY(self->type_codes);
-    DESTROY(self->encodings);
+    if (self->namedtuple_desc.fields) {
+        for (unsigned long i = 0; i < self->n_cols; i++) {
+            DESTROY(self->namedtuple_desc.fields[i].name);
+        }
+        DESTROY(self->namedtuple_desc.fields);
+    }
+    if (self->encodings) {
+        for (unsigned long i = 0; i < self->n_cols; i++) {
+            DESTROY(self->encodings[i]);
+        }
+        DESTROY(self->encodings);
+    }
     if (self->py_converters) {
         for (unsigned long i = 0; i < self->n_cols; i++) {
             Py_CLEAR(self->py_converters[i]);
@@ -357,11 +384,11 @@ static void State_clear_fields(StateObject *self) {
 
 static void State_dealloc(StateObject *self) {
     State_clear_fields(self);
-    Py_TYPE(self)->tp_free((PyObject*)self);
+    ((freefunc)PyType_GetSlot(StateType, Py_tp_free))((PyObject*)self);
 }
 
 static PyObject *State_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-    StateObject *self = (StateObject*)type->tp_alloc(type, 0);
+    StateObject *self = (StateObject*)((allocfunc)PyType_GetSlot(StateType, Py_tp_alloc))(type, 0);
     return (PyObject*)self;
 }
 
@@ -514,7 +541,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         Py_XINCREF(self->py_encodings[i]);
 
         self->encodings[i] = (!py_encoding || py_encoding == Py_None) ?
-                              NULL : PyUnicode_AsUTF8AndSize(py_encoding, NULL);
+                              NULL : PyUnicode_AsUTF8(py_encoding);
 
         self->py_invalid_values[i] = (!py_invalid_value || py_invalid_value == Py_None) ?
                                       NULL : py_converter;
@@ -561,7 +588,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         self->namedtuple_desc.fields = calloc(self->n_cols + 1, sizeof(PyStructSequence_Field));
         if (!self->namedtuple_desc.fields) goto error;
         for (unsigned long i = 0; i < self->n_cols; i++) {
-            self->namedtuple_desc.fields[i].name = PyUnicode_AsUTF8AndSize(self->py_names[i], NULL);
+            self->namedtuple_desc.fields[i].name = PyUnicode_AsUTF8(self->py_names[i]);
             self->namedtuple_desc.fields[i].doc = NULL;
         }
         self->namedtuple = PyStructSequence_NewType(&self->namedtuple_desc);
@@ -618,16 +645,20 @@ error:
     goto exit;
 }
 
-static PyTypeObject StateType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "_pymysqlsv.State",
-    .tp_doc = PyDoc_STR("Rowdata state manager"),
-    .tp_basicsize = sizeof(StateObject),
-    .tp_itemsize = 0,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-    .tp_new = State_new,
-    .tp_init = (initproc)State_init,
-    .tp_dealloc = (destructor)State_dealloc,
+static PyType_Slot StateType_slots[] = {
+    {Py_tp_new, State_new},
+    {Py_tp_init, State_init},
+    {Py_tp_dealloc, State_dealloc},
+    {Py_tp_doc, "MySQL accelerator"},
+    {0, NULL},
+};
+
+static PyType_Spec StateType_spec = {
+    .name = "_pymysqlsv.State",
+    .basicsize = sizeof(StateObject),
+    .itemsize = 0,
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .slots = StateType_slots,
 };
 
 //
@@ -760,7 +791,7 @@ static PyObject *read_bytes(StateObject *py_state, unsigned long long num_bytes)
         }
     }
 
-    if (PyBytes_GET_SIZE(py_data) < (long int)num_bytes) {
+    if (PyBytes_Size(py_data) < (long int)num_bytes) {
         force_close(py_state->py_conn);
         raise_exception(py_state->py_conn, "OperationalError", 0,
                         "Lost connection to MySQL server during query");
@@ -1105,8 +1136,8 @@ static PyObject *read_row_from_packet(
                     second = CHR2INT2(out); out += 3;
                     microsecond = (IS_DATETIME_MICRO(out, out_l)) ? CHR2INT6(out) :
                                   (IS_DATETIME_MILLI(out, out_l)) ? CHR2INT3(out) * 1e3 : 0;
-                    py_item = PyDateTime_FromDateAndTime(year, month, day,
-                                                      hour, minute, second, microsecond);
+                    //py_item = PyDateTime_FromDateAndTime(year, month, day,
+                    //                                  hour, minute, second, microsecond);
                     if (!py_item) {
                         PyErr_Clear();
                         py_item = PyUnicode_Decode(orig_out, orig_out_l, "utf8", "strict");
@@ -1129,7 +1160,7 @@ static PyObject *read_row_from_packet(
                     year = CHR2INT4(out); out += 5;
                     month = CHR2INT2(out); out += 3;
                     day = CHR2INT2(out); out += 3;
-                    py_item = PyDate_FromDate(year, month, day);
+                    //py_item = PyDate_FromDate(year, month, day);
                     if (!py_item) {
                         PyErr_Clear();
                         py_item = PyUnicode_Decode(orig_out, orig_out_l, "utf8", "strict");
@@ -1172,10 +1203,10 @@ static PyObject *read_row_from_packet(
                         microsecond = (IS_TIMEDELTA_MICRO(out, out_l)) ? CHR2INT6(out) :
                                       (IS_TIMEDELTA_MILLI(out, out_l)) ? CHR2INT3(out) * 1e3 : 0;
                     }
-                    py_item = PyDelta_FromDSU(0, sign * hour * 60 * 60 +
-                                              sign * minute * 60 +
-                                              sign * second,
-                                              sign * microsecond);
+                    //py_item = PyDelta_FromDSU(0, sign * hour * 60 * 60 +
+                    //                          sign * minute * 60 +
+                    //                          sign * second,
+                    //                          sign * microsecond);
                     if (!py_item) {
                         PyErr_Clear();
                         py_item = PyUnicode_Decode(orig_out, orig_out_l, "utf8", "strict");
@@ -1239,7 +1270,7 @@ static PyObject *read_row_from_packet(
 
         switch (py_state->options.output_type) {
         case MYSQLSV_OUT_NAMEDTUPLES:
-            PyStructSequence_SET_ITEM(py_result, i, py_item);
+            PyStructSequence_SetItem(py_result, i, py_item);
             break;
         case MYSQLSV_OUT_DICTS:
             PyDict_SetItem(py_result, py_state->py_names[i], py_item);
@@ -1247,7 +1278,7 @@ static PyObject *read_row_from_packet(
             Py_DECREF(py_item);
             break;
         default:
-            PyTuple_SET_ITEM(py_result, i, py_item);
+            PyTuple_SetItem(py_result, i, py_item);
         }
     }
 
@@ -1285,12 +1316,12 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
 
         PyObject *py_args = PyTuple_New(2);
         if (!py_args) goto error;
-        PyTuple_SET_ITEM(py_args, 0, py_res);
-        PyTuple_SET_ITEM(py_args, 1, py_requested_n_rows);
+        PyTuple_SetItem(py_args, 0, py_res);
+        PyTuple_SetItem(py_args, 1, py_requested_n_rows);
         Py_INCREF(py_res);
         Py_INCREF(py_requested_n_rows);
 
-        py_state = (StateObject*)State_new(&StateType, py_args, NULL);
+        py_state = (StateObject*)State_new(StateType, py_args, NULL);
         if (!py_state) { Py_DECREF(py_args); goto error; }
         rc = State_init((StateObject*)py_state, py_args, NULL);
         Py_DECREF(py_args);
@@ -1316,7 +1347,7 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
 
         PyObject *py_row = NULL;
         char *data = PyByteArray_AsString(py_buff);
-        unsigned long long data_l = PyByteArray_GET_SIZE(py_buff);
+        unsigned long long data_l = PyByteArray_Size(py_buff);
         unsigned long long warning_count = 0;
         int has_next = 0;
 
@@ -1421,9 +1452,16 @@ static struct PyModuleDef _pymysqlsvmodule = {
 };
 
 PyMODINIT_FUNC PyInit__pymysqlsv(void) {
-    PyDateTime_IMPORT;
-    if (PyType_Ready(&StateType) < 0) {
+    PyObject *type = (PyObject*)PyType_FromSpec(&StateType_spec);
+    if (type == NULL) {
         return NULL;
     }
+
+    StateType = (PyTypeObject*)type;
+
+    if (PyType_Ready(StateType) < 0) {
+        return NULL;
+    }
+
     return PyModule_Create(&_pymysqlsvmodule);
 }
