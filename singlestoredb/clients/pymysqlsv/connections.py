@@ -227,7 +227,7 @@ class Connection:
         ssl_key=None,
         ssl_verify_cert=None,
         ssl_verify_identity=None,
-        parse_json=False,
+        parse_json=True,
         invalid_values=None,
         pure_python=None,
         compress=None,  # not supported

@@ -4,6 +4,7 @@ import re
 import time
 from decimal import Decimal
 
+from ...converters import converters as decoders
 from .constants import FIELD_TYPE
 from .err import ProgrammingError
 
@@ -331,30 +332,30 @@ encoders = {
 }
 
 
-decoders = {
-    FIELD_TYPE.BIT: convert_bit,
-    FIELD_TYPE.TINY: int,
-    FIELD_TYPE.SHORT: int,
-    FIELD_TYPE.LONG: int,
-    FIELD_TYPE.FLOAT: float,
-    FIELD_TYPE.DOUBLE: float,
-    FIELD_TYPE.LONGLONG: int,
-    FIELD_TYPE.INT24: int,
-    FIELD_TYPE.YEAR: int,
-    FIELD_TYPE.TIMESTAMP: convert_datetime,
-    FIELD_TYPE.DATETIME: convert_datetime,
-    FIELD_TYPE.TIME: convert_timedelta,
-    FIELD_TYPE.DATE: convert_date,
-    FIELD_TYPE.BLOB: through,
-    FIELD_TYPE.TINY_BLOB: through,
-    FIELD_TYPE.MEDIUM_BLOB: through,
-    FIELD_TYPE.LONG_BLOB: through,
-    FIELD_TYPE.STRING: through,
-    FIELD_TYPE.VAR_STRING: through,
-    FIELD_TYPE.VARCHAR: through,
-    FIELD_TYPE.DECIMAL: Decimal,
-    FIELD_TYPE.NEWDECIMAL: Decimal,
-}
+# decoders = {
+#     FIELD_TYPE.BIT: convert_bit,
+#     FIELD_TYPE.TINY: int,
+#     FIELD_TYPE.SHORT: int,
+#     FIELD_TYPE.LONG: int,
+#     FIELD_TYPE.FLOAT: float,
+#     FIELD_TYPE.DOUBLE: float,
+#     FIELD_TYPE.LONGLONG: int,
+#     FIELD_TYPE.INT24: int,
+#     FIELD_TYPE.YEAR: int,
+#     FIELD_TYPE.TIMESTAMP: convert_datetime,
+#     FIELD_TYPE.DATETIME: convert_datetime,
+#     FIELD_TYPE.TIME: convert_timedelta,
+#     FIELD_TYPE.DATE: convert_date,
+#     FIELD_TYPE.BLOB: through,
+#     FIELD_TYPE.TINY_BLOB: through,
+#     FIELD_TYPE.MEDIUM_BLOB: through,
+#     FIELD_TYPE.LONG_BLOB: through,
+#     FIELD_TYPE.STRING: through,
+#     FIELD_TYPE.VAR_STRING: through,
+#     FIELD_TYPE.VARCHAR: through,
+#     FIELD_TYPE.DECIMAL: Decimal,
+#     FIELD_TYPE.NEWDECIMAL: Decimal,
+# }
 
 
 # for MySQLdb compatibility

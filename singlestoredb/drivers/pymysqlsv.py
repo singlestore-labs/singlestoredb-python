@@ -7,8 +7,8 @@ try:
 except (ImportError, ModuleNotFoundError):
     encoders = {}
 
-from .base import Driver
 from ..converters import converters as convs
+from .base import Driver
 
 converters: Dict[Any, Callable[..., Any]] = dict(convs)
 converters.update(encoders)

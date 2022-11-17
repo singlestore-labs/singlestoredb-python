@@ -1,10 +1,14 @@
 
+#define Py_LIMITED_API 0x03060000
+
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
-#define Py_LIMITED_API 0x03060000
 #include <Python.h>
+
+#ifndef Py_LIMITED_API
 #include <datetime.h>
+#endif
 
 #define MYSQLSV_OUT_TUPLES 0
 #define MYSQLSV_OUT_NAMEDTUPLES 1
@@ -274,18 +278,28 @@ char *PyUnicode_AsUTF8(PyObject *unicode) {
 }
 
 //
+// Cached int values for date/time components
+//
+static PyObject *PyInts[62] = {0};
+
+//
 // State
 //
 
 static PyTypeObject *StateType = NULL;
 
 typedef struct {
+    PyObject_HEAD
     PyObject *py_conn; // Database connection
     PyObject *py_fields; // List of table fields
     PyObject *py_decimal_mod; // decimal module
     PyObject *py_decimal; // decimal.Decimal
     PyObject *py_json_mod; // json module
     PyObject *py_json_loads; // json.loads
+    PyObject *py_datetime_mod; // datetime module
+    PyObject *py_date; // datetime.date
+    PyObject *py_timedelta; // datetime.timedelta
+    PyObject *py_datetime; // datetime.datetime
     PyObject *py_rows; // Output object
     PyObject *py_rfile; // Socket file I/O
     PyObject *py_read; // File I/O read method
@@ -327,18 +341,8 @@ static void State_clear_fields(StateObject *self) {
     DESTROY(self->scales);
     DESTROY(self->flags);
     DESTROY(self->type_codes);
-    if (self->namedtuple_desc.fields) {
-        for (unsigned long i = 0; i < self->n_cols; i++) {
-            DESTROY(self->namedtuple_desc.fields[i].name);
-        }
-        DESTROY(self->namedtuple_desc.fields);
-    }
-    if (self->encodings) {
-        for (unsigned long i = 0; i < self->n_cols; i++) {
-            DESTROY(self->encodings[i]);
-        }
-        DESTROY(self->encodings);
-    }
+    DESTROY(self->encodings);
+    DESTROY(self->namedtuple_desc.fields);
     if (self->py_converters) {
         for (unsigned long i = 0; i < self->n_cols; i++) {
             Py_CLEAR(self->py_converters[i]);
@@ -375,6 +379,10 @@ static void State_clear_fields(StateObject *self) {
     Py_CLEAR(self->py_json_mod);
     Py_CLEAR(self->py_decimal);
     Py_CLEAR(self->py_decimal_mod);
+    Py_CLEAR(self->py_date);
+    Py_CLEAR(self->py_timedelta);
+    Py_CLEAR(self->py_datetime);
+    Py_CLEAR(self->py_datetime_mod);
     Py_CLEAR(self->py_fields);
     Py_CLEAR(self->py_conn);
 
@@ -384,12 +392,7 @@ static void State_clear_fields(StateObject *self) {
 
 static void State_dealloc(StateObject *self) {
     State_clear_fields(self);
-    ((freefunc)PyType_GetSlot(StateType, Py_tp_free))((PyObject*)self);
-}
-
-static PyObject *State_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-    StateObject *self = (StateObject*)((allocfunc)PyType_GetSlot(StateType, Py_tp_alloc))(type, 0);
-    return (PyObject*)self;
+    PyObject_Del(self);
 }
 
 static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
@@ -441,6 +444,16 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
     if (!self->py_decimal_mod) goto error;
     self->py_decimal = PyObject_GetAttrString(self->py_decimal_mod, "Decimal");
     if (!self->py_decimal) goto error;
+
+    // Import datetime objects
+    self->py_datetime_mod = PyImport_ImportModule("datetime");
+    if (!self->py_datetime_mod) goto error;
+    self->py_date = PyObject_GetAttrString(self->py_datetime_mod, "date");
+    if (!self->py_date) goto error;
+    self->py_timedelta = PyObject_GetAttrString(self->py_datetime_mod, "timedelta");
+    if (!self->py_timedelta) goto error;
+    self->py_datetime = PyObject_GetAttrString(self->py_datetime_mod, "datetime");
+    if (!self->py_datetime) goto error;
 
     // Import json module.
     self->py_json_mod = PyImport_ImportModule("json");
@@ -646,9 +659,8 @@ error:
 }
 
 static PyType_Slot StateType_slots[] = {
-    {Py_tp_new, State_new},
-    {Py_tp_init, State_init},
-    {Py_tp_dealloc, State_dealloc},
+    {Py_tp_init, (initproc)State_init},
+    {Py_tp_dealloc, (destructor)State_dealloc},
     {Py_tp_doc, "MySQL accelerator"},
     {0, NULL},
 };
@@ -1015,6 +1027,123 @@ static void read_length_coded_string(
     return;
 }
 
+#ifdef Py_LIMITED_API
+
+static PyObject *PyDate_FromDate(
+    StateObject *py_state,
+    int year,
+    int month,
+    int day
+) {
+    PyObject *out = NULL;
+    PyObject *py_year = NULL;
+    int free_year = 0;
+
+    if (year >= 0 && year <= 60) {
+       py_year = PyInts[year];
+    } else {
+       free_year = 1;
+       py_year = PyLong_FromLong(year);
+    }
+
+    out = PyObject_CallFunctionObjArgs(
+        py_state->py_date, py_year, PyInts[month], PyInts[day], NULL
+    );
+
+    if (free_year) Py_XDECREF(py_year);
+
+    return out;
+}
+
+static PyObject *PyDelta_FromDSU(
+    StateObject *py_state,
+    int days,
+    int seconds,
+    int microseconds
+) {
+    PyObject *out = NULL;
+    PyObject *py_days = NULL;
+    PyObject *py_seconds = NULL;
+    PyObject *py_microseconds = NULL;
+    int free_days = 0;
+    int free_seconds = 0;
+    int free_microseconds = 0;
+
+    if (days >= 0 && days <= 60) {
+        py_days = PyInts[days];
+    } else {
+        free_days = 1;
+        py_days = PyLong_FromLong(days);
+    }
+
+    if (seconds >= 0 && seconds <= 60) {
+        py_seconds = PyInts[seconds];
+    } else {
+        free_seconds = 1;
+        py_seconds = PyLong_FromLong(seconds);
+    }
+
+    if (microseconds >= 0 && microseconds <= 60) {
+        py_microseconds = PyInts[microseconds];
+    } else {
+        free_microseconds = 1;
+        py_microseconds = PyLong_FromLong(microseconds);
+    }
+
+    out = PyObject_CallFunctionObjArgs(
+        py_state->py_timedelta, py_days, py_seconds, py_microseconds, NULL
+    );
+
+    if (free_days) Py_XDECREF(py_days);
+    if (free_seconds) Py_XDECREF(py_seconds);
+    if (free_microseconds) Py_XDECREF(py_microseconds);
+
+    return out;
+}
+
+static PyObject *PyDateTime_FromDateAndTime(
+    StateObject *py_state,
+    int year,
+    int month,
+    int day,
+    int hour,
+    int minute,
+    int second,
+    int microsecond
+) {
+    PyObject *out = NULL;
+    PyObject *py_year = NULL;
+    PyObject *py_microsecond = NULL;
+    int free_year = 0;
+    int free_microsecond = 0;
+
+    if (year >= 0 && year <= 60) {
+       py_year = PyInts[year];
+    } else {
+       free_year = 1;
+       py_year = PyLong_FromLong(year);
+    }
+
+    if (microsecond >= 0 && microsecond <= 60) {
+       py_microsecond = PyInts[microsecond];
+    } else {
+       free_microsecond = 1;
+       py_microsecond = PyLong_FromLong(microsecond);
+    }
+
+    out = PyObject_CallFunctionObjArgs(
+        py_state->py_datetime, py_year, PyInts[month], PyInts[day],
+        PyInts[hour], PyInts[minute], PyInts[second], py_microsecond, NULL
+    );
+
+    if (free_microsecond) Py_XDECREF(py_microsecond);
+    if (free_year) Py_XDECREF(py_year);
+
+    return out;
+}
+
+#endif
+
 static PyObject *read_row_from_packet(
     StateObject *py_state,
     char *data,
@@ -1136,8 +1265,11 @@ static PyObject *read_row_from_packet(
                     second = CHR2INT2(out); out += 3;
                     microsecond = (IS_DATETIME_MICRO(out, out_l)) ? CHR2INT6(out) :
                                   (IS_DATETIME_MILLI(out, out_l)) ? CHR2INT3(out) * 1e3 : 0;
-                    //py_item = PyDateTime_FromDateAndTime(year, month, day,
-                    //                                  hour, minute, second, microsecond);
+                    py_item = PyDateTime_FromDateAndTime(
+#ifdef Py_LIMITED_API
+                                    py_state,
+#endif
+                                    year, month, day, hour, minute, second, microsecond);
                     if (!py_item) {
                         PyErr_Clear();
                         py_item = PyUnicode_Decode(orig_out, orig_out_l, "utf8", "strict");
@@ -1160,7 +1292,11 @@ static PyObject *read_row_from_packet(
                     year = CHR2INT4(out); out += 5;
                     month = CHR2INT2(out); out += 3;
                     day = CHR2INT2(out); out += 3;
-                    //py_item = PyDate_FromDate(year, month, day);
+                    py_item = PyDate_FromDate(
+#ifdef Py_LIMITED_API
+                                    py_state,
+#endif
+                                    year, month, day);
                     if (!py_item) {
                         PyErr_Clear();
                         py_item = PyUnicode_Decode(orig_out, orig_out_l, "utf8", "strict");
@@ -1203,10 +1339,14 @@ static PyObject *read_row_from_packet(
                         microsecond = (IS_TIMEDELTA_MICRO(out, out_l)) ? CHR2INT6(out) :
                                       (IS_TIMEDELTA_MILLI(out, out_l)) ? CHR2INT3(out) * 1e3 : 0;
                     }
-                    //py_item = PyDelta_FromDSU(0, sign * hour * 60 * 60 +
-                    //                          sign * minute * 60 +
-                    //                          sign * second,
-                    //                          sign * microsecond);
+                    py_item = PyDelta_FromDSU(
+#ifdef Py_LIMITED_API
+                                    py_state,
+#endif
+                                    0, sign * hour * 60 * 60 +
+                                       sign * minute * 60 +
+                                       sign * second,
+                                       sign * microsecond);
                     if (!py_item) {
                         PyErr_Clear();
                         py_item = PyUnicode_Decode(orig_out, orig_out_l, "utf8", "strict");
@@ -1321,11 +1461,9 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
         Py_INCREF(py_res);
         Py_INCREF(py_requested_n_rows);
 
-        py_state = (StateObject*)State_new(StateType, py_args, NULL);
+        py_state = (StateObject*)PyObject_CallObject((PyObject*)StateType, py_args);
         if (!py_state) { Py_DECREF(py_args); goto error; }
-        rc = State_init((StateObject*)py_state, py_args, NULL);
         Py_DECREF(py_args);
-        if (rc != 0) { Py_CLEAR(py_state); goto error; }
 
         PyObject_SetAttrString(py_res, "_state", (PyObject*)py_state);
     }
@@ -1452,15 +1590,18 @@ static struct PyModuleDef _pymysqlsvmodule = {
 };
 
 PyMODINIT_FUNC PyInit__pymysqlsv(void) {
-    PyObject *type = (PyObject*)PyType_FromSpec(&StateType_spec);
-    if (type == NULL) {
+#ifndef Py_LIMITED_API
+    PyDateTime_IMPORT;
+#endif
+
+    StateType = (PyTypeObject*)PyType_FromSpec(&StateType_spec);
+    if (StateType == NULL || PyType_Ready(StateType) < 0) {
         return NULL;
     }
 
-    StateType = (PyTypeObject*)type;
-
-    if (PyType_Ready(StateType) < 0) {
-        return NULL;
+    // Populate ints
+    for (int i = 0; i < 62; i++) {
+        PyInts[i] = PyLong_FromLong(i);
     }
 
     return PyModule_Create(&_pymysqlsvmodule);
