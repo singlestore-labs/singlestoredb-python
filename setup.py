@@ -8,6 +8,9 @@ from setuptools import setup
 from wheel.bdist_wheel import bdist_wheel
 
 
+py_limited_api = '0x03060000'
+# py_limited_api = False
+
 universal2_flags = ['-arch', 'x86_64', '-arch', 'arm64'] \
     if (
         platform.platform().startswith('mac') and
@@ -35,8 +38,8 @@ setup(
         Extension(
             '_pymysqlsv',
             sources=['singlestoredb/clients/pymysqlsv/accel.c'],
-            define_macros=[('Py_LIMITED_API', '0x03060000')],
-            py_limited_api=True,
+            define_macros=[('Py_LIMITED_API', py_limited_api)] if py_limited_api else [],
+            py_limited_api=bool(py_limited_api),
             extra_compile_args=universal2_flags,
             extra_link_args=universal2_flags,
         ),
