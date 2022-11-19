@@ -19,7 +19,7 @@ jobs:
           python --version
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pymysql wheel
+          pip install pymysql
 
       - name: Initialize database
         id: initialize-database
@@ -100,7 +100,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r test-requirements.txt
-          pip install mysqlclient
+          pip install mysqlclient wheel
 
       - name: Install SingleStore package
         run: |
