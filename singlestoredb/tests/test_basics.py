@@ -7,6 +7,7 @@ import os
 import unittest
 
 import singlestoredb as s2
+
 from . import utils
 # import traceback
 
@@ -29,7 +30,6 @@ class TestBasics(unittest.TestCase):
     def setUp(self):
         self.conn = s2.connect(database=type(self).dbname)
         self.cur = self.conn.cursor()
-        self.driver = self.conn._driver.dbapi.__name__
 
     def tearDown(self):
         try:
@@ -229,17 +229,11 @@ class TestBasics(unittest.TestCase):
             'select `id`, `time` from alltypes where `time` = :1', ['00:07:00'],
         )
         out = self.cur.fetchall()
-        if self.driver == 'pyodbc':
-            assert out[0] == (0, datetime.time(0, 7)), out[0]
-        else:
-            assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
+        assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
         self.cur.execute('select `id`, `time` from alltypes where `time` = "00:07:00"')
         out = self.cur.fetchall()
-        if self.driver == 'pyodbc':
-            assert out[0] == (0, datetime.time(0, 7)), out[0]
-        else:
-            assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
+        assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
         with self.assertRaises(IndexError):
             self.cur.execute(
@@ -252,10 +246,7 @@ class TestBasics(unittest.TestCase):
             'or `time` = "00::07::00"', [0],
         )
         out = self.cur.fetchall()
-        if self.driver == 'pyodbc':
-            assert out[0] == (0, datetime.time(0, 7)), out[0]
-        else:
-            assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
+        assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
     def test_execute_with_escaped_substitutions(self):
         self.cur.execute(
@@ -263,10 +254,7 @@ class TestBasics(unittest.TestCase):
             dict(time='00:07:00'),
         )
         out = self.cur.fetchall()
-        if self.driver == 'pyodbc':
-            assert out[0] == (0, datetime.time(0, 7)), out[0]
-        else:
-            assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
+        assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
         self.cur.execute(
             'select `id`, `time` from alltypes where `time` = :time',
@@ -288,10 +276,7 @@ class TestBasics(unittest.TestCase):
             dict(time='00:07:00'),
         )
         out = self.cur.fetchall()
-        if self.driver == 'pyodbc':
-            assert out[0][:2] == (0, datetime.time(0, 7)), out[0]
-        else:
-            assert out[0][:2] == (0, datetime.timedelta(seconds=420)), out[0]
+        assert out[0][:2] == (0, datetime.timedelta(seconds=420)), out[0]
 
     def test_is_connected(self):
         assert self.conn.is_connected()
@@ -482,8 +467,7 @@ class TestBasics(unittest.TestCase):
             self.cur.execute('garbage syntax')
 
         exc = cm.exception
-        if self.driver != 'pyodbc':
-            assert exc.errno == 1064, exc.errno
+        assert exc.errno == 1064, exc.errno
         assert 'You have an error in your SQL syntax' in exc.errmsg, exc.errmsg
 
     def test_alltypes(self):
@@ -496,30 +480,8 @@ class TestBasics(unittest.TestCase):
 
         bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
-        if self.driver == 'pyodbc':
-            odbc_types = {
-                # int -> bigint
-                3: 8, 1: 8, 2: 8, 9: 8,
-                # float -> double
-                4: 5,
-                # timestamp -> datetime
-                7: 12,
-                # year -> bigint
-                13: 8,
-                # char/binary -> varchar/varbinary
-                249: 15, 250: 15, 251: 15, 252: 15, 253: 15, 254: 15, 255: 15,
-                # newdecimal -> decimal
-                246: 0,
-                # json -> varchar
-                245: 15,
-                # bit -> varchar
-                16: 15,
-            }
-        else:
-            odbc_types = {}
-
         def otype(x):
-            return odbc_types.get(x, x)
+            return x
 
         assert row['id'] == 0, row['id']
         assert typ['id'] == otype(3), typ['id']
@@ -575,21 +537,12 @@ class TestBasics(unittest.TestCase):
         assert row['date'] == datetime.date(8524, 11, 10), row['date']
         assert typ['date'] == 10, typ['date']
 
-        # pyodbc uses time rather than timedelta. In addition, if you try to
-        # put your own converter in, it changes the type code to 15!!!
-        if self.driver == 'pyodbc':
-            assert row['time'] == datetime.time(0, 7, 0), row['time']
-        else:
-            assert row['time'] == datetime.timedelta(minutes=7), row['time']
+        assert row['time'] == datetime.timedelta(minutes=7), row['time']
         assert typ['time'] == 11, typ['time']
 
-        # Same as above
-        if self.driver == 'pyodbc':
-            assert row['time_6'] == datetime.time(0, 7, 0), row['time_6']
-        else:
-            assert row['time_6'] == datetime.timedelta(
-                hours=1, minutes=10, microseconds=2,
-            ), row['time_6']
+        assert row['time_6'] == datetime.timedelta(
+            hours=1, minutes=10, microseconds=2,
+        ), row['time_6']
         assert typ['time_6'] == 11, typ['time_6']
 
         assert row['datetime'] == datetime.datetime(
@@ -653,11 +606,7 @@ class TestBasics(unittest.TestCase):
         assert row['tinyblob'] == bytearray([10, 11, 12, 13, 14, 15]), row['tinyblob']
         assert typ['tinyblob'] == otype(249), typ['tinyblob']
 
-        # pyodbc surfaces json as varchar
-        if self.driver == 'pyodbc':
-            assert row['json'] == '{"a":10,"b":2.75,"c":"hello world"}', row['json']
-        else:
-            assert row['json'] == {'a': 10, 'b': 2.75, 'c': 'hello world'}, row['json']
+        assert row['json'] == {'a': 10, 'b': 2.75, 'c': 'hello world'}, row['json']
         assert typ['json'] == otype(245), typ['json']
 
         assert row['enum'] == 'one', row['enum']
@@ -667,11 +616,7 @@ class TestBasics(unittest.TestCase):
         assert row['set'] in [{'two'}, 'two'], row['set']
         assert typ['set'] == otype(253), typ['set']  # mysql code: 248
 
-        # pyodbc uses the opposite endianness of all other drivers
-        if self.driver == 'pyodbc':
-            assert row['bit'] == b'\x80\x00\x00\x00\x00\x00\x00\x00', row['bit']
-        else:
-            assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+        assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
         assert typ['bit'] == otype(16), typ['bit']
 
     def test_alltypes_nulls(self):
@@ -682,30 +627,8 @@ class TestBasics(unittest.TestCase):
         row = dict(zip(names, out))
         typ = dict(zip(names, types))
 
-        if self.driver == 'pyodbc':
-            odbc_types = {
-                # int -> bigint
-                3: 8, 1: 8, 2: 8, 9: 8,
-                # float -> double
-                4: 5,
-                # timestamp -> datetime
-                7: 12,
-                # year -> bigint
-                13: 8,
-                # char/binary -> varchar/varbinary
-                249: 15, 250: 15, 251: 15, 252: 15, 253: 15, 254: 15, 255: 15,
-                # newdecimal -> decimal
-                246: 0,
-                # json -> varchar
-                245: 15,
-                # bit -> varchar
-                16: 15,
-            }
-        else:
-            odbc_types = {}
-
         def otype(x):
-            return odbc_types.get(x, x)
+            return x
 
         assert row['id'] == 1, row['id']
         assert typ['id'] == otype(3), typ['id']

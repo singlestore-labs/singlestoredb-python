@@ -8,7 +8,6 @@ import secrets
 import unittest
 
 import pytest
-
 import singlestoredb as s2
 
 

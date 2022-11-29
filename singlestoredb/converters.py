@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Data value conversion utilities."""
 import datetime
+import re
 from base64 import b64decode
-from datetime import timezone
 from decimal import Decimal
 from json import loads as json_loads
 from typing import Any
@@ -14,159 +14,213 @@ from typing import Set
 from typing import Union
 
 
-def _parse_isoformat_date(dtstr: str) -> List[Any]:
-    # It is assumed that this function will only be called with a
-    # string of length exactly 10, and (though this is not used) ASCII-only
-    year = int(dtstr[0:4])
-    if dtstr[4] != '-':
-        raise ValueError('Invalid date separator: %s' % dtstr[4])
-
-    month = int(dtstr[5:7])
-
-    if dtstr[7] != '-':
-        raise ValueError('Invalid date separator')
-
-    day = int(dtstr[8:10])
-
-    return [year, month, day]
+# Cache fromisoformat methods if they exist
+_dt_datetime_fromisoformat = None
+if hasattr(datetime.datetime, 'fromisoformat'):
+    _dt_datetime_fromisoformat = datetime.datetime.fromisoformat
+_dt_time_fromisoformat = None
+if hasattr(datetime.time, 'fromisoformat'):
+    _dt_time_fromisoformat = datetime.time.fromisoformat
+_dt_date_fromisoformat = None
+if hasattr(datetime.date, 'fromisoformat'):
+    _dt_date_fromisoformat = datetime.date.fromisoformat
 
 
-def _parse_hh_mm_ss_ff(tstr: str) -> List[Any]:
-    # Parses things of the form HH[:MM[:SS[.fff[fff]]]]
-    len_str = len(tstr)
-
-    time_comps = [0, 0, 0, 0]
-    pos = 0
-    for comp in range(0, 3):
-        if (len_str - pos) < 2:
-            raise ValueError('Incomplete time component')
-
-        time_comps[comp] = int(tstr[pos:pos+2])
-
-        pos += 2
-        next_char = tstr[pos:pos+1]
-
-        if not next_char or comp >= 2:
-            break
-
-        if next_char != ':':
-            raise ValueError('Invalid time separator: %c' % next_char)
-
-        pos += 1
-
-    if pos < len_str:
-        if tstr[pos] != '.':
-            raise ValueError('Invalid microsecond component')
-        else:
-            pos += 1
-
-            len_remainder = len_str - pos
-            if len_remainder not in (3, 6):
-                raise ValueError('Invalid microsecond component')
-
-            time_comps[3] = int(tstr[pos:])
-            if len_remainder == 3:
-                time_comps[3] *= 1000
-
-    return time_comps
+def _convert_second_fraction(s: str) -> int:
+    if not s:
+        return 0
+    # Pad zeros to ensure the fraction length in microseconds
+    s = s.ljust(6, '0')
+    return int(s[:6])
 
 
-def _parse_isoformat_time(tstr: str) -> List[Any]:
-    # Format supported is HH[:MM[:SS[.fff[fff]]]][+HH:MM[:SS[.ffffff]]]
-    len_str = len(tstr)
-    if len_str < 2:
-        raise ValueError('Isoformat time too short')
-
-    # This is equivalent to re.search('[+-]', tstr), but faster
-    tz_pos = (tstr.find('-') + 1 or tstr.find('+') + 1)
-    timestr = tstr[:tz_pos-1] if tz_pos > 0 else tstr
-
-    time_comps = _parse_hh_mm_ss_ff(timestr)
-
-    tzi = None
-    if tz_pos > 0:
-        tzstr = tstr[tz_pos:]
-
-        # Valid time zone strings are:
-        # HH:MM               len: 5
-        # HH:MM:SS            len: 8
-        # HH:MM:SS.ffffff     len: 15
-
-        if len(tzstr) not in (5, 8, 15):
-            raise ValueError('Malformed time zone string')
-
-        tz_comps = _parse_hh_mm_ss_ff(tzstr)
-        if all(x == 0 for x in tz_comps):
-            tzi = timezone.utc
-        else:
-            tzsign = -1 if tstr[tz_pos - 1] == '-' else 1
-
-            td = datetime.timedelta(
-                hours=tz_comps[0], minutes=tz_comps[1],
-                seconds=tz_comps[2], microseconds=tz_comps[3],
-            )
-
-            tzi = timezone(tzsign * td)
-
-    time_comps.append(tzi)
-
-    return time_comps
+DATETIME_RE = re.compile(
+    r'(\d{1,4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{1,2}):(\d{1,2})(?:.(\d{1,6}))?',
+)
 
 
-def datetime_fromisoformat(date_string: str) -> datetime.datetime:
-    """Construct a datetime from the output of datetime.isoformat()."""
-    if not isinstance(date_string, str):
-        raise TypeError('fromisoformat: argument must be str')
+def datetime_fromisoformat(
+    obj: Union[str, bytes, bytearray],
+) -> Union[datetime.datetime, str]:
+    """Returns a DATETIME or TIMESTAMP column value as a datetime object:
 
-    # Split this at the separator
-    dstr = date_string[0:10]
-    tstr = date_string[11:]
+      >>> datetime_fromisoformat('2007-02-25 23:06:20')
+      datetime.datetime(2007, 2, 25, 23, 6, 20)
+      >>> datetime_fromisoformat('2007-02-25T23:06:20')
+      datetime.datetime(2007, 2, 25, 23, 6, 20)
 
-    try:
-        date_components = _parse_isoformat_date(dstr)
-    except ValueError:
-        raise ValueError(f'Invalid isoformat string: {date_string!r}')
+    Illegal values are returned as str:
 
-    if tstr:
+      >>> datetime_fromisoformat('2007-02-31T23:06:20')
+      '2007-02-31T23:06:20'
+      >>> datetime_fromisoformat('0000-00-00 00:00:00')
+      '0000-00-00 00:00:00'
+    """
+    if isinstance(obj, (bytes, bytearray)):
+        obj = obj.decode('ascii')
+
+    # Use datetime methods if possible
+    if _dt_datetime_fromisoformat is not None:
         try:
-            time_components = _parse_isoformat_time(tstr)
+            if ' ' in obj or 'T' in obj:
+                return _dt_datetime_fromisoformat(obj)
+            if _dt_date_fromisoformat is not None:
+                date = _dt_date_fromisoformat(obj)
+                return datetime.datetime(date.year, date.month, date.day)
         except ValueError:
-            raise ValueError(f'Invalid isoformat string: {date_string!r}')
-    else:
-        time_components = [0, 0, 0, 0, None]
+            return obj
 
-    return datetime.datetime(*(date_components + time_components))
-
-
-def date_fromisoformat(date_string: str) -> datetime.date:
-    """Construct a date from the output of date.isoformat()."""
-    if not isinstance(date_string, str):
-        raise TypeError('fromisoformat: argument must be str')
+    m = DATETIME_RE.match(obj)
+    if not m:
+        mdate = date_fromisoformat(obj)
+        if type(mdate) is str:
+            return mdate
+        return datetime.datetime(mdate.year, mdate.month, mdate.day)  # type: ignore
 
     try:
-        assert len(date_string) == 10
-        return datetime.date(*_parse_isoformat_date(date_string))
-    except Exception:
-        raise ValueError(f'Invalid isoformat string: {date_string!r}')
+        groups = list(m.groups())
+        groups[-1] = _convert_second_fraction(groups[-1])
+        return datetime.datetime(*[int(x) for x in groups])  # type: ignore
+    except ValueError:
+        mdate = date_fromisoformat(obj)
+        if type(mdate) is str:
+            return mdate
+        return datetime.datetime(mdate.year, mdate.month, mdate.day)  # type: ignore
 
 
-def time_fromisoformat(time_string: str) -> datetime.time:
-    """Construct a time from the output of isoformat()."""
-    if not isinstance(time_string, str):
-        raise TypeError('fromisoformat: argument must be str')
+TIMEDELTA_RE = re.compile(r'(-)?(\d{1,3}):(\d{1,2}):(\d{1,2})(?:.(\d{1,6}))?')
+
+
+def timedelta_fromisoformat(
+    obj: Union[str, bytes, bytearray],
+) -> Union[datetime.timedelta, str]:
+    """Returns a TIME column as a timedelta object:
+
+      >>> timedelta_fromisoformat('25:06:17')
+      datetime.timedelta(days=1, seconds=3977)
+      >>> timedelta_fromisoformat('-25:06:17')
+      datetime.timedelta(days=-2, seconds=82423)
+
+    Illegal values are returned as string:
+
+      >>> timedelta_fromisoformat('random crap')
+      'random crap'
+
+    Note that MySQL always returns TIME columns as (+|-)HH:MM:SS, but
+    can accept values as (+|-)DD HH:MM:SS. The latter format will not
+    be parsed correctly by this function.
+    """
+    if isinstance(obj, (bytes, bytearray)):
+        obj = obj.decode('ascii')
+
+    m = TIMEDELTA_RE.match(obj)
+    if not m:
+        return obj
 
     try:
-        return datetime.time(*_parse_isoformat_time(time_string))
-    except Exception:
-        raise ValueError(f'Invalid isoformat string: {time_string!r}')
+        groups = list(m.groups())
+        groups[-1] = _convert_second_fraction(groups[-1])
+        negate = -1 if groups[0] else 1
+        hours, minutes, seconds, microseconds = groups[1:]
+
+        tdelta = (
+            datetime.timedelta(
+                hours=int(hours),
+                minutes=int(minutes),
+                seconds=int(seconds),
+                microseconds=int(microseconds),
+            )
+            * negate
+        )
+        return tdelta
+    except ValueError:
+        return obj
 
 
-# datetime_fromisoformat = datetime.datetime.fromisoformat
-# time_fromisoformat = datetime.time.fromisoformat
-# date_fromisoformat = datetime.date.fromisoformat
-datetime_min = datetime.datetime.min
-date_min = datetime.date.min
-datetime_combine = datetime.datetime.combine
+TIME_RE = re.compile(r'(\d{1,2}):(\d{1,2}):(\d{1,2})(?:.(\d{1,6}))?')
+
+
+def time_fromisoformat(
+    obj: Union[str, bytes, bytearray],
+) -> Union[datetime.time, str]:
+    """Returns a TIME column as a time object:
+
+      >>> time_fromisoformat('15:06:17')
+      datetime.time(15, 6, 17)
+
+    Illegal values are returned as str:
+
+      >>> time_fromisoformat('-25:06:17')
+      '-25:06:17'
+      >>> time_fromisoformat('random crap')
+      'random crap'
+
+    Note that MySQL always returns TIME columns as (+|-)HH:MM:SS, but
+    can accept values as (+|-)DD HH:MM:SS. The latter format will not
+    be parsed correctly by this function.
+
+    Also note that MySQL's TIME column corresponds more closely to
+    Python's timedelta and not time. However if you want TIME columns
+    to be treated as time-of-day and not a time offset, then you can
+    use set this function as the converter for FIELD_TYPE.TIME.
+    """
+    if isinstance(obj, (bytes, bytearray)):
+        obj = obj.decode('ascii')
+
+    # Use datetime methods if possible
+    if _dt_time_fromisoformat is not None:
+        try:
+            return _dt_time_fromisoformat(obj)
+        except ValueError:
+            return obj
+
+    m = TIME_RE.match(obj)
+    if not m:
+        return obj
+
+    try:
+        groups = list(m.groups())
+        groups[-1] = _convert_second_fraction(groups[-1])
+        hours, minutes, seconds, microseconds = groups
+        return datetime.time(
+            hour=int(hours),
+            minute=int(minutes),
+            second=int(seconds),
+            microsecond=int(microseconds),
+        )
+    except ValueError:
+        return obj
+
+
+def date_fromisoformat(
+    obj: Union[str, bytes, bytearray],
+) -> Union[datetime.date, str]:
+    """Returns a DATE column as a date object:
+
+      >>> date_fromisoformat('2007-02-26')
+      datetime.date(2007, 2, 26)
+
+    Illegal values are returned as str:
+
+      >>> date_fromisoformat('2007-02-31')
+      '2007-02-31'
+      >>> date_fromisoformat('0000-00-00')
+      '0000-00-00'
+    """
+    if isinstance(obj, (bytes, bytearray)):
+        obj = obj.decode('ascii')
+
+    # Use datetime methods if possible
+    if _dt_date_fromisoformat is not None:
+        try:
+            return _dt_date_fromisoformat(obj)
+        except ValueError:
+            return obj
+
+    try:
+        return datetime.date(*[int(x) for x in obj.split('-', 2)])
+    except ValueError:
+        return obj
 
 
 def identity(x: Any) -> Optional[Any]:
@@ -264,7 +318,7 @@ def decimal_or_none(x: Any) -> Optional[Decimal]:
     return Decimal(x)
 
 
-def date_or_none(x: Optional[str]) -> Optional[datetime.date]:
+def date_or_none(x: Optional[str]) -> Optional[Union[datetime.date, str]]:
     """
     Convert value to a date.
 
@@ -283,13 +337,10 @@ def date_or_none(x: Optional[str]) -> Optional[datetime.date]:
     """
     if x is None:
         return None
-    try:
-        return date_fromisoformat(x)
-    except ValueError:
-        return None
+    return date_fromisoformat(x)
 
 
-def time_or_none(x: Optional[str]) -> Optional[datetime.timedelta]:
+def timedelta_or_none(x: Optional[str]) -> Optional[Union[datetime.timedelta, str]]:
     """
     Convert value to a timedelta.
 
@@ -308,13 +359,32 @@ def time_or_none(x: Optional[str]) -> Optional[datetime.timedelta]:
     """
     if x is None:
         return None
-    try:
-        return datetime_combine(date_min, time_fromisoformat(x)) - datetime_min
-    except ValueError:
+    return timedelta_fromisoformat(x)
+
+
+def time_or_none(x: Optional[str]) -> Optional[Union[datetime.time, str]]:
+    """
+    Convert value to a time.
+
+    Parameters
+    ----------
+    x : Any
+        Arbitrary value
+
+    Returns
+    -------
+    datetime.time
+        If value can be cast to a time
+    None
+        If input value is None
+
+    """
+    if x is None:
         return None
+    return time_fromisoformat(x)
 
 
-def datetime_or_none(x: Optional[str]) -> Optional[datetime.datetime]:
+def datetime_or_none(x: Optional[str]) -> Optional[Union[datetime.datetime, str]]:
     """
     Convert value to a datetime.
 
@@ -333,10 +403,7 @@ def datetime_or_none(x: Optional[str]) -> Optional[datetime.datetime]:
     """
     if x is None:
         return None
-    try:
-        return datetime_fromisoformat(x)
-    except ValueError:
-        return None
+    return datetime_fromisoformat(x)
 
 
 def none(x: Any) -> None:
@@ -437,7 +504,7 @@ converters: Dict[int, Callable[..., Any]] = {
     8: int_or_none,
     9: int_or_none,
     10: date_or_none,
-    11: time_or_none,
+    11: timedelta_or_none,
     12: datetime_or_none,
     13: int_or_none,
     14: date_or_none,

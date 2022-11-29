@@ -6,13 +6,11 @@ import decimal
 import os
 import unittest
 import uuid
-import warnings
-
-import pandas as pd
 
 import singlestoredb as s2
 from singlestoredb import connection as sc
 from singlestoredb.tests import utils
+# import pandas as pd
 # import traceback
 
 
@@ -34,9 +32,6 @@ class TestConnection(unittest.TestCase):
     def setUp(self):
         self.conn = s2.connect(database=type(self).dbname, local_infile=True)
         self.cur = self.conn.cursor()
-        self.driver = self.conn._driver.dbapi.__name__.replace(
-            'singlestoredb.', '',
-        )
 
     def tearDown(self):
         try:
@@ -539,8 +534,6 @@ class TestConnection(unittest.TestCase):
         with self.assertRaises(s2.ProgrammingError) as cm:
             self.cur.execute('garbage syntax')
         exc = cm.exception
-        if self.driver != 'pyodbc':
-            assert exc.errno == 1064, exc.errno
         assert 'You have an error in your SQL syntax' in exc.errmsg, exc.errmsg
 
     def test_alltypes(self):
@@ -553,30 +546,8 @@ class TestConnection(unittest.TestCase):
 
         bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
-        if self.driver == 'pyodbc':
-            odbc_types = {
-                # int -> bigint
-                3: 8, 1: 8, 2: 8, 9: 8,
-                # float -> double
-                4: 5,
-                # timestamp -> datetime
-                7: 12,
-                # year -> bigint
-                13: 8,
-                # char/binary -> varchar/varbinary
-                249: 15, 250: 15, 251: 15, 252: 15, 253: 15, 254: 15, 255: 15,
-                # newdecimal -> decimal
-                246: 0,
-                # json -> varchar
-                245: 15,
-                # bit -> varchar
-                16: 15,
-            }
-        else:
-            odbc_types = {}
-
         def otype(x):
-            return odbc_types.get(x, x)
+            return x
 
         assert row['id'] == 0, row['id']
         assert typ['id'] == otype(3), typ['id']
@@ -662,11 +633,6 @@ class TestConnection(unittest.TestCase):
         assert row['time'] == datetime.timedelta(minutes=7), row['time']
         assert typ['time'] == 11, typ['time']
 
-        # pyodbc doesn't support microseconds on times
-        if not self.driver == 'pyodbc':
-            assert row['time_6'] == datetime.timedelta(
-                hours=1, minutes=10, microseconds=2,
-            ), row['time_6']
         assert typ['time_6'] == 11, typ['time_6']
 
         assert row['datetime'] == datetime.datetime(
@@ -740,14 +706,10 @@ class TestConnection(unittest.TestCase):
         ), row['tinyblob']
         assert typ['tinyblob'] == otype(249), typ['tinyblob']
 
-        # pyodbc surfaces json as varchar
-        if self.driver == 'pyodbc':
-            assert row['json'] == '{"a":10,"b":2.75,"c":"hello world"}', row['json']
-        else:
-            assert row['json'] == {
-                'a': 10, 'b': 2.75,
-                'c': 'hello world',
-            }, row['json']
+        assert row['json'] == {
+            'a': 10, 'b': 2.75,
+            'c': 'hello world',
+        }, row['json']
         assert typ['json'] == otype(245), typ['json']
 
         assert row['enum'] == 'one', row['enum']
@@ -756,10 +718,7 @@ class TestConnection(unittest.TestCase):
         assert row['set'] == 'two', row['set']
         assert typ['set'] == otype(253), typ['set']  # mysql code: 248
 
-        if self.driver == 'pyodbc':
-            assert row['bit'] == b'\x80\x00\x00\x00\x00\x00\x00\x00', row['bit']
-        else:
-            assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+        assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
         assert typ['bit'] == otype(16), typ['bit']
 
     def test_alltypes_nulls(self):
@@ -770,30 +729,8 @@ class TestConnection(unittest.TestCase):
         row = dict(zip(names, out))
         typ = dict(zip(names, types))
 
-        if self.driver == 'pyodbc':
-            odbc_types = {
-                # int -> bigint
-                3: 8, 1: 8, 2: 8, 9: 8,
-                # float -> double
-                4: 5,
-                # timestamp -> datetime
-                7: 12,
-                # year -> bigint
-                13: 8,
-                # char/binary -> varchar/varbinary
-                249: 15, 250: 15, 251: 15, 252: 15, 253: 15, 254: 15, 255: 15,
-                # newdecimal -> decimal
-                246: 0,
-                # json -> varchar
-                245: 15,
-                # bit -> varchar
-                16: 15,
-            }
-        else:
-            odbc_types = {}
-
         def otype(x):
-            return odbc_types.get(x, x)
+            return x
 
         assert row['id'] == 1, row['id']
         assert typ['id'] == otype(3), typ['id']
@@ -922,78 +859,6 @@ class TestConnection(unittest.TestCase):
         assert row['bit'] is None, row['bit']
         assert typ['bit'] == otype(16), typ['bit']
 
-    def test_convert_exception(self):
-        driver = self.conn._driver
-        dbapi = driver.dbapi
-
-        if self.driver in ['mysql.connector', 'http', 'https']:
-            exc_args = tuple()
-            exc_kwargs = dict(errno=-1, msg='hi there')
-        else:
-            exc_args = (-1, 'hi there')
-            exc_kwargs = {}
-
-        exc = driver.convert_exception(
-            dbapi.NotSupportedError(*exc_args, **exc_kwargs),
-        )
-        assert exc.args[0] == -1
-        assert exc.args[1] == 'hi there'
-        assert exc.errno == -1
-        assert exc.errmsg == 'hi there'
-        assert exc.msg == 'hi there'
-
-        with self.assertRaises(s2.NotSupportedError):
-            raise driver.convert_exception(
-                dbapi.NotSupportedError(*exc_args, **exc_kwargs),
-            )
-
-        with self.assertRaises(s2.ProgrammingError):
-            raise driver.convert_exception(
-                dbapi.ProgrammingError(*exc_args, **exc_kwargs),
-            )
-
-        with self.assertRaises(s2.InternalError):
-            raise driver.convert_exception(
-                dbapi.InternalError(*exc_args, **exc_kwargs),
-            )
-
-        with self.assertRaises(s2.IntegrityError):
-            raise driver.convert_exception(
-                dbapi.IntegrityError(*exc_args, **exc_kwargs),
-            )
-
-        with self.assertRaises(s2.OperationalError):
-            raise driver.convert_exception(
-                dbapi.OperationalError(*exc_args, **exc_kwargs),
-            )
-
-        with self.assertRaises(s2.DataError):
-            raise driver.convert_exception(
-                dbapi.DataError(*exc_args, **exc_kwargs),
-            )
-
-        with self.assertRaises(s2.DatabaseError):
-            raise driver.convert_exception(
-                dbapi.DatabaseError(*exc_args, **exc_kwargs),
-            )
-
-        with self.assertRaises(s2.InterfaceError):
-            raise driver.convert_exception(
-                dbapi.InterfaceError(*exc_args, **exc_kwargs),
-            )
-
-        with self.assertRaises(s2.Error):
-            raise driver.convert_exception(
-                dbapi.Error(*exc_args, **exc_kwargs),
-            )
-
-        if self.driver == 'mariadb':
-            with self.assertRaises(s2.Error):
-                raise driver.convert_exception(dbapi.Warning('hi there'))
-        else:
-            with self.assertRaises(s2.Warning):
-                raise driver.convert_exception(dbapi.Warning('hi there'))
-
     def test_name_check(self):
         nc = sc._name_check
         assert nc('foo') == 'foo'
@@ -1014,52 +879,31 @@ class TestConnection(unittest.TestCase):
         self.cur.execute('echo return_int()')
 
         out = self.cur.fetchall()
-        assert out == [(1234567890,)], out
-
-        # These take an extra `nextset` for some reason
-        if self.driver in [
-            'pymysql', 'clients.pymysqlsv',
-            'MySQLdb', 'cymysql', 'pyodbc',
-        ]:
-            self.cur.nextset()
+        assert list(out) == [(1234567890,)], out
 
         out = self.cur.nextset()
-        assert out is False, out
+        assert out is None, out
 
     def test_echo_with_result_set(self):
         self.cur.execute('echo result_set_and_return_int()')
 
         out = self.cur.fetchall()
-        assert out == [(5,)], out
-
-        if self.driver == 'mysql.connector' and s2.get_option('pure_python'):
-            warnings.warn(
-                'The mysql.connector in pure python mode does not '
-                'support multiple result sets.',
-            )
-            return
+        assert list(out) == [(5,)], out
 
         out = self.cur.nextset()
         assert out is True, out
 
         out = self.cur.fetchall()
-        assert out == [(1, 2, 3)], out
+        assert list(out) == [(1, 2, 3)], out
 
         out = self.cur.nextset()
         assert out is True, out
 
         out = self.cur.fetchall()
-        assert out == [(1234567890,)], out
-
-        # These take an extra `nextset` for some reason
-        if self.driver in [
-            'pymysql', 'clients.pymysqlsv',
-            'MySQLdb', 'cymysql', 'pyodbc',
-        ]:
-            self.cur.nextset()
+        assert list(out) == [(1234567890,)], out
 
         out = self.cur.nextset()
-        assert out is False, out
+        assert out is None, out
 
     def test_callproc(self):
         self.cur.callproc('get_animal', ['cats'])
@@ -1067,28 +911,21 @@ class TestConnection(unittest.TestCase):
         out = self.cur.fetchall()
         assert list(out) == [(5,)], out
 
-        if self.driver == 'mysql.connector' and s2.get_option('pure_python'):
-            warnings.warn(
-                'The mysql.connector in pure python mode does not '
-                'support multiple result sets.',
-            )
-            return
-
         out = self.cur.nextset()
         assert out is True, out
 
         out = self.cur.fetchall()
         assert list(out) == [(1, 2, 3)], out
 
-        # These take an extra `nextset` for some reason
-        if self.driver in [
-            'pymysql', 'clients.pymysqlsv',
-            'MySQLdb', 'cymysql', 'pyodbc',
-        ]:
-            self.cur.nextset()
+        out = self.cur.nextset()
+        assert out is True, out
+
+        # Always get an empty set at the end
+        out = self.cur.fetchall()
+        assert list(out) == [], out
 
         out = self.cur.nextset()
-        assert out is False, out
+        assert out is None, out
 
     def test_callproc_no_args(self):
         self.cur.callproc('no_args')
@@ -1096,57 +933,21 @@ class TestConnection(unittest.TestCase):
         out = self.cur.fetchall()
         assert list(out) == [(4, 5, 6)], out
 
-        # These take an extra `nextset` for some reason
-        if self.driver in [
-            'pymysql', 'clients.pymysqlsv',
-            'MySQLdb', 'cymysql', 'pyodbc',
-        ]:
-            self.cur.nextset()
+        out = self.cur.nextset()
+        assert out is True, out
+
+        # Always get an empty set at the end
+        out = self.cur.fetchall()
+        assert list(out) == [], out
 
         out = self.cur.nextset()
-        assert out is False, out
+        assert out is None, out
 
     def test_callproc_return_int(self):
         self.cur.callproc('result_set_and_return_int')
 
         out = self.cur.fetchall()
-        assert out == [(5,)], out
-
-        if self.driver == 'mysql.connector' and s2.get_option('pure_python'):
-            warnings.warn(
-                'The mysql.connector in pure python mode does not '
-                'support multiple result sets.',
-            )
-            return
-
-        out = self.cur.nextset()
-        assert out is True, out
-
-        out = self.cur.fetchall()
-        assert out == [(1, 2, 3)], out
-
-        # These take an extra `nextset` for some reason
-        if self.driver in [
-            'pymysql', 'clients.pymysqlsv',
-            'MySQLdb', 'cymysql', 'pyodbc',
-        ]:
-            self.cur.nextset()
-
-        out = self.cur.nextset()
-        assert out is False, out
-
-    def test_callproc_bad_args(self):
-        self.cur.callproc('get_animal', [10])
-
-        out = self.cur.fetchall()
-        assert list(out) == [], out
-
-        if self.driver == 'mysql.connector' and s2.get_option('pure_python'):
-            warnings.warn(
-                'The mysql.connector in pure python mode does not '
-                'support multiple result sets.',
-            )
-            return
+        assert list(out) == [(5,)], out
 
         out = self.cur.nextset()
         assert out is True, out
@@ -1154,15 +955,37 @@ class TestConnection(unittest.TestCase):
         out = self.cur.fetchall()
         assert list(out) == [(1, 2, 3)], out
 
-        # These take an extra `nextset` for some reason
-        if self.driver in [
-            'pymysql', 'clients.pymysqlsv',
-            'MySQLdb', 'cymysql', 'pyodbc',
-        ]:
-            self.cur.nextset()
+        out = self.cur.nextset()
+        assert out is True, out
+
+        # Always get an empty set at the end
+        out = self.cur.fetchall()
+        assert list(out) == [], out
 
         out = self.cur.nextset()
-        assert out is False, out
+        assert out is None, out
+
+    def test_callproc_bad_args(self):
+        self.cur.callproc('get_animal', [10])
+
+        out = self.cur.fetchall()
+        assert list(out) == [], out
+
+        out = self.cur.nextset()
+        assert out is True, out
+
+        out = self.cur.fetchall()
+        assert list(out) == [(1, 2, 3)], out
+
+        out = self.cur.nextset()
+        assert out is True, out
+
+        # Always get an empty set at the end
+        out = self.cur.fetchall()
+        assert list(out) == [], out
+
+        out = self.cur.nextset()
+        assert out is None, out
 
     def test_callproc_too_many_args(self):
         with self.assertRaises((
@@ -1189,37 +1012,36 @@ class TestConnection(unittest.TestCase):
     def test_cursor_close(self):
         self.cur.close()
 
-        with self.assertRaises(s2.InterfaceError):
-            self.cur.close()
+        self.cur.close()
 
-        with self.assertRaises(s2.InterfaceError):
+        with self.assertRaises(s2.ProgrammingError):
             self.cur.callproc('foo')
 
-        with self.assertRaises(s2.InterfaceError):
+        with self.assertRaises(s2.ProgrammingError):
             self.cur.execute('select 1')
 
-        with self.assertRaises(s2.InterfaceError):
-            self.cur.executemany('select 1')
+#       with self.assertRaises(s2.ProgrammingError):
+#           self.cur.executemany('select 1')
 
-        with self.assertRaises(s2.InterfaceError):
+        with self.assertRaises(s2.ProgrammingError):
             self.cur.fetchone()
 
-        with self.assertRaises(s2.InterfaceError):
+        with self.assertRaises(s2.ProgrammingError):
             self.cur.fetchall()
 
-        with self.assertRaises(s2.InterfaceError):
+        with self.assertRaises(s2.ProgrammingError):
             self.cur.fetchmany()
 
-        with self.assertRaises(s2.InterfaceError):
+        with self.assertRaises(s2.ProgrammingError):
             self.cur.nextset()
 
-        with self.assertRaises(s2.InterfaceError):
-            self.cur.setinputsizes([])
+#       with self.assertRaises(s2.ProgrammingError):
+#           self.cur.setinputsizes([])
 
-        with self.assertRaises(s2.InterfaceError):
-            self.cur.setoutputsize(10)
+#       with self.assertRaises(s2.ProgrammingError):
+#           self.cur.setoutputsize(10)
 
-        with self.assertRaises(s2.InterfaceError):
+        with self.assertRaises(s2.ProgrammingError):
             self.cur.scroll(2)
 
         with self.assertRaises(s2.InterfaceError):
@@ -1237,15 +1059,9 @@ class TestConnection(unittest.TestCase):
         self.cur.setinputsizes([10, 20, 30])
 
     def test_setoutputsize(self):
-        if self.driver in ['MySQLdb', 'pymysql', 'clients.pymysqlsv', 'cymysql']:
-            self.skipTest('outputsize is not supported')
-
         self.cur.setoutputsize(100)
 
     def test_scroll(self):
-        if self.driver in ['mysql.connector', 'pyodbc', 'mariadb', 'cymysql']:
-            self.skipTest('scroll is not supported')
-
         self.cur.execute('select * from data order by name')
 
         out = self.cur.fetchone()
@@ -1270,7 +1086,7 @@ class TestConnection(unittest.TestCase):
             self.cur.scroll(0, mode='badmode')
 
     def test_autocommit(self):
-        if self.driver in ['http', 'https']:
+        if self.conn.driver in ['http', 'https']:
             self.skipTest('Can not set autocommit in HTTP')
 
         orig = self.conn.locals.autocommit
@@ -1288,10 +1104,11 @@ class TestConnection(unittest.TestCase):
     def test_conn_close(self):
         self.conn.close()
 
-        self.conn.close()
+        with self.assertRaises(s2.Error):
+            self.conn.close()
 
         with self.assertRaises(s2.InterfaceError):
-            self.conn.autocommit()
+            self.conn.autocommit(False)
 
         with self.assertRaises(s2.InterfaceError):
             self.conn.commit()
@@ -1299,11 +1116,11 @@ class TestConnection(unittest.TestCase):
         with self.assertRaises(s2.InterfaceError):
             self.conn.rollback()
 
-        with self.assertRaises(s2.InterfaceError):
-            self.conn.cursor()
+#       with self.assertRaises(s2.InterfaceError):
+#           self.conn.cursor()
 
-        with self.assertRaises(s2.InterfaceError):
-            self.conn.messages
+#       with self.assertRaises(s2.InterfaceError):
+#           self.conn.messages
 
         with self.assertRaises(s2.InterfaceError):
             self.conn.globals.autocommit = True
@@ -1324,7 +1141,7 @@ class TestConnection(unittest.TestCase):
             self.conn.disable_data_api()
 
     def test_rollback(self):
-        if self.driver in ['http', 'https']:
+        if self.conn.driver in ['http', 'https']:
             self.skipTest('Can not set autocommit in HTTP')
 
         self.conn.autocommit(False)
@@ -1346,7 +1163,7 @@ class TestConnection(unittest.TestCase):
         assert len(out) == 5, len(out)
 
     def test_commit(self):
-        if self.driver in ['http', 'https']:
+        if self.conn.driver in ['http', 'https']:
             self.skipTest('Can not set autocommit in HTTP')
 
         self.conn.autocommit(False)
@@ -1395,7 +1212,7 @@ class TestConnection(unittest.TestCase):
         assert val == orig, val
 
     def test_session_var(self):
-        if self.driver in ['http', 'https']:
+        if self.conn.driver in ['http', 'https']:
             self.skipTest('Can not change session variable in HTTP')
 
         orig = self.conn.locals.enable_multipartition_queries
@@ -1413,7 +1230,7 @@ class TestConnection(unittest.TestCase):
         assert val == orig, val
 
     def test_local_infile(self):
-        if self.driver in ['http', 'https']:
+        if self.conn.driver in ['http', 'https']:
             self.skipTest('Can not load local files in HTTP')
 
         path = os.path.join(os.path.dirname(__file__), 'local_infile.csv')
@@ -1460,7 +1277,7 @@ class TestConnection(unittest.TestCase):
             254: upper,
         }
 
-        with s2.connect(database=type(self).dbname, converters=convs) as conn:
+        with s2.connect(database=type(self).dbname, conv=convs) as conn:
             with conn.cursor() as cur:
                 cur.execute('select * from alltypes where id = 0')
                 names = [x[0] for x in cur.description]
@@ -1490,47 +1307,47 @@ class TestConnection(unittest.TestCase):
                 assert row['tinytext'] == 'This is a tinytext column.', \
                     row['tinytext']
 
-    def test_results_format(self):
-        columns = [
-            'id', 'tinyint', 'unsigned_tinyint', 'bool', 'boolean',
-            'smallint', 'unsigned_smallint', 'mediumint', 'unsigned_mediumint',
-            'int24', 'unsigned_int24', 'int', 'unsigned_int',
-            'integer', 'unsigned_integer', 'bigint', 'unsigned_bigint',
-            'float', 'double', 'real', 'decimal', 'dec', 'fixed', 'numeric',
-            'date', 'time', 'time_6', 'datetime', 'datetime_6', 'timestamp',
-            'timestamp_6', 'year', 'char_100', 'binary_100', 'varchar_200',
-            'varbinary_200', 'longtext', 'mediumtext', 'text', 'tinytext',
-            'longblob', 'mediumblob', 'blob', 'tinyblob', 'json', 'enum',
-            'set', 'bit',
-        ]
+#   def test_results_format(self):
+#       columns = [
+#           'id', 'tinyint', 'unsigned_tinyint', 'bool', 'boolean',
+#           'smallint', 'unsigned_smallint', 'mediumint', 'unsigned_mediumint',
+#           'int24', 'unsigned_int24', 'int', 'unsigned_int',
+#           'integer', 'unsigned_integer', 'bigint', 'unsigned_bigint',
+#           'float', 'double', 'real', 'decimal', 'dec', 'fixed', 'numeric',
+#           'date', 'time', 'time_6', 'datetime', 'datetime_6', 'timestamp',
+#           'timestamp_6', 'year', 'char_100', 'binary_100', 'varchar_200',
+#           'varbinary_200', 'longtext', 'mediumtext', 'text', 'tinytext',
+#           'longblob', 'mediumblob', 'blob', 'tinyblob', 'json', 'enum',
+#           'set', 'bit',
+#       ]
 
-        with s2.connect(database=type(self).dbname, results_format='tuple') as conn:
-            with conn.cursor() as cur:
-                cur.execute('select * from alltypes')
-                out = cur.fetchall()
-                assert type(out[0]) is tuple, type(out[0])
-                assert len(out[0]) == len(columns), len(out[0])
+#       with s2.connect(database=type(self).dbname, results_format='tuple') as conn:
+#           with conn.cursor() as cur:
+#               cur.execute('select * from alltypes')
+#               out = cur.fetchall()
+#               assert type(out[0]) is tuple, type(out[0])
+#               assert len(out[0]) == len(columns), len(out[0])
 
-        with s2.connect(database=type(self).dbname, results_format='namedtuple') as conn:
-            with conn.cursor() as cur:
-                cur.execute('select * from alltypes')
-                out = cur.fetchall()
-                assert type(out[0]).__name__ == 'Row', type(out)
-                assert list(out[0]._fields) == columns, out[0]._fields
+#       with s2.connect(database=type(self).dbname, results_format='namedtuple') as conn:
+#           with conn.cursor() as cur:
+#               cur.execute('select * from alltypes')
+#               out = cur.fetchall()
+#               assert type(out[0]).__name__ == 'Row', type(out)
+#               assert list(out[0]._fields) == columns, out[0]._fields
 
-        with s2.connect(database=type(self).dbname, results_format='dict') as conn:
-            with conn.cursor() as cur:
-                cur.execute('select * from alltypes')
-                out = cur.fetchall()
-                assert type(out[0]) is dict, type(out)
-                assert list(out[0].keys()) == columns, out[0].keys()
+#       with s2.connect(database=type(self).dbname, results_format='dict') as conn:
+#           with conn.cursor() as cur:
+#               cur.execute('select * from alltypes')
+#               out = cur.fetchall()
+#               assert type(out[0]) is dict, type(out)
+#               assert list(out[0].keys()) == columns, out[0].keys()
 
-        with s2.connect(database=type(self).dbname, results_format='dataframe') as conn:
-            with conn.cursor() as cur:
-                cur.execute('select * from alltypes')
-                out = cur.fetchall()
-                assert type(out) is pd.DataFrame, type(out)
-                assert list(out.columns) == columns, out.columns
+#       with s2.connect(database=type(self).dbname, results_format='dataframe') as conn:
+#           with conn.cursor() as cur:
+#               cur.execute('select * from alltypes')
+#               out = cur.fetchall()
+#               assert type(out) is pd.DataFrame, type(out)
+#               assert list(out.columns) == columns, out.columns
 
 
 if __name__ == '__main__':

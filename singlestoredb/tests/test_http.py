@@ -30,9 +30,9 @@ class TestHTTP(unittest.TestCase):
     def setUp(self):
         self.conn = self._connect()
         self.cur = self.conn.cursor()
-        if self.params['protocol'] not in ['http', 'https']:
+        if self.params['driver'] not in ['http', 'https']:
             self.skipTest('Tests must be run using HTTP connection')
-        self.driver = self.params['protocol'] or 'http'
+        self.driver = self.params['driver'] or 'http'
 
     def _connect(self):
         params = sc.build_params(host=config.get_option('host'))
@@ -42,7 +42,7 @@ class TestHTTP(unittest.TestCase):
                 port=params.get('port'),
                 user=params.get('user'),
                 password=params.get('password'),
-                protocol=params.get('driver'),
+                driver=params.get('driver'),
             ).items() if v is not None
         }
         return http.connect(database=type(self).dbname, **self.params)
@@ -63,56 +63,62 @@ class TestHTTP(unittest.TestCase):
             pass
 
     def test_get_exc_type(self):
-        exc = http.get_exc_type(0)
+        exc = http.connection.get_exc_type(0)
         assert exc is http.InterfaceError, exc
 
-        exc = http.get_exc_type(2012)
+        exc = http.connection.get_exc_type(2012)
         assert exc is http.InterfaceError, exc
 
-        exc = http.get_exc_type(1230)
+        exc = http.connection.get_exc_type(1230)
         assert exc is http.DataError, exc
 
-        exc = http.get_exc_type(1110)
+        exc = http.connection.get_exc_type(1110)
         assert exc is http.ProgrammingError, exc
 
-        exc = http.get_exc_type(1452)
+        exc = http.connection.get_exc_type(1452)
         assert exc is http.IntegrityError, exc
 
-        exc = http.get_exc_type(9999)
+        exc = http.connection.get_exc_type(9999)
         assert exc is http.OperationalError, exc
 
-        exc = http.get_exc_type(222)
+        exc = http.connection.get_exc_type(222)
         assert exc is http.InternalError, exc
 
     def test_identity(self):
-        out = http.identity(1)
+        out = http.connection.identity(1)
         assert out == 1, out
 
-        out = http.identity('hi')
+        out = http.connection.identity('hi')
         assert out == 'hi', out
 
     def test_b64decode_converter(self):
         data = base64.b64encode(b'hi there')
         assert type(data) is bytes, type(data)
 
-        out = http.b64decode_converter(http.identity, None)
+        out = http.connection.b64decode_converter(http.connection.identity, None)
         assert out is None, out
 
-        out = http.b64decode_converter(http.identity, data)
+        out = http.connection.b64decode_converter(http.connection.identity, data)
         assert out == b'hi there', out
 
-        out = http.b64decode_converter(http.identity, str(data, 'utf8'))
+        out = http.connection.b64decode_converter(
+            http.connection.identity,
+            str(data, 'utf8'),
+        )
         assert out == b'hi there', out
 
     def test_executemany(self):
-        self.cur.executemany('select * from data where id < ?', [['d'], ['e']])
+        self.cur.executemany(
+            'select * from data where id < :id',
+            [dict(id='d'), dict(id='e')],
+        )
 
         assert self.cur.rownumber == 0, self.cur.rownumber
 
         # First set
         out = self.cur.fetchall()
 
-        assert self.cur.rownumber is None, self.cur.rownumber
+        assert self.cur.rownumber == 3, self.cur.rownumber
 
         desc = self.cur.description
         rowcount = self.cur.rowcount
@@ -161,7 +167,7 @@ class TestHTTP(unittest.TestCase):
         assert desc[2][1] == 8, desc[2][1]
 
         out = self.cur.nextset()
-        assert out is False, out
+        assert out is None, out
 
     def test_executemany_no_args(self):
         self.cur.executemany('select * from data where id < "d"')
@@ -190,7 +196,7 @@ class TestHTTP(unittest.TestCase):
         assert desc[2][1] == 8, desc[2][1]
 
         out = self.cur.nextset()
-        assert out is False, out
+        assert out is None, out
 
     def test_is_connected(self):
         assert self.cur.is_connected() is True
@@ -201,18 +207,18 @@ class TestHTTP(unittest.TestCase):
         self.cur.close()
         assert self.cur.is_connected() is False
 
-        with self.assertRaises(http.InterfaceError):
+        with self.assertRaises(http.ProgrammingError):
             self.cur.execute('select 1')
 
-        with self.assertRaises(http.InterfaceError):
+        with self.assertRaises(http.ProgrammingError):
             self.cur.executemany('select 1')
 
-        with self.assertRaises(http.InterfaceError):
+        with self.assertRaises(http.ProgrammingError):
             self.cur.callproc('get_animal', ['cats'])
 
-    def test_callproc(self):
-        with self.assertRaises(NotImplementedError):
-            self.cur.callproc('get_animal', ['cats'])
+#   def test_callproc(self):
+#       with self.assertRaises(NotImplementedError):
+#           self.cur.callproc('get_animal', ['cats'])
 
     def test_iter(self):
         self.cur.execute('select * from data')

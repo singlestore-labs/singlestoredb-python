@@ -54,7 +54,7 @@ register_option(
 )
 
 register_option(
-    'driver', 'string', check_str, 'pymysqlsv',
+    'driver', 'string', check_str, 'mysql',
     'Specifies the Python DB-API module to use for communicating'
     'with the database.',
     environ='SINGLESTOREDB_DRIVER',
@@ -82,12 +82,6 @@ register_option(
     'local_infile', 'bool', check_bool, False,
     'Should it be possible to load local files?',
     environ='SINGLESTOREDB_LOCAL_INFILE',
-)
-
-register_option(
-    'odbc_driver', 'str', check_str, 'SingleStore ODBC 1.0 Unicode Driver',
-    'Name of the ODBC driver for ODBC connections',
-    environ='SINGLESTOREDB_ODBC_DRIVER',
 )
 
 register_option(

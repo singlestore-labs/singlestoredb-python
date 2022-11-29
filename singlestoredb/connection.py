@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """SingleStoreDB connections and cursors."""
+import abc
 import inspect
 import pprint
 import re
 import weakref
-from collections import namedtuple
 from collections.abc import Mapping
 from collections.abc import MutableMapping
 from typing import Any
@@ -28,15 +28,9 @@ except ImportError:
             pass
 
 from . import auth
-from . import drivers
 from . import exceptions
-from . import types
 from .config import get_option
-from .drivers.base import Driver
-from .utils.convert_rows import convert_row
-from .utils.convert_rows import convert_rows
 from .utils.results import Description
-from .utils.results import format_results
 from .utils.results import Result
 
 
@@ -127,10 +121,8 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
 
     # Set known parameters
     for name in inspect.getfullargspec(connect).args:
-        if name == 'converters':
-            out[name] = kwargs.get(name, {})
-        elif name == 'results_format':
-            out[name] = kwargs.get(name, get_option('results.format'))
+        if name == 'conv':
+            out[name] = kwargs.get(name, None)
         else:
             out[name] = kwargs.get(name, get_option(name))
 
@@ -330,30 +322,29 @@ class VariableAccessor(MutableMapping):  # type: ignore
 
     def __getitem__(self, name: str) -> Any:
         name = _name_check(name)
-        with self.connection._i_cursor() as cur:
-            cur.execute('show {} variables like "{}";'.format(self.vtype, name))
-            out = list(cur)
-            if not out:
-                raise KeyError(f"No variable found with the name '{name}'.")
-            if len(out) > 1:
-                raise KeyError(f"Multiple variables found with the name '{name}'.")
-            return self._cast_value(out[0][1])
+        out = self.connection._iquery(
+            'show {} variables like "{}";'.format(self.vtype, name),
+        )
+        if not out:
+            raise KeyError(f"No variable found with the name '{name}'.")
+        if len(out) > 1:
+            raise KeyError(f"Multiple variables found with the name '{name}'.")
+        return self._cast_value(out[0]['Value'])
 
     def __setitem__(self, name: str, value: Any) -> None:
         name = _name_check(name)
-        with self.connection._i_cursor() as cur:
-            if value is True:
-                value = 'ON'
-            elif value is False:
-                value = 'OFF'
-            if 'local' in self.vtype:
-                cur.execute(
-                    'set {} {}=:1;'.format(
-                        self.vtype.replace('local', 'session'), name,
-                    ), [value],
-                )
-            else:
-                cur.execute('set {} {}=:1;'.format(self.vtype, name), [value])
+        if value is True:
+            value = 'ON'
+        elif value is False:
+            value = 'OFF'
+        if 'local' in self.vtype:
+            self.connection._iquery(
+                'set {} {}=:1;'.format(
+                    self.vtype.replace('local', 'session'), name,
+                ), [value],
+            )
+        else:
+            self.connection._iquery('set {} {}=:1;'.format(self.vtype, name), [value])
 
     def __delitem__(self, name: str) -> None:
         raise TypeError('Variables can not be deleted.')
@@ -368,17 +359,15 @@ class VariableAccessor(MutableMapping):  # type: ignore
         del self[name]
 
     def __len__(self) -> int:
-        with self.connection._i_cursor() as cur:
-            cur.execute('show {} variables;'.format(self.vtype))
-            return len(list(cur))
+        out = self.connection._iquery('show {} variables;'.format(self.vtype))
+        return len(list(out))
 
     def __iter__(self) -> Iterator[str]:
-        with self.connection._i_cursor() as cur:
-            cur.execute('show {} variables;'.format(self.vtype))
-            return iter(x[0] for x in list(cur))
+        out = self.connection._iquery('show {} variables;'.format(self.vtype))
+        return iter(list(x.keys())[0] for x in out)
 
 
-class Cursor(object):
+class Cursor(metaclass=abc.ABCMeta):
     """
     Database cursor for submitting commands and queries.
 
@@ -387,21 +376,16 @@ class Cursor(object):
 
     """
 
-    def __init__(
-            self, connection: 'Connection', cursor: Any, driver: Driver,
-    ):
+    def __init__(self, connection: 'Connection'):
         """Call ``Connection.cursor`` instead."""
         self.errorhandler = connection.errorhandler
-        self._results_format: str = connection.results_format
-        self._conn: Optional[Connection] = weakref.proxy(connection)
-        self._cursor = cursor
-        self._driver = driver
+        self._connection: Optional[Connection] = weakref.proxy(connection)
 
         #: Current row of the cursor.
-        self.rownumber: Optional[int] = None
+        self._rownumber: Optional[int] = None
 
         #: Description of columns in the last executed query.
-        self.description: Optional[List[Description]] = None
+        self._description: Optional[List[Description]] = None
 
         #: Default batch size of ``fetchmany`` calls.
         self.arraysize = get_option('results.arraysize')
@@ -417,10 +401,25 @@ class Cursor(object):
         self.rowcount: int = -1
 
         #: Messages generated during last query.
-        self.messages: List[str] = []
+        self._messages: List[Tuple[int, str]] = []
 
         #: Row ID of the last modified row.
         self.lastrowid: Optional[int] = None
+
+    @property
+    def messages(self) -> List[Tuple[int, str]]:
+        """Messages created by the server."""
+        return self._messages
+
+    @abc.abstractproperty
+    def description(self) -> Optional[List[Description]]:
+        """Return the field descriptions of the last query."""
+        return self._description
+
+    @abc.abstractproperty
+    def rownumber(self) -> Optional[int]:
+        """Return the last modified row number."""
+        return self._rownumber
 
     @property
     def connection(self) -> Optional['Connection']:
@@ -432,73 +431,12 @@ class Cursor(object):
         Connection or None
 
         """
-        return self._conn
+        return self._connection
 
-    def _set_description(self) -> None:
-        """
-        Return column descriptions for the current result set.
-
-        Returns
-        -------
-        list of Description
-
-        """
-        if self._cursor.description:
-            self._converters.clear()
-            out = []
-            for i, item in enumerate(self._cursor.description):
-                item = list(item) + [None, None]
-                item[1] = types.ColumnType.get_code(item[1])
-                item[6] = not (not (item[6]))
-                out.append(Description(*item[:9]))
-
-                # Setup override converters, if the SET flag is set use that
-                # converter but keep the same type code.
-                if item[7] and item[7] & 2048:  # SET_FLAG = 2048
-                    conv = self._driver.converters.get(247, None)  # SET CODE = 247
-                else:
-                    conv = self._driver.converters.get(item[1], None)
-
-                encoding = None
-
-                # Determine proper encoding for character fields as needed
-                if self._driver.returns_bytes:
-                    if item[1] in CHAR_COLUMNS:
-                        if item[8] and item[8] == 63:  # BINARY / BLOB
-                            pass
-                        elif self._conn is not None:
-                            encoding = self._conn.encoding
-                        else:
-                            encoding = 'utf-8'
-                    elif item[1] == 16:  # BIT
-                        pass
-                    else:
-                        encoding = 'ascii'
-
-                if conv is not None:
-                    self._converters.append((i, encoding, conv))
-                elif encoding is not None:
-                    self._converters.append((i, encoding, None))
-
-            self.description = out
-
-    def _update_attrs(self) -> None:
-        """Update cursor attributes from the last query."""
-        if self._cursor is None:
-            return
-        self.messages[:] = getattr(self._cursor, 'messages', [])
-        self.lastrowid = getattr(
-            self._cursor, 'lastrowid',
-            getattr(self._cursor, '_lastrowid', None),
-        ) or None
-        self.rowcount = getattr(
-            self._cursor, 'rowcount',
-            getattr(self._cursor, '_rowcount', -1),
-        )
-
+    @abc.abstractmethod
     def callproc(
         self, name: str,
-        params: Optional[Sequence[Any]] = None,
+        params: Optional[Union[List[Any], Dict[str, Any]]] = None,
     ) -> None:
         """
         Call a stored procedure.
@@ -513,14 +451,14 @@ class Cursor(object):
         ----------
         name : str
             Name of the stored procedure
-        params : iterable,  optional
+        params : iterable, optional
             Parameters to the stored procedure
 
         """
         # NOTE: The `callproc` interface varies quite a bit between drivers
         #       so it is implemented using `execute` here.
 
-        if self._cursor is None:
+        if not self.is_connected():
             raise exceptions.InterfaceError(2048, 'Cursor is closed.')
 
         name = _name_check(name)
@@ -531,28 +469,20 @@ class Cursor(object):
             keys = ', '.join([f':{i+1}' for i in range(len(params))])
             self.execute(f'CALL {name}({keys});', params)
 
+    @abc.abstractmethod
+    def is_connected(self) -> bool:
+        """Is the cursor still connected?"""
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def close(self) -> None:
         """Close the cursor."""
-        if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
+        raise NotImplementedError
 
-        try:
-            self._cursor.close()
-
-        # Ignore weak reference errors. It just means the connection
-        # was closed underneath us.
-        except ReferenceError:
-            pass
-
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
-
-        self._cursor = None
-        self._conn = None
-
+    @abc.abstractmethod
     def execute(
         self, oper: str,
-        params: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
+        params: Optional[Union[Sequence[Any], Dict[str, Any], Any]] = None,
     ) -> None:
         """
         Execute a SQL statement.
@@ -565,33 +495,11 @@ class Cursor(object):
             Parameters to substitute into the SQL code
 
         """
-        if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
-
-        self.description = None
-        self.rownumber = None
-
-        try:
-            if params:
-                param_converter = sqlparams.SQLParams(
-                    isinstance(params, Mapping) and
-                    map_paramstyle or positional_paramstyle,
-                    self._driver.dbapi.paramstyle,
-                    escape_char=True,
-                )
-                self._cursor.execute(*param_converter.format(oper, params))
-            else:
-                self._cursor.execute(oper)
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
-
-        self._set_description()
-        self._update_attrs()
-        self.rownumber = 0
+        raise NotImplementedError
 
     def executemany(
         self, oper: str,
-        param_seq: Optional[Sequence[Union[Sequence[Any], Dict[str, Any]]]] = None,
+        param_seq: Optional[Sequence[Union[Sequence[Any], Dict[str, Any], Any]]] = None,
     ) -> None:
         """
         Execute SQL code against multiple sets of parameters.
@@ -604,37 +512,14 @@ class Cursor(object):
             Sets of parameters to substitute into the SQL code
 
         """
-        if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
-
-        self.description = None
-        self.rownumber = None
-
-        is_dataframe = False
-        if isinstance(param_seq, DataFrame):
-            is_dataframe = True
+        # NOTE: Just implement using `execute` to cover driver inconsistencies
+        if not param_seq:
+            self.execute(oper)
         else:
-            param_seq = param_seq or [[]]
+            for params in param_seq:
+                self.execute(oper, params)
 
-        try:
-            # NOTE: Just implement using `execute` to cover driver inconsistencies
-            if is_dataframe:
-                for params in param_seq.itertuples(index=False):
-                    self.execute(oper, params)
-
-            elif param_seq[0]:
-                for params in param_seq:
-                    self.execute(oper, params)
-            else:
-                self.execute(oper)
-
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
-
-        self._set_description()
-        self._update_attrs()
-        self.rownumber = 0
-
+    @abc.abstractmethod
     def fetchone(self) -> Optional[Result]:
         """
         Fetch a single row from the result set.
@@ -645,26 +530,9 @@ class Cursor(object):
             Values of the returned row if there are rows remaining
 
         """
-        if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
+        raise NotImplementedError
 
-        try:
-            out = self._cursor.fetchone()
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
-
-        if out is not None and self.rownumber is not None:
-            self.rownumber += 1
-
-        if out is not None:
-            out = convert_row(tuple(out), self._converters)
-
-        return format_results(
-            self._results_format,
-            self.description or [],
-            out, single=True,
-        )
-
+    @abc.abstractmethod
     def fetchmany(self, size: Optional[int] = None) -> Result:
         """
         Fetch `size` rows from the result.
@@ -677,36 +545,9 @@ class Cursor(object):
             Values of the returned rows if there are rows remaining
 
         """
-        if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
+        raise NotImplementedError
 
-        if size is not None:
-            size = max(int(size), 1)
-        else:
-            size = max(int(self.arraysize), 1)
-
-        try:
-            # This is to get around a bug in mysql.connector. For some reason,
-            # fetchmany(1) returns the same row over and over again.
-            if size == 1:
-                out = [self._cursor.fetchone()]
-            else:
-                # Don't use a keyword parameter for size=. Pyodbc fails with that.
-                out = self._cursor.fetchmany(size)
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
-
-        out = convert_rows(out, self._converters)
-
-        formatted: Result = format_results(
-            self._results_format, self.description or [], out,
-        )
-
-        if self.rownumber is not None:
-            self.rownumber += len(formatted)
-
-        return formatted
-
+    @abc.abstractmethod
     def fetchall(self) -> Result:
         """
         Fetch all rows in the result set.
@@ -719,25 +560,9 @@ class Cursor(object):
             If there are no rows to return
 
         """
-        if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
+        raise NotImplementedError
 
-        try:
-            out = self._cursor.fetchall()
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
-
-        out = convert_rows(out, self._converters)
-
-        formatted: Result = format_results(
-            self._results_format, self.description or [], out,
-        )
-
-        if self.rownumber is not None:
-            self.rownumber += len(formatted)
-
-        return formatted
-
+    @abc.abstractmethod
     def nextset(self) -> Optional[bool]:
         """
         Skip to the next available result set.
@@ -750,46 +575,19 @@ class Cursor(object):
             If no other result set is available
 
         """
-        if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
+        raise NotImplementedError
 
-        self.rownumber = None
-
-        try:
-            out = self._cursor.nextset()
-            self._set_description()
-            if out:
-                self.rownumber = 0
-                return True
-            return False
-
-        except Exception as exc:
-            exc = self._driver.convert_exception(exc)
-            if getattr(exc, 'errno', -1) == 2053:
-                return False
-            self.rownumber = 0
-            return True
-
+    @abc.abstractmethod
     def setinputsizes(self, sizes: Sequence[int]) -> None:
         """Predefine memory areas for parameters."""
-        if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
+        raise NotImplementedError
 
-        try:
-            self._cursor.setinputsizes(sizes)
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
-
+    @abc.abstractmethod
     def setoutputsize(self, size: int, column: Optional[str] = None) -> None:
         """Set a column buffer size for fetches of large columns."""
-        if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
+        raise NotImplementedError
 
-        try:
-            self._cursor.setoutputsize(size, column)
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
-
+    @abc.abstractmethod
     def scroll(self, value: int, mode: str = 'relative') -> None:
         """
         Scroll the cursor to the position in the result set.
@@ -802,21 +600,7 @@ class Cursor(object):
             Where to move the cursor from: 'relative' or 'absolute'
 
         """
-        if self._cursor is None:
-            raise exceptions.InterfaceError(2048, 'Cursor is closed.')
-
-        value = int(value)
-        try:
-            self._cursor.scroll(value, mode=mode)
-            if self.rownumber is not None:
-                if mode == 'relative':
-                    self.rownumber += value
-                elif mode == 'absolute':
-                    self.rownumber = value
-                else:
-                    raise ValueError(f'Unrecognized scroll mode {mode}')
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
+        raise NotImplementedError
 
     def next(self) -> Optional[Result]:
         """
@@ -832,18 +616,12 @@ class Cursor(object):
         tuple of values
 
         """
-        if self._cursor is None:
+        if not self.is_connected():
             raise exceptions.InterfaceError(2048, 'Cursor is closed.')
-
-        try:
-            out = self.fetchone()
-            if out is None:
-                raise StopIteration
-            return out
-        except StopIteration:
-            raise
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
+        out = self.fetchone()
+        if out is None:
+            raise StopIteration
+        return out
 
     __next__ = next
 
@@ -862,19 +640,6 @@ class Cursor(object):
         """Exit a context."""
         self.close()
 
-    def is_connected(self) -> bool:
-        """
-        Check if the cursor is connected.
-
-        Returns
-        -------
-        bool
-
-        """
-        if self._conn is None:
-            return False
-        return self._conn.is_connected()
-
 
 class ShowResult(Sequence[Any]):
     """
@@ -890,7 +655,7 @@ class ShowResult(Sequence[Any]):
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self._data: List[Any] = []
+        self._data: List[Dict[str, Any]] = []
         item: Any = None
         for item in list(*args, **kwargs):
             self._data.append(item)
@@ -926,14 +691,14 @@ class ShowResult(Sequence[Any]):
         out.append('<table>')
         out.append('<thead>')
         out.append('<tr>')
-        for name in self._data[0]._fields:
+        for name in self._data[0].keys():
             out.append(f'<th {cell_style}>{name}</th>')
         out.append('</tr>')
         out.append('</thead>')
         out.append('<tbody>')
         for row in self._data:
             out.append('<tr>')
-            for item in row:
+            for item in row.values():
                 out.append(f'<td {cell_style}>{item}</td>')
             out.append('</tr>')
         out.append('</tbody>')
@@ -951,146 +716,137 @@ class ShowAccessor(object):
         """Show the column information for the given table."""
         table = quote_identifier(table)
         if full:
-            return self._query(f'full columns in {table}')
-        return self._query(f'columns in {table}')
+            return self._iquery(f'full columns in {table}')
+        return self._iquery(f'columns in {table}')
 
     def tables(self, extended: bool = False) -> ShowResult:
         """Show tables in the current database."""
         if extended:
-            return self._query('tables extended')
-        return self._query('tables')
+            return self._iquery('tables extended')
+        return self._iquery('tables')
 
     def warnings(self) -> ShowResult:
         """Show warnings."""
-        return self._query('warnings')
+        return self._iquery('warnings')
 
     def errors(self) -> ShowResult:
         """Show errors."""
-        return self._query('errors')
+        return self._iquery('errors')
 
     def databases(self, extended: bool = False) -> ShowResult:
         """Show all databases in the server."""
         if extended:
-            return self._query('databases extended')
-        return self._query('databases')
+            return self._iquery('databases extended')
+        return self._iquery('databases')
 
     def database_status(self) -> ShowResult:
         """Show status of the current database."""
-        return self._query('database status')
+        return self._iquery('database status')
 
     def global_status(self) -> ShowResult:
         """Show global status of the current server."""
-        return self._query('global status')
+        return self._iquery('global status')
 
     def indexes(self, table: str) -> ShowResult:
         """Show all indexes in the given table."""
         table = quote_identifier(table)
-        return self._query('indexes in {table}')
+        return self._iquery('indexes in {table}')
 
     def functions(self) -> ShowResult:
         """Show all functions in the current database."""
-        return self._query('functions')
+        return self._iquery('functions')
 
     def partitions(self, extended: bool = False) -> ShowResult:
         """Show partitions in the current database."""
         if extended:
-            return self._query('partitions extended')
-        return self._query('partitions')
+            return self._iquery('partitions extended')
+        return self._iquery('partitions')
 
     def pipelines(self) -> ShowResult:
         """Show all pipelines in the current database."""
-        return self._query('pipelines')
+        return self._iquery('pipelines')
 
     def plan(self, plan_id: str, json: bool = False) -> ShowResult:
         """Show the plan for the given plan ID."""
         plan_id = quote_identifier(plan_id)
         if json:
-            return self._query(f'plan json {plan_id}')
-        return self._query(f'plan {plan_id}')
+            return self._iquery(f'plan json {plan_id}')
+        return self._iquery(f'plan {plan_id}')
 
     def plancache(self) -> ShowResult:
         """Show all query statements compiled and executed."""
-        return self._query('plancache')
+        return self._iquery('plancache')
 
     def processlist(self) -> ShowResult:
         """Show details about currently running threads."""
-        return self._query('processlist')
+        return self._iquery('processlist')
 
     def reproduction(self, outfile: Optional[str] = None) -> ShowResult:
         """Show troubleshooting data for query optimizer and code generation."""
         if outfile:
             outfile = outfile.replace('"', r'\"')
-            return self._query('reproduction into outfile "{outfile}"')
-        return self._query('reproduction')
+            return self._iquery('reproduction into outfile "{outfile}"')
+        return self._iquery('reproduction')
 
     def schemas(self) -> ShowResult:
         """Show schemas in the server."""
-        return self._query('schemas')
+        return self._iquery('schemas')
 
     def session_status(self) -> ShowResult:
         """Show server status information for a session."""
-        return self._query('session status')
+        return self._iquery('session status')
 
     def status(self, extended: bool = False) -> ShowResult:
         """Show server status information."""
         if extended:
-            return self._query('status extended')
-        return self._query('status')
+            return self._iquery('status extended')
+        return self._iquery('status')
 
     def table_status(self) -> ShowResult:
         """Show table status information for the current database."""
-        return self._query('table status')
+        return self._iquery('table status')
 
     def procedures(self) -> ShowResult:
         """Show all procedures in the current database."""
-        return self._query('procedures')
+        return self._iquery('procedures')
 
     def aggregates(self) -> ShowResult:
         """Show all aggregate functions in the current database."""
-        return self._query('aggregates')
+        return self._iquery('aggregates')
 
     def create_aggregate(self, name: str) -> ShowResult:
         """Show the function creation code for the given aggregate function."""
         name = quote_identifier(name)
-        return self._query(f'create aggregate {name}')
+        return self._iquery(f'create aggregate {name}')
 
     def create_function(self, name: str) -> ShowResult:
         """Show the function creation code for the given function."""
         name = quote_identifier(name)
-        return self._query(f'create function {name}')
+        return self._iquery(f'create function {name}')
 
     def create_pipeline(self, name: str, extended: bool = False) -> ShowResult:
         """Show the pipeline creation code for the given pipeline."""
         name = quote_identifier(name)
         if extended:
-            return self._query(f'create pipeline {name} extended')
-        return self._query(f'create pipeline {name}')
+            return self._iquery(f'create pipeline {name} extended')
+        return self._iquery(f'create pipeline {name}')
 
     def create_table(self, name: str) -> ShowResult:
         """Show the table creation code for the given table."""
         name = quote_identifier(name)
-        return self._query(f'create table {name}')
+        return self._iquery(f'create table {name}')
 
     def create_view(self, name: str) -> ShowResult:
         """Show the view creation code for the given view."""
         name = quote_identifier(name)
-        return self._query(f'create view {name}')
+        return self._iquery(f'create view {name}')
 
-    def _query(self, qtype: str) -> ShowResult:
+    def _iquery(self, qtype: str) -> ShowResult:
         """Query the given object type."""
-        with self._conn._i_cursor() as cur:
-            cur.execute(f'show {qtype}')
-            out = []
-            if cur.description:
-                names = [under2camel(str(x[0]).replace(' ', '')) for x in cur.description]
-                names[0] = 'Name'
-                item_type = namedtuple('Row', names)  # type: ignore
-                for item in cur.fetchall():
-                    out.append(item_type(*item))
-            return ShowResult(out)
+        return ShowResult(self._conn._iquery(f'show {qtype}'))
 
 
-class Connection(object):
+class Connection(metaclass=abc.ABCMeta):
     """
     SingleStoreDB connection.
 
@@ -1115,20 +871,16 @@ class Connection(object):
     ProgrammingError = exceptions.ProgrammingError
     NotSupportedError = exceptions.NotSupportedError
 
+    paramstyle = 'named'
+
     def __init__(self, **kwargs: Any):
         """Call :func:`singlestoredb.connect` instead."""
-        self._conn: Optional[Any] = None
+        self.connection_params: Dict[str, Any] = kwargs
         self.errorhandler = None
-        self.connection_params: Dict[str, Any] = build_params(**kwargs)
-
-        #: Query results format ('tuple', 'namedtuple', 'dict', 'dataframe')
-        self.results_format = self.connection_params.pop(
-            'results_format',
-            get_option('results.format'),
-        )
 
         #: Session encoding
-        self.encoding = self.connection_params.get('charset', 'utf-8').replace('mb4', '')
+        self.encoding = self.connection_params.get('charset', None) or 'utf-8'
+        self.encoding = self.encoding.replace('mb4', '')
 
         # Handle various authentication types
         credential_type = self.connection_params.get('credential_type', None)
@@ -1137,14 +889,6 @@ class Connection(object):
             info = auth.get_jwt(self.connection_params['user'])
             self.connection_params['password'] = str(info)
             self.connection_params['credential_type'] = auth.JWT
-
-        drv_name = re.sub(r'^\w+\+', r'', self.connection_params['driver']).lower()
-        self._driver = drivers.get_driver(drv_name, self.connection_params)
-
-        try:
-            self._conn = self._driver.connect()
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
 
         #: Attribute-like access to global server variables
         self.globals = VariableAccessor(self, 'global')
@@ -1164,41 +908,73 @@ class Connection(object):
         #: Attribute-like access to all cluster server variables
         self.cluster_vars = VariableAccessor(self, 'cluster')
 
+    @classmethod
+    def _convert_params(
+        cls, oper: str,
+        params: Optional[Union[Sequence[Any], Dict[str, Any], Any]],
+    ) -> Tuple[Any, ...]:
+        """Convert query to correct parameter format."""
+        if params:
+            is_sequence = isinstance(params, Sequence) \
+                and not isinstance(params, str) \
+                and not isinstance(params, bytes)
+            is_mapping = isinstance(params, Mapping)
+            param_converter = sqlparams.SQLParams(
+                is_mapping and map_paramstyle or positional_paramstyle,
+                cls.paramstyle,
+                escape_char=True,
+            )
+            if not is_sequence and not is_mapping:
+                params = [params]
+            return param_converter.format(oper, params)
+        return (oper, None)
+
     def autocommit(self, value: bool = True) -> None:
         """Set autocommit mode."""
-        if self._conn is None:
-            raise exceptions.InterfaceError(2048, 'Connection is closed.')
         self.locals.autocommit = bool(value)
 
+    @abc.abstractmethod
+    def connect(self) -> 'Connection':
+        """Connect to the server."""
+        raise NotImplementedError
+
+    def _iquery(
+        self, oper: str,
+        params: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
+        fix_names: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Return the results of a query as a list of dicts (for internal use)."""
+        with self.cursor() as cur:
+            cur.execute(oper, params)
+            out = list(cur.fetchall())
+            if not out:
+                return []
+            if isinstance(out, DataFrame):
+                out = out.to_dict(orient='records')
+            elif isinstance(out[0], (tuple, list)):
+                if cur.description:
+                    names = [x[0] for x in cur.description]
+                    if fix_names:
+                        names = [under2camel(str(x).replace(' ', '')) for x in names]
+                    out = [{k: v for k, v in zip(names, row)} for row in out]
+            return out
+
+    @abc.abstractmethod
     def close(self) -> None:
         """Close the database connection."""
-        if self._conn is None:
-            return None
-        try:
-            self._conn.close()
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
-        finally:
-            self._conn = None
+        raise NotImplementedError
 
+    @abc.abstractmethod
     def commit(self) -> None:
         """Commit the pending transaction."""
-        if self._conn is None:
-            raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        try:
-            self._conn.commit()
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
+        raise NotImplementedError
 
+    @abc.abstractmethod
     def rollback(self) -> None:
         """Rollback the pending transaction."""
-        if self._conn is None:
-            raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        try:
-            self._conn.rollback()
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
+        raise NotImplementedError
 
+    @abc.abstractmethod
     def cursor(self) -> Cursor:
         """
         Create a new cursor object.
@@ -1212,34 +988,10 @@ class Connection(object):
         :class:`Cursor`
 
         """
-        if self._conn is None:
-            raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        try:
-            cur = self._conn.cursor()
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
-        return Cursor(self, cur, self._driver)
+        raise NotImplementedError
 
-    def _i_cursor(self) -> Cursor:
-        """
-        Create a cursor for internal use.
-
-        Internal cursors always return tuples in results.
-        These are used to ensure that methods that query the database
-        have a consistent results structure regardless of the
-        `results.format` option.
-
-        Returns
-        -------
-        Cursor
-
-        """
-        out = self.cursor()
-        out._results_format = 'tuple'
-        return out
-
-    @property
-    def messages(self) -> Sequence[Tuple[int, str]]:
+    @abc.abstractproperty
+    def messages(self) -> List[Tuple[int, str]]:
         """
         Return messages generated by the connection.
 
@@ -1249,9 +1001,7 @@ class Connection(object):
             Each tuple contains an int code and a message
 
         """
-        if self._conn is None:
-            raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        return self._conn.messages
+        raise NotImplementedError
 
     def __enter__(self) -> 'Connection':
         """Enter a context."""
@@ -1264,6 +1014,7 @@ class Connection(object):
         """Exit a context."""
         self.close()
 
+    @abc.abstractmethod
     def is_connected(self) -> bool:
         """
         Determine if the database is still connected.
@@ -1273,12 +1024,7 @@ class Connection(object):
         bool
 
         """
-        if self._conn is None:
-            return False
-        try:
-            return self._driver.is_connected(self._conn)
-        except Exception as exc:
-            raise self._driver.convert_exception(exc)
+        raise NotImplementedError
 
     def enable_data_api(self, port: Optional[int] = None) -> int:
         """
@@ -1304,14 +1050,11 @@ class Connection(object):
             port number of the HTTP server
 
         """
-        if self._conn is None:
-            raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        with self._i_cursor() as cur:
-            if port is not None:
-                self.globals.http_proxy_port = int(port)
-            self.globals.http_api = True
-            cur.execute('restart proxy')
-            return int(self.globals.http_proxy_port)
+        if port is not None:
+            self.globals.http_proxy_port = int(port)
+        self.globals.http_api = True
+        self._iquery('restart proxy')
+        return int(self.globals.http_proxy_port)
 
     enable_http_api = enable_data_api
 
@@ -1324,11 +1067,8 @@ class Connection(object):
         :meth:`enable_data_api`
 
         """
-        if self._conn is None:
-            raise exceptions.InterfaceError(2048, 'Connection is closed.')
-        with self._i_cursor() as cur:
-            self.globals.http_api = False
-            cur.execute('restart proxy')
+        self.globals.http_api = False
+        self._iquery('restart proxy')
 
     disable_http_api = disable_data_api
 
@@ -1349,13 +1089,12 @@ def connect(
     password: Optional[str] = None, port: Optional[int] = None,
     database: Optional[str] = None, driver: Optional[str] = None,
     pure_python: Optional[bool] = None, local_infile: Optional[bool] = None,
-    odbc_driver: Optional[str] = None, charset: Optional[str] = None,
+    charset: Optional[str] = None,
     ssl_key: Optional[str] = None, ssl_cert: Optional[str] = None,
     ssl_ca: Optional[str] = None, ssl_disabled: Optional[bool] = None,
     ssl_cipher: Optional[str] = None, ssl_verify_cert: Optional[bool] = None,
     ssl_verify_identity: Optional[bool] = None,
-    converters: Optional[Dict[int, Callable[..., Any]]] = None,
-    results_format: Optional[str] = None,
+    conv: Optional[Dict[int, Callable[..., Any]]] = None,
     credential_type: Optional[str] = None,
     autocommit: Optional[bool] = None,
 ) -> Connection:
@@ -1387,8 +1126,6 @@ def connect(
         Use the connector in pure Python mode
     local_infile : bool, optional
         Allow local file uploads
-    odbc_driver : str, optional
-        Name of the ODBC driver to use for ODBC connections
     charset : str, optional
         Character set for string values
     ssl_key : str, optional
@@ -1406,10 +1143,8 @@ def connect(
         ``ssl_ca`` is also specified.
     ssl_verify_identity : bool, optional
         Verify the server's identity
-    converters : dict[int, Callable], optional
+    conv : dict[int, Callable], optional
         Dictionary of data conversion functions
-    results_format : str, optional
-        Format of query results: tuple, namedtuple, dict, or dataframe
     credential_type : str, optional
         Type of authentication to use: auth.PASSWORD, auth.JWT, or auth.BROWSER_SSO
     autocommit : bool, optional
@@ -1469,4 +1204,12 @@ def connect(
     :class:`Connection`
 
     """
-    return Connection(**dict(locals()))
+    params = build_params(**dict(locals()))
+    driver = params.get('driver', 'mysql')
+    if not driver or driver == 'mysql':
+        from .mysql.connection import Connection  # type: ignore
+        return Connection(**params)
+    if driver in ['http', 'https']:
+        from .http.connection import Connection
+        return Connection(**params)
+    raise ValueError(f'Unrecognized protocol: {driver}')
