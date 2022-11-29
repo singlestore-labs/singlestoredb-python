@@ -7,7 +7,6 @@ import os
 import unittest
 
 import singlestoredb as s2
-
 from . import utils
 # import traceback
 

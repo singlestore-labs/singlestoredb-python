@@ -4,6 +4,7 @@ import time
 import warnings
 
 import pytest
+
 import singlestoredb.mysql as sv
 from singlestoredb.mysql.tests import base
 

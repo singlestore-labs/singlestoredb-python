@@ -873,6 +873,10 @@ class Connection(metaclass=abc.ABCMeta):
 
     paramstyle = 'named'
 
+    # Populated when first needed
+    _map_param_converter: Optional[sqlparams.SQLParams] = None
+    _positional_param_converter: Optional[sqlparams.SQLParams] = None
+
     def __init__(self, **kwargs: Any):
         """Call :func:`singlestoredb.connect` instead."""
         self.connection_params: Dict[str, Any] = kwargs
@@ -915,18 +919,30 @@ class Connection(metaclass=abc.ABCMeta):
     ) -> Tuple[Any, ...]:
         """Convert query to correct parameter format."""
         if params:
+
+            if cls._map_param_converter is None:
+                cls._map_param_converter = sqlparams.SQLParams(
+                    map_paramstyle, cls.paramstyle, escape_char=True,
+                )
+
+            if cls._positional_param_converter is None:
+                cls._positional_param_converter = sqlparams.SQLParams(
+                    positional_paramstyle, cls.paramstyle, escape_char=True,
+                )
+
             is_sequence = isinstance(params, Sequence) \
                 and not isinstance(params, str) \
                 and not isinstance(params, bytes)
             is_mapping = isinstance(params, Mapping)
-            param_converter = sqlparams.SQLParams(
-                is_mapping and map_paramstyle or positional_paramstyle,
-                cls.paramstyle,
-                escape_char=True,
-            )
+
+            param_converter = cls._map_param_converter \
+                if is_mapping else cls._positional_param_converter
+
             if not is_sequence and not is_mapping:
                 params = [params]
+
             return param_converter.format(oper, params)
+
         return (oper, None)
 
     def autocommit(self, value: bool = True) -> None:
