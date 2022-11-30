@@ -28,7 +28,7 @@ class Description(NamedTuple):
     """Column definition."""
 
     name: str
-    type_code: str
+    type_code: int
     display_size: Optional[int]
     internal_size: Optional[int]
     precision: Optional[int]

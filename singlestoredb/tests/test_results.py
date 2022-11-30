@@ -29,7 +29,6 @@ class TestResults(unittest.TestCase):
     def setUp(self):
         self.conn = s2.connect(database=type(self).dbname)
         self.cur = self.conn.cursor()
-        self.driver = self.conn._driver.dbapi.__name__
 
     def tearDown(self):
         try:
@@ -72,7 +71,7 @@ class TestResults(unittest.TestCase):
                     out = cur.fetchall()
                     assert len(out) == 0, len(out)
 
-    def test_namedtuples(self):
+    def _test_namedtuples(self):
         with s2.options(('results.format', 'namedtuple')):
             with s2.connect(database=type(self).dbname) as conn:
                 with conn.cursor() as cur:
@@ -106,7 +105,7 @@ class TestResults(unittest.TestCase):
                     out = cur.fetchall()
                     assert len(out) == 0, len(out)
 
-    def test_dict(self):
+    def _test_dict(self):
         with s2.options(('results.format', 'dict')):
             with s2.connect(database=type(self).dbname) as conn:
                 with conn.cursor() as cur:
@@ -134,7 +133,7 @@ class TestResults(unittest.TestCase):
                     out = cur.fetchall()
                     assert len(out) == 0, len(out)
 
-    def test_dataframe(self):
+    def _test_dataframe(self):
         with s2.options(('results.format', 'dataframe')):
             with s2.connect(database=type(self).dbname) as conn:
                 with conn.cursor() as cur:

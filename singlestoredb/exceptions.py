@@ -3,7 +3,11 @@
 from typing import Optional
 
 
-class Error(Exception):
+class MySQLError(Exception):
+    """All MySQL-related exceptions."""
+
+
+class Error(MySQLError):
     """
     Generic database exception.
 
@@ -52,7 +56,7 @@ class Error(Exception):
         return self.errmsg
 
 
-class Warning(Exception):
+class Warning(Warning, MySQLError):  # type: ignore
     """Exception for important warnings like data truncations, etc."""
 
 

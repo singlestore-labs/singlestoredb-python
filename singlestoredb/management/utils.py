@@ -22,7 +22,12 @@ def to_datetime(
         obj, micros = obj.split('.', 1)
         micros = micros + '0' * (6 - len(micros))
         obj = obj + '.' + micros
-    return converters.datetime_fromisoformat(obj)
+    out = converters.datetime_fromisoformat(obj)
+    if isinstance(out, str):
+        return None
+    if isinstance(out, datetime.date):
+        return datetime.datetime(out.year, out.month, out.day)
+    return out
 
 
 def vars_to_str(obj: Any) -> str:

@@ -37,12 +37,12 @@ setup(
     ext_modules=[
         Extension(
             '_pymysqlsv',
-            sources=['singlestoredb/clients/pymysqlsv/accel.c'],
+            sources=['singlestoredb/mysql/accel.c'],
             define_macros=[('Py_LIMITED_API', py_limited_api)] if py_limited_api else [],
             py_limited_api=bool(py_limited_api),
             extra_compile_args=universal2_flags,
             extra_link_args=universal2_flags,
         ),
     ],
-    cmdclass={'bdist_wheel': bdist_wheel_abi3},
+    cmdclass={'bdist_wheel': bdist_wheel_abi3 if py_limited_api else bdist_wheel},
 )
