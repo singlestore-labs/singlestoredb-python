@@ -13,7 +13,7 @@ build:
 
 requirements:
     build:
-        - {{ gcc }}  # [unix]
+        - gcc  # [unix]
         - {{ compiler('c') }}  # [not unix]
         - build
         - wheel
