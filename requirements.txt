@@ -1,3 +1,5 @@
+build
 PyJWT
 requests
 sqlparams
+wheel
