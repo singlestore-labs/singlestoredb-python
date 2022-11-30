@@ -17,13 +17,13 @@ from typing import Union
 # Cache fromisoformat methods if they exist
 _dt_datetime_fromisoformat = None
 if hasattr(datetime.datetime, 'fromisoformat'):
-    _dt_datetime_fromisoformat = datetime.datetime.fromisoformat
+    _dt_datetime_fromisoformat = datetime.datetime.fromisoformat  # type: ignore
 _dt_time_fromisoformat = None
 if hasattr(datetime.time, 'fromisoformat'):
-    _dt_time_fromisoformat = datetime.time.fromisoformat
+    _dt_time_fromisoformat = datetime.time.fromisoformat  # type: ignore
 _dt_date_fromisoformat = None
 if hasattr(datetime.date, 'fromisoformat'):
-    _dt_date_fromisoformat = datetime.date.fromisoformat
+    _dt_date_fromisoformat = datetime.date.fromisoformat  # type: ignore
 
 
 def _convert_second_fraction(s: str) -> int:
