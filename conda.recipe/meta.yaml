@@ -13,7 +13,10 @@ build:
 
 requirements:
     build:
-        - {{ compiler('c') }}
+        - {{ gcc }}  # [unix]
+        - {{ compiler('c') }}  # [not unix]
+        - build
+        - wheel
     host:
         - python {{ python }}
         - pip
