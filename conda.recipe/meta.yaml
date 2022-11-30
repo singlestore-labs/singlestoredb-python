@@ -9,14 +9,8 @@ source:
 
 build:
     number: {{ environ.get('PACKAGE_BUILD_NUMBER', '0') }}
-    script: python -m pip install --no-deps --ignore-installed .
 
 requirements:
-    build:
-        - gcc  # [unix]
-        - {{ compiler('c') }}  # [not unix]
-        - build
-        - wheel
     host:
         - python {{ python }}
         - pip
