@@ -310,7 +310,7 @@ class TestConnection(unittest.TestCase):
             dict(time='00::07::00'),
         )
         out = self.cur.fetchall()
-        assert len(out) == 0, out
+        assert len(out) == 1, out
 
         with self.assertRaises(KeyError):
             self.cur.execute(

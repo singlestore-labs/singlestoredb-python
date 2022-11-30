@@ -695,7 +695,7 @@ class Connection(connection.Connection):
             if not ssl_verify_cert:
                 self._sess.verify = False
 
-        version = kwargs.get('version', 'v1')
+        version = kwargs.get('version', 'v2')
         self.driver = kwargs.get('driver', 'https')
 
         self._database = kwargs.get('database', get_option('database'))
