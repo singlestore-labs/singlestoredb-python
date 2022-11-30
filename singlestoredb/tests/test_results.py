@@ -5,7 +5,6 @@ import os
 import unittest
 
 import pandas as pd
-
 import singlestoredb as s2
 from singlestoredb.tests import utils
 # import traceback
