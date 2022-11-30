@@ -51,34 +51,32 @@ jobs:
           - "3.10"
           - "3.11"
         driver:
-          - pymysqlsv
-#         - mysql.connector
-          - mysqldb
-#         - http
+          - mysql
+          - https
         pure-python:
           - 0
         # Manually include a couple of runs on Mac & Windows
         include:
           - os: ubuntu-latest
             python-version: "3.9"
-            driver: pymysqlsv
+            driver: mysql
             pure-python: 1
           - os: macos-latest
             python-version: "3.9"
-            driver: pymysqlsv
+            driver: mysql
             pure-python: 0
-#         - os: macos-latest
-#           python-version: "3.9"
-#           driver: http
-#           pure-python: 0
+          - os: macos-latest
+            python-version: "3.9"
+            driver: https
+            pure-python: 0
           - os: windows-latest
             python-version: "3.9"
-            driver: pymysqlsv
+            driver: mysql
             pure-python: 0
-#         - os: windows-latest
-#           python-version: "3.9"
-#           driver: http
-#           pure-python: 0
+          - os: windows-latest
+            python-version: "3.9"
+            driver: https
+            pure-python: 0
 
     steps:
       - uses: actions/checkout@v3
@@ -88,12 +86,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
-
-      - name: Install MySQL libraries
-        if: ${{ matrix.os == 'macos-latest' }}
-        run: |
-          # brew update
-          brew install mysql
 
       - name: Install dependencies
         run: |
@@ -107,13 +99,13 @@ jobs:
           python setup.py install
 
       - name: Run tests
-        if: ${{ matrix.driver != 'http' }}
+        if: ${{ matrix.driver != 'https' }}
         run: pytest -q singlestoredb/tests/test_basics.py
         env:
           SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{matrix.pure-python}}"
 
       - name: Run tests
-        if: ${{ matrix.driver == 'http' }}
+        if: ${{ matrix.driver == 'https' }}
         run: pytest -q singlestoredb/tests/test_basics.py
         env:
           SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:9000/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{matrix.pure-python}}"

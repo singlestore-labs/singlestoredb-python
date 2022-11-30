@@ -35,11 +35,11 @@ jobs:
       - name: Build source dist
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          python setup.py build sdist
+          python -m build --sdist
 
       - name: Build wheel
         run: |
-          python setup.py build bdist_wheel
+          python -m build --wheel
 
       - name: Build conda
         if: ${{ matrix.os != 'windows-latest' }}

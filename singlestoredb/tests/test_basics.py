@@ -28,6 +28,7 @@ class TestBasics(unittest.TestCase):
 
     def setUp(self):
         self.conn = s2.connect(database=type(self).dbname)
+        self.conn.locals.time_zone = 'utc'
         self.cur = self.conn.cursor()
 
     def tearDown(self):
@@ -260,7 +261,7 @@ class TestBasics(unittest.TestCase):
             dict(time='00::07::00'),
         )
         out = self.cur.fetchall()
-        assert len(out) == 0, out
+        assert len(out) == 1, out
 
         with self.assertRaises(KeyError):
             self.cur.execute(
@@ -751,6 +752,186 @@ class TestBasics(unittest.TestCase):
 
         assert row['bit'] is None, row['bit']
         assert typ['bit'] == otype(16), typ['bit']
+
+    def test_alltypes_mins(self):
+        self.cur.execute('select * from alltypes where id = 2')
+        names = [x[0] for x in self.cur.description]
+        out = self.cur.fetchone()
+        row = dict(zip(names, out))
+
+        expected = dict(
+            id=2,
+            tinyint=-128,
+            unsigned_tinyint=0,
+            bool=-128,
+            boolean=-128,
+            smallint=-32768,
+            unsigned_smallint=0,
+            mediumint=-8388608,
+            unsigned_mediumint=0,
+            int24=-8388608,
+            unsigned_int24=0,
+            int=-2147483648,
+            unsigned_int=0,
+            integer=-2147483648,
+            unsigned_integer=0,
+            bigint=-9223372036854775808,
+            unsigned_bigint=0,
+            float=0,
+            double=-1.7976931348623158e308,
+            real=-1.7976931348623158e308,
+            decimal=decimal.Decimal('-99999999999999.999999'),
+            dec=-decimal.Decimal('99999999999999.999999'),
+            fixed=decimal.Decimal('-99999999999999.999999'),
+            numeric=decimal.Decimal('-99999999999999.999999'),
+            date=datetime.date(1000, 1, 1),
+            time=-1 * datetime.timedelta(hours=838, minutes=59, seconds=59),
+            time_6=-1 * datetime.timedelta(hours=838, minutes=59, seconds=59),
+            datetime=datetime.datetime(1000, 1, 1, 0, 0, 0),
+            datetime_6=datetime.datetime(1000, 1, 1, 0, 0, 0, 0),
+            timestamp=datetime.datetime(1970, 1, 1, 0, 0, 1),
+            timestamp_6=datetime.datetime(1970, 1, 1, 0, 0, 1, 0),
+            year=1901,
+            char_100='',
+            binary_100=b'\x00' * 100,
+            varchar_200='',
+            varbinary_200=b'',
+            longtext='',
+            mediumtext='',
+            text='',
+            tinytext='',
+            longblob=b'',
+            mediumblob=b'',
+            blob=b'',
+            tinyblob=b'',
+            json={},
+            enum='one',
+            set='two',
+            bit=b'\x00\x00\x00\x00\x00\x00\x00\x00',
+        )
+
+        for k, v in sorted(row.items()):
+            assert v == expected[k], '{} != {} in key {}'.format(v, expected[k], k)
+
+    def test_alltypes_maxs(self):
+        self.cur.execute('select * from alltypes where id = 3')
+        names = [x[0] for x in self.cur.description]
+        out = self.cur.fetchone()
+        row = dict(zip(names, out))
+
+        expected = dict(
+            id=3,
+            tinyint=127,
+            unsigned_tinyint=255,
+            bool=127,
+            boolean=127,
+            smallint=32767,
+            unsigned_smallint=65535,
+            mediumint=8388607,
+            unsigned_mediumint=16777215,
+            int24=8388607,
+            unsigned_int24=16777215,
+            int=2147483647,
+            unsigned_int=4294967295,
+            integer=2147483647,
+            unsigned_integer=4294967295,
+            bigint=9223372036854775807,
+            unsigned_bigint=18446744073709551615,
+            float=0,
+            double=1.7976931348623158e308,
+            real=1.7976931348623158e308,
+            decimal=decimal.Decimal('99999999999999.999999'),
+            dec=decimal.Decimal('99999999999999.999999'),
+            fixed=decimal.Decimal('99999999999999.999999'),
+            numeric=decimal.Decimal('99999999999999.999999'),
+            date=datetime.date(9999, 12, 31),
+            time=datetime.timedelta(hours=838, minutes=59, seconds=59),
+            time_6=datetime.timedelta(hours=838, minutes=59, seconds=59),
+            datetime=datetime.datetime(9999, 12, 31, 23, 59, 59),
+            datetime_6=datetime.datetime(9999, 12, 31, 23, 59, 59, 999999),
+            timestamp=datetime.datetime(2038, 1, 19, 3, 14, 7),
+            timestamp_6=datetime.datetime(2038, 1, 19, 3, 14, 7, 999999),
+            year=2155,
+            char_100='',
+            binary_100=b'\x00' * 100,
+            varchar_200='',
+            varbinary_200=b'',
+            longtext='',
+            mediumtext='',
+            text='',
+            tinytext='',
+            longblob=b'',
+            mediumblob=b'',
+            blob=b'',
+            tinyblob=b'',
+            json={},
+            enum='one',
+            set='two',
+            bit=b'\xff\xff\xff\xff\xff\xff\xff\xff',
+        )
+
+        for k, v in sorted(row.items()):
+            assert v == expected[k], '{} != {} in key {}'.format(v, expected[k], k)
+
+    def test_alltypes_zeros(self):
+        self.cur.execute('select * from alltypes where id = 4')
+        names = [x[0] for x in self.cur.description]
+        out = self.cur.fetchone()
+        row = dict(zip(names, out))
+
+        expected = dict(
+            id=4,
+            tinyint=0,
+            unsigned_tinyint=0,
+            bool=0,
+            boolean=0,
+            smallint=0,
+            unsigned_smallint=0,
+            mediumint=0,
+            unsigned_mediumint=0,
+            int24=0,
+            unsigned_int24=0,
+            int=0,
+            unsigned_int=0,
+            integer=0,
+            unsigned_integer=0,
+            bigint=0,
+            unsigned_bigint=0,
+            float=0,
+            double=0,
+            real=0,
+            decimal=decimal.Decimal('0.0'),
+            dec=decimal.Decimal('0.0'),
+            fixed=decimal.Decimal('0.0'),
+            numeric=decimal.Decimal('0.0'),
+            date='0000-00-00',
+            time=datetime.timedelta(hours=0, minutes=0, seconds=0),
+            time_6=datetime.timedelta(hours=0, minutes=0, seconds=0, microseconds=0),
+            datetime='0000-00-00 00:00:00',
+            datetime_6='0000-00-00 00:00:00.000000',
+            timestamp='0000-00-00 00:00:00',
+            timestamp_6='0000-00-00 00:00:00.000000',
+            year=0,
+            char_100='',
+            binary_100=b'\x00' * 100,
+            varchar_200='',
+            varbinary_200=b'',
+            longtext='',
+            mediumtext='',
+            text='',
+            tinytext='',
+            longblob=b'',
+            mediumblob=b'',
+            blob=b'',
+            tinyblob=b'',
+            json={},
+            enum='one',
+            set='two',
+            bit=b'\x00\x00\x00\x00\x00\x00\x00\x00',
+        )
+
+        for k, v in sorted(row.items()):
+            assert v == expected[k], '{} != {} in key {}'.format(v, expected[k], k)
 
 
 if __name__ == '__main__':
