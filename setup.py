@@ -36,7 +36,7 @@ class bdist_wheel_abi3(bdist_wheel):
 setup(
     ext_modules=[
         Extension(
-            '_pymysqlsv',
+            '_singlestoredb_accel',
             sources=['singlestoredb/mysql/accel.c'],
             define_macros=[('Py_LIMITED_API', py_limited_api)] if py_limited_api else [],
             py_limited_api=bool(py_limited_api),

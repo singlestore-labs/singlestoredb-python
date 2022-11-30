@@ -13,9 +13,9 @@ import traceback
 import warnings
 
 try:
-    import _pymysqlsv
+    import _singlestoredb_accel
 except (ImportError, ModuleNotFoundError):
-    _pymysqlsv = None
+    _singlestoredb_accel = None
     warnings.warn(
         'Accelerator extension could not be loaded; '
         'running in pure Python mode.', RuntimeWarning,
@@ -45,7 +45,7 @@ from .protocol import (
     EOFPacketWrapper,
     LoadLocalPacketWrapper,
 )
-from . import err, VERSION_STRING
+from . import err
 from ..connection import Connection as BaseConnection
 
 try:
@@ -412,7 +412,7 @@ class Connection(BaseConnection):
         self.resultclass = MySQLResult
 
         # The C extension handles these types internally.
-        if _pymysqlsv is not None and not self.pure_python:
+        if _singlestoredb_accel is not None and not self.pure_python:
             self.resultclass = MySQLResultSV
             if self.cursorclass is Cursor:
                 self.cursorclass = CursorSV
@@ -447,6 +447,8 @@ class Connection(BaseConnection):
         self._auth_plugin_map = auth_plugin_map or {}
         self._binary_prefix = binary_prefix
         self.server_public_key = server_public_key
+
+        from .. import __version__ as VERSION_STRING
 
         self._connect_attrs = {
             '_client_name': 'singlestoredb.mysql',
@@ -1561,10 +1563,10 @@ class MySQLResultSV(MySQLResult):
             ).items() if v is not UNSET
         }
         self._read_rowdata_packet = functools.partial(
-            _pymysqlsv.read_rowdata_packet, self,
+            _singlestoredb_accel.read_rowdata_packet, self,
         )
         self._read_rowdata_packet_unbuffered = functools.partial(
-            _pymysqlsv.read_rowdata_packet, self,
+            _singlestoredb_accel.read_rowdata_packet, self,
         )
 
 

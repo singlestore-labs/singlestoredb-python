@@ -666,7 +666,7 @@ static PyType_Slot StateType_slots[] = {
 };
 
 static PyType_Spec StateType_spec = {
-    .name = "_pymysqlsv.State",
+    .name = "_singlestoredb_accel.State",
     .basicsize = sizeof(StateObject),
     .itemsize = 0,
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
@@ -1581,15 +1581,15 @@ static PyMethodDef PyMySQLAccelMethods[] = {
     {NULL, NULL, 0, NULL}
 };
 
-static struct PyModuleDef _pymysqlsvmodule = {
+static struct PyModuleDef _singlestoredb_accelmodule = {
     PyModuleDef_HEAD_INIT,
-    "_pymysqlsv",
+    "_singlestoredb_accel",
     "PyMySQL row data packet reader accelerator",
     -1,
     PyMySQLAccelMethods
 };
 
-PyMODINIT_FUNC PyInit__pymysqlsv(void) {
+PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
 #ifndef Py_LIMITED_API
     PyDateTime_IMPORT;
 #endif
@@ -1604,5 +1604,5 @@ PyMODINIT_FUNC PyInit__pymysqlsv(void) {
         PyInts[i] = PyLong_FromLong(i);
     }
 
-    return PyModule_Create(&_pymysqlsvmodule);
+    return PyModule_Create(&_singlestoredb_accelmodule);
 }

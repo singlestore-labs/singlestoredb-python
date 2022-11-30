@@ -44,11 +44,6 @@ from .times import Timestamp
 from .times import TimestampFromTicks
 
 
-VERSION = (1, 0, 2, None)
-if VERSION[3] is not None:
-    VERSION_STRING = '%d.%d.%d_%s' % VERSION
-else:
-    VERSION_STRING = '%d.%d.%d' % VERSION[:3]
 threadsafety = 1
 apilevel = '2.0'
 paramstyle = 'numeric'
@@ -110,10 +105,8 @@ Connect = connect = Connection = connection.Connection
 
 
 def get_client_info():  # for MySQLdb compatibility
-    version = VERSION
-    if VERSION[3] is None:
-        version = VERSION[:3]
-    return '.'.join(map(str, version))
+    from .. import __version__
+    return __version__
 
 
 # we include a doctored version_info here for MySQLdb compatibility
