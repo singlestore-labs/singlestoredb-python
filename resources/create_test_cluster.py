@@ -8,6 +8,7 @@ import re
 import secrets
 import subprocess
 import sys
+import time
 import uuid
 from optparse import OptionParser
 
@@ -101,6 +102,17 @@ clus = cm.create_cluster(
     size=options.size,
     wait_on_active=True,
 )
+
+# Make sure the endpoint exists before continuing
+timeout = 300
+while not clus.endpoint and timeout > 0:
+    time.sleep(10)
+    clus.refresh()
+    timeout -= 10
+
+if not clus.endpoint:
+    print('ERROR: Endpoint was never activated.')
+    sys.exit(1)
 
 database = options.database
 if not database:

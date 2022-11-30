@@ -1,6 +1,4 @@
 
-SET GLOBAL time_zone = 'utc';
-
 CREATE ROWSTORE TABLE IF NOT EXISTS data (
     id VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
