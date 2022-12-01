@@ -10,11 +10,6 @@ This package can be install from PyPI using `pip`:
 pip install singlestoredb
 ```
 
-If you are using Anaconda, you can install with `conda`:
-```
-conda install -c singlestore singlestoredb
-```
-
 ## Usage
 
 Connections to the SingleStore database are made using the DB-API parameters
@@ -47,6 +42,46 @@ Connecting to the HTTP API is done as follows:
 # Use the HTTP API connector
 conn = s2.connect('https://user:password@host:8080/db_name')
 ```
+
+## Performance
+
+While this package is based on [PyMySQL](https://github.com/PyMySQL/PyMySQL)
+which is a pure Python-based MySQL connector, it adds various performance
+enhancements that make it faster than most other connectors. The performance
+improvents come from changes to the data conversion functions, cursor implementations,
+and a C extension that is highly optimized to improve row data reading.
+
+The package can be used both in a pure Python mode and as well as a C accelerated
+mode. Generally speaking, the C accelerated version of the client can read
+data 10X faster than PyMySQL, 2X faster than MySQLdb, and 1.5X faster than
+mysql.connector. All of this is done without having to install any 3rd party
+MySQL libraries!
+
+Benchmarking was done with a table of 3,533,286 rows each containing a datetime,
+a float, and eight character columns. The data is the same data set used in
+[this article](https://www.singlestore.com/blog/how-to-get-started-with-singlestore/).
+The client and server were running on the same machine and queries were made
+using `fetchone`, `fetchall`, `fetchmany(1000)`, and an iterator over the cursor
+object (e.g., `iter(cur)`). The results are shown below.
+
+### Buffered
+
+|                         | PyMySQL | MySQLdb | mysql.connector | SingleStore (Python) | SingleStore |
+|-------------------------|---------|---------|-----------------|----------------------|-------------|
+| fetchall                |   37.5s |    8.7s |            5.6s |                30.6s |        3.8s |
+| fetchmany(1000)         |   37.9s |    9.3s |            6.1s |                33.1s |        4.0s |
+| fetchone                |   37.8s |    9.2s |            6.1s |                31.0s |        4.1s |
+| iter(cur)               |   37.6s |    9.2s |            6.1s |                31.1s |        4.2s |
+
+### Unbuffered
+
+|                         | PyMySQL | MySQLdb | mysql.connector | SingleStore (Python) | SingleStore |
+|-------------------------|---------|---------|-----------------|----------------------|-------------|
+| fetchall                |   38.3s |    6.6s |            5.6s |                32.1s |        5.6s |
+| fetchmany(1000)         |   38.9s |    7.2s |            6.1s |                33.2s |        6.0s |
+| fetchone                |   38.8s |    7.1s |            6.0s |                32.9s |        6.1s |
+| iter(cur)               |   38.7s |    7.0s |            6.0s |                32.4s |        6.2s |
+
 
 ## License
 
