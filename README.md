@@ -68,19 +68,19 @@ object (e.g., `iter(cur)`). The results are shown below.
 
 |                         | PyMySQL | MySQLdb | mysql.connector | SingleStore (pure Python) | SingleStore |
 |-------------------------|---------|---------|-----------------|---------------------------|-------------|
-| fetchall                |   37.5s |    8.7s |            5.6s |                     30.6s |        3.8s |
-| fetchmany(1000)         |   37.9s |    9.3s |            6.1s |                     33.1s |        4.0s |
-| fetchone                |   37.8s |    9.2s |            6.1s |                     31.0s |        4.1s |
-| iter(cur)               |   37.6s |    9.2s |            6.1s |                     31.1s |        4.2s |
+| fetchall                |   37.0s |    8.8s |            5.6s |                     30.2s |        3.7s |
+| fetchmany(1000)         |   37.4s |    9.5s |            6.9s |                     30.4s |        3.8s |
+| fetchone                |   38.2s |   10.3s |            7.0s |                     32.1s |        4.8s |
+| iter(cur)               |   38.3s |    9.5s |            6.9s |                     31.3s |        4.5s |
 
 ### Unbuffered
 
 |                         | PyMySQL | MySQLdb | mysql.connector | SingleStore (pure Python) | SingleStore |
 |-------------------------|---------|---------|-----------------|---------------------------|-------------|
-| fetchall                |   38.3s |    6.6s |            5.6s |                     32.1s |        5.6s |
-| fetchmany(1000)         |   38.9s |    7.2s |            6.1s |                     33.2s |        6.0s |
-| fetchone                |   38.8s |    7.1s |            6.0s |                     32.9s |        6.1s |
-| iter(cur)               |   38.7s |    7.0s |            6.0s |                     32.4s |        6.2s |
+| fetchall                |   39.0s |    6.6s |            5.6s |                     31.8s |        3.7s |
+| fetchmany(1000)         |   39.4s |    7.0s |            6.2s |                     31.5s |        3.9s |
+| fetchone                |   34.5s |    9.2s |           10.4s |                     33.6s |        5.0s |
+| iter(cur)               |   39.0s |    9.1s |           10.4s |                     32.3s |        4.7s |
 
 
 ## License
