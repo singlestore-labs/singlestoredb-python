@@ -171,7 +171,7 @@ if options.init_sql:
     init_db = [
         os.path.join(os.path.dirname(__file__), 'init_db.py'),
         '--host', str(host), '--port', str(port),
-        '--user', 'admin', '--password', str(options.password),
+        '--user', 'admin', '--password', options.password,
         '--database', database,
     ]
 
