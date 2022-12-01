@@ -16,7 +16,7 @@ import singlestoredb as s2
 
 
 # Handle command-line options
-usage = 'usage: %prog [options] cluster-name'
+usage = 'usage: %prog [options] workspace-name'
 parser = OptionParser(usage=usage)
 parser.add_option(
     '-r', '--region',
@@ -31,16 +31,16 @@ parser.add_option(
 parser.add_option(
     '-e', '--expires',
     default='4h',
-    help='timestamp when cluster should expire (4h)',
+    help='timestamp when workspace should expire (4h)',
 )
 parser.add_option(
     '-s', '--size',
     default='S-00',
-    help='size of the cluster (S-00)',
+    help='size of the workspace (S-00)',
 )
 parser.add_option(
     '-t', '--token',
-    help='API key for the cluster management API',
+    help='API key for the workspace management API',
 )
 parser.add_option(
     '--http-port', type='int',
@@ -53,7 +53,7 @@ parser.add_option(
 parser.add_option(
     '-o', '--output',
     default='env', choices=['env', 'github', 'json'],
-    help='report cluster information in the requested format: github, env, json',
+    help='report workspace information in the requested format: github, env, json',
 )
 parser.add_option(
     '-d', '--database',
@@ -71,13 +71,13 @@ if options.init_sql and not os.path.isfile(options.init_sql):
     sys.exit(1)
 
 
-# Connect to cluster
-cm = s2.manage_cluster(options.token or None)
+# Connect to workspace
+wm = s2.manage_workspaces(options.token or None)
 
 # Find matching region
 if '::' in options.region:
     pattern = options.region.replace('*', '.*')
-    regions = cm.regions
+    regions = wm.regions
     for item in random.sample(regions, k=len(regions)):
         region_name = '{}::{}'.format(item.provider, item.name)
         if re.match(pattern, region_name):
@@ -91,26 +91,47 @@ if '::' in options.region:
     )
     sys.exit(1)
 
-# Create cluster
-clus = cm.create_cluster(
-    args[0],
-    region=options.region,
-    admin_password=options.password,
-    # firewall_ranges=requests.get('https://api.github.com/meta').json()['actions'],
-    firewall_ranges=['0.0.0.0/0'],
-    expires_at=options.expires,
+
+# Create workspace group
+wg_name = 'Python Client Testing'
+
+wgs = [x for x in wm.workspace_groups if x.name == wg_name]
+if len(wgs) > 1:
+    print('ERROR: There is more than one workspace group with the specified name.')
+    sys.exit(1)
+elif len(wgs) == 1:
+    wg = wgs[0]
+else:
+    wg = wm.create_workspace_group(
+        wg_name,
+        region=options.region,
+        admin_password=options.password,
+        # firewall_ranges=requests.get('https://api.github.com/meta').json()['actions'],
+        firewall_ranges=['0.0.0.0/0'],
+    )
+
+# Make sure the workspace group exists before continuing
+timeout = 300
+while timeout > 0 and not [x for x in wm.workspace_groups if x.name == wg_name]:
+    time.sleep(10)
+    timeout -= 10
+
+ws_name = re.sub(r'^-|-$', r'', re.sub(r'-+', r'-', re.sub(r'\s+', '-', args[0].lower())))
+
+ws = wg.create_workspace(
+    ws_name,
     size=options.size,
     wait_on_active=True,
 )
 
 # Make sure the endpoint exists before continuing
 timeout = 300
-while not clus.endpoint and timeout > 0:
+while timeout > 0 and not ws.endpoint:
     time.sleep(10)
-    clus.refresh()
+    ws.refresh()
     timeout -= 10
 
-if not clus.endpoint:
+if not ws.endpoint:
     print('ERROR: Endpoint was never activated.')
     sys.exit(1)
 
@@ -118,28 +139,28 @@ database = options.database
 if not database:
     database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
 
-host = clus.endpoint
+host = ws.endpoint
 if ':' in host:
     host, port = host.split(':', 1)
     port = int(port)
 else:
     port = 3306
 
-# Print cluster information
+# Print workspace information
 if options.output == 'env':
-    print(f'CLUSTER_ID={clus.id}')
+    print(f'CLUSTER_ID={ws.id}')
     print(f'CLUSTER_HOST={host}')
     print(f'CLUSTER_PORT={port}')
     print(f'CLUSTER_DATABASE={database}')
 elif options.output == 'github':
     with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-        print(f'cluster-id={clus.id}', file=output)
+        print(f'cluster-id={ws.id}', file=output)
         print(f'cluster-host={host}', file=output)
         print(f'cluster-port={port}', file=output)
         print(f'cluster-database={database}', file=output)
 elif options.output == 'json':
     print('{')
-    print(f'  "cluster-id": "{clus.id}",')
+    print(f'  "cluster-id": "{ws.id}",')
     print(f'  "cluster-host": "{host}",')
     print(f'  "cluster-port": {port}')
     print(f'  "cluster-database": {database}')

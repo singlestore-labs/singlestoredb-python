@@ -23,7 +23,7 @@ jobs:
       - name: Initialize database
         id: initialize-database
         run: |
-          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "singlestore-python - $GITHUB_WORKFLOW"
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "singlestoredb-python - $GITHUB_WORKFLOW - $GITHUB_RUN_ID"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
@@ -118,6 +118,6 @@ jobs:
       # Just use curl here so we don't have to check out the package source again.
       - name: Shutdown database
         run: |
-          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v0beta/clusters/${{ env.CLUSTER_ID }}"
+          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v1/workspaces/${{ env.CLUSTER_ID }}"
         env:
           CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}
