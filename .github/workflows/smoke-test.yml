@@ -106,7 +106,7 @@ jobs:
         if: ${{ matrix.driver == 'https' }}
         run: pytest -q singlestoredb/tests/test_basics.py
         env:
-          SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:8015/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{matrix.pure-python}}"
+          SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{matrix.pure-python}}"
 
 
   shutdown-database:
