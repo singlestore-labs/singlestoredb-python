@@ -1228,9 +1228,9 @@ static PyObject *read_row_from_packet(
                 case MYSQL_TYPE_LONGLONG:
                 case MYSQL_TYPE_INT24:
                     if (py_state->flags[i] & MYSQL_FLAG_UNSIGNED) {
-                        py_item = PyLong_FromUnsignedLongLong(strtoul(out, &end, 10));
+                        py_item = PyLong_FromUnsignedLongLong(strtoull(out, &end, 10));
                     } else {
-                        py_item = PyLong_FromLongLong(strtol(out, &end, 10));
+                        py_item = PyLong_FromLongLong(strtoll(out, &end, 10));
                     }
                     if (!py_item) goto error;
                     break;
