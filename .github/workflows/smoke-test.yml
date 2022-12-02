@@ -9,7 +9,7 @@ on:
 jobs:
 
   setup-database:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       - uses: actions/checkout@v3
@@ -41,7 +41,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-latest
+          - ubuntu-20.04
         python-version:
           - "3.6"
           - "3.7"
@@ -56,7 +56,7 @@ jobs:
           - 0
         # Manually include a couple of runs on Mac & Windows
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-20.04
             python-version: "3.9"
             driver: mysql
             pure-python: 1
@@ -112,7 +112,7 @@ jobs:
   shutdown-database:
     needs: [setup-database, smoke-test]
     if: ${{ always() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
       # Just use curl here so we don't have to check out the package source again.

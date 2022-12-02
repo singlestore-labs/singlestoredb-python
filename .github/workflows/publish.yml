@@ -18,11 +18,11 @@ on:
         required: true
         type: boolean
         default: true
-      publish_anaconda:
-        description: "Publish Anaconda packages on success?"
-        required: true
-        type: boolean
-        default: true
+#     publish_anaconda:
+#       description: "Publish Anaconda packages on success?"
+#       required: true
+#       type: boolean
+#       default: true
       build_number:
         description: "Package build number"
         required: true
@@ -32,7 +32,7 @@ on:
 jobs:
   publish:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     services:
       singlestore:
@@ -59,7 +59,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r test-requirements.txt
-          pip install wheel
 
       - name: Build PyPI package
         run: |
@@ -68,17 +67,17 @@ jobs:
           python -m build
           twine check dist/*
 
-      - name: Build Conda package
-        run: |
-          # $CONDA is an environment variable pointing to the root of the miniconda directory
-          echo $CONDA/bin >> $GITHUB_PATH
-          conda update conda
-          conda install conda-build anaconda-client conda-verify
-          mkdir artifacts
-          cd conda.recipe
-          conda build -c singlestore -c conda-forge --no-anaconda-upload --output-folder ../artifacts .
-        env:
-          SINGLESTOREDB_URL: "root:root@127.0.0.1:3306"
+#     - name: Build Conda package
+#       run: |
+#         # $CONDA is an environment variable pointing to the root of the miniconda directory
+#         echo $CONDA/bin >> $GITHUB_PATH
+#         conda update conda
+#         conda install conda-build anaconda-client conda-verify
+#         mkdir artifacts
+#         cd conda.recipe
+#         conda build -c singlestore -c conda-forge --no-anaconda-upload --output-folder ../artifacts .
+#       env:
+#         SINGLESTOREDB_URL: "root:root@127.0.0.1:3306"
 
       - name: Publish PyPI package
         if: ${{ github.event_name == 'release' || github.event.inputs.publish_pypi == 'true' }}
@@ -88,10 +87,10 @@ jobs:
         run: |
           twine upload dist/*
 
-      - name: Publish Conda package
-        if: ${{ github.event_name == 'release' || github.event.inputs.publish_anaconda == 'true' }}
-        env:
-          PACKAGE_BUILD_NUMBER: ${{ github.event.inputs.build_number }}
-        run: |
-          echo $CONDA/bin >> $GITHUB_PATH
-          anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main artifacts/noarch/singlestoredb-*.tar.bz2
+#     - name: Publish Conda package
+#       if: ${{ github.event_name == 'release' || github.event.inputs.publish_anaconda == 'true' }}
+#       env:
+#         PACKAGE_BUILD_NUMBER: ${{ github.event.inputs.build_number }}
+#       run: |
+#         echo $CONDA/bin >> $GITHUB_PATH
+#         anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main artifacts/noarch/singlestoredb-*.tar.bz2
