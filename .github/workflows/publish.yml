@@ -95,6 +95,30 @@ jobs:
 #         path: |
 #           conda-bld/*
 
+  setup-database:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          python --version
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Initialize database
+        id: initialize-database
+        run: |
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+    outputs:
+      cluster-id: ${{ steps.initialize-database.outputs.cluster-id }}
+      cluster-host: ${{ steps.initialize-database.outputs.cluster-host }}
+      cluster-database: ${{ steps.initialize-database.outputs.cluster-database }}
+
   test:
     needs: build
 
@@ -132,12 +156,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -f ./dist/ singlestoredb
 
-#     - name: Run smoke tests
-#       run: |
-#         pip install pytest
-#         pytest -q singlestoredb/tests/test_basics.py
-#       env:
-#         SINGLESTOREDB_PURE_PYTHON=0
+      - name: Run smoke tests
+        run: |
+          pip install pytest
+          pytest -q singlestoredb/tests/test_basics.py
+        env:
+          SINGLESTOREDB_URL: "mysql://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0"
 
   publish:
     needs: test
