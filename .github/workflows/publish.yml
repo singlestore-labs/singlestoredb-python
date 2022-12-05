@@ -139,21 +139,21 @@ jobs:
     runs-on: ubuntu-20.04
 
     steps:
-      - name: Download wheel
+      - name: Download Windows wheel
         uses: actions/download-artifact@v3
         with:
           name: wheel-windows-latest
           path: |
             dist
 
-      - name: Download wheel
+      - name: Download Mac wheel
         uses: actions/download-artifact@v3
         with:
           name: wheel-macos-latest
           path: |
             dist
 
-      - name: Download wheel
+      - name: Download Linux wheel
         uses: actions/download-artifact@v3
         with:
           name: wheel-ubuntu-20.04
