@@ -136,9 +136,7 @@ jobs:
           - "3.10"
 
     steps:
-      - name: Dummy requirements
-        run: |
-          touch requirements.txt
+      - uses: actions/checkout@v3
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -155,12 +153,11 @@ jobs:
 
       - name: Install package
         run: |
-          python -m pip install --upgrade pip
           pip install -f ./dist/ singlestoredb
 
       - name: Run smoke tests
         run: |
-          pip install pytest
+          pip install -r test-requirements
           pytest -q singlestoredb/tests/test_basics.py
         env:
           SINGLESTOREDB_URL: "mysql://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0"
