@@ -130,7 +130,7 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          pip install --no-index -f ./dist/ singlestoredb
+          pip install -f ./dist/ singlestoredb
 
 #     - name: Run smoke tests
 #       run: |
