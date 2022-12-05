@@ -79,6 +79,8 @@ jobs:
 #         C:\Miniconda\condabin\conda.bat build -c singlestore -c conda-forge --output-folder ../conda-bld --no-test --no-anaconda-upload .
 
   publish:
+    needs: build
+
     runs-on: ubuntu-20.04
 
     steps:
