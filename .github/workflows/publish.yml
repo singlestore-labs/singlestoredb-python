@@ -1,3 +1,4 @@
+
 name: Publish packages
 
 on:
@@ -22,6 +23,7 @@ on:
         default: 0
 
 jobs:
+
   build:
     runs-on: ${{ matrix.os }}
 
@@ -79,7 +81,7 @@ jobs:
 #         C:\Miniconda\condabin\conda.bat build -c singlestore -c conda-forge --output-folder ../conda-bld --no-test --no-anaconda-upload .
 #
 
-     - name: Archive source dist and wheel
+      - name: Archive source dist and wheel
         uses: actions/upload-artifact@v3
         with:
           name: wheel-${{ matrix.os }}
