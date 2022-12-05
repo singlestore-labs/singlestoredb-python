@@ -87,6 +87,7 @@ jobs:
           name: wheel-${{ matrix.os }}
           path: |
             dist
+          retention-days: 2
 
 #    - name: Archive conda
 #       uses: actions/upload-artifact@v3
@@ -94,6 +95,7 @@ jobs:
 #         name: conda-${{ matrix.os }}
 #         path: |
 #           conda-bld/*
+#         retention-days: 2
 
   setup-database:
     runs-on: ubuntu-20.04
