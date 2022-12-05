@@ -122,7 +122,7 @@ jobs:
       cluster-database: ${{ steps.initialize-database.outputs.cluster-database }}
 
   test:
-    needs: build
+    needs: [build, setup-database]
 
     runs-on: ${{ matrix.os }}
 
