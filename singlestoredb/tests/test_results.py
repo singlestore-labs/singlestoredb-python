@@ -45,7 +45,7 @@ class TestResults(unittest.TestCase):
             # traceback.print_exc()
             pass
 
-    def test_tuples(self):
+    def _test_tuples(self):
         with s2.options(('results.format', 'tuple')):
             with s2.connect(database=type(self).dbname) as conn:
                 with conn.cursor() as cur:

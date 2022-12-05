@@ -381,10 +381,8 @@ class Cursor(metaclass=abc.ABCMeta):
         self.errorhandler = connection.errorhandler
         self._connection: Optional[Connection] = weakref.proxy(connection)
 
-        #: Current row of the cursor.
         self._rownumber: Optional[int] = None
 
-        #: Description of columns in the last executed query.
         self._description: Optional[List[Description]] = None
 
         #: Default batch size of ``fetchmany`` calls.
@@ -400,7 +398,6 @@ class Cursor(metaclass=abc.ABCMeta):
         #: Number of rows affected by the last query.
         self.rowcount: int = -1
 
-        #: Messages generated during last query.
         self._messages: List[Tuple[int, str]] = []
 
         #: Row ID of the last modified row.
@@ -413,24 +410,17 @@ class Cursor(metaclass=abc.ABCMeta):
 
     @abc.abstractproperty
     def description(self) -> Optional[List[Description]]:
-        """Return the field descriptions of the last query."""
+        """The field descriptions of the last query."""
         return self._description
 
     @abc.abstractproperty
     def rownumber(self) -> Optional[int]:
-        """Return the last modified row number."""
+        """The last modified row number."""
         return self._rownumber
 
     @property
     def connection(self) -> Optional['Connection']:
-        """
-        Return the connection that the cursor belongs to.
-
-        Returns
-        -------
-        Connection or None
-
-        """
+        """the connection that the cursor belongs to."""
         return self._connection
 
     @abc.abstractmethod
@@ -645,12 +635,27 @@ class ShowResult(Sequence[Any]):
     """
     Simple result object.
 
+    This object is primarily used for displaying results to a
+    terminal or web browser, but it can also be treated like a
+    simple data frame where columns are accessible using either
+    dictionary key-like syntax or attribute syntax.
+
+    Examples
+    --------
+    >>> conn.show.status().Value[10]
+
+    >>> conn.show.status()[10]['Value']
+
     Parameters
     ----------
     *args : Any
         Parameters to send to underlying list constructor
     **kwargs : Any
         Keyword parameters to send to underlying list constructor
+
+    See Also
+    --------
+    :attr:`Connection.show`
 
     """
 
@@ -666,11 +671,41 @@ class ShowResult(Sequence[Any]):
     def __getattr__(self, name: str) -> List[Any]:
         out = []
         for item in self._data:
-            out.append(getattr(item, name))
+            out.append(item[name])
         return out
 
     def __len__(self) -> int:
         return len(self._data)
+
+    def __repr__(self) -> str:
+        if not self._data:
+            return ''
+        return '\n{}\n'.format(self._format_table(self._data))
+
+    def _format_table(self, rows: Sequence[Dict[str, Any]]) -> str:
+        if not self._data:
+            return ''
+
+        keys = rows[0].keys()
+        lens = [len(x) for x in keys]
+
+        for row in self._data:
+            align = ['<'] * len(keys)
+            for i, k in enumerate(keys):
+                lens[i] = max(lens[i], len(str(row[k])))
+                align[i] = '<' if isinstance(row[k], (bytes, bytearray, str)) else '>'
+
+        fmt = '| %s |' % '|'.join([' {:%s%d} ' % (x, y) for x, y in zip(align, lens)])
+
+        out = []
+        out.append(fmt.format(*keys))
+        out.append('-' * len(out[0]))
+        for row in rows:
+            out.append(fmt.format(*list(row.values())))
+        return '\n'.join(out)
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
     def _repr_pretty_(self, p: Any, cycle: bool) -> None:
         if cycle:
@@ -707,7 +742,14 @@ class ShowResult(Sequence[Any]):
 
 
 class ShowAccessor(object):
-    """Accessor for ``SHOW`` commands."""
+    """
+    Accessor for ``SHOW`` commands.
+
+    See Also
+    --------
+    :attr:`Connection.show`
+
+    """
 
     def __init__(self, conn: 'Connection'):
         self._conn = conn
@@ -843,7 +885,13 @@ class ShowAccessor(object):
 
     def _iquery(self, qtype: str) -> ShowResult:
         """Query the given object type."""
-        return ShowResult(self._conn._iquery(f'show {qtype}'))
+        out = self._conn._iquery(f'show {qtype}')
+        for i, row in enumerate(out):
+            new_row = {}
+            for i, (k, v) in enumerate(row.items()):
+                new_row[under2camel(k)] = v
+            out[i] = new_row
+        return ShowResult(out)
 
 
 class Connection(metaclass=abc.ABCMeta):
@@ -852,7 +900,7 @@ class Connection(metaclass=abc.ABCMeta):
 
     Instances of this object are typically created through the
     :func:`singlestoredb.connect` function rather than creating them directly.
-    See the :func:`connect` function for parameter definitions.
+    See the :func:`singlestoredb.connect` function for parameter definitions.
 
     See Also
     --------
@@ -871,6 +919,7 @@ class Connection(metaclass=abc.ABCMeta):
     ProgrammingError = exceptions.ProgrammingError
     NotSupportedError = exceptions.NotSupportedError
 
+    #: Read-only DB-API parameter style
     paramstyle = 'named'
 
     # Populated when first needed
@@ -1008,15 +1057,7 @@ class Connection(metaclass=abc.ABCMeta):
 
     @abc.abstractproperty
     def messages(self) -> List[Tuple[int, str]]:
-        """
-        Return messages generated by the connection.
-
-        Returns
-        -------
-        list of tuples
-            Each tuple contains an int code and a message
-
-        """
+        """Messages generated during the connection."""
         raise NotImplementedError
 
     def __enter__(self) -> 'Connection':
@@ -1112,7 +1153,7 @@ def connect(
     ssl_verify_identity: Optional[bool] = None,
     conv: Optional[Dict[int, Callable[..., Any]]] = None,
     credential_type: Optional[str] = None,
-    autocommit: Optional[bool] = None,
+    autocommit: Optional[bool] = None, buffered: Optional[bool] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1165,6 +1206,8 @@ def connect(
         Type of authentication to use: auth.PASSWORD, auth.JWT, or auth.BROWSER_SSO
     autocommit : bool, optional
         Enable autocommits
+    buffered : bool, optional
+        Should query results be buffered before processing rows?
 
     Examples
     --------

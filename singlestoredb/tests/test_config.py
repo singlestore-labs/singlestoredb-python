@@ -75,17 +75,17 @@ class TestConfig(unittest.TestCase):
             reset_option('results')
 
     def test_shortcut_options(self):
-        format = get_option('results.format')
+        asize = get_option('results.arraysize')
         token = get_option('management.token')
 
-        self.assertEqual(get_option('format'), format)
-        self.assertEqual(options.format, format)
+        self.assertEqual(get_option('arraysize'), asize)
+        self.assertEqual(options.arraysize, asize)
 
-        options.format = 'tuple'
+        options.arraysize = 20
 
-        self.assertEqual(get_option('results.format'), 'tuple')
-        self.assertEqual(options.results.format, 'tuple')
-        self.assertEqual(options.format, 'tuple')
+        self.assertEqual(get_option('results.arraysize'), 20)
+        self.assertEqual(options.results.arraysize, 20)
+        self.assertEqual(options.arraysize, 20)
 
         self.assertEqual(get_option('token'), token)
         self.assertEqual(get_option('management.token'), token)
@@ -125,14 +125,14 @@ class TestConfig(unittest.TestCase):
 
     def test_errors(self):
         with self.assertRaises(ValueError):
-            set_option('results.format', 'hi')
+            set_option('credential_type', 'foo')
 
     def test_doc(self):
-        out = describe_option('results.format', 'local_infile', _print_desc=False)
+        out = describe_option('results.arraysize', 'local_infile', _print_desc=False)
         for line in out.split('\n'):
             if not line or line.startswith(' '):
                 continue
-            self.assertRegex(line, r'^(results\.format|local_infile)')
+            self.assertRegex(line, r'^(results\.arraysize|local_infile)')
 
         # Displays entire option hierarchy
         out = describe_option('management', _print_desc=False)
@@ -155,7 +155,7 @@ class TestConfig(unittest.TestCase):
     def test_suboptions(self):
         self.assertEqual(
             list(sorted(get_suboptions('results').keys())),
-            ['arraysize', 'format'],
+            ['arraysize'],
         )
 
         with self.assertRaises(KeyError):
@@ -163,10 +163,10 @@ class TestConfig(unittest.TestCase):
 
         # This is an option, not a level in the hierarchy
         with self.assertRaises(TypeError):
-            get_suboptions('results.format')
+            get_suboptions('results.arraysize')
 
     def test_get_default(self):
-        self.assertEqual(get_default('results.format'), 'tuple')
+        self.assertEqual(get_default('results.arraysize'), 100)
 
         with self.assertRaises(KeyError):
             get_default('results.foo')

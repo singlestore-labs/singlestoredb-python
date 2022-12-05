@@ -16,10 +16,6 @@ try:
     import _singlestoredb_accel
 except (ImportError, ModuleNotFoundError):
     _singlestoredb_accel = None
-    warnings.warn(
-        'Accelerator extension could not be loaded; '
-        'running in pure Python mode.', RuntimeWarning,
-    )
 
 from . import _auth
 
@@ -227,7 +223,8 @@ class Connection(BaseConnection):
     pure_python : bool, optional
         Should we ignore the C extension even if it's available?
         This can be given explicitly using True or False, or if the value is None,
-        the C extension will be loaded if it is available.
+        the C extension will be loaded if it is available. If set to False and
+        the C extension can't be loaded, a NotSupportedError is raised.
 
     See `Connection <https://www.python.org/dev/peps/pep-0249/#connection-objects>`_
     in the specification.
@@ -257,7 +254,7 @@ class Connection(BaseConnection):
         conv=None,
         use_unicode=True,
         client_flag=0,
-        cursorclass=Cursor,
+        cursorclass=None,
         init_command=None,
         connect_timeout=10,
         read_default_group=None,
@@ -283,6 +280,7 @@ class Connection(BaseConnection):
         parse_json=True,
         invalid_values=None,
         pure_python=None,
+        buffered=True,
         compress=None,  # not supported
         named_pipe=None,  # not supported
         passwd=None,  # deprecated
@@ -408,11 +406,31 @@ class Connection(BaseConnection):
 
         self.pure_python = pure_python
         self.output_type = 'tuples'
-        self.cursorclass = cursorclass
         self.resultclass = MySQLResult
+        if cursorclass is not None:
+            self.cursorclass = cursorclass
+        elif buffered:
+            self.cursorclass = Cursor
+        else:
+            self.cursorclass = SSCursor
+
+        if self.pure_python is False and _singlestoredb_accel is None:
+            try:
+                import _singlestortedb_accel  # noqa: F401
+            except Exception:
+                import traceback
+                traceback.print_exc(file=sys.stderr)
+            finally:
+                raise err.NotSupportedError(
+                    'pure_python=False, but the '
+                    'C extension can not be loaded',
+                )
+
+        if self.pure_python is True:
+            pass
 
         # The C extension handles these types internally.
-        if _singlestoredb_accel is not None and not self.pure_python:
+        elif _singlestoredb_accel is not None:
             self.resultclass = MySQLResultSV
             if self.cursorclass is Cursor:
                 self.cursorclass = CursorSV

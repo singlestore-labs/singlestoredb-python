@@ -12,16 +12,16 @@ class Region(object):
     Cluster region information.
 
     This object is not directly instantiated. It is used in results
-    of `ClusterManager` API calls.
+    of ``WorkspaceManager`` API calls.
 
     See Also
     --------
-    :attr:`ClusterManager.regions`
+    :attr:`WorkspaceManager.regions`
 
     """
 
     def __init__(self, id: str, name: str, provider: str):
-        """Use :attr:`ClusterManager.regions` instead."""
+        """Use :attr:`WorkspaceManager.regions` instead."""
         #: Unique ID of the region
         self.id = id
 
@@ -50,8 +50,8 @@ class Region(object):
         ----------
         obj : dict
             Key-value pairs to retrieve region information from
-        manager : ClusterManager, optional
-            The ClusterManager the Region belongs to
+        manager : WorkspaceManager, optional
+            The WorkspaceManager the Region belongs to
 
         Returns
         -------

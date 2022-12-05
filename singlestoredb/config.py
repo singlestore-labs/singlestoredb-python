@@ -67,8 +67,13 @@ register_option(
 )
 
 register_option(
-    'pure_python', 'bool', check_bool, False,
-    'Should the driver use a pure Python implementation?',
+    'pure_python', 'bool', check_optional_bool, None,
+    'Should the driver use a pure Python implementation? If the value is '
+    '`None`, the C extension will be used if it exists, and pure python '
+    'will be used otherwise. If the value is `False`, the pure python '
+    'implementation will be used. If the value is `True` and the C extension '
+    'exists, it will be used. If the value is `True` and the C extension '
+    'doesn\'t exist or can\'t be loaded, a `NotSupportedError` is raised.',
     environ='SINGLESTOREDB_PURE_PYTHON',
 )
 
@@ -153,22 +158,28 @@ register_option(
     environ='SINGLESTOREDB_AUTOCOMMIT',
 )
 
+register_option(
+    'buffered', 'bool', check_bool, True,
+    'Should query results be buffered before processing?',
+    environ='SINGLESTOREDB_BUFFERED',
+)
+
 #
 # Query results options
 #
-register_option(
-    'results.format', 'string',
-    functools.partial(
-        check_str,
-        valid_values=[
-            'tuple', 'namedtuple',
-            'dict', 'dataframe',
-        ],
-    ),
-    'tuple',
-    'What form should the query results take?',
-    environ='SINGLESTOREDB_RESULTS_FORMAT',
-)
+# register_option(
+#    'results.type', 'string',
+#    functools.partial(
+#        check_str,
+#        valid_values=[
+#            'tuple', 'namedtuple',
+#            'dict', 'dataframe',
+#        ],
+#    ),
+#    'tuple',
+#    'What form should the query results take?',
+#    environ='SINGLESTOREDB_RESULTS_TYPE',
+# )
 
 register_option(
     'results.arraysize', 'int', check_int, 100,
@@ -178,7 +189,7 @@ register_option(
 
 
 #
-# Cluster manager options
+# Workspace manager options
 #
 register_option(
     'management.token', 'string', check_str, None,
