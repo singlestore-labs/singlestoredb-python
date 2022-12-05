@@ -209,3 +209,16 @@ jobs:
 #         echo $CONDA/bin >> $GITHUB_PATH
 #         anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main conda-bld/*/singlestoredb-*.tar.bz2
 #
+
+  shutdown-database:
+    needs: [setup-database, test]
+    if: ${{ always() }}
+    runs-on: ubuntu-20.04
+
+    steps:
+      # Just use curl here so we don't have to check out the package source again.
+      - name: Shutdown database
+        run: |
+          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v1/workspaces/${{ env.CLUSTER_ID }}"
+        env:
+          CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}
