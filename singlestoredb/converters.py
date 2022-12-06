@@ -49,11 +49,6 @@ ZERO_DATETIMES = set([
 ZERO_DATES = set([
     '0000-00-00',
 ])
-ZERO_TIMEDELTAS = set([
-    '00:00:00',
-    '00:00:00.000',
-    '00:00:00.000000',
-])
 
 
 def datetime_fromisoformat(
@@ -134,9 +129,6 @@ def timedelta_fromisoformat(
     if isinstance(obj, (bytes, bytearray)):
         obj = obj.decode('ascii')
 
-    if obj in ZERO_TIMEDELTAS:
-        return None
-
     m = TIMEDELTA_RE.match(obj)
     if not m:
         return obj
@@ -190,9 +182,6 @@ def time_fromisoformat(
     """
     if isinstance(obj, (bytes, bytearray)):
         obj = obj.decode('ascii')
-
-    if obj in ZERO_TIMEDELTAS:
-        return None
 
     # Use datetime methods if possible
     if _dt_time_fromisoformat is not None:
