@@ -167,19 +167,19 @@ register_option(
 #
 # Query results options
 #
-# register_option(
-#    'results.type', 'string',
-#    functools.partial(
-#        check_str,
-#        valid_values=[
-#            'tuple', 'namedtuple',
-#            'dict', 'dataframe',
-#        ],
-#    ),
-#    'tuple',
-#    'What form should the query results take?',
-#    environ='SINGLESTOREDB_RESULTS_TYPE',
-# )
+register_option(
+    'results.type', 'string',
+    functools.partial(
+        check_str,
+        valid_values=[
+            'tuple', 'tuples', 'namedtuple', 'namedtuples',
+            'dict', 'dicts',
+        ],
+    ),
+    'tuples',
+    'What form should the query results take?',
+    environ='SINGLESTOREDB_RESULTS_TYPE',
+)
 
 register_option(
     'results.arraysize', 'int', check_int, 100,

@@ -1,5 +1,6 @@
 # type: ignore
 import re
+from collections import namedtuple
 
 from . import err
 from ..connection import Cursor as BaseCursor
@@ -505,11 +506,42 @@ class DictCursorMixin:
 
 
 class DictCursor(DictCursorMixin, Cursor):
-    """A cursor which returns results as a dictionary"""
+    """A cursor which returns results as a dictionary."""
 
 
 class DictCursorSV(Cursor):
     """A cursor which returns results as a dictionary for C extension."""
+
+
+class NamedtupleCursorMixin:
+
+    def _do_get_result(self):
+        super(NamedtupleCursorMixin, self)._do_get_result()
+        fields = []
+        if self._description:
+            for f in self._result.fields:
+                name = f.name
+                if name in fields:
+                    name = f.table_name + '.' + name
+                fields.append(name)
+            self._fields = fields
+            self._namedtuple = namedtuple('Row', self._fields)
+
+        if fields and self._rows:
+            self._rows = [self._conv_row(r) for r in self._rows]
+
+    def _conv_row(self, row):
+        if row is None:
+            return None
+        return self._namedtuple(*row)
+
+
+class NamedtupleCursor(NamedtupleCursorMixin, Cursor):
+    """A cursor which returns results in a named tuple."""
+
+
+class NamedtupleCursorSV(Cursor):
+    """A cursor which returns results as a named tuple for C extension."""
 
 
 class SSCursor(Cursor):
@@ -702,9 +734,17 @@ class SSCursorSV(SSCursor):
             raise err.ProgrammingError('unknown scroll mode %s' % mode)
 
 
-class SSDictCursorSV(SSCursorSV):
-    """An unbuffered cursor for use with PyMySQLsv, which returns a dictionary"""
-
-
 class SSDictCursor(DictCursorMixin, SSCursor):
     """An unbuffered cursor, which returns results as a dictionary"""
+
+
+class SSDictCursorSV(SSCursorSV):
+    """An unbuffered cursor for the C extension, which returns a dictionary"""
+
+
+class SSNamedtupleCursor(NamedtupleCursorMixin, SSCursor):
+    """An unbuffered cursor, which returns results as a named tuple"""
+
+
+class SSNamedtupleCursorSV(SSCursorSV):
+    """An unbuffered cursor for the C extension, which returns results as a named tuple"""

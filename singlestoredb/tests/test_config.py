@@ -155,7 +155,7 @@ class TestConfig(unittest.TestCase):
     def test_suboptions(self):
         self.assertEqual(
             list(sorted(get_suboptions('results').keys())),
-            ['arraysize'],
+            ['arraysize', 'type'],
         )
 
         with self.assertRaises(KeyError):

@@ -190,8 +190,11 @@ _converters: Dict[
     ],
 ] = {
     'tuple': results_to_tuple,
+    'tuples': results_to_tuple,
     'namedtuple': results_to_namedtuple,
+    'namedtuples': results_to_namedtuple,
     'dict': results_to_dict,
+    'dicts': results_to_dict,
     'dataframe': results_to_dataframe,
 }
 

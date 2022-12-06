@@ -25,12 +25,16 @@ from . import converters
 from .cursors import (
     Cursor,
     CursorSV,
-    SSCursor,
-    SSCursorSV,
     DictCursor,
     DictCursorSV,
+    NamedtupleCursor,
+    NamedtupleCursorSV,
+    SSCursor,
+    SSCursorSV,
     SSDictCursor,
     SSDictCursorSV,
+    SSNamedtupleCursor,
+    SSNamedtupleCursorSV,
 )
 from .optionfile import Parser
 from .protocol import (
@@ -281,6 +285,7 @@ class Connection(BaseConnection):
         invalid_values=None,
         pure_python=None,
         buffered=True,
+        results_type='tuples',
         compress=None,  # not supported
         named_pipe=None,  # not supported
         passwd=None,  # deprecated
@@ -405,14 +410,24 @@ class Connection(BaseConnection):
         self.client_flag = client_flag
 
         self.pure_python = pure_python
-        self.output_type = 'tuples'
+        self.results_type = results_type
         self.resultclass = MySQLResult
         if cursorclass is not None:
             self.cursorclass = cursorclass
         elif buffered:
-            self.cursorclass = Cursor
+            if 'dict' in self.results_type:
+                self.cursorclass = DictCursor
+            elif 'namedtuple' in self.results_type:
+                self.cursorclass = NamedtupleCursor
+            else:
+                self.cursorclass = Cursor
         else:
-            self.cursorclass = SSCursor
+            if 'dict' in self.results_type:
+                self.cursorclass = SSDictCursor
+            elif 'namedtuple' in self.results_type:
+                self.cursorclass = SSNamedtupleCursor
+            else:
+                self.cursorclass = SSCursor
 
         if self.pure_python is False and _singlestoredb_accel is None:
             try:
@@ -438,10 +453,16 @@ class Connection(BaseConnection):
                 self.cursorclass = SSCursorSV
             elif self.cursorclass is DictCursor:
                 self.cursorclass = DictCursorSV
-                self.output_type = 'dicts'
+                self.results_type = 'dicts'
             elif self.cursorclass is SSDictCursor:
                 self.cursorclass = SSDictCursorSV
-                self.output_type = 'dicts'
+                self.results_type = 'dicts'
+            elif self.cursorclass is NamedtupleCursor:
+                self.cursorclass = NamedtupleCursorSV
+                self.results_type = 'namedtuples'
+            elif self.cursorclass is SSNamedtupleCursor:
+                self.cursorclass = SSNamedtupleCursorSV
+                self.results_type = 'namedtuples'
 
         self._result = None
         self._affected_rows = 0
@@ -1579,7 +1600,7 @@ class MySQLResultSV(MySQLResult):
         self.options = {
             k: v for k, v in dict(
                 default_converters=converters.decoders,
-                output_type=connection.output_type,
+                results_type=connection.results_type,
                 parse_json=connection.parse_json,
                 invalid_values=connection.invalid_values,
                 unbuffered=unbuffered,

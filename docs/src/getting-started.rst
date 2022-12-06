@@ -161,20 +161,20 @@ iterated over itself.
            print(row)
 
 
-Result Formats
-..............
+Result Type
+...........
 
 In addition to being able to specify the amount of data to be retrieved, you can also
 specify the data structure that the results are returned in. By default, each row of
 data is a tuple with one element per column from the query. However, it is also possible
-to get results back as named tuples, dicts, or :class:`pandas.DataFrame`.
+to get results back as named tuples or dicts.
 
 Tuples (Default)
 ^^^^^^^^^^^^^^^^
 
 .. ipython:: python
 
-   with s2.connect(results_format='tuple') as conn:
+   with s2.connect(results_type='tuples') as conn:
        with conn.cursor() as cur:
            cur.execute('show variables like "auto%"')
            for row in cur.fetchall():
@@ -186,7 +186,7 @@ Named Tuples
 
 .. ipython:: python
 
-   with s2.connect(results_format='namedtuple') as conn:
+   with s2.connect(results_type='namedtuples') as conn:
        with conn.cursor() as cur:
            cur.execute('show variables like "auto%"')
            for row in cur.fetchall():
@@ -198,22 +198,8 @@ Dictionaries
 
 .. ipython:: python
 
-   with s2.connect(results_format='dict') as conn:
+   with s2.connect(results_type='dicts') as conn:
        with conn.cursor() as cur:
            cur.execute('show variables like "auto%"')
            for row in cur.fetchall():
                print(row)
-
-
-DataFrames
-^^^^^^^^^^^^
-
-Note that in this example, we do not loop through the rows to print each one
-separately. The entire result of :meth:`Cursor.fetchall` is a ``DataFrame``.
-
-.. ipython:: python
-
-   with s2.connect(results_format='dataframe') as conn:
-       with conn.cursor() as cur:
-           cur.execute('show variables like "auto%"')
-           print(cur.fetchall())

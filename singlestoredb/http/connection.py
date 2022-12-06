@@ -33,6 +33,7 @@ from ..exceptions import ProgrammingError
 from ..exceptions import Warning  # noqa: F401
 from ..utils.convert_rows import convert_rows
 from ..utils.results import Description
+from ..utils.results import format_results
 from ..utils.results import Result
 
 
@@ -179,6 +180,8 @@ class Cursor(connection.Cursor):
         connection.Cursor.__init__(self, conn)
         self._connection: Optional[Connection] = conn
         self._results: List[List[Tuple[Any, ...]]] = [[]]
+        self._results_type: str = self._connection._results_type \
+            if self._connection is not None else 'tuples'
         self._row_idx: int = -1
         self._result_idx: int = -1
         self._descriptions: List[List[Description]] = []
@@ -473,7 +476,11 @@ class Cursor(connection.Cursor):
             return None
         out = self._rows[self._row_idx]
         self._row_idx += 1
-        return out
+        return format_results(
+            self._results_type,
+            self.description or [],
+            out, single=True,
+        )
 
     def fetchmany(
         self,
@@ -493,14 +500,16 @@ class Cursor(connection.Cursor):
         if self._connection is None:
             raise ProgrammingError(errno=2048, msg='Connection is closed')
         if not self._has_row:
-            return []
+            if 'dict' in self._results_type:
+                return {}
+            return tuple()
         if not size:
             size = max(int(self.arraysize), 1)
         else:
             size = max(int(size), 1)
         out = self._rows[self._row_idx:self._row_idx+size]
         self._row_idx += len(out)
-        return out
+        return format_results(self._results_type, self.description or [], out)
 
     def fetchall(self) -> Result:
         """
@@ -515,10 +524,12 @@ class Cursor(connection.Cursor):
         if self._connection is None:
             raise ProgrammingError(errno=2048, msg='Connection is closed')
         if not self._has_row:
-            return []
+            if 'dict' in self._results_type:
+                return {}
+            return tuple()
         out = list(self._rows)
         self._row_idx = len(out)
-        return out
+        return format_results(self._results_type, self.description or [], out)
 
     def nextset(self) -> Optional[bool]:
         """Skip to the next available result set."""
@@ -703,6 +714,7 @@ class Connection(connection.Connection):
         self._messages: List[Tuple[int, str]] = []
         self._autocommit: bool = True
         self._conv = kwargs.get('conv', None)
+        self._results_type = kwargs.get('results_type', 'tuples')
 
     @property
     def messages(self) -> List[Tuple[int, str]]:
@@ -820,6 +832,7 @@ def connect(
     conv: Optional[Dict[int, Callable[..., Any]]] = None,
     #   results_format: Optional[str] = None,
     credential_type: Optional[str] = None,
+    results_type: Optional[str] = None,
     autocommit: Optional[bool] = None,
 ) -> Connection:
     return Connection(**dict(locals()))

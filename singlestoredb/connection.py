@@ -123,6 +123,8 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
     for name in inspect.getfullargspec(connect).args:
         if name == 'conv':
             out[name] = kwargs.get(name, None)
+        elif name == 'results_type':
+            out[name] = kwargs.get(name, get_option('results.type'))
         else:
             out[name] = kwargs.get(name, get_option(name))
 
@@ -1153,7 +1155,9 @@ def connect(
     ssl_verify_identity: Optional[bool] = None,
     conv: Optional[Dict[int, Callable[..., Any]]] = None,
     credential_type: Optional[str] = None,
-    autocommit: Optional[bool] = None, buffered: Optional[bool] = None,
+    autocommit: Optional[bool] = None,
+    results_type: Optional[str] = None,
+    buffered: Optional[bool] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1163,7 +1167,7 @@ def connect(
     host : str, optional
         Hostname, IP address, or URL that describes the connection.
         The scheme or protocol defines which database connector to use.
-        By default, the ``pymysql`` scheme is used. To connect to the
+        By default, the ``mysql`` scheme is used. To connect to the
         HTTP API, the scheme can be set to ``http`` or ``https``. The username,
         password, host, and port are specified as in a standard URL. The path
         indicates the database name. The overall form of the URL is:
@@ -1206,6 +1210,8 @@ def connect(
         Type of authentication to use: auth.PASSWORD, auth.JWT, or auth.BROWSER_SSO
     autocommit : bool, optional
         Enable autocommits
+    results_type : str, optional
+        The form of the query results: tuples, namedtuples, dicts
     buffered : bool, optional
         Should query results be buffered before processing rows?
 

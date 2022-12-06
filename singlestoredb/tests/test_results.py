@@ -45,8 +45,8 @@ class TestResults(unittest.TestCase):
             # traceback.print_exc()
             pass
 
-    def _test_tuples(self):
-        with s2.options(('results.format', 'tuple')):
+    def test_tuples(self):
+        with s2.options(('results.type', 'tuple')):
             with s2.connect(database=type(self).dbname) as conn:
                 with conn.cursor() as cur:
                     cur.execute('select * from data')
@@ -71,8 +71,8 @@ class TestResults(unittest.TestCase):
                     out = cur.fetchall()
                     assert len(out) == 0, len(out)
 
-    def _test_namedtuples(self):
-        with s2.options(('results.format', 'namedtuple')):
+    def test_namedtuples(self):
+        with s2.options(('results.type', 'namedtuple')):
             with s2.connect(database=type(self).dbname) as conn:
                 with conn.cursor() as cur:
                     cur.execute('select * from data')
@@ -105,8 +105,8 @@ class TestResults(unittest.TestCase):
                     out = cur.fetchall()
                     assert len(out) == 0, len(out)
 
-    def _test_dict(self):
-        with s2.options(('results.format', 'dict')):
+    def test_dict(self):
+        with s2.options(('results.type', 'dict')):
             with s2.connect(database=type(self).dbname) as conn:
                 with conn.cursor() as cur:
                     cur.execute('select * from data')
@@ -134,7 +134,7 @@ class TestResults(unittest.TestCase):
                     assert len(out) == 0, len(out)
 
     def _test_dataframe(self):
-        with s2.options(('results.format', 'dataframe')):
+        with s2.options(('results.type', 'dataframe')):
             with s2.connect(database=type(self).dbname) as conn:
                 with conn.cursor() as cur:
                     cur.execute('select * from data')
