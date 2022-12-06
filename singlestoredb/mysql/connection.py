@@ -1364,7 +1364,12 @@ class MySQLResult:
         self.has_next = None
         self.unbuffered_active = False
         if unbuffered:
-            self.init_unbuffered_query()
+            try:
+                self.init_unbuffered_query()
+            except Exception:
+                self.connection = None
+                self.unbuffered_active = False
+                raise
 
     def __del__(self):
         if self.unbuffered_active:

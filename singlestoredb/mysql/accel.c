@@ -176,6 +176,53 @@
 #define IS_TIME_MILLI(s, s_l) ((s_l) == 12)
 #define IS_TIME_MICRO(s, s_l) ((s_l) == 15)
 
+
+// 0000-00-00 00:00:00
+// 0000-00-00 00:00:00.000
+// 0000-00-00 00:00:00.000000
+#define CHECK_ANY_ZERO_DATETIME_STR(s, s_l) \
+    (((s_l) == 19 && CHECK_ZERO_DATETIME_STR(s, s_l)) || \
+     ((s_l) == 23 && CHECK_ZERO_MILLI_DATETIME_STR(s, s_l)) || \
+     ((s_l) == 26 && CHECK_ZERO_MICRO_DATETIME_STR(s, s_l)))
+
+#define CHECK_ZERO_DATETIME_STR(s, s_l) \
+    (s_l == 19 && \
+     CHECK_ZERO_DATE_STR(s, 10) && \
+     ((s)[10] == ' ' || (s)[10] == 'T') && \
+     CHECK_ZERO_TIME_STR((s)+11, 8))
+
+#define CHECK_ZERO_MILLI_DATETIME_STR(s, s_l) \
+    (s_l == 23 && \
+     CHECK_ZERO_DATE_STR(s, 10) && \
+     ((s)[10] == ' ' || (s)[10] == 'T') && \
+     CHECK_ZERO_MILLI_TIME_STR((s)+11, 12))
+
+#define CHECK_ZERO_MICRO_DATETIME_STR(s, s_l) \
+    (s_l == 26 && \
+     CHECK_ZERO_DATE_STR(s, 10) && \
+     ((s)[10] == ' ' || (s)[10] == 'T') && \
+     CHECK_ZERO_MICRO_TIME_STR((s)+11, 15))
+
+#define CHECK_ZERO_DATE_STR(s, s_l) \
+    (s_l == 10 && ((s)[0] == '0' && (s)[1] == '0' && (s)[2] == '0' && (s)[3] == '0' && \
+     (s)[4] == '-' && (s)[5] == '0' && (s)[6] == '0' && (s)[7] == '-' && \
+     (s)[8] == '0' && (s)[9] == '0'))
+
+#define CHECK_ZERO_TIME_STR(s, s_l) \
+    (s_l == 8 && ((s)[0] == '0' && (s)[1] == '0' && (s)[2] == ':' && \
+     (s)[3] == '0' && (s)[4] == '0' && (s)[5] == ':' && \
+     (s)[6] == '0' && (s)[7] == '0'))
+
+#define CHECK_ZERO_MILLI_TIME_STR(s, s_l) \
+    (s_l == 12 && CHECK_ZERO_TIME_STR(s, 8) && \
+     (s)[8] == '.' && (s)[9] == '0' && (s)[10] == '0' && (s)[11] == '0')
+
+#define CHECK_ZERO_MICRO_TIME_STR(s, s_l) \
+    (s_l == 15 && CHECK_ZERO_TIME_STR(s, 8) && \
+     (s)[8] == '.' && (s)[9] == '0' && (s)[10] == '0' && (s)[11] == '0' && \
+                      (s)[12] == '0' && (s)[13] == '0' && (s)[14] == '0')
+
+
 #define CHECK_TIMEDELTA1_STR(s, s_l) \
     ((s_l) == 7 && \
      (s)[0] >= '0' && (s)[0] <= '9' && \
@@ -661,7 +708,7 @@ error:
 static PyType_Slot StateType_slots[] = {
     {Py_tp_init, (initproc)State_init},
     {Py_tp_dealloc, (destructor)State_dealloc},
-    {Py_tp_doc, "MySQL accelerator"},
+    {Py_tp_doc, "PyMySQL accelerator"},
     {0, NULL},
 };
 
@@ -788,7 +835,7 @@ static PyObject *read_bytes(StateObject *py_state, unsigned long long num_bytes)
 
                 force_close(py_state->py_conn);
                 raise_exception(py_state->py_conn, "OperationalError", 0,
-                                "Lost connection to MySQL server during query");
+                                "Lost connection to SingleStoreDB server during query");
                 goto error;
             }
             else if (PyErr_ExceptionMatches(PyExc_BaseException)) {
@@ -806,7 +853,7 @@ static PyObject *read_bytes(StateObject *py_state, unsigned long long num_bytes)
     if (PyBytes_Size(py_data) < (long int)num_bytes) {
         force_close(py_state->py_conn);
         raise_exception(py_state->py_conn, "OperationalError", 0,
-                        "Lost connection to MySQL server during query");
+                        "Lost connection to SingleStoreDB server during query");
         goto error;
     }
 
@@ -851,7 +898,7 @@ static PyObject *read_packet(StateObject *py_state) {
             force_close(py_state->py_conn);
             if (packet_number == 0) {
                 raise_exception(py_state->py_conn, "OperationalError", 0,
-                                "Lost connection to MySQL server during query");
+                                "Lost connection to SingleStoreDB server during query");
 
                 goto error;
             }
@@ -1247,7 +1294,12 @@ static PyObject *read_row_from_packet(
 
                 case MYSQL_TYPE_DATETIME:
                 case MYSQL_TYPE_TIMESTAMP:
-                    if (!CHECK_ANY_DATETIME_STR(out, out_l)) {
+                    if (CHECK_ANY_ZERO_DATETIME_STR(out, out_l)) {
+                        py_item = Py_None;
+                        Py_INCREF(Py_None);
+                        break;
+                    }
+                    else if (!CHECK_ANY_DATETIME_STR(out, out_l)) {
                         if (py_state->py_invalid_values[i]) {
                             py_item = py_state->py_invalid_values[i];
                             Py_INCREF(py_item);
@@ -1279,7 +1331,12 @@ static PyObject *read_row_from_packet(
 
                 case MYSQL_TYPE_NEWDATE:
                 case MYSQL_TYPE_DATE:
-                    if (!CHECK_DATE_STR(out, out_l)) {
+                    if (CHECK_ZERO_DATE_STR(out, out_l)) {
+                        py_item = Py_None;
+                        Py_INCREF(Py_None);
+                        break;
+                    }
+                    else if (!CHECK_DATE_STR(out, out_l)) {
                         if (py_state->py_invalid_values[i]) {
                             py_item = py_state->py_invalid_values[i];
                             Py_INCREF(py_item);
@@ -1577,7 +1634,7 @@ error:
 }
 
 static PyMethodDef PyMySQLAccelMethods[] = {
-    {"read_rowdata_packet", (PyCFunction)read_rowdata_packet, METH_VARARGS | METH_KEYWORDS, "MySQL row data packet reader"},
+    {"read_rowdata_packet", (PyCFunction)read_rowdata_packet, METH_VARARGS | METH_KEYWORDS, "PyMySQL row data packet reader"},
     {NULL, NULL, 0, NULL}
 };
 

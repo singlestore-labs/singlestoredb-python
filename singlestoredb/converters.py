@@ -38,10 +38,27 @@ DATETIME_RE = re.compile(
     r'(\d{1,4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{1,2}):(\d{1,2})(?:.(\d{1,6}))?',
 )
 
+ZERO_DATETIMES = set([
+    '0000-00-00 00:00:00',
+    '0000-00-00 00:00:00.000',
+    '0000-00-00 00:00:00.000000',
+    '0000-00-00T00:00:00',
+    '0000-00-00T00:00:00.000',
+    '0000-00-00T00:00:00.000000',
+])
+ZERO_DATES = set([
+    '0000-00-00',
+])
+ZERO_TIMEDELTAS = set([
+    '00:00:00',
+    '00:00:00.000',
+    '00:00:00.000000',
+])
+
 
 def datetime_fromisoformat(
     obj: Union[str, bytes, bytearray],
-) -> Union[datetime.datetime, str]:
+) -> Union[datetime.datetime, str, None]:
     """Returns a DATETIME or TIMESTAMP column value as a datetime object:
 
       >>> datetime_fromisoformat('2007-02-25 23:06:20')
@@ -49,15 +66,19 @@ def datetime_fromisoformat(
       >>> datetime_fromisoformat('2007-02-25T23:06:20')
       datetime.datetime(2007, 2, 25, 23, 6, 20)
 
-    Illegal values are returned as str:
+    Illegal values are returned as str or None:
 
       >>> datetime_fromisoformat('2007-02-31T23:06:20')
       '2007-02-31T23:06:20'
       >>> datetime_fromisoformat('0000-00-00 00:00:00')
-      '0000-00-00 00:00:00'
+      None
+
     """
     if isinstance(obj, (bytes, bytearray)):
         obj = obj.decode('ascii')
+
+    if obj in ZERO_DATETIMES:
+        return None
 
     # Use datetime methods if possible
     if _dt_datetime_fromisoformat is not None:
@@ -93,7 +114,7 @@ TIMEDELTA_RE = re.compile(r'(-)?(\d{1,3}):(\d{1,2}):(\d{1,2})(?:.(\d{1,6}))?')
 
 def timedelta_fromisoformat(
     obj: Union[str, bytes, bytearray],
-) -> Union[datetime.timedelta, str]:
+) -> Union[datetime.timedelta, str, None]:
     """Returns a TIME column as a timedelta object:
 
       >>> timedelta_fromisoformat('25:06:17')
@@ -112,6 +133,9 @@ def timedelta_fromisoformat(
     """
     if isinstance(obj, (bytes, bytearray)):
         obj = obj.decode('ascii')
+
+    if obj in ZERO_TIMEDELTAS:
+        return None
 
     m = TIMEDELTA_RE.match(obj)
     if not m:
@@ -142,7 +166,7 @@ TIME_RE = re.compile(r'(\d{1,2}):(\d{1,2}):(\d{1,2})(?:.(\d{1,6}))?')
 
 def time_fromisoformat(
     obj: Union[str, bytes, bytearray],
-) -> Union[datetime.time, str]:
+) -> Union[datetime.time, str, None]:
     """Returns a TIME column as a time object:
 
       >>> time_fromisoformat('15:06:17')
@@ -166,6 +190,9 @@ def time_fromisoformat(
     """
     if isinstance(obj, (bytes, bytearray)):
         obj = obj.decode('ascii')
+
+    if obj in ZERO_TIMEDELTAS:
+        return None
 
     # Use datetime methods if possible
     if _dt_time_fromisoformat is not None:
@@ -194,21 +221,25 @@ def time_fromisoformat(
 
 def date_fromisoformat(
     obj: Union[str, bytes, bytearray],
-) -> Union[datetime.date, str]:
+) -> Union[datetime.date, str, None]:
     """Returns a DATE column as a date object:
 
       >>> date_fromisoformat('2007-02-26')
       datetime.date(2007, 2, 26)
 
-    Illegal values are returned as str:
+    Illegal values are returned as str or None:
 
       >>> date_fromisoformat('2007-02-31')
       '2007-02-31'
       >>> date_fromisoformat('0000-00-00')
-      '0000-00-00'
+      None
+
     """
     if isinstance(obj, (bytes, bytearray)):
         obj = obj.decode('ascii')
+
+    if obj in ZERO_DATES:
+        return None
 
     # Use datetime methods if possible
     if _dt_date_fromisoformat is not None:
