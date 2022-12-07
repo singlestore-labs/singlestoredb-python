@@ -52,7 +52,7 @@ class test_MySQLdb(capabilities.DatabaseTest):
         try:
             self.create_table(('pos INT', 'tree CHAR(20)'))
             c.executemany(
-                'INSERT INTO %s (pos,tree) VALUES (:1,:2)' % self.table,
+                'INSERT INTO %s (pos,tree) VALUES (%%s,%%s)' % self.table,
                 list(enumerate('ash birch cedar larch pine'.split())),
             )
             db.commit()

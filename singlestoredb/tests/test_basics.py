@@ -176,7 +176,7 @@ class TestBasics(unittest.TestCase):
         assert self.cur.rownumber == 5, self.cur.rownumber
 
     def test_execute_with_dict_params(self):
-        self.cur.execute('select * from data where id < :name', dict(name='d'))
+        self.cur.execute('select * from data where id < %(name)s', dict(name='d'))
         out = self.cur.fetchall()
 
         desc = self.cur.description
@@ -200,7 +200,7 @@ class TestBasics(unittest.TestCase):
         assert desc[2].type_code == 8, desc[2].type_code
 
     def test_execute_with_positional_params(self):
-        self.cur.execute('select * from data where id < :1', ['d'])
+        self.cur.execute('select * from data where id < %s', ['d'])
         out = self.cur.fetchall()
 
         desc = self.cur.description
@@ -225,7 +225,7 @@ class TestBasics(unittest.TestCase):
 
     def test_execute_with_escaped_positional_substitutions(self):
         self.cur.execute(
-            'select `id`, `time` from alltypes where `time` = :1', ['00:07:00'],
+            'select `id`, `time` from alltypes where `time` = %s', ['00:07:00'],
         )
         out = self.cur.fetchall()
         assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
@@ -234,30 +234,30 @@ class TestBasics(unittest.TestCase):
         out = self.cur.fetchall()
         assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
-        with self.assertRaises(IndexError):
-            self.cur.execute(
-                'select `id`, `time` from alltypes where `id` = :1 '
-                'or `time` = "00:07:00"', [0],
-            )
+#       with self.assertRaises(IndexError):
+#           self.cur.execute(
+#               'select `id`, `time` from alltypes where `id` = %1s '
+#               'or `time` = "00:07:00"', [0],
+#           )
 
         self.cur.execute(
-            'select `id`, `time` from alltypes where `id` = :1 '
-            'or `time` = "00::07::00"', [0],
+            'select `id`, `time` from alltypes where `id` = %s '
+            'or `time` = "00:07:00"', [0],
         )
         out = self.cur.fetchall()
         assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
     def test_execute_with_escaped_substitutions(self):
         self.cur.execute(
-            'select `id`, `time` from alltypes where `time` = :time',
+            'select `id`, `time` from alltypes where `time` = %(time)s',
             dict(time='00:07:00'),
         )
         out = self.cur.fetchall()
         assert out[0] == (0, datetime.timedelta(seconds=420)), out[0]
 
         self.cur.execute(
-            'select `id`, `time` from alltypes where `time` = :time',
-            dict(time='00::07::00'),
+            'select `id`, `time` from alltypes where `time` = %(time)s',
+            dict(time='00:07:00'),
         )
         out = self.cur.fetchall()
         assert len(out) == 1, out
@@ -265,13 +265,13 @@ class TestBasics(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.cur.execute(
                 'select `id`, `time`, `char_100` from alltypes '
-                'where `time` = :time or `char_100` like "foo:bar"',
-                dict(time='00:07:00'),
+                'where `time` = %(time)s or `char_100` like "foo:bar"',
+                dict(x='00:07:00'),
             )
 
         self.cur.execute(
             'select `id`, `time`, `char_100` from alltypes '
-            'where `time` = :time or `char_100` like "foo::bar"',
+            'where `time` = %(time)s or `char_100` like "foo::bar"',
             dict(time='00:07:00'),
         )
         out = self.cur.fetchall()
@@ -295,7 +295,7 @@ class TestBasics(unittest.TestCase):
     def test_executemany(self):
         # NOTE: Doesn't actually do anything since no rows match
         self.cur.executemany(
-            'delete from data where id > :name',
+            'delete from data where id > %(name)s',
             [dict(name='z'), dict(name='y')],
         )
 

@@ -37,8 +37,8 @@ from .utils.results import Result
 # DB-API settings
 apilevel = '2.0'
 threadsafety = 1
-paramstyle = map_paramstyle = 'named'
-positional_paramstyle = 'numeric'
+paramstyle = map_paramstyle = 'pyformat'
+positional_paramstyle = 'format'
 
 
 # Type codes for character-based columns
@@ -341,12 +341,12 @@ class VariableAccessor(MutableMapping):  # type: ignore
             value = 'OFF'
         if 'local' in self.vtype:
             self.connection._iquery(
-                'set {} {}=:1;'.format(
+                'set {} {}=%s;'.format(
                     self.vtype.replace('local', 'session'), name,
                 ), [value],
             )
         else:
-            self.connection._iquery('set {} {}=:1;'.format(self.vtype, name), [value])
+            self.connection._iquery('set {} {}=%s;'.format(self.vtype, name), [value])
 
     def __delitem__(self, name: str) -> None:
         raise TypeError('Variables can not be deleted.')
@@ -473,43 +473,43 @@ class Cursor(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def execute(
-        self, oper: str,
-        params: Optional[Union[Sequence[Any], Dict[str, Any], Any]] = None,
+        self, query: str,
+        args: Optional[Union[Sequence[Any], Dict[str, Any], Any]] = None,
     ) -> None:
         """
         Execute a SQL statement.
 
         Parameters
         ----------
-        oper : str
+        query : str
             The SQL statement to execute
-        params : iterable or dict, optional
+        args : iterable or dict, optional
             Parameters to substitute into the SQL code
 
         """
         raise NotImplementedError
 
     def executemany(
-        self, oper: str,
-        param_seq: Optional[Sequence[Union[Sequence[Any], Dict[str, Any], Any]]] = None,
+        self, query: str,
+        args: Optional[Sequence[Union[Sequence[Any], Dict[str, Any], Any]]] = None,
     ) -> None:
         """
         Execute SQL code against multiple sets of parameters.
 
         Parameters
         ----------
-        oper : str
+        query : str
             The SQL statement to execute
-        params_seq : iterable of iterables or dicts, optional
+        args : iterable of iterables or dicts, optional
             Sets of parameters to substitute into the SQL code
 
         """
         # NOTE: Just implement using `execute` to cover driver inconsistencies
-        if not param_seq:
-            self.execute(oper)
+        if not args:
+            self.execute(query)
         else:
-            for params in param_seq:
-                self.execute(oper, params)
+            for params in args:
+                self.execute(query, params)
 
     @abc.abstractmethod
     def fetchone(self) -> Optional[Result]:
@@ -932,6 +932,7 @@ class Connection(metaclass=abc.ABCMeta):
         """Call :func:`singlestoredb.connect` instead."""
         self.connection_params: Dict[str, Any] = kwargs
         self.errorhandler = None
+        self._results_type: str = kwargs.get('results_type', None) or 'tuples'
 
         #: Session encoding
         self.encoding = self.connection_params.get('charset', None) or 'utf-8'

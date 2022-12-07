@@ -64,34 +64,34 @@ class CursorTest(base.PyMySQLTestCase):
             cursor = conn.cursor()
 
             m = cursors.RE_INSERT_VALUES.match(
-                'INSERT INTO TEST (ID, NAME) VALUES (:1, :2)',
+                'INSERT INTO TEST (ID, NAME) VALUES (%s, %s)',
             )
-            self.assertIsNotNone(m, 'error parse :1')
+            self.assertIsNotNone(m, 'error parse %s')
             self.assertEqual(
                 m.group(3), '', 'group 3 not blank, bug in RE_INSERT_VALUES?',
             )
 
             m = cursors.RE_INSERT_VALUES.match(
-                'INSERT INTO TEST (ID, NAME) VALUES (:id, :name)',
+                'INSERT INTO TEST (ID, NAME) VALUES (%(id)s, %(name)s)',
             )
-            self.assertIsNotNone(m, 'error parse :name')
+            self.assertIsNotNone(m, 'error parse %(name)s')
             self.assertEqual(
                 m.group(3), '', 'group 3 not blank, bug in RE_INSERT_VALUES?',
             )
 
             m = cursors.RE_INSERT_VALUES.match(
-                'INSERT INTO TEST (ID, NAME) VALUES (:id_name, :name)',
+                'INSERT INTO TEST (ID, NAME) VALUES (%(id_name)s, %(name)s)',
             )
-            self.assertIsNotNone(m, 'error parse :id_name')
+            self.assertIsNotNone(m, 'error parse %(id_name)s')
             self.assertEqual(
                 m.group(3), '', 'group 3 not blank, bug in RE_INSERT_VALUES?',
             )
 
             m = cursors.RE_INSERT_VALUES.match(
-                'INSERT INTO TEST (ID, NAME) VALUES (:id_name, :name) '
+                'INSERT INTO TEST (ID, NAME) VALUES (%(id_name)s, %(name)s) '
                 'ON duplicate update',
             )
-            self.assertIsNotNone(m, 'error parse :id_name')
+            self.assertIsNotNone(m, 'error parse %(id_name)s')
             self.assertEqual(
                 m.group(3),
                 ' ON duplicate update',
@@ -100,7 +100,7 @@ class CursorTest(base.PyMySQLTestCase):
 
             # https://github.com/PyMySQL/PyMySQL/pull/597
             m = cursors.RE_INSERT_VALUES.match(
-                'INSERT INTO bloup(foo, bar)VALUES(:1, :2)',
+                'INSERT INTO bloup(foo, bar)VALUES(%s, %s)',
             )
             assert m is not None
 
@@ -108,18 +108,18 @@ class CursorTest(base.PyMySQLTestCase):
             #                           values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)"
             # list args
             data = range(10)
-            cursor.executemany('insert into test (data) values (:1)', data)
+            cursor.executemany('insert into test (data) values (%s)', data)
             self.assertTrue(
                 cursor._executed.endswith(b',(7),(8),(9)'),
-                'execute many with :1 not in one query',
+                'execute many with %s not in one query',
             )
 
             # dict args
             data_dict = [{'data': i} for i in range(10)]
-            cursor.executemany('insert into test (data) values (:data)', data_dict)
+            cursor.executemany('insert into test (data) values (%(data)s)', data_dict)
             self.assertTrue(
                 cursor._executed.endswith(b',(7),(8),(9)'),
-                'execute many with :data not in one query',
+                'execute many with %(data)s not in one query',
             )
 
             # %% in column set
@@ -130,7 +130,7 @@ class CursorTest(base.PyMySQLTestCase):
                     `B%` INTEGER)""",
             )
             try:
-                q = 'INSERT INTO percent_test (`A%`, `B%`) VALUES (:1, :2)'
+                q = 'INSERT INTO percent_test (`A%%`, `B%%`) VALUES (%s, %s)'
                 self.assertIsNotNone(cursors.RE_INSERT_VALUES.match(q))
                 cursor.executemany(q, [(3, 4), (5, 6)])
                 self.assertTrue(

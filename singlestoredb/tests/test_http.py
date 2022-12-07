@@ -109,7 +109,7 @@ class TestHTTP(unittest.TestCase):
 
     def test_executemany(self):
         self.cur.executemany(
-            'select * from data where id < :id',
+            'select * from data where id < %(id)s',
             [dict(id='d'), dict(id='e')],
         )
 

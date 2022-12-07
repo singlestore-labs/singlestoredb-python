@@ -52,7 +52,7 @@ class TestSSCursor(base.PyMySQLTestCase):
         conn.begin()
         # Test INSERT
         for i in data:
-            cursor.execute('INSERT INTO tz_data VALUES (:1, :2, :3)', i)
+            cursor.execute('INSERT INTO tz_data VALUES (%s, %s, %s)', i)
             self.assertEqual(conn.affected_rows(), 1, 'affected_rows does not match')
         conn.commit()
 
@@ -103,7 +103,7 @@ class TestSSCursor(base.PyMySQLTestCase):
                 break
 
         # Test update, affected_rows()
-        cursor.execute('UPDATE tz_data SET zone = :1', ['Foo'])
+        cursor.execute('UPDATE tz_data SET zone = %s', ['Foo'])
         conn.commit()
         self.assertEqual(
             cursor.rowcount,
@@ -112,7 +112,7 @@ class TestSSCursor(base.PyMySQLTestCase):
         )
 
         # Test executemany
-        cursor.executemany('INSERT INTO tz_data VALUES (:1, :2, :3)', data)
+        cursor.executemany('INSERT INTO tz_data VALUES (%s, %s, %s)', data)
         self.assertEqual(
             cursor.rowcount,
             len(data),

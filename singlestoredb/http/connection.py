@@ -251,7 +251,7 @@ class Cursor(connection.Cursor):
         if not params:
             self._execute(f'CALL {name}();', is_callproc=True)
         else:
-            keys = ', '.join([f':{i+1}' for i in range(len(params))])
+            keys = ', '.join(['%s' for i in range(len(params))])
             self._execute(f'CALL {name}({keys});', params, is_callproc=True)
 
     def close(self) -> None:
@@ -259,21 +259,21 @@ class Cursor(connection.Cursor):
         self._connection = None
 
     def execute(
-        self, oper: str,
-        params: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
+        self, query: str,
+        args: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
     ) -> None:
         """
         Execute a SQL statement.
 
         Parameters
         ----------
-        oper : str
+        query : str
             The SQL statement to execute
-        params : iterable or dict, optional
+        args : iterable or dict, optional
             Parameters to substitute into the SQL code
 
         """
-        return self._execute(oper, params)
+        return self._execute(query, args)
 
     def _execute(
         self, oper: str,
@@ -410,7 +410,7 @@ class Cursor(connection.Cursor):
 
     def executemany(
         self, query: str,
-        param_seq: Optional[Sequence[Union[Sequence[Any], Dict[str, Any]]]] = None,
+        args: Optional[Sequence[Union[Sequence[Any], Dict[str, Any]]]] = None,
     ) -> None:
         """
         Execute SQL code against multiple sets of parameters.
@@ -419,7 +419,7 @@ class Cursor(connection.Cursor):
         ----------
         query : str
             The SQL statement to execute
-        params_seq : iterable of iterables or dicts, optional
+        args : iterable of iterables or dicts, optional
             Sets of parameters to substitute into the SQL code
 
         """
@@ -427,9 +427,9 @@ class Cursor(connection.Cursor):
             raise ProgrammingError(errno=2048, msg='Connection is closed.')
 
         results = []
-        if param_seq:
+        if args:
             description = []
-            for params in param_seq:
+            for params in args:
                 self.execute(query, params)
                 if self._descriptions:
                     description = self._descriptions[-1]
@@ -714,7 +714,6 @@ class Connection(connection.Connection):
         self._messages: List[Tuple[int, str]] = []
         self._autocommit: bool = True
         self._conv = kwargs.get('conv', None)
-        self._results_type = kwargs.get('results_type', 'tuples')
 
     @property
     def messages(self) -> List[Tuple[int, str]]:

@@ -36,7 +36,7 @@ class TestNextset(base.PyMySQLTestCase):
         cur = con.cursor()
 
         for i in range(3):
-            cur.execute('SELECT :1; xyzzy;', (i,))
+            cur.execute('SELECT %s; xyzzy;', (i,))
             self.assertEqual([(i,)], list(cur))
             with self.assertRaises(sv.ProgrammingError):
                 cur.nextset()

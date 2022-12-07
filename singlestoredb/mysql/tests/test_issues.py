@@ -23,7 +23,7 @@ class TestOldIssues(base.PyMySQLTestCase):
         c.execute('create table issue3 (d date, t time, dt datetime, ts timestamp)')
         try:
             c.execute(
-                'insert into issue3 (d, t, dt, ts) values (:1,:2,:3,:4)',
+                'insert into issue3 (d, t, dt, ts) values (%s,%s,%s,%s)',
                 (None, None, None, None),
             )
             c.execute('select d from issue3')
@@ -104,7 +104,7 @@ KEY (`station`,`dh`,`echeance`)) ENGINE=MyISAM DEFAULT CHARSET=latin1;""",
             cur.execute('create table issue13 (t text)')
             # ticket says 18k
             size = 18 * 1024
-            cur.execute('insert into issue13 (t) values (:1)', ('x' * size,))
+            cur.execute('insert into issue13 (t) values (%s)', ('x' * size,))
             cur.execute('select t from issue13')
             # use assertTrue so that obscenely huge error messages don't print
             r = cur.fetchone()[0]
@@ -121,7 +121,7 @@ KEY (`station`,`dh`,`echeance`)) ENGINE=MyISAM DEFAULT CHARSET=latin1;""",
             c.execute('drop table if exists issue15')
         c.execute('create table issue15 (t varchar(32))')
         try:
-            c.execute('insert into issue15 (t) values (:1)', ('\xe4\xf6\xfc',))
+            c.execute('insert into issue15 (t) values (%s)', ('\xe4\xf6\xfc',))
             c.execute('select t from issue15')
             self.assertEqual('\xe4\xf6\xfc', c.fetchone()[0])
         finally:
@@ -141,7 +141,7 @@ KEY (`station`,`dh`,`echeance`)) ENGINE=MyISAM DEFAULT CHARSET=latin1;""",
             c.execute(
                 "insert into issue16 (name, email) values ('pete', 'floydophone')",
             )
-            c.execute('select email from issue16 where name=:1', ('pete',))
+            c.execute('select email from issue16 where name=%s', ('pete',))
             self.assertEqual('floydophone', c.fetchone()[0])
         finally:
             c.execute('drop table issue16')
@@ -267,7 +267,7 @@ class TestNewIssues(base.PyMySQLTestCase):
                 warnings.filterwarnings('ignore')
                 c.execute('drop table if exists issue38')
             c.execute('create table issue38 (id integer, data mediumblob)')
-            c.execute('insert into issue38 values (1, :1)', (datum,))
+            c.execute('insert into issue38 values (1, %s)', (datum,))
         finally:
             c.execute('drop table issue38')
 
@@ -324,8 +324,8 @@ class TestGitHubIssues(base.PyMySQLTestCase):
         a = (1, 11)
         b = (1, 22)
         try:
-            c.execute('insert into a values (:1, :2)', a)
-            c.execute('insert into b values (:1, :2)', b)
+            c.execute('insert into a values (%s, %s)', a)
+            c.execute('insert into b values (%s, %s)', b)
 
             c.execute('SELECT * FROM a inner join b on a.id = b.id')
             r = c.fetchall()[0]
@@ -408,13 +408,13 @@ class TestGitHubIssues(base.PyMySQLTestCase):
             'create table issue321 (value_1 varchar(1), value_2 varchar(1))',
         )
 
-        sql_insert = 'insert into issue321 (value_1, value_2) values (:1, :2)'
+        sql_insert = 'insert into issue321 (value_1, value_2) values (%s, %s)'
         sql_dict_insert = (
             'insert into issue321 (value_1, value_2) '
-            'values (:value_1, :value_2)'
+            'values (%(value_1)s, %(value_2)s)'
         )
         sql_select = 'select * from issue321 ' + \
-            'where value_1 in :1 and value_2=:2 order by value_1'
+            'where value_1 in %s and value_2=%s order by value_1'
         data = [
             [('a',), '\u0430'],
             [['b'], '\u0430'],
@@ -439,8 +439,8 @@ class TestGitHubIssues(base.PyMySQLTestCase):
             'engine=InnoDB default charset=utf8mb4',
         )
 
-        sql = 'insert into issue364 (value_1, value_2) values (_binary :1, :2)'
-        usql = 'insert into issue364 (value_1, value_2) values (_binary :1, :2)'
+        sql = 'insert into issue364 (value_1, value_2) values (_binary %s, %s)'
+        usql = 'insert into issue364 (value_1, value_2) values (_binary %s, %s)'
         values = [sv.Binary(b'\x00\xff\x00'), '\xe4\xf6\xfc']
 
         # test single insert and select

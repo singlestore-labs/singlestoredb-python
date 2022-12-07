@@ -35,7 +35,7 @@ class TestDictCursor(base.PyMySQLTestCase):
             ('jim', 56, '1955-05-09 13:12:45'),
             ('fred', 100, '1911-09-12 01:01:01'),
         ]
-        c.executemany('insert into dictcursor values (:1,:2,:3)', data)
+        c.executemany('insert into dictcursor values (%s,%s,%s)', data)
 
     def tearDown(self):
         c = self.conn.cursor()

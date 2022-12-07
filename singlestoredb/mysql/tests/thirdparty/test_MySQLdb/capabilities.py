@@ -86,7 +86,7 @@ class DatabaseTest(unittest.TestCase):
         self.create_table(columndefs)
         insert_statement = 'INSERT INTO %s VALUES (%s)' % (
             self.table,
-            ','.join(':%d' % (x + 1) for x in range(len(columndefs))),
+            ','.join('%s' for x in range(len(columndefs))),
         )
         data = [
             [generator(i, j) for j in range(len(columndefs))] for i in range(self.rows)
@@ -124,7 +124,7 @@ class DatabaseTest(unittest.TestCase):
         self.create_table(columndefs)
         insert_statement = 'INSERT INTO %s VALUES (%s)' % (
             self.table,
-            ','.join(':%d' % (x + 1) for x in range(len(columndefs))),
+            ','.join('%s' for x in range(len(columndefs))),
         )
         data = [
             [generator(i, j) for j in range(len(columndefs))] for i in range(self.rows)
@@ -141,7 +141,7 @@ class DatabaseTest(unittest.TestCase):
         for i in range(self.rows):
             for j in range(len(columndefs)):
                 self.assertEqual(out[i][j], generator(i, j))
-        delete_statement = 'delete from %s where col1=:1' % self.table
+        delete_statement = 'delete from %s where col1=%%s' % self.table
         self.cursor.execute(delete_statement, (0,))
         self.cursor.execute('select col1 from %s where col1=%s' % (self.table, 0))
         out = self.cursor.fetchall()
@@ -165,7 +165,7 @@ class DatabaseTest(unittest.TestCase):
         self.create_table(columndefs)
         insert_statement = 'INSERT INTO %s VALUES (%s)' % (
             self.table,
-            ','.join(':%d' % (x + 1) for x in range(len(columndefs))),
+            ','.join('%s' for x in range(len(columndefs))),
         )
 
         try:

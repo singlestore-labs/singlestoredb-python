@@ -44,7 +44,7 @@ class TestConversion(base.PyMySQLTestCase):
             )
             c.execute(
                 'insert into test_datatypes (b,i,l,f,s,u,bb,d,dt,td,t,st) '
-                '                    values (:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12)',
+                '                    values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                 v,
             )
             c.execute('select b,i,l,f,s,u,bb,d,dt,td,t,st from test_datatypes')
@@ -61,7 +61,7 @@ class TestConversion(base.PyMySQLTestCase):
             # check nulls
             c.execute(
                 'insert into test_datatypes (b,i,l,f,s,u,bb,d,dt,td,t,st) '
-                '                    values (:1,:2,:3,:4,:5,:6,:7,:8,:9,:10,:11,:12)',
+                '                    values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                 [None] * 12,
             )
             c.execute('select b,i,l,f,s,u,bb,d,dt,td,t,st from test_datatypes')
@@ -77,7 +77,7 @@ class TestConversion(base.PyMySQLTestCase):
                 )
                 seq = seq_type([2, 6])
                 c.execute(
-                    'select l from test_datatypes where i in :1 order by i', (seq,),
+                    'select l from test_datatypes where i in %s order by i', (seq,),
                 )
                 r = c.fetchall()
                 # NOTE: C extension returns a list, not a tuple
@@ -94,7 +94,7 @@ class TestConversion(base.PyMySQLTestCase):
         c.execute('create table test_dict (a integer, b integer, c integer)')
         try:
             c.execute(
-                'insert into test_dict (a,b,c) values (:a, :b, :c)',
+                'insert into test_dict (a,b,c) values (%(a)s, %(b)s, %(c)s)',
                 {'a': 1, 'b': 2, 'c': 3},
             )
             c.execute('select a,b,c from test_dict')
@@ -108,7 +108,7 @@ class TestConversion(base.PyMySQLTestCase):
         c.execute('create table test_dict (a text)')
         test_value = 'I am a test string'
         try:
-            c.execute('insert into test_dict (a) values (:1)', test_value)
+            c.execute('insert into test_dict (a) values (%s)', test_value)
             c.execute('select a from test_dict')
             self.assertEqual((test_value,), c.fetchone())
         finally:
@@ -120,7 +120,7 @@ class TestConversion(base.PyMySQLTestCase):
         c.execute('create table test_dict (a integer)')
         test_value = 12345
         try:
-            c.execute('insert into test_dict (a) values (:1)', test_value)
+            c.execute('insert into test_dict (a) values (%s)', test_value)
             c.execute('select a from test_dict')
             self.assertEqual((test_value,), c.fetchone())
         finally:
@@ -135,7 +135,7 @@ class TestConversion(base.PyMySQLTestCase):
         )
 
         with conn.cursor() as c:
-            c.execute('insert into test_binary (b) values (_binary :1)', (data,))
+            c.execute('insert into test_binary (b) values (_binary %s)', (data,))
             c.execute('select b from test_binary')
             self.assertEqual(data, c.fetchone()[0])
 
@@ -146,7 +146,7 @@ class TestConversion(base.PyMySQLTestCase):
         self.safe_create_table(conn, 'test_blob', 'create table test_blob (b blob)')
 
         with conn.cursor() as c:
-            c.execute('insert into test_blob (b) values (_binary :1)', (data,))
+            c.execute('insert into test_blob (b) values (_binary %s)', (data,))
             c.execute('select b from test_blob')
             self.assertEqual(data, c.fetchone()[0])
 
@@ -189,7 +189,7 @@ class TestConversion(base.PyMySQLTestCase):
         dt = datetime.datetime(2013, 11, 12, 9, 9, 9, 123450)
         c.execute('create table test_datetime (id int, ts datetime(6))')
         try:
-            c.execute('insert into test_datetime values (:1, :2)', (1, dt))
+            c.execute('insert into test_datetime values (%s, %s)', (1, dt))
             c.execute('select ts from test_datetime')
             self.assertEqual((dt,), c.fetchone())
         finally:
@@ -257,7 +257,7 @@ class TestCursor(base.PyMySQLTestCase):
         c.execute('create table test_nr (b varchar(32))')
         try:
             data = 'pymysql'
-            c.execute('insert into test_nr (b) values (:1)', (data,))
+            c.execute('insert into test_nr (b) values (%s)', (data,))
             self.assertEqual(None, c.fetchone())
         finally:
             c.execute('drop table test_nr')
@@ -269,7 +269,7 @@ class TestCursor(base.PyMySQLTestCase):
         try:
             c.execute('create table test_aggregates (i integer)')
             for i in range(0, 10):
-                c.execute('insert into test_aggregates (i) values (:1)', (i,))
+                c.execute('insert into test_aggregates (i) values (%s)', (i,))
             c.execute('select sum(i) from test_aggregates')
             (r,) = c.fetchone()
             self.assertEqual(sum(range(0, 10)), r)
@@ -285,7 +285,7 @@ class TestCursor(base.PyMySQLTestCase):
         )
         c.execute('insert into mystuff (id) values (1)')
         c.execute('insert into mystuff (id) values (2)')
-        c.execute('select id from mystuff where id in :1', ((1,),))
+        c.execute('select id from mystuff where id in %s', ((1,),))
         self.assertEqual([(1,)], list(c.fetchall()))
         c.close()
 
@@ -311,13 +311,13 @@ create table test_json (
         cur = conn.cursor()
 
         json_str = '{"hello": "こんにちは"}'
-        cur.execute('INSERT INTO test_json (id, `json`) values (42, :1)', (json_str,))
+        cur.execute('INSERT INTO test_json (id, `json`) values (42, %s)', (json_str,))
         cur.execute('SELECT `json` from `test_json` WHERE `id`=42')
         res = cur.fetchone()[0]
         self.assertEqual(res, json.loads(json_str))
 
-#       cur.execute("SELECT CAST(:1 AS JSON) AS x", (json_str,))
-        cur.execute('SELECT :1 :> JSON AS x', (json_str,))
+#       cur.execute("SELECT CAST(%s AS JSON) AS x", (json_str,))
+        cur.execute('SELECT %s :> JSON AS x', (json_str,))
         res = cur.fetchone()[0]
         self.assertEqual(res, json.loads(json_str))
 
@@ -360,7 +360,7 @@ PRIMARY KEY (id)
 
         data = [(0, 'bob', 21, 123), (1, 'jim', 56, 45), (2, 'fred', 100, 180)]
         cursor.executemany(
-            'insert into bulkinsert (id, name, age, height) ' 'values (:1,:2,:3,:4)',
+            'insert into bulkinsert (id, name, age, height) ' 'values (%s,%s,%s,%s)',
             data,
         )
         self.assertEqual(
@@ -381,9 +381,9 @@ PRIMARY KEY (id)
             """insert
 into bulkinsert (id, name,
 age, height)
-values (:1,
-:2 , :3,
-:4 )
+values (%s,
+%s , %s,
+%s )
  """,
             data,
         )
@@ -410,7 +410,7 @@ values (0,
         cursor = conn.cursor()
         data = [(0, 'bob', 21, 123)]
         cursor.executemany(
-            'insert into bulkinsert (id, name, age, height) ' 'values (:1,:2,:3,:4)',
+            'insert into bulkinsert (id, name, age, height) ' 'values (%s,%s,%s,%s)',
             data,
         )
         cursor.execute('commit')
@@ -425,9 +425,9 @@ values (0,
             """insert
 into bulkinsert (id, name,
 age, height)
-values (:1,
-:2 , :3,
-:4 ) on duplicate key update
+values (%s,
+%s , %s,
+%s ) on duplicate key update
 age = values(age)
  """,
             data,

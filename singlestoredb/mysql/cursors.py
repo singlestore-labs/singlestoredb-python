@@ -15,12 +15,6 @@ RE_INSERT_VALUES = re.compile(
     + r'(\s*(?:ON DUPLICATE.*)?);?\s*\Z',
     re.IGNORECASE | re.DOTALL,
 )
-RE_INSERT_VALUES = re.compile(
-    r'\s*((?:INSERT|REPLACE)\b.+\bVALUES?\s*)'
-    + r'(\(\s*(?:\:\d+|\:\w+)\s*(?:,\s*(?:\:\d+|\:\w+)\s*)*\))'
-    + r'(\s*(?:ON DUPLICATE.*)?);?\s*\Z',
-    re.IGNORECASE | re.DOTALL,
-)
 
 
 class Cursor(BaseCursor):
@@ -176,8 +170,6 @@ class Cursor(BaseCursor):
         """
         conn = self._get_db()
 
-        query, args = self._connection._convert_params(query, args)
-
         if args:
             query = query % self._escape_args(args, conn)
 
@@ -212,40 +204,6 @@ class Cursor(BaseCursor):
         self._executed = query
         return result
 
-    def _process_values_spec(self, spec):
-        """
-        Replace :#/:foo style parameters with %s/%(foo)s
-
-        Parameters
-        ----------
-        spec : str
-           The values portion of the insert query
-
-        Returns
-        -------
-        (str, Tuple[int, ...])
-            The str is the values string with the substitution parameters
-            changed to pyformat. The tuple is a tuple of the array
-            indices specified by :# style parameters. These can be used to
-            re-order or subset the input arguments. This ability is not
-            possible with %s style parameters.
-
-        """
-        #
-        # Since the substitution parameter was changed from %s/%(foo)s
-        # to :#/:foo, we have to change that format in the insert calls
-        # done by executemany for bulk inserts. The sqlparams package
-        # doesn't do this. This is a much more specific problem than
-        # general query processing, so this simpler form should be able
-        # to be done safely here.
-        #
-        order = [int(x) - 1 for x in re.findall(r':(\d+)\b', spec)]
-        spec = re.sub(
-            r':(\w+)\b', r'%(\1)s',
-            re.sub(r':\d+\b', '%s', spec),
-        )
-        return spec, order or None
-
     def executemany(self, query, args=None):
         """
         Run several data against one query.
@@ -266,19 +224,18 @@ class Cursor(BaseCursor):
         int : Number of rows affected, if any.
 
         """
-        args = args or []
+        if not args:
+            return
 
         m = RE_INSERT_VALUES.match(query)
         if m:
-            q_prefix = m.group(1) or ''
-            q_values = m.group(2).rstrip().replace('%', '%%')
+            q_prefix = m.group(1) % ()
+            q_values = m.group(2).rstrip()
             q_postfix = m.group(3) or ''
             assert q_values[0] == '(' and q_values[-1] == ')'
-            q_values, q_order = self._process_values_spec(q_values)
             return self._do_execute_many(
                 q_prefix,
                 q_values,
-                q_order,
                 q_postfix,
                 args,
                 self.max_stmt_length,
@@ -289,7 +246,7 @@ class Cursor(BaseCursor):
         return self.rowcount
 
     def _do_execute_many(
-        self, prefix, values, order, postfix, args, max_stmt_length, encoding,
+        self, prefix, values, postfix, args, max_stmt_length, encoding,
     ):
         conn = self._get_db()
         escape = self._escape_args
@@ -299,13 +256,7 @@ class Cursor(BaseCursor):
             postfix = postfix.encode(encoding)
         sql = bytearray(prefix)
         args = iter(args)
-        args_list = next(args)
-        if not isinstance(args_list, dict) and not isinstance(args_list, (tuple, list)):
-            args_list = [args_list]
-        if order is not None:
-            v = values % tuple(escape(args_list[x], conn) for x in order)
-        else:
-            v = values % escape(args_list, conn)
+        v = values % escape(next(args), conn)
         if isinstance(v, str):
             v = v.encode(encoding, 'surrogateescape')
         sql += v

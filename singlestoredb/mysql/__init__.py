@@ -46,7 +46,7 @@ from .times import TimestampFromTicks
 
 threadsafety = 1
 apilevel = '2.0'
-paramstyle = 'numeric'
+paramstyle = 'pyformat'
 
 from . import connection  # noqa: E402
 
