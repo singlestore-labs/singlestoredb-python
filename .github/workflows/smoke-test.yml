@@ -112,7 +112,7 @@ jobs:
       - name: Install MySQLdb on Linux
         if: ${{ matrix.os == 'ubuntu-20.04' }}
         run: |
-          pip install MySQLdb
+          pip install mysqlclient
 
       - name: Install SingleStore package
         run: |
