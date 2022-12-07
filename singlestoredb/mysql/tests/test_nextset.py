@@ -1,5 +1,6 @@
 # type: ignore
 import pytest
+
 import singlestoredb.mysql as sv
 from singlestoredb.mysql.constants import CLIENT
 from singlestoredb.mysql.tests import base

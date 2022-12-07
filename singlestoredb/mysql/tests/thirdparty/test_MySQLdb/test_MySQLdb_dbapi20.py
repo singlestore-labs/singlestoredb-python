@@ -1,8 +1,7 @@
 # type: ignore
 import singlestoredb.mysql as sv
-from singlestoredb.mysql.tests import base
-
 from . import dbapi20
+from singlestoredb.mysql.tests import base
 
 
 class test_MySQLdb(dbapi20.DatabaseAPI20Test):

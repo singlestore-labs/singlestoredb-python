@@ -2,9 +2,8 @@
 import os
 
 import singlestoredb as s2
-from singlestoredb.mysql.tests.thirdparty.test_MySQLdb import test_MySQLdb_dbapi20
-
 from . import utils
+from singlestoredb.mysql.tests.thirdparty.test_MySQLdb import test_MySQLdb_dbapi20
 
 
 class TestDBAPI(test_MySQLdb_dbapi20.test_MySQLdb):

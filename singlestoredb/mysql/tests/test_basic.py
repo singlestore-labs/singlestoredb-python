@@ -4,6 +4,7 @@ import json
 import time
 
 import pytest
+
 import singlestoredb.mysql as sv
 import singlestoredb.mysql.cursors as cursors
 from singlestoredb.mysql.tests import base
