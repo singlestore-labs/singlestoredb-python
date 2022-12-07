@@ -992,6 +992,7 @@ class TestConnection(unittest.TestCase):
             s2.ProgrammingError,
             s2.OperationalError,
             s2.InternalError,
+            TypeError,
         )):
             self.cur.callproc('get_animal', ['cats', 'dogs'])
 
@@ -999,6 +1000,7 @@ class TestConnection(unittest.TestCase):
             s2.ProgrammingError,
             s2.OperationalError,
             s2.InternalError,
+            TypeError,
         )):
             self.cur.callproc('get_animal', [])
 
@@ -1006,6 +1008,7 @@ class TestConnection(unittest.TestCase):
             s2.ProgrammingError,
             s2.OperationalError,
             s2.InternalError,
+            TypeError,
         )):
             self.cur.callproc('get_animal')
 
@@ -1309,47 +1312,50 @@ class TestConnection(unittest.TestCase):
                 assert row['tinytext'] == 'This is a tinytext column.', \
                     row['tinytext']
 
-#   def test_results_format(self):
-#       columns = [
-#           'id', 'tinyint', 'unsigned_tinyint', 'bool', 'boolean',
-#           'smallint', 'unsigned_smallint', 'mediumint', 'unsigned_mediumint',
-#           'int24', 'unsigned_int24', 'int', 'unsigned_int',
-#           'integer', 'unsigned_integer', 'bigint', 'unsigned_bigint',
-#           'float', 'double', 'real', 'decimal', 'dec', 'fixed', 'numeric',
-#           'date', 'time', 'time_6', 'datetime', 'datetime_6', 'timestamp',
-#           'timestamp_6', 'year', 'char_100', 'binary_100', 'varchar_200',
-#           'varbinary_200', 'longtext', 'mediumtext', 'text', 'tinytext',
-#           'longblob', 'mediumblob', 'blob', 'tinyblob', 'json', 'enum',
-#           'set', 'bit',
-#       ]
+    def test_results_type(self):
+        columns = [
+            'id', 'tinyint', 'unsigned_tinyint', 'bool', 'boolean',
+            'smallint', 'unsigned_smallint', 'mediumint', 'unsigned_mediumint',
+            'int24', 'unsigned_int24', 'int', 'unsigned_int',
+            'integer', 'unsigned_integer', 'bigint', 'unsigned_bigint',
+            'float', 'double', 'real', 'decimal', 'dec', 'fixed', 'numeric',
+            'date', 'time', 'time_6', 'datetime', 'datetime_6', 'timestamp',
+            'timestamp_6', 'year', 'char_100', 'binary_100', 'varchar_200',
+            'varbinary_200', 'longtext', 'mediumtext', 'text', 'tinytext',
+            'longblob', 'mediumblob', 'blob', 'tinyblob', 'json', 'enum',
+            'set', 'bit',
+        ]
 
-#       with s2.connect(database=type(self).dbname, results_format='tuple') as conn:
-#           with conn.cursor() as cur:
-#               cur.execute('select * from alltypes')
-#               out = cur.fetchall()
-#               assert type(out[0]) is tuple, type(out[0])
-#               assert len(out[0]) == len(columns), len(out[0])
+        with s2.connect(database=type(self).dbname, results_type='tuples') as conn:
+            with conn.cursor() as cur:
+                cur.execute('select * from alltypes')
+                out = cur.fetchall()
+                assert type(out[0]) is tuple, type(out[0])
+                assert len(out[0]) == len(columns), len(out[0])
 
-#       with s2.connect(database=type(self).dbname, results_format='namedtuple') as conn:
-#           with conn.cursor() as cur:
-#               cur.execute('select * from alltypes')
-#               out = cur.fetchall()
-#               assert type(out[0]).__name__ == 'Row', type(out)
-#               assert list(out[0]._fields) == columns, out[0]._fields
+        with s2.connect(database=type(self).dbname, results_type='namedtuples') as conn:
+            with conn.cursor() as cur:
+                cur.execute('select * from alltypes')
+                out = cur.fetchall()
+                assert type(out[0]).__name__ == 'Row', type(out)
+                for i, name in enumerate(columns):
+                    assert hasattr(out[0], name)
+                    assert out[0][i] == getattr(out[0], name)
 
-#       with s2.connect(database=type(self).dbname, results_format='dict') as conn:
-#           with conn.cursor() as cur:
-#               cur.execute('select * from alltypes')
-#               out = cur.fetchall()
-#               assert type(out[0]) is dict, type(out)
-#               assert list(out[0].keys()) == columns, out[0].keys()
+        with s2.connect(database=type(self).dbname, results_type='dicts') as conn:
+            with conn.cursor() as cur:
+                cur.execute('select * from alltypes')
+                out = cur.fetchall()
+                assert type(out[0]) is dict, type(out)
+                assert list(out[0].keys()) == columns, out[0].keys()
 
-#       with s2.connect(database=type(self).dbname, results_format='dataframe') as conn:
-#           with conn.cursor() as cur:
-#               cur.execute('select * from alltypes')
-#               out = cur.fetchall()
-#               assert type(out) is pd.DataFrame, type(out)
-#               assert list(out.columns) == columns, out.columns
+    def test_results_format(self):
+        with self.assertWarns(DeprecationWarning):
+            with s2.connect(database=type(self).dbname, results_format='dicts') as conn:
+                with conn.cursor() as cur:
+                    cur.execute('select * from alltypes')
+                    out = cur.fetchall()
+                    assert type(out[0]) is dict, type(out)
 
 
 if __name__ == '__main__':

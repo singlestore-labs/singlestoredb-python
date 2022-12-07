@@ -3,7 +3,6 @@ import datetime
 import warnings
 
 import pytest
-
 import singlestoredb.mysql.cursors as cursors
 from singlestoredb.mysql.tests import base
 

@@ -5,7 +5,6 @@ import os
 import unittest
 
 import pandas as pd
-
 import singlestoredb as s2
 from singlestoredb.tests import utils
 # import traceback
@@ -46,7 +45,7 @@ class TestResults(unittest.TestCase):
             pass
 
     def test_tuples(self):
-        with s2.options(('results.type', 'tuple')):
+        with s2.options(('results.type', 'tuples')):
             with s2.connect(database=type(self).dbname) as conn:
                 with conn.cursor() as cur:
                     cur.execute('select * from data')
@@ -72,7 +71,7 @@ class TestResults(unittest.TestCase):
                     assert len(out) == 0, len(out)
 
     def test_namedtuples(self):
-        with s2.options(('results.type', 'namedtuple')):
+        with s2.options(('results.type', 'namedtuples')):
             with s2.connect(database=type(self).dbname) as conn:
                 with conn.cursor() as cur:
                     cur.execute('select * from data')
@@ -106,7 +105,7 @@ class TestResults(unittest.TestCase):
                     assert len(out) == 0, len(out)
 
     def test_dict(self):
-        with s2.options(('results.type', 'dict')):
+        with s2.options(('results.type', 'dicts')):
             with s2.connect(database=type(self).dbname) as conn:
                 with conn.cursor() as cur:
                     cur.execute('select * from data')

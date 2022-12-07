@@ -185,10 +185,11 @@ class Cursor(connection.Cursor):
         self._row_idx: int = -1
         self._result_idx: int = -1
         self._descriptions: List[List[Description]] = []
-        self.arraysize: int = 1000
+        self.arraysize: int = get_option('results.arraysize')
         self.rowcount: int = 0
         self.lastrowid: Optional[int] = None
         self._pymy_results: List[PyMyResult] = []
+        self._expect_results: bool = False
 
     @property
     def _result(self) -> Optional[PyMyResult]:
@@ -275,6 +276,14 @@ class Cursor(connection.Cursor):
         """
         return self._execute(query, args)
 
+    def _validate_param_subs(
+        self, query: str,
+        args: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
+    ) -> None:
+        """Make sure the parameter substitions are valid."""
+        if args is not None:
+            query = query % args
+
     def _execute(
         self, oper: str,
         params: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
@@ -282,6 +291,8 @@ class Cursor(connection.Cursor):
     ) -> None:
         if self._connection is None:
             raise ProgrammingError(errno=2048, msg='Connection is closed.')
+
+        self._validate_param_subs(oper, params)
 
         oper, params = self._connection._convert_params(oper, params)
 
@@ -291,8 +302,10 @@ class Cursor(connection.Cursor):
         if self._connection._database:
             data['database'] = self._connection._database
 
+        self._expect_results = False
         sql_type = 'exec'
         if re.match(r'^\s*(select|show|call|echo)\s+', oper, flags=re.I):
+            self._expect_results = True
             sql_type = 'query'
 
         if sql_type == 'query':
@@ -427,6 +440,7 @@ class Cursor(connection.Cursor):
             raise ProgrammingError(errno=2048, msg='Connection is closed.')
 
         results = []
+        rowcount = 0
         if args:
             description = []
             for params in args:
@@ -435,12 +449,13 @@ class Cursor(connection.Cursor):
                     description = self._descriptions[-1]
                 if self._rows is not None:
                     results.append(self._rows)
+                rowcount += self.rowcount
             self._results = results
             self._descriptions = [description for _ in range(len(results))]
-            if self._results:
-                self.rowcount = len(self._results[0])
         else:
             self.execute(query)
+            rowcount += self.rowcount
+        self.rowcount = rowcount
 
     @property
     def _has_row(self) -> bool:
@@ -472,6 +487,8 @@ class Cursor(connection.Cursor):
         """
         if self._connection is None:
             raise ProgrammingError(errno=2048, msg='Connection is closed')
+        if not self._expect_results:
+            raise self._connection.ProgrammingError(msg='No query has been submitted')
         if not self._has_row:
             return None
         out = self._rows[self._row_idx]
@@ -499,6 +516,8 @@ class Cursor(connection.Cursor):
         """
         if self._connection is None:
             raise ProgrammingError(errno=2048, msg='Connection is closed')
+        if not self._expect_results:
+            raise self._connection.ProgrammingError(msg='No query has been submitted')
         if not self._has_row:
             if 'dict' in self._results_type:
                 return {}
@@ -523,11 +542,13 @@ class Cursor(connection.Cursor):
         """
         if self._connection is None:
             raise ProgrammingError(errno=2048, msg='Connection is closed')
+        if not self._expect_results:
+            raise self._connection.ProgrammingError(msg='No query has been submitted')
         if not self._has_row:
             if 'dict' in self._results_type:
                 return {}
             return tuple()
-        out = list(self._rows)
+        out = list(self._rows[self._row_idx:])
         self._row_idx = len(out)
         return format_results(self._results_type, self.description or [], out)
 
@@ -829,7 +850,6 @@ def connect(
     ssl_cipher: Optional[str] = None, ssl_verify_cert: Optional[bool] = None,
     ssl_verify_identity: Optional[bool] = None,
     conv: Optional[Dict[int, Callable[..., Any]]] = None,
-    #   results_format: Optional[str] = None,
     credential_type: Optional[str] = None,
     results_type: Optional[str] = None,
     autocommit: Optional[bool] = None,

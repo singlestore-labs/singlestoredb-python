@@ -166,7 +166,7 @@ class TestConfig(unittest.TestCase):
             get_suboptions('results.arraysize')
 
     def test_get_default(self):
-        self.assertEqual(get_default('results.arraysize'), 100)
+        self.assertEqual(get_default('results.arraysize'), 1)
 
         with self.assertRaises(KeyError):
             get_default('results.foo')

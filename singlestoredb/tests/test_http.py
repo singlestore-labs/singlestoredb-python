@@ -130,7 +130,7 @@ class TestHTTP(unittest.TestCase):
             ('c', 'cats', 5),
         ]), out
 
-        assert rowcount == 3, rowcount
+        assert rowcount == 7, rowcount
         assert lastrowid is None, lastrowid
         assert len(desc) == 3, desc
         assert desc[0][0] == 'id', desc[0][0]

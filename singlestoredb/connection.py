@@ -4,6 +4,7 @@ import abc
 import inspect
 import pprint
 import re
+import warnings
 import weakref
 from collections.abc import Mapping
 from collections.abc import MutableMapping
@@ -123,6 +124,13 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
     for name in inspect.getfullargspec(connect).args:
         if name == 'conv':
             out[name] = kwargs.get(name, None)
+        elif name == 'results_format':  # deprecated
+            warnings.warn(
+                'The `results_format=` parameter has been renamed to `results_type=`.',
+                DeprecationWarning,
+            )
+            if kwargs.get(name, None) is not None:
+                out['results_type'] = kwargs.get(name, get_option('results.type'))
         elif name == 'results_type':
             out[name] = kwargs.get(name, get_option('results.type'))
         else:
@@ -297,6 +305,13 @@ def _name_check(name: str) -> str:
 def quote_identifier(name: str) -> str:
     """Escape identifier value."""
     return f'`{name}`'
+
+
+class Driver(object):
+    """Compatibility class for driver name."""
+
+    def __init__(self, name: str):
+        self.name = name
 
 
 class VariableAccessor(MutableMapping):  # type: ignore
@@ -924,6 +939,9 @@ class Connection(metaclass=abc.ABCMeta):
     #: Read-only DB-API parameter style
     paramstyle = 'named'
 
+    # Must be set by subclass
+    driver = ''
+
     # Populated when first needed
     _map_param_converter: Optional[sqlparams.SQLParams] = None
     _positional_param_converter: Optional[sqlparams.SQLParams] = None
@@ -963,6 +981,9 @@ class Connection(metaclass=abc.ABCMeta):
 
         #: Attribute-like access to all cluster server variables
         self.cluster_vars = VariableAccessor(self, 'cluster')
+
+        # For backwards compatibility with SQLAlchemy package
+        self._driver = Driver(self.driver)
 
     @classmethod
     def _convert_params(
@@ -1014,6 +1035,8 @@ class Connection(metaclass=abc.ABCMeta):
         """Return the results of a query as a list of dicts (for internal use)."""
         with self.cursor() as cur:
             cur.execute(oper, params)
+            if not re.match(r'^\s*(select|show|call|echo)\s+', oper, flags=re.I):
+                return []
             out = list(cur.fetchall())
             if not out:
                 return []
@@ -1159,6 +1182,7 @@ def connect(
     autocommit: Optional[bool] = None,
     results_type: Optional[str] = None,
     buffered: Optional[bool] = None,
+    results_format: Optional[str] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1213,8 +1237,8 @@ def connect(
         Enable autocommits
     results_type : str, optional
         The form of the query results: tuples, namedtuples, dicts
-    buffered : bool, optional
-        Should query results be buffered before processing rows?
+    results_format : str, optional
+        Deprecated. This option has been renamed to results_type.
 
     Examples
     --------
@@ -1272,10 +1296,13 @@ def connect(
     """
     params = build_params(**dict(locals()))
     driver = params.get('driver', 'mysql')
+
     if not driver or driver == 'mysql':
         from .mysql.connection import Connection  # type: ignore
         return Connection(**params)
+
     if driver in ['http', 'https']:
         from .http.connection import Connection
         return Connection(**params)
+
     raise ValueError(f'Unrecognized protocol: {driver}')

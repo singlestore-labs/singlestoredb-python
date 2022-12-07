@@ -7,6 +7,7 @@ import os
 import unittest
 
 import singlestoredb as s2
+
 from . import utils
 # import traceback
 
@@ -199,6 +200,9 @@ class TestBasics(unittest.TestCase):
         assert desc[2].name == 'value', desc[2].name
         assert desc[2].type_code == 8, desc[2].type_code
 
+        with self.assertRaises(KeyError):
+            self.cur.execute('select * from data where id < %(name)s', dict(foo='d'))
+
     def test_execute_with_positional_params(self):
         self.cur.execute('select * from data where id < %s', ['d'])
         out = self.cur.fetchall()
@@ -222,6 +226,14 @@ class TestBasics(unittest.TestCase):
         assert desc[1].type_code in [253, 15], desc[1].type_code
         assert desc[2].name == 'value', desc[2].name
         assert desc[2].type_code == 8, desc[2].type_code
+
+        with self.assertRaises(TypeError):
+            self.cur.execute(
+                'select * from data where id < %s and id > %s', ['d', 'e', 'f'],
+            )
+
+        with self.assertRaises(TypeError):
+            self.cur.execute('select * from data where id < %s and id > %s', ['d'])
 
     def test_execute_with_escaped_positional_substitutions(self):
         self.cur.execute(
@@ -934,6 +946,37 @@ class TestBasics(unittest.TestCase):
 
         for k, v in sorted(row.items()):
             assert v == expected[k], '{} != {} in key {}'.format(v, expected[k], k)
+
+    def test_MySQLdb(self):
+        try:
+            import json
+            import MySQLdb
+        except (ModuleNotFoundError, ImportError):
+            self.skipTest('MySQLdb is not installed')
+
+        self.cur.execute('select * from alltypes order by id')
+        s2_out = self.cur.fetchall()
+
+        port = self.conn.connection_params['port']
+        if 'http' in self.conn.driver:
+            port = 3306
+
+        args = dict(
+            host=self.conn.connection_params['host'],
+            port=port,
+            user=self.conn.connection_params['user'],
+            password=self.conn.connection_params['password'],
+            database=type(self).dbname,
+        )
+
+        with MySQLdb.connect(**args) as conn:
+            conn.converter[245] = json.loads
+            with conn.cursor() as cur:
+                cur.execute('select * from alltypes order by id')
+                mydb_out = cur.fetchall()
+
+        for a, b in zip(s2_out, mydb_out):
+            assert a == b, (a, b)
 
 
 if __name__ == '__main__':

@@ -658,6 +658,9 @@ class SSCursorSV(SSCursor):
         out = self._result._read_rowdata_packet_unbuffered(size)
         if out is None:
             return []
+        if size == 1:
+            self._rownumber += 1
+            return [out]
         self._rownumber += len(out)
         return out
 

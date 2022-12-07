@@ -42,15 +42,16 @@ jobs:
 
       - name: Run MySQL protocol tests
         run: |
-          pytest -q --cov=singlestoredb singlestoredb/tests
+          pytest -q --cov=singlestoredb singlestoredb/tests singlestoredb/mysql/tests
         env:
           COVERAGE_FILE: "coverage-mysql.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3306"
+          SINGLESTOREDB_PURE_PYTHON: 0
           SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
 
       - name: Run MySQL protocol tests (pure Python)
         run: |
-          pytest -q -m 'not management' --cov=singlestoredb singlestoredb/tests
+          pytest -q -m 'not management' --cov=singlestoredb singlestoredb/tests singlestoredb/mysql/tests
         env:
           COVERAGE_FILE: "coverage-mysql-py.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3306"

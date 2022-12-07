@@ -2,8 +2,9 @@
 import warnings
 
 import singlestoredb.mysql as sv
-from . import capabilities
 from singlestoredb.mysql.tests import base
+
+from . import capabilities
 
 warnings.filterwarnings('error')
 

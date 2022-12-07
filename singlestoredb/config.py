@@ -182,7 +182,7 @@ register_option(
 )
 
 register_option(
-    'results.arraysize', 'int', check_int, 100,
+    'results.arraysize', 'int', check_int, 1,
     'Number of result rows to download in `fetchmany` calls',
     environ='SINGLESTOREDB_RESULTS_ARRAYSIZE',
 )
