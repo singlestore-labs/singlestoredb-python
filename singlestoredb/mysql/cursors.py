@@ -224,7 +224,7 @@ class Cursor(BaseCursor):
         int : Number of rows affected, if any.
 
         """
-        if not args:
+        if args is None or len(args) == 0:
             return
 
         m = RE_INSERT_VALUES.match(query)
@@ -255,7 +255,11 @@ class Cursor(BaseCursor):
         if isinstance(postfix, str):
             postfix = postfix.encode(encoding)
         sql = bytearray(prefix)
-        args = iter(args)
+        # Detect dataframes
+        if hasattr(args, 'itertuples'):
+            args = args.itertuples(index=False)
+        else:
+            args = iter(args)
         v = values % escape(next(args), conn)
         if isinstance(v, str):
             v = v.encode(encoding, 'surrogateescape')

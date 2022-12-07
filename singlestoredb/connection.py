@@ -340,7 +340,8 @@ class VariableAccessor(MutableMapping):  # type: ignore
     def __getitem__(self, name: str) -> Any:
         name = _name_check(name)
         out = self.connection._iquery(
-            'show {} variables like "{}";'.format(self.vtype, name),
+            'show {} variables like %s;'.format(self.vtype),
+            [name],
         )
         if not out:
             raise KeyError(f"No variable found with the name '{name}'.")
@@ -381,7 +382,7 @@ class VariableAccessor(MutableMapping):  # type: ignore
 
     def __iter__(self) -> Iterator[str]:
         out = self.connection._iquery('show {} variables;'.format(self.vtype))
-        return iter(list(x.keys())[0] for x in out)
+        return iter(list(x.values())[0] for x in out)
 
 
 class Cursor(metaclass=abc.ABCMeta):
@@ -490,7 +491,7 @@ class Cursor(metaclass=abc.ABCMeta):
     def execute(
         self, query: str,
         args: Optional[Union[Sequence[Any], Dict[str, Any], Any]] = None,
-    ) -> None:
+    ) -> int:
         """
         Execute a SQL statement.
 
@@ -501,13 +502,17 @@ class Cursor(metaclass=abc.ABCMeta):
         args : iterable or dict, optional
             Parameters to substitute into the SQL code
 
+        Returns
+        -------
+        Number of rows affected
+
         """
         raise NotImplementedError
 
     def executemany(
         self, query: str,
         args: Optional[Sequence[Union[Sequence[Any], Dict[str, Any], Any]]] = None,
-    ) -> None:
+    ) -> int:
         """
         Execute SQL code against multiple sets of parameters.
 
@@ -518,6 +523,10 @@ class Cursor(metaclass=abc.ABCMeta):
         args : iterable of iterables or dicts, optional
             Sets of parameters to substitute into the SQL code
 
+        Returns
+        -------
+        Number of rows affected
+
         """
         # NOTE: Just implement using `execute` to cover driver inconsistencies
         if not args:
@@ -525,6 +534,7 @@ class Cursor(metaclass=abc.ABCMeta):
         else:
             for params in args:
                 self.execute(query, params)
+        return self.rowcount
 
     @abc.abstractmethod
     def fetchone(self) -> Optional[Result]:

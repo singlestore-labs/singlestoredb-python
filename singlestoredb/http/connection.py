@@ -262,7 +262,7 @@ class Cursor(connection.Cursor):
     def execute(
         self, query: str,
         args: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
-    ) -> None:
+    ) -> int:
         """
         Execute a SQL statement.
 
@@ -288,7 +288,7 @@ class Cursor(connection.Cursor):
         self, oper: str,
         params: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
         is_callproc: bool = False,
-    ) -> None:
+    ) -> int:
         if self._connection is None:
             raise ProgrammingError(errno=2048, msg='Connection is closed.')
 
@@ -421,10 +421,12 @@ class Cursor(connection.Cursor):
 
             self.rowcount = out['rowsAffected']
 
+        return self.rowcount
+
     def executemany(
         self, query: str,
         args: Optional[Sequence[Union[Sequence[Any], Dict[str, Any]]]] = None,
-    ) -> None:
+    ) -> int:
         """
         Execute SQL code against multiple sets of parameters.
 
@@ -441,9 +443,14 @@ class Cursor(connection.Cursor):
 
         results = []
         rowcount = 0
-        if args:
+        if args is not None and len(args) > 0:
             description = []
-            for params in args:
+            # Detect dataframes
+            if hasattr(args, 'itertuples'):
+                argiter = args.itertuples(index=False)  # type: ignore
+            else:
+                argiter = iter(args)
+            for params in argiter:
                 self.execute(query, params)
                 if self._descriptions:
                     description = self._descriptions[-1]
@@ -455,7 +462,10 @@ class Cursor(connection.Cursor):
         else:
             self.execute(query)
             rowcount += self.rowcount
+
         self.rowcount = rowcount
+
+        return self.rowcount
 
     @property
     def _has_row(self) -> bool:

@@ -77,9 +77,9 @@ object (e.g., `iter(cur)`). The results are shown below.
 
 |                         | PyMySQL | MySQLdb | mysql.connector | SingleStore (pure Python) | SingleStore |
 |-------------------------|---------|---------|-----------------|---------------------------|-------------|
-| fetchall                |   39.0s |    6.6s |            5.6s |                     31.8s |        3.7s |
-| fetchmany(1000)         |   39.4s |    7.0s |            6.2s |                     31.5s |        3.9s |
-| fetchone                |   34.5s |    9.2s |           10.4s |                     33.6s |        5.0s |
+| fetchall                |   39.0s |    6.6s |            5.6s |                     31.8s |        3.8s |
+| fetchmany(1000)         |   39.4s |    7.0s |            6.2s |                     31.5s |        4.0s |
+| fetchone                |   34.5s |    9.2s |           10.4s |                     33.6s |        4.9s |
 | iter(cur)               |   39.0s |    9.1s |           10.4s |                     32.3s |        4.7s |
 
 
