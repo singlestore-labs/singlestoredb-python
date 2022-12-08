@@ -11,10 +11,10 @@ This document outlines features and improvements from each release.
 
 v0.5.0 - December 8, 2022 (**API CHANGES**)
 -------------------------------------------
-* **Query parameter syntax has changed from ``:1`` for positional
+* ! Query parameter syntax has changed from ``:1`` for positional
   and ``:key`` for dictionary keys to ``%s`` for positional and ``%(key)s``
-  for dictionary keys**
-* **``results_format`` connection parameter has changed to ``results_type``**
+  for dictionary keys
+* ! ``results_format`` connection parameter has changed to ``results_type``
 * High-performance C extension added
 * Added ``ssl_verify_cert`` and ``ssl_verify_identity`` connection options
 * Add Python 3.11 support
