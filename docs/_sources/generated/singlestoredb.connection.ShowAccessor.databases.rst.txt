@@ -1,0 +1,6 @@
+﻿singlestoredb.connection.ShowAccessor.databases
+===============================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. automethod:: ShowAccessor.databases

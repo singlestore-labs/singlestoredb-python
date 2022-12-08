@@ -24,7 +24,7 @@ or a connection string in the form of a URL.
 Connection
 ..........
 
-Connection objects are created by the :func:`connect` function. They are
+Connection objects are created by the :func:`singlestoredb.connect` function. They are
 used to create :class:`Cursor` objects for querying the database.
 
 .. currentmodule:: singlestoredb.connection
@@ -41,6 +41,59 @@ used to create :class:`Cursor` objects for querying the database.
    Connection.is_connected
    Connection.enable_data_api
    Connection.disable_data_api
+
+
+The :attr:`Connection.show` attribute of the connection objects allow you to access various
+information about the server. The available operations are shown below.
+
+.. currentmodule:: singlestoredb.connection
+
+.. autosummary::
+   :toctree: generated/
+
+   ShowAccessor.aggregates
+   ShowAccessor.columns
+   ShowAccessor.create_aggregate
+   ShowAccessor.create_function
+   ShowAccessor.create_pipeline
+   ShowAccessor.create_table
+   ShowAccessor.create_view
+   ShowAccessor.databases
+   ShowAccessor.database_status
+   ShowAccessor.errors
+   ShowAccessor.functions
+   ShowAccessor.global_status
+   ShowAccessor.indexes
+   ShowAccessor.partitions
+   ShowAccessor.pipelines
+   ShowAccessor.plan
+   ShowAccessor.plancache
+   ShowAccessor.procedures
+   ShowAccessor.processlist
+   ShowAccessor.reproduction
+   ShowAccessor.schemas
+   ShowAccessor.session_status
+   ShowAccessor.status
+   ShowAccessor.table_status
+   ShowAccessor.tables
+   ShowAccessor.warnings
+
+
+ShowResult
+^^^^^^^^^^
+
+The results of the above methods and attributes are in the form of a
+:class:`ShowResult` object. This object is primarily used to display
+information to the screen or web browser, but columns from the output
+can also be accessed using dictionary-like key access syntax or
+attributes.
+
+.. currentmodule:: singlestoredb.connection
+
+.. autosummary::
+   :toctree: generated/
+
+   ShowResult
 
 
 Cursor
@@ -186,15 +239,15 @@ values.
 
    import singlestoredb as s2
 
-   s2.describe_option('results.format')
+   s2.describe_option('local_infile')
 
-   s2.options.results.format
+   s2.options.local_infile
 
-   s2.options.results.format = 'namedtuple'
+   s2.options.local_infile = True
 
-   s2.describe_option('results.format')
+   s2.describe_option('local_infile')
 
 .. ipython:: python
    :suppress:
 
-   s2.options.results.format = 'tuple'
+   s2.options.local_infile = False

@@ -444,7 +444,7 @@ class Cursor(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def callproc(
         self, name: str,
-        params: Optional[Union[List[Any], Dict[str, Any]]] = None,
+        params: Optional[Sequence[Any]] = None,
     ) -> None:
         """
         Call a stored procedure.
@@ -454,6 +454,11 @@ class Cursor(metaclass=abc.ABCMeta):
         :meth:`fetchmany`, or :meth:`fetchall`. If the procedure generates
         multiple result sets, subsequent result sets can be accessed
         using :meth:`nextset`.
+
+        Examples
+        --------
+        >>> cur.callproc('myprocedure', ['arg1', 'arg2'])
+        >>> print(cur.fetchall())
 
         Parameters
         ----------
@@ -495,12 +500,24 @@ class Cursor(metaclass=abc.ABCMeta):
         """
         Execute a SQL statement.
 
+        Queries can use the ``format``-style parameters (``%s``) when using a
+        list of paramters or ``pyformat``-style parameters (``%(key)s``)
+        when using a dictionary of parameters.
+
         Parameters
         ----------
         query : str
             The SQL statement to execute
-        args : iterable or dict, optional
+        args : Sequence or dict, optional
             Parameters to substitute into the SQL code
+
+        Examples
+        --------
+        >>> cur.execute('select * from mytable')
+
+        >>> cur.execute('select * from mytable where id < %s', [100])
+
+        >>> cur.execute('select * from mytable where id < %(max)s', dict(max=100))
 
         Returns
         -------
@@ -516,12 +533,24 @@ class Cursor(metaclass=abc.ABCMeta):
         """
         Execute SQL code against multiple sets of parameters.
 
+        Queries can use the ``format``-style parameters (``%s``) when using
+        lists of paramters or ``pyformat``-style parameters (``%(key)s``)
+        when using dictionaries of parameters.
+
         Parameters
         ----------
         query : str
             The SQL statement to execute
         args : iterable of iterables or dicts, optional
             Sets of parameters to substitute into the SQL code
+
+        Examples
+        --------
+        >>> cur.executemany('select * from mytable where id < %s',
+        ...                 [[100], [200], [300]])
+
+        >>> cur.executemany('select * from mytable where id < %(max)s',
+        ...                 [dict(max=100), dict(max=100), dict(max=300)])
 
         Returns
         -------
@@ -541,6 +570,14 @@ class Cursor(metaclass=abc.ABCMeta):
         """
         Fetch a single row from the result set.
 
+        Examples
+        --------
+        >>> while True:
+        ...    row = cur.fetchone()
+        ...    if row is None:
+        ...       break
+        ...    print(row)
+
         Returns
         -------
         tuple
@@ -556,6 +593,15 @@ class Cursor(metaclass=abc.ABCMeta):
 
         If `size` is not specified, the `arraysize` attribute is used.
 
+        Examples
+        --------
+        >>> while True:
+        ...    out = cur.fetchmany(100)
+        ...    if not len(out):
+        ...        break
+        ...    for row in out:
+        ...        print(row)
+
         Returns
         -------
         list of tuples
@@ -568,6 +614,11 @@ class Cursor(metaclass=abc.ABCMeta):
     def fetchall(self) -> Result:
         """
         Fetch all rows in the result set.
+
+        Examples
+        --------
+        >>> for row in cur.fetchall():
+        ...     print(row)
 
         Returns
         -------
@@ -583,6 +634,15 @@ class Cursor(metaclass=abc.ABCMeta):
     def nextset(self) -> Optional[bool]:
         """
         Skip to the next available result set.
+
+        This is used when calling a procedure that returns multiple
+        results sets.
+
+        Note
+        ----
+        The ``nextset`` method must be called until it returns an empty
+        set (i.e., once more than the number of expected result sets).
+        This is to retain compatibility with PyMySQL and MySOLdb.
 
         Returns
         -------

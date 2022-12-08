@@ -1,0 +1,18 @@
+﻿singlestoredb.connection.ShowResult
+===================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. autoclass:: ShowResult
+
+
+   .. automethod:: __init__
+
+
+   .. rubric:: Methods
+
+   .. autosummary::
+
+      ~ShowResult.__init__
+      ~ShowResult.count
+      ~ShowResult.index

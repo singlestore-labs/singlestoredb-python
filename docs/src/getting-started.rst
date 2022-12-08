@@ -46,7 +46,7 @@ In addition, you can user a URL like in the SQLAlchemy package.
    conn = s2.connect('user:password@host:port/database')
 
 URLs work equally well to connect to the
-`HTTP API <https://docs.singlestoredb.com/db/v7.8/en/reference/http-api.html>`_.
+`Data API <https://docs.singlestore.com/managed-service/en/reference/data-api.html>`_.
 
 .. ipython:: python
    :verbatim:
@@ -95,7 +95,12 @@ Parameter Substitution
 ......................
 
 If your queries require parameter substitutions, they can be specified in
-one of two formats: named (``:varname``) or numbered (``:1``).
+one of two formats: named (``%(name)s``) or positional (``%s``).
+
+.. warning:: As of v0.5.0, the substition parameter has been changed from
+   ``:1``, ``:2``, etc. for list parameters and ``:foo``, ``:bar``, etc.
+   for dictionary parameters to ``%s`` and ``%(foo)s``, ``%(bar)s``, etc.
+   respectively, to ease the transition from other MySQL Python packages.
 
 Named Substitution
 ^^^^^^^^^^^^^^^^^^
@@ -105,31 +110,31 @@ are used, the data structure passed to the :meth:`Cursor.execute` method
 must be a dictionary, where the keys map to the names given in the substitutions
 and the values are the values to substitute.
 
-In the example below, ``:pattern`` is replaced with the value ``"auto%"``. All
+In the example below, ``%(pattern)s`` is replaced with the value ``"auto%"``. All
 escaping and quoting of the substituted data values is done automatically.
 
 .. ipython:: python
 
    with conn.cursor() as cur:
-       cur.execute('show variables like :pattern', dict(pattern='auto%'))
+       cur.execute('show variables like %(pattern)s', dict(pattern='auto%'))
        for row in cur.fetchall():
            print(row)
 
 
-Numeric Substitution
-^^^^^^^^^^^^^^^^^^^^
+Positional Substitution
+^^^^^^^^^^^^^^^^^^^^^^^
 
-If numbered parameters are used, the data structure passed to the
-:meth:`Cursor.execute` method must be a list or tuple, where the substitution
-numbers correspond to the 1-based position in the list / tuple.
+If positional parameters are used, the data structure passed to the
+:meth:`Cursor.execute` method must be a list or tuple with the same
+number of elements as there are ``%s`` values in the query string.
 
-In the example below, ``:1`` is replade with the value ``"auto%"``. All
+In the example below, ``%s`` is replaced with the value ``"auto%"``. All
 escaping and quoting of the substituted data values is done automatically.
 
 .. ipython:: python
 
    with conn.cursor() as cur:
-       cur.execute('show variables like :1', ['auto%'])
+       cur.execute('show variables like %s', ['auto%'])
        for row in cur.fetchall():
            print(row)
 

@@ -17,6 +17,7 @@
       ~Connection.autocommit
       ~Connection.close
       ~Connection.commit
+      ~Connection.connect
       ~Connection.cursor
       ~Connection.disable_data_api
       ~Connection.disable_http_api
@@ -33,9 +34,10 @@
 
    .. autosummary::
 
+      ~Connection.driver
       ~Connection.messages
+      ~Connection.paramstyle
       ~Connection.show
-      ~Connection.results_format
       ~Connection.encoding
       ~Connection.globals
       ~Connection.locals

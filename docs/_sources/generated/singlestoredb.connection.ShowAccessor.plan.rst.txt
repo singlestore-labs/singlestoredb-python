@@ -1,0 +1,6 @@
+﻿singlestoredb.connection.ShowAccessor.plan
+==========================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. automethod:: ShowAccessor.plan

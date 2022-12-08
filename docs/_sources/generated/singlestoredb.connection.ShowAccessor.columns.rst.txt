@@ -1,0 +1,6 @@
+﻿singlestoredb.connection.ShowAccessor.columns
+=============================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. automethod:: ShowAccessor.columns

@@ -1,0 +1,6 @@
+﻿singlestoredb.connection.ShowAccessor.functions
+===============================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. automethod:: ShowAccessor.functions

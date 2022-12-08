@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStoreDB 0.4.0 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 0.5.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
@@ -31,7 +31,7 @@
             <a href="index.html" class="icon icon-home"> SingleStoreDB
           </a>
               <div class="version">
-                0.4.0
+                0.5.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -59,6 +59,33 @@
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.is_connected.html">Connection.is_connected</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.enable_data_api.html">Connection.enable_data_api</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.disable_data_api.html">Connection.disable_data_api</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.aggregates.html">Connection.show.aggregates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.columns.html">Connection.show.columns</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_aggregate.html">Connection.show.create_aggregate</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_function.html">Connection.show.create_function</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_pipeline.html">Connection.show.create_pipeline</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_table.html">Connection.show.create_table</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_view.html">Connection.show.create_view</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.databases.html">Connection.show.databases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.database_status.html">Connection.show.database_status</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.errors.html">Connection.show.errors</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.functions.html">Connection.show.functions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.global_status.html">Connection.show.global_status</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.indexes.html">Connection.show.indexes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.partitions.html">Connection.show.partitions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.pipelines.html">Connection.show.pipelines</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.plan.html">Connection.show.plan</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.plancache.html">Connection.show.plancache</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.procedures.html">Connection.show.procedures</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.processlist.html">Connection.show.processlist</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.reproduction.html">Connection.show.reproduction</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.schemas.html">Connection.show.schemas</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.session_status.html">Connection.show.session_status</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.status.html">Connection.show.status</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.table_status.html">Connection.show.table_status</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.tables.html">Connection.show.tables</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.warnings.html">Connection.show.warnings</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#showresult">ShowResult</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#cursor">Cursor</a><ul>
@@ -174,7 +201,7 @@ or a connection string in the form of a URL.</p>
 </table>
 <section id="connection">
 <h3>Connection<a class="headerlink" href="#connection" title="Permalink to this headline">¶</a></h3>
-<p>Connection objects are created by the <a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">connect()</span></code></a> function. They are
+<p>Connection objects are created by the <a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">singlestoredb.connect()</span></code></a> function. They are
 used to create<a href="singlestoredb.connection.Cursor.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Cursor</span></code></a> objects for querying the database.</p>
 <table class="longtable docutils align-default">
 <colgroup>
@@ -211,6 +238,113 @@ used to create<a href="singlestoredb.connection.Cursor.html"> <code class="xref 
 </tr>
 </tbody>
 </table>
+<p>The <code class="xref py py-attr docutils literal notranslate"><span class="pre">Connection.show</span></code> attribute of the connection objects allow you to access various
+information about the server. The available operations are shown below.</p>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.aggregates.html#singlestoredb.connection.ShowAccessor.aggregates" title="singlestoredb.connection.ShowAccessor.aggregates"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.aggregates</span></code></a>()</p></td>
+<td><p>Show all aggregate functions in the current database.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.columns.html#singlestoredb.connection.ShowAccessor.columns" title="singlestoredb.connection.ShowAccessor.columns"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.columns</span></code></a>(table[, full])</p></td>
+<td><p>Show the column information for the given table.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_aggregate.html#singlestoredb.connection.ShowAccessor.create_aggregate" title="singlestoredb.connection.ShowAccessor.create_aggregate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.create_aggregate</span></code></a>(name)</p></td>
+<td><p>Show the function creation code for the given aggregate function.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_function.html#singlestoredb.connection.ShowAccessor.create_function" title="singlestoredb.connection.ShowAccessor.create_function"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.create_function</span></code></a>(name)</p></td>
+<td><p>Show the function creation code for the given function.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_pipeline.html#singlestoredb.connection.ShowAccessor.create_pipeline" title="singlestoredb.connection.ShowAccessor.create_pipeline"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.create_pipeline</span></code></a>(name[, extended])</p></td>
+<td><p>Show the pipeline creation code for the given pipeline.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_table.html#singlestoredb.connection.ShowAccessor.create_table" title="singlestoredb.connection.ShowAccessor.create_table"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.create_table</span></code></a>(name)</p></td>
+<td><p>Show the table creation code for the given table.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_view.html#singlestoredb.connection.ShowAccessor.create_view" title="singlestoredb.connection.ShowAccessor.create_view"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.create_view</span></code></a>(name)</p></td>
+<td><p>Show the view creation code for the given view.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.databases.html#singlestoredb.connection.ShowAccessor.databases" title="singlestoredb.connection.ShowAccessor.databases"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.databases</span></code></a>([extended])</p></td>
+<td><p>Show all databases in the server.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.database_status.html#singlestoredb.connection.ShowAccessor.database_status" title="singlestoredb.connection.ShowAccessor.database_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.database_status</span></code></a>()</p></td>
+<td><p>Show status of the current database.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.errors.html#singlestoredb.connection.ShowAccessor.errors" title="singlestoredb.connection.ShowAccessor.errors"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.errors</span></code></a>()</p></td>
+<td><p>Show errors.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.functions.html#singlestoredb.connection.ShowAccessor.functions" title="singlestoredb.connection.ShowAccessor.functions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.functions</span></code></a>()</p></td>
+<td><p>Show all functions in the current database.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.global_status.html#singlestoredb.connection.ShowAccessor.global_status" title="singlestoredb.connection.ShowAccessor.global_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.global_status</span></code></a>()</p></td>
+<td><p>Show global status of the current server.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.indexes.html#singlestoredb.connection.ShowAccessor.indexes" title="singlestoredb.connection.ShowAccessor.indexes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.indexes</span></code></a>(table)</p></td>
+<td><p>Show all indexes in the given table.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.partitions.html#singlestoredb.connection.ShowAccessor.partitions" title="singlestoredb.connection.ShowAccessor.partitions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.partitions</span></code></a>([extended])</p></td>
+<td><p>Show partitions in the current database.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.pipelines.html#singlestoredb.connection.ShowAccessor.pipelines" title="singlestoredb.connection.ShowAccessor.pipelines"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.pipelines</span></code></a>()</p></td>
+<td><p>Show all pipelines in the current database.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.plan.html#singlestoredb.connection.ShowAccessor.plan" title="singlestoredb.connection.ShowAccessor.plan"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.plan</span></code></a>(plan_id[, json])</p></td>
+<td><p>Show the plan for the given plan ID.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.plancache.html#singlestoredb.connection.ShowAccessor.plancache" title="singlestoredb.connection.ShowAccessor.plancache"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.plancache</span></code></a>()</p></td>
+<td><p>Show all query statements compiled and executed.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.procedures.html#singlestoredb.connection.ShowAccessor.procedures" title="singlestoredb.connection.ShowAccessor.procedures"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.procedures</span></code></a>()</p></td>
+<td><p>Show all procedures in the current database.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.processlist.html#singlestoredb.connection.ShowAccessor.processlist" title="singlestoredb.connection.ShowAccessor.processlist"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.processlist</span></code></a>()</p></td>
+<td><p>Show details about currently running threads.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.reproduction.html#singlestoredb.connection.ShowAccessor.reproduction" title="singlestoredb.connection.ShowAccessor.reproduction"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.reproduction</span></code></a>([outfile])</p></td>
+<td><p>Show troubleshooting data for query optimizer and code generation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.schemas.html#singlestoredb.connection.ShowAccessor.schemas" title="singlestoredb.connection.ShowAccessor.schemas"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.schemas</span></code></a>()</p></td>
+<td><p>Show schemas in the server.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.session_status.html#singlestoredb.connection.ShowAccessor.session_status" title="singlestoredb.connection.ShowAccessor.session_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.session_status</span></code></a>()</p></td>
+<td><p>Show server status information for a session.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.status.html#singlestoredb.connection.ShowAccessor.status" title="singlestoredb.connection.ShowAccessor.status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.status</span></code></a>([extended])</p></td>
+<td><p>Show server status information.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.table_status.html#singlestoredb.connection.ShowAccessor.table_status" title="singlestoredb.connection.ShowAccessor.table_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.table_status</span></code></a>()</p></td>
+<td><p>Show table status information for the current database.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.tables.html#singlestoredb.connection.ShowAccessor.tables" title="singlestoredb.connection.ShowAccessor.tables"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.tables</span></code></a>([extended])</p></td>
+<td><p>Show tables in the current database.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.warnings.html#singlestoredb.connection.ShowAccessor.warnings" title="singlestoredb.connection.ShowAccessor.warnings"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.warnings</span></code></a>()</p></td>
+<td><p>Show warnings.</p></td>
+</tr>
+</tbody>
+</table>
+<section id="showresult">
+<h4>ShowResult<a class="headerlink" href="#showresult" title="Permalink to this headline">¶</a></h4>
+<p>The results of the above methods and attributes are in the form of a
+<a class="reference internal" href="generated/singlestoredb.connection.ShowResult.html#singlestoredb.connection.ShowResult" title="singlestoredb.connection.ShowResult"><code class="xref py py-class docutils literal notranslate"><span class="pre">ShowResult</span></code></a> object. This object is primarily used to display
+information to the screen or web browser, but columns from the output
+can also be accessed using dictionary-like key access syntax or
+attributes.</p>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowResult.html#singlestoredb.connection.ShowResult" title="singlestoredb.connection.ShowResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ShowResult</span></code></a>(*args, **kwargs)</p></td>
+<td><p>Simple result object.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
 </section>
 <section id="cursor">
 <h3>Cursor<a class="headerlink" href="#cursor" title="Permalink to this headline">¶</a></h3>
@@ -222,7 +356,7 @@ created using the <a class="reference internal" href="generated/singlestoredb.co
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.html#singlestoredb.connection.Cursor" title="singlestoredb.connection.Cursor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor</span></code></a>(connection, cursor, driver)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.html#singlestoredb.connection.Cursor" title="singlestoredb.connection.Cursor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor</span></code></a>(connection)</p></td>
 <td><p>Database cursor for submitting commands and queries.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.callproc.html#singlestoredb.connection.Cursor.callproc" title="singlestoredb.connection.Cursor.callproc"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.callproc</span></code></a>(name[, params])</p></td>
@@ -231,10 +365,10 @@ created using the <a class="reference internal" href="generated/singlestoredb.co
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.close.html#singlestoredb.connection.Cursor.close" title="singlestoredb.connection.Cursor.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.close</span></code></a>()</p></td>
 <td><p>Close the cursor.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.execute.html#singlestoredb.connection.Cursor.execute" title="singlestoredb.connection.Cursor.execute"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.execute</span></code></a>(oper[, params])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.execute.html#singlestoredb.connection.Cursor.execute" title="singlestoredb.connection.Cursor.execute"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.execute</span></code></a>(query[, args])</p></td>
 <td><p>Execute a SQL statement.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.executemany.html#singlestoredb.connection.Cursor.executemany" title="singlestoredb.connection.Cursor.executemany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.executemany</span></code></a>(oper[, param_seq])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.executemany.html#singlestoredb.connection.Cursor.executemany" title="singlestoredb.connection.Cursor.executemany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.executemany</span></code></a>(query[, args])</p></td>
 <td><p>Execute SQL code against multiple sets of parameters.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchone.html#singlestoredb.connection.Cursor.fetchone" title="singlestoredb.connection.Cursor.fetchone"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchone</span></code></a>()</p></td>
@@ -262,7 +396,7 @@ created using the <a class="reference internal" href="generated/singlestoredb.co
 <td><p>Return the next row from the result set for use in iterators.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.is_connected.html#singlestoredb.connection.Cursor.is_connected" title="singlestoredb.connection.Cursor.is_connected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.is_connected</span></code></a>()</p></td>
-<td><p>Check if the cursor is connected.</p></td>
+<td><p>Is the cursor still connected?</p></td>
 </tr>
 </tbody>
 </table>
@@ -432,22 +566,22 @@ see the documentation for all options.</p>
 values.</p>
 <div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [1]: </span><span class="kn">import</span> <span class="nn">singlestoredb</span> <span class="k">as</span> <span class="nn">s2</span>
 
-<span class="gp">In [2]: </span><span class="n">s2</span><span class="o">.</span><span class="n">describe_option</span><span class="p">(</span><span class="s1">&#39;results.format&#39;</span><span class="p">)</span>
-<span class="go">results.format : string</span>
-<span class="go">    What form should the query results take?</span>
-<span class="go">    [default: tuple] [currently: tuple]</span>
+<span class="gp">In [2]: </span><span class="n">s2</span><span class="o">.</span><span class="n">describe_option</span><span class="p">(</span><span class="s1">&#39;local_infile&#39;</span><span class="p">)</span>
+<span class="go">local_infile : bool</span>
+<span class="go">    Should it be possible to load local files?</span>
+<span class="go">    [default: False] [currently: False]</span>
 
 
 
-<span class="gp">In [3]: </span><span class="n">s2</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">format</span>
-<span class="gh">Out[3]: </span><span class="go">&#39;tuple&#39;</span>
+<span class="gp">In [3]: </span><span class="n">s2</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">local_infile</span>
+<span class="gh">Out[3]: </span><span class="go">False</span>
 
-<span class="gp">In [4]: </span><span class="n">s2</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">format</span> <span class="o">=</span> <span class="s1">&#39;namedtuple&#39;</span>
+<span class="gp">In [4]: </span><span class="n">s2</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">local_infile</span> <span class="o">=</span> <span class="kc">True</span>
 
-<span class="gp">In [5]: </span><span class="n">s2</span><span class="o">.</span><span class="n">describe_option</span><span class="p">(</span><span class="s1">&#39;results.format&#39;</span><span class="p">)</span>
-<span class="go">results.format : string</span>
-<span class="go">    What form should the query results take?</span>
-<span class="go">    [default: tuple] [currently: namedtuple]</span>
+<span class="gp">In [5]: </span><span class="n">s2</span><span class="o">.</span><span class="n">describe_option</span><span class="p">(</span><span class="s1">&#39;local_infile&#39;</span><span class="p">)</span>
+<span class="go">local_infile : bool</span>
+<span class="go">    Should it be possible to load local files?</span>
+<span class="go">    [default: False] [currently: True]</span>
 </pre></div>
 </div>
 </section>

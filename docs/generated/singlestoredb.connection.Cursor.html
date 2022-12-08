@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>singlestoredb.connection.Cursor &mdash; SingleStoreDB 0.4.0 documentation</title>
+  <title>singlestoredb.connection.Cursor &mdash; SingleStoreDB 0.5.0 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -20,7 +20,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="singlestoredb.connection.Cursor.callproc" href="singlestoredb.connection.Cursor.callproc.html" />
-    <link rel="prev" title="singlestoredb.connection.Connection.disable_data_api" href="singlestoredb.connection.Connection.disable_data_api.html" />
+    <link rel="prev" title="singlestoredb.connection.ShowResult" href="singlestoredb.connection.ShowResult.html" />
 </head>
 
 <body class="wy-body-for-nav">
@@ -31,7 +31,7 @@
             <a href="../index.html" class="icon icon-home"> SingleStoreDB
           </a>
               <div class="version">
-                0.4.0
+                0.5.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -106,13 +106,13 @@
 <h1>singlestoredb.connection.Cursor<a class="headerlink" href="#singlestoredb-connection-cursor" title="Permalink to this headline">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="singlestoredb.connection.Cursor">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">singlestoredb.connection.</span></span><span class="sig-name descname"><span class="pre">Cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="singlestoredb.connection.Connection.html#singlestoredb.connection.Connection" title="singlestoredb.connection.Connection"><span class="pre">singlestoredb.connection.Connection</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">cursor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.10)"><span class="pre">Any</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">driver</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">singlestoredb.drivers.base.Driver</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.connection.Cursor" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">singlestoredb.connection.</span></span><span class="sig-name descname"><span class="pre">Cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="singlestoredb.connection.Connection.html#singlestoredb.connection.Connection" title="singlestoredb.connection.Connection"><span class="pre">singlestoredb.connection.Connection</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.connection.Cursor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Database cursor for submitting commands and queries.</p>
 <p>This object should not be instantiated directly.
 The<a href="singlestoredb.connection.Connection.cursor.html"> <code class="docutils literal notranslate"><span class="pre">Connection.cursor</span></code></a> method should be used.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="singlestoredb.connection.Cursor.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="singlestoredb.connection.Connection.html#singlestoredb.connection.Connection" title="singlestoredb.connection.Connection"><span class="pre">singlestoredb.connection.Connection</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">cursor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.10)"><span class="pre">Any</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">driver</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">singlestoredb.drivers.base.Driver</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.connection.Cursor.__init__" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="singlestoredb.connection.Connection.html#singlestoredb.connection.Connection" title="singlestoredb.connection.Connection"><span class="pre">singlestoredb.connection.Connection</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.connection.Cursor.__init__" title="Permalink to this definition">¶</a></dt>
 <dd><p>Call<a href="singlestoredb.connection.Connection.cursor.html"> <code class="docutils literal notranslate"><span class="pre">Connection.cursor</span></code></a> instead.</p>
 </dd></dl>
 
@@ -123,7 +123,7 @@ The<a href="singlestoredb.connection.Connection.cursor.html"> <code class="docut
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#singlestoredb.connection.Cursor.__init__" title="singlestoredb.connection.Cursor.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(connection, cursor, driver)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#singlestoredb.connection.Cursor.__init__" title="singlestoredb.connection.Cursor.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(connection)</p></td>
 <td><p>Call<a href="singlestoredb.connection.Connection.cursor.html"> <code class="docutils literal notranslate"><span class="pre">Connection.cursor</span></code></a> instead.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.connection.Cursor.callproc.html#singlestoredb.connection.Cursor.callproc" title="singlestoredb.connection.Cursor.callproc"><code class="xref py py-obj docutils literal notranslate"><span class="pre">callproc</span></code></a>(name[, params])</p></td>
@@ -132,10 +132,10 @@ The<a href="singlestoredb.connection.Connection.cursor.html"> <code class="docut
 <tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.connection.Cursor.close.html#singlestoredb.connection.Cursor.close" title="singlestoredb.connection.Cursor.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">close</span></code></a>()</p></td>
 <td><p>Close the cursor.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.connection.Cursor.execute.html#singlestoredb.connection.Cursor.execute" title="singlestoredb.connection.Cursor.execute"><code class="xref py py-obj docutils literal notranslate"><span class="pre">execute</span></code></a>(oper[, params])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.connection.Cursor.execute.html#singlestoredb.connection.Cursor.execute" title="singlestoredb.connection.Cursor.execute"><code class="xref py py-obj docutils literal notranslate"><span class="pre">execute</span></code></a>(query[, args])</p></td>
 <td><p>Execute a SQL statement.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.connection.Cursor.executemany.html#singlestoredb.connection.Cursor.executemany" title="singlestoredb.connection.Cursor.executemany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">executemany</span></code></a>(oper[, param_seq])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.connection.Cursor.executemany.html#singlestoredb.connection.Cursor.executemany" title="singlestoredb.connection.Cursor.executemany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">executemany</span></code></a>(query[, args])</p></td>
 <td><p>Execute SQL code against multiple sets of parameters.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.connection.Cursor.fetchall.html#singlestoredb.connection.Cursor.fetchall" title="singlestoredb.connection.Cursor.fetchall"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fetchall</span></code></a>()</p></td>
@@ -148,7 +148,7 @@ The<a href="singlestoredb.connection.Connection.cursor.html"> <code class="docut
 <td><p>Fetch a single row from the result set.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.connection.Cursor.is_connected.html#singlestoredb.connection.Cursor.is_connected" title="singlestoredb.connection.Cursor.is_connected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_connected</span></code></a>()</p></td>
-<td><p>Check if the cursor is connected.</p></td>
+<td><p>Is the cursor still connected?</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.connection.Cursor.next.html#singlestoredb.connection.Cursor.next" title="singlestoredb.connection.Cursor.next"><code class="xref py py-obj docutils literal notranslate"><span class="pre">next</span></code></a>()</p></td>
 <td><p>Return the next row from the result set for use in iterators.</p></td>
@@ -175,22 +175,22 @@ The<a href="singlestoredb.connection.Connection.cursor.html"> <code class="docut
 </colgroup>
 <tbody>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">connection</span></code></p></td>
-<td><p>Return the connection that the cursor belongs to.</p></td>
+<td><p>the connection that the cursor belongs to.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">description</span></code></p></td>
+<td><p>The field descriptions of the last query.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">messages</span></code></p></td>
+<td><p>Messages created by the server.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">rownumber</span></code></p></td>
-<td><p>Current row of the cursor.</p></td>
+<td><p>The last modified row number.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">description</span></code></p></td>
-<td><p>Description of columns in the last executed query.</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">arraysize</span></code></p></td>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">arraysize</span></code></p></td>
 <td><p>Default batch size of <code class="docutils literal notranslate"><span class="pre">fetchmany</span></code> calls.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">rowcount</span></code></p></td>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">rowcount</span></code></p></td>
 <td><p>Number of rows affected by the last query.</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">messages</span></code></p></td>
-<td><p>Messages generated during last query.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">lastrowid</span></code></p></td>
 <td><p>Row ID of the last modified row.</p></td>
@@ -205,7 +205,7 @@ The<a href="singlestoredb.connection.Connection.cursor.html"> <code class="docut
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="singlestoredb.connection.Connection.disable_data_api.html" class="btn btn-neutral float-left" title="singlestoredb.connection.Connection.disable_data_api" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="singlestoredb.connection.ShowResult.html" class="btn btn-neutral float-left" title="singlestoredb.connection.ShowResult" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="singlestoredb.connection.Cursor.callproc.html" class="btn btn-neutral float-right" title="singlestoredb.connection.Cursor.callproc" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

@@ -1,0 +1,6 @@
+﻿singlestoredb.connection.ShowAccessor.create\_function
+======================================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. automethod:: ShowAccessor.create_function

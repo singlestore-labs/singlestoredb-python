@@ -37,9 +37,9 @@
    .. autosummary::
 
       ~Cursor.connection
-      ~Cursor.rownumber
       ~Cursor.description
+      ~Cursor.messages
+      ~Cursor.rownumber
       ~Cursor.arraysize
       ~Cursor.rowcount
-      ~Cursor.messages
       ~Cursor.lastrowid

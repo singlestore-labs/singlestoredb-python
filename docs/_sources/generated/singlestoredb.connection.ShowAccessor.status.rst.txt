@@ -1,0 +1,6 @@
+﻿singlestoredb.connection.ShowAccessor.status
+============================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. automethod:: ShowAccessor.status

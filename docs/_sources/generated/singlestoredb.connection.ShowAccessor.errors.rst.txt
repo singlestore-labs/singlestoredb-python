@@ -1,0 +1,6 @@
+﻿singlestoredb.connection.ShowAccessor.errors
+============================================
+
+.. currentmodule:: singlestoredb.connection
+
+.. automethod:: ShowAccessor.errors

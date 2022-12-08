@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Getting Started &mdash; SingleStoreDB 0.4.0 documentation</title>
+  <title>Getting Started &mdash; SingleStoreDB 0.5.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
@@ -31,7 +31,7 @@
             <a href="index.html" class="icon icon-home"> SingleStoreDB
           </a>
               <div class="version">
-                0.4.0
+                0.5.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -52,17 +52,16 @@
 <li class="toctree-l2"><a class="reference internal" href="#executing-queries">Executing Queries</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#parameter-substitution">Parameter Substitution</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#named-substitution">Named Substitution</a></li>
-<li class="toctree-l4"><a class="reference internal" href="#numeric-substitution">Numeric Substitution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#positional-substitution">Positional Substitution</a></li>
 </ul>
 </li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#fetching-results">Fetching Results</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#result-formats">Result Formats</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#result-type">Result Type</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#tuples-default">Tuples (Default)</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#named-tuples">Named Tuples</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#dictionaries">Dictionaries</a></li>
-<li class="toctree-l4"><a class="reference internal" href="#dataframes">DataFrames</a></li>
 </ul>
 </li>
 </ul>
@@ -128,7 +127,7 @@ for the <a class="reference internal" href="generated/singlestoredb.connect.html
 </pre></div>
 </div>
 <p>URLs work equally well to connect to the
-<a class="reference external" href="https://docs.singlestoredb.com/db/v7.8/en/reference/http-api.html">HTTP API</a>.</p>
+<a class="reference external" href="https://docs.singlestore.com/managed-service/en/reference/data-api.html">Data API</a>.</p>
 <div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [4]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;https://user:password@host:port/database&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -168,17 +167,24 @@ the results.</p>
 <section id="parameter-substitution">
 <h3>Parameter Substitution<a class="headerlink" href="#parameter-substitution" title="Permalink to this headline">¶</a></h3>
 <p>If your queries require parameter substitutions, they can be specified in
-one of two formats: named (<code class="docutils literal notranslate"><span class="pre">:varname</span></code>) or numbered (<code class="docutils literal notranslate"><span class="pre">:1</span></code>).</p>
+one of two formats: named (<code class="docutils literal notranslate"><span class="pre">%(name)s</span></code>) or positional (<code class="docutils literal notranslate"><span class="pre">%s</span></code>).</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>As of v0.5.0, the substition parameter has been changed from
+<code class="docutils literal notranslate"><span class="pre">:1</span></code>, <code class="docutils literal notranslate"><span class="pre">:2</span></code>, etc. for list parameters and <code class="docutils literal notranslate"><span class="pre">:foo</span></code>, <code class="docutils literal notranslate"><span class="pre">:bar</span></code>, etc.
+for dictionary parameters to <code class="docutils literal notranslate"><span class="pre">%s</span></code> and <code class="docutils literal notranslate"><span class="pre">%(foo)s</span></code>, <code class="docutils literal notranslate"><span class="pre">%(bar)s</span></code>, etc.
+respectively, to ease the transition from other MySQL Python packages.</p>
+</div>
 <section id="named-substitution">
 <h4>Named Substitution<a class="headerlink" href="#named-substitution" title="Permalink to this headline">¶</a></h4>
 <p>When named parameters
 are used, the data structure passed to the <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.execute()</span></code> method
 must be a dictionary, where the keys map to the names given in the substitutions
 and the values are the values to substitute.</p>
-<p>In the example below, <code class="docutils literal notranslate"><span class="pre">:pattern</span></code> is replaced with the value <code class="docutils literal notranslate"><span class="pre">&quot;auto%&quot;</span></code>. All
+<p>In the example below, <code class="docutils literal notranslate"><span class="pre">%(pattern)s</span></code> is replaced with the value <code class="docutils literal notranslate"><span class="pre">&quot;auto%&quot;</span></code>. All
 escaping and quoting of the substituted data values is done automatically.</p>
 <div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [8]: </span><span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
-<span class="gp">   ...: </span>    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like :pattern&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">pattern</span><span class="o">=</span><span class="s1">&#39;auto%&#39;</span><span class="p">))</span>
+<span class="gp">   ...: </span>    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like </span><span class="si">%(pattern)s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">pattern</span><span class="o">=</span><span class="s1">&#39;auto%&#39;</span><span class="p">))</span>
 <span class="gp">   ...: </span>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
 <span class="gp">   ...: </span>        <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
 <span class="gp">   ...: </span>
@@ -190,15 +196,15 @@ escaping and quoting of the substituted data values is done automatically.</p>
 </pre></div>
 </div>
 </section>
-<section id="numeric-substitution">
-<h4>Numeric Substitution<a class="headerlink" href="#numeric-substitution" title="Permalink to this headline">¶</a></h4>
-<p>If numbered parameters are used, the data structure passed to the
-<code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.execute()</span></code> method must be a list or tuple, where the substitution
-numbers correspond to the 1-based position in the list / tuple.</p>
-<p>In the example below, <code class="docutils literal notranslate"><span class="pre">:1</span></code> is replade with the value <code class="docutils literal notranslate"><span class="pre">&quot;auto%&quot;</span></code>. All
+<section id="positional-substitution">
+<h4>Positional Substitution<a class="headerlink" href="#positional-substitution" title="Permalink to this headline">¶</a></h4>
+<p>If positional parameters are used, the data structure passed to the
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.execute()</span></code> method must be a list or tuple with the same
+number of elements as there are <code class="docutils literal notranslate"><span class="pre">%s</span></code> values in the query string.</p>
+<p>In the example below, <code class="docutils literal notranslate"><span class="pre">%s</span></code> is replaced with the value <code class="docutils literal notranslate"><span class="pre">&quot;auto%&quot;</span></code>. All
 escaping and quoting of the substituted data values is done automatically.</p>
 <div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [9]: </span><span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
-<span class="gp">   ...: </span>    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like :1&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;auto%&#39;</span><span class="p">])</span>
+<span class="gp">   ...: </span>    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;auto%&#39;</span><span class="p">])</span>
 <span class="gp">   ...: </span>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
 <span class="gp">   ...: </span>        <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
 <span class="gp">   ...: </span>
@@ -239,15 +245,15 @@ iterated over itself.</p>
 <span class="go">(&#39;autocommit&#39;, &#39;ON&#39;)</span>
 </pre></div>
 </div>
-<section id="result-formats">
-<h3>Result Formats<a class="headerlink" href="#result-formats" title="Permalink to this headline">¶</a></h3>
+<section id="result-type">
+<h3>Result Type<a class="headerlink" href="#result-type" title="Permalink to this headline">¶</a></h3>
 <p>In addition to being able to specify the amount of data to be retrieved, you can also
 specify the data structure that the results are returned in. By default, each row of
 data is a tuple with one element per column from the query. However, it is also possible
-to get results back as named tuples, dicts, or <a class="reference external" href="https://pandas.pydata.org/pandas-docs/version/0.19.2/generated/pandas.DataFrame.html#pandas.DataFrame" title="(in pandas v0.19.2)"><code class="xref py py-class docutils literal notranslate"><span class="pre">pandas.DataFrame</span></code></a>.</p>
+to get results back as named tuples or dicts.</p>
 <section id="tuples-default">
 <h4>Tuples (Default)<a class="headerlink" href="#tuples-default" title="Permalink to this headline">¶</a></h4>
-<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [11]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_format</span><span class="o">=</span><span class="s1">&#39;tuple&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [11]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_type</span><span class="o">=</span><span class="s1">&#39;tuples&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
 <span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
 <span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
 <span class="gp">   ....: </span>        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
@@ -263,23 +269,23 @@ to get results back as named tuples, dicts, or <a class="reference external" hre
 </section>
 <section id="named-tuples">
 <h4>Named Tuples<a class="headerlink" href="#named-tuples" title="Permalink to this headline">¶</a></h4>
-<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [12]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_format</span><span class="o">=</span><span class="s1">&#39;namedtuple&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [12]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_type</span><span class="o">=</span><span class="s1">&#39;namedtuples&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
 <span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
 <span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
 <span class="gp">   ....: </span>        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
 <span class="gp">   ....: </span>            <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
 <span class="gp">   ....: </span>
-<span class="go">Row(Variable_name=&#39;auto_attach&#39;, Value=&#39;ON&#39;)</span>
-<span class="go">Row(Variable_name=&#39;auto_increment_increment&#39;, Value=&#39;1&#39;)</span>
-<span class="go">Row(Variable_name=&#39;auto_increment_offset&#39;, Value=&#39;1&#39;)</span>
-<span class="go">Row(Variable_name=&#39;auto_replicate&#39;, Value=&#39;OFF&#39;)</span>
-<span class="go">Row(Variable_name=&#39;autocommit&#39;, Value=&#39;ON&#39;)</span>
+<span class="go">singlestoredb.Row(Variable_name=&#39;auto_attach&#39;, Value=&#39;ON&#39;)</span>
+<span class="go">singlestoredb.Row(Variable_name=&#39;auto_increment_increment&#39;, Value=&#39;1&#39;)</span>
+<span class="go">singlestoredb.Row(Variable_name=&#39;auto_increment_offset&#39;, Value=&#39;1&#39;)</span>
+<span class="go">singlestoredb.Row(Variable_name=&#39;auto_replicate&#39;, Value=&#39;OFF&#39;)</span>
+<span class="go">singlestoredb.Row(Variable_name=&#39;autocommit&#39;, Value=&#39;ON&#39;)</span>
 </pre></div>
 </div>
 </section>
 <section id="dictionaries">
 <h4>Dictionaries<a class="headerlink" href="#dictionaries" title="Permalink to this headline">¶</a></h4>
-<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [13]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_format</span><span class="o">=</span><span class="s1">&#39;dict&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [13]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_type</span><span class="o">=</span><span class="s1">&#39;dicts&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
 <span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
 <span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
 <span class="gp">   ....: </span>        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
@@ -290,24 +296,6 @@ to get results back as named tuples, dicts, or <a class="reference external" hre
 <span class="go">{&#39;Variable_name&#39;: &#39;auto_increment_offset&#39;, &#39;Value&#39;: &#39;1&#39;}</span>
 <span class="go">{&#39;Variable_name&#39;: &#39;auto_replicate&#39;, &#39;Value&#39;: &#39;OFF&#39;}</span>
 <span class="go">{&#39;Variable_name&#39;: &#39;autocommit&#39;, &#39;Value&#39;: &#39;ON&#39;}</span>
-</pre></div>
-</div>
-</section>
-<section id="dataframes">
-<h4>DataFrames<a class="headerlink" href="#dataframes" title="Permalink to this headline">¶</a></h4>
-<p>Note that in this example, we do not loop through the rows to print each one
-separately. The entire result of <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchall()</span></code> is a <code class="docutils literal notranslate"><span class="pre">DataFrame</span></code>.</p>
-<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [14]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_format</span><span class="o">=</span><span class="s1">&#39;dataframe&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
-<span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
-<span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
-<span class="gp">   ....: </span>        <span class="nb">print</span><span class="p">(</span><span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
-<span class="gp">   ....: </span>
-<span class="go">              Variable_name Value</span>
-<span class="go">0               auto_attach    ON</span>
-<span class="go">1  auto_increment_increment     1</span>
-<span class="go">2     auto_increment_offset     1</span>
-<span class="go">3            auto_replicate   OFF</span>
-<span class="go">4                autocommit    ON</span>
 </pre></div>
 </div>
 </section>

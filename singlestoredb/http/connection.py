@@ -231,7 +231,7 @@ class Cursor(connection.Cursor):
 
     def callproc(
         self, name: str,
-        params: Optional[Union[List[Any], Dict[str, Any]]] = None,
+        params: Optional[Sequence[Any]] = None,
     ) -> None:
         """
         Call a stored procedure.
@@ -240,7 +240,7 @@ class Cursor(connection.Cursor):
         ----------
         name : str
             Name of the stored procedure
-        params : iterable or dict, optional
+        params : sequence, optional
             Parameters to the stored procedure
 
         """
