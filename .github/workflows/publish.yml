@@ -51,8 +51,25 @@ jobs:
           pip install -r requirements.txt
           pip install -r test-requirements.txt
 
+      - name: Build sdist
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          python -m build --sdist
+
       - name: Build wheel (x86_64)
         uses: RalfG/python-wheels-manylinux-build@v0.6.0-manylinux2014_x86_64
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        with:
+          python-versions: 'cp310-cp310'
+
+      - name: Build wheel (i686)
+        uses: RalfG/python-wheels-manylinux-build@v0.6.0-manylinux2014_i686
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        with:
+          python-versions: 'cp310-cp310'
+
+      - name: Build wheel (aarch64)
+        uses: RalfG/python-wheels-manylinux-build@v0.6.0-manylinux2014_aarch64
         if: ${{ matrix.os == 'ubuntu-latest' }}
         with:
           python-versions: 'cp310-cp310'
@@ -82,6 +99,11 @@ jobs:
 #         cd conda.recipe
 #         C:\Miniconda\condabin\conda.bat build -c singlestore -c conda-forge --output-folder ../conda-bld --no-test --no-anaconda-upload .
 #
+
+      - name: Clean out unused Linux files
+        run: |
+          rm dist/*-linux_*.whl
+          ls dist
 
       - name: Archive source dist and wheel
         uses: actions/upload-artifact@v3
