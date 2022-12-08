@@ -72,7 +72,7 @@ jobs:
         uses: RalfG/python-wheels-manylinux-build@v0.6.0-manylinux2014_aarch64
         if: ${{ matrix.os == 'ubuntu-latest' }}
         with:
-          python-versions: 'cp310-cp310'
+          python-versions: 'cp36-cp36m'
 
       - name: Build wheel (Windows & Mac)
         if: ${{ matrix.os == 'macos-latest' || matrix.os == 'windows-latest' }}
