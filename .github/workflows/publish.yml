@@ -101,8 +101,9 @@ jobs:
 #
 
       - name: Clean out unused Linux files
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          rm dist/*-linux_*.whl
+          rm -f dist/*-linux_*.whl
           ls dist
 
       - name: Archive source dist and wheel
