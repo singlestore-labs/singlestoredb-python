@@ -2,7 +2,6 @@
 """SingleStoreDB connections and cursors."""
 import abc
 import inspect
-import pprint
 import re
 import warnings
 import weakref
@@ -756,6 +755,8 @@ class ShowResult(Sequence[Any]):
         return self._data[item]
 
     def __getattr__(self, name: str) -> List[Any]:
+        if name.startswith('_ipython'):
+            raise AttributeError(name)
         out = []
         for item in self._data:
             out.append(item[name])
@@ -768,6 +769,13 @@ class ShowResult(Sequence[Any]):
         if not self._data:
             return ''
         return '\n{}\n'.format(self._format_table(self._data))
+
+    @property
+    def columns(self) -> List[str]:
+        """The columns in the result."""
+        if not self._data:
+            return []
+        return list(self._data[0].keys())
 
     def _format_table(self, rows: Sequence[Dict[str, Any]]) -> str:
         if not self._data:
@@ -788,29 +796,18 @@ class ShowResult(Sequence[Any]):
         out.append(fmt.format(*keys))
         out.append('-' * len(out[0]))
         for row in rows:
-            out.append(fmt.format(*list(row.values())))
+            out.append(fmt.format(*[str(x) for x in row.values()]))
         return '\n'.join(out)
 
     def __str__(self) -> str:
         return self.__repr__()
-
-    def _repr_pretty_(self, p: Any, cycle: bool) -> None:
-        if cycle:
-            p.text('[...]')
-        else:
-            p.text('[\n')
-            for item in self._data:
-                p.text('    ')
-                p.text(pprint.pformat(item))
-                p.text('\n')
-            p.text(']')
 
     def _repr_html_(self) -> str:
         if not self._data:
             return ''
         cell_style = 'style="text-align: left; vertical-align: top"'
         out = []
-        out.append('<table>')
+        out.append('<table border="1" class="dataframe">')
         out.append('<thead>')
         out.append('<tr>')
         for name in self._data[0].keys():
@@ -879,7 +876,7 @@ class ShowAccessor(object):
     def indexes(self, table: str) -> ShowResult:
         """Show all indexes in the given table."""
         table = quote_identifier(table)
-        return self._iquery('indexes in {table}')
+        return self._iquery(f'indexes in {table}')
 
     def functions(self) -> ShowResult:
         """Show all functions in the current database."""
@@ -895,9 +892,9 @@ class ShowAccessor(object):
         """Show all pipelines in the current database."""
         return self._iquery('pipelines')
 
-    def plan(self, plan_id: str, json: bool = False) -> ShowResult:
+    def plan(self, plan_id: int, json: bool = False) -> ShowResult:
         """Show the plan for the given plan ID."""
-        plan_id = quote_identifier(plan_id)
+        plan_id = int(plan_id)
         if json:
             return self._iquery(f'plan json {plan_id}')
         return self._iquery(f'plan {plan_id}')
@@ -975,7 +972,9 @@ class ShowAccessor(object):
         out = self._conn._iquery(f'show {qtype}')
         for i, row in enumerate(out):
             new_row = {}
-            for i, (k, v) in enumerate(row.items()):
+            for j, (k, v) in enumerate(row.items()):
+                if j == 0:
+                    k = 'Name'
                 new_row[under2camel(k)] = v
             out[i] = new_row
         return ShowResult(out)

@@ -1357,6 +1357,98 @@ class TestConnection(unittest.TestCase):
                     out = cur.fetchall()
                     assert type(out[0]) is dict, type(out)
 
+    def test_show_accessors(self):
+        out = self.conn.show.columns('data')
+        assert out.columns == [
+            'Name', 'Type', 'Null',
+            'Key', 'Default', 'Extra',
+        ], out.columns
+        assert out.Name == ['id', 'name', 'value'], out.Name
+        assert out.Type == ['varchar(255)', 'varchar(255)', 'bigint(20)'], out.Type
+        assert str(out).count('varchar(255)') == 2, out
+
+        html = out._repr_html_()
+        assert html.count('varchar(255)') == 2
+        assert html.count('bigint(20)') == 1
+        assert '<table' in html
+
+        out = self.conn.show.tables()
+        assert out.columns == ['Name'], out.columns
+        assert 'data' in out.Name, out.Name
+        assert 'alltypes' in out.Name, out.Name
+
+        out = self.conn.show.warnings()
+
+        out = self.conn.show.errors()
+
+        out = self.conn.show.databases()
+        assert out.columns == ['Name'], out.columns
+        assert 'information_schema' in out.Name
+
+        out = self.conn.show.database_status()
+        assert out.columns == ['Name', 'Value'], out.columns
+        assert 'database' in out.Name
+
+        out = self.conn.show.global_status()
+        assert out.columns == ['Name', 'Value'], out.columns
+
+        out = self.conn.show.indexes('data')
+        assert 'Name' in out.columns, out.columns
+        assert 'KeyName' in out.columns, out.columns
+        assert out.Name == ['data'], out.Name
+
+        out = self.conn.show.functions()
+
+        out = self.conn.show.partitions()
+        assert 'Name' in out.columns, out.columns
+        assert 'Role' in out.columns, out.columns
+
+        out = self.conn.show.pipelines()
+
+        # out = self.conn.show.plan(1)
+
+        # out = self.conn.show.plancache()
+
+        out = self.conn.show.processlist()
+        assert 'Name' in out.columns, out.columns
+        assert 'Command' in out.columns, out.columns
+
+        # out = self.conn.show.reproduction()
+
+        out = self.conn.show.schemas()
+        assert out.columns == ['Name'], out.columns
+        assert 'information_schema' in out.Name
+
+        out = self.conn.show.session_status()
+        assert out.columns == ['Name', 'Value']
+
+        out = self.conn.show.status()
+        assert out.columns == ['Name', 'Value']
+
+        out = self.conn.show.table_status()
+        assert 'Name' in out.columns, out.columns
+        assert 'alltypes' in out.Name, out.Name
+        assert 'data' in out.Name, out.Name
+
+        out = self.conn.show.procedures()
+
+        out = self.conn.show.aggregates()
+
+        # out = self.conn.show.create_aggregate('aname')
+
+        # out = self.conn.show.create_function('fname')
+
+        # out = self.conn.show.create_pipeline('pname')
+
+        out = self.conn.show.create_table('data')
+        assert 'Name' in out.columns, out.columns
+        assert 'CreateTable' in out.columns, out.columns
+        assert '`id` varchar(255)' in out.CreateTable[0], out.CreateTable[0]
+        assert '`name` varchar(255)' in out.CreateTable[0], out.CreateTable[0]
+        assert '`value` bigint(20)' in out.CreateTable[0], out.CreateTable[0]
+
+        # out = self.conn.show.create_view('vname')
+
 
 if __name__ == '__main__':
     import nose2
