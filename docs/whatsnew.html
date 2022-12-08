@@ -45,6 +45,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">What’s New</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#v0-5-0-december-8-2022-api-changes">v0.5.0 - December 8, 2022 (<strong>API CHANGES</strong>)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#v0-4-0-october-19-2022">v0.4.0 - October 19, 2022</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#v0-3-3-september-21-2022">v0.3.3 - September 21, 2022</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#v0-3-2-september-14-2022">v0.3.2 - September 14, 2022</a></li>
@@ -86,6 +87,18 @@
   <section id="what-s-new">
 <h1>What’s New<a class="headerlink" href="#what-s-new" title="Permalink to this headline">¶</a></h1>
 <p>This document outlines features and improvements from each release.</p>
+<section id="v0-5-0-december-8-2022-api-changes">
+<h2>v0.5.0 - December 8, 2022 (<strong>API CHANGES</strong>)<a class="headerlink" href="#v0-5-0-december-8-2022-api-changes" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Query parameter syntax has changed from ``:1`` for positional
+and ``:key`` for dictionary keys to ``%s`` for positional and ``%(key)s``
+for dictionary keys</strong></p></li>
+<li><p><strong>``results_format`` connection parameter has changed to ``results_type``</strong></p></li>
+<li><p>High-performance C extension added</p></li>
+<li><p>Added <code class="docutils literal notranslate"><span class="pre">ssl_verify_cert</span></code> and <code class="docutils literal notranslate"><span class="pre">ssl_verify_identity</span></code> connection options</p></li>
+<li><p>Python 3.11 support</p></li>
+</ul>
+</section>
 <section id="v0-4-0-october-19-2022">
 <h2>v0.4.0 - October 19, 2022<a class="headerlink" href="#v0-4-0-october-19-2022" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
