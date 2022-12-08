@@ -62,17 +62,17 @@ jobs:
         with:
           python-versions: 'cp36-cp36m'
 
-      - name: Build wheel (i686)
-        uses: RalfG/python-wheels-manylinux-build@v0.6.0-manylinux2014_i686
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        with:
-          python-versions: 'cp36-cp36m'
+#     - name: Build wheel (i686)
+#       uses: RalfG/python-wheels-manylinux-build@v0.6.0-manylinux2014_i686
+#       if: ${{ matrix.os == 'ubuntu-latest' }}
+#       with:
+#         python-versions: 'cp36-cp36m'
 
-      - name: Build wheel (aarch64)
-        uses: RalfG/python-wheels-manylinux-build@v0.6.0-manylinux2014_aarch64
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        with:
-          python-versions: 'cp36-cp36m'
+#     - name: Build wheel (aarch64)
+#       uses: RalfG/python-wheels-manylinux-build@v0.6.0-manylinux2014_aarch64
+#       if: ${{ matrix.os == 'ubuntu-latest' }}
+#       with:
+#         python-versions: 'cp36-cp36m'
 
       - name: Build wheel (Windows & Mac)
         if: ${{ matrix.os == 'macos-latest' || matrix.os == 'windows-latest' }}
