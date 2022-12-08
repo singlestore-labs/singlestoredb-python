@@ -52,12 +52,10 @@ jobs:
           pip install -r test-requirements.txt
 
       - name: Build wheel (x86_64)
-        uses: docker://quay.io/pypa/manylinux2014_x86_64
+        uses: RalfG/python-wheels-manylinux-build@v0.6.0-manylinux2014_x86_64
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          python3.6 -m build
-          auditwheel repair -w dist dist/*.whl
-          rm dist/*-linux_x86_64.whl
+        with:
+          python-versions: 'cp36-abi3'
 
       - name: Build wheel (Windows & Mac)
         if: ${{ matrix.os == 'macos-latest' || matrix.os == 'windows-latest' }}
