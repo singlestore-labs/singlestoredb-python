@@ -16,3 +16,13 @@
       ~ShowResult.__init__
       ~ShowResult.count
       ~ShowResult.index
+
+
+
+
+
+   .. rubric:: Attributes
+
+   .. autosummary::
+
+      ~ShowResult.columns
