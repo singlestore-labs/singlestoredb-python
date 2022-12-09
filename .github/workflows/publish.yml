@@ -180,7 +180,7 @@ jobs:
 #
 
   shutdown-database:
-    needs: [setup-database, test]
+    needs: [setup-database, build-and-test]
     if: ${{ always() }}
     runs-on: ubuntu-latest
 
