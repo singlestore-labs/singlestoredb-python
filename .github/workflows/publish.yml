@@ -93,6 +93,7 @@ jobs:
 
       - name: Merge wheels and sdist
         run: |
+          mkdir -p dist
           mv ./wheelhouse/*.whl ./dist/.
 
       - name: Archive source dist and wheel
