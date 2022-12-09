@@ -15,6 +15,10 @@ This package can be install from PyPI using `pip`:
 pip install singlestoredb
 ```
 
+## Documentation
+
+https://singlestore-labs.github.io/singlestoredb-python
+
 ## Usage
 
 Connections to the SingleStore database are made using the DB-API parameters
@@ -94,7 +98,6 @@ This library is licensed under the [Apache 2.0 License](https://raw.githubuserco
 
 ## Resources
 
-* [Documentation](https://singlestore-labs.github.io/singlestoredb-python)
 * [SingleStore](https://singlestore.com)
 * [Python](https://python.org)
 
