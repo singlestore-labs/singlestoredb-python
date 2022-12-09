@@ -101,7 +101,7 @@ jobs:
           CIBW_ARCHS_MACOS: "universal2"
           CIBW_BUILD: "cp39-*"
           CIBW_SKIP: "pp* *-musllinux* *-manylinux_i686"
-          CIBW_TEST_COMMAND: "pytest {package}/tests/test_basics.py"
+          CIBW_TEST_COMMAND: "pytest {project}/tests/test_basics.py"
           CIBW_TEST_REQUIRES: "pytest"
           SINGLESTOREDB_URL: "mysql://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0"
 
