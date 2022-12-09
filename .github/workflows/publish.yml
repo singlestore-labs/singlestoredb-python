@@ -25,16 +25,15 @@ on:
 jobs:
 
   build:
+    name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
         os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-        python-version:
-          - "3.10"
+          - ubuntu-20.04
+          - macos-11
+          - windows-2019
 
     steps:
       - uses: actions/checkout@v3
@@ -42,7 +41,7 @@ jobs:
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.10"
           cache: "pip"
 
       - name: Install dependencies
@@ -52,32 +51,25 @@ jobs:
           pip install -r test-requirements.txt
 
       - name: Build sdist
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: runner.os == 'Linux'
         run: |
           python -m build --sdist
 
-      - name: Build wheel (x86_64)
-        uses: RalfG/python-wheels-manylinux-build@v0.6.0-manylinux2014_x86_64
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+      - name: Set up QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v2
         with:
-          python-versions: 'cp36-cp36m'
+          platforms: all
 
-#     - name: Build wheel (i686)
-#       uses: RalfG/python-wheels-manylinux-build@v0.6.0-manylinux2014_i686
-#       if: ${{ matrix.os == 'ubuntu-latest' }}
-#       with:
-#         python-versions: 'cp36-cp36m'
-
-#     - name: Build wheel (aarch64)
-#       uses: RalfG/python-wheels-manylinux-build@v0.6.0-manylinux2014_aarch64
-#       if: ${{ matrix.os == 'ubuntu-latest' }}
-#       with:
-#         python-versions: 'cp36-cp36m'
-
-      - name: Build wheel (Windows & Mac)
-        if: ${{ matrix.os == 'macos-latest' || matrix.os == 'windows-latest' }}
-        run: |
-          python -m build --wheel
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.11.3
+        env:
+          # configure cibuildwheel to build native archs ('auto'), and some
+          # emulated ones
+          CIBW_ARCHS_LINUX: "auto aarch64"
+          CIBW_ARCHS_MACOS: "universal2"
+          CIBW_BUILD: "cp39-*"
+          CIBW_SKIP: "pp* *-musllinux* *-manylinux_i686"
 
 #     - name: Build conda
 #       if: ${{ matrix.os != 'windows-latest' }}
@@ -98,28 +90,23 @@ jobs:
 #         mkdir conda-bld
 #         cd conda.recipe
 #         C:\Miniconda\condabin\conda.bat build -c singlestore -c conda-forge --output-folder ../conda-bld --no-test --no-anaconda-upload .
-#
 
-      - name: Clean out unused Linux files
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+      - name: Merge wheels and sdist
         run: |
-          rm -f dist/*-linux_*.whl
-          ls dist
+          mv ./wheelhouse/*.whl ./dist/.
 
       - name: Archive source dist and wheel
         uses: actions/upload-artifact@v3
         with:
-          name: wheel-${{ matrix.os }}
-          path: |
-            dist
+          name: artifacts
+          path: dist
           retention-days: 2
 
 #    - name: Archive conda
 #       uses: actions/upload-artifact@v3
 #       with:
 #         name: conda-${{ matrix.os }}
-#         path: |
-#           conda-bld/*
+#         path: ./conda-bld
 #         retention-days: 2
 
   setup-database:
@@ -169,12 +156,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
-      - name: Download wheel
+      - name: Download wheels
         uses: actions/download-artifact@v3
         with:
           name: wheel-${{ matrix.os }}
-          path: |
-            dist
+          path: dist
 
       - name: Install package
         run: |
@@ -198,26 +184,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install twine
 
-      - name: Download Windows wheel
+      - name: Download wheels and sdist
         uses: actions/download-artifact@v3
         with:
-          name: wheel-windows-latest
-          path: |
-            dist
-
-      - name: Download Mac wheel
-        uses: actions/download-artifact@v3
-        with:
-          name: wheel-macos-latest
-          path: |
-            dist
-
-      - name: Download Linux wheel
-        uses: actions/download-artifact@v3
-        with:
-          name: wheel-ubuntu-latest
-          path: |
-            dist
+          name: artifacts
+          path: dist
 
       - name: Publish PyPI package
         if: ${{ github.event_name == 'release' || github.event.inputs.publish_pypi == 'true' }}
@@ -225,8 +196,8 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
         run: |
-          ls dist/*
-          twine upload dist/*
+          ls ./dist/*
+#         twine upload ./dist/*
 
 #     - name: Publish Conda package
 #       if: ${{ github.event_name == 'release' || github.event.inputs.publish_anaconda == 'true' }}
