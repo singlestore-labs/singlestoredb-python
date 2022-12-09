@@ -32,6 +32,7 @@ from ..exceptions import OperationalError
 from ..exceptions import ProgrammingError
 from ..exceptions import Warning  # noqa: F401
 from ..utils.convert_rows import convert_rows
+from ..utils.debug import log_query
 from ..utils.results import Description
 from ..utils.results import format_results
 from ..utils.results import Result
@@ -295,6 +296,8 @@ class Cursor(connection.Cursor):
         self._validate_param_subs(oper, params)
 
         oper, params = self._connection._convert_params(oper, params)
+
+        log_query(oper, params)
 
         data: Dict[str, Any] = dict(sql=oper)
         if params is not None:

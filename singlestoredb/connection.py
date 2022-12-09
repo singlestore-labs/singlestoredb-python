@@ -967,6 +967,27 @@ class ShowAccessor(object):
         name = quote_identifier(name)
         return self._iquery(f'create view {name}')
 
+#   def grants(
+#       self,
+#       user: Optional[str] = None,
+#       hostname: Optional[str] = None,
+#       role: Optional[str] = None
+#   ) -> ShowResult:
+#       """Show the privileges for the given user or role."""
+#       if user:
+#           if not re.match(r'^[\w+-_]+$', user):
+#               raise ValueError(f'User name is not valid: {user}')
+#           if hostname and not re.match(r'^[\w+-_\.]+$', hostname):
+#               raise ValueError(f'Hostname is not valid: {hostname}')
+#           if hostname:
+#               return self._iquery(f"grants for '{user}@{hostname}'")
+#           return self._iquery(f"grants for '{user}'")
+#       if role:
+#           if not re.match(r'^[\w+-_]+$', role):
+#               raise ValueError(f'Role is not valid: {role}')
+#           return self._iquery(f"grants for role '{role}'")
+#       return self._iquery('grants')
+
     def _iquery(self, qtype: str) -> ShowResult:
         """Query the given object type."""
         out = self._conn._iquery(f'show {qtype}')

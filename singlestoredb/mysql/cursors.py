@@ -4,6 +4,7 @@ from collections import namedtuple
 
 from . import err
 from ..connection import Cursor as BaseCursor
+from ..utils.debug import log_query
 
 
 #: Regular expression for :meth:`Cursor.executemany`.
@@ -197,6 +198,8 @@ class Cursor(BaseCursor):
         """
         while self.nextset():
             pass
+
+        log_query(query, args)
 
         query = self.mogrify(query, args)
 

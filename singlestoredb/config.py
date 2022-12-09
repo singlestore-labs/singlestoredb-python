@@ -183,7 +183,7 @@ register_option(
 
 register_option(
     'results.arraysize', 'int', check_int, 1,
-    'Number of result rows to download in `fetchmany` calls',
+    'Number of result rows to download in `fetchmany` calls.',
     environ='SINGLESTOREDB_RESULTS_ARRAYSIZE',
 )
 
@@ -195,4 +195,14 @@ register_option(
     'management.token', 'string', check_str, None,
     'Specifies the authentication token for the management API.',
     environ=['SINGLESTOREDB_MANAGEMENT_TOKEN'],
+)
+
+
+#
+# Debugging options
+#
+register_option(
+    'debug.queries', 'bool', check_bool, False,
+    'Print queries and parameters to stderr.',
+    environ='SINGLESTOREDB_DEBUG_QUERIES',
 )
