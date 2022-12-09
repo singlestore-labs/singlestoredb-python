@@ -1,4 +1,9 @@
 
+#
+# This workflow depends heavily on cibuildwheels.
+# https://cibuildwheel.readthedocs.io/en/stable/
+#
+
 name: Publish packages
 
 on:
@@ -198,7 +203,7 @@ jobs:
           TWINE_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
         run: |
           ls ./dist/*
-#         twine upload ./dist/*
+          twine upload ./dist/*
 
 #     - name: Publish Conda package
 #       if: ${{ github.event_name == 'release' || github.event.inputs.publish_anaconda == 'true' }}
