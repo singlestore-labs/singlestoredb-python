@@ -103,7 +103,7 @@ jobs:
           CIBW_SKIP: "pp* *-musllinux* *-manylinux_i686"
           CIBW_TEST_COMMAND: "pytest {project}/singlestoredb/tests/test_basics.py"
           CIBW_TEST_REQUIRES: "pytest"
-          SINGLESTOREDB_URL: "mysql://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0"
+          CIBW_ENVIRONMENT: "SINGLESTOREDB_URL='mysql://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0'"
 
 #     - name: Build conda
 #       if: ${{ matrix.os != 'windows-latest' }}
