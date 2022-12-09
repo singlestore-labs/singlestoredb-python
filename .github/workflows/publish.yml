@@ -160,7 +160,7 @@ jobs:
       - name: Download wheels
         uses: actions/download-artifact@v3
         with:
-          name: wheel-${{ matrix.os }}
+          name: artifacts
           path: dist
 
       - name: Install package
