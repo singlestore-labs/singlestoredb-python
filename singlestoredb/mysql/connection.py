@@ -958,7 +958,8 @@ class Connection(BaseConnection):
         return packet
 
     def _read_bytes(self, num_bytes):
-        self._sock.settimeout(self._read_timeout)
+        if self._read_timeout is not None:
+            self._sock.settimeout(self._read_timeout)
         while True:
             try:
                 data = self._rfile.read(num_bytes)
@@ -983,7 +984,8 @@ class Connection(BaseConnection):
         return data
 
     def _write_bytes(self, data):
-        self._sock.settimeout(self._write_timeout)
+        if self._read_timeout is not None:
+            self._sock.settimeout(self._write_timeout)
         try:
             self._sock.sendall(data)
         except IOError as e:
@@ -1384,6 +1386,8 @@ class MySQLResult:
         self.rows = None
         self.has_next = None
         self.unbuffered_active = False
+        self.converters = []
+        self.fields = []
         if unbuffered:
             try:
                 self.init_unbuffered_query()
@@ -1511,7 +1515,7 @@ class MySQLResult:
         # After much reading on the MySQL protocol, it appears that there is,
         # in fact, no way to stop MySQL from sending all the data after
         # executing a query, so we just spin, and wait for an EOF packet.
-        while self.unbuffered_active:
+        while self.unbuffered_active and self.connection._sock is not None:
             packet = self.connection._read_packet()
             if self._check_packet_is_eof(packet):
                 self.unbuffered_active = False
@@ -1607,10 +1611,10 @@ class MySQLResultSV(MySQLResult):
             ).items() if v is not UNSET
         }
         self._read_rowdata_packet = functools.partial(
-            _singlestoredb_accel.read_rowdata_packet, self,
+            _singlestoredb_accel.read_rowdata_packet, self, False,
         )
         self._read_rowdata_packet_unbuffered = functools.partial(
-            _singlestoredb_accel.read_rowdata_packet, self,
+            _singlestoredb_accel.read_rowdata_packet, self, True,
         )
 
 

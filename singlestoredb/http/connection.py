@@ -158,6 +158,7 @@ class PyMyResult(object):
 
     def __init__(self) -> None:
         self.fields: List[PyMyField] = []
+        self.unbuffered_active = False
 
     def append(self, item: PyMyField) -> None:
         self.fields.append(item)

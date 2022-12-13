@@ -330,6 +330,42 @@ char *PyUnicode_AsUTF8(PyObject *unicode) {
 static PyObject *PyInts[62] = {0};
 
 //
+// Cached string values
+//
+typedef struct {
+    PyObject *unbuffered_active;
+    PyObject *active_idx;
+    PyObject *_state;
+    PyObject *affected_rows;
+    PyObject *warning_count;
+    PyObject *connection;
+    PyObject *has_next;
+    PyObject *options;
+    PyObject *Decimal;
+    PyObject *date;
+    PyObject *timedelta;
+    PyObject *datetime;
+    PyObject *loads;
+    PyObject *field_count;
+    PyObject *converters;
+    PyObject *fields;
+    PyObject *flags;
+    PyObject *scale;
+    PyObject *type_code;
+    PyObject *name;
+    PyObject *table_name;
+    PyObject *_sock;
+    PyObject *settimeout;
+    PyObject *_rfile;
+    PyObject *read;
+    PyObject *x_errno;
+    PyObject *_result;
+    PyObject *_read_timeout;
+} PyStrings;
+
+static PyStrings PyStr = {0};
+
+//
 // State
 //
 
@@ -453,7 +489,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         return -1;
     }
 
-    py_options = PyObject_GetAttrString(py_res, "options");
+    py_options = PyObject_GetAttr(py_res, PyStr.options);
     if (!py_options) {
         Py_INCREF(Py_None);
         py_options = Py_None;
@@ -472,7 +508,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
     }
 
     if (self->unbuffered) {
-        PyObject *unbuffered_active = PyObject_GetAttrString(py_res, "unbuffered_active");
+        PyObject *unbuffered_active = PyObject_GetAttr(py_res, PyStr.unbuffered_active);
         if (!unbuffered_active || !PyObject_IsTrue(unbuffered_active)) {
             Py_XDECREF(unbuffered_active);
             goto error;
@@ -489,32 +525,32 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
     // Import decimal module.
     self->py_decimal_mod = PyImport_ImportModule("decimal");
     if (!self->py_decimal_mod) goto error;
-    self->py_decimal = PyObject_GetAttrString(self->py_decimal_mod, "Decimal");
+    self->py_decimal = PyObject_GetAttr(self->py_decimal_mod, PyStr.Decimal);
     if (!self->py_decimal) goto error;
 
     // Import datetime objects
     self->py_datetime_mod = PyImport_ImportModule("datetime");
     if (!self->py_datetime_mod) goto error;
-    self->py_date = PyObject_GetAttrString(self->py_datetime_mod, "date");
+    self->py_date = PyObject_GetAttr(self->py_datetime_mod, PyStr.date);
     if (!self->py_date) goto error;
-    self->py_timedelta = PyObject_GetAttrString(self->py_datetime_mod, "timedelta");
+    self->py_timedelta = PyObject_GetAttr(self->py_datetime_mod, PyStr.timedelta);
     if (!self->py_timedelta) goto error;
-    self->py_datetime = PyObject_GetAttrString(self->py_datetime_mod, "datetime");
+    self->py_datetime = PyObject_GetAttr(self->py_datetime_mod, PyStr.datetime);
     if (!self->py_datetime) goto error;
 
     // Import json module.
     self->py_json_mod = PyImport_ImportModule("json");
     if (!self->py_json_mod) goto error;
-    self->py_json_loads = PyObject_GetAttrString(self->py_json_mod, "loads");
+    self->py_json_loads = PyObject_GetAttr(self->py_json_mod, PyStr.loads);
     if (!self->py_json_loads) goto error;
 
     // Retrieve type codes for each column.
-    PyObject *py_field_count = PyObject_GetAttrString(py_res, "field_count");
+    PyObject *py_field_count = PyObject_GetAttr(py_res, PyStr.field_count);
     if (!py_field_count) goto error;
     self->n_cols = PyLong_AsUnsignedLong(py_field_count);
     Py_XDECREF(py_field_count);
 
-    py_converters = PyObject_GetAttrString(py_res, "converters");
+    py_converters = PyObject_GetAttr(py_res, PyStr.converters);
     if (!py_converters) goto error;
 
     self->py_converters = calloc(self->n_cols, sizeof(PyObject*));
@@ -541,7 +577,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
     self->py_names = calloc(self->n_cols, sizeof(PyObject*));
     if (!self->py_names) goto error;
 
-    self->py_fields = PyObject_GetAttrString(py_res, "fields");
+    self->py_fields = PyObject_GetAttr(py_res, PyStr.fields);
     if (!self->py_fields) goto error;
 
     for (unsigned long i = 0; i < self->n_cols; i++) {
@@ -549,17 +585,17 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         PyObject *py_field = PyList_GetItem(self->py_fields, i);
         if (!py_field) goto error;
 
-        PyObject *py_flags = PyObject_GetAttrString(py_field, "flags");
+        PyObject *py_flags = PyObject_GetAttr(py_field, PyStr.flags);
         if (!py_flags) goto error;
         self->flags[i] = PyLong_AsUnsignedLong(py_flags);
         Py_XDECREF(py_flags);
 
-        PyObject *py_scale = PyObject_GetAttrString(py_field, "scale");
+        PyObject *py_scale = PyObject_GetAttr(py_field, PyStr.scale);
         if (!py_scale) goto error;
         self->scales[i] = PyLong_AsUnsignedLong(py_scale);
         Py_XDECREF(py_scale);
 
-        PyObject *py_field_type = PyObject_GetAttrString(py_field, "type_code");
+        PyObject *py_field_type = PyObject_GetAttr(py_field, PyStr.type_code);
         if (!py_field_type) goto error;
         self->type_codes[i] = PyLong_AsUnsignedLong(py_field_type);
         PyObject *py_default_converter = (self->py_default_converters) ?
@@ -569,7 +605,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         Py_XDECREF(py_field_type);
 
         // Get field name.
-        PyObject *py_field_name = PyObject_GetAttrString(py_field, "name");
+        PyObject *py_field_name = PyObject_GetAttr(py_field, PyStr.name);
         if (!py_field_name) goto error;
 
         // Make sure field name is not a duplicate.
@@ -581,7 +617,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
             }
         }
         if (dup_found) {
-            PyObject *py_table_name = PyObject_GetAttrString(py_field, "table_name");
+            PyObject *py_table_name = PyObject_GetAttr(py_field, PyStr.table_name);
             self->py_names[i] = PyUnicode_FromFormat("%U.%U", py_table_name, py_field_name);
             Py_XDECREF(py_table_name);
             if (!self->py_names[i]) goto error;
@@ -615,20 +651,20 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
     }
 
     // Loop over all data packets.
-    self->py_conn = PyObject_GetAttrString(py_res, "connection");
+    self->py_conn = PyObject_GetAttr(py_res, PyStr.connection);
     if (!self->py_conn) goto error;
 
     // Cache socket timeout and read methods.
-    self->py_sock = PyObject_GetAttrString(self->py_conn, "_sock");
+    self->py_sock = PyObject_GetAttr(self->py_conn, PyStr._sock);
     if (!self->py_sock) goto error;
-    self->py_settimeout = PyObject_GetAttrString(self->py_sock, "settimeout");
+    self->py_settimeout = PyObject_GetAttr(self->py_sock, PyStr.settimeout);
     if (!self->py_settimeout) goto error;
-    self->py_read_timeout = PyObject_GetAttrString(self->py_conn, "_read_timeout");
+    self->py_read_timeout = PyObject_GetAttr(self->py_conn, PyStr._read_timeout);
     if (!self->py_read_timeout) goto error;
 
-    self->py_rfile = PyObject_GetAttrString(self->py_conn, "_rfile");
+    self->py_rfile = PyObject_GetAttr(self->py_conn, PyStr._rfile);
     if (!self->py_rfile) goto error;
-    self->py_read = PyObject_GetAttrString(self->py_rfile, "read");
+    self->py_read = PyObject_GetAttr(self->py_rfile, PyStr.read);
     if (!self->py_read) goto error;
 
     PyObject *py_next_seq_id = PyObject_GetAttr(self->py_conn, self->py_str._next_seq_id);
@@ -658,12 +694,12 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
 
     default:
         // For fetchone, reuse the same list every time.
-        if (requested_n_rows == 1) {
-            self->py_rows = PyList_New(1);
-            PyList_SetItem(self->py_rows, 0, Py_None);
-        } else {
+        //if (requested_n_rows == 1) {
+        //    self->py_rows = PyList_New(1);
+        //    PyList_SetItem(self->py_rows, 0, Py_None);
+        //} else {
             self->py_rows = PyList_New(0);
-        }
+        //}
         if (!self->py_rows) goto error;
 
         PyObject_SetAttr(py_res, self->py_str.rows, self->py_rows);
@@ -672,6 +708,9 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
 exit:
     Py_XDECREF(py_converters);
     Py_XDECREF(py_options);
+    if (PyErr_Occurred()) {
+        PyErr_Print();
+    }
     return rc;
 
 error:
@@ -690,13 +729,13 @@ static int State_reset_batch(
 
     self->n_rows_in_batch = 0;
 
-    if (requested_n_rows != 1) {
+    //if (requested_n_rows != 1) {
         py_tmp = self->py_rows;
         self->py_rows = PyList_New(0);
         Py_XDECREF(py_tmp);
         if (!self->py_rows) { rc = -1; goto error; }
         rc = PyObject_SetAttr(py_res, self->py_str.rows, self->py_rows);
-    }
+    //}
 
 exit:
     return rc;
@@ -787,14 +826,14 @@ static int is_error_packet(char *buff_bytes) {
 static void force_close(PyObject *py_conn) {
     PyObject *py_sock = NULL;
 
-    py_sock = PyObject_GetAttrString(py_conn, "_sock");
+    py_sock = PyObject_GetAttr(py_conn, PyStr._sock);
     if (!py_sock) goto error;
 
     Py_XDECREF(PyObject_CallMethod(py_sock, "close", NULL));
     PyErr_Clear();
 
-    PyObject_SetAttrString(py_conn, "_sock", Py_None);
-    PyObject_SetAttrString(py_conn, "_rfile", Py_None);
+    PyObject_SetAttr(py_conn, PyStr._sock, Py_None);
+    PyObject_SetAttr(py_conn, PyStr._rfile, Py_None);
 
 exit:
     Py_XDECREF(py_sock);
@@ -823,7 +862,7 @@ static PyObject *read_bytes(StateObject *py_state, unsigned long long num_bytes)
 
         if ((py_exc = PyErr_Occurred())) {
             if (PyErr_ExceptionMatches(PyExc_IOError) || PyErr_ExceptionMatches(PyExc_OSError)) {
-                PyObject *py_errno = PyObject_GetAttrString(py_exc, "errno");
+                PyObject *py_errno = PyObject_GetAttr(py_exc, PyStr.x_errno);
                 if (!py_errno) goto error;
 
                 unsigned long long err = PyLong_AsUnsignedLongLong(py_errno);
@@ -930,11 +969,11 @@ static PyObject *read_packet(StateObject *py_state) {
     }
 
     if (is_error_packet(PyByteArray_AsString(py_buff))) {
-        PyObject *py_result = PyObject_GetAttrString(py_state->py_conn, "_result");
+        PyObject *py_result = PyObject_GetAttr(py_state->py_conn, PyStr._result);
         if (py_result && py_result != Py_None) {
-            PyObject *py_unbuffered_active = PyObject_GetAttrString(py_result, "unbuffered_active");
+            PyObject *py_unbuffered_active = PyObject_GetAttr(py_result, PyStr.unbuffered_active);
             if (py_unbuffered_active == Py_True) {
-                PyObject_SetAttrString(py_result, "unbuffered_active", Py_False);
+                PyObject_SetAttr(py_result, PyStr.unbuffered_active, Py_False);
             }
             Py_XDECREF(py_unbuffered_active);
         }
@@ -1491,20 +1530,32 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
     int rc = 0;
     StateObject *py_state = NULL;
     PyObject *py_res = NULL;
+    PyObject *py_unbuffered = NULL;
     PyObject *py_out = NULL;
     PyObject *py_next_seq_id = NULL;
     PyObject *py_zero = PyLong_FromUnsignedLong(0);
     unsigned long long requested_n_rows = 0;
     unsigned long long row_idx = 0;
-    char *keywords[] = {"result", "size", NULL};
+    char *keywords[] = {"result", "unbuffered", "size", NULL};
 
     // Parse function args.
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|K", keywords, &py_res, &requested_n_rows)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|K", keywords, &py_res, &py_unbuffered, &requested_n_rows)) {
         goto error;
     }
 
+    if (py_unbuffered && PyObject_IsTrue(py_unbuffered)) {
+        PyObject *unbuffered_active = PyObject_GetAttr(py_res, PyStr.unbuffered_active);
+        if (!unbuffered_active || !PyObject_IsTrue(unbuffered_active)) {
+            Py_XDECREF(unbuffered_active);
+            Py_XDECREF(py_zero);
+            Py_INCREF(Py_None);
+            return Py_None;
+         }
+        Py_XDECREF(unbuffered_active);
+    }
+
     // Get the rowdata state.
-    py_state = (StateObject*)PyObject_GetAttrString(py_res, "_state");
+    py_state = (StateObject*)PyObject_GetAttr(py_res, PyStr._state);
     if (!py_state) {
         PyErr_Clear();
 
@@ -1522,7 +1573,7 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
         if (!py_state) { Py_DECREF(py_args); goto error; }
         Py_DECREF(py_args);
 
-        PyObject_SetAttrString(py_res, "_state", (PyObject*)py_state);
+        PyObject_SetAttr(py_res, PyStr._state, (PyObject*)py_state);
     }
     else if (requested_n_rows > 0) {
         State_reset_batch(py_state, py_res, requested_n_rows);
@@ -1554,15 +1605,15 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
             PyObject *py_long = NULL;
 
             py_long = PyLong_FromUnsignedLongLong(warning_count);
-            PyObject_SetAttrString(py_res, "warning_count", py_long ? py_long : 0);
+            PyObject_SetAttr(py_res, PyStr.warning_count, py_long ? py_long : 0);
             Py_CLEAR(py_long);
 
             py_long = PyLong_FromLong(has_next);
-            PyObject_SetAttrString(py_res, "has_next", py_long ? py_long : 0);
+            PyObject_SetAttr(py_res, PyStr.has_next, py_long ? py_long : 0);
             Py_CLEAR(py_long);
 
-            PyObject_SetAttrString(py_res, "connection", Py_None);
-            PyObject_SetAttrString(py_res, "unbuffered_active", Py_False);
+            PyObject_SetAttr(py_res, PyStr.connection, Py_None);
+            PyObject_SetAttr(py_res, PyStr.unbuffered_active, Py_False);
 
             break;
         }
@@ -1573,12 +1624,12 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
         py_row = read_row_from_packet(py_state, data, data_l);
         if (!py_row) { Py_CLEAR(py_buff); goto error; }
 
-        if (requested_n_rows == 1) {
-            rc = PyList_SetItem(py_state->py_rows, 0, py_row);
-        } else {
+        //if (requested_n_rows == 1) {
+        //    rc = PyList_SetItem(py_state->py_rows, 0, py_row);
+        //} else {
             rc = PyList_Append(py_state->py_rows, py_row);
             Py_DECREF(py_row);
-        }
+        //}
         if (rc != 0) { Py_CLEAR(py_buff); goto error; }
 
         row_idx++;
@@ -1602,9 +1653,9 @@ exit:
             py_out = Py_None;
             PyObject_SetAttr(py_res, py_state->py_str.rows, Py_None);
             PyObject *py_n_rows = PyLong_FromSsize_t(py_state->n_rows);
-            PyObject_SetAttrString(py_res, "affected_rows", (py_n_rows) ? py_n_rows : Py_None);
+            PyObject_SetAttr(py_res, PyStr.affected_rows, (py_n_rows) ? py_n_rows : Py_None);
             Py_XDECREF(py_n_rows);
-            PyObject_DelAttrString(py_res, "_state");
+            PyObject_DelAttr(py_res, PyStr._state);
             Py_CLEAR(py_state);
         }
         else {
@@ -1617,10 +1668,10 @@ exit:
         py_out = py_state->py_rows;
         Py_INCREF(py_out);
         PyObject *py_n_rows = PyLong_FromSsize_t(py_state->n_rows);
-        PyObject_SetAttrString(py_res, "affected_rows", (py_n_rows) ? py_n_rows : Py_None);
+        PyObject_SetAttr(py_res, PyStr.affected_rows, (py_n_rows) ? py_n_rows : Py_None);
         Py_XDECREF(py_n_rows);
         if (py_state->is_eof) {
-            PyObject_DelAttrString(py_res, "_state");
+            PyObject_DelAttr(py_res, PyStr._state);
             Py_CLEAR(py_state);
         }
     }
@@ -1660,6 +1711,35 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     for (int i = 0; i < 62; i++) {
         PyInts[i] = PyLong_FromLong(i);
     }
+
+    PyStr.unbuffered_active = PyUnicode_FromString("unbuffered_active");
+    PyStr._state = PyUnicode_FromString("_state");
+    PyStr.affected_rows = PyUnicode_FromString("affected_rows");
+    PyStr.warning_count = PyUnicode_FromString("warning_count");
+    PyStr.connection = PyUnicode_FromString("connection");
+    PyStr.has_next = PyUnicode_FromString("has_next");
+    PyStr.options = PyUnicode_FromString("options");
+    PyStr.Decimal = PyUnicode_FromString("Decimal");
+    PyStr.date = PyUnicode_FromString("date");
+    PyStr.timedelta = PyUnicode_FromString("timedelta");
+    PyStr.datetime = PyUnicode_FromString("datetime");
+    PyStr.loads = PyUnicode_FromString("loads");
+    PyStr.field_count = PyUnicode_FromString("field_count");
+    PyStr.converters = PyUnicode_FromString("converters");
+    PyStr.fields = PyUnicode_FromString("fields");
+    PyStr.flags = PyUnicode_FromString("flags");
+    PyStr.scale = PyUnicode_FromString("scale");
+    PyStr.type_code = PyUnicode_FromString("type_code");
+    PyStr.name = PyUnicode_FromString("name");
+    PyStr.table_name = PyUnicode_FromString("table_name");
+    PyStr._sock = PyUnicode_FromString("_sock");
+    PyStr.settimeout = PyUnicode_FromString("settimeout");
+    PyStr._read_timeout = PyUnicode_FromString("_read_timeout");
+    PyStr._rfile = PyUnicode_FromString("_rfile");
+    PyStr.read = PyUnicode_FromString("read");
+    PyStr.x_errno = PyUnicode_FromString("errno");
+    PyStr._result = PyUnicode_FromString("_result");
+
 
     return PyModule_Create(&_singlestoredb_accelmodule);
 }

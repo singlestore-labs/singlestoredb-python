@@ -150,6 +150,7 @@ class test_MySQLdb(dbapi20.DatabaseAPI20Test):
                 'cursor.rowcount should == number of rows returned, or '
                 'set to -1 after executing a select statement',
             )
+            cur.fetchall()
             self.executeDDL2(cur)
         # self.assertEqual(cur.rowcount, -1,
         #                  'cursor.rowcount not being reset to -1 after executing '
@@ -201,6 +202,8 @@ class test_MySQLdb(dbapi20.DatabaseAPI20Test):
                 cur.callproc('deleteme')
                 numberofrows = cur.fetchone()
                 assert numberofrows[0] == len(self.samples)
+                if cur._result.unbuffered_active:
+                    assert len(cur.fetchall()) == 0
                 assert cur.nextset()
                 names = cur.fetchall()
                 assert len(names) == len(self.samples)

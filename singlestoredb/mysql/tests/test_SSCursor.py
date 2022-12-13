@@ -18,7 +18,8 @@ except Exception:
 class TestSSCursor(base.PyMySQLTestCase):
 
     def test_SSCursor(self):
-        affected_rows = 18446744073709551615
+        # affected_rows = 18446744073709551615
+        affected_rows = -1
 
         conn = self.connect(
             client_flag=CLIENT.MULTI_STATEMENTS,

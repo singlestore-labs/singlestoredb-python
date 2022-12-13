@@ -68,7 +68,7 @@ class TestBasics(unittest.TestCase):
             ('e', 'elephants', 0),
         ]), out
 
-        assert rowcount in (5, 18446744073709551615), rowcount
+        assert rowcount in (5, -1), rowcount
         assert rownumber == 5, rownumber
         assert lastrowid is None, lastrowid
         assert len(desc) == 3, desc
@@ -103,7 +103,7 @@ class TestBasics(unittest.TestCase):
             ('e', 'elephants', 0),
         ]), out
 
-        assert rowcount in (5, 18446744073709551615), rowcount
+        assert rowcount in (5, -1), rowcount
         assert rownumber == 5, rownumber
         assert lastrowid is None, lastrowid
         assert len(desc) == 3, desc
@@ -139,7 +139,7 @@ class TestBasics(unittest.TestCase):
             ('e', 'elephants', 0),
         ]), out
 
-        assert rowcount in (5, 18446744073709551615), rowcount
+        assert rowcount in (5, -1), rowcount
         assert rownumber == 5, rownumber
         assert lastrowid is None, lastrowid
         assert len(desc) == 3, desc
@@ -189,7 +189,7 @@ class TestBasics(unittest.TestCase):
             ('c', 'cats', 5),
         ]), out
 
-        assert rowcount in (3, 18446744073709551615), rowcount
+        assert rowcount in (3, -1), rowcount
         assert lastrowid is None, lastrowid
         assert len(desc) == 3, desc
         assert desc[0].name == 'id', desc[0].name
@@ -216,7 +216,7 @@ class TestBasics(unittest.TestCase):
             ('c', 'cats', 5),
         ]), out
 
-        assert rowcount in (3, 18446744073709551615), rowcount
+        assert rowcount in (3, -1), rowcount
         assert lastrowid is None, lastrowid
         assert len(desc) == 3, desc
         assert desc[0].name == 'id', desc[0].name

@@ -226,15 +226,15 @@ class TestAuthentication(base.PyMySQLTestCase):
         }
         with TempUser(
             self.connect().cursor(),
-            'pymysqlsv_2q@localhost',
+            'singlestoredb_2q@localhost',
             self.databases[0]['database'],
             'two_questions',
             'notverysecret',
         ) as _:
             with self.assertRaises(sv.err.OperationalError):
-                sv.connect(user='pymysqlsv_2q', **self.db)
+                sv.connect(user='singlestoredb_2q', **self.db)
             sv.connect(
-                user='pymysqlsv_2q',
+                user='singlestoredb_2q',
                 auth_plugin_map={b'dialog': TestAuthentication.Dialog},
                 **self.db,
             )
@@ -270,49 +270,51 @@ class TestAuthentication(base.PyMySQLTestCase):
         )
         with TempUser(
             self.connect().cursor(),
-            'pymysqlsv_3a@localhost',
+            'singlestoredb_3a@localhost',
             self.databases[0]['database'],
             'three_attempts',
             'stillnotverysecret',
         ) as _:
             sv.connect(
-                user='pymysqlsv_3a',
+                user='singlestoredb_3a',
                 auth_plugin_map={b'dialog': TestAuthentication.Dialog},
                 **self.db,
             )
             sv.connect(
-                user='pymysqlsv_3a',
+                user='singlestoredb_3a',
                 auth_plugin_map={b'dialog': TestAuthentication.DialogHandler},
                 **self.db,
             )
             with self.assertRaises(sv.err.OperationalError):
                 sv.connect(
-                    user='pymysqlsv_3a', auth_plugin_map={b'dialog': object}, **self.db,
+                    user='singlestoredb_3a',
+                    auth_plugin_map={b'dialog': object},
+                    **self.db,
                 )
 
             with self.assertRaises(sv.err.OperationalError):
                 sv.connect(
-                    user='pymysqlsv_3a',
+                    user='singlestoredb_3a',
                     auth_plugin_map={b'dialog': TestAuthentication.DefectiveHandler},
                     **self.db,
                 )
             with self.assertRaises(sv.err.OperationalError):
                 sv.connect(
-                    user='pymysqlsv_3a',
+                    user='singlestoredb_3a',
                     auth_plugin_map={b'notdialogplugin': TestAuthentication.Dialog},
                     **self.db,
                 )
             TestAuthentication.Dialog.m = {b'Password, please:': b'I do not know'}
             with self.assertRaises(sv.err.OperationalError):
                 sv.connect(
-                    user='pymysqlsv_3a',
+                    user='singlestoredb_3a',
                     auth_plugin_map={b'dialog': TestAuthentication.Dialog},
                     **self.db,
                 )
             TestAuthentication.Dialog.m = {b'Password, please:': None}
             with self.assertRaises(sv.err.OperationalError):
                 sv.connect(
-                    user='pymysqlsv_3a',
+                    user='singlestoredb_3a',
                     auth_plugin_map={b'dialog': TestAuthentication.Dialog},
                     **self.db,
                 )
@@ -411,18 +413,18 @@ class TestAuthentication(base.PyMySQLTestCase):
         c = conn.cursor()
         with TempUser(
             c,
-            'pymysqlsv_sha256@localhost',
+            'singlestoredb_sha256@localhost',
             self.databases[0]['database'],
             'sha256_password',
         ) as _:
-            c.execute("SET PASSWORD FOR 'pymysqlsv_sha256'@'localhost' ='Sh@256Pa33'")
+            c.execute("SET PASSWORD FOR 'singlestoredb_sha256'@'localhost' ='Sh@256Pa33'")
             c.execute('FLUSH PRIVILEGES')
             db = self.db.copy()
             db['password'] = 'Sh@256Pa33'
             # Although SHA256 is supported, need the configuration of public
             # key of the mysql server. Currently will get error by this test.
             with self.assertRaises(sv.err.OperationalError):
-                sv.connect(user='pymysqlsv_sha256', **db)
+                sv.connect(user='singlestoredb_sha256', **db)
 
     @pytest.mark.skipif(not ed25519_found, reason='no ed25519 authention plugin')
     def testAuthEd25519(self):
@@ -437,21 +439,21 @@ class TestAuthentication(base.PyMySQLTestCase):
 
         with TempUser(
             c,
-            'pymysqlsv_ed25519',
+            'singlestoredb_ed25519',
             self.databases[0]['database'],
             'ed25519',
             empty_pass,
         ) as _:
-            sv.connect(user='pymysqlsv_ed25519', password='', **db)
+            sv.connect(user='singlestoredb_ed25519', password='', **db)
 
         with TempUser(
             c,
-            'pymysqlsv_ed25519',
+            'singlestoredb_ed25519',
             self.databases[0]['database'],
             'ed25519',
             non_empty_pass,
         ) as _:
-            sv.connect(user='pymysqlsv_ed25519', password='ed25519_password', **db)
+            sv.connect(user='singlestoredb_ed25519', password='ed25519_password', **db)
 
 
 class TestConnection(base.PyMySQLTestCase):
@@ -567,9 +569,9 @@ class TestConnection(base.PyMySQLTestCase):
     def test_ssl_connect(self):
         dummy_ssl_context = mock.Mock(options=0)
         with mock.patch(
-            'pymysqlsv.connections.Connection.connect',
+            'singlestoredb.connections.Connection.connect',
         ) as _, mock.patch(
-            'pymysqlsv.connections.ssl.create_default_context',
+            'singlestoredb.connections.ssl.create_default_context',
             new=mock.Mock(return_value=dummy_ssl_context),
         ) as create_default_context:
             sv.connect(
@@ -588,9 +590,9 @@ class TestConnection(base.PyMySQLTestCase):
 
         dummy_ssl_context = mock.Mock(options=0)
         with mock.patch(
-            'pymysqlsv.connections.Connection.connect',
+            'singlestoredb.connections.Connection.connect',
         ) as _, mock.patch(
-            'pymysqlsv.connections.ssl.create_default_context',
+            'singelstoredb.connections.ssl.create_default_context',
             new=mock.Mock(return_value=dummy_ssl_context),
         ) as create_default_context:
             sv.connect(
@@ -608,9 +610,9 @@ class TestConnection(base.PyMySQLTestCase):
 
         dummy_ssl_context = mock.Mock(options=0)
         with mock.patch(
-            'pymysqlsv.connections.Connection.connect',
+            'singelstoredb.connections.Connection.connect',
         ) as _, mock.patch(
-            'pymysqlsv.connections.ssl.create_default_context',
+            'singlestoredb.connections.ssl.create_default_context',
             new=mock.Mock(return_value=dummy_ssl_context),
         ) as create_default_context:
             sv.connect(
@@ -624,9 +626,9 @@ class TestConnection(base.PyMySQLTestCase):
 
         dummy_ssl_context = mock.Mock(options=0)
         with mock.patch(
-            'pymysqlsv.connections.Connection.connect',
+            'singlestoredb.connections.Connection.connect',
         ) as _, mock.patch(
-            'pymysqlsv.connections.ssl.create_default_context',
+            'singlestoredb.connections.ssl.create_default_context',
             new=mock.Mock(return_value=dummy_ssl_context),
         ) as create_default_context:
             sv.connect(
@@ -643,9 +645,9 @@ class TestConnection(base.PyMySQLTestCase):
         for ssl_verify_cert in (True, '1', 'yes', 'true'):
             dummy_ssl_context = mock.Mock(options=0)
             with mock.patch(
-                'pymysqlsv.connections.Connection.connect',
+                'singlestoredb.connections.Connection.connect',
             ) as _, mock.patch(
-                'pymysqlsv.connections.ssl.create_default_context',
+                'singlestoredb.connections.ssl.create_default_context',
                 new=mock.Mock(return_value=dummy_ssl_context),
             ) as create_default_context:
                 sv.connect(
@@ -664,9 +666,9 @@ class TestConnection(base.PyMySQLTestCase):
         for ssl_verify_cert in (None, False, '0', 'no', 'false'):
             dummy_ssl_context = mock.Mock(options=0)
             with mock.patch(
-                'pymysqlsv.connections.Connection.connect',
+                'singlestoredb.connections.Connection.connect',
             ) as _, mock.patch(
-                'pymysqlsv.connections.ssl.create_default_context',
+                'singlestoredb.connections.ssl.create_default_context',
                 new=mock.Mock(return_value=dummy_ssl_context),
             ) as create_default_context:
                 sv.connect(
@@ -686,9 +688,9 @@ class TestConnection(base.PyMySQLTestCase):
             for ssl_verify_cert in ('foo', 'bar', ''):
                 dummy_ssl_context = mock.Mock(options=0)
                 with mock.patch(
-                    'pymysqlsv.connections.Connection.connect',
+                    'singlestoredb.connections.Connection.connect',
                 ) as _, mock.patch(
-                    'pymysqlsv.connections.ssl.create_default_context',
+                    'singlestoredb.connections.ssl.create_default_context',
                     new=mock.Mock(return_value=dummy_ssl_context),
                 ) as create_default_context:
                     sv.connect(
@@ -709,9 +711,9 @@ class TestConnection(base.PyMySQLTestCase):
 
         dummy_ssl_context = mock.Mock(options=0)
         with mock.patch(
-            'pymysqlsv.connections.Connection.connect',
+            'singlestoredb.connections.Connection.connect',
         ) as _, mock.patch(
-            'pymysqlsv.connections.ssl.create_default_context',
+            'singlestoredb.connections.ssl.create_default_context',
             new=mock.Mock(return_value=dummy_ssl_context),
         ) as create_default_context:
             sv.connect(
@@ -728,9 +730,9 @@ class TestConnection(base.PyMySQLTestCase):
 
         dummy_ssl_context = mock.Mock(options=0)
         with mock.patch(
-            'pymysqlsv.connections.Connection.connect',
+            'singlestoredb.connections.Connection.connect',
         ) as _, mock.patch(
-            'pymysqlsv.connections.ssl.create_default_context',
+            'singlestoredb.connections.ssl.create_default_context',
             new=mock.Mock(return_value=dummy_ssl_context),
         ) as create_default_context:
             sv.connect(
@@ -745,9 +747,9 @@ class TestConnection(base.PyMySQLTestCase):
 
         dummy_ssl_context = mock.Mock(options=0)
         with mock.patch(
-            'pymysqlsv.connections.Connection.connect',
+            'singlestoredb.connections.Connection.connect',
         ) as _, mock.patch(
-            'pymysqlsv.connections.ssl.create_default_context',
+            'singlestoredb.connections.ssl.create_default_context',
             new=mock.Mock(return_value=dummy_ssl_context),
         ) as create_default_context:
             sv.connect(

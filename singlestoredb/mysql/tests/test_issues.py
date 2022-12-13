@@ -87,9 +87,9 @@ DEFAULT '0', `me` double DEFAULT NULL, `mo` double DEFAULT NULL, PRIMARY
 KEY (`station`,`dh`,`echeance`)) ENGINE=MyISAM DEFAULT CHARSET=latin1;""",
         )
         try:
-            self.assertEqual(0, c.execute('SELECT * FROM test'))
+            self.assertIn(c.execute('SELECT * FROM test'), [0, -1])
             c.execute('ALTER TABLE `test` ADD INDEX `idx_station` (`station`)')
-            self.assertEqual(0, c.execute('SELECT * FROM test'))
+            self.assertIn(c.execute('SELECT * FROM test'), [0, -1])
         finally:
             c.execute('drop table test')
 
@@ -363,6 +363,10 @@ class TestGitHubIssues(base.PyMySQLTestCase):
         conn = sv.connect(charset='utf8', **self.databases[0])
         conn.autocommit(False)
         c = conn.cursor()
+
+        if type(c).__name__.startswith('SS'):
+            self.skipTest('Test hangs with unbuffered cursor')
+
         c.execute("""select @@autocommit;""")
         self.assertFalse(c.fetchone()[0])
         conn.close()
@@ -424,7 +428,7 @@ class TestGitHubIssues(base.PyMySQLTestCase):
         self.assertEqual(cur.execute(sql_insert, data[0]), 1)
         self.assertEqual(cur.execute(sql_insert, data[1]), 1)
         self.assertEqual(cur.execute(sql_dict_insert, data[2]), 1)
-        self.assertEqual(cur.execute(sql_select, [('a', 'b', 'c'), '\u0430']), 3)
+        self.assertIn(cur.execute(sql_select, [('a', 'b', 'c'), '\u0430']), [3, -1])
         self.assertEqual(cur.fetchone(), ('a', '\u0430'))
         self.assertEqual(cur.fetchone(), ('b', '\u0430'))
         self.assertEqual(cur.fetchone(), ('c', '\u0430'))

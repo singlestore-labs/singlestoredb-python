@@ -57,7 +57,6 @@ class TestDictCursor(base.PyMySQLTestCase):
         # pull back the single row dict for bob and check
         c.execute("SELECT * from dictcursor where name='bob'")
         r = c.fetchone()
-        print(bob, r)
         self.assertEqual(bob, r, 'fetchone via DictCursor failed')
         self._ensure_cursor_expired(c)
 

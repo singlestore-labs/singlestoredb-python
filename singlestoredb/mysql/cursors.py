@@ -406,15 +406,18 @@ class Cursor(BaseCursor):
         self._result = result = conn._result
 
         self.rowcount = result.affected_rows
+        # Affected rows is set to max int64 for compatibility with MySQLdb, but
+        # the DB-API requires this value to be -1. This happens in unbuffered mode.
+        if self.rowcount == 18446744073709551615:
+            self.rowcount = -1
         self._description = result.description
         self.lastrowid = result.insert_id
         self._rows = result.rows
 
     def __iter__(self):
         self._check_executed()
-        _unchecked_fetchone = self._unchecked_fetchone
 
-        def fetchall_unbuffered_gen():
+        def fetchall_unbuffered_gen(_unchecked_fetchone=self._unchecked_fetchone):
             while True:
                 out = _unchecked_fetchone()
                 if out is not None:
@@ -586,9 +589,8 @@ class SSCursor(Cursor):
 
         """
         self._check_executed()
-        _unchecked_fetchone = self._unchecked_fetchone
 
-        def fetchall_unbuffered_gen():
+        def fetchall_unbuffered_gen(_unchecked_fetchone=self._unchecked_fetchone):
             while True:
                 out = _unchecked_fetchone()
                 if out is not None:

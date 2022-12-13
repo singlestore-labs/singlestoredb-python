@@ -9,7 +9,7 @@ import warnings
 import singlestoredb.mysql as sv
 from singlestoredb.connection import build_params
 
-DBNAME_BASE = 'pymysqlsv__test_%s_%s_%s_%s_' % \
+DBNAME_BASE = 'singlestoredb__test_%s_%s_%s_%s_' % \
               (
                   *platform.python_version_tuple()[:2],
                   platform.system(), platform.machine(),
@@ -34,11 +34,13 @@ class PyMySQLTestCase(unittest.TestCase):
                 'database': DBNAME_BASE + '1',
                 'use_unicode': True,
                 'local_infile': True,
+                'buffered': params['buffered'],
             },
             {
                 'host': params['host'], 'user': params['user'],
                 'port': params['port'], 'passwd': params['password'],
                 'database': DBNAME_BASE + '2',
+                'buffered': params['buffered'],
             },
         ]
 

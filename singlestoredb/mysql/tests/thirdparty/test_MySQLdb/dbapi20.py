@@ -291,6 +291,7 @@ class DatabaseAPI20Test(unittest.TestCase):
                 'cursor.description[x][1] must return column type. Got %r'
                 % cur.description[0][1],
             )
+            cur.fetchall()
 
             # Make sure self.description gets reset
             self.executeDDL2(cur)
@@ -695,7 +696,7 @@ class DatabaseAPI20Test(unittest.TestCase):
             for sql in self._populate():
                 cur.execute(sql)
 
-            cur.execute('select name from %sbooze' % self.table_prefix)
+            cur.execute('select name from %sbooze order by name' % self.table_prefix)
             rows1 = cur.fetchone()
             rows23 = cur.fetchmany(2)
             rows4 = cur.fetchone()

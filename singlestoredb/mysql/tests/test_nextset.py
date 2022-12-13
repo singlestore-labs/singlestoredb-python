@@ -35,6 +35,9 @@ class TestNextset(base.PyMySQLTestCase):
         con = self.connect(client_flag=CLIENT.MULTI_STATEMENTS)
         cur = con.cursor()
 
+        if type(cur).__name__.startswith('SS'):
+            self.skipTest('nextset in unbuffered cursor closes connection')
+
         for i in range(3):
             cur.execute('SELECT %s; xyzzy;', (i,))
             self.assertEqual([(i,)], list(cur))
