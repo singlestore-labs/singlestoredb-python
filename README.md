@@ -57,7 +57,7 @@ conn = s2.connect('https://user:password@host:8080/db_name')
 While this package is based on [PyMySQL](https://github.com/PyMySQL/PyMySQL)
 which is a pure Python-based MySQL connector, it adds various performance
 enhancements that make it faster than most other connectors. The performance
-improvents come from changes to the data conversion functions, cursor implementations,
+improvements come from changes to the data conversion functions, cursor implementations,
 and a C extension that is highly optimized to improve row data reading.
 
 The package can be used both in a pure Python mode and as well as a C accelerated
