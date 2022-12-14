@@ -1,6 +1,4 @@
 ﻿singlestoredb.connection.Connection.cursor
 ==========================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. automethod:: Connection.cursor

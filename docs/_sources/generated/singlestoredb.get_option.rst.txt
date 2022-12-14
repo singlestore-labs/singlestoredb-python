@@ -1,6 +1,4 @@
 ﻿singlestoredb.get\_option
 =========================
-
 .. currentmodule:: singlestoredb
-
 .. autofunction:: get_option

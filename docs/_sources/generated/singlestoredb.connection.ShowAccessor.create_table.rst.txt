@@ -1,6 +1,4 @@
 ﻿singlestoredb.connection.ShowAccessor.create\_table
 ===================================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. automethod:: ShowAccessor.create_table

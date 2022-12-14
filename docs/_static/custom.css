@@ -34,7 +34,6 @@ code.docutils > .pre {
     font-weight: bold;
     font-size: smaller;
 }
-
 /* Theme Overrides */
 .wy-side-nav-search {
     background-color: black !important;
@@ -80,7 +79,6 @@ html.writer-html4 .rst-content dl:not(.docutils)>dt, html.writer-html5 .rst-cont
     color: #80c;
 }
 .wy-grid-for-nav {
-
 }
 html.writer-html4 .rst-content dl:not(.docutils)>dt,
 html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple)>dt {

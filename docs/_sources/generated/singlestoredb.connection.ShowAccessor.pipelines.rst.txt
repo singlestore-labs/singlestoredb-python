@@ -1,6 +1,4 @@
 ﻿singlestoredb.connection.ShowAccessor.pipelines
 ===============================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. automethod:: ShowAccessor.pipelines

@@ -8,12 +8,10 @@
  * :license: BSD, see LICENSE for details.
  *
  */
-
 /**
  * select a different prefix for underscore
  */
 $u = _.noConflict();
-
 /**
  * make the code below compatible with browsers without
  * an installed firebug like debugger
@@ -26,7 +24,6 @@ if (!window.console || !console.firebug) {
     window.console[names[i]] = function() {};
 }
  */
-
 /**
  * small helper function to urldecode strings
  *
@@ -38,12 +35,10 @@ jQuery.urldecode = function(x) {
   }
   return decodeURIComponent(x.replace(/\+/g, ' '));
 };
-
 /**
  * small helper function to urlencode strings
  */
 jQuery.urlencode = encodeURIComponent;
-
 /**
  * This function returns the parsed url parameters of the
  * current request. Multiple values per key are supported,
@@ -65,7 +60,6 @@ jQuery.getQueryParameters = function(s) {
   }
   return result;
 };
-
 /**
  * highlight a given string on a jquery object by wrapping it in
  * span elements with the given class name.
@@ -120,7 +114,6 @@ jQuery.fn.highlightText = function(text, className) {
   }
   return result;
 };
-
 /*
  * backward compatibility for jQuery.browser
  * This will be supported until firefox bug is fixed.
@@ -128,14 +121,12 @@ jQuery.fn.highlightText = function(text, className) {
 if (!jQuery.browser) {
   jQuery.uaMatch = function(ua) {
     ua = ua.toLowerCase();
-
     var match = /(chrome)[ \/]([\w.]+)/.exec(ua) ||
       /(webkit)[ \/]([\w.]+)/.exec(ua) ||
       /(opera)(?:.*version|)[ \/]([\w.]+)/.exec(ua) ||
       /(msie) ([\w.]+)/.exec(ua) ||
       ua.indexOf("compatible") < 0 && /(mozilla)(?:.*? rv:([\w.]+)|)/.exec(ua) ||
       [];
-
     return {
       browser: match[ 1 ] || "",
       version: match[ 2 ] || "0"
@@ -144,12 +135,10 @@ if (!jQuery.browser) {
   jQuery.browser = {};
   jQuery.browser[jQuery.uaMatch(navigator.userAgent).browser] = true;
 }
-
 /**
  * Small JavaScript module for the documentation.
  */
 var Documentation = {
-
   init : function() {
     this.fixFirefoxAnchorBug();
     this.highlightSearchWords();
@@ -158,14 +147,12 @@ var Documentation = {
       this.initOnKeyListeners();
     }
   },
-
   /**
    * i18n support
    */
   TRANSLATIONS : {},
   PLURAL_EXPR : function(n) { return n === 1 ? 0 : 1; },
   LOCALE : 'unknown',
-
   // gettext and ngettext don't access this so that the functions
   // can safely bound to a different name (_ = Documentation.gettext)
   gettext : function(string) {
@@ -174,21 +161,18 @@ var Documentation = {
       return string;
     return (typeof translated === 'string') ? translated : translated[0];
   },
-
   ngettext : function(singular, plural, n) {
     var translated = Documentation.TRANSLATIONS[singular];
     if (typeof translated === 'undefined')
       return (n == 1) ? singular : plural;
     return translated[Documentation.PLURALEXPR(n)];
   },
-
   addTranslations : function(catalog) {
     for (var key in catalog.messages)
       this.TRANSLATIONS[key] = catalog.messages[key];
     this.PLURAL_EXPR = new Function('n', 'return +(' + catalog.plural_expr + ')');
     this.LOCALE = catalog.locale;
   },
-
   /**
    * add context elements like header anchor links
    */
@@ -206,7 +190,6 @@ var Documentation = {
       appendTo(this);
     });
   },
-
   /**
    * workaround a firefox stupidity
    * see: https://bugzilla.mozilla.org/show_bug.cgi?id=645075
@@ -217,7 +200,6 @@ var Documentation = {
         document.location.href += '';
       }, 10);
   },
-
   /**
    * highlight the search words provided in the url in the text
    */
@@ -239,7 +221,6 @@ var Documentation = {
           .appendTo($('#searchbox'));
     }
   },
-
   /**
    * init the domain index toggle buttons
    */
@@ -257,7 +238,6 @@ var Documentation = {
         togglers.click();
     }
   },
-
   /**
    * helper function to hide the search marks again
    */
@@ -268,14 +248,12 @@ var Documentation = {
     url.searchParams.delete('highlight');
     window.history.replaceState({}, '', url);
   },
-
   /**
    * make the url absolute
    */
   makeURL : function(relativeURL) {
     return DOCUMENTATION_OPTIONS.URL_ROOT + '/' + relativeURL;
   },
-
   /**
    * get the current relative url
    */
@@ -289,7 +267,6 @@ var Documentation = {
     var url = parts.join('/');
     return path.substring(url.lastIndexOf('/') + 1, path.length - 1);
   },
-
   initOnKeyListeners: function() {
     $(document).keydown(function(event) {
       var activeElementType = document.activeElement.tagName;
@@ -317,10 +294,8 @@ var Documentation = {
     });
   }
 };
-
 // quick alias for translations
 _ = Documentation.gettext;
-
 $(document).ready(function() {
   Documentation.init();
 });

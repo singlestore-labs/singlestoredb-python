@@ -1,6 +1,4 @@
 ﻿singlestoredb.connection.ShowAccessor.plancache
 ===============================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. automethod:: ShowAccessor.plancache

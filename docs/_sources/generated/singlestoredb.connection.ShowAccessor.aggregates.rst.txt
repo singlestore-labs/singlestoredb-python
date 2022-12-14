@@ -1,6 +1,4 @@
 ﻿singlestoredb.connection.ShowAccessor.aggregates
 ================================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. automethod:: ShowAccessor.aggregates

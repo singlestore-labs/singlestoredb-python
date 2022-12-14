@@ -8,7 +8,6 @@
  * :license: BSD, see LICENSE for details.
  *
  */
-
 if (!Scorer) {
   /**
    * Simple result scoring code.
@@ -22,7 +21,6 @@ if (!Scorer) {
       return result[4];
     },
     */
-
     // query matches the full name of an object
     objNameMatch: 11,
     // or matches in the last dotted part of the object name
@@ -33,7 +31,6 @@ if (!Scorer) {
               2: -5},  // used to be unimportantResults
     //  Used when the priority is not in the mapping.
     objPrioDefault: 0,
-
     // query found in title
     title: 15,
     partialTitle: 7,
@@ -42,22 +39,18 @@ if (!Scorer) {
     partialTerm: 2
   };
 }
-
 if (!splitQuery) {
   function splitQuery(query) {
     return query.split(/\s+/);
   }
 }
-
 /**
  * Search Module
  */
 var Search = {
-
   _index : null,
   _queued_query : null,
   _pulse_status : -1,
-
   htmlToText : function(htmlString) {
       var virtualDocument = document.implementation.createHTMLDocument('virtual');
       var htmlElement = $(htmlString, virtualDocument);
@@ -70,7 +63,6 @@ var Search = {
       }
       return docContent.textContent || docContent.innerText;
   },
-
   init : function() {
       var params = $.getQueryParameters();
       if (params.q) {
@@ -79,7 +71,6 @@ var Search = {
           this.performSearch(query);
       }
   },
-
   loadIndex : function(url) {
     $.ajax({type: "GET", url: url, data: null,
             dataType: "script", cache: true,
@@ -89,7 +80,6 @@ var Search = {
               }
             }});
   },
-
   setIndex : function(index) {
     var q;
     this._index = index;
@@ -98,19 +88,15 @@ var Search = {
       Search.query(q);
     }
   },
-
   hasIndex : function() {
       return this._index !== null;
   },
-
   deferQuery : function(query) {
       this._queued_query = query;
   },
-
   stopPulse : function() {
       this._pulse_status = 0;
   },
-
   startPulse : function() {
     if (this._pulse_status >= 0)
         return;
@@ -126,7 +112,6 @@ var Search = {
     }
     pulse();
   },
-
   /**
    * perform a search for something (or wait until index is loaded)
    */
@@ -137,23 +122,19 @@ var Search = {
     this.dots = $('<span></span>').appendTo(this.title);
     this.status = $('<p class="search-summary">&nbsp;</p>').appendTo(this.out);
     this.output = $('<ul class="search"/>').appendTo(this.out);
-
     $('#search-progress').text(_('Preparing search...'));
     this.startPulse();
-
     // index already loaded, the browser was quick!
     if (this.hasIndex())
       this.query(query);
     else
       this.deferQuery(query);
   },
-
   /**
    * execute search (requires search index to be loaded)
    */
   query : function(query) {
     var i;
-
     // stem the searchterms and add them to the correct list
     var stemmer = new Stemmer();
     var searchterms = [];
@@ -165,7 +146,6 @@ var Search = {
       if (tmp[i] !== "") {
           objectterms.push(tmp[i].toLowerCase());
       }
-
       if ($u.indexOf(stopwords, tmp[i].toLowerCase()) != -1 || tmp[i] === "") {
         // skip this "word"
         continue;
@@ -191,35 +171,28 @@ var Search = {
         toAppend.push(word);
     }
     var highlightstring = '?highlight=' + $.urlencode(hlterms.join(" "));
-
     // console.debug('SEARCH: searching for:');
     // console.info('required: ', searchterms);
     // console.info('excluded: ', excluded);
-
     // prepare search
     var terms = this._index.terms;
     var titleterms = this._index.titleterms;
-
     // array of [filename, title, anchor, descr, score]
     var results = [];
     $('#search-progress').empty();
-
     // lookup as object
     for (i = 0; i < objectterms.length; i++) {
       var others = [].concat(objectterms.slice(0, i),
                              objectterms.slice(i+1, objectterms.length));
       results = results.concat(this.performObjectSearch(objectterms[i], others));
     }
-
     // lookup as search terms in fulltext
     results = results.concat(this.performTermsSearch(searchterms, excluded, terms, titleterms));
-
     // let the scorer override scores with a custom scoring function
     if (Scorer.score) {
       for (i = 0; i < results.length; i++)
         results[i][4] = Scorer.score(results[i]);
     }
-
     // now sort the results by score (in opposite order of appearance, since the
     // display function below uses pop() to retrieve items) and then
     // alphabetically
@@ -237,11 +210,9 @@ var Search = {
         return (left > right) ? -1 : ((left < right) ? 1 : 0);
       }
     });
-
     // for debugging
     //Search.lastresults = results.slice();  // a copy
     //console.info('search results:', Search.lastresults);
-
     // print the results
     var resultCount = results.length;
     function displayNextItem() {
@@ -261,7 +232,6 @@ var Search = {
           }
           requestUrl = DOCUMENTATION_OPTIONS.URL_ROOT + dirname;
           linkUrl = requestUrl;
-
         } else {
           // normal html builders
           requestUrl = DOCUMENTATION_OPTIONS.URL_ROOT + item[0] + DOCUMENTATION_OPTIONS.FILE_SUFFIX;
@@ -313,7 +283,6 @@ var Search = {
     }
     displayNextItem();
   },
-
   /**
    * search for object names
    */
@@ -323,10 +292,8 @@ var Search = {
     var objects = this._index.objects;
     var objnames = this._index.objnames;
     var titles = this._index.titles;
-
     var i;
     var results = [];
-
     for (var prefix in objects) {
       for (var iMatch = 0; iMatch != objects[prefix].length; ++iMatch) {
         var match = objects[prefix][iMatch];
@@ -363,7 +330,6 @@ var Search = {
             }
           }
           var descr = objname + _(', in ') + title;
-
           var anchor = match[3];
           if (anchor === '')
             anchor = fullname;
@@ -379,17 +345,14 @@ var Search = {
         }
       }
     }
-
     return results;
   },
-
   /**
    * See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions
    */
   escapeRegExp : function(string) {
     return string.replace(/[.*+\-?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
   },
-
   /**
    * search for full-text terms in the index
    */
@@ -397,12 +360,10 @@ var Search = {
     var docnames = this._index.docnames;
     var filenames = this._index.filenames;
     var titles = this._index.titles;
-
     var i, j, file;
     var fileMap = {};
     var scoreMap = {};
     var results = [];
-
     // perform the search on the required terms
     for (i = 0; i < searchterms.length; i++) {
       var word = searchterms[i];
@@ -425,7 +386,6 @@ var Search = {
           }
         }
       }
-
       // no match but word was a required one
       if ($u.every(_o, function(o){return o.files === undefined;})) {
         break;
@@ -435,11 +395,9 @@ var Search = {
         var _files = o.files;
         if (_files === undefined)
           return
-
         if (_files.length === undefined)
           _files = [_files];
         files = files.concat(_files);
-
         // set score for the word in each file to Scorer.term
         for (j = 0; j < _files.length; j++) {
           file = _files[j];
@@ -448,7 +406,6 @@ var Search = {
           scoreMap[file][word] = o.score;
         }
       });
-
       // create the mapping
       for (j = 0; j < files.length; j++) {
         file = files[j];
@@ -458,11 +415,9 @@ var Search = {
           fileMap[file] = [word];
       }
     }
-
     // now check if the files don't contain excluded terms
     for (file in fileMap) {
       var valid = true;
-
       // check if all requirements are matched
       var filteredTermCount = // as search terms with length < 3 are discarded: ignore
         searchterms.filter(function(term){return term.length > 2}).length
@@ -470,7 +425,6 @@ var Search = {
         fileMap[file].length != searchterms.length &&
         fileMap[file].length != filteredTermCount
       ) continue;
-
       // ensure that none of the excluded terms is in the search result
       for (i = 0; i < excluded.length; i++) {
         if (terms[excluded[i]] == file ||
@@ -481,7 +435,6 @@ var Search = {
           break;
         }
       }
-
       // if we have still a valid result we can add it to the result list
       if (valid) {
         // select one (max) score for the file.
@@ -492,7 +445,6 @@ var Search = {
     }
     return results;
   },
-
   /**
    * helper function to return a node containing the
    * search summary for a given text. keywords is a list
@@ -523,7 +475,6 @@ var Search = {
     return rv;
   }
 };
-
 $(document).ready(function() {
   Search.init();
 });

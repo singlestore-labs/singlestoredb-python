@@ -1,6 +1,4 @@
 ﻿singlestoredb.connection.ShowAccessor.warnings
 ==============================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. automethod:: ShowAccessor.warnings

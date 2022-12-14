@@ -1,6 +1,4 @@
 ﻿singlestoredb.connect
 =====================
-
 .. currentmodule:: singlestoredb
-
 .. autofunction:: connect

@@ -9,17 +9,12 @@
  * :license: BSD, see LICENSE for details.
  *
  */
-
 var stopwords = ["a","and","are","as","at","be","but","by","for","if","in","into","is","it","near","no","not","of","on","or","such","that","the","their","then","there","these","they","this","to","was","will","with"];
-
-
 /* Non-minified version is copied as a separate JS file, is available */
-
 /**
  * Porter Stemmer
  */
 var Stemmer = function() {
-
   var step2list = {
     ational: 'ate',
     tional: 'tion',
@@ -43,7 +38,6 @@ var Stemmer = function() {
     biliti: 'ble',
     logi: 'log'
   };
-
   var step3list = {
     icate: 'ic',
     ative: '',
@@ -53,44 +47,35 @@ var Stemmer = function() {
     ful: '',
     ness: ''
   };
-
   var c = "[^aeiou]";          // consonant
   var v = "[aeiouy]";          // vowel
   var C = c + "[^aeiouy]*";    // consonant sequence
   var V = v + "[aeiou]*";      // vowel sequence
-
   var mgr0 = "^(" + C + ")?" + V + C;                      // [C]VC... is m>0
   var meq1 = "^(" + C + ")?" + V + C + "(" + V + ")?$";    // [C]VC[V] is m=1
   var mgr1 = "^(" + C + ")?" + V + C + V + C;              // [C]VCVC... is m>1
   var s_v   = "^(" + C + ")?" + v;                         // vowel in stem
-
   this.stemWord = function (w) {
     var stem;
     var suffix;
     var firstch;
     var origword = w;
-
     if (w.length < 3)
       return w;
-
     var re;
     var re2;
     var re3;
     var re4;
-
     firstch = w.substr(0,1);
     if (firstch == "y")
       w = firstch.toUpperCase() + w.substr(1);
-
     // Step 1a
     re = /^(.+?)(ss|i)es$/;
     re2 = /^(.+?)([^s])s$/;
-
     if (re.test(w))
       w = w.replace(re,"$1$2");
     else if (re2.test(w))
       w = w.replace(re2,"$1$2");
-
     // Step 1b
     re = /^(.+?)eed$/;
     re2 = /^(.+?)(ed|ing)$/;
@@ -121,7 +106,6 @@ var Stemmer = function() {
           w = w + "e";
       }
     }
-
     // Step 1c
     re = /^(.+?)y$/;
     if (re.test(w)) {
@@ -131,7 +115,6 @@ var Stemmer = function() {
       if (re.test(stem))
         w = stem + "i";
     }
-
     // Step 2
     re = /^(.+?)(ational|tional|enci|anci|izer|bli|alli|entli|eli|ousli|ization|ation|ator|alism|iveness|fulness|ousness|aliti|iviti|biliti|logi)$/;
     if (re.test(w)) {
@@ -142,7 +125,6 @@ var Stemmer = function() {
       if (re.test(stem))
         w = stem + step2list[suffix];
     }
-
     // Step 3
     re = /^(.+?)(icate|ative|alize|iciti|ical|ful|ness)$/;
     if (re.test(w)) {
@@ -153,7 +135,6 @@ var Stemmer = function() {
       if (re.test(stem))
         w = stem + step3list[suffix];
     }
-
     // Step 4
     re = /^(.+?)(al|ance|ence|er|ic|able|ible|ant|ement|ment|ent|ou|ism|ate|iti|ous|ive|ize)$/;
     re2 = /^(.+?)(s|t)(ion)$/;
@@ -171,7 +152,6 @@ var Stemmer = function() {
       if (re2.test(stem))
         w = stem;
     }
-
     // Step 5
     re = /^(.+?)e$/;
     if (re.test(w)) {
@@ -189,17 +169,12 @@ var Stemmer = function() {
       re = /.$/;
       w = w.replace(re,"");
     }
-
     // and turn initial Y back to y
     if (firstch == "y")
       w = firstch.toLowerCase() + w.substr(1);
     return w;
   }
 }
-
-
-
-
 var splitChars = (function() {
     var result = {};
     var singles = [96, 180, 187, 191, 215, 247, 749, 885, 903, 907, 909, 930, 1014, 1648,
@@ -274,7 +249,6 @@ var splitChars = (function() {
     }
     return result;
 })();
-
 function splitQuery(query) {
     var result = [];
     var start = -1;

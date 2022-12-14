@@ -1,6 +1,4 @@
 ﻿singlestoredb.connection.ShowAccessor.indexes
 =============================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. automethod:: ShowAccessor.indexes

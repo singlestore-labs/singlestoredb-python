@@ -1,6 +1,4 @@
 ﻿singlestoredb.connection.ShowAccessor.schemas
 =============================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. automethod:: ShowAccessor.schemas

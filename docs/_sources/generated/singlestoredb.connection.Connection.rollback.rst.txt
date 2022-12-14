@@ -1,6 +1,4 @@
 ﻿singlestoredb.connection.Connection.rollback
 ============================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. automethod:: Connection.rollback

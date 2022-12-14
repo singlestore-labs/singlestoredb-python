@@ -1,6 +1,4 @@
 ﻿singlestoredb.connection.Cursor.callproc
 ========================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. automethod:: Cursor.callproc

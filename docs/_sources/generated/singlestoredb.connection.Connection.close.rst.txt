@@ -1,6 +1,4 @@
 ﻿singlestoredb.connection.Connection.close
 =========================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. automethod:: Connection.close

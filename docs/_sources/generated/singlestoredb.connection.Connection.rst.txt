@@ -1,18 +1,10 @@
 ﻿singlestoredb.connection.Connection
 ===================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. autoclass:: Connection
-
-
    .. automethod:: __init__
-
-
    .. rubric:: Methods
-
    .. autosummary::
-
       ~Connection.__init__
       ~Connection.autocommit
       ~Connection.close
@@ -25,15 +17,8 @@
       ~Connection.enable_http_api
       ~Connection.is_connected
       ~Connection.rollback
-
-
-
-
-
    .. rubric:: Attributes
-
    .. autosummary::
-
       ~Connection.driver
       ~Connection.messages
       ~Connection.paramstyle

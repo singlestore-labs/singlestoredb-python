@@ -8,6 +8,14 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.5.2 - December 14, 2022
+--------------------------
+* Fixed issues with unbuffered reads
+
+v0.5.1 - December 9, 2022
+-------------------------
+* Added 32-bit Windows and aarch64 Linux packages
+* Added option to log queries
 
 v0.5.0 - December 8, 2022 (**API CHANGES**)
 -------------------------------------------

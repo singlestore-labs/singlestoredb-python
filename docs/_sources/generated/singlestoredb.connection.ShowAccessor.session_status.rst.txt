@@ -1,6 +1,4 @@
 ﻿singlestoredb.connection.ShowAccessor.session\_status
 =====================================================
-
 .. currentmodule:: singlestoredb.connection
-
 .. automethod:: ShowAccessor.session_status
