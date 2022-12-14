@@ -7,6 +7,7 @@ import os
 import unittest
 
 import singlestoredb as s2
+
 from . import utils
 # import traceback
 
@@ -946,7 +947,7 @@ class TestBasics(unittest.TestCase):
         for k, v in sorted(row.items()):
             assert v == expected[k], '{} != {} in key {}'.format(v, expected[k], k)
 
-    def test_MySQLdb(self):
+    def _test_MySQLdb(self):
         try:
             import json
             import MySQLdb
