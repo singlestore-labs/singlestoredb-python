@@ -1255,12 +1255,12 @@ class TestConnection(unittest.TestCase):
                 'fields terminated by "," lines terminated by "\n";', [path],
             )
 
-            self.cur.execute(f'select * from {tblname};')
+            self.cur.execute(f'select * from {tblname} order by first_name')
             out = list(self.cur)
             assert out == [
                 ('John', 'Doe', 34),
-                ('Sandy', 'Smith', 24),
                 ('Patty', 'Jones', 57),
+                ('Sandy', 'Smith', 24),
             ], out
 
         finally:
