@@ -19,7 +19,6 @@ jobs:
           python --version
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install mysqlclient
 
       - name: Initialize database
         id: initialize-database
@@ -117,7 +116,7 @@ jobs:
 
       - name: Install SingleStore package
         run: |
-          python setup.py install
+          pip install .
 
       - name: Run tests
         if: ${{ matrix.driver != 'https' }}
