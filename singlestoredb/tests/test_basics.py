@@ -924,7 +924,7 @@ class TestBasics(unittest.TestCase):
             datetime_6=None,
             timestamp=None,
             timestamp_6=None,
-            year=0,
+            year=None,
             char_100='',
             binary_100=b'\x00' * 100,
             varchar_200='',

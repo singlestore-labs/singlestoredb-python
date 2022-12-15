@@ -292,6 +292,10 @@ INSERT INTO alltypes SET
 ;
 
 -- Zero values
+--
+-- Note that v8 of SingleStoreDB does not allow zero date/times by
+-- default, so they are set to NULL here.
+--
 INSERT INTO alltypes SET
     `id`=4,
     `tinyint`=0,
@@ -317,14 +321,14 @@ INSERT INTO alltypes SET
     `dec`=0.0,
     `fixed`=0.0,
     `numeric`=0.0,
-    `date`='0000-00-00',
+    `date`=NULL,
     `time`='00:00:00',
     `time_6`='00:00:00.000000',
-    `datetime`='0000-00-00 00:00:00',
-    `datetime_6`='0000-00-00 00:00:00.000000',
-    `timestamp`='0000-00-00 00:00:00',
-    `timestamp_6`='0000-00-00 00:00:00.000000',
-    `year`=0,
+    `datetime`=NULL,
+    `datetime_6`=NULL,
+    `timestamp`=NULL,
+    `timestamp_6`=NULL,
+    `year`=NULL,
     `char_100`='',
     `binary_100`=x'',
     `varchar_200`='',

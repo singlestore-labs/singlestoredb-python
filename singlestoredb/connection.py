@@ -124,11 +124,12 @@ def build_params(**kwargs: Any) -> Dict[str, Any]:
         if name == 'conv':
             out[name] = kwargs.get(name, None)
         elif name == 'results_format':  # deprecated
-            warnings.warn(
-                'The `results_format=` parameter has been renamed to `results_type=`.',
-                DeprecationWarning,
-            )
             if kwargs.get(name, None) is not None:
+                warnings.warn(
+                    'The `results_format=` parameter has been '
+                    'renamed to `results_type=`.',
+                    DeprecationWarning,
+                )
                 out['results_type'] = kwargs.get(name, get_option('results.type'))
         elif name == 'results_type':
             out[name] = kwargs.get(name, get_option('results.type'))
