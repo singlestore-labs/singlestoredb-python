@@ -344,6 +344,7 @@ typedef struct {
     PyObject *Decimal;
     PyObject *date;
     PyObject *timedelta;
+    PyObject *time;
     PyObject *datetime;
     PyObject *loads;
     PyObject *field_count;
@@ -361,9 +362,25 @@ typedef struct {
     PyObject *x_errno;
     PyObject *_result;
     PyObject *_read_timeout;
+    PyObject *_next_seq_id;
+    PyObject *rows;
 } PyStrings;
 
 static PyStrings PyStr = {0};
+
+//
+// Cached Python functions
+//
+typedef struct {
+    PyObject *json_loads;
+    PyObject *decimal_Decimal;
+    PyObject *datetime_date;
+    PyObject *datetime_time;
+    PyObject *datetime_timedelta;
+    PyObject *datetime_datetime;
+} PyFunctions;
+
+static PyFunctions PyFunc = {0};
 
 //
 // State
@@ -375,14 +392,6 @@ typedef struct {
     PyObject_HEAD
     PyObject *py_conn; // Database connection
     PyObject *py_fields; // List of table fields
-    PyObject *py_decimal_mod; // decimal module
-    PyObject *py_decimal; // decimal.Decimal
-    PyObject *py_json_mod; // json module
-    PyObject *py_json_loads; // json.loads
-    PyObject *py_datetime_mod; // datetime module
-    PyObject *py_date; // datetime.date
-    PyObject *py_timedelta; // datetime.timedelta
-    PyObject *py_datetime; // datetime.datetime
     PyObject *py_rows; // Output object
     PyObject *py_rfile; // Socket file I/O
     PyObject *py_read; // File I/O read method
@@ -458,19 +467,8 @@ static void State_clear_fields(StateObject *self) {
     Py_CLEAR(self->py_read);
     Py_CLEAR(self->py_rfile);
     Py_CLEAR(self->py_rows);
-    Py_CLEAR(self->py_json_loads);
-    Py_CLEAR(self->py_json_mod);
-    Py_CLEAR(self->py_decimal);
-    Py_CLEAR(self->py_decimal_mod);
-    Py_CLEAR(self->py_date);
-    Py_CLEAR(self->py_timedelta);
-    Py_CLEAR(self->py_datetime);
-    Py_CLEAR(self->py_datetime_mod);
     Py_CLEAR(self->py_fields);
     Py_CLEAR(self->py_conn);
-
-    Py_CLEAR(self->py_str._next_seq_id);
-    Py_CLEAR(self->py_str.rows);
 }
 
 static void State_dealloc(StateObject *self) {
@@ -515,34 +513,6 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         }
         Py_XDECREF(unbuffered_active);
     }
-
-    // Create reused strings.
-    self->py_str._next_seq_id = PyUnicode_FromString("_next_seq_id");
-    if (!self->py_str._next_seq_id) goto error;
-    self->py_str.rows = PyUnicode_FromString("rows");
-    if (!self->py_str.rows) goto error;
-
-    // Import decimal module.
-    self->py_decimal_mod = PyImport_ImportModule("decimal");
-    if (!self->py_decimal_mod) goto error;
-    self->py_decimal = PyObject_GetAttr(self->py_decimal_mod, PyStr.Decimal);
-    if (!self->py_decimal) goto error;
-
-    // Import datetime objects
-    self->py_datetime_mod = PyImport_ImportModule("datetime");
-    if (!self->py_datetime_mod) goto error;
-    self->py_date = PyObject_GetAttr(self->py_datetime_mod, PyStr.date);
-    if (!self->py_date) goto error;
-    self->py_timedelta = PyObject_GetAttr(self->py_datetime_mod, PyStr.timedelta);
-    if (!self->py_timedelta) goto error;
-    self->py_datetime = PyObject_GetAttr(self->py_datetime_mod, PyStr.datetime);
-    if (!self->py_datetime) goto error;
-
-    // Import json module.
-    self->py_json_mod = PyImport_ImportModule("json");
-    if (!self->py_json_mod) goto error;
-    self->py_json_loads = PyObject_GetAttr(self->py_json_mod, PyStr.loads);
-    if (!self->py_json_loads) goto error;
 
     // Retrieve type codes for each column.
     PyObject *py_field_count = PyObject_GetAttr(py_res, PyStr.field_count);
@@ -667,7 +637,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
     self->py_read = PyObject_GetAttr(self->py_rfile, PyStr.read);
     if (!self->py_read) goto error;
 
-    PyObject *py_next_seq_id = PyObject_GetAttr(self->py_conn, self->py_str._next_seq_id);
+    PyObject *py_next_seq_id = PyObject_GetAttr(self->py_conn, PyStr._next_seq_id);
     if (!py_next_seq_id) goto error;
     self->next_seq_id = PyLong_AsUnsignedLongLong(py_next_seq_id);
     Py_XDECREF(py_next_seq_id);
@@ -702,7 +672,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         //}
         if (!self->py_rows) goto error;
 
-        PyObject_SetAttr(py_res, self->py_str.rows, self->py_rows);
+        PyObject_SetAttr(py_res, PyStr.rows, self->py_rows);
     }
 
 exit:
@@ -734,7 +704,7 @@ static int State_reset_batch(
         self->py_rows = PyList_New(0);
         Py_XDECREF(py_tmp);
         if (!self->py_rows) { rc = -1; goto error; }
-        rc = PyObject_SetAttr(py_res, self->py_str.rows, self->py_rows);
+        rc = PyObject_SetAttr(py_res, PyStr.rows, self->py_rows);
     //}
 
 exit:
@@ -1133,7 +1103,7 @@ static PyObject *PyDate_FromDate(
     }
 
     out = PyObject_CallFunctionObjArgs(
-        py_state->py_date, py_year, PyInts[month], PyInts[day], NULL
+        PyFunc.datetime_date, py_year, PyInts[month], PyInts[day], NULL
     );
 
     if (free_year) Py_XDECREF(py_year);
@@ -1177,7 +1147,7 @@ static PyObject *PyDelta_FromDSU(
     }
 
     out = PyObject_CallFunctionObjArgs(
-        py_state->py_timedelta, py_days, py_seconds, py_microseconds, NULL
+        PyFunc.datetime_timedelta, py_days, py_seconds, py_microseconds, NULL
     );
 
     if (free_days) Py_XDECREF(py_days);
@@ -1218,7 +1188,7 @@ static PyObject *PyDateTime_FromDateAndTime(
     }
 
     out = PyObject_CallFunctionObjArgs(
-        py_state->py_datetime, py_year, PyInts[month], PyInts[day],
+        PyFunc.datetime_datetime, py_year, PyInts[month], PyInts[day],
         PyInts[hour], PyInts[minute], PyInts[second], py_microsecond, NULL
     );
 
@@ -1303,7 +1273,7 @@ static PyObject *read_row_from_packet(
                     py_str = PyUnicode_Decode(out, out_l, py_state->encodings[i], "strict");
                     if (!py_str) goto error;
 
-                    py_item = PyObject_CallFunctionObjArgs(py_state->py_decimal, py_str, NULL);
+                    py_item = PyObject_CallFunctionObjArgs(PyFunc.decimal_Decimal, py_str, NULL);
                     Py_CLEAR(py_str);
                     if (!py_item) goto error;
                     break;
@@ -1485,7 +1455,7 @@ static PyObject *read_row_from_packet(
                     // Parse JSON string.
                     if (py_state->type_codes[i] == MYSQL_TYPE_JSON && py_state->options.parse_json) {
                         py_str = py_item;
-                        py_item = PyObject_CallFunctionObjArgs(py_state->py_json_loads, py_str, NULL);
+                        py_item = PyObject_CallFunctionObjArgs(PyFunc.json_loads, py_str, NULL);
                         Py_CLEAR(py_str);
                         if (!py_item) goto error;
                     }
@@ -1642,7 +1612,7 @@ exit:
 
     py_next_seq_id = PyLong_FromUnsignedLongLong(py_state->next_seq_id);
     if (!py_next_seq_id) goto error;
-    PyObject_SetAttr(py_state->py_conn, py_state->py_str._next_seq_id, py_next_seq_id);
+    PyObject_SetAttr(py_state->py_conn, PyStr._next_seq_id, py_next_seq_id);
     Py_DECREF(py_next_seq_id);
 
     py_out = NULL;
@@ -1651,7 +1621,7 @@ exit:
         if (py_state->is_eof && row_idx == 0) {
             Py_INCREF(Py_None);
             py_out = Py_None;
-            PyObject_SetAttr(py_res, py_state->py_str.rows, Py_None);
+            PyObject_SetAttr(py_res, PyStr.rows, Py_None);
             PyObject *py_n_rows = PyLong_FromSsize_t(py_state->n_rows);
             PyObject_SetAttr(py_res, PyStr.affected_rows, (py_n_rows) ? py_n_rows : Py_None);
             Py_XDECREF(py_n_rows);
@@ -1721,6 +1691,7 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     PyStr.options = PyUnicode_FromString("options");
     PyStr.Decimal = PyUnicode_FromString("Decimal");
     PyStr.date = PyUnicode_FromString("date");
+    PyStr.time = PyUnicode_FromString("time");
     PyStr.timedelta = PyUnicode_FromString("timedelta");
     PyStr.datetime = PyUnicode_FromString("datetime");
     PyStr.loads = PyUnicode_FromString("loads");
@@ -1739,7 +1710,31 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     PyStr.read = PyUnicode_FromString("read");
     PyStr.x_errno = PyUnicode_FromString("errno");
     PyStr._result = PyUnicode_FromString("_result");
+    PyStr._next_seq_id = PyUnicode_FromString("_next_seq_id");
+    PyStr.rows = PyUnicode_FromString("rows");
 
+    PyObject *decimal_mod = PyImport_ImportModule("decimal");
+    if (!decimal_mod) goto error;
+    PyObject *datetime_mod = PyImport_ImportModule("datetime");
+    if (!datetime_mod) goto error;
+    PyObject *json_mod = PyImport_ImportModule("json");
+    if (!json_mod) goto error;
+
+    PyFunc.decimal_Decimal = PyObject_GetAttr(decimal_mod, PyStr.Decimal);
+    if (!PyFunc.decimal_Decimal) goto error;
+    PyFunc.datetime_date = PyObject_GetAttr(datetime_mod, PyStr.date);
+    if (!PyFunc.datetime_date) goto error;
+    PyFunc.datetime_timedelta = PyObject_GetAttr(datetime_mod, PyStr.timedelta);
+    if (!PyFunc.datetime_timedelta) goto error;
+    PyFunc.datetime_time = PyObject_GetAttr(datetime_mod, PyStr.time);
+    if (!PyFunc.datetime_time) goto error;
+    PyFunc.datetime_datetime = PyObject_GetAttr(datetime_mod, PyStr.datetime);
+    if (!PyFunc.datetime_datetime) goto error;
+    PyFunc.json_loads = PyObject_GetAttr(json_mod, PyStr.loads);
+    if (!PyFunc.json_loads) goto error;
 
     return PyModule_Create(&_singlestoredb_accelmodule);
+
+error:
+    return NULL;
 }
