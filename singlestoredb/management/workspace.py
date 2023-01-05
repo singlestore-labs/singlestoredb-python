@@ -197,7 +197,7 @@ class WorkspaceGroup(object):
     def __init__(
         self, name: str, id: str,
         created_at: Union[str, datetime.datetime],
-        region: Region,
+        region: Optional[Region],
         firewall_ranges: List[str],
         terminated_at: Optional[Union[str, datetime.datetime]],
     ):
@@ -248,10 +248,14 @@ class WorkspaceGroup(object):
         :class:`WorkspaceGroup`
 
         """
+        try:
+            region = [x for x in manager.regions if x.id == obj['regionID']][0]
+        except IndexError:
+            region = None
         out = cls(
             name=obj['name'], id=obj['workspaceGroupID'],
             created_at=obj['createdAt'],
-            region=[x for x in manager.regions if x.id == obj['regionID']][0],
+            region=region,
             firewall_ranges=obj.get('firewallRanges', []),
             terminated_at=obj.get('terminatedAt'),
         )
