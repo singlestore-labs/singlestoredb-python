@@ -977,6 +977,11 @@ class TestBasics(unittest.TestCase):
         for a, b in zip(s2_out, mydb_out):
             assert a == b, (a, b)
 
+    def test_long_string(self):
+        string = 'a' * 48
+        self.cur.execute(f"SELECT 1 AS column_1, '{string}' AS column_2")
+        self.assertEqual((1, string), self.cur.fetchone())
+
 
 if __name__ == '__main__':
     import nose2
