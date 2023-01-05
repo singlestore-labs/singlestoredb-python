@@ -1283,14 +1283,19 @@ static PyObject *read_row_from_packet(
                 case MYSQL_TYPE_LONG:
                 case MYSQL_TYPE_LONGLONG:
                 case MYSQL_TYPE_INT24:
+                {
+                    char *substr = calloc(out_l + 1, sizeof(char));
+                    memcpy(substr, out, out_l);
                     if (py_state->flags[i] & MYSQL_FLAG_UNSIGNED) {
-                        py_item = PyLong_FromUnsignedLongLong(strtoull(out, &end, 10));
+                        py_item = PyLong_FromUnsignedLongLong(strtoull(substr, NULL, 10));
                     } else {
-                        py_item = PyLong_FromLongLong(strtoll(out, &end, 10));
+                        py_item = PyLong_FromLongLong(strtoll(substr, NULL, 10));
                     }
+                    DESTROY(substr);
+                    out += out_l;
                     if (!py_item) goto error;
                     break;
-
+                }
                 case MYSQL_TYPE_FLOAT:
                 case MYSQL_TYPE_DOUBLE:
                     py_item = PyFloat_FromDouble(strtod(out, &end));
