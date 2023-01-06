@@ -977,10 +977,15 @@ class TestBasics(unittest.TestCase):
         for a, b in zip(s2_out, mydb_out):
             assert a == b, (a, b)
 
-    def test_long_string(self):
+    def test_int_string(self):
         string = 'a' * 48
-        self.cur.execute(f"SELECT 1 AS column_1, '{string}' AS column_2")
+        self.cur.execute(f"SELECT 1, '{string}'")
         self.assertEqual((1, string), self.cur.fetchone())
+
+    def test_double_string(self):
+        string = 'a' * 49
+        self.cur.execute(f"SELECT 1.2 :> DOUBLE, '{string}'")
+        self.assertEqual((1.2, string), self.cur.fetchone())
 
 
 if __name__ == '__main__':

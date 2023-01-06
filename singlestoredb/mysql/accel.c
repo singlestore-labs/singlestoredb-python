@@ -1267,6 +1267,10 @@ static PyObject *read_row_from_packet(
 
             // If no converter was passed in, do the default processing.
             else {
+                // Make sure not to overrun
+                char tmp = *end;
+                if (data_l) *end = '\0';
+
                 switch (py_state->type_codes[i]) {
                 case MYSQL_TYPE_NEWDECIMAL:
                 case MYSQL_TYPE_DECIMAL:
@@ -1283,19 +1287,13 @@ static PyObject *read_row_from_packet(
                 case MYSQL_TYPE_LONG:
                 case MYSQL_TYPE_LONGLONG:
                 case MYSQL_TYPE_INT24:
-                {
-                    char *substr = calloc(out_l + 1, sizeof(char));
-                    memcpy(substr, out, out_l);
                     if (py_state->flags[i] & MYSQL_FLAG_UNSIGNED) {
-                        py_item = PyLong_FromUnsignedLongLong(strtoull(substr, NULL, 10));
+                        py_item = PyLong_FromUnsignedLongLong(strtoull(out, NULL, 10));
                     } else {
-                        py_item = PyLong_FromLongLong(strtoll(substr, NULL, 10));
+                        py_item = PyLong_FromLongLong(strtoll(out, NULL, 10));
                     }
-                    DESTROY(substr);
-                    out += out_l;
                     if (!py_item) goto error;
                     break;
-                }
                 case MYSQL_TYPE_FLOAT:
                 case MYSQL_TYPE_DOUBLE:
                     py_item = PyFloat_FromDouble(strtod(out, &end));
@@ -1430,8 +1428,7 @@ static PyObject *read_row_from_packet(
                         goto error;
                         break;
                     }
-                    end = &out[out_l];
-                    year = strtoul(out, &end, 10);
+                    year = strtoul(out, NULL, 10);
                     py_item = PyLong_FromLong(year);
                     if (!py_item) goto error;
                     break;
@@ -1472,6 +1469,7 @@ static PyObject *read_row_from_packet(
                                  py_state->type_codes[i], NULL);
                     goto error;
                 }
+                if (data_l) *end = tmp;
             }
         }
 
