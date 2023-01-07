@@ -1213,7 +1213,7 @@ static PyObject *read_row_from_packet(
     PyObject *py_result = NULL;
     PyObject *py_item = NULL;
     PyObject *py_str = NULL;
-    char *end = NULL;
+    char end = '\0';
 
     int sign = 1;
     int year = 0;
@@ -1240,7 +1240,7 @@ static PyObject *read_row_from_packet(
     for (unsigned long i = 0; i < py_state->n_cols; i++) {
 
         read_length_coded_string(&data, &data_l, &out, &out_l, &is_null);
-        end = &out[out_l];
+        end = out[out_l];
 
         orig_out = out;
         orig_out_l = out_l;
@@ -1283,17 +1283,21 @@ static PyObject *read_row_from_packet(
                 case MYSQL_TYPE_LONG:
                 case MYSQL_TYPE_LONGLONG:
                 case MYSQL_TYPE_INT24:
+                    if (data_l) out[out_l] = '\0';
                     if (py_state->flags[i] & MYSQL_FLAG_UNSIGNED) {
-                        py_item = PyLong_FromUnsignedLongLong(strtoull(out, &end, 10));
+                        py_item = PyLong_FromUnsignedLongLong(strtoull(out, NULL, 10));
                     } else {
-                        py_item = PyLong_FromLongLong(strtoll(out, &end, 10));
+                        py_item = PyLong_FromLongLong(strtoll(out, NULL, 10));
                     }
+                    if (data_l) out[out_l] = end;
                     if (!py_item) goto error;
                     break;
 
                 case MYSQL_TYPE_FLOAT:
                 case MYSQL_TYPE_DOUBLE:
-                    py_item = PyFloat_FromDouble(strtod(out, &end));
+                    if (data_l) out[out_l] = '\0';
+                    py_item = PyFloat_FromDouble(strtod(out, NULL));
+                    if (data_l) out[out_l] = end;
                     if (!py_item) goto error;
                     break;
 
@@ -1425,9 +1429,10 @@ static PyObject *read_row_from_packet(
                         goto error;
                         break;
                     }
-                    end = &out[out_l];
-                    year = strtoul(out, &end, 10);
+                    if (data_l) out[out_l] = '\0';
+                    year = strtoul(out, NULL, 10);
                     py_item = PyLong_FromLong(year);
+                    if (data_l) out[out_l] = end;
                     if (!py_item) goto error;
                     break;
 
