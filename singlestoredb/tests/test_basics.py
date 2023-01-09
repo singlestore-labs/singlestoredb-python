@@ -987,6 +987,11 @@ class TestBasics(unittest.TestCase):
         self.cur.execute(f"SELECT 1.2 :> DOUBLE, '{string}'")
         self.assertEqual((1.2, string), self.cur.fetchone())
 
+    def test_year_string(self):
+        string = 'a' * 49
+        self.cur.execute(f"SELECT 1999 :> YEAR, '{string}'")
+        self.assertEqual((1999, string), self.cur.fetchone())
+
 
 if __name__ == '__main__':
     import nose2
