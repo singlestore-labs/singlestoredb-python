@@ -470,7 +470,7 @@ class WorkspaceManager(Manager):
                 name=name, regionID=region,
                 adminPassword=admin_password,
                 firewallRanges=firewall_ranges,
-                expiresAt=expires_at
+                expiresAt=expires_at,
             ),
         )
         return self.get_workspace_group(res.json()['workspaceGroupID'])
