@@ -453,7 +453,7 @@ class WorkspaceManager(Manager):
             a password will be generated and retured in the response.
         expires_at : str, optional
             The timestamp of when the workspace group will expire.
-            If the expiration time is not specified, 
+            If the expiration time is not specified,
             the workspace group will have no expiration time.
             At expiration, the workspace group is terminated and all the data is lost.
             Expiration time can be specified as a timestamp or duration.
