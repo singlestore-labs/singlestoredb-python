@@ -434,6 +434,7 @@ class WorkspaceManager(Manager):
     def create_workspace_group(
         self, name: str, region: Union[str, Region],
         firewall_ranges: List[str], admin_password: Optional[str] = None,
+        expires_at: Optional[str] = None,
     ) -> WorkspaceGroup:
         """
         Create a new workspace group.
@@ -450,6 +451,13 @@ class WorkspaceManager(Manager):
         admin_password : str, optional
             Admin password for the workspace group. If no password is supplied,
             a password will be generated and retured in the response.
+        expires_at : str, optional
+            The timestamp of when the workspace group will expire.
+            If the expiration time is not specified,
+            the workspace group will have no expiration time.
+            At expiration, the workspace group is terminated and all the data is lost.
+            Expiration time can be specified as a timestamp or duration.
+            Example: "2021-01-02T15:04:05Z07:00", "2021-01-02", "3h30m"
 
         Returns
         -------
@@ -463,6 +471,7 @@ class WorkspaceManager(Manager):
                 name=name, regionID=region,
                 adminPassword=admin_password,
                 firewallRanges=firewall_ranges,
+                expiresAt=expires_at,
             ),
         )
         return self.get_workspace_group(res.json()['workspaceGroupID'])
