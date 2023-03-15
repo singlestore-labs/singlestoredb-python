@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.5.4 - March 15, 2023
+-----------------------
+* Added expiration to workspaces
+
 v0.5.3 - January 9, 2023
 --------------------------
 * Fixed issue with parsing numeric results
