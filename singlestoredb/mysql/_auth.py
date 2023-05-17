@@ -2,8 +2,9 @@
 """
 Implements auth methods
 """
-from .err import OperationalError
+import getpass
 
+from .err import OperationalError
 
 try:
     from cryptography.hazmat.backends import default_backend
@@ -273,3 +274,28 @@ def caching_sha2_password_auth(conn, pkt):
 
     data = sha2_rsa_encrypt(conn.password, conn.salt, conn.server_public_key)
     pkt = _roundtrip(conn, data)
+
+
+def gssapi_auth(user):
+    try:
+        import gssapi.raw
+    except ImportError:
+        raise ImportError(
+            'The `gssapi` package must be '
+            'installed for Kerberos authentication',
+        )
+
+    if not user:
+        user = getpass.getuser()
+
+    ctx = None
+    try:
+        ctx = gssapi.raw.init_sec_context(
+            gssapi.raw.import_name(user, gssapi.raw.NameType.user),
+            flags=[0], lifetime=0,
+        )
+        return ctx.token
+
+    finally:
+        if ctx is not None:
+            gssapi.raw.delete_sec_context(ctx.context)

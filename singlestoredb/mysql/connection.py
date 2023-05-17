@@ -1111,6 +1111,9 @@ class Connection(BaseConnection):
                 authresp = b'\1'  # request public key
             else:
                 authresp = b'\0'  # empty password
+        elif self._auth_plugin_name == b'auth_gssapi_client':
+            plugin_name = b'auth_gssapi_client'
+            authresp = _auth.gssapi_auth(self.user)
 
         if self.server_capabilities & CLIENT.PLUGIN_AUTH_LENENC_CLIENT_DATA:
             data += _lenenc_int(len(authresp)) + authresp
@@ -1199,6 +1202,8 @@ class Connection(BaseConnection):
         elif plugin_name == b'mysql_clear_password':
             # https://dev.mysql.com/doc/internals/en/clear-text-authentication.html
             data = self.password + b'\0'
+        elif plugin_name == b'auth_gssapi_client':
+            data = _auth.gssapi_auth(self.user)
         elif plugin_name == b'dialog':
             pkt = auth_packet
             while True:
