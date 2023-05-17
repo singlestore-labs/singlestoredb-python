@@ -13,7 +13,7 @@ Examples
 
 """
 
-__version__ = '0.5.4'
+__version__ = '0.6.0'
 
 from .config import options, get_option, set_option, describe_option
 from .connection import connect, apilevel, threadsafety, paramstyle
