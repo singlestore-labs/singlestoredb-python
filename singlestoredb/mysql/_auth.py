@@ -2,8 +2,6 @@
 """
 Implements auth methods
 """
-import getpass
-
 from .err import OperationalError
 
 try:
@@ -276,7 +274,7 @@ def caching_sha2_password_auth(conn, pkt):
     pkt = _roundtrip(conn, data)
 
 
-def gssapi_auth(user):
+def gssapi_auth(data):
     try:
         import gssapi.raw
     except ImportError:
@@ -285,13 +283,10 @@ def gssapi_auth(user):
             'installed for Kerberos authentication',
         )
 
-    if not user:
-        user = getpass.getuser()
-
     ctx = None
     try:
         ctx = gssapi.raw.init_sec_context(
-            gssapi.raw.import_name(user, gssapi.raw.NameType.user),
+            gssapi.raw.import_name(data, gssapi.raw.NameType.user),
             flags=[0], lifetime=0,
         )
         return ctx.token
