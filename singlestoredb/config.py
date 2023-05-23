@@ -4,6 +4,7 @@ import functools
 
 from . import auth
 from .utils.config import check_bool  # noqa: F401
+from .utils.config import check_dict_str_str  # noqa: F401
 from .utils.config import check_float  # noqa: F401
 from .utils.config import check_int  # noqa: F401
 from .utils.config import check_optional_bool  # noqa: F401
@@ -129,6 +130,16 @@ register_option(
     'ssl_verify_identity', 'bool', check_optional_bool, None,
     'Verify the server\'s identity',
     environ='SINGLESTOREDB_SSL_VERIFY_IDENTITY',
+)
+
+register_option(
+    'program_name', 'string', check_str, None,
+    'Name of the program',
+)
+
+register_option(
+    'conn_attrs', 'dict', check_dict_str_str, None,
+    'Additional connection attributes for telemetry',
 )
 
 register_option(

@@ -291,6 +291,7 @@ class Connection(BaseConnection):
         passwd=None,  # deprecated
         db=None,  # deprecated
         driver=None,  # internal use
+        conn_attrs=None,
     ):
         BaseConnection.__init__(**dict(locals()))
 
@@ -490,13 +491,19 @@ class Connection(BaseConnection):
         from .. import __version__ as VERSION_STRING
 
         self._connect_attrs = {
-            '_client_name': 'singlestoredb.mysql',
+            '_os': str(sys.platform),
             '_pid': str(os.getpid()),
+            '_client_name': 'SingleStoreDB Python Client',
             '_client_version': VERSION_STRING,
         }
 
         if program_name:
             self._connect_attrs['program_name'] = program_name
+        if conn_attrs is not None:
+            # do not overwrite the attributes that we set ourselves
+            for k, v in conn_attrs.items():
+                if k not in self._connect_attrs:
+                    self._connect_attrs[k] = v
 
         if defer_connect:
             self._sock = None

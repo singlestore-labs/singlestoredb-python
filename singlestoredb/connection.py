@@ -1274,6 +1274,8 @@ def connect(
     results_type: Optional[str] = None,
     buffered: Optional[bool] = None,
     results_format: Optional[str] = None,
+    program_name: Optional[str] = None,
+    conn_attrs: Optional[Dict[str, str]] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1330,6 +1332,11 @@ def connect(
         The form of the query results: tuples, namedtuples, dicts
     results_format : str, optional
         Deprecated. This option has been renamed to results_type.
+    program_name: str, optional
+        Name of the program
+    conn_attrs: dict, optional
+        Additional connection attributes for telemetry. Example:
+        {'program_version': "1.0.2", "_connector_name": "dbt connector"}
 
     Examples
     --------
