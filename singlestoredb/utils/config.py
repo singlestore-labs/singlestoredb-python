@@ -32,6 +32,7 @@ from typing import Callable
 from typing import Dict
 from typing import Iterator
 from typing import List
+from typing import Mapping
 from typing import Optional
 from typing import Tuple
 from typing import Union
@@ -641,6 +642,41 @@ def check_str(
             '%s is not one of the possible values: %s' %
             (out, ', '.join(valid_values)),
         )
+
+    return out
+
+
+def check_dict_str_str(
+    value: Any,
+) -> Optional[Dict[str, str]]:
+    """
+    Validate a string value.
+
+    Parameters
+    ----------
+    value : dict
+        The value to validate. Keys and values must be strings.
+
+    Returns
+    -------
+    dict
+        The validated dict value
+    """
+    if value is None:
+        return None
+
+    if not isinstance(value, Mapping):
+        raise ValueError(
+            'value {} must be of type dict'.format(value),
+        )
+
+    out = {}
+    for k, v in value.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            raise ValueError(
+                'keys and values in {} must be strings'.format(value),
+            )
+        out[k] = v
 
     return out
 
