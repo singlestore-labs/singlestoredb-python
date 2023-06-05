@@ -123,7 +123,7 @@ created using the :meth:`Connection.cursor` method.
    Cursor.is_connected
 
 
-Utiliites
+Utilities
 ---------
 
 .. currentmodule:: singlestoredb.auth
