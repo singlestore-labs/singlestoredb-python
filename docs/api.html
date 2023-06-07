@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStoreDB 0.5.1 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 0.6.1 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
@@ -11,9 +11,8 @@
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
         <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
-        <script src="_static/jquery.js"></script>
-        <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -25,14 +24,15 @@
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-            <a href="index.html" class="icon icon-home"> SingleStoreDB
+          <a href="index.html" class="icon icon-home">
+            SingleStoreDB
           </a>
               <div class="version">
-                0.5.1
+                0.6.1
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
@@ -104,7 +104,7 @@
 </li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#utiliites">Utiliites</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#utilities">Utilities</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.auth.get_jwt.html">singlestoredb.auth.get_jwt</a></li>
 </ul>
 </li>
@@ -163,8 +163,8 @@
         <div class="rst-content">
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
-      <li>API Reference</li>
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">API Reference</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/api.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -174,18 +174,14 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
   <span class="target" id="module-singlestoredb"></span><section id="api-reference">
-<span id="api"></span><h1>API Reference<a class="headerlink" href="#api-reference" title="Permalink to this headline">¶</a></h1>
+<span id="api"></span><h1>API Reference<a class="headerlink" href="#api-reference" title="Permalink to this heading">¶</a></h1>
 <section id="connections">
-<span id="api-functions"></span><h2>Connections<a class="headerlink" href="#connections" title="Permalink to this headline">¶</a></h2>
+<span id="api-functions"></span><h2>Connections<a class="headerlink" href="#connections" title="Permalink to this heading">¶</a></h2>
 <p>The <a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">connect()</span></code></a> function is the primary entry point for the SingleStore
 package. It connects to a SingleStore database using either
 <a class="reference external" href="https://peps.python.org/pep-0249/">DB-API</a> compliant parameters,
 or a connection string in the form of a URL.</p>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
+<table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">connect</span></code></a>([host, user, password, port, ...])</p></td>
 <td><p>Return a SingleStoreDB connection.</p></td>
@@ -193,14 +189,10 @@ or a connection string in the form of a URL.</p>
 </tbody>
 </table>
 <section id="connection">
-<h3>Connection<a class="headerlink" href="#connection" title="Permalink to this headline">¶</a></h3>
+<h3>Connection<a class="headerlink" href="#connection" title="Permalink to this heading">¶</a></h3>
 <p>Connection objects are created by the <a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">singlestoredb.connect()</span></code></a> function. They are
 used to create<a href="singlestoredb.connection.Cursor.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Cursor</span></code></a> objects for querying the database.</p>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
+<table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.html#singlestoredb.connection.Connection" title="singlestoredb.connection.Connection"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection</span></code></a>(**kwargs)</p></td>
 <td><p>SingleStoreDB connection.</p></td>
@@ -233,11 +225,7 @@ used to create<a href="singlestoredb.connection.Cursor.html"> <code class="xref 
 </table>
 <p>The <code class="xref py py-attr docutils literal notranslate"><span class="pre">Connection.show</span></code> attribute of the connection objects allow you to access various
 information about the server. The available operations are shown below.</p>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
+<table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.aggregates.html#singlestoredb.connection.ShowAccessor.aggregates" title="singlestoredb.connection.ShowAccessor.aggregates"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.aggregates</span></code></a>()</p></td>
 <td><p>Show all aggregate functions in the current database.</p></td>
@@ -320,17 +308,13 @@ information about the server. The available operations are shown below.</p>
 </tbody>
 </table>
 <section id="showresult">
-<h4>ShowResult<a class="headerlink" href="#showresult" title="Permalink to this headline">¶</a></h4>
+<h4>ShowResult<a class="headerlink" href="#showresult" title="Permalink to this heading">¶</a></h4>
 <p>The results of the above methods and attributes are in the form of a
 <a class="reference internal" href="generated/singlestoredb.connection.ShowResult.html#singlestoredb.connection.ShowResult" title="singlestoredb.connection.ShowResult"><code class="xref py py-class docutils literal notranslate"><span class="pre">ShowResult</span></code></a> object. This object is primarily used to display
 information to the screen or web browser, but columns from the output
 can also be accessed using dictionary-like key access syntax or
 attributes.</p>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
+<table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowResult.html#singlestoredb.connection.ShowResult" title="singlestoredb.connection.ShowResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ShowResult</span></code></a>(*args, **kwargs)</p></td>
 <td><p>Simple result object.</p></td>
@@ -340,14 +324,10 @@ attributes.</p>
 </section>
 </section>
 <section id="cursor">
-<h3>Cursor<a class="headerlink" href="#cursor" title="Permalink to this headline">¶</a></h3>
+<h3>Cursor<a class="headerlink" href="#cursor" title="Permalink to this heading">¶</a></h3>
 <p>Cursors are used to query the database and download results.  They are
 created using the <a class="reference internal" href="generated/singlestoredb.connection.Connection.cursor.html#singlestoredb.connection.Connection.cursor" title="singlestoredb.connection.Connection.cursor"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Connection.cursor()</span></code></a> method.</p>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
+<table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.html#singlestoredb.connection.Cursor" title="singlestoredb.connection.Cursor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor</span></code></a>(connection)</p></td>
 <td><p>Database cursor for submitting commands and queries.</p></td>
@@ -395,13 +375,9 @@ created using the <a class="reference internal" href="generated/singlestoredb.co
 </table>
 </section>
 </section>
-<section id="utiliites">
-<h2>Utiliites<a class="headerlink" href="#utiliites" title="Permalink to this headline">¶</a></h2>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
+<section id="utilities">
+<h2>Utilities<a class="headerlink" href="#utilities" title="Permalink to this heading">¶</a></h2>
+<table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.auth.get_jwt.html#singlestoredb.auth.get_jwt" title="singlestoredb.auth.get_jwt"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_jwt</span></code></a>(email[, url, clusters, databases, ...])</p></td>
 <td><p>Retrieve a JWT token from the SingleStoreDB single-sign-on URL.</p></td>
@@ -410,14 +386,10 @@ created using the <a class="reference internal" href="generated/singlestoredb.co
 </table>
 </section>
 <section id="management-api">
-<h2>Management API<a class="headerlink" href="#management-api" title="Permalink to this headline">¶</a></h2>
+<h2>Management API<a class="headerlink" href="#management-api" title="Permalink to this heading">¶</a></h2>
 <p>The management objects allow you to create, destroy, and interact with
 workspaces in the SingleStoreDB Cloud.</p>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
+<table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.manage_workspaces.html#singlestoredb.manage_workspaces" title="singlestoredb.manage_workspaces"><code class="xref py py-obj docutils literal notranslate"><span class="pre">manage_workspaces</span></code></a>([access_token, version, ...])</p></td>
 <td><p>Retrieve a SingleStoreDB workspace manager.</p></td>
@@ -425,15 +397,11 @@ workspaces in the SingleStoreDB Cloud.</p>
 </tbody>
 </table>
 <section id="workspacemanager">
-<h3>WorkspaceManager<a class="headerlink" href="#workspacemanager" title="Permalink to this headline">¶</a></h3>
+<h3>WorkspaceManager<a class="headerlink" href="#workspacemanager" title="Permalink to this heading">¶</a></h3>
 <p>WorkspaceManager objects are returned by the <a class="reference internal" href="generated/singlestoredb.manage_workspaces.html#singlestoredb.manage_workspaces" title="singlestoredb.manage_workspaces"><code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code></a> function.
 They allow you to retrieve information about workspaces in your account, or
 create new ones.</p>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
+<table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.html#singlestoredb.management.workspace.WorkspaceManager" title="singlestoredb.management.workspace.WorkspaceManager"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a>([access_token, version, ...])</p></td>
 <td><p>SingleStoreDB workspace manager.</p></td>
@@ -460,14 +428,10 @@ create new ones.</p>
 </table>
 </section>
 <section id="workspacegroup">
-<h3>WorkspaceGroup<a class="headerlink" href="#workspacegroup" title="Permalink to this headline">¶</a></h3>
+<h3>WorkspaceGroup<a class="headerlink" href="#workspacegroup" title="Permalink to this heading">¶</a></h3>
 <p>WorkspaceGroup objects are retrieved from <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace_group.html#singlestoredb.management.workspace.WorkspaceManager.get_workspace_group" title="singlestoredb.management.workspace.WorkspaceManager.get_workspace_group"><code class="xref py py-meth docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace_group()</span></code></a>
 or by retrieving an element from <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.workspace_groups.html#singlestoredb.management.workspace.WorkspaceManager.workspace_groups" title="singlestoredb.management.workspace.WorkspaceManager.workspace_groups"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.workspace_groups</span></code></a>.</p>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
+<table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.html#singlestoredb.management.workspace.WorkspaceGroup" title="singlestoredb.management.workspace.WorkspaceGroup"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup</span></code></a>(name, id, created_at, region, ...)</p></td>
 <td><p>SingleStoreDB workspace group definition.</p></td>
@@ -491,15 +455,11 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 </table>
 </section>
 <section id="workspace">
-<h3>Workspace<a class="headerlink" href="#workspace" title="Permalink to this headline">¶</a></h3>
+<h3>Workspace<a class="headerlink" href="#workspace" title="Permalink to this heading">¶</a></h3>
 <p>Workspaces are created within WorkspaceGroups. They can be created using either
 <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.create_workspace.html#singlestoredb.management.workspace.WorkspaceGroup.create_workspace" title="singlestoredb.management.workspace.WorkspaceGroup.create_workspace"><code class="xref py py-meth docutils literal notranslate"><span class="pre">WorkspaceGroup.create_workspace()</span></code></a> or retrieved from
 <code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.workspaces</span></code>.</p>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
+<table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.html#singlestoredb.management.workspace.Workspace" title="singlestoredb.management.workspace.Workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace</span></code></a>(name, workspace_id, ...[, ...])</p></td>
 <td><p>SingleStoreDB workspace definition.</p></td>
@@ -517,13 +477,9 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 </table>
 </section>
 <section id="region">
-<h3>Region<a class="headerlink" href="#region" title="Permalink to this headline">¶</a></h3>
+<h3>Region<a class="headerlink" href="#region" title="Permalink to this heading">¶</a></h3>
 <p>Region objects are accessed from the <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html#singlestoredb.management.workspace.WorkspaceManager.regions" title="singlestoredb.management.workspace.WorkspaceManager.regions"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a> attribute.</p>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
+<table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.region.Region.html#singlestoredb.management.region.Region" title="singlestoredb.management.region.Region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Region</span></code></a>(id, name, provider)</p></td>
 <td><p>Cluster region information.</p></td>
@@ -533,15 +489,11 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 </section>
 </section>
 <section id="configuration">
-<h2>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h2>
+<h2>Configuration<a class="headerlink" href="#configuration" title="Permalink to this heading">¶</a></h2>
 <p>The following functions are used to get and set package configuration settings.
 Execute the <code class="xref py py-func docutils literal notranslate"><span class="pre">describe_option()</span></code> function with no parameters to
 see the documentation for all options.</p>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
+<table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.get_option.html#singlestoredb.get_option" title="singlestoredb.get_option"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_option</span></code></a>(key)</p></td>
 <td><p>Get the value of an option.</p></td>

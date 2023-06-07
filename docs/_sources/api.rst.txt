@@ -91,7 +91,7 @@ created using the :meth:`Connection.cursor` method.
    Cursor.scroll
    Cursor.next
    Cursor.is_connected
-Utiliites
+Utilities
 ---------
 .. currentmodule:: singlestoredb.auth
 .. autosummary::

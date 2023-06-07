@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>What’s New &mdash; SingleStoreDB 0.5.1 documentation</title>
+  <title>What’s New &mdash; SingleStoreDB 0.6.1 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
@@ -11,9 +11,8 @@
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
         <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
-        <script src="_static/jquery.js"></script>
-        <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -25,14 +24,15 @@
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-            <a href="index.html" class="icon icon-home"> SingleStoreDB
+          <a href="index.html" class="icon icon-home">
+            SingleStoreDB
           </a>
               <div class="version">
-                0.5.1
+                0.6.1
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
@@ -42,6 +42,10 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">What’s New</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#v0-6-1-may-18-2023">v0.6.1 - May 18, 2023</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#v0-6-0-may-17-2023">v0.6.0 - May 17, 2023</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#v0-5-4-march-15-2023">v0.5.4 - March 15, 2023</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#v0-5-3-january-9-2023">v0.5.3 - January 9, 2023</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#v0-5-2-december-14-2022">v0.5.2 - December 14, 2022</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#v0-5-1-december-9-2022">v0.5.1 - December 9, 2022</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#v0-5-0-december-8-2022-api-changes">v0.5.0 - December 8, 2022 (<strong>API CHANGES</strong>)</a></li>
@@ -69,8 +73,8 @@
         <div class="rst-content">
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
-      <li>What’s New</li>
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">What’s New</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/whatsnew.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -80,7 +84,7 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
   <section id="what-s-new">
-<h1>What’s New<a class="headerlink" href="#what-s-new" title="Permalink to this headline">¶</a></h1>
+<h1>What’s New<a class="headerlink" href="#what-s-new" title="Permalink to this heading">¶</a></h1>
 <p>This document outlines features and improvements from each release.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -88,21 +92,45 @@
 are for non-production testing and evaluation, and may include
 changes to the API.</p>
 </div>
+<section id="v0-6-1-may-18-2023">
+<h2>v0.6.1 - May 18, 2023<a class="headerlink" href="#v0-6-1-may-18-2023" title="Permalink to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Fix GSSAPI/Kerberos packet data</p></li>
+</ul>
+</section>
+<section id="v0-6-0-may-17-2023">
+<h2>v0.6.0 - May 17, 2023<a class="headerlink" href="#v0-6-0-may-17-2023" title="Permalink to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Added GSSAPI/Kerberos support</p></li>
+</ul>
+</section>
+<section id="v0-5-4-march-15-2023">
+<h2>v0.5.4 - March 15, 2023<a class="headerlink" href="#v0-5-4-march-15-2023" title="Permalink to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Added expiration to workspaces</p></li>
+</ul>
+</section>
+<section id="v0-5-3-january-9-2023">
+<h2>v0.5.3 - January 9, 2023<a class="headerlink" href="#v0-5-3-january-9-2023" title="Permalink to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Fixed issue with parsing numeric results</p></li>
+</ul>
+</section>
 <section id="v0-5-2-december-14-2022">
-<h2>v0.5.2 - December 14, 2022<a class="headerlink" href="#v0-5-2-december-14-2022" title="Permalink to this headline">¶</a></h2>
+<h2>v0.5.2 - December 14, 2022<a class="headerlink" href="#v0-5-2-december-14-2022" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fixed issues with unbuffered reads</p></li>
 </ul>
 </section>
 <section id="v0-5-1-december-9-2022">
-<h2>v0.5.1 - December 9, 2022<a class="headerlink" href="#v0-5-1-december-9-2022" title="Permalink to this headline">¶</a></h2>
+<h2>v0.5.1 - December 9, 2022<a class="headerlink" href="#v0-5-1-december-9-2022" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Added 32-bit Windows and aarch64 Linux packages</p></li>
 <li><p>Added option to log queries</p></li>
 </ul>
 </section>
 <section id="v0-5-0-december-8-2022-api-changes">
-<h2>v0.5.0 - December 8, 2022 (<strong>API CHANGES</strong>)<a class="headerlink" href="#v0-5-0-december-8-2022-api-changes" title="Permalink to this headline">¶</a></h2>
+<h2>v0.5.0 - December 8, 2022 (<strong>API CHANGES</strong>)<a class="headerlink" href="#v0-5-0-december-8-2022-api-changes" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>! Query parameter syntax has changed from <code class="docutils literal notranslate"><span class="pre">:1</span></code> for positional
 and <code class="docutils literal notranslate"><span class="pre">:key</span></code> for dictionary keys to <code class="docutils literal notranslate"><span class="pre">%s</span></code> for positional and <code class="docutils literal notranslate"><span class="pre">%(key)s</span></code>
@@ -114,38 +142,38 @@ for dictionary keys</p></li>
 </ul>
 </section>
 <section id="v0-4-0-october-19-2022">
-<h2>v0.4.0 - October 19, 2022<a class="headerlink" href="#v0-4-0-october-19-2022" title="Permalink to this headline">¶</a></h2>
+<h2>v0.4.0 - October 19, 2022<a class="headerlink" href="#v0-4-0-october-19-2022" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add Python 3.6 support</p></li>
 </ul>
 </section>
 <section id="v0-3-3-september-21-2022">
-<h2>v0.3.3 - September 21, 2022<a class="headerlink" href="#v0-3-3-september-21-2022" title="Permalink to this headline">¶</a></h2>
+<h2>v0.3.3 - September 21, 2022<a class="headerlink" href="#v0-3-3-september-21-2022" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add <code class="docutils literal notranslate"><span class="pre">ssl_cipher</span></code> option to connections</p></li>
 <li><p>Add <code class="docutils literal notranslate"><span class="pre">show</span></code> accessor for database <code class="docutils literal notranslate"><span class="pre">SHOW</span></code> commands</p></li>
 </ul>
 </section>
 <section id="v0-3-2-september-14-2022">
-<h2>v0.3.2 - September 14, 2022<a class="headerlink" href="#v0-3-2-september-14-2022" title="Permalink to this headline">¶</a></h2>
+<h2>v0.3.2 - September 14, 2022<a class="headerlink" href="#v0-3-2-september-14-2022" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fixes for PyMySQL compatibility</p></li>
 </ul>
 </section>
 <section id="v0-3-1-september-9-2022">
-<h2>v0.3.1 - September 9, 2022<a class="headerlink" href="#v0-3-1-september-9-2022" title="Permalink to this headline">¶</a></h2>
+<h2>v0.3.1 - September 9, 2022<a class="headerlink" href="#v0-3-1-september-9-2022" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Changed cipher in PyMySQL connection for SingleStoreDB Cloud compatibility</p></li>
 </ul>
 </section>
 <section id="v0-3-0-september-9-2022">
-<h2>v0.3.0 - September 9, 2022<a class="headerlink" href="#v0-3-0-september-9-2022" title="Permalink to this headline">¶</a></h2>
+<h2>v0.3.0 - September 9, 2022<a class="headerlink" href="#v0-3-0-september-9-2022" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Changed autocommit=True by default</p></li>
 </ul>
 </section>
 <section id="v0-2-0-august-5-2022">
-<h2>v0.2.0 - August 5, 2022<a class="headerlink" href="#v0-2-0-august-5-2022" title="Permalink to this headline">¶</a></h2>
+<h2>v0.2.0 - August 5, 2022<a class="headerlink" href="#v0-2-0-august-5-2022" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Changed to pure Python driver</p></li>
 <li><p>Add workspace management objects</p></li>
@@ -153,7 +181,7 @@ for dictionary keys</p></li>
 </ul>
 </section>
 <section id="v0-1-0-may-6-2022">
-<h2>v0.1.0 - May 6, 2022<a class="headerlink" href="#v0-1-0-may-6-2022" title="Permalink to this headline">¶</a></h2>
+<h2>v0.1.0 - May 6, 2022<a class="headerlink" href="#v0-1-0-may-6-2022" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>DB-API compliant connections</p></li>
 <li><p>HTTP API support</p></li>

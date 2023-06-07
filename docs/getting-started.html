@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Getting Started &mdash; SingleStoreDB 0.5.1 documentation</title>
+  <title>Getting Started &mdash; SingleStoreDB 0.6.1 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
@@ -11,9 +11,8 @@
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
         <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
-        <script src="_static/jquery.js"></script>
-        <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -25,14 +24,15 @@
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-            <a href="index.html" class="icon icon-home"> SingleStoreDB
+          <a href="index.html" class="icon icon-home">
+            SingleStoreDB
           </a>
               <div class="version">
-                0.5.1
+                0.6.1
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
@@ -79,8 +79,8 @@
         <div class="rst-content">
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
-      <li>Getting Started</li>
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Getting Started</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/getting-started.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -90,11 +90,11 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
   <section id="getting-started">
-<h1>Getting Started<a class="headerlink" href="#getting-started" title="Permalink to this headline">¶</a></h1>
+<h1>Getting Started<a class="headerlink" href="#getting-started" title="Permalink to this heading">¶</a></h1>
 <p>Database connections can be made using either keyword parameters or
 a URL as described in the following sections.</p>
 <section id="connect-using-db-api-parameters">
-<h2>Connect using DB-API Parameters<a class="headerlink" href="#connect-using-db-api-parameters" title="Permalink to this headline">¶</a></h2>
+<h2>Connect using DB-API Parameters<a class="headerlink" href="#connect-using-db-api-parameters" title="Permalink to this heading">¶</a></h2>
 <p>Connections to SingleStoreDB can be made using the parameters described in
 the <a class="reference external" href="https://peps.python.org/pep-0249/">Python DB-API</a>. The <code class="docutils literal notranslate"><span class="pre">host=</span></code>
 parameter can be either a hostname or IP address (it can also be a
@@ -113,7 +113,7 @@ for the <a class="reference internal" href="generated/singlestoredb.connect.html
 </div>
 </section>
 <section id="connect-using-a-url">
-<h2>Connect using a URL<a class="headerlink" href="#connect-using-a-url" title="Permalink to this headline">¶</a></h2>
+<h2>Connect using a URL<a class="headerlink" href="#connect-using-a-url" title="Permalink to this heading">¶</a></h2>
 <p>In addition, you can user a URL like in the SQLAlchemy package.</p>
 <div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [3]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;user:password@host:port/database&#39;</span><span class="p">)</span>
 </pre></div>
@@ -125,7 +125,7 @@ for the <a class="reference internal" href="generated/singlestoredb.connect.html
 </div>
 </section>
 <section id="specifying-additional-connection-parameters">
-<h2>Specifying Additional Connection Parameters<a class="headerlink" href="#specifying-additional-connection-parameters" title="Permalink to this headline">¶</a></h2>
+<h2>Specifying Additional Connection Parameters<a class="headerlink" href="#specifying-additional-connection-parameters" title="Permalink to this heading">¶</a></h2>
 <p>Connection parameters can be set either in the URL or
 as parameters. Here <code class="docutils literal notranslate"><span class="pre">local_infile=</span></code> is set as a URL parameter.</p>
 <div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [5]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;https://user:password@host:port/database?local_infile=True&#39;</span><span class="p">)</span>
@@ -140,7 +140,7 @@ as keyword parameters.</p>
 </div>
 </section>
 <section id="executing-queries">
-<h2>Executing Queries<a class="headerlink" href="#executing-queries" title="Permalink to this headline">¶</a></h2>
+<h2>Executing Queries<a class="headerlink" href="#executing-queries" title="Permalink to this heading">¶</a></h2>
 <p>Once you have a connection established, you can query the database.
 As defined in the DB-API, a cursor is used to execute queries and fetch
 the results.</p>
@@ -152,12 +152,14 @@ the results.</p>
 <span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
 <span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
 <span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_profile_type&#39;, &#39;FULL&#39;)</span>
 <span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
 <span class="go">(&#39;autocommit&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;autostats_flush_interval_secs&#39;, &#39;600&#39;)</span>
 </pre></div>
 </div>
 <section id="parameter-substitution">
-<h3>Parameter Substitution<a class="headerlink" href="#parameter-substitution" title="Permalink to this headline">¶</a></h3>
+<h3>Parameter Substitution<a class="headerlink" href="#parameter-substitution" title="Permalink to this heading">¶</a></h3>
 <p>If your queries require parameter substitutions, they can be specified in
 one of two formats: named (<code class="docutils literal notranslate"><span class="pre">%(name)s</span></code>) or positional (<code class="docutils literal notranslate"><span class="pre">%s</span></code>).</p>
 <div class="admonition warning">
@@ -168,7 +170,7 @@ for dictionary parameters to <code class="docutils literal notranslate"><span cl
 respectively, to ease the transition from other MySQL Python packages.</p>
 </div>
 <section id="named-substitution">
-<h4>Named Substitution<a class="headerlink" href="#named-substitution" title="Permalink to this headline">¶</a></h4>
+<h4>Named Substitution<a class="headerlink" href="#named-substitution" title="Permalink to this heading">¶</a></h4>
 <p>When named parameters
 are used, the data structure passed to the <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.execute()</span></code> method
 must be a dictionary, where the keys map to the names given in the substitutions
@@ -183,13 +185,15 @@ escaping and quoting of the substituted data values is done automatically.</p>
 <span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
 <span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
 <span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_profile_type&#39;, &#39;FULL&#39;)</span>
 <span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
 <span class="go">(&#39;autocommit&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;autostats_flush_interval_secs&#39;, &#39;600&#39;)</span>
 </pre></div>
 </div>
 </section>
 <section id="positional-substitution">
-<h4>Positional Substitution<a class="headerlink" href="#positional-substitution" title="Permalink to this headline">¶</a></h4>
+<h4>Positional Substitution<a class="headerlink" href="#positional-substitution" title="Permalink to this heading">¶</a></h4>
 <p>If positional parameters are used, the data structure passed to the
 <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.execute()</span></code> method must be a list or tuple with the same
 number of elements as there are <code class="docutils literal notranslate"><span class="pre">%s</span></code> values in the query string.</p>
@@ -203,15 +207,17 @@ escaping and quoting of the substituted data values is done automatically.</p>
 <span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
 <span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
 <span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_profile_type&#39;, &#39;FULL&#39;)</span>
 <span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
 <span class="go">(&#39;autocommit&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;autostats_flush_interval_secs&#39;, &#39;600&#39;)</span>
 </pre></div>
 </div>
 </section>
 </section>
 </section>
 <section id="fetching-results">
-<h2>Fetching Results<a class="headerlink" href="#fetching-results" title="Permalink to this headline">¶</a></h2>
+<h2>Fetching Results<a class="headerlink" href="#fetching-results" title="Permalink to this heading">¶</a></h2>
 <p>Fetching results can be done in a number of ways. The DB-API specifies three methods
 that can be used to fetch results: <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchone()</span></code>, <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchall()</span></code>,
 and <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchmany()</span></code>.</p>
@@ -233,18 +239,20 @@ iterated over itself.</p>
 <span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
 <span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
 <span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_profile_type&#39;, &#39;FULL&#39;)</span>
 <span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
 <span class="go">(&#39;autocommit&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;autostats_flush_interval_secs&#39;, &#39;600&#39;)</span>
 </pre></div>
 </div>
 <section id="result-type">
-<h3>Result Type<a class="headerlink" href="#result-type" title="Permalink to this headline">¶</a></h3>
+<h3>Result Type<a class="headerlink" href="#result-type" title="Permalink to this heading">¶</a></h3>
 <p>In addition to being able to specify the amount of data to be retrieved, you can also
 specify the data structure that the results are returned in. By default, each row of
 data is a tuple with one element per column from the query. However, it is also possible
 to get results back as named tuples or dicts.</p>
 <section id="tuples-default">
-<h4>Tuples (Default)<a class="headerlink" href="#tuples-default" title="Permalink to this headline">¶</a></h4>
+<h4>Tuples (Default)<a class="headerlink" href="#tuples-default" title="Permalink to this heading">¶</a></h4>
 <div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [11]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_type</span><span class="o">=</span><span class="s1">&#39;tuples&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
 <span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
 <span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
@@ -254,13 +262,15 @@ to get results back as named tuples or dicts.</p>
 <span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
 <span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
 <span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_profile_type&#39;, &#39;FULL&#39;)</span>
 <span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
 <span class="go">(&#39;autocommit&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;autostats_flush_interval_secs&#39;, &#39;600&#39;)</span>
 </pre></div>
 </div>
 </section>
 <section id="named-tuples">
-<h4>Named Tuples<a class="headerlink" href="#named-tuples" title="Permalink to this headline">¶</a></h4>
+<h4>Named Tuples<a class="headerlink" href="#named-tuples" title="Permalink to this heading">¶</a></h4>
 <div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [12]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_type</span><span class="o">=</span><span class="s1">&#39;namedtuples&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
 <span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
 <span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
@@ -270,13 +280,15 @@ to get results back as named tuples or dicts.</p>
 <span class="go">singlestoredb.Row(Variable_name=&#39;auto_attach&#39;, Value=&#39;ON&#39;)</span>
 <span class="go">singlestoredb.Row(Variable_name=&#39;auto_increment_increment&#39;, Value=&#39;1&#39;)</span>
 <span class="go">singlestoredb.Row(Variable_name=&#39;auto_increment_offset&#39;, Value=&#39;1&#39;)</span>
+<span class="go">singlestoredb.Row(Variable_name=&#39;auto_profile_type&#39;, Value=&#39;FULL&#39;)</span>
 <span class="go">singlestoredb.Row(Variable_name=&#39;auto_replicate&#39;, Value=&#39;OFF&#39;)</span>
 <span class="go">singlestoredb.Row(Variable_name=&#39;autocommit&#39;, Value=&#39;ON&#39;)</span>
+<span class="go">singlestoredb.Row(Variable_name=&#39;autostats_flush_interval_secs&#39;, Value=&#39;600&#39;)</span>
 </pre></div>
 </div>
 </section>
 <section id="dictionaries">
-<h4>Dictionaries<a class="headerlink" href="#dictionaries" title="Permalink to this headline">¶</a></h4>
+<h4>Dictionaries<a class="headerlink" href="#dictionaries" title="Permalink to this heading">¶</a></h4>
 <div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [13]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_type</span><span class="o">=</span><span class="s1">&#39;dicts&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
 <span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
 <span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
@@ -286,8 +298,10 @@ to get results back as named tuples or dicts.</p>
 <span class="go">{&#39;Variable_name&#39;: &#39;auto_attach&#39;, &#39;Value&#39;: &#39;ON&#39;}</span>
 <span class="go">{&#39;Variable_name&#39;: &#39;auto_increment_increment&#39;, &#39;Value&#39;: &#39;1&#39;}</span>
 <span class="go">{&#39;Variable_name&#39;: &#39;auto_increment_offset&#39;, &#39;Value&#39;: &#39;1&#39;}</span>
+<span class="go">{&#39;Variable_name&#39;: &#39;auto_profile_type&#39;, &#39;Value&#39;: &#39;FULL&#39;}</span>
 <span class="go">{&#39;Variable_name&#39;: &#39;auto_replicate&#39;, &#39;Value&#39;: &#39;OFF&#39;}</span>
 <span class="go">{&#39;Variable_name&#39;: &#39;autocommit&#39;, &#39;Value&#39;: &#39;ON&#39;}</span>
+<span class="go">{&#39;Variable_name&#39;: &#39;autostats_flush_interval_secs&#39;, &#39;Value&#39;: &#39;600&#39;}</span>
 </pre></div>
 </div>
 </section>
