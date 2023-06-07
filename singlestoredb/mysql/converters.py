@@ -6,6 +6,12 @@ from decimal import Decimal
 from ..converters import converters as decoders
 from .err import ProgrammingError
 
+try:
+    import numpy as np
+    has_numpy = True
+except ImportError:
+    has_numpy = False
+
 
 def escape_item(val, charset, mapping=None):
     if mapping is None:
@@ -176,6 +182,13 @@ encoders = {
     Decimal: Decimal2Literal,
 }
 
+if has_numpy:
+
+    def escape_numpy(value, mapping=None):
+        """Convert numpy arrays to vectors of bytes."""
+        return escape_bytes(value.tobytes())
+
+    encoders[np.ndarray] = escape_numpy
 
 # for MySQLdb compatibility
 conversions = encoders.copy()
