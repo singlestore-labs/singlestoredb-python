@@ -13,6 +13,18 @@ from typing import Optional
 from typing import Set
 from typing import Union
 
+try:
+    import shapely.wkt
+    has_shapely = True
+except ImportError:
+    has_shapely = False
+
+try:
+    import pygeos
+    has_pygeos = True
+except ImportError:
+    has_pygeos = False
+
 
 # Cache fromisoformat methods if they exist
 _dt_datetime_fromisoformat = None
@@ -500,14 +512,18 @@ def geometry_or_none(x: Optional[str]) -> Optional[Any]:
 
     Returns
     -------
-    ???
+    shapely object or pygeos object or str
         If value is valid geometry value
     None
-        If input value is None
+        If input value is None or empty
 
     """
-    if x is None:
+    if x is None or not x:
         return None
+    if has_shapely:
+        return shapely.wkt.loads(x)
+    if has_pygeos:
+        return pygeos.io.from_wkt(x)
     return x
 
 

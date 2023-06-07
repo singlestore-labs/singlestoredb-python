@@ -12,6 +12,19 @@ try:
 except ImportError:
     has_numpy = False
 
+try:
+    import shapely
+    import shapely.wkt
+    has_shapely = True
+except ImportError:
+    has_shapely = False
+
+try:
+    import pygeos
+    has_pygeos = True
+except ImportError:
+    has_pygeos = False
+
 
 def escape_item(val, charset, mapping=None):
     if mapping is None:
@@ -186,9 +199,28 @@ if has_numpy:
 
     def escape_numpy(value, mapping=None):
         """Convert numpy arrays to vectors of bytes."""
-        return escape_bytes(value.tobytes())
+        return escape_bytes(value.tobytes(), mapping=mapping)
 
     encoders[np.ndarray] = escape_numpy
+
+if has_shapely:
+
+    def escape_shapely(value, mapping=None):
+        """Convert shapely geo objects."""
+        return escape_str(shapely.wkt.dumps(value), mapping=mapping)
+
+    encoders[shapely.Polygon] = escape_shapely
+    encoders[shapely.Point] = escape_shapely
+    encoders[shapely.LineString] = escape_shapely
+
+if has_pygeos:
+
+    def escape_pygeos(value, mapping=None):
+        """Convert pygeos objects."""
+        return escape_str(pygeos.io.to_wkt(value), mapping=mapping)
+
+    encoders[pygeos.Geometry] = escape_pygeos
+
 
 # for MySQLdb compatibility
 conversions = encoders.copy()
