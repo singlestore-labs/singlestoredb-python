@@ -168,11 +168,11 @@ def convert_special_type(arg: Any) -> Any:
     dtype = type(arg)
     if has_numpy and dtype is np.ndarray:
         return arg.tobytes()
-    if has_shapely and dtype is shapely.Point:
+    if has_shapely and dtype is getattr(shapely, 'Point', None):
         return shapely.wkt.dumps(arg)
-    if has_shapely and dtype is shapely.Polygon:
+    if has_shapely and dtype is getattr(shapely, 'Polygon', None):
         return shapely.wkt.dumps(arg)
-    if has_shapely and dtype is shapely.LineString:
+    if has_shapely and dtype is getattr(shapely, 'LineString', None):
         return shapely.wkt.dumps(arg)
     if has_pygeos and dtype is pygeos.Geometry:
         return pygeos.io.to_wkt(arg)

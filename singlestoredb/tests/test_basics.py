@@ -500,13 +500,20 @@ class TestBasics(unittest.TestCase):
         assert 'You have an error in your SQL syntax' in exc.errmsg, exc.errmsg
 
     def test_extended_types(self):
+        import uuid
+
+        key = str(uuid.uuid4())
+
         # shapely data
         data = [
-            (1, 'POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 'POINT(1.5 1.5)', [0.5, 0.6]),
-            (2, 'POLYGON((5 1, 6 1, 6 2, 5 2, 5 1))', 'POINT(5.5 1.5)', [1.3, 2.5]),
-            (3, 'POLYGON((5 5, 6 5, 6 6, 5 6, 5 5))', 'POINT(5.5 5.5)', [10.3, 11.1]),
-            (4, 'POLYGON((1 5, 2 5, 2 6, 1 6, 1 5))', 'POINT(1.5 5.5)', [3.3, 3.4]),
-            (5, 'POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))', 'POINT(3.5 3.5)', [2.9, 9.5]),
+            (1, 'POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 'POINT(1.5 1.5)', [0.5, 0.6], key),
+            (2, 'POLYGON((5 1, 6 1, 6 2, 5 2, 5 1))', 'POINT(5.5 1.5)', [1.3, 2.5], key),
+            (
+                3, 'POLYGON((5 5, 6 5, 6 6, 5 6, 5 5))',
+                'POINT(5.5 5.5)', [10.3, 11.1], key,
+            ),
+            (4, 'POLYGON((1 5, 2 5, 2 6, 1 6, 1 5))', 'POINT(1.5 5.5)', [3.3, 3.4], key),
+            (5, 'POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))', 'POINT(3.5 3.5)', [2.9, 9.5], key),
         ]
 
         new_data = []
@@ -521,11 +528,14 @@ class TestBasics(unittest.TestCase):
             new_data.append(row)
 
         self.cur.executemany(
-            'INSERT INTO extended_types (id, geography, geographypoint, vectors) '
-            'VALUES (%s, %s, %s, %s)', new_data,
+            'INSERT INTO extended_types '
+            '(id, geography, geographypoint, vectors, testkey) '
+            'VALUES (%s, %s, %s, %s, %s)', new_data,
         )
 
-        self.cur.execute('SELECT * FROM extended_types ORDER BY id')
+        self.cur.execute(
+            'SELECT * FROM extended_types WHERE testkey = %s ORDER BY id', [key],
+        )
 
         for data_row, row in zip(new_data, self.cur):
             assert data_row[0] == row[0]
@@ -538,11 +548,14 @@ class TestBasics(unittest.TestCase):
 
         # pygeos data
         data = [
-            (6, 'POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 'POINT(1.5 1.5)', [0.5, 0.6]),
-            (7, 'POLYGON((5 1, 6 1, 6 2, 5 2, 5 1))', 'POINT(5.5 1.5)', [1.3, 2.5]),
-            (8, 'POLYGON((5 5, 6 5, 6 6, 5 6, 5 5))', 'POINT(5.5 5.5)', [10.3, 11.1]),
-            (9, 'POLYGON((1 5, 2 5, 2 6, 1 6, 1 5))', 'POINT(1.5 5.5)', [3.3, 3.4]),
-            (10, 'POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))', 'POINT(3.5 3.5)', [2.9, 9.5]),
+            (6, 'POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 'POINT(1.5 1.5)', [0.5, 0.6], key),
+            (7, 'POLYGON((5 1, 6 1, 6 2, 5 2, 5 1))', 'POINT(5.5 1.5)', [1.3, 2.5], key),
+            (
+                8, 'POLYGON((5 5, 6 5, 6 6, 5 6, 5 5))',
+                'POINT(5.5 5.5)', [10.3, 11.1], key,
+            ),
+            (9, 'POLYGON((1 5, 2 5, 2 6, 1 6, 1 5))', 'POINT(1.5 5.5)', [3.3, 3.4], key),
+            (10, 'POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))', 'POINT(3.5 3.5)', [2.9, 9.5], key),
         ]
 
         new_data = []
@@ -557,11 +570,16 @@ class TestBasics(unittest.TestCase):
             new_data.append(row)
 
         self.cur.executemany(
-            'INSERT INTO extended_types (id, geography, geographypoint, vectors) '
-            'VALUES (%s, %s, %s, %s)', new_data,
+            'INSERT INTO extended_types '
+            '(id, geography, geographypoint, vectors, testkey) '
+            'VALUES (%s, %s, %s, %s, %s)', new_data,
         )
 
-        self.cur.execute('SELECT * FROM extended_types WHERE id >= 6 ORDER BY id')
+        self.cur.execute(
+            'SELECT * FROM extended_types WHERE id >= 6 and testkey = %s ORDER BY id', [
+                key,
+            ],
+        )
 
         for data_row, row in zip(new_data, self.cur):
             assert data_row[0] == row[0]

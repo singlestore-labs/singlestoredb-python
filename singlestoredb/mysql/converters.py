@@ -209,9 +209,12 @@ if has_shapely:
         """Convert shapely geo objects."""
         return escape_str(shapely.wkt.dumps(value), mapping=mapping)
 
-    encoders[shapely.Polygon] = escape_shapely
-    encoders[shapely.Point] = escape_shapely
-    encoders[shapely.LineString] = escape_shapely
+    if hasattr(shapely, 'Polygon'):
+        encoders[shapely.Polygon] = escape_shapely
+    if hasattr(shapely, 'Point'):
+        encoders[shapely.Point] = escape_shapely
+    if hasattr(shapely, 'LineString'):
+        encoders[shapely.LineString] = escape_shapely
 
 if has_pygeos:
 

@@ -355,7 +355,8 @@ CREATE ROWSTORE TABLE IF NOT EXISTS `extended_types` (
     `id` INT(11),
     `geography` GEOGRAPHY,
     `geographypoint` GEOGRAPHYPOINT,
-    `vectors` BLOB
+    `vectors` BLOB,
+    `testkey` LONGTEXT
 )
 COLLATE='utf8_unicode_ci';
 
