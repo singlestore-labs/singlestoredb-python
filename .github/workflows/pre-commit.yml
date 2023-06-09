@@ -30,5 +30,11 @@ jobs:
         pip install pre-commit==2.17
 
     - name: Analysing the code with pre-commit checks
+      if: ${{ matrix.os != '3.6' }}
       run: |
         pre-commit run --all-files
+
+    - name: Analysing the code with pre-commit checks
+      if: ${{ matrix.os == '3.6' }}
+      run: |
+        pre-commit run -c .pre-commit-config-py36.yaml --all-files
