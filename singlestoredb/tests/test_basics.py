@@ -500,6 +500,9 @@ class TestBasics(unittest.TestCase):
         assert 'You have an error in your SQL syntax' in exc.errmsg, exc.errmsg
 
     def test_extended_types(self):
+        if not has_numpy or not has_pygeos or not has_shapely:
+            self.skipTest('Test requires numpy, pygeos, and shapely')
+
         import uuid
 
         key = str(uuid.uuid4())
