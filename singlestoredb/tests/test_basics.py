@@ -6,6 +6,25 @@ import decimal
 import os
 import unittest
 
+try:
+    import numpy as np
+    has_numpy = True
+except ImportError:
+    has_numpy = False
+
+try:
+    import shapely.wkt
+    has_shapely = True
+except ImportError:
+    has_shapely = False
+
+try:
+    import pygeos
+    from pygeos.testing import assert_geometries_equal
+    has_pygeos = True
+except ImportError:
+    has_pygeos = False
+
 import singlestoredb as s2
 from . import utils
 # import traceback
@@ -479,6 +498,67 @@ class TestBasics(unittest.TestCase):
         exc = cm.exception
         assert exc.errno == 1064, exc.errno
         assert 'You have an error in your SQL syntax' in exc.errmsg, exc.errmsg
+
+    def test_extended_types(self):
+        # shapely data
+        data = [
+            (1, 'POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 'POINT(1.5 1.5)', [0.5, 0.6]),
+            (2, 'POLYGON((5 1, 6 1, 6 2, 5 2, 5 1))', 'POINT(5.5 1.5)', [1.3, 2.5]),
+            (3, 'POLYGON((5 5, 6 5, 6 6, 5 6, 5 5))', 'POINT(5.5 5.5)', [10.3, 11.1]),
+            (4, 'POLYGON((1 5, 2 5, 2 6, 1 6, 1 5))', 'POINT(1.5 5.5)', [3.3, 3.4]),
+            (5, 'POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))', 'POINT(3.5 3.5)', [2.9, 9.5]),
+        ]
+
+        new_data = []
+        for i, row in enumerate(data):
+            row = list(row)
+            row[1] = shapely.wkt.loads(row[1])
+            row[2] = shapely.wkt.loads(row[2])
+            row[3] = np.array(row[3], dtype='<f4')
+            new_data.append(row)
+
+        self.cur.executemany(
+            'INSERT INTO extended_types (id, geography, geographypoint, vectors) '
+            'VALUES (%s, %s, %s, %s)', new_data,
+        )
+
+        self.cur.execute('SELECT * FROM extended_types ORDER BY id')
+
+        for data_row, row in zip(new_data, self.cur):
+            assert data_row[0] == row[0]
+            assert data_row[1].equals_exact(shapely.wkt.loads(row[1]), 1e-4)
+            assert data_row[2].equals_exact(shapely.wkt.loads(row[2]), 1e-4)
+            assert (data_row[3] == np.frombuffer(row[3], dtype='<f4')).all()
+
+        # pygeos data
+        data = [
+            (6, 'POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 'POINT(1.5 1.5)', [0.5, 0.6]),
+            (7, 'POLYGON((5 1, 6 1, 6 2, 5 2, 5 1))', 'POINT(5.5 1.5)', [1.3, 2.5]),
+            (8, 'POLYGON((5 5, 6 5, 6 6, 5 6, 5 5))', 'POINT(5.5 5.5)', [10.3, 11.1]),
+            (9, 'POLYGON((1 5, 2 5, 2 6, 1 6, 1 5))', 'POINT(1.5 5.5)', [3.3, 3.4]),
+            (10, 'POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))', 'POINT(3.5 3.5)', [2.9, 9.5]),
+        ]
+
+        new_data = []
+        for i, row in enumerate(data):
+            row = list(row)
+            row[1] = pygeos.io.from_wkt(row[1])
+            row[2] = pygeos.io.from_wkt(row[2])
+            row[3] = np.array(row[3], dtype='<f4')
+            new_data.append(row)
+
+        self.cur.executemany(
+            'INSERT INTO extended_types (id, geography, geographypoint, vectors) '
+            'VALUES (%s, %s, %s, %s)', new_data,
+        )
+
+        self.cur.execute('SELECT * FROM extended_types WHERE id >= 6 ORDER BY id')
+
+        for data_row, row in zip(new_data, self.cur):
+            assert data_row[0] == row[0]
+            assert_geometries_equal(data_row[1], pygeos.io.from_wkt(row[1]))
+            assert_geometries_equal(data_row[2], pygeos.io.from_wkt(row[2]))
+            assert (data_row[3] == np.frombuffer(row[3], dtype='<f4')).all()
 
     def test_alltypes(self):
         self.cur.execute('select * from alltypes where id = 0')

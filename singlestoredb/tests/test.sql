@@ -347,4 +347,17 @@ INSERT INTO alltypes SET
     `bit`=0
 ;
 
+
+--
+-- Table of extended data types
+--
+CREATE ROWSTORE TABLE IF NOT EXISTS `extended_types` (
+    `id` INT(11),
+    `geography` GEOGRAPHY,
+    `geographypoint` GEOGRAPHYPOINT,
+    `vectors` BLOB
+)
+COLLATE='utf8_unicode_ci';
+
+
 COMMIT;

@@ -1,4 +1,6 @@
 coverage
 pandas
+pygeos
 pytest
 pytest-cov
+shapely
