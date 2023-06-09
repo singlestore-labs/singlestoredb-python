@@ -163,18 +163,37 @@ def b64decode_converter(
     return converter(b64decode(x))
 
 
+shapely_Point = None
+shapely_Polygon = None
+shapely_LineString = None
+np_ndarray = None
+pygeos_Geometry = None
+
+
+if has_shapely:
+    shapely_Point = shapely.Point
+    shapely_Polygon = shapely.Polygon
+    shapely_LineString = shapely.LineString
+
+if has_numpy:
+    np_ndarray = np.ndarray
+
+if has_pygeos:
+    pygeos_Geometry = pygeos.Geometry
+
+
 def convert_special_type(arg: Any) -> Any:
     """Convert special data type objects."""
     dtype = type(arg)
-    if has_numpy and dtype is np.ndarray:
+    if dtype is np_ndarray:
         return arg.tobytes()
-    if has_shapely and dtype is getattr(shapely, 'Point', None):
+    if dtype is shapely_Point:
         return shapely.wkt.dumps(arg)
-    if has_shapely and dtype is getattr(shapely, 'Polygon', None):
+    if dtype is shapely_Polygon:
         return shapely.wkt.dumps(arg)
-    if has_shapely and dtype is getattr(shapely, 'LineString', None):
+    if dtype is shapely_LineString:
         return shapely.wkt.dumps(arg)
-    if has_pygeos and dtype is pygeos.Geometry:
+    if dtype is pygeos_Geometry:
         return pygeos.io.to_wkt(arg)
     return arg
 
