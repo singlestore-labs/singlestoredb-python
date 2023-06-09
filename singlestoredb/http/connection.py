@@ -805,7 +805,7 @@ class Connection(connection.Connection):
 
     def connect(self) -> 'Connection':
         """Connect to the server."""
-        pass
+        return self
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """

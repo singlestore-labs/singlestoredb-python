@@ -183,10 +183,14 @@ def get_jwt(
         server = HTTPServer(('127.0.0.1', 0), AuthServer)
         threading.Thread(target=server.serve_forever).start()
 
+        host = server.server_address[0]
+        if isinstance(host, bytes):
+            host = host.decode('utf-8')
+
         query = urllib.parse.urlencode({
             k: v for k, v in dict(
                 email=email,
-                returnTo=f'http://{server.server_address[0]}:{server.server_address[1]}',
+                returnTo=f'http://{host}:{server.server_address[1]}',
                 db=_listify(databases),
                 cluster=_listify(clusters),
             ).items() if v is not None
