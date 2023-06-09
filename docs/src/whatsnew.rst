@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.7.0 - June 9, 2023
+---------------------
+* Add converters for numpy array to vector blobs,
+  and pygeos / shapely objects to geography data
+
 v0.6.1 - May 18, 2023
 ---------------------
 * Fix GSSAPI/Kerberos packet data
