@@ -17,6 +17,25 @@ from urllib.parse import urljoin
 
 import requests
 
+try:
+    import numpy as np
+    has_numpy = True
+except ImportError:
+    has_numpy = False
+
+try:
+    import pygeos
+    has_pygeos = True
+except ImportError:
+    has_pygeos = False
+
+try:
+    import shapely
+    import shapely.wkt
+    has_shapely = True
+except ImportError:
+    has_shapely = False
+
 from .. import connection
 from .. import types
 from ..config import get_option
@@ -142,6 +161,33 @@ def b64decode_converter(
     if converter is None:
         return b64decode(x)
     return converter(b64decode(x))
+
+
+def convert_special_type(arg: Any) -> Any:
+    """Convert special data type objects."""
+    dtype = type(arg)
+    if has_numpy and dtype is np.ndarray:
+        return arg.tobytes()
+    if has_shapely and dtype is shapely.Point:
+        return shapely.wkt.dumps(arg)
+    if has_shapely and dtype is shapely.Polygon:
+        return shapely.wkt.dumps(arg)
+    if has_shapely and dtype is shapely.LineString:
+        return shapely.wkt.dumps(arg)
+    if has_pygeos and dtype is pygeos.Geometry:
+        return pygeos.io.to_wkt(arg)
+    return arg
+
+
+def convert_special_params(
+    params: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
+) -> Optional[Union[Sequence[Any], Dict[str, Any]]]:
+    """Convert parameters of special data types."""
+    if params is None:
+        return params
+    if isinstance(params, Dict):
+        return {k: convert_special_type(v) for k, v in params.items()}
+    return tuple(map(convert_special_type, params))
 
 
 class PyMyField(object):
@@ -284,7 +330,10 @@ class Cursor(connection.Cursor):
     ) -> None:
         """Make sure the parameter substitions are valid."""
         if args is not None:
-            query = query % args
+            if isinstance(args, Sequence):
+                query = query % tuple(args)
+            else:
+                query = query % args
 
     def _execute(
         self, oper: str,
@@ -302,7 +351,7 @@ class Cursor(connection.Cursor):
 
         data: Dict[str, Any] = dict(sql=oper)
         if params is not None:
-            data['args'] = params
+            data['args'] = convert_special_params(params)
         if self._connection._database:
             data['database'] = self._connection._database
 

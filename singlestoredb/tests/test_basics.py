@@ -514,7 +514,10 @@ class TestBasics(unittest.TestCase):
             row = list(row)
             row[1] = shapely.wkt.loads(row[1])
             row[2] = shapely.wkt.loads(row[2])
-            row[3] = np.array(row[3], dtype='<f4')
+            if 'http' in self.conn.driver:
+                row[3] = ''
+            else:
+                row[3] = np.array(row[3], dtype='<f4')
             new_data.append(row)
 
         self.cur.executemany(
@@ -528,7 +531,10 @@ class TestBasics(unittest.TestCase):
             assert data_row[0] == row[0]
             assert data_row[1].equals_exact(shapely.wkt.loads(row[1]), 1e-4)
             assert data_row[2].equals_exact(shapely.wkt.loads(row[2]), 1e-4)
-            assert (data_row[3] == np.frombuffer(row[3], dtype='<f4')).all()
+            if 'http' in self.conn.driver:
+                assert row[3] == b''
+            else:
+                assert (data_row[3] == np.frombuffer(row[3], dtype='<f4')).all()
 
         # pygeos data
         data = [
@@ -544,7 +550,10 @@ class TestBasics(unittest.TestCase):
             row = list(row)
             row[1] = pygeos.io.from_wkt(row[1])
             row[2] = pygeos.io.from_wkt(row[2])
-            row[3] = np.array(row[3], dtype='<f4')
+            if 'http' in self.conn.driver:
+                row[3] = ''
+            else:
+                row[3] = np.array(row[3], dtype='<f4')
             new_data.append(row)
 
         self.cur.executemany(
@@ -558,7 +567,10 @@ class TestBasics(unittest.TestCase):
             assert data_row[0] == row[0]
             assert_geometries_equal(data_row[1], pygeos.io.from_wkt(row[1]))
             assert_geometries_equal(data_row[2], pygeos.io.from_wkt(row[2]))
-            assert (data_row[3] == np.frombuffer(row[3], dtype='<f4')).all()
+            if 'http' in self.conn.driver:
+                assert row[3] == b''
+            else:
+                assert (data_row[3] == np.frombuffer(row[3], dtype='<f4')).all()
 
     def test_alltypes(self):
         self.cur.execute('select * from alltypes where id = 0')
