@@ -30,7 +30,7 @@ except ImportError:
     has_pygeos = False
 
 try:
-    import shapely
+    import shapely.geometry
     import shapely.wkt
     has_shapely = True
 except ImportError:
@@ -171,9 +171,9 @@ pygeos_Geometry = None
 
 
 if has_shapely:
-    shapely_Point = shapely.Point
-    shapely_Polygon = shapely.Polygon
-    shapely_LineString = shapely.LineString
+    shapely_Point = shapely.geometry.Point
+    shapely_Polygon = shapely.geometry.Polygon
+    shapely_LineString = shapely.geometry.LineString
 
 if has_numpy:
     np_ndarray = np.ndarray

@@ -13,7 +13,7 @@ except ImportError:
     has_numpy = False
 
 try:
-    import shapely
+    import shapely.geometry
     import shapely.wkt
     has_shapely = True
 except ImportError:
@@ -209,12 +209,9 @@ if has_shapely:
         """Convert shapely geo objects."""
         return escape_str(shapely.wkt.dumps(value), mapping=mapping)
 
-    if hasattr(shapely, 'Polygon'):
-        encoders[shapely.Polygon] = escape_shapely
-    if hasattr(shapely, 'Point'):
-        encoders[shapely.Point] = escape_shapely
-    if hasattr(shapely, 'LineString'):
-        encoders[shapely.LineString] = escape_shapely
+    encoders[shapely.geometry.Polygon] = escape_shapely
+    encoders[shapely.geometry.Point] = escape_shapely
+    encoders[shapely.geometry.LineString] = escape_shapely
 
 if has_pygeos:
 
