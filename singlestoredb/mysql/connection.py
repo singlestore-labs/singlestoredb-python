@@ -292,6 +292,7 @@ class Connection(BaseConnection):
         db=None,  # deprecated
         driver=None,  # internal use
         conn_attrs=None,
+        multi_statements=None,
     ):
         BaseConnection.__init__(**dict(locals()))
 
@@ -316,6 +317,8 @@ class Connection(BaseConnection):
         self._local_infile = bool(local_infile)
         if self._local_infile:
             client_flag |= CLIENT.LOCAL_FILES
+        if multi_statements:
+            client_flag |= CLIENT.MULTI_STATEMENTS
 
         if read_default_group and not read_default_file:
             if sys.platform.startswith('win'):

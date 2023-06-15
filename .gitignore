@@ -76,3 +76,6 @@ docs/src/_build/doctrees
 docs/src/generated
 
 dask-worker-space
+
+## Test configuration
+singlestoredb/mysql/tests/databases.json

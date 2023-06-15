@@ -1276,6 +1276,7 @@ def connect(
     results_format: Optional[str] = None,
     program_name: Optional[str] = None,
     conn_attrs: Optional[Dict[str, str]] = None,
+    multi_statements: Optional[bool] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
