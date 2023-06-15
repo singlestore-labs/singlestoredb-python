@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.7.1 - June 15, 2023
+----------------------
+* Add ``connect_timeout`` and ``multi_statements`` options to connection
+
 v0.7.0 - June 9, 2023
 ---------------------
 * Add converters for numpy array to vector blobs,
