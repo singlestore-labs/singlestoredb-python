@@ -181,6 +181,13 @@ register_option(
     environ='SINGLESTOREDB_BUFFERED',
 )
 
+register_option(
+    'connect_timeout', 'int', check_int, 10,
+    'The timeout for connecting to the database in seconds. '
+    '(default: 10, min: 1, max: 31536000)',
+    environ='SINGLESTOREDB_CONNECT_TIMEOUT',
+)
+
 #
 # Query results options
 #

@@ -1277,6 +1277,7 @@ def connect(
     program_name: Optional[str] = None,
     conn_attrs: Optional[Dict[str, str]] = None,
     multi_statements: Optional[bool] = None,
+    connect_timeout: Optional[int] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1338,6 +1339,11 @@ def connect(
     conn_attrs: dict, optional
         Additional connection attributes for telemetry. Example:
         {'program_version': "1.0.2", "_connector_name": "dbt connector"}
+    multi_statements: bool, optional
+        Should multiple statements be allowed within a single query?
+    connect_timeout: int, optional
+        The timeout for connecting to the database in seconds.
+        (default: 10, min: 1, max: 31536000)
 
     Examples
     --------

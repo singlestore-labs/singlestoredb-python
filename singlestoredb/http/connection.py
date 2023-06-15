@@ -809,6 +809,12 @@ class Connection(connection.Connection):
             if not ssl_verify_cert:
                 self._sess.verify = False
 
+        if kwargs.get('multi_statements', False):
+            raise self.InterfaceError(
+                0, 'The Data API does not allow multiple '
+                'statements within a query',
+            )
+
         version = kwargs.get('version', 'v2')
         self.driver = kwargs.get('driver', 'https')
 
@@ -846,6 +852,8 @@ class Connection(connection.Connection):
         """
         if self._sess is None:
             raise InterfaceError(errno=2048, msg='Connection is closed.')
+        if 'timeout' not in kwargs:
+            kwargs['timeout'] = get_option('connect_timeout')
         return self._sess.post(urljoin(self._url, path), *args, **kwargs)
 
     def close(self) -> None:

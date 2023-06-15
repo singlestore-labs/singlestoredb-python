@@ -1370,6 +1370,12 @@ class TestConnection(unittest.TestCase):
                     self.assertEqual([(2,)], list(cur))
                     self.assertIsNone(cur.nextset())
 
+    def test_connect_timeout(self):
+        with s2.connect(database=type(self).dbname, connect_timeout=8) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT 1')
+                self.assertEqual([(1,)], list(cur))
+
     def test_show_accessors(self):
         out = self.conn.show.columns('data')
         assert out.columns == [
