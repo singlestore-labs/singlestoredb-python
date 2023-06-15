@@ -91,6 +91,12 @@ register_option(
 )
 
 register_option(
+    'multi_statements', 'bool', check_bool, False,
+    'Should it be possible use multiple statements in one query?',
+    environ='SINGLESTOREDB_MULTI_STATEMENTS',
+)
+
+register_option(
     'ssl_key', 'str', check_str, None,
     'File containing SSL key',
     environ='SINGLESTOREDB_SSL_KEY',
