@@ -1358,16 +1358,17 @@ class TestConnection(unittest.TestCase):
                     assert type(out[0]) is dict, type(out)
 
     def test_multi_statements(self):
-        with s2.connect(database=type(self).dbname, multi_statements=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute('SELECT 1; SELECT 2;')
-                self.assertEqual([(1,)], list(cur))
+        if self.conn.driver not in ['http', 'https']:
+            with s2.connect(database=type(self).dbname, multi_statements=True) as conn:
+                with conn.cursor() as cur:
+                    cur.execute('SELECT 1; SELECT 2;')
+                    self.assertEqual([(1,)], list(cur))
 
-                r = cur.nextset()
-                self.assertTrue(r)
+                    r = cur.nextset()
+                    self.assertTrue(r)
 
-                self.assertEqual([(2,)], list(cur))
-                self.assertIsNone(cur.nextset())
+                    self.assertEqual([(2,)], list(cur))
+                    self.assertIsNone(cur.nextset())
 
     def test_show_accessors(self):
         out = self.conn.show.columns('data')
