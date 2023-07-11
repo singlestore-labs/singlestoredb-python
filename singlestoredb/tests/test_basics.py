@@ -509,14 +509,36 @@ class TestBasics(unittest.TestCase):
 
         # shapely data
         data = [
-            (1, 'POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 'POINT(1.5 1.5)', [0.5, 0.6], key),
-            (2, 'POLYGON((5 1, 6 1, 6 2, 5 2, 5 1))', 'POINT(5.5 1.5)', [1.3, 2.5], key),
             (
-                3, 'POLYGON((5 5, 6 5, 6 6, 5 6, 5 5))',
-                'POINT(5.5 5.5)', [10.3, 11.1], key,
+                1, 'POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 'POINT(1.5 1.5)',
+                [0.5, 0.6], datetime.datetime(1950, 1, 2, 12, 13, 14),
+                datetime.date(1950, 1, 2), datetime.timedelta(seconds=123456),
+                key,
             ),
-            (4, 'POLYGON((1 5, 2 5, 2 6, 1 6, 1 5))', 'POINT(1.5 5.5)', [3.3, 3.4], key),
-            (5, 'POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))', 'POINT(3.5 3.5)', [2.9, 9.5], key),
+            (
+                2, 'POLYGON((5 1, 6 1, 6 2, 5 2, 5 1))', 'POINT(5.5 1.5)',
+                [1.3, 2.5], datetime.datetime(1960, 3, 4, 15, 16, 17),
+                datetime.date(1960, 3, 4), datetime.timedelta(seconds=2),
+                key,
+            ),
+            (
+                3, 'POLYGON((5 5, 6 5, 6 6, 5 6, 5 5))', 'POINT(5.5 5.5)',
+                [10.3, 11.1], datetime.datetime(1970, 6, 7, 18, 19, 20),
+                datetime.date(1970, 5, 6), datetime.timedelta(seconds=-2),
+                key,
+            ),
+            (
+                4, 'POLYGON((1 5, 2 5, 2 6, 1 6, 1 5))', 'POINT(1.5 5.5)',
+                [3.3, 3.4], datetime.datetime(1980, 8, 9, 21, 22, 23),
+                datetime.date(1980, 7, 8), datetime.timedelta(seconds=-123456),
+                key,
+            ),
+            (
+                5, 'POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))', 'POINT(3.5 3.5)',
+                [2.9, 9.5], datetime.datetime(2010, 10, 11, 1, 2, 3),
+                datetime.date(2010, 8, 9), datetime.timedelta(seconds=0),
+                key,
+            ),
         ]
 
         new_data = []
@@ -532,8 +554,8 @@ class TestBasics(unittest.TestCase):
 
         self.cur.executemany(
             'INSERT INTO extended_types '
-            '(id, geography, geographypoint, vectors, testkey) '
-            'VALUES (%s, %s, %s, %s, %s)', new_data,
+            '(id, geography, geographypoint, vectors, dt, d, t, td, testkey) '
+            'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)', new_data,
         )
 
         self.cur.execute(
@@ -551,14 +573,36 @@ class TestBasics(unittest.TestCase):
 
         # pygeos data
         data = [
-            (6, 'POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 'POINT(1.5 1.5)', [0.5, 0.6], key),
-            (7, 'POLYGON((5 1, 6 1, 6 2, 5 2, 5 1))', 'POINT(5.5 1.5)', [1.3, 2.5], key),
             (
-                8, 'POLYGON((5 5, 6 5, 6 6, 5 6, 5 5))',
-                'POINT(5.5 5.5)', [10.3, 11.1], key,
+                6, 'POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))', 'POINT(1.5 1.5)',
+                [0.5, 0.6], datetime.datetime(1950, 1, 2, 12, 13, 14),
+                datetime.date(1950, 1, 2), datetime.timedelta(seconds=123456),
+                key,
             ),
-            (9, 'POLYGON((1 5, 2 5, 2 6, 1 6, 1 5))', 'POINT(1.5 5.5)', [3.3, 3.4], key),
-            (10, 'POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))', 'POINT(3.5 3.5)', [2.9, 9.5], key),
+            (
+                7, 'POLYGON((5 1, 6 1, 6 2, 5 2, 5 1))', 'POINT(5.5 1.5)',
+                [1.3, 2.5], datetime.datetime(1960, 3, 4, 15, 16, 17),
+                datetime.date(1960, 3, 4), datetime.timedelta(seconds=2),
+                key,
+            ),
+            (
+                8, 'POLYGON((5 5, 6 5, 6 6, 5 6, 5 5))', 'POINT(5.5 5.5)',
+                [10.3, 11.1], datetime.datetime(1970, 6, 7, 18, 19, 20),
+                datetime.date(1970, 5, 6), datetime.timedelta(seconds=-2),
+                key,
+            ),
+            (
+                9, 'POLYGON((1 5, 2 5, 2 6, 1 6, 1 5))', 'POINT(1.5 5.5)',
+                [3.3, 3.4], datetime.datetime(1980, 8, 9, 21, 22, 23),
+                datetime.date(1980, 7, 8), datetime.timedelta(seconds=-123456),
+                key,
+            ),
+            (
+                10, 'POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))', 'POINT(3.5 3.5)',
+                [2.9, 9.5], datetime.datetime(2010, 10, 11, 1, 2, 3),
+                datetime.date(2010, 8, 9), datetime.timedelta(seconds=0),
+                key,
+            ),
         ]
 
         new_data = []

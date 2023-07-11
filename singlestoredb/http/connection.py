@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 """SingleStoreDB HTTP API interface."""
+import datetime
+import decimal
 import functools
 import json
 import re
+import time
 from base64 import b64decode
 from typing import Any
 from typing import Callable
@@ -163,38 +166,88 @@ def b64decode_converter(
     return converter(b64decode(x))
 
 
-shapely_Point = None
-shapely_Polygon = None
-shapely_LineString = None
-np_ndarray = None
-pygeos_Geometry = None
+def encode_timedelta(obj: datetime.timedelta) -> str:
+    """Encode timedelta as str."""
+    seconds = int(obj.seconds) % 60
+    minutes = int(obj.seconds // 60) % 60
+    hours = int(obj.seconds // 3600) % 24 + int(obj.days) * 24
+    if obj.microseconds:
+        fmt = '{0:02d}:{1:02d}:{2:02d}.{3:06d}'
+    else:
+        fmt = '{0:02d}:{1:02d}:{2:02d}'
+    return fmt.format(hours, minutes, seconds, obj.microseconds)
+
+
+def encode_time(obj: datetime.time) -> str:
+    """Encode time as str."""
+    if obj.microsecond:
+        fmt = '{0.hour:02}:{0.minute:02}:{0.second:02}.{0.microsecond:06}'
+    else:
+        fmt = '{0.hour:02}:{0.minute:02}:{0.second:02}'
+    return fmt.format(obj)
+
+
+def encode_datetime(obj: datetime.datetime) -> str:
+    """Encode datetime as str."""
+    if obj.microsecond:
+        fmt = '{0.year:04}-{0.month:02}-{0.day:02} ' \
+              '{0.hour:02}:{0.minute:02}:{0.second:02}.{0.microsecond:06}'
+    else:
+        fmt = '{0.year:04}-{0.month:02}-{0.day:02} ' \
+              '{0.hour:02}:{0.minute:02}:{0.second:02}'
+    return fmt.format(obj)
+
+
+def encode_date(obj: datetime.date) -> str:
+    """Encode date as str."""
+    fmt = '{0.year:04}-{0.month:02}-{0.day:02}'
+    return fmt.format(obj)
+
+
+def encode_struct_time(obj: time.struct_time) -> str:
+    """Encode time struct to str."""
+    return encode_datetime(datetime.datetime(*obj[:6]))
+
+
+def encode_decimal(o: decimal.Decimal) -> str:
+    """Encode decimal to str."""
+    return format(o, 'f')
+
+
+# Most argument encoding is done by the JSON encoder, but these
+# are exceptions to the rule.
+encoders = {
+    datetime.datetime: encode_datetime,
+    datetime.date: encode_date,
+    datetime.time: encode_time,
+    datetime.timedelta: encode_timedelta,
+    time.struct_time: encode_struct_time,
+    decimal.Decimal: encode_decimal,
+}
 
 
 if has_shapely:
-    shapely_Point = shapely.geometry.Point
-    shapely_Polygon = shapely.geometry.Polygon
-    shapely_LineString = shapely.geometry.LineString
+    encoders[shapely.geometry.Point] = shapely.wkt.dumps
+    encoders[shapely.geometry.Polygon] = shapely.wkt.dumps
+    encoders[shapely.geometry.LineString] = shapely.wkt.dumps
 
 if has_numpy:
-    np_ndarray = np.ndarray
+
+    def encode_ndarray(obj: np.ndarray[Any, Any]) -> bytes:
+        """Encode an ndarray as bytes."""
+        return obj.tobytes()
+
+    encoders[np.ndarray] = encode_ndarray
 
 if has_pygeos:
-    pygeos_Geometry = pygeos.Geometry
+    encoders[pygeos.Geometry] = pygeos.io.to_wkt
 
 
 def convert_special_type(arg: Any) -> Any:
     """Convert special data type objects."""
-    dtype = type(arg)
-    if dtype is np_ndarray:
-        return arg.tobytes()
-    if dtype is shapely_Point:
-        return shapely.wkt.dumps(arg)
-    if dtype is shapely_Polygon:
-        return shapely.wkt.dumps(arg)
-    if dtype is shapely_LineString:
-        return shapely.wkt.dumps(arg)
-    if dtype is pygeos_Geometry:
-        return pygeos.io.to_wkt(arg)
+    func = encoders.get(type(arg), None)
+    if func is not None:
+        return func(arg)  # type: ignore
     return arg
 
 

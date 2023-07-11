@@ -1028,7 +1028,7 @@ class Connection(metaclass=abc.ABCMeta):
     NotSupportedError = exceptions.NotSupportedError
 
     #: Read-only DB-API parameter style
-    paramstyle = 'named'
+    paramstyle = 'pyformat'
 
     # Must be set by subclass
     driver = ''
