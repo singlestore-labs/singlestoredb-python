@@ -618,8 +618,8 @@ class TestBasics(unittest.TestCase):
 
         self.cur.executemany(
             'INSERT INTO extended_types '
-            '(id, geography, geographypoint, vectors, testkey) '
-            'VALUES (%s, %s, %s, %s, %s)', new_data,
+            '(id, geography, geographypoint, vectors, dt, d, t, td, testkey) '
+            'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)', new_data,
         )
 
         self.cur.execute(
