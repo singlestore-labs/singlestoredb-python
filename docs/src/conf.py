@@ -90,4 +90,4 @@ html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 html_static_path = ['_static']
 
 pygments_style = 'monokai'
-#pygments_dark_style = 'monokai'
+# pygments_dark_style = 'monokai'
