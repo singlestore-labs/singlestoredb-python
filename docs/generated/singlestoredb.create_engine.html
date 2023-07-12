@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>singlestoredb.connection.Cursor.close &mdash; SingleStoreDB 0.8.1 documentation</title>
+  <title>singlestoredb.create_engine &mdash; SingleStoreDB 0.8.1 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -16,8 +16,8 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="singlestoredb.connection.Cursor.execute" href="singlestoredb.connection.Cursor.execute.html" />
-    <link rel="prev" title="singlestoredb.connection.Cursor.callproc" href="singlestoredb.connection.Cursor.callproc.html" />
+    <link rel="next" title="singlestoredb.connection.Connection" href="singlestoredb.connection.Connection.html" />
+    <link rel="prev" title="singlestoredb.connect" href="singlestoredb.connect.html" />
 </head>
 <body class="wy-body-for-nav">
   <div class="wy-grid-for-nav">
@@ -46,25 +46,12 @@
 <li class="toctree-l1 current"><a class="reference internal" href="../api.html">API Reference</a><ul class="current">
 <li class="toctree-l2 current"><a class="reference internal" href="../api.html#connections">Connections</a><ul class="current">
 <li class="toctree-l3"><a class="reference internal" href="singlestoredb.connect.html">singlestoredb.connect</a></li>
-<li class="toctree-l3"><a class="reference internal" href="singlestoredb.create_engine.html">singlestoredb.create_engine</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../api.html#connection">Connection</a></li>
-<li class="toctree-l3 current"><a class="reference internal" href="../api.html#cursor">Cursor</a><ul class="current">
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.html">Cursor</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.callproc.html">Cursor.callproc</a></li>
-<li class="toctree-l4 current"><a class="current reference internal" href="#">Cursor.close</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.execute.html">Cursor.execute</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.executemany.html">Cursor.executemany</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.fetchone.html">Cursor.fetchone</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.fetchmany.html">Cursor.fetchmany</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.fetchall.html">Cursor.fetchall</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.nextset.html">Cursor.nextset</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.setinputsizes.html">Cursor.setinputsizes</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.setoutputsize.html">Cursor.setoutputsize</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.scroll.html">Cursor.scroll</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.next.html">Cursor.next</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.is_connected.html">Cursor.is_connected</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">singlestoredb.create_engine</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#singlestoredb.create_engine"><code class="docutils literal notranslate"><span class="pre">create_engine()</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#connection">Connection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#cursor">Cursor</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../api.html#utilities">Utilities</a></li>
@@ -87,28 +74,46 @@
   <ul class="wy-breadcrumbs">
       <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="../api.html">API Reference</a></li>
-      <li class="breadcrumb-item active">singlestoredb.connection.Cursor.close</li>
+      <li class="breadcrumb-item active">singlestoredb.create_engine</li>
       <li class="wy-breadcrumbs-aside">
-            <a href="../_sources/generated/singlestoredb.connection.Cursor.close.rst.txt" rel="nofollow"> View page source</a>
+            <a href="../_sources/generated/singlestoredb.create_engine.rst.txt" rel="nofollow"> View page source</a>
       </li>
   </ul>
   <hr/>
 </div>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
-  <section id="singlestoredb-connection-cursor-close">
-<h1>singlestoredb.connection.Cursor.close<a class="headerlink" href="#singlestoredb-connection-cursor-close" title="Permalink to this heading">¶</a></h1>
-<dl class="py method">
-<dt class="sig sig-object py" id="singlestoredb.connection.Cursor.close">
-<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span></span><a class="headerlink" href="#singlestoredb.connection.Cursor.close" title="Permalink to this definition">¶</a></dt>
-<dd><p>Close the cursor.</p>
+  <section id="singlestoredb-create-engine">
+<h1>singlestoredb.create_engine<a class="headerlink" href="#singlestoredb-create-engine" title="Permalink to this heading">¶</a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="singlestoredb.create_engine">
+<span class="sig-prename descclassname"><span class="pre">singlestoredb.</span></span><span class="sig-name descname"><span class="pre">create_engine</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><span class="pre">Any</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.11)"><span class="pre">Any</span></a></span></span><a class="headerlink" href="#singlestoredb.create_engine" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an SQLAlchemy engine for SingleStoreDB.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>**kwargs</strong> (<em>Any</em>) – The parameters taken here are the same as for
+<cite>sqlalchemy.create_engine</cite>. However, this function can be
+called without any parameters in order to inherit parameters
+set by environment variables or parameters set in by
+options in Python code.</p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>SQLAlchemy engine</p>
+</dd>
+</dl>
 </dd></dl>
 </section>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="singlestoredb.connection.Cursor.callproc.html" class="btn btn-neutral float-left" title="singlestoredb.connection.Cursor.callproc" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="singlestoredb.connection.Cursor.execute.html" class="btn btn-neutral float-right" title="singlestoredb.connection.Cursor.execute" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="singlestoredb.connect.html" class="btn btn-neutral float-left" title="singlestoredb.connect" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="singlestoredb.connection.Connection.html" class="btn btn-neutral float-right" title="singlestoredb.connection.Connection" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
   <hr/>
   <div role="contentinfo">

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStoreDB 0.7.1 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 0.8.1 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                0.7.1
+                0.8.1
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -46,6 +46,7 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">API Reference</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#connections">Connections</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.connect.html">singlestoredb.connect</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.create_engine.html">singlestoredb.create_engine</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#connection">Connection</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.html">Connection</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.autocommit.html">Connection.autocommit</a></li>
@@ -181,10 +182,18 @@
 package. It connects to a SingleStore database using either
 <a class="reference external" href="https://peps.python.org/pep-0249/">DB-API</a> compliant parameters,
 or a connection string in the form of a URL.</p>
+<p>The <a class="reference internal" href="generated/singlestoredb.create_engine.html#singlestoredb.create_engine" title="singlestoredb.create_engine"><code class="xref py py-func docutils literal notranslate"><span class="pre">create_engine()</span></code></a> function is used with the SQLAlchemy package
+to create an SQLAlchemy engine for SingleStoreDB connections. This is
+primarily for use in environments where the connection parameters are
+stored in environment variables so that you can create SingleStoreDB
+connections without specifying any parameters in the code itself.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">connect</span></code></a>([host, user, password, port, ...])</p></td>
 <td><p>Return a SingleStoreDB connection.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.create_engine.html#singlestoredb.create_engine" title="singlestoredb.create_engine"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_engine</span></code></a>(*args, **kwargs)</p></td>
+<td><p>Create an SQLAlchemy engine for SingleStoreDB.</p></td>
 </tr>
 </tbody>
 </table>

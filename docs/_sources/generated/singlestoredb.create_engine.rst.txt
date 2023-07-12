@@ -1,0 +1,4 @@
+﻿singlestoredb.create\_engine
+============================
+.. currentmodule:: singlestoredb
+.. autofunction:: create_engine
