@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.8.0 - July, 12, 2023
+-----------------------
+* ! Python 3.8 is now the minimum required version
+* Add parameter conversion routines to HTTP driver
+
 v0.7.1 - June 15, 2023
 ----------------------
 * Add ``connect_timeout`` and ``multi_statements`` options to connection
