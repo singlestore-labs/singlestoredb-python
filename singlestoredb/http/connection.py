@@ -233,7 +233,7 @@ if has_shapely:
 
 if has_numpy:
 
-    def encode_ndarray(obj: np.ndarray[Any, Any]) -> bytes:
+    def encode_ndarray(obj: np.ndarray) -> bytes:  # type: ignore
         """Encode an ndarray as bytes."""
         return obj.tobytes()
 
