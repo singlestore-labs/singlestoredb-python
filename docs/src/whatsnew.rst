@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.8.1 - July, 12, 2023
+-----------------------
+* Add `create_engine` function to return SQLAlchemy engine while supporting
+  environment variable parameter settings and settings in options
+
 v0.8.0 - July, 12, 2023
 -----------------------
 * ! Python 3.8 is now the minimum required version
