@@ -15,10 +15,17 @@ package. It connects to a SingleStore database using either
 `DB-API <https://peps.python.org/pep-0249/>`_ compliant parameters,
 or a connection string in the form of a URL.
 
+The :func:`create_engine` function is used with the SQLAlchemy package
+to create an SQLAlchemy engine for SingleStoreDB connections. This is
+primarily for use in environments where the connection parameters are
+stored in environment variables so that you can create SingleStoreDB
+connections without specifying any parameters in the code itself.
+
 .. autosummary::
    :toctree: generated/
 
    connect
+   create_engine
 
 
 Connection

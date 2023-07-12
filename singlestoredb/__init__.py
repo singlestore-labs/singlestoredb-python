@@ -15,6 +15,7 @@ Examples
 
 __version__ = '0.8.0'
 
+from .alchemy import create_engine
 from .config import options, get_option, set_option, describe_option
 from .connection import connect, apilevel, threadsafety, paramstyle
 from .exceptions import (
