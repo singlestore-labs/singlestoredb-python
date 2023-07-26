@@ -7,6 +7,8 @@ import math
 import os
 import unittest
 
+from requests.exceptions import InvalidJSONError
+
 try:
     import numpy as np
     has_numpy = True
@@ -1151,7 +1153,7 @@ class TestBasics(unittest.TestCase):
         self.assertEqual((1999, string), self.cur.fetchone())
 
     def test_nan_as_null(self):
-        with self.assertRaises(s2.ProgrammingError):
+        with self.assertRaises((s2.ProgrammingError, InvalidJSONError)):
             self.cur.execute('SELECT %s AS X', [math.nan])
 
         with s2.connect(database=type(self).dbname, nan_as_null=True) as conn:
@@ -1165,7 +1167,7 @@ class TestBasics(unittest.TestCase):
                 self.assertEqual(1.234, list(cur)[0][0])
 
     def test_inf_as_null(self):
-        with self.assertRaises(s2.ProgrammingError):
+        with self.assertRaises((s2.ProgrammingError, InvalidJSONError)):
             self.cur.execute('SELECT %s AS X', [math.inf])
 
         with s2.connect(database=type(self).dbname, inf_as_null=True) as conn:
