@@ -1154,30 +1154,30 @@ class TestBasics(unittest.TestCase):
 
     def test_nan_as_null(self):
         with self.assertRaises((s2.ProgrammingError, InvalidJSONError)):
-            self.cur.execute('SELECT %s AS X', [math.nan])
+            self.cur.execute('SELECT %s :> DOUBLE AS X', [math.nan])
 
         with s2.connect(database=type(self).dbname, nan_as_null=True) as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT %s AS X', [math.nan])
+                cur.execute('SELECT %s :> DOUBLE AS X', [math.nan])
                 self.assertEqual(None, list(cur)[0][0])
 
         with s2.connect(database=type(self).dbname, nan_as_null=True) as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT %s AS X', [1.234])
+                cur.execute('SELECT %s :> DOUBLE AS X', [1.234])
                 self.assertEqual(1.234, list(cur)[0][0])
 
     def test_inf_as_null(self):
         with self.assertRaises((s2.ProgrammingError, InvalidJSONError)):
-            self.cur.execute('SELECT %s AS X', [math.inf])
+            self.cur.execute('SELECT %s :> DOUBLE AS X', [math.inf])
 
         with s2.connect(database=type(self).dbname, inf_as_null=True) as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT %s AS X', [math.inf])
+                cur.execute('SELECT %s :> DOUBLE AS X', [math.inf])
                 self.assertEqual(None, list(cur)[0][0])
 
         with s2.connect(database=type(self).dbname, inf_as_null=True) as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT %s AS X', [1.234])
+                cur.execute('SELECT %s :> DOUBLE AS X', [1.234])
                 self.assertEqual(1.234, list(cur)[0][0])
 
 
