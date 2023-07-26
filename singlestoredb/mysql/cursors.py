@@ -486,7 +486,7 @@ class NamedtupleCursorMixin:
                     name = f.table_name + '.' + name
                 fields.append(name)
             self._fields = fields
-            self._namedtuple = namedtuple('Row', self._fields)
+            self._namedtuple = namedtuple('Row', self._fields, rename=True)
 
         if fields and self._rows:
             self._rows = [self._conv_row(r) for r in self._rows]
