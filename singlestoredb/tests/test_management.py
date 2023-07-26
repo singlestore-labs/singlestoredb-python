@@ -144,6 +144,8 @@ class TestCluster(unittest.TestCase):
         trues = ['1', 'on', 'true']
         pure_python = os.environ.get('SINGLESTOREDB_PURE_PYTHON', '0').lower() in trues
 
+        self.skipTest('Connection test is disable due to flakey server')
+
         if pure_python:
             self.skipTest('Connections through managed service are disabled')
 
