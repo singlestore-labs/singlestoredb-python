@@ -188,6 +188,20 @@ register_option(
     environ='SINGLESTOREDB_CONNECT_TIMEOUT',
 )
 
+register_option(
+    'nan_as_null', 'bool', check_bool, False,
+    'Should NaN values be treated as NULLs in query parameter substitutions '
+    'including uploaded data?',
+    environ='SINGLESTOREDB_NAN_AS_NULL',
+)
+
+register_option(
+    'inf_as_null', 'bool', check_bool, False,
+    'Should Inf values be treated as NULLs in query parameter substitutions '
+    'including uploaded data?',
+    environ='SINGLESTOREDB_INF_AS_NULL',
+)
+
 #
 # Query results options
 #

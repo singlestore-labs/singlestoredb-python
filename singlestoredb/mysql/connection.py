@@ -229,6 +229,12 @@ class Connection(BaseConnection):
         This can be given explicitly using True or False, or if the value is None,
         the C extension will be loaded if it is available. If set to False and
         the C extension can't be loaded, a NotSupportedError is raised.
+    nan_as_null : bool, optional
+        Should NaN values be treated as NULLs in parameter substitution including
+        uploading data?
+    inf_as_null : bool, optional
+        Should Inf values be treated as NULLs in parameter substitution including
+        uploading data?
 
     See `Connection <https://www.python.org/dev/peps/pep-0249/#connection-objects>`_
     in the specification.
@@ -293,6 +299,8 @@ class Connection(BaseConnection):
         driver=None,  # internal use
         conn_attrs=None,
         multi_statements=None,
+        nan_as_null=None,
+        inf_as_null=None,
     ):
         BaseConnection.__init__(**dict(locals()))
 
@@ -490,6 +498,16 @@ class Connection(BaseConnection):
         self._auth_plugin_map = auth_plugin_map or {}
         self._binary_prefix = binary_prefix
         self.server_public_key = server_public_key
+
+        if self.connection_params['nan_as_null'] or \
+                self.connection_params['inf_as_null']:
+            float_encoder = self.encoders.get(float)
+            if float_encoder is not None:
+                self.encoders[float] = functools.partial(
+                    float_encoder,
+                    nan_as_null=self.connection_params['nan_as_null'],
+                    inf_as_null=self.connection_params['inf_as_null'],
+                )
 
         from .. import __version__ as VERSION_STRING
 
@@ -695,6 +713,8 @@ class Connection(BaseConnection):
             if self._binary_prefix:
                 ret = '_binary' + ret
             return ret
+        if mapping is None:
+            mapping = self.encoders
         return converters.escape_item(obj, self.charset, mapping=mapping)
 
     def literal(self, obj):

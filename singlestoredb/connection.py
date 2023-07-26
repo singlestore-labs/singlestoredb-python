@@ -1278,6 +1278,8 @@ def connect(
     conn_attrs: Optional[Dict[str, str]] = None,
     multi_statements: Optional[bool] = None,
     connect_timeout: Optional[int] = None,
+    nan_as_null: Optional[bool] = None,
+    inf_as_null: Optional[bool] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1344,6 +1346,12 @@ def connect(
     connect_timeout: int, optional
         The timeout for connecting to the database in seconds.
         (default: 10, min: 1, max: 31536000)
+    nan_as_null: bool, optional
+        Should NaN values be treated as NULLs when used in parameter
+        substitutions including uploaded data?
+    inf_as_null: bool, optional
+        Should Inf values be treated as NULLs when used in parameter
+        substitutions including uploaded data?
 
     Examples
     --------

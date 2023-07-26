@@ -3,6 +3,7 @@
 """Basic SingleStoreDB connection testing."""
 import datetime
 import decimal
+import math
 import os
 import unittest
 
@@ -1148,6 +1149,34 @@ class TestBasics(unittest.TestCase):
         string = 'a' * 49
         self.cur.execute(f"SELECT 1999 :> YEAR, '{string}'")
         self.assertEqual((1999, string), self.cur.fetchone())
+
+    def test_nan_as_null(self):
+        with self.assertRaises(s2.ProgrammingError):
+            self.cur.execute('SELECT %s AS X', [math.nan])
+
+        with s2.connect(database=type(self).dbname, nan_as_null=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT %s AS X', [math.nan])
+                self.assertEqual(None, list(cur)[0][0])
+
+        with s2.connect(database=type(self).dbname, nan_as_null=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT %s AS X', [1.234])
+                self.assertEqual(1.234, list(cur)[0][0])
+
+    def test_inf_as_null(self):
+        with self.assertRaises(s2.ProgrammingError):
+            self.cur.execute('SELECT %s AS X', [math.inf])
+
+        with s2.connect(database=type(self).dbname, inf_as_null=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT %s AS X', [math.inf])
+                self.assertEqual(None, list(cur)[0][0])
+
+        with s2.connect(database=type(self).dbname, inf_as_null=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT %s AS X', [1.234])
+                self.assertEqual(1.234, list(cur)[0][0])
 
 
 if __name__ == '__main__':

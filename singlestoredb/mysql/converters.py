@@ -73,9 +73,15 @@ def escape_int(value, mapping=None):
     return str(value)
 
 
-def escape_float(value, mapping=None):
+def escape_float(value, mapping=None, nan_as_null=False, inf_as_null=False):
     s = repr(value)
-    if s in ('inf', 'nan'):
+    if s == 'nan':
+        if nan_as_null:
+            return 'NULL'
+        raise ProgrammingError('%s can not be used with SingleStoreDB' % s)
+    if s == 'inf':
+        if inf_as_null:
+            return 'NULL'
         raise ProgrammingError('%s can not be used with SingleStoreDB' % s)
     if 'e' not in s:
         s += 'e0'
@@ -202,6 +208,21 @@ if has_numpy:
         return escape_bytes(value.tobytes(), mapping=mapping)
 
     encoders[np.ndarray] = escape_numpy
+    encoders[np.float16] = escape_float
+    encoders[np.float32] = escape_float
+    encoders[np.float64] = escape_float
+    encoders[np.float128] = escape_float
+    encoders[np.uint] = escape_int
+    encoders[np.uint8] = escape_int
+    encoders[np.uint16] = escape_int
+    encoders[np.uint32] = escape_int
+    encoders[np.uint64] = escape_int
+    encoders[np.integer] = escape_int
+    encoders[np.int_] = escape_int
+    encoders[np.int8] = escape_int
+    encoders[np.int16] = escape_int
+    encoders[np.int32] = escape_int
+    encoders[np.int64] = escape_int
 
 if has_shapely:
 

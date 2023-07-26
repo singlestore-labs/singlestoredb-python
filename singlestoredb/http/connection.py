@@ -4,6 +4,7 @@ import datetime
 import decimal
 import functools
 import json
+import math
 import re
 import time
 from base64 import b64decode
@@ -243,9 +244,25 @@ if has_pygeos:
     encoders[pygeos.Geometry] = pygeos.io.to_wkt
 
 
-def convert_special_type(arg: Any) -> Any:
+def convert_special_type(
+    arg: Any,
+    nan_as_null: bool = False,
+    inf_as_null: bool = False,
+) -> Any:
     """Convert special data type objects."""
-    func = encoders.get(type(arg), None)
+    dtype = type(arg)
+    if dtype is float or \
+            (
+                has_numpy and dtype in (
+                    np.float16, np.float32,
+                    np.float64, np.float128,
+                )
+            ):
+        if nan_as_null and math.isnan(arg):
+            return None
+        if inf_as_null and math.isinf(arg):
+            return None
+    func = encoders.get(dtype, None)
     if func is not None:
         return func(arg)  # type: ignore
     return arg
@@ -253,13 +270,20 @@ def convert_special_type(arg: Any) -> Any:
 
 def convert_special_params(
     params: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
+    nan_as_null: bool = False,
+    inf_as_null: bool = False,
 ) -> Optional[Union[Sequence[Any], Dict[str, Any]]]:
     """Convert parameters of special data types."""
     if params is None:
         return params
+    converter = functools.partial(
+        convert_special_type,
+        nan_as_null=nan_as_null,
+        inf_as_null=inf_as_null,
+    )
     if isinstance(params, Dict):
-        return {k: convert_special_type(v) for k, v in params.items()}
-    return tuple(map(convert_special_type, params))
+        return {k: converter(v) for k, v in params.items()}
+    return tuple(map(converter, params))
 
 
 class PyMyField(object):
@@ -423,7 +447,11 @@ class Cursor(connection.Cursor):
 
         data: Dict[str, Any] = dict(sql=oper)
         if params is not None:
-            data['args'] = convert_special_params(params)
+            data['args'] = convert_special_params(
+                params,
+                nan_as_null=self._connection.connection_params['nan_as_null'],
+                inf_as_null=self._connection.connection_params['inf_as_null'],
+            )
         if self._connection._database:
             data['database'] = self._connection._database
 
