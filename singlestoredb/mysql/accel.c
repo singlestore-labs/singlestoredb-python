@@ -364,6 +364,8 @@ typedef struct {
     PyObject *_read_timeout;
     PyObject *_next_seq_id;
     PyObject *rows;
+    PyObject *namedtuple;
+    PyObject *Row;
 } PyStrings;
 
 static PyStrings PyStr = {0};
@@ -378,9 +380,19 @@ typedef struct {
     PyObject *datetime_time;
     PyObject *datetime_timedelta;
     PyObject *datetime_datetime;
+    PyObject *collections_namedtuple;
 } PyFunctions;
 
 static PyFunctions PyFunc = {0};
+
+//
+// Cached Python objects
+//
+typedef struct {
+    PyObject *namedtuple_kwargs;
+} PyObjects;
+
+static PyObjects PyObj = {0};
 
 //
 // State
@@ -400,8 +412,9 @@ typedef struct {
     PyObject *py_settimeout; // Socket settimeout method
     PyObject **py_converters; // List of converter functions
     PyObject **py_names; // Column names
+    PyObject *py_names_list; // Python list of column names
     PyObject *py_default_converters; // Dict of default converters
-    PyTypeObject *namedtuple; // Generated namedtuple type
+    PyObject *py_namedtuple; // Generated namedtuple type
     PyObject **py_encodings; // Encoding for each column as Python string
     PyObject **py_invalid_values; // Values to use when invalid data exists in a cell
     const char **encodings; // Encoding for each column
@@ -414,7 +427,6 @@ typedef struct {
     unsigned long *offsets; // Column offsets in buffer
     unsigned long long next_seq_id; // MySQL packet sequence number
     MySQLAccelOptions options; // Packet reader options
-    PyStructSequence_Desc namedtuple_desc;
     int unbuffered; // Are we running in unbuffered mode?
     int is_eof; // Have we hit the eof packet yet?
     struct {
@@ -434,7 +446,6 @@ static void State_clear_fields(StateObject *self) {
     DESTROY(self->flags);
     DESTROY(self->type_codes);
     DESTROY(self->encodings);
-    DESTROY(self->namedtuple_desc.fields);
     if (self->py_converters) {
         for (unsigned long i = 0; i < self->n_cols; i++) {
             Py_CLEAR(self->py_converters[i]);
@@ -459,7 +470,8 @@ static void State_clear_fields(StateObject *self) {
         }
         DESTROY(self->py_invalid_values);
     }
-    Py_CLEAR(self->namedtuple);
+    Py_CLEAR(self->py_namedtuple);
+    Py_CLEAR(self->py_names_list);
     Py_CLEAR(self->py_default_converters);
     Py_CLEAR(self->py_settimeout);
     Py_CLEAR(self->py_read_timeout);
@@ -481,6 +493,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
     PyObject *py_res = NULL;
     PyObject *py_converters = NULL;
     PyObject *py_options = NULL;
+    PyObject *py_args = NULL;
     unsigned long long requested_n_rows = 0;
 
     if (!PyArg_ParseTuple(args, "OK", &py_res, &requested_n_rows)) {
@@ -550,6 +563,9 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
     self->py_fields = PyObject_GetAttr(py_res, PyStr.fields);
     if (!self->py_fields) goto error;
 
+    self->py_names_list = PyList_New(self->n_cols);
+    if (!self->py_names_list) goto error;
+
     for (unsigned long i = 0; i < self->n_cols; i++) {
         // Get type codes.
         PyObject *py_field = PyList_GetItem(self->py_fields, i);
@@ -594,6 +610,10 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         } else {
             self->py_names[i] = py_field_name;
         }
+
+        Py_INCREF(self->py_names[i]);  // Extra ref since SetItem steals one
+        rc = PyList_SetItem(self->py_names_list, i, self->py_names[i]);
+        if (rc) goto error;
 
         // Get field encodings (NULL means binary) and default converters.
         PyObject *py_tmp = PyList_GetItem(py_converters, i);
@@ -648,17 +668,22 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
 
     switch (self->options.results_type) {
     case MYSQLSV_OUT_NAMEDTUPLES:
-        self->namedtuple_desc.name = "singlestoredb.Row";
-        self->namedtuple_desc.doc = "Row of data values";
-        self->namedtuple_desc.n_in_sequence = self->n_cols;
-        self->namedtuple_desc.fields = calloc(self->n_cols + 1, sizeof(PyStructSequence_Field));
-        if (!self->namedtuple_desc.fields) goto error;
-        for (unsigned long i = 0; i < self->n_cols; i++) {
-            self->namedtuple_desc.fields[i].name = PyUnicode_AsUTF8(self->py_names[i]);
-            self->namedtuple_desc.fields[i].doc = NULL;
-        }
-        self->namedtuple = PyStructSequence_NewType(&self->namedtuple_desc);
-        if (!self->namedtuple) goto error;
+        py_args = PyTuple_New(2);
+        if (!py_args) goto error;
+
+        rc = PyTuple_SetItem(py_args, 0, PyStr.Row);
+        if (rc) goto error;
+        Py_INCREF(PyStr.Row);
+
+        rc = PyTuple_SetItem(py_args, 1, self->py_names_list);
+        if (rc) goto error;
+        Py_INCREF(self->py_names_list);
+
+        self->py_namedtuple = PyObject_Call(
+                                  PyFunc.collections_namedtuple,
+                                  py_args, PyObj.namedtuple_kwargs);
+
+        if (!self->py_namedtuple) goto error;
 
         // Fall through
 
@@ -676,6 +701,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
     }
 
 exit:
+    Py_XDECREF(py_args);
     Py_XDECREF(py_converters);
     Py_XDECREF(py_options);
     if (PyErr_Occurred()) {
@@ -1225,15 +1251,14 @@ static PyObject *read_row_from_packet(
     int microsecond = 0;
 
     switch (py_state->options.results_type) {
-    case MYSQLSV_OUT_NAMEDTUPLES: {
-        if (!py_state->namedtuple) goto error;
-        py_result = PyStructSequence_New(py_state->namedtuple);
-        break;
-        }
     case MYSQLSV_OUT_DICTS:
         py_result = PyDict_New();
         break;
     default:
+        // We use regular tuples here for namedtuples as well since
+        // we can't instantiate a namedtuple with just a size. Once
+        // we have a populated regular tuple, it will be converted
+        // to a namedtuple at the end.
         py_result = PyTuple_New(py_state->n_cols);
     }
 
@@ -1480,9 +1505,6 @@ static PyObject *read_row_from_packet(
         }
 
         switch (py_state->options.results_type) {
-        case MYSQLSV_OUT_NAMEDTUPLES:
-            PyStructSequence_SetItem(py_result, i, py_item);
-            break;
         case MYSQLSV_OUT_DICTS:
             PyDict_SetItem(py_result, py_state->py_names[i], py_item);
             Py_INCREF(py_state->py_names[i]);
@@ -1491,6 +1513,14 @@ static PyObject *read_row_from_packet(
         default:
             PyTuple_SetItem(py_result, i, py_item);
         }
+    }
+
+    if (py_state->options.results_type == MYSQLSV_OUT_NAMEDTUPLES &&
+        py_state->py_namedtuple) {
+        PyObject *py_tmp = py_result;
+        py_result = PyObject_CallObject(py_state->py_namedtuple, py_result);
+        Py_CLEAR(py_tmp);
+        if (!py_result) goto error;
     }
 
 exit:
@@ -1717,6 +1747,8 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     PyStr._result = PyUnicode_FromString("_result");
     PyStr._next_seq_id = PyUnicode_FromString("_next_seq_id");
     PyStr.rows = PyUnicode_FromString("rows");
+    PyStr.namedtuple = PyUnicode_FromString("namedtuple");
+    PyStr.Row = PyUnicode_FromString("Row");
 
     PyObject *decimal_mod = PyImport_ImportModule("decimal");
     if (!decimal_mod) goto error;
@@ -1724,6 +1756,8 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     if (!datetime_mod) goto error;
     PyObject *json_mod = PyImport_ImportModule("json");
     if (!json_mod) goto error;
+    PyObject *collections_mod = PyImport_ImportModule("collections");
+    if (!collections_mod) goto error;
 
     PyFunc.decimal_Decimal = PyObject_GetAttr(decimal_mod, PyStr.Decimal);
     if (!PyFunc.decimal_Decimal) goto error;
@@ -1737,6 +1771,14 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     if (!PyFunc.datetime_datetime) goto error;
     PyFunc.json_loads = PyObject_GetAttr(json_mod, PyStr.loads);
     if (!PyFunc.json_loads) goto error;
+    PyFunc.collections_namedtuple = PyObject_GetAttr(collections_mod, PyStr.namedtuple);
+    if (!PyFunc.collections_namedtuple) goto error;
+
+    PyObj.namedtuple_kwargs = PyDict_New();
+    if (!PyObj.namedtuple_kwargs) goto error;
+    if (PyDict_SetItemString(PyObj.namedtuple_kwargs, "rename", Py_True)) {
+        goto error;
+    }
 
     return PyModule_Create(&_singlestoredb_accelmodule);
 

@@ -76,7 +76,7 @@ def escape_int(value, mapping=None):
 def escape_float(value, mapping=None):
     s = repr(value)
     if s in ('inf', 'nan'):
-        raise ProgrammingError('%s can not be used with MySQL' % s)
+        raise ProgrammingError('%s can not be used with SingleStoreDB' % s)
     if 'e' not in s:
         s += 'e0'
     return s

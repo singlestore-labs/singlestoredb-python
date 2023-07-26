@@ -200,7 +200,7 @@ register_option(
             'dict', 'dicts',
         ],
     ),
-    'tuples',
+    'namedtuples',
     'What form should the query results take?',
     environ='SINGLESTOREDB_RESULTS_TYPE',
 )
