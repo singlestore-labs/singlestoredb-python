@@ -146,6 +146,8 @@ class Connection(BaseConnection):
         (default: None - no timeout)
     charset : str, optional
         Charset to use.
+    collation : str, optional
+        The charset collation
     sql_mode : str, optional
         Default SQL_MODE to use.
     read_default_file : str, optional
@@ -259,6 +261,7 @@ class Connection(BaseConnection):
         unix_socket=None,
         port=0,
         charset='',
+        collation=None,
         sql_mode=None,
         read_default_file=None,
         conv=None,
@@ -411,6 +414,7 @@ class Connection(BaseConnection):
         self._write_timeout = write_timeout
 
         self.charset = charset or DEFAULT_CHARSET
+        self.collation = collation
         self.use_unicode = use_unicode
 
         self.encoding = charset_by_name(self.charset).encoding
@@ -818,24 +822,40 @@ class Connection(BaseConnection):
                 raise
 
     def set_charset(self, charset):
-        """
-        Set charset on the server.
+        """Deprecated. Use set_character_set() instead."""
+        # This function has been implemented in old PyMySQL.
+        # But this name is different from MySQLdb.
+        # So we keep this function for compatibility and add
+        # new set_character_set() function.
+        self.set_character_set(charset)
 
-        Internal use only.
+    def set_character_set(self, charset, collation=None):
+        """
+        Set charaset (and collation) on the server.
+
+        Send "SET NAMES charset [COLLATE collation]" query.
+        Update Connection.encoding based on charset.
 
         Parameters
         ----------
         charset : str
             The charset to enable.
+        collation : str, optional
+            The collation value
 
         """
         # Make sure charset is supported.
         encoding = charset_by_name(charset).encoding
 
-        self._execute_command(COMMAND.COM_QUERY, 'SET NAMES %s' % self.escape(charset))
+        if collation:
+            query = f'SET NAMES {charset} COLLATE {collation}'
+        else:
+            query = f'SET NAMES {charset}'
+        self._execute_command(COMMAND.COM_QUERY, query)
         self._read_packet()
         self.charset = charset
         self.encoding = encoding
+        self.collation = collation
 
     def connect(self, sock=None):
         """
@@ -865,7 +885,7 @@ class Connection(BaseConnection):
                                 (self.host, self.port), self.connect_timeout, **kwargs,
                             )
                             break
-                        except (OSError, IOError) as e:
+                        except OSError as e:
                             if e.errno == errno.EINTR:
                                 continue
                             raise
@@ -883,15 +903,30 @@ class Connection(BaseConnection):
             self._get_server_information()
             self._request_authentication()
 
+            # Send "SET NAMES" query on init for:
+            # - Ensure charaset (and collation) is set to the server.
+            #   - collation_id in handshake packet may be ignored.
+            # - If collation is not specified, we don't know what is server's
+            #   default collation for the charset. For example, default collation
+            #   of utf8mb4 is:
+            #   - MySQL 5.7, MariaDB 10.x: utf8mb4_general_ci
+            #   - MySQL 8.0: utf8mb4_0900_ai_ci
+            #
+            # Reference:
+            # - https://github.com/PyMySQL/PyMySQL/issues/1092
+            # - https://github.com/wagtail/wagtail/issues/9477
+            # - https://zenn.dev/methane/articles/2023-mysql-collation (Japanese)
+            self.set_character_set(self.charset, self.collation)
+
             if self.sql_mode is not None:
                 c = self.cursor()
                 c.execute('SET sql_mode=%s', (self.sql_mode,))
+                c.close()
 
             if self.init_command is not None:
                 c = self.cursor()
                 c.execute(self.init_command)
                 c.close()
-                self.commit()
 
             if self.autocommit_mode is not None:
                 self.autocommit(self.autocommit_mode)
@@ -903,10 +938,10 @@ class Connection(BaseConnection):
                 except:  # noqa
                     pass
 
-            if isinstance(e, (OSError, IOError)):
+            if isinstance(e, (OSError, IOError, socket.error)):
                 exc = err.OperationalError(
                     CR.CR_CONN_HOST_ERROR,
-                    "Can't connect to MySQL server on %r (%s)" % (self.host, e),
+                    f'Can\'t connect to MySQL server on {self.host!r} ({e})',
                 )
                 # Keep original exception and traceback to investigate error.
                 exc.original_exception = e
@@ -994,7 +1029,7 @@ class Connection(BaseConnection):
             try:
                 data = self._rfile.read(num_bytes)
                 break
-            except (IOError, OSError) as e:
+            except OSError as e:
                 if e.errno == errno.EINTR:
                     continue
                 self._force_close()
@@ -1018,10 +1053,10 @@ class Connection(BaseConnection):
             self._sock.settimeout(self._write_timeout)
         try:
             self._sock.sendall(data)
-        except IOError as e:
+        except OSError as e:
             self._force_close()
             raise err.OperationalError(
-                CR.CR_SERVER_GONE_ERROR, 'MySQL server has gone away (%r)' % (e,),
+                CR.CR_SERVER_GONE_ERROR, f'MySQL server has gone away ({e!r})',
             )
 
     def _read_query_result(self, unbuffered=False):
@@ -1548,7 +1583,20 @@ class MySQLResult:
         # in fact, no way to stop MySQL from sending all the data after
         # executing a query, so we just spin, and wait for an EOF packet.
         while self.unbuffered_active and self.connection._sock is not None:
-            packet = self.connection._read_packet()
+            try:
+                packet = self.connection._read_packet()
+            except err.OperationalError as e:
+                if e.args[0] in (
+                    ER.QUERY_TIMEOUT,
+                    ER.STATEMENT_TIMEOUT,
+                ):
+                    # if the query timed out we can simply ignore this error
+                    self.unbuffered_active = False
+                    self.connection = None
+                    return
+
+                raise
+
             if self._check_packet_is_eof(packet):
                 self.unbuffered_active = False
                 self.connection = None  # release reference to kill cyclic reference.
@@ -1672,11 +1720,12 @@ class LoadLocalFile:
                     if not chunk:
                         break
                     conn.write_packet(chunk)
-        except IOError:
+        except OSError:
             raise err.OperationalError(
                 ER.FILE_NOT_FOUND,
                 f"Can't find file '{self.filename}'",
             )
         finally:
-            # send the empty packet to signify we are done sending data
-            conn.write_packet(b'')
+            if not conn._closed:
+                # send the empty packet to signify we are done sending data
+                conn.write_packet(b'')

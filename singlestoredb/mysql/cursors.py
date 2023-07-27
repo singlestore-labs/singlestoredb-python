@@ -43,6 +43,7 @@ class Cursor(BaseCursor):
 
     def __init__(self, connection):
         self._connection = connection
+        self.warning_count = 0
         self._description = None
         self._rownumber = 0
         self.rowcount = -1
@@ -133,13 +134,6 @@ class Cursor(BaseCursor):
 
     def nextset(self):
         return self._nextset(False)
-
-    def _ensure_bytes(self, x, encoding=None):
-        if isinstance(x, str):
-            x = x.encode(encoding)
-        elif isinstance(x, (tuple, list)):
-            x = type(x)(self._ensure_bytes(v, encoding=encoding) for v in x)
-        return x
 
     def _escape_args(self, args, conn):
         if isinstance(args, (tuple, list)):
@@ -328,7 +322,7 @@ class Cursor(BaseCursor):
             )
             self.nextset()
 
-        q = 'CALL %s(%s)' % (
+        q = 'CALL {}({})'.format(
             procname,
             ','.join(['@_%s_%d' % (procname, i) for i in range(len(args))]),
         )
@@ -353,6 +347,7 @@ class Cursor(BaseCursor):
         """Fetch several rows."""
         self._check_executed()
         if self._rows is None:
+            self.warning_count = self._result.warning_count
             return ()
         end = self._rownumber + (size or self.arraysize)
         result = self._rows[self._rownumber: end]
@@ -396,6 +391,7 @@ class Cursor(BaseCursor):
         self._result = None
 
         self.rowcount = 0
+        self.warning_count = 0
         self._description = None
         self.lastrowid = None
         self._rows = None
@@ -406,6 +402,7 @@ class Cursor(BaseCursor):
         self._result = result = conn._result
 
         self.rowcount = result.affected_rows
+        self.warning_count = result.warning_count
         # Affected rows is set to max int64 for compatibility with MySQLdb, but
         # the DB-API requires this value to be -1. This happens in unbuffered mode.
         if self.rowcount == 18446744073709551615:
@@ -564,6 +561,7 @@ class SSCursor(Cursor):
         """Fetch next row."""
         row = self.read_next()
         if row is None:
+            self.warning_count = self._result.warning_count
             return None
         self._rownumber += 1
         return row
@@ -612,6 +610,7 @@ class SSCursor(Cursor):
         for i in range(size):
             row = self.read_next()
             if row is None:
+                self.warning_count = self._result.warning_count
                 break
             rows.append(row)
             self._rownumber += 1
