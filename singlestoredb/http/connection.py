@@ -254,8 +254,8 @@ def convert_special_type(
     if dtype is float or \
             (
                 has_numpy and dtype in (
-                    np.float16, np.float32,
-                    np.float64, np.float128,
+                    np.float16, np.float32, np.float64,
+                    getattr(np, 'float128', np.float64),
                 )
             ):
         if nan_as_null and math.isnan(arg):

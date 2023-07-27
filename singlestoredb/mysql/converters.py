@@ -211,7 +211,8 @@ if has_numpy:
     encoders[np.float16] = escape_float
     encoders[np.float32] = escape_float
     encoders[np.float64] = escape_float
-    encoders[np.float128] = escape_float
+    if hasattr(np, 'float128'):
+        encoders[np.float128] = escape_float
     encoders[np.uint] = escape_int
     encoders[np.uint8] = escape_int
     encoders[np.uint16] = escape_int
