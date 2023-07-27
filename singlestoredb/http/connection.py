@@ -1022,7 +1022,15 @@ def connect(
     ssl_verify_identity: Optional[bool] = None,
     conv: Optional[Dict[int, Callable[..., Any]]] = None,
     credential_type: Optional[str] = None,
-    results_type: Optional[str] = None,
     autocommit: Optional[bool] = None,
+    results_type: Optional[str] = None,
+    buffered: Optional[bool] = None,
+    results_format: Optional[str] = None,
+    program_name: Optional[str] = None,
+    conn_attrs: Optional[Dict[str, str]] = None,
+    multi_statements: Optional[bool] = None,
+    connect_timeout: Optional[int] = None,
+    nan_as_null: Optional[bool] = None,
+    inf_as_null: Optional[bool] = None,
 ) -> Connection:
     return Connection(**dict(locals()))
