@@ -211,10 +211,10 @@ register_option(
         check_str,
         valid_values=[
             'tuple', 'tuples', 'namedtuple', 'namedtuples',
-            'dict', 'dicts',
+            'dict', 'dicts', 'structsequence', 'structsequences',
         ],
     ),
-    'namedtuples',
+    'tuples',
     'What form should the query results take?',
     environ='SINGLESTOREDB_RESULTS_TYPE',
 )

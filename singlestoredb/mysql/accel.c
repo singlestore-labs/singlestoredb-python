@@ -10,9 +10,10 @@
 #include <datetime.h>
 #endif
 
-#define MYSQLSV_OUT_TUPLES 0
-#define MYSQLSV_OUT_NAMEDTUPLES 1
-#define MYSQLSV_OUT_DICTS 2
+#define ACCEL_OUT_TUPLES 0
+#define ACCEL_OUT_STRUCTSEQUENCES 1
+#define ACCEL_OUT_DICTS 2
+#define ACCEL_OUT_NAMEDTUPLES 3
 
 #define MYSQL_FLAG_NOT_NULL 1
 #define MYSQL_FLAG_PRI_KEY 2
@@ -73,12 +74,12 @@
 // 2**24 - 1
 #define MYSQL_MAX_PACKET_LEN 16777215
 
-#define MYSQLSV_OPTION_TIME_TYPE_TIMEDELTA 0
-#define MYSQLSV_OPTION_TIME_TYPE_TIME 1
-#define MYSQLSV_OPTION_JSON_TYPE_STRING 0
-#define MYSQLSV_OPTION_JSON_TYPE_OBJ 1
-#define MYSQLSV_OPTION_BIT_TYPE_BYTES 0
-#define MYSQLSV_OPTION_BIT_TYPE_INT 1
+#define ACCEL_OPTION_TIME_TYPE_TIMEDELTA 0
+#define ACCEL_OPTION_TIME_TYPE_TIME 1
+#define ACCEL_OPTION_JSON_TYPE_STRING 0
+#define ACCEL_OPTION_JSON_TYPE_OBJ 1
+#define ACCEL_OPTION_BIT_TYPE_BYTES 0
+#define ACCEL_OPTION_BIT_TYPE_INT 1
 
 #define CHR2INT1(x) ((x)[1] - '0')
 #define CHR2INT2(x) ((((x)[0] - '0') * 10) + ((x)[1] - '0'))
@@ -415,6 +416,9 @@ typedef struct {
     PyObject *py_names_list; // Python list of column names
     PyObject *py_default_converters; // Dict of default converters
     PyObject *py_namedtuple; // Generated namedtuple type
+    PyObject *py_namedtuple_args; // Pre-allocated tuple for namedtuple args
+    PyTypeObject *structsequence; // StructSequence type (like C namedtuple)
+    PyStructSequence_Desc structsequence_desc;
     PyObject **py_encodings; // Encoding for each column as Python string
     PyObject **py_invalid_values; // Values to use when invalid data exists in a cell
     const char **encodings; // Encoding for each column
@@ -446,6 +450,7 @@ static void State_clear_fields(StateObject *self) {
     DESTROY(self->flags);
     DESTROY(self->type_codes);
     DESTROY(self->encodings);
+    DESTROY(self->structsequence_desc.fields);
     if (self->py_converters) {
         for (unsigned long i = 0; i < self->n_cols; i++) {
             Py_CLEAR(self->py_converters[i]);
@@ -470,7 +475,9 @@ static void State_clear_fields(StateObject *self) {
         }
         DESTROY(self->py_invalid_values);
     }
+    Py_CLEAR(self->structsequence);
     Py_CLEAR(self->py_namedtuple);
+    Py_CLEAR(self->py_namedtuple_args);
     Py_CLEAR(self->py_names_list);
     Py_CLEAR(self->py_default_converters);
     Py_CLEAR(self->py_settimeout);
@@ -667,23 +674,43 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
     }
 
     switch (self->options.results_type) {
-    case MYSQLSV_OUT_NAMEDTUPLES:
-        py_args = PyTuple_New(2);
-        if (!py_args) goto error;
+    case ACCEL_OUT_NAMEDTUPLES:
+    case ACCEL_OUT_STRUCTSEQUENCES:
+        if (self->options.results_type == ACCEL_OUT_NAMEDTUPLES)
+        {
+            py_args = PyTuple_New(2);
+            if (!py_args) goto error;
 
-        rc = PyTuple_SetItem(py_args, 0, PyStr.Row);
-        if (rc) goto error;
-        Py_INCREF(PyStr.Row);
+            rc = PyTuple_SetItem(py_args, 0, PyStr.Row);
+            if (rc) goto error;
+            Py_INCREF(PyStr.Row);
 
-        rc = PyTuple_SetItem(py_args, 1, self->py_names_list);
-        if (rc) goto error;
-        Py_INCREF(self->py_names_list);
+            rc = PyTuple_SetItem(py_args, 1, self->py_names_list);
+            if (rc) goto error;
+            Py_INCREF(self->py_names_list);
 
-        self->py_namedtuple = PyObject_Call(
-                                  PyFunc.collections_namedtuple,
-                                  py_args, PyObj.namedtuple_kwargs);
+            self->py_namedtuple = PyObject_Call(
+                                      PyFunc.collections_namedtuple,
+                                      py_args, PyObj.namedtuple_kwargs);
+            if (!self->py_namedtuple) goto error;
 
-        if (!self->py_namedtuple) goto error;
+            self->py_namedtuple_args = PyTuple_New(self->n_cols);
+            if (!self->py_namedtuple_args) goto error;
+        }
+        else
+        {
+            self->structsequence_desc.name = "singlestoredb.Row";
+            self->structsequence_desc.doc = "Row of data values";
+            self->structsequence_desc.n_in_sequence = self->n_cols;
+            self->structsequence_desc.fields = calloc(self->n_cols + 1, sizeof(PyStructSequence_Field));
+            if (!self->structsequence_desc.fields) goto error;
+            for (unsigned long i = 0; i < self->n_cols; i++) {
+                self->structsequence_desc.fields[i].name = PyUnicode_AsUTF8(self->py_names[i]);
+                self->structsequence_desc.fields[i].doc = NULL;
+            }
+            self->structsequence = PyStructSequence_NewType(&self->structsequence_desc);
+            if (!self->structsequence) goto error;
+        }
 
         // Fall through
 
@@ -770,14 +797,18 @@ static void read_options(MySQLAccelOptions *options, PyObject *dict) {
         if (PyUnicode_CompareWithASCIIString(key, "results_type") == 0) {
             if (PyUnicode_CompareWithASCIIString(value, "dict") == 0 ||
                 PyUnicode_CompareWithASCIIString(value, "dicts") == 0 ) {
-                options->results_type = MYSQLSV_OUT_DICTS;
+                options->results_type = ACCEL_OUT_DICTS;
             }
             else if (PyUnicode_CompareWithASCIIString(value, "namedtuple") == 0 ||
                      PyUnicode_CompareWithASCIIString(value, "namedtuples") == 0) {
-                options->results_type = MYSQLSV_OUT_NAMEDTUPLES;
+                options->results_type = ACCEL_OUT_NAMEDTUPLES;
+            }
+            else if (PyUnicode_CompareWithASCIIString(value, "structsequence") == 0 ||
+                     PyUnicode_CompareWithASCIIString(value, "structsequences") == 0) {
+                options->results_type = ACCEL_OUT_STRUCTSEQUENCES;
             }
             else {
-                options->results_type = MYSQLSV_OUT_TUPLES;
+                options->results_type = ACCEL_OUT_TUPLES;
             }
         } else if (PyUnicode_CompareWithASCIIString(key, "parse_json") == 0) {
             options->parse_json = PyObject_IsTrue(value);
@@ -1251,14 +1282,20 @@ static PyObject *read_row_from_packet(
     int microsecond = 0;
 
     switch (py_state->options.results_type) {
-    case MYSQLSV_OUT_DICTS:
+    case ACCEL_OUT_DICTS:
         py_result = PyDict_New();
         break;
+   case ACCEL_OUT_STRUCTSEQUENCES: {
+        if (!py_state->structsequence) goto error;
+        py_result = PyStructSequence_New(py_state->structsequence);
+        break;
+        }
+    case ACCEL_OUT_NAMEDTUPLES:
+        if (!py_state->py_namedtuple) goto error;
+        if (!py_state->py_namedtuple_args) goto error;
+        py_result = py_state->py_namedtuple_args;
+        break;
     default:
-        // We use regular tuples here for namedtuples as well since
-        // we can't instantiate a namedtuple with just a size. Once
-        // we have a populated regular tuple, it will be converted
-        // to a namedtuple at the end.
         py_result = PyTuple_New(py_state->n_cols);
     }
 
@@ -1505,7 +1542,10 @@ static PyObject *read_row_from_packet(
         }
 
         switch (py_state->options.results_type) {
-        case MYSQLSV_OUT_DICTS:
+        case ACCEL_OUT_STRUCTSEQUENCES:
+            PyStructSequence_SetItem(py_result, i, py_item);
+            break;
+        case ACCEL_OUT_DICTS:
             PyDict_SetItem(py_result, py_state->py_names[i], py_item);
             Py_INCREF(py_state->py_names[i]);
             Py_DECREF(py_item);
@@ -1515,11 +1555,11 @@ static PyObject *read_row_from_packet(
         }
     }
 
-    if (py_state->options.results_type == MYSQLSV_OUT_NAMEDTUPLES &&
-        py_state->py_namedtuple) {
-        PyObject *py_tmp = py_result;
+    if (py_state->options.results_type == ACCEL_OUT_NAMEDTUPLES) {
+        // We just use py_result above as storage for the parameters to
+        // the namedtuple constructor. It gets deleted at the end of the
+        // fetch operation.
         py_result = PyObject_CallObject(py_state->py_namedtuple, py_result);
-        Py_CLEAR(py_tmp);
         if (!py_result) goto error;
     }
 
