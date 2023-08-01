@@ -128,11 +128,6 @@ jobs:
         env:
           SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
 
-      - name: Drop database
-        if: ${{ always() }}
-        run: |
-          python resources/drop_db.py --user "${{ secrets.CLUSTER_USER }}" --password "${{ secrets.CLUSTER_PASSWORD }}" --host "${{ needs.setup-database.outputs.cluster-host }}" --port 3306 --database "${{ needs.setup-database.outputs.cluster-database }}"
-
 
   shutdown-database:
     needs: [setup-database, smoke-test]
