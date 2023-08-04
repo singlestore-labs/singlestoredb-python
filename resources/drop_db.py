@@ -40,7 +40,7 @@ parser.add_option(
 
 (options, args) = parser.parse_args()
 
-if len(args) != 1 or options.help:
+if options.help:
     parser.print_help()
     sys.exit(1)
 
