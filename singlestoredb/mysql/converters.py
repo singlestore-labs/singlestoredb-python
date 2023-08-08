@@ -29,10 +29,10 @@ except ImportError:
 def escape_item(val, charset, mapping=None):
     if mapping is None:
         mapping = encoders
-    encoder = mapping.get(type(val))
+    encoder = mapping.get(type(val), None)
 
     # Fallback to default when no encoder found
-    if not encoder:
+    if encoder is None:
         try:
             encoder = mapping[str]
         except KeyError:
@@ -109,17 +109,15 @@ def escape_string(value, mapping=None):
 
 
 def escape_bytes_prefixed(value, mapping=None):
-    return "_binary'%s'" % value.decode('ascii', 'surrogateescape').translate(
-        _escape_table,
-    )
+    return "_binary X'{}'".format(value.hex())
 
 
 def escape_bytes(value, mapping=None):
-    return "'%s'" % value.decode('ascii', 'surrogateescape').translate(_escape_table)
+    return "X'{}'".format(value.hex())
 
 
 def escape_str(value, mapping=None):
-    return "'%s'" % escape_string(str(value), mapping)
+    return "'{}'".format(escape_string(str(value), mapping))
 
 
 def escape_None(value, mapping=None):

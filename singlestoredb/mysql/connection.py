@@ -710,13 +710,11 @@ class Connection(BaseConnection):
         Non-standard, for internal use; do not use this in your applications.
 
         """
-        if isinstance(obj, str):
-            return "'" + self.escape_string(obj) + "'"
-        if isinstance(obj, (bytes, bytearray)):
-            ret = self._quote_bytes(obj)
-            if self._binary_prefix:
-                ret = '_binary' + ret
-            return ret
+        dtype = type(obj)
+        if dtype is str or isinstance(obj, str):
+            return "'{}'".format(self.escape_string(obj))
+        if dtype is bytes or dtype is bytearray or isinstance(obj, (bytes, bytearray)):
+            return self._quote_bytes(obj)
         if mapping is None:
             mapping = self.encoders
         return converters.escape_item(obj, self.charset, mapping=mapping)
@@ -738,7 +736,9 @@ class Connection(BaseConnection):
 
     def _quote_bytes(self, s):
         if self.server_status & SERVER_STATUS.SERVER_STATUS_NO_BACKSLASH_ESCAPES:
-            return "'%s'" % (s.replace(b"'", b"''").decode('ascii', 'surrogateescape'),)
+            if self._binary_prefix:
+                return "_binary X'{}'".format(s.hex())
+            return "X'{}'".format(s.hex())
         return converters.escape_bytes(s)
 
     def cursor(self):

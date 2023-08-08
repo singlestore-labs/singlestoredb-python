@@ -136,14 +136,15 @@ class Cursor(BaseCursor):
         return self._nextset(False)
 
     def _escape_args(self, args, conn):
-        if isinstance(args, (tuple, list)):
-            return tuple(conn.literal(arg) for arg in args)
-        elif isinstance(args, dict):
-            return {key: conn.literal(val) for (key, val) in args.items()}
-        else:
-            # If it's not a dictionary let's try escaping it anyways.
-            # Worst case it will throw a Value error
-            return conn.escape(args)
+        dtype = type(args)
+        literal = conn.literal
+        if dtype is tuple or dtype is list or isinstance(args, (tuple, list)):
+            return tuple(literal(arg) for arg in args)
+        elif dtype is dict or isinstance(args, dict):
+            return {key: literal(val) for (key, val) in args.items()}
+        # If it's not a dictionary let's try escaping it anyways.
+        # Worst case it will throw a Value error
+        return conn.escape(args)
 
     def mogrify(self, query, args=None):
         """
@@ -264,7 +265,7 @@ class Cursor(BaseCursor):
         rows = 0
         for arg in args:
             v = values % escape(arg, conn)
-            if isinstance(v, str):
+            if type(v) is str or isinstance(v, str):
                 v = v.encode(encoding, 'surrogateescape')
             if len(sql) + len(v) + len(postfix) + 1 > max_stmt_length:
                 rows += self.execute(sql + postfix)
