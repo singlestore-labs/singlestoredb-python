@@ -114,7 +114,7 @@ html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(
 }
 /* operator */
 .highlight .o {
-    color: #aaa !important;
+    color: #ddd !important;
 }
 /* keyword / constant */
 .highlight .k, .highlight .kn, .highlight .ow, .highlight .kc,
@@ -127,7 +127,7 @@ html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(
 }
 /* attributes / methods */
 .highlight .n, .highlight .na, .highlight .nf {
-    color: #aaa !important;
+    color: #ddd !important;
 }
 /* builtin */
 .highlight .nb {
