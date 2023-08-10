@@ -1007,6 +1007,7 @@ static PyObject *read_packet(StateObject *py_state) {
         Py_XDECREF(py_result);
         Py_XDECREF(PyObject_CallMethod(py_state->py_conn, "_raise_mysql_exception",
                                        "O", py_buff, NULL));
+        goto error;
     }
 
 exit:
@@ -1722,6 +1723,10 @@ exit:
     }
 
     Py_XDECREF(py_zero);
+
+    if (PyErr_Occurred()) {
+        Py_CLEAR(py_out);
+    }
 
     return py_out;
 
