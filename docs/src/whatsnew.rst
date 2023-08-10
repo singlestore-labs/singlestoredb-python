@@ -8,12 +8,18 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
-v0.8.1 - July, 12, 2023
+v0.8.2 - August 10, 2023
+------------------------
+* Add ``nan_as_null`` and ``inf_as_null`` options for parameter conversion support
+* Separate ``structsequences`` and ``namedtuples`` for ``results_type``
+* Performance improvements of binary data uploads
+
+v0.8.1 - July 12, 2023
 -----------------------
-* Add `create_engine` function to return SQLAlchemy engine while supporting
+* Add ``create_engine`` function to return SQLAlchemy engine while supporting
   environment variable parameter settings and settings in options
 
-v0.8.0 - July, 12, 2023
+v0.8.0 - July 12, 2023
 -----------------------
 * ! Python 3.8 is now the minimum required version
 * Add parameter conversion routines to HTTP driver
