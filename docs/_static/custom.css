@@ -99,10 +99,7 @@ html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(
     -webkit-font-smoothing: antialiased;
     font-family: Inconsolata, monospace;
     font-weight: light;
-    font-size: 13px;
-}
-.highlight {
-    background-color: #000 !important;
+    font-size: 15px;
 }
 /* prompt */
 .highlight .gp {
