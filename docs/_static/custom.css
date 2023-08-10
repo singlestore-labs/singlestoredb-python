@@ -34,6 +34,7 @@ code.docutils > .pre {
     font-weight: bold;
     font-size: smaller;
 }
+
 /* Theme Overrides */
 .wy-side-nav-search {
     background-color: black !important;
@@ -79,6 +80,7 @@ html.writer-html4 .rst-content dl:not(.docutils)>dt, html.writer-html5 .rst-cont
     color: #80c;
 }
 .wy-grid-for-nav {
+
 }
 html.writer-html4 .rst-content dl:not(.docutils)>dt,
 html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple)>dt {
@@ -99,12 +101,50 @@ html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(
     font-weight: light;
     font-size: 13px;
 }
-.highlight .s1 {
-    color: #ffcf64 !important;
-}
+/* prompt */
 .highlight .gp {
+    color: #BBDEFB !important;
+}
+/* punctuation */
+.highlight .p {
     color: #aaa !important;
 }
+/* operator */
 .highlight .o {
-    color: #aaa !important;
+    color: #9575CD !important;
+}
+/* keyword / constant */
+.highlight .k, .highlight .kn, .highlight .ow, .highlight .kc,
+.highlight .kd, .highlight .kp, .highlight .kr, .highlight .kl {
+    color: rgba(189, 147, 249, 0.9) !important;
+}
+/* strings */
+.highlight .s, .highlight .s1, .highlight .s2 {
+    color: rgba(255, 121, 198, 0.8) !important;
+}
+/* attributes / methods */
+.highlight .n, .highlight .na, .highlight .nf {
+    color: #9FA8DA !important;
+}
+/* builtin */
+.highlight .nb {
+    color: #B39DDB !important;
+}
+/* output */
+.highlight .go {
+    color: #eee !important;
+}
+/* comment */
+.highlight .c, .highlight .ch, .highlight .cm, .highlight .cp,
+.highlight .cpf, .highlight .c1, .highlight .cs {
+    color: #BBDEFB !important;
+}
+/* number */
+.highlight .m, .highlight .il, .highlight .mb, .highlight .mf,
+.highlight .mh, .highlight .mi {
+    color: #9FA8DA !important;
+}
+/* error */
+.highlight .err {
+    color: #f00 !important;
 }
