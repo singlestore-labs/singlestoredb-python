@@ -101,6 +101,9 @@ html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(
     font-weight: light;
     font-size: 13px;
 }
+.highlight {
+    background-color: #000 !important;
+}
 /* prompt */
 .highlight .gp {
     color: #BBDEFB !important;
@@ -111,20 +114,20 @@ html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(
 }
 /* operator */
 .highlight .o {
-    color: #9575CD !important;
+    color: #aaa !important;
 }
 /* keyword / constant */
 .highlight .k, .highlight .kn, .highlight .ow, .highlight .kc,
 .highlight .kd, .highlight .kp, .highlight .kr, .highlight .kl {
-    color: rgba(189, 147, 249, 0.9) !important;
+    color: rgba(189, 147, 249) !important;
 }
 /* strings */
 .highlight .s, .highlight .s1, .highlight .s2 {
-    color: rgba(255, 121, 198, 0.8) !important;
+    color: rgba(255, 121, 198) !important;
 }
 /* attributes / methods */
 .highlight .n, .highlight .na, .highlight .nf {
-    color: #9FA8DA !important;
+    color: #aaa !important;
 }
 /* builtin */
 .highlight .nb {
