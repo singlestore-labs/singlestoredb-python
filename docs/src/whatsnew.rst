@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.8.3 - August 23, 2023
+------------------------
+* Fix ``%`` escaping in HTTP queries
+
 v0.8.2 - August 10, 2023
 ------------------------
 * Add ``nan_as_null`` and ``inf_as_null`` options for parameter conversion support

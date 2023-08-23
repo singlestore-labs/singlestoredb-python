@@ -425,7 +425,7 @@ class Cursor(connection.Cursor):
         args: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
     ) -> None:
         """Make sure the parameter substitions are valid."""
-        if args is not None:
+        if args:
             if isinstance(args, Sequence):
                 query = query % tuple(args)
             else:
