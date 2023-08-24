@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 import uuid
 from optparse import OptionParser
 
@@ -57,18 +58,30 @@ database = options.database
 if not database:
     database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
 
-with s2.connect(
-    f'mysql://{options.host}:{options.port}',
-    user=options.user, password=options.password,
-) as conn:
-    with conn.cursor() as cur:
-        cur.execute(f'CREATE DATABASE IF NOT EXISTS {database};')
-        cur.execute(f'USE {database};')
-        if options.http_port:
-            conn.enable_data_api(int(options.http_port))
-        with open(sql_file, 'r') as infile:
-            for cmd in infile.read().split(';\n'):
-                cmd = cmd.strip()
-                if cmd:
-                    cmd += ';'
-                    cur.execute(cmd)
+tries = 10
+while tries > 0:
+
+    try:
+        with s2.connect(
+            f'mysql://{options.host}:{options.port}',
+            user=options.user, password=options.password,
+        ) as conn:
+            with conn.cursor() as cur:
+                cur.execute(f'CREATE DATABASE IF NOT EXISTS {database};')
+                cur.execute(f'USE {database};')
+                if options.http_port:
+                    conn.enable_data_api(int(options.http_port))
+                with open(sql_file, 'r') as infile:
+                    for cmd in infile.read().split(';\n'):
+                        cmd = cmd.strip()
+                        if cmd:
+                            cmd += ';'
+                            cur.execute(cmd)
+
+    except Exception as exc:
+        if 'timed out' in str(exc):
+            print('WARNING: Timed out, trying again...')
+            time.sleep(30)
+            tries -= 1
+        else:
+            raise
