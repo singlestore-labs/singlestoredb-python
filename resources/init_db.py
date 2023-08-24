@@ -80,9 +80,6 @@ while tries > 0:
         break
 
     except Exception as exc:
-        if 'timed out' in str(exc):
-            print('WARNING: Timed out, trying again...')
-            time.sleep(30)
-            tries -= 1
-        else:
-            raise
+        print(f'WARNING: {exc}')
+        time.sleep(30)
+        tries -= 1
