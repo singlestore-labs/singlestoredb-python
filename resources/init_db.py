@@ -58,8 +58,8 @@ database = options.database
 if not database:
     database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
 
-tries = 10
-while tries > 0:
+tries = 25
+while True:
 
     try:
         with s2.connect(
@@ -83,3 +83,5 @@ while tries > 0:
         print(f'WARNING: {exc}')
         time.sleep(30)
         tries -= 1
+        if tries < 0:
+            raise
