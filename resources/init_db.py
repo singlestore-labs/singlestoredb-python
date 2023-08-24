@@ -77,6 +77,7 @@ while tries > 0:
                         if cmd:
                             cmd += ';'
                             cur.execute(cmd)
+        break
 
     except Exception as exc:
         if 'timed out' in str(exc):
