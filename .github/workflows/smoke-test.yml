@@ -107,11 +107,6 @@ jobs:
           pip install -r requirements.txt
           pip install -r test-requirements.txt
 
-      - name: Install MySQLdb on Linux
-        if: ${{ matrix.os == 'ubuntu-20.04' }}
-        run: |
-          pip install mysqlclient
-
       - name: Install SingleStore package
         run: |
           pip install .

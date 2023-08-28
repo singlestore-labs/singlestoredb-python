@@ -76,16 +76,16 @@ class TestConnection(unittest.TestCase):
         assert cbp('enable') is True, cbp('enable')
         assert cbp('enabled') is True, cbp('enabled')
 
-        assert cbp('false') is True, cbp('false')
-        assert cbp('f') is True, cbp('f')
-        assert cbp('False') is True, cbp('False')
-        assert cbp('F') is True, cbp('F')
-        assert cbp('FALSE') is True, cbp('FALSE')
+        assert cbp('false') is False, cbp('false')
+        assert cbp('f') is False, cbp('f')
+        assert cbp('False') is False, cbp('False')
+        assert cbp('F') is False, cbp('F')
+        assert cbp('FALSE') is False, cbp('FALSE')
 
-        assert cbp('off') is True, cbp('off')
-        assert cbp('no') is True, cbp('no')
-        assert cbp('disable') is True, cbp('disable')
-        assert cbp('disabled') is True, cbp('disabled')
+        assert cbp('off') is False, cbp('off')
+        assert cbp('no') is False, cbp('no')
+        assert cbp('disable') is False, cbp('disable')
+        assert cbp('disabled') is False, cbp('disabled')
 
         with self.assertRaises(ValueError):
             cbp('nein')
