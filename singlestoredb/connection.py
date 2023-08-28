@@ -96,7 +96,7 @@ def cast_bool_param(val: Any) -> bool:
         if val.lower() in ['on', 't', 'true', 'y', 'yes', 'enabled', 'enable']:
             return True
         elif val.lower() in ['off', 'f', 'false', 'n', 'no', 'disabled', 'disable']:
-            return True
+            return False
 
     raise ValueError('Unrecognized value for bool: {}'.format(val))
 
