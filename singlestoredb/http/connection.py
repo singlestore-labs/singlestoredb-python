@@ -457,7 +457,7 @@ class Cursor(connection.Cursor):
 
         self._expect_results = False
         sql_type = 'exec'
-        if re.match(r'^\s*(select|show|call|echo|describe)\s+', oper, flags=re.I):
+        if re.match(r'^\s*(select|show|call|echo|describe|with)\s+', oper, flags=re.I):
             self._expect_results = True
             sql_type = 'query'
 
