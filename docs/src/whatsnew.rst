@@ -8,6 +8,18 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.8.6 - August 29, 2023
+------------------------
+* Fix ``WITH`` statements in HTTP
+
+v0.8.5 - August 29, 2023
+------------------------
+* Fix ``DESCRIBE`` statements in HTTP
+
+v0.8.4 - August 28, 2023
+------------------------
+* Fix boolean connection options
+
 v0.8.3 - August 23, 2023
 ------------------------
 * Fix ``%`` escaping in HTTP queries
