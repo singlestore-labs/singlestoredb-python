@@ -8,7 +8,7 @@ from setuptools import setup
 from wheel.bdist_wheel import bdist_wheel
 
 
-py_limited_api = '0x03060000'
+py_limited_api = '0x03080000'
 # py_limited_api = False
 
 universal2_flags = ['-arch', 'x86_64', '-arch', 'arm64'] \
@@ -37,7 +37,7 @@ setup(
     ext_modules=[
         Extension(
             '_singlestoredb_accel',
-            sources=['singlestoredb/mysql/accel.c'],
+            sources=['accel.c'],
             define_macros=[('Py_LIMITED_API', py_limited_api)] if py_limited_api else [],
             py_limited_api=bool(py_limited_api),
             extra_compile_args=universal2_flags,
