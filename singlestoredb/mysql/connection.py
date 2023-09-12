@@ -18,6 +18,7 @@ except (ImportError, ModuleNotFoundError):
     _singlestoredb_accel = None
 
 from . import _auth
+from . import fusion
 
 from .charset import charset_by_name, charset_by_id
 from .constants import CLIENT, COMMAND, CR, ER, FIELD_TYPE, SERVER_STATUS
@@ -755,10 +756,14 @@ class Connection(BaseConnection):
         """
         # if DEBUG:
         #     print("DEBUG: sending query:", sql)
-        if isinstance(sql, str):
-            sql = sql.encode(self.encoding, 'surrogateescape')
-        self._execute_command(COMMAND.COM_QUERY, sql)
-        self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+        if fusion.is_management_query(sql):
+            self._result = fusion.execute(self, sql)
+            self._affected_rows = self._result.affected_rows
+        else:
+            if isinstance(sql, str):
+                sql = sql.encode(self.encoding, 'surrogateescape')
+            self._execute_command(COMMAND.COM_QUERY, sql)
+            self._affected_rows = self._read_query_result(unbuffered=unbuffered)
         return self._affected_rows
 
     def next_result(self, unbuffered=False):
