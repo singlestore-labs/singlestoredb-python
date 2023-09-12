@@ -755,7 +755,7 @@ class Connection(BaseConnection):
         """
         # if DEBUG:
         #     print("DEBUG: sending query:", sql)
-        from . import fusion
+        from .. import fusion
         if fusion.is_management_query(sql):
             self._result = fusion.execute(self, sql)
             self._affected_rows = self._result.affected_rows
