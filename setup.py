@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """SingleStoreDB package installer."""
+import os
 import platform
 from typing import Tuple
 
@@ -10,6 +11,8 @@ from wheel.bdist_wheel import bdist_wheel
 
 py_limited_api = '0x03080000'
 # py_limited_api = False
+
+build_extension = bool(int(os.environ.get('SINGLESTOREDB_BUILD_EXTENSION', '1')))
 
 universal2_flags = ['-arch', 'x86_64', '-arch', 'arm64'] \
     if (
@@ -33,16 +36,21 @@ class bdist_wheel_abi3(bdist_wheel):
         return python, abi, plat
 
 
-setup(
-    ext_modules=[
-        Extension(
-            '_singlestoredb_accel',
-            sources=['accel.c'],
-            define_macros=[('Py_LIMITED_API', py_limited_api)] if py_limited_api else [],
-            py_limited_api=bool(py_limited_api),
-            extra_compile_args=universal2_flags,
-            extra_link_args=universal2_flags,
-        ),
-    ],
-    cmdclass={'bdist_wheel': bdist_wheel_abi3 if py_limited_api else bdist_wheel},
-)
+if build_extension:
+    setup(
+        ext_modules=[
+            Extension(
+                '_singlestoredb_accel',
+                sources=['accel.c'],
+                define_macros=[
+                    ('Py_LIMITED_API', py_limited_api),
+                ] if py_limited_api else [],
+                py_limited_api=bool(py_limited_api),
+                extra_compile_args=universal2_flags,
+                extra_link_args=universal2_flags,
+            ),
+        ],
+        cmdclass={'bdist_wheel': bdist_wheel_abi3 if py_limited_api else bdist_wheel},
+    )
+else:
+    setup()
