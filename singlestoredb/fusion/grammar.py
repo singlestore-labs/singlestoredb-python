@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from parsimonious.grammar import Grammar
 
 GRAMMAR = Grammar(r'''
@@ -9,17 +8,17 @@ GRAMMAR = Grammar(r'''
                 select /
                 create_workspace_group /
                 create_workspace ) ws end? ws
-    ws = ~"(\s*(/\*.*\*/)*\s*)*"
+    ws = ~r"(\s*(/\*.*\*/)*\s*)*"
     like = ~"like"i ws qs ws
     extended = ~"extended"i ws
     in = ~"in"i ws qs ws
-    qs = ~"\"[^\"]*\"|'[^\']*'" ws
-    ident = ~"(`[^`]`\.|\w+\.)?(`[^`]+`|\w+|\*)" ws
-    name = ~"[A-Z]\w*" ws
+    qs = ~r"\"[^\"]*\"|'[^\']*'" ws
+    ident = ~r"(`[^`]`\.|\w+\.)?(`[^`]+`|\w+|\*)" ws
+    name = ~r"[A-Z]\w*" ws
     compound_name = ident alias? ws
     comma = "," ws
     end = ";" ws
-    alias = ~"as"i ws ~"(`[^`]+`|\w+)" ws
+    alias = ~"as"i ws ~r"(`[^`]+`|\w+)" ws
     projections = compound_name alias? (comma compound_name alias?)* ws
     table = compound_name ws
     select = ~"select"i ws projections ~"from"i ws table ws

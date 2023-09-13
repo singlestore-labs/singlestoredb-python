@@ -5,19 +5,16 @@ from typing import Optional
 from typing import Tuple
 
 from .. import connection
+from ..mysql.constants.FIELD_TYPE import BLOB  # noqa: F401
+from ..mysql.constants.FIELD_TYPE import BOOL  # noqa: F401
+from ..mysql.constants.FIELD_TYPE import DATE  # noqa: F401
+from ..mysql.constants.FIELD_TYPE import DATETIME  # noqa: F401
+from ..mysql.constants.FIELD_TYPE import DOUBLE  # noqa: F401
+from ..mysql.constants.FIELD_TYPE import JSON  # noqa: F401
+from ..mysql.constants.FIELD_TYPE import LONGLONG  # noqa: F401
+from ..mysql.constants.FIELD_TYPE import STRING  # noqa: F401
 from ..utils.results import Description
 from ..utils.results import format_results
-
-# MySQL data types
-BOOL = 1
-DOUBLE = 5
-INT = 8
-DATE = 10
-TIME = 11
-DATETIME = 12
-JSON = 245
-BLOB = 252
-STRING = 253
 
 
 class DummyField(object):
