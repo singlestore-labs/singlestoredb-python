@@ -71,7 +71,7 @@ class Handler:
                 )
         else:
             def fields(x: Any) -> Any:
-                return (x.name, x.id, x.region.name, json.dumps(x.firewall_ranges))
+                return (x.name, x.id, x.region.name, x.firewall_ranges)
         is_like = self.build_like_func(params.get('like', None))
         return (
             desc,

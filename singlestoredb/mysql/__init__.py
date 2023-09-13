@@ -1,4 +1,3 @@
-# type: ignore
 """
 PyMySQL: A pure-Python MySQL client library.
 
@@ -23,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 import sys
+from typing import Any
 
 from .constants import FIELD_TYPE
 from .err import DatabaseError
@@ -51,20 +51,21 @@ paramstyle = 'pyformat'
 from . import connection  # noqa: E402
 
 
-class DBAPISet(frozenset):
-    def __ne__(self, other):
+class DBAPISet(frozenset[Any]):
+
+    def __ne__(self, other: Any) -> bool:
         if isinstance(other, set):
             return frozenset.__ne__(self, other)
         else:
             return other not in self
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         if isinstance(other, frozenset):
             return frozenset.__eq__(self, other)
         else:
             return other in self
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return frozenset.__hash__(self)
 
 
@@ -96,15 +97,15 @@ DATETIME = TIMESTAMP
 ROWID = DBAPISet()
 
 
-def Binary(x):
+def Binary(x: Any) -> bytes:
     """Return x as a binary type."""
     return bytes(x)
 
 
-Connect = connect = Connection = connection.Connection
+Connect = connect = Connection = connection.Connection  # type: ignore
 
 
-def get_client_info():  # for MySQLdb compatibility
+def get_client_info() -> str:  # for MySQLdb compatibility
     from .. import __version__
     return __version__
 
@@ -117,11 +118,11 @@ NULL = 'NULL'
 __version__ = get_client_info()
 
 
-def thread_safe():
+def thread_safe() -> bool:
     return True  # match MySQLdb.thread_safe()
 
 
-def install_as_MySQLdb():
+def install_as_MySQLdb() -> None:
     """
     After this function is called, any application that imports MySQLdb or
     _mysql will unwittingly actually use pymysql.

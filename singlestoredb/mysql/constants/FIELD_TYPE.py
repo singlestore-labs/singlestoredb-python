@@ -1,4 +1,3 @@
-# type: ignore
 DECIMAL = 0
 TINY = 1
 SHORT = 2
@@ -30,3 +29,4 @@ GEOMETRY = 255
 
 CHAR = TINY
 INTERVAL = ENUM
+BOOL = TINY

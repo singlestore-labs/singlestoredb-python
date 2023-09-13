@@ -51,7 +51,7 @@ class TestResults(unittest.TestCase):
                 with conn.cursor() as cur:
                     cur.execute('select * from data')
                     out = cur.fetchone()
-                    assert type(out) == tuple, type(out)
+                    assert type(out) is tuple, type(out)
                     assert len(out) == 3, len(out)
                     cur.fetchall()
 
@@ -59,7 +59,7 @@ class TestResults(unittest.TestCase):
                     out = cur.fetchall()
                     assert len(out) == 5, len(out)
                     assert len(out[0]) == 3, len(out[0])
-                    assert type(out[0]) == tuple, type(out[0])
+                    assert type(out[0]) is tuple, type(out[0])
                     assert sorted(out) == sorted([
                         ('a', 'antelopes', 2),
                         ('b', 'bears', 2),
@@ -111,13 +111,13 @@ class TestResults(unittest.TestCase):
                 with conn.cursor() as cur:
                     cur.execute('select * from data')
                     out = cur.fetchone()
-                    assert type(out) == dict, type(out)
+                    assert type(out) is dict, type(out)
                     assert len(out) == 3, len(out)
                     cur.fetchall()
 
                     cur.execute('select * from data')
                     out = cur.fetchall()
-                    assert type(out[0]) == dict, type(out[0])
+                    assert type(out[0]) is dict, type(out[0])
                     assert len(out) == 5, len(out)
                     assert len(out[0]) == 3, len(out[0])
                     assert sorted(out, key=lambda x: x['id']) == sorted(
@@ -139,13 +139,13 @@ class TestResults(unittest.TestCase):
                 with conn.cursor() as cur:
                     cur.execute('select * from data')
                     out = cur.fetchone()
-                    assert type(out) == pd.DataFrame, type(out)
+                    assert type(out) is pd.DataFrame, type(out)
                     assert len(out) == 1, len(out)
                     cur.fetchall()
 
                     cur.execute('select * from data')
                     out = cur.fetchall()
-                    assert type(out) == pd.DataFrame, type(out)
+                    assert type(out) is pd.DataFrame, type(out)
                     assert len(out) == 5, len(out)
                     out = out.sort_values('id').reset_index(drop=True)
                     exp = pd.DataFrame(
