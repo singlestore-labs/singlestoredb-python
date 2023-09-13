@@ -23,6 +23,7 @@ THE SOFTWARE.
 """
 import sys
 from typing import Any
+from typing import FrozenSet
 
 from .constants import FIELD_TYPE
 from .err import DatabaseError
@@ -51,7 +52,7 @@ paramstyle = 'pyformat'
 from . import connection  # noqa: E402
 
 
-class DBAPISet(frozenset[Any]):
+class DBAPISet(FrozenSet[Any]):
 
     def __ne__(self, other: Any) -> bool:
         if isinstance(other, set):
