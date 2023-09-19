@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.8.7 - September 19, 2023
+---------------------------
+* Add `encoding_errors=` parameter to connection
+
 v0.8.6 - August 29, 2023
 ------------------------
 * Fix ``WITH`` statements in HTTP
