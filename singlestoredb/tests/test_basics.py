@@ -1183,6 +1183,14 @@ class TestBasics(unittest.TestCase):
     def test_encoding_errors(self):
         with s2.connect(
             database=type(self).dbname,
+            encoding_errors='strict',
+        ) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT * FROM badutf8')
+                list(cur)
+
+        with s2.connect(
+            database=type(self).dbname,
             encoding_errors='backslashreplace',
         ) as conn:
             with conn.cursor() as cur:
