@@ -304,6 +304,7 @@ class Connection(BaseConnection):
         multi_statements=None,
         nan_as_null=None,
         inf_as_null=None,
+        encoding_errors='strict',
     ):
         BaseConnection.__init__(**dict(locals()))
 
@@ -416,6 +417,7 @@ class Connection(BaseConnection):
         self.charset = charset or DEFAULT_CHARSET
         self.collation = collation
         self.use_unicode = use_unicode
+        self.encoding_errors = encoding_errors
 
         self.encoding = charset_by_name(self.charset).encoding
 
@@ -1455,6 +1457,7 @@ class MySQLResult:
         self.unbuffered_active = False
         self.converters = []
         self.fields = []
+        self.encoding_errors = self.connection.encoding_errors
         if unbuffered:
             try:
                 self.init_unbuffered_query()
@@ -1625,7 +1628,7 @@ class MySQLResult:
                 break
             if data is not None:
                 if encoding is not None:
-                    data = data.decode(encoding)
+                    data = data.decode(encoding, errors=self.encoding_errors)
                 if DEBUG:
                     print('DEBUG: DATA = ', data)
                 if converter is not None:

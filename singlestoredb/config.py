@@ -85,6 +85,12 @@ register_option(
 )
 
 register_option(
+    'encoding_errors', 'string', check_str, 'strict',
+    'Specifies the error handling behavior for decoding string values.',
+    environ='SINGLESTOREDB_ENCODING_ERRORS',
+)
+
+register_option(
     'local_infile', 'bool', check_bool, False,
     'Should it be possible to load local files?',
     environ='SINGLESTOREDB_LOCAL_INFILE',

@@ -1180,6 +1180,15 @@ class TestBasics(unittest.TestCase):
                 cur.execute('SELECT %s :> DOUBLE AS X', [1.234])
                 self.assertEqual(1.234, list(cur)[0][0])
 
+    def test_encoding_errors(self):
+        with s2.connect(
+            database=type(self).dbname,
+            encoding_errors='backslashreplace',
+        ) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT * FROM badutf8')
+                list(cur)
+
 
 if __name__ == '__main__':
     import nose2

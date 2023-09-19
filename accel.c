@@ -488,6 +488,7 @@ typedef struct {
         PyObject *_next_seq_id;
         PyObject *rows;
     } py_str;
+    char *encoding_errors;
 } StateObject;
 
 static void read_options(MySQLAccelOptions *options, PyObject *dict);
@@ -502,6 +503,7 @@ static void State_clear_fields(StateObject *self) {
     DESTROY(self->type_codes);
     DESTROY(self->encodings);
     DESTROY(self->structsequence_desc.fields);
+    DESTROY(self->encoding_errors);
     if (self->py_converters) {
         for (unsigned long i = 0; i < self->n_cols; i++) {
             Py_CLEAR(self->py_converters[i]);
@@ -574,6 +576,17 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         if (py_unbuffered && PyObject_IsTrue(py_unbuffered)) {
             self->unbuffered = 1;
         }
+        PyObject *py_encoding_errors = PyDict_GetItemString(py_options, "encoding_errors");
+        if (py_encoding_errors) {
+            self->encoding_errors = PyUnicode_AsUTF8(py_encoding_errors);
+            if (!self->encoding_errors) goto error;
+        }
+    }
+
+    if (!self->encoding_errors) {
+        self->encoding_errors = calloc(7, 1);
+        if (!self->encoding_errors) goto error;
+        memcpy(self->encoding_errors, "strict", 6);
     }
 
     if (self->unbuffered) {
@@ -1371,7 +1384,7 @@ static PyObject *read_row_from_packet(
                     py_str = PyBytes_FromStringAndSize(out, out_l);
                     if (!py_str) goto error;
                 } else {
-                    py_str = PyUnicode_Decode(out, out_l, py_state->encodings[i], "strict");
+                    py_str = PyUnicode_Decode(out, out_l, py_state->encodings[i], py_state->encoding_errors);
                     if (!py_str) goto error;
                 }
                 py_item = PyObject_CallFunctionObjArgs(py_state->py_converters[i], py_str, NULL);
@@ -1384,7 +1397,7 @@ static PyObject *read_row_from_packet(
                 switch (py_state->type_codes[i]) {
                 case MYSQL_TYPE_NEWDECIMAL:
                 case MYSQL_TYPE_DECIMAL:
-                    py_str = PyUnicode_Decode(out, out_l, py_state->encodings[i], "strict");
+                    py_str = PyUnicode_Decode(out, out_l, py_state->encodings[i], py_state->encoding_errors);
                     if (!py_str) goto error;
 
                     py_item = PyObject_CallFunctionObjArgs(PyFunc.decimal_Decimal, py_str, NULL);
@@ -1431,7 +1444,7 @@ static PyObject *read_row_from_packet(
                             py_item = py_state->py_invalid_values[i];
                             Py_INCREF(py_item);
                         } else {
-                            py_item = PyUnicode_Decode(orig_out, orig_out_l, "utf8", "strict");
+                            py_item = PyUnicode_Decode(orig_out, orig_out_l, "ascii", py_state->encoding_errors);
                             if (!py_item) goto error;
                         }
                         break;
@@ -1451,7 +1464,7 @@ static PyObject *read_row_from_packet(
                                     year, month, day, hour, minute, second, microsecond);
                     if (!py_item) {
                         PyErr_Clear();
-                        py_item = PyUnicode_Decode(orig_out, orig_out_l, "utf8", "strict");
+                        py_item = PyUnicode_Decode(orig_out, orig_out_l, "ascii", py_state->encoding_errors);
                     }
                     if (!py_item) goto error;
                     break;
@@ -1468,7 +1481,7 @@ static PyObject *read_row_from_packet(
                             py_item = py_state->py_invalid_values[i];
                             Py_INCREF(py_item);
                         } else {
-                            py_item = PyUnicode_Decode(orig_out, orig_out_l, "utf8", "strict");
+                            py_item = PyUnicode_Decode(orig_out, orig_out_l, "ascii", py_state->encoding_errors);
                             if (!py_item) goto error;
                         }
                         break;
@@ -1483,7 +1496,7 @@ static PyObject *read_row_from_packet(
                                     year, month, day);
                     if (!py_item) {
                         PyErr_Clear();
-                        py_item = PyUnicode_Decode(orig_out, orig_out_l, "utf8", "strict");
+                        py_item = PyUnicode_Decode(orig_out, orig_out_l, "ascii", py_state->encoding_errors);
                     }
                     if (!py_item) goto error;
                     break;
@@ -1495,7 +1508,7 @@ static PyObject *read_row_from_packet(
                             py_item = py_state->py_invalid_values[i];
                             Py_INCREF(py_item);
                         } else {
-                            py_item = PyUnicode_Decode(orig_out, orig_out_l, "utf8", "strict");
+                            py_item = PyUnicode_Decode(orig_out, orig_out_l, "ascii", py_state->encoding_errors);
                             if (!py_item) goto error;
                         }
                         break;
@@ -1533,7 +1546,7 @@ static PyObject *read_row_from_packet(
                                        sign * microsecond);
                     if (!py_item) {
                         PyErr_Clear();
-                        py_item = PyUnicode_Decode(orig_out, orig_out_l, "utf8", "strict");
+                        py_item = PyUnicode_Decode(orig_out, orig_out_l, "ascii", py_state->encoding_errors);
                     }
                     if (!py_item) goto error;
                     break;
@@ -1568,7 +1581,7 @@ static PyObject *read_row_from_packet(
                         break;
                     }
 
-                    py_item = PyUnicode_Decode(out, out_l, py_state->encodings[i], "strict");
+                    py_item = PyUnicode_Decode(out, out_l, py_state->encodings[i], py_state->encoding_errors);
                     if (!py_item) goto error;
 
                     // Parse JSON string.

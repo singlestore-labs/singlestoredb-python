@@ -1280,6 +1280,7 @@ def connect(
     connect_timeout: Optional[int] = None,
     nan_as_null: Optional[bool] = None,
     inf_as_null: Optional[bool] = None,
+    encoding_errors: Optional[str] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1352,6 +1353,8 @@ def connect(
     inf_as_null: bool, optional
         Should Inf values be treated as NULLs when used in parameter
         substitutions including uploaded data?
+    encoding_errors: str, optional
+        The error handler name for value decoding errors
 
     Examples
     --------

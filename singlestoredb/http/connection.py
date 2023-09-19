@@ -1032,5 +1032,6 @@ def connect(
     connect_timeout: Optional[int] = None,
     nan_as_null: Optional[bool] = None,
     inf_as_null: Optional[bool] = None,
+    encoding_errors: Optional[str] = None,
 ) -> Connection:
     return Connection(**dict(locals()))

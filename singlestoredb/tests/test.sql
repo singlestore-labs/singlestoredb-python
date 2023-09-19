@@ -365,4 +365,20 @@ CREATE ROWSTORE TABLE IF NOT EXISTS `extended_types` (
 COLLATE='utf8_unicode_ci';
 
 
+--
+-- Invalid utf8 table
+--
+-- These sequences were breaking during fetch on a customer's machine
+-- however, they seem to work fine in our tests.
+--
+CREATE TABLE IF NOT EXISTS `badutf8` (
+    `text` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci
+)
+COLLATE='utf8_unicode_ci';
+
+
+INSERT INTO `badutf8` VALUES ('🥷🧙👻.eth');
+INSERT INTO `badutf8` VALUES ('🥒rick.eth');
+
+
 COMMIT;
