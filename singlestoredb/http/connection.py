@@ -853,6 +853,8 @@ class Connection(connection.Connection):
     paramstyle = 'qmark'
 
     def __init__(self, **kwargs: Any):
+        from .. import __version__ as client_version
+
         connection.Connection.__init__(self, **kwargs)
 
         host = kwargs.get('host', get_option('host'))
@@ -870,6 +872,7 @@ class Connection(connection.Connection):
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'Accept-Encoding': 'compress,identity',
+            'User-Agent': f'SingleStoreDB-Python/{client_version}',
         })
 
         if kwargs.get('ssl_disabled', get_option('ssl_disabled')):

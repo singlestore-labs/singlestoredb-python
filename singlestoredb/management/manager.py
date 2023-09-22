@@ -30,6 +30,7 @@ class Manager(object):
         self, access_token: Optional[str] = None, version: Optional[str] = None,
         base_url: Optional[str] = None,
     ):
+        from .. import __version__ as client_version
         access_token = (
             access_token or
             config.get_option('management.token')
@@ -41,6 +42,7 @@ class Manager(object):
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json',
             'Accept': 'application/json',
+            'User-Agent': f'SingleStoreDB-Python/{client_version}',
         })
         self._base_url = urljoin(
             base_url or type(self).default_base_url,
