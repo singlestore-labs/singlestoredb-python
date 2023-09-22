@@ -1644,6 +1644,9 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
     PyObject *py_out = NULL;
     PyObject *py_next_seq_id = NULL;
     PyObject *py_zero = PyLong_FromUnsignedLong(0);
+    PyObject *py_err_type = NULL;
+    PyObject *py_err_value = NULL;
+    PyObject *py_err_tb = NULL;
     unsigned long long requested_n_rows = 0;
     unsigned long long row_idx = 0;
     char *keywords[] = {"result", "unbuffered", "size", NULL};
@@ -1791,10 +1794,17 @@ exit:
     if (PyErr_Occurred()) {
         Py_CLEAR(py_out);
     }
+    else if (py_err_type) {
+        Py_CLEAR(py_out);
+        PyErr_Restore(py_err_type, py_err_value, py_err_tb);
+    }
 
     return py_out;
 
 error:
+    if (PyErr_Occurred()) {
+        PyErr_Fetch(&py_err_type, &py_err_value, &py_err_tb);
+    }
     goto exit;
 }
 
