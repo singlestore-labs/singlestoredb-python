@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.8.8 - September 26, 2023
+---------------------------
+* Fix error propagation issue in C extension
+
 v0.8.7 - September 19, 2023
 ---------------------------
 * Add `encoding_errors=` parameter to connection
