@@ -46,6 +46,7 @@ from .protocol import (
     LoadLocalPacketWrapper,
 )
 from . import err
+from ..config import get_option
 from ..connection import Connection as BaseConnection
 
 try:
@@ -65,7 +66,7 @@ except (ImportError, KeyError):
     # KeyError occurs when there's no entry in OS database for a current user.
     DEFAULT_USER = None
 
-DEBUG = False
+DEBUG = get_option('debug.connection')
 
 TEXT_TYPES = {
     FIELD_TYPE.BIT,
@@ -1051,7 +1052,7 @@ class Connection(BaseConnection):
         return data
 
     def _write_bytes(self, data):
-        if self._read_timeout is not None:
+        if self._write_timeout is not None:
             self._sock.settimeout(self._write_timeout)
         try:
             self._sock.sendall(data)
@@ -1090,7 +1091,7 @@ class Connection(BaseConnection):
 
         """
         if not self._sock:
-            raise err.InterfaceError(0, '')
+            raise err.InterfaceError(0, 'The connection has been closed')
 
         # If the last query was unbuffered, make sure it finishes before
         # sending new commands

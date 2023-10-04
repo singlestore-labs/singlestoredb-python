@@ -16,8 +16,10 @@ except ImportError:
 from functools import partial
 import hashlib
 
+from ..config import get_option
 
-DEBUG = False
+
+DEBUG = get_option('debug.connection')
 SCRAMBLE_LENGTH = 20
 sha1_new = partial(hashlib.new, 'sha1')
 
