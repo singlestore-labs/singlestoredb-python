@@ -1,7 +1,12 @@
-# type: ignore
 import datetime
 import time
 from decimal import Decimal
+from typing import Any
+from typing import Callable
+from typing import Dict
+from typing import Optional
+from typing import Tuple
+from typing import Union
 
 from ..converters import converters as decoders
 from .err import ProgrammingError
@@ -26,7 +31,10 @@ except ImportError:
     has_pygeos = False
 
 
-def escape_item(val, charset, mapping=None):
+Encoders = Dict[type, Callable[..., Union[str, Dict[str, str]]]]
+
+
+def escape_item(val: Any, charset: str, mapping: Optional[Encoders] = None) -> str:
     if mapping is None:
         mapping = encoders
     encoder = mapping.get(type(val), None)
@@ -45,7 +53,11 @@ def escape_item(val, charset, mapping=None):
     return val
 
 
-def escape_dict(val, charset, mapping=None):
+def escape_dict(
+    val: Dict[str, Any],
+    charset: str,
+    mapping: Optional[Encoders] = None,
+) -> Dict[str, str]:
     n = {}
     for k, v in val.items():
         quoted = escape_item(v, charset, mapping)
@@ -53,7 +65,11 @@ def escape_dict(val, charset, mapping=None):
     return n
 
 
-def escape_sequence(val, charset, mapping=None):
+def escape_sequence(
+    val: Any,
+    charset: str,
+    mapping: Optional[Encoders] = None,
+) -> str:
     n = []
     for item in val:
         quoted = escape_item(item, charset, mapping)
@@ -61,28 +77,33 @@ def escape_sequence(val, charset, mapping=None):
     return '(' + ','.join(n) + ')'
 
 
-def escape_set(val, charset, mapping=None):
+def escape_set(val: Any, charset: str, mapping: Optional[Encoders] = None) -> str:
     return ','.join([escape_item(x, charset, mapping) for x in val])
 
 
-def escape_bool(value, mapping=None):
+def escape_bool(value: Any, mapping: Optional[Encoders] = None) -> str:
     return str(int(value))
 
 
-def escape_int(value, mapping=None):
+def escape_int(value: Any, mapping: Optional[Encoders] = None) -> str:
     return str(value)
 
 
-def escape_float(value, mapping=None, nan_as_null=False, inf_as_null=False):
+def escape_float(
+    value: Any,
+    mapping: Optional[Encoders] = None,
+    nan_as_null: bool = False,
+    inf_as_null: bool = False,
+) -> str:
     s = repr(value)
     if s == 'nan':
         if nan_as_null:
             return 'NULL'
-        raise ProgrammingError('%s can not be used with SingleStoreDB' % s)
+        raise ProgrammingError(0, '%s can not be used with SingleStoreDB' % s)
     if s == 'inf':
         if inf_as_null:
             return 'NULL'
-        raise ProgrammingError('%s can not be used with SingleStoreDB' % s)
+        raise ProgrammingError(0, '%s can not be used with SingleStoreDB' % s)
     if 'e' not in s:
         s += 'e0'
     return s
@@ -98,7 +119,7 @@ _escape_table[ord('"')] = '\\"'
 _escape_table[ord("'")] = "\\'"
 
 
-def escape_string(value, mapping=None):
+def escape_string(value: str, mapping: Optional[Encoders] = None) -> str:
     """
     Escapes *value* without adding quote.
 
@@ -108,23 +129,23 @@ def escape_string(value, mapping=None):
     return value.translate(_escape_table)
 
 
-def escape_bytes_prefixed(value, mapping=None):
+def escape_bytes_prefixed(value: bytes, mapping: Optional[Encoders] = None) -> str:
     return "_binary X'{}'".format(value.hex())
 
 
-def escape_bytes(value, mapping=None):
+def escape_bytes(value: bytes, mapping: Optional[Encoders] = None) -> str:
     return "X'{}'".format(value.hex())
 
 
-def escape_str(value, mapping=None):
+def escape_str(value: str, mapping: Optional[Encoders] = None) -> str:
     return "'{}'".format(escape_string(str(value), mapping))
 
 
-def escape_None(value, mapping=None):
+def escape_None(value: str, mapping: Optional[Encoders] = None) -> str:
     return 'NULL'
 
 
-def escape_timedelta(obj, mapping=None):
+def escape_timedelta(obj: datetime.timedelta, mapping: Optional[Encoders] = None) -> str:
     seconds = int(obj.seconds) % 60
     minutes = int(obj.seconds // 60) % 60
     hours = int(obj.seconds // 3600) % 24 + int(obj.days) * 24
@@ -135,7 +156,7 @@ def escape_timedelta(obj, mapping=None):
     return fmt.format(hours, minutes, seconds, obj.microseconds)
 
 
-def escape_time(obj, mapping=None):
+def escape_time(obj: datetime.time, mapping: Optional[Encoders] = None) -> str:
     if obj.microsecond:
         fmt = "'{0.hour:02}:{0.minute:02}:{0.second:02}.{0.microsecond:06}'"
     else:
@@ -143,7 +164,7 @@ def escape_time(obj, mapping=None):
     return fmt.format(obj)
 
 
-def escape_datetime(obj, mapping=None):
+def escape_datetime(obj: datetime.datetime, mapping: Optional[Encoders] = None) -> str:
     if obj.microsecond:
         fmt = "'{0.year:04}-{0.month:02}-{0.day:02} " \
               "{0.hour:02}:{0.minute:02}:{0.second:02}.{0.microsecond:06}'"
@@ -153,20 +174,20 @@ def escape_datetime(obj, mapping=None):
     return fmt.format(obj)
 
 
-def escape_date(obj, mapping=None):
+def escape_date(obj: datetime.date, mapping: Optional[Encoders] = None) -> str:
     fmt = "'{0.year:04}-{0.month:02}-{0.day:02}'"
     return fmt.format(obj)
 
 
-def escape_struct_time(obj, mapping=None):
+def escape_struct_time(obj: Tuple[Any, ...], mapping: Optional[Encoders] = None) -> str:
     return escape_datetime(datetime.datetime(*obj[:6]))
 
 
-def Decimal2Literal(o, d):
+def Decimal2Literal(o: Any, d: Any) -> str:
     return format(o, 'f')
 
 
-def through(x):
+def through(x: Any) -> Any:
     return x
 
 
@@ -179,7 +200,7 @@ def through(x):
 convert_bit = through
 
 
-encoders = {
+encoders: Encoders = {
     bool: escape_bool,
     int: escape_int,
     float: escape_float,
@@ -201,7 +222,7 @@ encoders = {
 
 if has_numpy:
 
-    def escape_numpy(value, mapping=None):
+    def escape_numpy(value: Any, mapping: Optional[Encoders] = None) -> str:
         """Convert numpy arrays to vectors of bytes."""
         return escape_bytes(value.tobytes(), mapping=mapping)
 
@@ -225,7 +246,7 @@ if has_numpy:
 
 if has_shapely:
 
-    def escape_shapely(value, mapping=None):
+    def escape_shapely(value: Any, mapping: Optional[Encoders] = None) -> str:
         """Convert shapely geo objects."""
         return escape_str(shapely.wkt.dumps(value), mapping=mapping)
 
@@ -235,7 +256,7 @@ if has_shapely:
 
 if has_pygeos:
 
-    def escape_pygeos(value, mapping=None):
+    def escape_pygeos(value: Any, mapping: Optional[Encoders] = None) -> str:
         """Convert pygeos objects."""
         return escape_str(pygeos.io.to_wkt(value), mapping=mapping)
 
@@ -243,8 +264,8 @@ if has_pygeos:
 
 
 # for MySQLdb compatibility
-conversions = encoders.copy()
-conversions.update(decoders)
+conversions = encoders.copy()  # type: ignore
+conversions.update(decoders)   # type: ignore
 Thing2Literal = escape_str
 
 # Run doctests with `pytest --doctest-modules pymysql/converters.py`

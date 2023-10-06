@@ -1,15 +1,16 @@
-# type: ignore
+from typing import Dict
+from typing import Optional
 
 MBLENGTH = {8: 1, 33: 3, 88: 2, 91: 2}
 
 
 class Charset:
 
-    def __init__(self, id, name, collation, is_default):
+    def __init__(self, id: int, name: str, collation: str, is_default: str):
         self.id, self.name, self.collation = id, name, collation
         self.is_default = is_default == 'Yes'
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return 'Charset(id=%s, name=%r, collation=%r)' % (
             self.id,
             self.name,
@@ -17,7 +18,7 @@ class Charset:
         )
 
     @property
-    def encoding(self):
+    def encoding(self) -> str:
         name = self.name
         if name in ('utf8mb4', 'utf8mb3'):
             return 'utf8'
@@ -30,25 +31,25 @@ class Charset:
         return name
 
     @property
-    def is_binary(self):
+    def is_binary(self) -> bool:
         return self.id == 63
 
 
 class Charsets:
 
-    def __init__(self):
-        self._by_id = {}
-        self._by_name = {}
+    def __init__(self) -> None:
+        self._by_id: Dict[int, Charset] = {}
+        self._by_name: Dict[str, Charset] = {}
 
-    def add(self, c):
+    def add(self, c: Charset) -> None:
         self._by_id[c.id] = c
         if c.is_default:
             self._by_name[c.name] = c
 
-    def by_id(self, id):
+    def by_id(self, id: int) -> Charset:
         return self._by_id[id]
 
-    def by_name(self, name):
+    def by_name(self, name: str) -> Optional[Charset]:
         return self._by_name.get(name.lower())
 
 

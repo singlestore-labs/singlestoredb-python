@@ -1,5 +1,5 @@
-# type: ignore
 import struct
+from typing import Any
 
 from ..exceptions import DatabaseError  # noqa: F401
 from ..exceptions import DataError  # noqa: F401
@@ -18,7 +18,7 @@ from .constants import ER
 error_map = {}
 
 
-def _map_error(exc, *errors):
+def _map_error(exc: Any, *errors: int) -> None:
     for error in errors:
         error_map[error] = exc
 
@@ -83,7 +83,7 @@ _map_error(
 del _map_error, ER
 
 
-def raise_mysql_exception(data):
+def raise_mysql_exception(data: bytes) -> Exception:
     errno = struct.unpack('<h', data[1:3])[0]
     errval = data[9:].decode('utf-8', 'replace')
     errorclass = error_map.get(errno)

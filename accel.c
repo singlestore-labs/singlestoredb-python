@@ -79,57 +79,6 @@
 #define ACCEL_OPTION_BIT_TYPE_BYTES 0
 #define ACCEL_OPTION_BIT_TYPE_INT 1
 
-//
-// !! MUST BE KEPT IN SYNC WITH singlestoredb/ext_func/dtypes.py!!!
-//
-#define DATATYPE_BOOL 0
-#define DATATYPE_BOOLEAN 0
-#define DATATYPE_BIT 1
-#define DATATYPE_TINYINT 2
-#define DATATYPE_UNSIGNED_TINYINT 3
-#define DATATYPE_SMALLINT 4
-#define DATATYPE_UNSIGNED_SMALLINT 5
-#define DATATYPE_MEDIUMINT 6
-#define DATATYPE_UNSIGNED_MEDIUMINT 7
-#define DATATYPE_INT 8
-#define DATATYPE_INTEGER 8
-#define DATATYPE_UNSIGNED_INT 9
-#define DATATYPE_UNSIGNED_INTEGER 9
-#define DATATYPE_BIGINT 10
-#define DATATYPE_UNSIGNED_BIGINT 11
-#define DATATYPE_FLOAT 12
-#define DATATYPE_DOUBLE 13
-#define DATATYPE_REAL 13
-#define DATATYPE_DECIMAL 14
-#define DATATYPE_DEC 14
-#define DATATYPE_FIXED 14
-#define DATATYPE_NUMERIC 14
-#define DATATYPE_DATE 15
-#define DATATYPE_TIME 16
-#define DATATYPE_TIME_6 17
-#define DATATYPE_DATETIME 18
-#define DATATYPE_DATETIME_6 19
-#define DATATYPE_TIMESTAMP 20
-#define DATATYPE_TIMESTAMP_6 21
-#define DATATYPE_YEAR 22
-#define DATATYPE_CHAR 23
-#define DATATYPE_VARCHAR 24
-#define DATATYPE_LONGTEXT 25
-#define DATATYPE_MEDIUMTEXT 26
-#define DATATYPE_TEXT 27
-#define DATATYPE_TINYTEXT 28
-#define DATATYPE_BINARY 29
-#define DATATYPE_VARBINARY 30
-#define DATATYPE_LONGBLOB 31
-#define DATATYPE_MEDIUMBLOB 32
-#define DATATYPE_BLOB 33
-#define DATATYPE_TINYBLOB 34
-#define DATATYPE_JSON 35
-#define DATATYPE_GEOGRAPHYPOINT 36
-#define DATATYPE_GEOGRAPHY 37
-#define DATATYPE_ARRAY 101
-#define DATATYPE_RECORD 102
-
 #define CHR2INT1(x) ((x)[1] - '0')
 #define CHR2INT2(x) ((((x)[0] - '0') * 10) + ((x)[1] - '0'))
 #define CHR2INT3(x) ((((x)[0] - '0') * 1e2) + (((x)[1] - '0') * 10) + ((x)[2] - '0'))
@@ -1830,7 +1779,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     uint64_t u64 = 0;
     float flt = 0;
     double dbl = 0;
-    uint8_t *ctypes = NULL;
+    int *ctypes = NULL;
     char *data = NULL;
     char *end = NULL;
     unsigned long long colspec_l = 0;
@@ -1850,18 +1799,17 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
         goto error;
     }
 
-    ctypes = malloc(sizeof(uint8_t) * colspec_l);
+    ctypes = malloc(sizeof(int) * colspec_l);
 
     for (i = 0; i < colspec_l; i++) {
         PyObject *py_cspec = PySequence_GetItem(py_colspec, i);
         if (!py_cspec) goto error;
         PyObject *py_ctype = PySequence_GetItem(py_cspec, 1);
         if (!py_ctype) { Py_DECREF(py_cspec); goto error; }
-        PyObject *py_id = PyObject_GetAttrString(py_ctype, "id");
-        if (!py_id) { Py_DECREF(py_cspec); Py_DECREF(py_ctype); goto error; }
-        ctypes[i] = (uint8_t)PyLong_AsLong(py_id);
+        ctypes[i] = (int)PyLong_AsLong(py_ctype);
         Py_DECREF(py_ctype);
         Py_DECREF(py_cspec);
+        if (PyErr_Occurred()) { goto error; }
     }
 
     py_out_row_ids = PyList_New(0);
@@ -1896,23 +1844,17 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
             if (is_null) Py_INCREF(Py_None);
 
             switch (ctypes[i]) {
-            case DATATYPE_BOOL:
-            //case DATATYPE_BOOLEAN:
-                i8 = *(int8_t*)data; data += 1;
-                if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
-                } else {
-                    CHECKRC(PyTuple_SetItem(py_row, i, (i8) ? Py_True : Py_False));
-                    Py_INCREF((i8) ? Py_True : Py_False);
-                }
+            case MYSQL_TYPE_NULL:
+                data += 1;
+                CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                Py_INCREF(Py_None);
                 break;
 
-            case DATATYPE_BIT:
+            case MYSQL_TYPE_BIT:
                 // TODO
                 break;
 
-            case DATATYPE_TINYINT:
+            case MYSQL_TYPE_TINY:
                 i8 = *(int8_t*)data; data += 1;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -1922,7 +1864,8 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_UNSIGNED_TINYINT:
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_TINY:
                 u8 = *(uint8_t*)data; data += 1;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -1932,7 +1875,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_SMALLINT:
+            case MYSQL_TYPE_SHORT:
                 i16 = *(int16_t*)data; data += 2;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -1942,7 +1885,8 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_UNSIGNED_SMALLINT:
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_SHORT:
                 u16 = *(uint16_t*)data; data += 2;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -1952,9 +1896,8 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_MEDIUMINT:
-            case DATATYPE_INT:
-            //case DATATYPE_INTEGER:
+            case MYSQL_TYPE_LONG:
+            case MYSQL_TYPE_INT24:
                 i32 = *(int32_t*)data; data += 4;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -1964,9 +1907,9 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_UNSIGNED_MEDIUMINT:
-            case DATATYPE_UNSIGNED_INT:
-            //case DATATYPE_UNSIGNED_INTEGER:
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_LONG:
+            case -MYSQL_TYPE_INT24:
                 u32 = *(uint32_t*)data; data += 4;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -1976,7 +1919,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_BIGINT:
+            case MYSQL_TYPE_LONGLONG:
                 i64 = *(int64_t*)data; data += 8;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -1986,7 +1929,8 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_UNSIGNED_BIGINT:
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_LONGLONG:
                 u64 = *(uint64_t*)data; data += 8;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -1996,7 +1940,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_FLOAT:
+            case MYSQL_TYPE_FLOAT:
                 flt = *(float*)data; data += 4;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -2006,8 +1950,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_DOUBLE:
-            //case DATATYPE_REAL:
+            case MYSQL_TYPE_DOUBLE:
                 dbl = *(double*)data; data += 8;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -2017,42 +1960,29 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_DECIMAL:
-            //case DATATYPE_DEC:
-            //case DATATYPE_FIXED:
-            //case DATATYPE_NUMERIC:
+            case MYSQL_TYPE_DECIMAL:
+            case MYSQL_TYPE_NEWDECIMAL:
                 // TODO
                 break;
 
-            case DATATYPE_DATE:
+            case MYSQL_TYPE_DATE:
+            case MYSQL_TYPE_NEWDATE:
                 // TODO
                 break;
 
-            case DATATYPE_TIME:
+            case MYSQL_TYPE_TIME:
                 // TODO
                 break;
 
-            case DATATYPE_TIME_6:
+            case MYSQL_TYPE_DATETIME:
                 // TODO
                 break;
 
-            case DATATYPE_DATETIME:
+            case MYSQL_TYPE_TIMESTAMP:
                 // TODO
                 break;
 
-            case DATATYPE_DATETIME_6:
-                // TODO
-                break;
-
-            case DATATYPE_TIMESTAMP:
-                // TODO
-                break;
-
-            case DATATYPE_TIMESTAMP_6:
-                // TODO
-                break;
-
-            case DATATYPE_YEAR:
+            case MYSQL_TYPE_YEAR:
                 u16 = *(uint16_t*)data; data += 2;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -2062,15 +1992,17 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_CHAR:
-            case DATATYPE_VARCHAR:
-            case DATATYPE_LONGTEXT:
-            case DATATYPE_MEDIUMTEXT:
-            case DATATYPE_TEXT:
-            case DATATYPE_TINYTEXT:
-            case DATATYPE_JSON:
-            case DATATYPE_GEOGRAPHYPOINT:
-            case DATATYPE_GEOGRAPHY:
+            case MYSQL_TYPE_VARCHAR:
+            case MYSQL_TYPE_JSON:
+            case MYSQL_TYPE_SET:
+            case MYSQL_TYPE_ENUM:
+            case MYSQL_TYPE_VAR_STRING:
+            case MYSQL_TYPE_STRING:
+            case MYSQL_TYPE_GEOMETRY:
+            case MYSQL_TYPE_TINY_BLOB:
+            case MYSQL_TYPE_MEDIUM_BLOB:
+            case MYSQL_TYPE_LONG_BLOB:
+            case MYSQL_TYPE_BLOB:
                 i64 = *(int64_t*)data; data += 8;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -2083,12 +2015,18 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_BINARY:
-            case DATATYPE_VARBINARY:
-            case DATATYPE_LONGBLOB:
-            case DATATYPE_MEDIUMBLOB:
-            case DATATYPE_BLOB:
-            case DATATYPE_TINYBLOB:
+            // Use negative to indicate binary
+            case -MYSQL_TYPE_VARCHAR:
+            case -MYSQL_TYPE_JSON:
+            case -MYSQL_TYPE_SET:
+            case -MYSQL_TYPE_ENUM:
+            case -MYSQL_TYPE_VAR_STRING:
+            case -MYSQL_TYPE_STRING:
+            case -MYSQL_TYPE_GEOMETRY:
+            case -MYSQL_TYPE_TINY_BLOB:
+            case -MYSQL_TYPE_MEDIUM_BLOB:
+            case -MYSQL_TYPE_LONG_BLOB:
+            case -MYSQL_TYPE_BLOB:
                 i64 = *(int64_t*)data; data += 8;
                 if (is_null) {
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
@@ -2099,11 +2037,6 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                     if (!py_blob) goto error;
                     CHECKRC(PyTuple_SetItem(py_row, i, py_blob));
                 }
-                break;
-
-            case DATATYPE_ARRAY:
-            case DATATYPE_RECORD:
-                // TODO
                 break;
 
             default:
@@ -2154,7 +2087,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     unsigned long long out_l = 0;
     unsigned long long out_idx = 0;
     Py_ssize_t length = 0;
-    uint8_t *returns = NULL;
+    int *returns = NULL;
     unsigned long long returns_l = 0;
     char *keywords[] = {"returns", "data", NULL};
     unsigned long long i = 0;
@@ -2180,16 +2113,15 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     returns_l = (unsigned long long)PyObject_Length(py_returns);
     if (returns_l == 0) goto error;
 
-    returns = malloc(sizeof(uint8_t) * length);
+    returns = malloc(sizeof(int) * length);
     if (!returns) goto error;
 
     for (i = 0; i < returns_l; i++) {
         PyObject *py_item = PySequence_GetItem(py_returns, i);
         if (!py_item) goto error;
-        PyObject *py_id = PyObject_GetAttrString(py_item, "id");
-        if (!py_id) { Py_DECREF(py_item); goto error; }
-        returns[i] = (uint8_t)PyLong_AsLong(py_id);
+        returns[i] = (int)PyLong_AsLong(py_item);
         Py_DECREF(py_item);
+        if (PyErr_Occurred()) { goto error; }
     }
 
 #define CHECKMEM(x) \
@@ -2226,144 +2158,125 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
             out_idx += 1;
 
             switch (returns[i]) {
-            case DATATYPE_BOOL:
-            //case DATATYPE_BOOLEAN:
-                CHECKMEM(1);
-                i8 = (is_null) ? 0 : (int8_t)PyLong_AsLong(py_item);
-                memcpy(out+out_idx, &i8, 1);
-                out_idx += 1;
-                break;
-
-            case DATATYPE_BIT:
+            case MYSQL_TYPE_BIT:
                 // TODO
                 break;
 
-            case DATATYPE_TINYINT:
+            case MYSQL_TYPE_TINY:
                 CHECKMEM(1);
                 i8 = (is_null) ? 0 : (int8_t)PyLong_AsLong(py_item);
                 memcpy(out+out_idx, &i8, 1);
                 out_idx += 1;
                 break;
 
-            case DATATYPE_UNSIGNED_TINYINT:
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_TINY:
                 CHECKMEM(1);
                 u8 = (is_null) ? 0 : (uint8_t)PyLong_AsUnsignedLong(py_item);
                 memcpy(out+out_idx, &u8, 1);
                 out_idx += 1;
                 break;
 
-            case DATATYPE_SMALLINT:
+            case MYSQL_TYPE_SHORT:
                 CHECKMEM(2);
                 i16 = (is_null) ? 0 : (int16_t)PyLong_AsLong(py_item);
                 memcpy(out+out_idx, &i16, 2);
                 out_idx += 2;
                 break;
 
-            case DATATYPE_UNSIGNED_SMALLINT:
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_SHORT:
                 CHECKMEM(2);
                 u16 = (is_null) ? 0 : (uint16_t)PyLong_AsUnsignedLong(py_item);
                 memcpy(out+out_idx, &u16, 2);
                 out_idx += 2;
                 break;
 
-            case DATATYPE_MEDIUMINT:
-            case DATATYPE_INT:
-            //case DATATYPE_INTEGER:
+            case MYSQL_TYPE_LONG:
+            case MYSQL_TYPE_INT24:
                 CHECKMEM(4);
                 i32 = (is_null) ? 0 : (int32_t)PyLong_AsLong(py_item);
                 memcpy(out+out_idx, &i32, 4);
                 out_idx += 4;
                 break;
 
-            case DATATYPE_UNSIGNED_MEDIUMINT:
-            case DATATYPE_UNSIGNED_INT:
-            //case DATATYPE_UNSIGNED_INTEGER:
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_LONG:
+            case -MYSQL_TYPE_INT24:
                 CHECKMEM(4);
                 u32 = (is_null) ? 0 : (uint32_t)PyLong_AsUnsignedLong(py_item);
                 memcpy(out+out_idx, &u32, 4);
                 out_idx += 4;
                 break;
 
-            case DATATYPE_BIGINT:
+            case MYSQL_TYPE_LONGLONG:
                 CHECKMEM(8);
                 i64 = (is_null) ? 0 : (int64_t)PyLong_AsLongLong(py_item);
                 memcpy(out+out_idx, &i64, 8);
                 out_idx += 8;
                 break;
 
-            case DATATYPE_UNSIGNED_BIGINT:
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_LONGLONG:
                 CHECKMEM(8);
                 u64 = (is_null) ? 0 : (uint64_t)PyLong_AsUnsignedLongLong(py_item);
                 memcpy(out+out_idx, &u64, 8);
                 out_idx += 8;
                 break;
 
-            case DATATYPE_FLOAT:
+            case MYSQL_TYPE_FLOAT:
                 CHECKMEM(4);
                 flt = (is_null) ? 0 : (float)PyFloat_AsDouble(py_item);
                 memcpy(out+out_idx, &flt, 4);
                 out_idx += 4;
                 break;
 
-            case DATATYPE_DOUBLE:
-            //case DATATYPE_REAL:
+            case MYSQL_TYPE_DOUBLE:
                 CHECKMEM(8);
                 dbl = (is_null) ? 0 : (double)PyFloat_AsDouble(py_item);
                 memcpy(out+out_idx, &dbl, 8);
                 out_idx += 8;
                 break;
 
-            case DATATYPE_DECIMAL:
-            //case DATATYPE_DEC:
-            //case DATATYPE_FIXED:
-            //case DATATYPE_NUMERIC:
+            case MYSQL_TYPE_DECIMAL:
                 // TODO
                 break;
 
-            case DATATYPE_DATE:
+            case MYSQL_TYPE_DATE:
+            case MYSQL_TYPE_NEWDATE:
                 // TODO
                 break;
 
-            case DATATYPE_TIME:
+            case MYSQL_TYPE_TIME:
                 // TODO
                 break;
 
-            case DATATYPE_TIME_6:
+            case MYSQL_TYPE_DATETIME:
                 // TODO
                 break;
 
-            case DATATYPE_DATETIME:
+            case MYSQL_TYPE_TIMESTAMP:
                 // TODO
                 break;
 
-            case DATATYPE_DATETIME_6:
-                // TODO
-                break;
-
-            case DATATYPE_TIMESTAMP:
-                // TODO
-                break;
-
-            case DATATYPE_TIMESTAMP_6:
-                // TODO
-                break;
-
-            case DATATYPE_YEAR:
+            case MYSQL_TYPE_YEAR:
                 CHECKMEM(2);
                 i16 = (is_null) ? 0 : (int16_t)PyLong_AsLong(py_item);
                 memcpy(out+out_idx, &i16, 2);
                 out_idx += 2;
                 break;
 
-            case DATATYPE_CHAR:
-            case DATATYPE_VARCHAR:
-            case DATATYPE_LONGTEXT:
-            case DATATYPE_MEDIUMTEXT:
-            case DATATYPE_TEXT:
-            case DATATYPE_TINYTEXT:
-            case DATATYPE_JSON:
-            case DATATYPE_GEOGRAPHYPOINT:
-            case DATATYPE_GEOGRAPHY:
+            case MYSQL_TYPE_VARCHAR:
+            case MYSQL_TYPE_JSON:
+            case MYSQL_TYPE_SET:
+            case MYSQL_TYPE_ENUM:
+            case MYSQL_TYPE_VAR_STRING:
+            case MYSQL_TYPE_STRING:
+            case MYSQL_TYPE_GEOMETRY:
+            case MYSQL_TYPE_TINY_BLOB:
+            case MYSQL_TYPE_MEDIUM_BLOB:
+            case MYSQL_TYPE_LONG_BLOB:
+            case MYSQL_TYPE_BLOB:
                 {
                     PyObject *py_bytes = PyUnicode_AsEncodedString(py_item, "utf-8", "strict");
                     if (!py_bytes) goto error;
@@ -2385,12 +2298,18 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case DATATYPE_BINARY:
-            case DATATYPE_VARBINARY:
-            case DATATYPE_LONGBLOB:
-            case DATATYPE_MEDIUMBLOB:
-            case DATATYPE_BLOB:
-            case DATATYPE_TINYBLOB:
+            // Use negative to indicate binary
+            case -MYSQL_TYPE_VARCHAR:
+            case -MYSQL_TYPE_JSON:
+            case -MYSQL_TYPE_SET:
+            case -MYSQL_TYPE_ENUM:
+            case -MYSQL_TYPE_VAR_STRING:
+            case -MYSQL_TYPE_STRING:
+            case -MYSQL_TYPE_GEOMETRY:
+            case -MYSQL_TYPE_TINY_BLOB:
+            case -MYSQL_TYPE_MEDIUM_BLOB:
+            case -MYSQL_TYPE_LONG_BLOB:
+            case -MYSQL_TYPE_BLOB:
                 {
                     char *str = NULL;
                     Py_ssize_t str_l = 0;
@@ -2405,11 +2324,6 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                     memcpy(out+out_idx, str, str_l);
                     out_idx += str_l;
                 }
-                break;
-
-            case DATATYPE_ARRAY:
-            case DATATYPE_RECORD:
-                // TODO
                 break;
 
             default:

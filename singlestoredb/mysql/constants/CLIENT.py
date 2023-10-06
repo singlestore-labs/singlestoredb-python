@@ -1,4 +1,3 @@
-# type: ignore
 # https://dev.mysql.com/doc/internals/en/capability-flags.html#packet-Protocol::CapabilityFlags
 LONG_PASSWORD = 1
 FOUND_ROWS = 1 << 1

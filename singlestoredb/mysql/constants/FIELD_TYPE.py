@@ -1,4 +1,3 @@
-# type: ignore
 DECIMAL = 0
 TINY = 1
 SHORT = 2

@@ -1,4 +1,3 @@
-# type: ignore
 ERROR_FIRST = 1000
 HASHCHK = 1000
 NISAMCHK = 1001
