@@ -5,13 +5,14 @@ import struct
 import sys
 
 from . import err
+from ..config import get_option
 from ..utils.results import Description
 from .charset import MBLENGTH
 from .constants import FIELD_TYPE
 from .constants import SERVER_STATUS
 
 
-DEBUG = False
+DEBUG = get_option('debug.connection')
 
 NULL_COLUMN = 251
 UNSIGNED_CHAR_COLUMN = 251

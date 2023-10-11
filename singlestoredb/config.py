@@ -230,3 +230,10 @@ register_option(
     'Print queries and parameters to stderr.',
     environ='SINGLESTOREDB_DEBUG_QUERIES',
 )
+
+
+register_option(
+    'debug.connection', 'bool', check_bool, False,
+    'Print connection tracing information.',
+    environ='SINGLESTOREDB_DEBUG_CONNECTION',
+)

@@ -46,6 +46,7 @@ from .protocol import (
     LoadLocalPacketWrapper,
 )
 from . import err
+from ..config import get_option
 from ..connection import Connection as BaseConnection
 
 try:
@@ -65,7 +66,7 @@ except (ImportError, KeyError):
     # KeyError occurs when there's no entry in OS database for a current user.
     DEFAULT_USER = None
 
-DEBUG = False
+DEBUG = get_option('debug.connection')
 
 TEXT_TYPES = {
     FIELD_TYPE.BIT,
