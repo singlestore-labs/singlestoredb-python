@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """SingleStoreDB Base Manager."""
+import os
+import sys
 import time
 from typing import Any
 from typing import Dict
@@ -48,6 +50,7 @@ class Manager(object):
             base_url or type(self).default_base_url,
             version or type(self).default_version,
         ) + '/'
+        self._params: Dict[str, str] = {}
 
     def _check(
         self, res: requests.Response, url: str, params: Dict[str, Any],
@@ -65,6 +68,8 @@ class Manager(object):
         requests.Response
 
         """
+        if config.get_option('debug.queries'):
+            print(os.path.join(self._base_url, url), params, file=sys.stderr)
         if res.status_code >= 400:
             txt = res.text.strip()
             msg = f'{txt}: /{url}'
@@ -75,7 +80,7 @@ class Manager(object):
                         if 'password' in k.lower() and v:
                             new_params['json'][k] = '*' * len(v)
                 msg += ': {}'.format(str(new_params))
-            raise ManagementError(errno=res.status_code, msg=msg)
+            raise ManagementError(errno=res.status_code, msg=msg, response=txt)
         return res
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -96,6 +101,8 @@ class Manager(object):
         requests.Response
 
         """
+        if self._params:
+            kwargs['params'] = self._params
         return self._check(
             self._sess.get(
                 urljoin(self._base_url, path),
@@ -122,8 +129,38 @@ class Manager(object):
         requests.Response
 
         """
+        if self._params:
+            kwargs['params'] = self._params
         return self._check(
             self._sess.post(
+                urljoin(self._base_url, path),
+                *args, **kwargs,
+            ),
+            path, kwargs,
+        )
+
+    def _put(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
+        """
+        Invoke a PUT request.
+
+        Parameters
+        ----------
+        path : str
+            Path of the resource
+        *args : positional arguments, optional
+            Arguments to add to the POST request
+        **kwargs : keyword arguments, optional
+            Keyword arguments to add to the POST request
+
+        Returns
+        -------
+        requests.Response
+
+        """
+        if self._params:
+            kwargs['params'] = self._params
+        return self._check(
+            self._sess.put(
                 urljoin(self._base_url, path),
                 *args, **kwargs,
             ),
@@ -148,6 +185,8 @@ class Manager(object):
         requests.Response
 
         """
+        if self._params:
+            kwargs['params'] = self._params
         return self._check(
             self._sess.delete(
                 urljoin(self._base_url, path),
@@ -174,6 +213,8 @@ class Manager(object):
         requests.Response
 
         """
+        if self._params:
+            kwargs['params'] = self._params
         return self._check(
             self._sess.patch(
                 urljoin(self._base_url, path),

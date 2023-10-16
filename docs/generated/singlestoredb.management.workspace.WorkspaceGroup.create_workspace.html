@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>singlestoredb.management.workspace.WorkspaceGroup.create_workspace &mdash; SingleStoreDB 0.8.8 documentation</title>
+  <title>singlestoredb.management.workspace.WorkspaceGroup.create_workspace &mdash; SingleStoreDB 0.8.9 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -17,7 +17,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="singlestoredb.management.workspace.WorkspaceGroup.refresh" href="singlestoredb.management.workspace.WorkspaceGroup.refresh.html" />
-    <link rel="prev" title="singlestoredb.management.workspace.WorkspaceGroup.workspaces" href="singlestoredb.management.workspace.WorkspaceGroup.workspaces.html" />
+    <link rel="prev" title="singlestoredb.management.workspace.WorkspaceGroup.stages" href="singlestoredb.management.workspace.WorkspaceGroup.stages.html" />
 </head>
 <body class="wy-body-for-nav">
   <div class="wy-grid-for-nav">
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                0.8.8
+                0.8.9
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -50,16 +50,19 @@
 <li class="toctree-l3"><a class="reference internal" href="singlestoredb.manage_workspaces.html">singlestoredb.manage_workspaces</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#workspacemanager">WorkspaceManager</a></li>
 <li class="toctree-l3 current"><a class="reference internal" href="../api.html#workspacegroup">WorkspaceGroup</a><ul class="current">
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.html">singlestoredb.management.workspace.WorkspaceGroup</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.workspaces.html">singlestoredb.management.workspace.WorkspaceGroup.workspaces</a></li>
-<li class="toctree-l4 current"><a class="current reference internal" href="#">singlestoredb.management.workspace.WorkspaceGroup.create_workspace</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.refresh.html">singlestoredb.management.workspace.WorkspaceGroup.refresh</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.update.html">singlestoredb.management.workspace.WorkspaceGroup.update</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.terminate.html">singlestoredb.management.workspace.WorkspaceGroup.terminate</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.html">workspace.WorkspaceGroup</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.workspaces.html">workspace.WorkspaceGroup.workspaces</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.stages.html">workspace.WorkspaceGroup.stages</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">workspace.WorkspaceGroup.create_workspace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.refresh.html">workspace.WorkspaceGroup.refresh</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.update.html">workspace.WorkspaceGroup.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.terminate.html">workspace.WorkspaceGroup.terminate</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#workspace">Workspace</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#region">Region</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#stages">Stages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#stagesobject">StagesObject</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../api.html#configuration">Configuration</a></li>
@@ -93,17 +96,17 @@
 <h1>singlestoredb.management.workspace.WorkspaceGroup.create_workspace<a class="headerlink" href="#singlestoredb-management-workspace-workspacegroup-create-workspace" title="Permalink to this heading">¶</a></h1>
 <dl class="py method">
 <dt class="sig sig-object py" id="singlestoredb.management.workspace.WorkspaceGroup.create_workspace">
-<span class="sig-prename descclassname"><span class="pre">WorkspaceGroup.</span></span><span class="sig-name descname"><span class="pre">create_workspace</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wait_on_active</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wait_interval</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wait_timeout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">600</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="singlestoredb.management.workspace.Workspace.html#singlestoredb.management.workspace.Workspace" title="singlestoredb.management.workspace.Workspace"><span class="pre">Workspace</span></a></span></span><a class="headerlink" href="#singlestoredb.management.workspace.WorkspaceGroup.create_workspace" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">WorkspaceGroup.</span></span><span class="sig-name descname"><span class="pre">create_workspace</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wait_on_active</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wait_interval</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wait_timeout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">600</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="singlestoredb.management.workspace.Workspace.html#singlestoredb.management.workspace.Workspace" title="singlestoredb.management.workspace.Workspace"><span class="pre">Workspace</span></a></span></span><a class="headerlink" href="#singlestoredb.management.workspace.WorkspaceGroup.create_workspace" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a new workspace.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a>) – Name of the workspace</p></li>
-<li><p><strong>size</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>, </em><em>optional</em>) – Workspace size in workspace size notation (S-00, S-1, etc.)</p></li>
-<li><p><strong>wait_on_active</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><em>bool</em></a><em>, </em><em>optional</em>) – Wait for the workspace to be active before returning</p></li>
-<li><p><strong>wait_timeout</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><em>int</em></a><em>, </em><em>optional</em>) – Maximum number of seconds to wait before raising an exception
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a>) – Name of the workspace</p></li>
+<li><p><strong>size</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>optional</em>) – Workspace size in workspace size notation (S-00, S-1, etc.)</p></li>
+<li><p><strong>wait_on_active</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>optional</em>) – Wait for the workspace to be active before returning</p></li>
+<li><p><strong>wait_timeout</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>, </em><em>optional</em>) – Maximum number of seconds to wait before raising an exception
 if wait=True</p></li>
-<li><p><strong>wait_interval</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><em>int</em></a><em>, </em><em>optional</em>) – Number of seconds between each polling interval</p></li>
+<li><p><strong>wait_interval</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>, </em><em>optional</em>) – Number of seconds between each polling interval</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -115,7 +118,7 @@ if wait=True</p></li>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="singlestoredb.management.workspace.WorkspaceGroup.workspaces.html" class="btn btn-neutral float-left" title="singlestoredb.management.workspace.WorkspaceGroup.workspaces" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="singlestoredb.management.workspace.WorkspaceGroup.stages.html" class="btn btn-neutral float-left" title="singlestoredb.management.workspace.WorkspaceGroup.stages" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="singlestoredb.management.workspace.WorkspaceGroup.refresh.html" class="btn btn-neutral float-right" title="singlestoredb.management.workspace.WorkspaceGroup.refresh" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
   <hr/>

@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.StagesObject.remove
+======================================================
+.. currentmodule:: singlestoredb.management.workspace
+.. automethod:: StagesObject.remove

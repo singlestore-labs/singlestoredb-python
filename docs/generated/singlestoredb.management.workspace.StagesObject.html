@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>singlestoredb.management.workspace.StagesObject &mdash; SingleStoreDB 0.8.9 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="singlestoredb.management.workspace.StagesObject.download" href="singlestoredb.management.workspace.StagesObject.download.html" />
+    <link rel="prev" title="singlestoredb.management.workspace.Stages.rmdir" href="singlestoredb.management.workspace.Stages.rmdir.html" />
+</head>
+<body class="wy-body-for-nav">
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          <a href="../index.html" class="icon icon-home">
+            SingleStoreDB
+          </a>
+              <div class="version">
+                0.8.9
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../whatsnew.html">What’s New</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started.html">Getting Started</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../api.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../api.html#connections">Connections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api.html#utilities">Utilities</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../api.html#management-api">Management API</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="singlestoredb.manage_workspaces.html">singlestoredb.manage_workspaces</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#workspacemanager">WorkspaceManager</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#workspacegroup">WorkspaceGroup</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#workspace">Workspace</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#region">Region</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#stages">Stages</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="../api.html#stagesobject">StagesObject</a><ul class="current">
+<li class="toctree-l4 current"><a class="current reference internal" href="#">workspace.StagesObject</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.download.html">workspace.StagesObject.download</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.remove.html">workspace.StagesObject.remove</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.rmdir.html">workspace.StagesObject.rmdir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.removedirs.html">workspace.StagesObject.removedirs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.rename.html">workspace.StagesObject.rename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.exists.html">workspace.StagesObject.exists</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.is_dir.html">workspace.StagesObject.is_dir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.is_file.html">workspace.StagesObject.is_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.abspath.html">workspace.StagesObject.abspath</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.basename.html">workspace.StagesObject.basename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.dirname.html">workspace.StagesObject.dirname</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.getmtime.html">workspace.StagesObject.getmtime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.getctime.html">workspace.StagesObject.getctime</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../api.html#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+</ul>
+        </div>
+      </div>
+    </nav>
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SingleStoreDB</a>
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">API Reference</a></li>
+      <li class="breadcrumb-item active">singlestoredb.management.workspace.StagesObject</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/generated/singlestoredb.management.workspace.StagesObject.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+  <section id="singlestoredb-management-workspace-stagesobject">
+<h1>singlestoredb.management.workspace.StagesObject<a class="headerlink" href="#singlestoredb-management-workspace-stagesobject" title="Permalink to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="singlestoredb.management.workspace.StagesObject">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">singlestoredb.management.workspace.</span></span><span class="sig-name descname"><span class="pre">StagesObject</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/os.html#os.PathLike" title="(in Python v3.12)"><span class="pre">PathLike</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mimetype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">created</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.12)"><span class="pre">datetime</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">last_modified</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.12)"><span class="pre">datetime</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">writable</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">content</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.workspace.StagesObject" title="Permalink to this definition">¶</a></dt>
+<dd><p>Stages file / folder object.</p>
+<p>This object is not instantiated directly. It is used in the results
+of various operations in<a href="singlestoredb.management.workspace.WorkspaceGroup.stages.html"> <code class="docutils literal notranslate"><span class="pre">WorkspaceGroup.stages</span></code></a> methods.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="singlestoredb.management.workspace.StagesObject.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/os.html#os.PathLike" title="(in Python v3.12)"><span class="pre">PathLike</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">mimetype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">created</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.12)"><span class="pre">datetime</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">last_modified</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.12)"><span class="pre">datetime</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">writable</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">content</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.workspace.StagesObject.__init__" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#singlestoredb.management.workspace.StagesObject.__init__" title="singlestoredb.management.workspace.StagesObject.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(name, path, size, type, format, ...)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.abspath.html#singlestoredb.management.workspace.StagesObject.abspath" title="singlestoredb.management.workspace.StagesObject.abspath"><code class="xref py py-obj docutils literal notranslate"><span class="pre">abspath</span></code></a>()</p></td>
+<td><p>Return the full path of the object.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.basename.html#singlestoredb.management.workspace.StagesObject.basename" title="singlestoredb.management.workspace.StagesObject.basename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">basename</span></code></a>()</p></td>
+<td><p>Return the basename of the object.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.dirname.html#singlestoredb.management.workspace.StagesObject.dirname" title="singlestoredb.management.workspace.StagesObject.dirname"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dirname</span></code></a>()</p></td>
+<td><p>Return the directory name of the object.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.download.html#singlestoredb.management.workspace.StagesObject.download" title="singlestoredb.management.workspace.StagesObject.download"><code class="xref py py-obj docutils literal notranslate"><span class="pre">download</span></code></a>([local_path, overwrite, encoding])</p></td>
+<td><p>Download the content of a stage path.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.exists.html#singlestoredb.management.workspace.StagesObject.exists" title="singlestoredb.management.workspace.StagesObject.exists"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exists</span></code></a>()</p></td>
+<td><p>Does the file / folder exist?</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_dict</span></code>(obj, stages)</p></td>
+<td><p>Construct a StagesObject from a dictionary of values.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.getctime.html#singlestoredb.management.workspace.StagesObject.getctime" title="singlestoredb.management.workspace.StagesObject.getctime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">getctime</span></code></a>()</p></td>
+<td><p>Return the creation datetime as a UNIX timestamp.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.getmtime.html#singlestoredb.management.workspace.StagesObject.getmtime" title="singlestoredb.management.workspace.StagesObject.getmtime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">getmtime</span></code></a>()</p></td>
+<td><p>Return the last modified datetime as a UNIX timestamp.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.is_dir.html#singlestoredb.management.workspace.StagesObject.is_dir" title="singlestoredb.management.workspace.StagesObject.is_dir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_dir</span></code></a>()</p></td>
+<td><p>Is the stage object a directory?</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.is_file.html#singlestoredb.management.workspace.StagesObject.is_file" title="singlestoredb.management.workspace.StagesObject.is_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_file</span></code></a>()</p></td>
+<td><p>Is the stage object a file?</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.remove.html#singlestoredb.management.workspace.StagesObject.remove" title="singlestoredb.management.workspace.StagesObject.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">remove</span></code></a>()</p></td>
+<td><p>Delete the stage file.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.removedirs.html#singlestoredb.management.workspace.StagesObject.removedirs" title="singlestoredb.management.workspace.StagesObject.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">removedirs</span></code></a>()</p></td>
+<td><p>Delete the stage directory recursively.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.rename.html#singlestoredb.management.workspace.StagesObject.rename" title="singlestoredb.management.workspace.StagesObject.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rename</span></code></a>(new_path, *[, overwrite])</p></td>
+<td><p>Move the stage file to a new location.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.rmdir.html#singlestoredb.management.workspace.StagesObject.rmdir" title="singlestoredb.management.workspace.StagesObject.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rmdir</span></code></a>()</p></td>
+<td><p>Delete the empty stage directory.</p></td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Attributes</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">name</span></code></p></td>
+<td><p>Name of file / folder</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">path</span></code></p></td>
+<td><p>Path of file / folder</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">size</span></code></p></td>
+<td><p>Size of the object (in bytes)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">type</span></code></p></td>
+<td><p>file or directory</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">format</span></code></p></td>
+<td><p>Data format</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">mimetype</span></code></p></td>
+<td><p>Mime type</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">created_at</span></code></p></td>
+<td><p>Datetime the object was created</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">last_modified_at</span></code></p></td>
+<td><p>Datetime the object was modified last</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">writable</span></code></p></td>
+<td><p>Is the object writable?</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">content</span></code></p></td>
+<td><p>Contents of a directory</p></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+</section>
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="singlestoredb.management.workspace.Stages.rmdir.html" class="btn btn-neutral float-left" title="singlestoredb.management.workspace.Stages.rmdir" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="singlestoredb.management.workspace.StagesObject.download.html" class="btn btn-neutral float-right" title="singlestoredb.management.workspace.StagesObject.download" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+  <hr/>
+  <div role="contentinfo">
+    <p>&#169; Copyright 2022 SingleStore. All Rights Reserved.</p>
+  </div>
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+</body>
+</html>

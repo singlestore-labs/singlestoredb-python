@@ -12,8 +12,10 @@
       ~WorkspaceManager.get_workspace_group
    .. rubric:: Attributes
    .. autosummary::
+      ~WorkspaceManager.billing
       ~WorkspaceManager.default_base_url
       ~WorkspaceManager.default_version
       ~WorkspaceManager.obj_type
+      ~WorkspaceManager.organizations
       ~WorkspaceManager.regions
       ~WorkspaceManager.workspace_groups

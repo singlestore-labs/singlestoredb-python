@@ -94,3 +94,27 @@ class NotSupportedError(DatabaseError):
 
 class ManagementError(Error):
     """Exception for errors in the management API."""
+
+    def __init__(
+        self, errno: Optional[int] = None, msg: Optional[str] = None,
+        response: Optional[str] = None,
+    ):
+        self.errno = errno
+        self.errmsg = msg
+        self.response = response
+        super(Exception, self).__init__(errno, msg)
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        prefix = []
+        if self.errno is not None:
+            prefix.append(f'{self.errno}')
+        if self.response is not None:
+            prefix.append(f'({self.response})')
+        if prefix and self.errmsg:
+            return ' '.join(prefix) + ': ' + self.errmsg
+        elif prefix:
+            return ' '.join(prefix)
+        elif self.errmsg:
+            return f'{self.errmsg}'
+        return 'Unknown error'

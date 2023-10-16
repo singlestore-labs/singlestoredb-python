@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>singlestoredb.management.workspace.WorkspaceGroup.workspaces &mdash; SingleStoreDB 0.8.8 documentation</title>
+  <title>singlestoredb.management.workspace.WorkspaceGroup.workspaces &mdash; SingleStoreDB 0.8.9 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -16,7 +16,7 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="singlestoredb.management.workspace.WorkspaceGroup.create_workspace" href="singlestoredb.management.workspace.WorkspaceGroup.create_workspace.html" />
+    <link rel="next" title="singlestoredb.management.workspace.WorkspaceGroup.stages" href="singlestoredb.management.workspace.WorkspaceGroup.stages.html" />
     <link rel="prev" title="singlestoredb.management.workspace.WorkspaceGroup" href="singlestoredb.management.workspace.WorkspaceGroup.html" />
 </head>
 <body class="wy-body-for-nav">
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                0.8.8
+                0.8.9
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -50,16 +50,19 @@
 <li class="toctree-l3"><a class="reference internal" href="singlestoredb.manage_workspaces.html">singlestoredb.manage_workspaces</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#workspacemanager">WorkspaceManager</a></li>
 <li class="toctree-l3 current"><a class="reference internal" href="../api.html#workspacegroup">WorkspaceGroup</a><ul class="current">
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.html">singlestoredb.management.workspace.WorkspaceGroup</a></li>
-<li class="toctree-l4 current"><a class="current reference internal" href="#">singlestoredb.management.workspace.WorkspaceGroup.workspaces</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.create_workspace.html">singlestoredb.management.workspace.WorkspaceGroup.create_workspace</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.refresh.html">singlestoredb.management.workspace.WorkspaceGroup.refresh</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.update.html">singlestoredb.management.workspace.WorkspaceGroup.update</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.terminate.html">singlestoredb.management.workspace.WorkspaceGroup.terminate</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.html">workspace.WorkspaceGroup</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">workspace.WorkspaceGroup.workspaces</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.stages.html">workspace.WorkspaceGroup.stages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.create_workspace.html">workspace.WorkspaceGroup.create_workspace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.refresh.html">workspace.WorkspaceGroup.refresh</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.update.html">workspace.WorkspaceGroup.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.terminate.html">workspace.WorkspaceGroup.terminate</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#workspace">Workspace</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#region">Region</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#stages">Stages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#stagesobject">StagesObject</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../api.html#configuration">Configuration</a></li>
@@ -93,7 +96,7 @@
 <h1>singlestoredb.management.workspace.WorkspaceGroup.workspaces<a class="headerlink" href="#singlestoredb-management-workspace-workspacegroup-workspaces" title="Permalink to this heading">¶</a></h1>
 <dl class="py property">
 <dt class="sig sig-object py" id="singlestoredb.management.workspace.WorkspaceGroup.workspaces">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">WorkspaceGroup.</span></span><span class="sig-name descname"><span class="pre">workspaces</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.11)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="singlestoredb.management.workspace.Workspace.html#singlestoredb.management.workspace.Workspace" title="singlestoredb.management.workspace.Workspace"><span class="pre">Workspace</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#singlestoredb.management.workspace.WorkspaceGroup.workspaces" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">WorkspaceGroup.</span></span><span class="sig-name descname"><span class="pre">workspaces</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="singlestoredb.management.workspace.Workspace.html#singlestoredb.management.workspace.Workspace" title="singlestoredb.management.workspace.Workspace"><span class="pre">Workspace</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#singlestoredb.management.workspace.WorkspaceGroup.workspaces" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a list of available workspaces.</p>
 </dd></dl>
 </section>
@@ -101,7 +104,7 @@
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="singlestoredb.management.workspace.WorkspaceGroup.html" class="btn btn-neutral float-left" title="singlestoredb.management.workspace.WorkspaceGroup" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="singlestoredb.management.workspace.WorkspaceGroup.create_workspace.html" class="btn btn-neutral float-right" title="singlestoredb.management.workspace.WorkspaceGroup.create_workspace" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="singlestoredb.management.workspace.WorkspaceGroup.stages.html" class="btn btn-neutral float-right" title="singlestoredb.management.workspace.WorkspaceGroup.stages" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
   <hr/>
   <div role="contentinfo">

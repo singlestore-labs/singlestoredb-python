@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>singlestoredb.management.region.Region &mdash; SingleStoreDB 0.8.8 documentation</title>
+  <title>singlestoredb.management.region.Region &mdash; SingleStoreDB 0.8.9 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -16,7 +16,7 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="singlestoredb.get_option" href="singlestoredb.get_option.html" />
+    <link rel="next" title="singlestoredb.management.workspace.Stages" href="singlestoredb.management.workspace.Stages.html" />
     <link rel="prev" title="singlestoredb.management.workspace.Workspace.terminate" href="singlestoredb.management.workspace.Workspace.terminate.html" />
 </head>
 <body class="wy-body-for-nav">
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                0.8.8
+                0.8.9
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -52,9 +52,11 @@
 <li class="toctree-l3"><a class="reference internal" href="../api.html#workspacegroup">WorkspaceGroup</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#workspace">Workspace</a></li>
 <li class="toctree-l3 current"><a class="reference internal" href="../api.html#region">Region</a><ul class="current">
-<li class="toctree-l4 current"><a class="current reference internal" href="#">singlestoredb.management.region.Region</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">region.Region</a></li>
 </ul>
 </li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#stages">Stages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#stagesobject">StagesObject</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../api.html#configuration">Configuration</a></li>
@@ -88,7 +90,7 @@
 <h1>singlestoredb.management.region.Region<a class="headerlink" href="#singlestoredb-management-region-region" title="Permalink to this heading">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="singlestoredb.management.region.Region">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">singlestoredb.management.region.</span></span><span class="sig-name descname"><span class="pre">Region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">provider</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.region.Region" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">singlestoredb.management.region.</span></span><span class="sig-name descname"><span class="pre">Region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">provider</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.region.Region" title="Permalink to this definition">¶</a></dt>
 <dd><p>Cluster region information.</p>
 <p>This object is not directly instantiated. It is used in results
 of<a href="singlestoredb.management.workspace.WorkspaceManager.html"> <code class="docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a> API calls.</p>
@@ -98,7 +100,7 @@ of<a href="singlestoredb.management.workspace.WorkspaceManager.html"> <code clas
 </div>
 <dl class="py method">
 <dt class="sig sig-object py" id="singlestoredb.management.region.Region.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">provider</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.region.Region.__init__" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">provider</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.region.Region.__init__" title="Permalink to this definition">¶</a></dt>
 <dd><p>Use<a href="singlestoredb.management.workspace.WorkspaceManager.regions.html"> <code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a> instead.</p>
 </dd></dl>
 <p class="rubric">Methods</p>
@@ -132,7 +134,7 @@ of<a href="singlestoredb.management.workspace.WorkspaceManager.html"> <code clas
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="singlestoredb.management.workspace.Workspace.terminate.html" class="btn btn-neutral float-left" title="singlestoredb.management.workspace.Workspace.terminate" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="singlestoredb.get_option.html" class="btn btn-neutral float-right" title="singlestoredb.get_option" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="singlestoredb.management.workspace.Stages.html" class="btn btn-neutral float-right" title="singlestoredb.management.workspace.Stages" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
   <hr/>
   <div role="contentinfo">

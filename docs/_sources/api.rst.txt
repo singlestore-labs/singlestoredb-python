@@ -134,6 +134,7 @@ or by retrieving an element from :attr:`WorkspaceManager.workspace_groups`.
    :toctree: generated/
    WorkspaceGroup
    WorkspaceGroup.workspaces
+   WorkspaceGroup.stages
    WorkspaceGroup.create_workspace
    WorkspaceGroup.refresh
    WorkspaceGroup.update
@@ -156,6 +157,45 @@ Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
 .. autosummary::
    :toctree: generated/
    Region
+Stages
+......
+.. currentmodule:: singlestoredb.management.workspace
+.. autosummary::
+   :toctree: generated/
+   Stages
+   Stages.open
+   Stages.upload_file
+   Stages.upload_folder
+   Stages.mkdir
+   Stages.rename
+   Stages.info
+   Stages.exists
+   Stages.is_dir
+   Stages.is_file
+   Stages.listdir
+   Stages.download
+   Stages.remove
+   Stages.removedirs
+   Stages.rmdir
+StagesObject
+............
+.. currentmodule:: singlestoredb.management.workspace
+.. autosummary::
+   :toctree: generated/
+   StagesObject
+   StagesObject.download
+   StagesObject.remove
+   StagesObject.rmdir
+   StagesObject.removedirs
+   StagesObject.rename
+   StagesObject.exists
+   StagesObject.is_dir
+   StagesObject.is_file
+   StagesObject.abspath
+   StagesObject.basename
+   StagesObject.dirname
+   StagesObject.getmtime
+   StagesObject.getctime
 Configuration
 -------------
 The following functions are used to get and set package configuration settings.

@@ -1,0 +1,23 @@
+﻿singlestoredb.management.workspace.Stages
+=========================================
+.. currentmodule:: singlestoredb.management.workspace
+.. autoclass:: Stages
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~Stages.__init__
+      ~Stages.download
+      ~Stages.exists
+      ~Stages.info
+      ~Stages.is_dir
+      ~Stages.is_file
+      ~Stages.listdir
+      ~Stages.mkdir
+      ~Stages.mkdirs
+      ~Stages.open
+      ~Stages.remove
+      ~Stages.removedirs
+      ~Stages.rename
+      ~Stages.rmdir
+      ~Stages.upload_file
+      ~Stages.upload_folder

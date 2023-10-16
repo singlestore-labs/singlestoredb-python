@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>singlestoredb.management.workspace.WorkspaceManager &mdash; SingleStoreDB 0.8.8 documentation</title>
+  <title>singlestoredb.management.workspace.WorkspaceManager &mdash; SingleStoreDB 0.8.9 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                0.8.8
+                0.8.9
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -49,18 +49,20 @@
 <li class="toctree-l2 current"><a class="reference internal" href="../api.html#management-api">Management API</a><ul class="current">
 <li class="toctree-l3"><a class="reference internal" href="singlestoredb.manage_workspaces.html">singlestoredb.manage_workspaces</a></li>
 <li class="toctree-l3 current"><a class="reference internal" href="../api.html#workspacemanager">WorkspaceManager</a><ul class="current">
-<li class="toctree-l4 current"><a class="current reference internal" href="#">singlestoredb.management.workspace.WorkspaceManager</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.workspace_groups.html">singlestoredb.management.workspace.WorkspaceManager.workspace_groups</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.regions.html">singlestoredb.management.workspace.WorkspaceManager.regions</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.create_workspace_group.html">singlestoredb.management.workspace.WorkspaceManager.create_workspace_group</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.create_workspace.html">singlestoredb.management.workspace.WorkspaceManager.create_workspace</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.get_workspace_group.html">singlestoredb.management.workspace.WorkspaceManager.get_workspace_group</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.get_workspace.html">singlestoredb.management.workspace.WorkspaceManager.get_workspace</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">workspace.WorkspaceManager</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.workspace_groups.html">workspace.WorkspaceManager.workspace_groups</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.regions.html">workspace.WorkspaceManager.regions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.create_workspace_group.html">workspace.WorkspaceManager.create_workspace_group</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.create_workspace.html">workspace.WorkspaceManager.create_workspace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.get_workspace_group.html">workspace.WorkspaceManager.get_workspace_group</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.get_workspace.html">workspace.WorkspaceManager.get_workspace</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#workspacegroup">WorkspaceGroup</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#workspace">Workspace</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#region">Region</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#stages">Stages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#stagesobject">StagesObject</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../api.html#configuration">Configuration</a></li>
@@ -94,15 +96,15 @@
 <h1>singlestoredb.management.workspace.WorkspaceManager<a class="headerlink" href="#singlestoredb-management-workspace-workspacemanager" title="Permalink to this heading">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="singlestoredb.management.workspace.WorkspaceManager">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">singlestoredb.management.workspace.</span></span><span class="sig-name descname"><span class="pre">WorkspaceManager</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">access_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_url</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.workspace.WorkspaceManager" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">singlestoredb.management.workspace.</span></span><span class="sig-name descname"><span class="pre">WorkspaceManager</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">access_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_url</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.workspace.WorkspaceManager" title="Permalink to this definition">¶</a></dt>
 <dd><p>SingleStoreDB workspace manager.</p>
 <p>This class should be instantiated using <a class="reference internal" href="singlestoredb.manage_workspaces.html#singlestoredb.manage_workspaces" title="singlestoredb.manage_workspaces"><code class="xref py py-func docutils literal notranslate"><span class="pre">singlestoredb.manage_workspaces()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>access_token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>, </em><em>optional</em>) – The API key or other access token for the workspace management API</p></li>
-<li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>, </em><em>optional</em>) – Version of the API to use</p></li>
-<li><p><strong>base_url</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><em>str</em></a><em>, </em><em>optional</em>) – Base URL of the workspace management API</p></li>
+<li><p><strong>access_token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>optional</em>) – The API key or other access token for the workspace management API</p></li>
+<li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>optional</em>) – Version of the API to use</p></li>
+<li><p><strong>base_url</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>optional</em>) – Base URL of the workspace management API</p></li>
 </ul>
 </dd>
 </dl>
@@ -112,7 +114,7 @@
 </div>
 <dl class="py method">
 <dt class="sig sig-object py" id="singlestoredb.management.workspace.WorkspaceManager.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">access_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_url</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.workspace.WorkspaceManager.__init__" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">access_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_url</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.workspace.WorkspaceManager.__init__" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 <p class="rubric">Methods</p>
 <table class="autosummary longtable docutils align-default">
@@ -137,14 +139,20 @@
 <p class="rubric">Attributes</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">default_base_url</span></code></p></td>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">billing</span></code></p></td>
+<td><p>Return the current billing information.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">default_base_url</span></code></p></td>
 <td><p>Base URL if none is specified.</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">default_version</span></code></p></td>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">default_version</span></code></p></td>
 <td><p>Workspace management API version if none is specified.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">obj_type</span></code></p></td>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">obj_type</span></code></p></td>
 <td><p>Object type</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">organizations</span></code></p></td>
+<td><p>Return the organizations.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.regions.html#singlestoredb.management.workspace.WorkspaceManager.regions" title="singlestoredb.management.workspace.WorkspaceManager.regions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">regions</span></code></a></p></td>
 <td><p>Return a list of available regions.</p></td>

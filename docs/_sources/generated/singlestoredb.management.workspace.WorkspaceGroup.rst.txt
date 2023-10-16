@@ -13,6 +13,7 @@
       ~WorkspaceGroup.update
    .. rubric:: Attributes
    .. autosummary::
+      ~WorkspaceGroup.stages
       ~WorkspaceGroup.workspaces
       ~WorkspaceGroup.name
       ~WorkspaceGroup.id
