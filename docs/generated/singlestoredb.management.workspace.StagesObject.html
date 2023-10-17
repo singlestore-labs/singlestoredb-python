@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>singlestoredb.management.workspace.StagesObject &mdash; SingleStoreDB 0.9.0 documentation</title>
+  <title>singlestoredb.management.workspace.StagesObject &mdash; SingleStoreDB 0.9.1 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -16,7 +16,7 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="singlestoredb.management.workspace.StagesObject.download" href="singlestoredb.management.workspace.StagesObject.download.html" />
+    <link rel="next" title="singlestoredb.management.workspace.StagesObject.open" href="singlestoredb.management.workspace.StagesObject.open.html" />
     <link rel="prev" title="singlestoredb.management.workspace.Stages.rmdir" href="singlestoredb.management.workspace.Stages.rmdir.html" />
 </head>
 <body class="wy-body-for-nav">
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                0.9.0
+                0.9.1
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -55,11 +55,8 @@
 <li class="toctree-l3"><a class="reference internal" href="../api.html#stages">Stages</a></li>
 <li class="toctree-l3 current"><a class="reference internal" href="../api.html#stagesobject">StagesObject</a><ul class="current">
 <li class="toctree-l4 current"><a class="current reference internal" href="#">workspace.StagesObject</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.open.html">workspace.StagesObject.open</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.download.html">workspace.StagesObject.download</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.remove.html">workspace.StagesObject.remove</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.rmdir.html">workspace.StagesObject.rmdir</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.removedirs.html">workspace.StagesObject.removedirs</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.rename.html">workspace.StagesObject.rename</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.exists.html">workspace.StagesObject.exists</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.is_dir.html">workspace.StagesObject.is_dir</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.is_file.html">workspace.StagesObject.is_file</a></li>
@@ -68,6 +65,10 @@
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.dirname.html">workspace.StagesObject.dirname</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.getmtime.html">workspace.StagesObject.getmtime</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.getctime.html">workspace.StagesObject.getctime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.rename.html">workspace.StagesObject.rename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.remove.html">workspace.StagesObject.remove</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.removedirs.html">workspace.StagesObject.removedirs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.rmdir.html">workspace.StagesObject.rmdir</a></li>
 </ul>
 </li>
 </ul>
@@ -147,16 +148,19 @@ of various operations in<a href="singlestoredb.management.workspace.WorkspaceGro
 <tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.is_file.html#singlestoredb.management.workspace.StagesObject.is_file" title="singlestoredb.management.workspace.StagesObject.is_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_file</span></code></a>()</p></td>
 <td><p>Is the stage object a file?</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.remove.html#singlestoredb.management.workspace.StagesObject.remove" title="singlestoredb.management.workspace.StagesObject.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">remove</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.open.html#singlestoredb.management.workspace.StagesObject.open" title="singlestoredb.management.workspace.StagesObject.open"><code class="xref py py-obj docutils literal notranslate"><span class="pre">open</span></code></a>([mode, encoding])</p></td>
+<td><p>Open a Stage path for reading or writing.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.remove.html#singlestoredb.management.workspace.StagesObject.remove" title="singlestoredb.management.workspace.StagesObject.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">remove</span></code></a>()</p></td>
 <td><p>Delete the stage file.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.removedirs.html#singlestoredb.management.workspace.StagesObject.removedirs" title="singlestoredb.management.workspace.StagesObject.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">removedirs</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.removedirs.html#singlestoredb.management.workspace.StagesObject.removedirs" title="singlestoredb.management.workspace.StagesObject.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">removedirs</span></code></a>()</p></td>
 <td><p>Delete the stage directory recursively.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.rename.html#singlestoredb.management.workspace.StagesObject.rename" title="singlestoredb.management.workspace.StagesObject.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rename</span></code></a>(new_path, *[, overwrite])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.rename.html#singlestoredb.management.workspace.StagesObject.rename" title="singlestoredb.management.workspace.StagesObject.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rename</span></code></a>(new_path, *[, overwrite])</p></td>
 <td><p>Move the stage file to a new location.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.rmdir.html#singlestoredb.management.workspace.StagesObject.rmdir" title="singlestoredb.management.workspace.StagesObject.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rmdir</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.rmdir.html#singlestoredb.management.workspace.StagesObject.rmdir" title="singlestoredb.management.workspace.StagesObject.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rmdir</span></code></a>()</p></td>
 <td><p>Delete the empty stage directory.</p></td>
 </tr>
 </tbody>
@@ -202,7 +206,7 @@ of various operations in<a href="singlestoredb.management.workspace.WorkspaceGro
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="singlestoredb.management.workspace.Stages.rmdir.html" class="btn btn-neutral float-left" title="singlestoredb.management.workspace.Stages.rmdir" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="singlestoredb.management.workspace.StagesObject.download.html" class="btn btn-neutral float-right" title="singlestoredb.management.workspace.StagesObject.download" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="singlestoredb.management.workspace.StagesObject.open.html" class="btn btn-neutral float-right" title="singlestoredb.management.workspace.StagesObject.open" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
   <hr/>
   <div role="contentinfo">

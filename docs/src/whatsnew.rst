@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.9.1 - October 17, 2023
+-------------------------
+* Add name / ID indexing to workspace groups / workspaces / regions
+
 v0.9.0 - October 16, 2023
 -------------------------
 * Add Stages to Management API

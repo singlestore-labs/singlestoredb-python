@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>singlestoredb.management.workspace.StagesObject.is_file &mdash; SingleStoreDB 0.9.1 documentation</title>
+  <title>singlestoredb.management.workspace.StagesObject.open &mdash; SingleStoreDB 0.9.1 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -16,8 +16,8 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="singlestoredb.management.workspace.StagesObject.abspath" href="singlestoredb.management.workspace.StagesObject.abspath.html" />
-    <link rel="prev" title="singlestoredb.management.workspace.StagesObject.is_dir" href="singlestoredb.management.workspace.StagesObject.is_dir.html" />
+    <link rel="next" title="singlestoredb.management.workspace.StagesObject.download" href="singlestoredb.management.workspace.StagesObject.download.html" />
+    <link rel="prev" title="singlestoredb.management.workspace.StagesObject" href="singlestoredb.management.workspace.StagesObject.html" />
 </head>
 <body class="wy-body-for-nav">
   <div class="wy-grid-for-nav">
@@ -55,11 +55,11 @@
 <li class="toctree-l3"><a class="reference internal" href="../api.html#stages">Stages</a></li>
 <li class="toctree-l3 current"><a class="reference internal" href="../api.html#stagesobject">StagesObject</a><ul class="current">
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.html">workspace.StagesObject</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.open.html">workspace.StagesObject.open</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">workspace.StagesObject.open</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.download.html">workspace.StagesObject.download</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.exists.html">workspace.StagesObject.exists</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.is_dir.html">workspace.StagesObject.is_dir</a></li>
-<li class="toctree-l4 current"><a class="current reference internal" href="#">workspace.StagesObject.is_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.is_file.html">workspace.StagesObject.is_file</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.abspath.html">workspace.StagesObject.abspath</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.basename.html">workspace.StagesObject.basename</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StagesObject.dirname.html">workspace.StagesObject.dirname</a></li>
@@ -91,28 +91,58 @@
   <ul class="wy-breadcrumbs">
       <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="../api.html">API Reference</a></li>
-      <li class="breadcrumb-item active">singlestoredb.management.workspace.StagesObject.is_file</li>
+      <li class="breadcrumb-item active">singlestoredb.management.workspace.StagesObject.open</li>
       <li class="wy-breadcrumbs-aside">
-            <a href="../_sources/generated/singlestoredb.management.workspace.StagesObject.is_file.rst.txt" rel="nofollow"> View page source</a>
+            <a href="../_sources/generated/singlestoredb.management.workspace.StagesObject.open.rst.txt" rel="nofollow"> View page source</a>
       </li>
   </ul>
   <hr/>
 </div>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
-  <section id="singlestoredb-management-workspace-stagesobject-is-file">
-<h1>singlestoredb.management.workspace.StagesObject.is_file<a class="headerlink" href="#singlestoredb-management-workspace-stagesobject-is-file" title="Permalink to this heading">¶</a></h1>
+  <section id="singlestoredb-management-workspace-stagesobject-open">
+<h1>singlestoredb.management.workspace.StagesObject.open<a class="headerlink" href="#singlestoredb-management-workspace-stagesobject-open" title="Permalink to this heading">¶</a></h1>
 <dl class="py method">
-<dt class="sig sig-object py" id="singlestoredb.management.workspace.StagesObject.is_file">
-<span class="sig-prename descclassname"><span class="pre">StagesObject.</span></span><span class="sig-name descname"><span class="pre">is_file</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></span><a class="headerlink" href="#singlestoredb.management.workspace.StagesObject.is_file" title="Permalink to this definition">¶</a></dt>
-<dd><p>Is the stage object a file?</p>
+<dt class="sig sig-object py" id="singlestoredb.management.workspace.StagesObject.open">
+<span class="sig-prename descclassname"><span class="pre">StagesObject.</span></span><span class="sig-name descname"><span class="pre">open</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'r'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">encoding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">StringIO</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">BytesIO</span></span></span><a class="headerlink" href="#singlestoredb.management.workspace.StagesObject.open" title="Permalink to this definition">¶</a></dt>
+<dd><p>Open a Stage path for reading or writing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>optional</em>) – <dl class="simple">
+<dt>The read / write mode. The following modes are supported:</dt><dd><ul>
+<li><p>’r’ open for reading (default)</p></li>
+<li><p>’w’ open for writing, truncating the file first</p></li>
+<li><p>’x’ create a new file and open it for writing</p></li>
+</ul>
+</dd>
+<dt>The data type can be specified by adding one of the following:</dt><dd><ul>
+<li><p>’b’ binary mode</p></li>
+<li><p>’t’ text mode (default)</p></li>
+</ul>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>encoding</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>optional</em>) – The string encoding to use for text</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>StagesObjectBytesReader - ‘rb’ or ‘b’ mode</em></p></li>
+<li><p><em>StagesObjectBytesWriter - ‘wb’ or ‘xb’ mode</em></p></li>
+<li><p><em>StagesObjectTextReader - ‘r’ or ‘rt’ mode</em></p></li>
+<li><p><em>StagesObjectTextWriter - ‘w’, ‘x’, ‘wt’ or ‘xt’ mode</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
 </dd></dl>
 </section>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="singlestoredb.management.workspace.StagesObject.is_dir.html" class="btn btn-neutral float-left" title="singlestoredb.management.workspace.StagesObject.is_dir" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="singlestoredb.management.workspace.StagesObject.abspath.html" class="btn btn-neutral float-right" title="singlestoredb.management.workspace.StagesObject.abspath" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="singlestoredb.management.workspace.StagesObject.html" class="btn btn-neutral float-left" title="singlestoredb.management.workspace.StagesObject" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="singlestoredb.management.workspace.StagesObject.download.html" class="btn btn-neutral float-right" title="singlestoredb.management.workspace.StagesObject.download" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
   <hr/>
   <div role="contentinfo">

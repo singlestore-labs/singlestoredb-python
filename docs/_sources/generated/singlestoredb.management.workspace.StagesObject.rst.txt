@@ -16,6 +16,7 @@
       ~StagesObject.getmtime
       ~StagesObject.is_dir
       ~StagesObject.is_file
+      ~StagesObject.open
       ~StagesObject.remove
       ~StagesObject.removedirs
       ~StagesObject.rename

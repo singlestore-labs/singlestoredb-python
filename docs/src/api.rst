@@ -258,9 +258,9 @@ methods and attributes.
 StagesObject
 ............
 
-:class:`StagesObject`s are returned by the :mthd:`StagesObject.upload_file`
-:mthd:`StagesObject.upload_folder`, :mthd:`StagesObject.mkdir`,
-:mthd:`StagesObject.rename`, and :mthd:`StagesObject.info` methods.
+:class:`StagesObject`s are returned by the :meth:`StagesObject.upload_file`
+:meth:`StagesObject.upload_folder`, :meth:`StagesObject.mkdir`,
+:meth:`StagesObject.rename`, and :meth:`StagesObject.info` methods.
 
 .. currentmodule:: singlestoredb.management.workspace
 
