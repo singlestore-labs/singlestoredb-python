@@ -69,9 +69,21 @@ class TestCluster(unittest.TestCase):
     def test_regions(self):
         out = self.manager.regions
         providers = {x.provider for x in out}
+        names = [x.name for x in out]
+        ids = [x.id for x in out]
         assert 'Azure' in providers, providers
         assert 'GCP' in providers, providers
         assert 'AWS' in providers, providers
+
+        objs = {}
+        for item in out:
+            objs[item.id] = item
+            objs[item.name] = item
+
+        name = random.choice(names)
+        assert out[name] == objs[name]
+        id = random.choice(ids)
+        assert out[id] == objs[id]
 
     def test_clusters(self):
         clusters = self.manager.clusters
@@ -232,19 +244,61 @@ class TestWorkspace(unittest.TestCase):
     def test_regions(self):
         out = self.manager.regions
         providers = {x.provider for x in out}
+        names = [x.name for x in out]
+        ids = [x.id for x in out]
         assert 'Azure' in providers, providers
         assert 'GCP' in providers, providers
         assert 'AWS' in providers, providers
 
+        objs = {}
+        for item in out:
+            objs[item.id] = item
+            objs[item.name] = item
+
+        name = random.choice(names)
+        assert out[name] == objs[name]
+        id = random.choice(ids)
+        assert out[id] == objs[id]
+
     def test_workspace_groups(self):
         workspace_groups = self.manager.workspace_groups
         ids = [x.id for x in workspace_groups]
-        assert self.workspace_group.id in ids, ids
+        names = [x.name for x in workspace_groups]
+        assert self.workspace_group.id in ids
+        assert self.workspace_group.name in names
+
+        assert workspace_groups.ids() == ids
+        assert workspace_groups.names() == names
+
+        objs = {}
+        for item in workspace_groups:
+            objs[item.id] = item
+            objs[item.name] = item
+
+        name = random.choice(names)
+        assert workspace_groups[name] == objs[name]
+        id = random.choice(ids)
+        assert workspace_groups[id] == objs[id]
 
     def test_workspaces(self):
         spaces = self.workspace_group.workspaces
         ids = [x.id for x in spaces]
-        assert self.workspace.id in ids, ids
+        names = [x.name for x in spaces]
+        assert self.workspace.id in ids
+        assert self.workspace.name in names
+
+        assert spaces.ids() == ids
+        assert spaces.names() == names
+
+        objs = {}
+        for item in spaces:
+            objs[item.id] = item
+            objs[item.name] = item
+
+        name = random.choice(names)
+        assert spaces[name] == objs[name]
+        id = random.choice(ids)
+        assert spaces[id] == objs[id]
 
     def test_get_workspace_group(self):
         group = self.manager.get_workspace_group(self.workspace_group.id)
@@ -432,6 +486,46 @@ class TestStages(unittest.TestCase):
 
         # Test reader without context manager
         rfile = st.open('open_raw_test.sql', 'r')
+        txt = ''
+        for line in rfile:
+            txt += line
+        rfile.close()
+
+        assert txt == open(TEST_DIR / 'test.sql').read()
+
+    def test_obj_open(self):
+        st = self.wg.stages
+
+        # Load test file
+        f = st.upload_file(TEST_DIR / 'test.sql', 'obj_open_test.sql')
+
+        # Read file using `open`
+        with f.open() as rfile:
+            assert rfile.read() == open(TEST_DIR / 'test.sql').read()
+
+        # Make sure directories error out
+        d = st.mkdir('obj_open_dir')
+        with self.assertRaises(IsADirectoryError):
+            d.open()
+
+        # Write file using `open`
+        with f.open('w', encoding='utf-8') as wfile:
+            wfile.write(open(TEST_DIR / 'test2.sql').read())
+
+        assert f.download(encoding='utf-8') == open(TEST_DIR / 'test2.sql').read()
+
+        # Test writer without context manager
+        wfile = f.open('w')
+        for line in open(TEST_DIR / 'test.sql'):
+            wfile.write(line)
+        wfile.close()
+
+        txt = st.download(f.path, encoding='utf-8')
+
+        assert txt == open(TEST_DIR / 'test.sql').read()
+
+        # Test reader without context manager
+        rfile = f.open('r')
         txt = ''
         for line in rfile:
             txt += line

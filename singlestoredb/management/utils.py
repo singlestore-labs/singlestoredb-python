@@ -8,6 +8,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import SupportsIndex
+from typing import TypeVar
 from typing import Union
 
 from .. import converters
@@ -15,6 +17,7 @@ from .. import converters
 JSON = Union[str, List[str], Dict[str, 'JSON']]
 JSONObj = Dict[str, JSON]
 JSONList = List[JSON]
+T = TypeVar('T')
 
 if sys.version_info < (3, 10):
     PathLike = Union[str, os.PathLike]
@@ -22,6 +25,49 @@ if sys.version_info < (3, 10):
 else:
     PathLike = Union[str, os.PathLike[str]]
     PathLikeABC = os.PathLike[str]
+
+
+class NamedList(List[T]):
+    """List class which also allows selection by ``name`` and ``id`` attribute."""
+
+    def _find_item(self, key: str) -> T:
+        for item in self:
+            if getattr(item, 'name', '') == key:
+                return item
+            if getattr(item, 'id', '') == key:
+                return item
+        raise KeyError(key)
+
+    def __getitem__(self, key: Union[SupportsIndex, slice, str]) -> Any:
+        if isinstance(key, str):
+            return self._find_item(key)
+        return super().__getitem__(key)
+
+    def __contains__(self, key: Any) -> bool:
+        if isinstance(key, str):
+            try:
+                self._find_item(key)
+                return True
+            except KeyError:
+                return False
+        return super().__contains__(key)
+
+    def names(self) -> List[str]:
+        """Return ``name`` attribute of each item."""
+        return [y for y in [getattr(x, 'name', None) for x in self] if y is not None]
+
+    def ids(self) -> List[str]:
+        """Return ``id`` attribute of each item."""
+        return [y for y in [getattr(x, 'id', None) for x in self] if y is not None]
+
+    def get(self, name_or_id: str, *default: Any) -> Any:
+        """Return object with name / ID if it exists, or return default value."""
+        try:
+            return self._find_item(name_or_id)
+        except KeyError:
+            if default:
+                return default[0]
+            raise
 
 
 def enable_http_tracing() -> None:

@@ -147,6 +147,9 @@ Management API
 The management objects allow you to create, destroy, and interact with
 workspaces in the SingleStoreDB Cloud.
 
+The :func:`manage_workspaces` function will return a :class:`WorkspaceManager`
+object that can be used to interact with the Management API.
+
 .. currentmodule:: singlestoredb
 
 .. autosummary::
@@ -226,6 +229,10 @@ Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
 Stages
 ......
 
+To interact with Stages, use the :attr:`WorkspaceManager.stages` attribute.
+It will return a :class:`Stages` object which defines the following
+methods and attributes.
+
 .. currentmodule:: singlestoredb.management.workspace
 
 .. autosummary::
@@ -233,16 +240,16 @@ Stages
 
    Stages
    Stages.open
+   Stages.download
    Stages.upload_file
    Stages.upload_folder
-   Stages.mkdir
-   Stages.rename
    Stages.info
+   Stages.listdir
    Stages.exists
    Stages.is_dir
    Stages.is_file
-   Stages.listdir
-   Stages.download
+   Stages.mkdir
+   Stages.rename
    Stages.remove
    Stages.removedirs
    Stages.rmdir
@@ -251,17 +258,18 @@ Stages
 StagesObject
 ............
 
+:class:`StagesObject`s are returned by the :mthd:`StagesObject.upload_file`
+:mthd:`StagesObject.upload_folder`, :mthd:`StagesObject.mkdir`,
+:mthd:`StagesObject.rename`, and :mthd:`StagesObject.info` methods.
+
 .. currentmodule:: singlestoredb.management.workspace
 
 .. autosummary::
    :toctree: generated/
 
    StagesObject
+   StagesObject.open
    StagesObject.download
-   StagesObject.remove
-   StagesObject.rmdir
-   StagesObject.removedirs
-   StagesObject.rename
    StagesObject.exists
    StagesObject.is_dir
    StagesObject.is_file
@@ -270,6 +278,10 @@ StagesObject
    StagesObject.dirname
    StagesObject.getmtime
    StagesObject.getctime
+   StagesObject.rename
+   StagesObject.remove
+   StagesObject.removedirs
+   StagesObject.rmdir
 
 
 Configuration

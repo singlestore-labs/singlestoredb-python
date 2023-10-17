@@ -23,6 +23,7 @@ from .manager import Manager
 from .organization import Organization
 from .region import Region
 from .utils import from_datetime
+from .utils import NamedList
 from .utils import PathLike
 from .utils import snake_to_camel
 from .utils import to_datetime
@@ -125,6 +126,47 @@ class StagesObject(object):
     def __repr__(self) -> str:
         """Return string representation."""
         return str(self)
+
+    def open(
+        self,
+        mode: str = 'r',
+        encoding: Optional[str] = None,
+    ) -> Union[io.StringIO, io.BytesIO]:
+        """
+        Open a Stage path for reading or writing.
+
+        Parameters
+        ----------
+        mode : str, optional
+            The read / write mode. The following modes are supported:
+                * 'r' open for reading (default)
+                * 'w' open for writing, truncating the file first
+                * 'x' create a new file and open it for writing
+            The data type can be specified by adding one of the following:
+                * 'b' binary mode
+                * 't' text mode (default)
+        encoding : str, optional
+            The string encoding to use for text
+
+        Returns
+        -------
+        StagesObjectBytesReader - 'rb' or 'b' mode
+        StagesObjectBytesWriter - 'wb' or 'xb' mode
+        StagesObjectTextReader - 'r' or 'rt' mode
+        StagesObjectTextWriter - 'w', 'x', 'wt' or 'xt' mode
+
+        """
+        if self._stages is None:
+            raise ManagementError(
+                msg='No Stages object is associated with this object.',
+            )
+
+        if self.is_dir():
+            raise IsADirectoryError(
+                f'directories can not be read or written: {self.path}',
+            )
+
+        return self._stages.open(self.path, mode=mode, encoding=encoding)
 
     def download(
         self,
@@ -1163,14 +1205,16 @@ class WorkspaceGroup(object):
         )
 
     @property
-    def workspaces(self) -> List[Workspace]:
+    def workspaces(self) -> NamedList[Workspace]:
         """Return a list of available workspaces."""
         if self._manager is None:
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
         res = self._manager._get('workspaces', params=dict(workspaceGroupID=self.id))
-        return [Workspace.from_dict(item, self._manager) for item in res.json()]
+        return NamedList(
+            [Workspace.from_dict(item, self._manager) for item in res.json()],
+        )
 
 
 class Billing(object):
@@ -1275,10 +1319,10 @@ class WorkspaceManager(Manager):
     obj_type = 'workspace'
 
     @ property
-    def workspace_groups(self) -> List[WorkspaceGroup]:
+    def workspace_groups(self) -> NamedList[WorkspaceGroup]:
         """Return a list of available workspace groups."""
         res = self._get('workspaceGroups')
-        return [WorkspaceGroup.from_dict(item, self) for item in res.json()]
+        return NamedList([WorkspaceGroup.from_dict(item, self) for item in res.json()])
 
     @ property
     def organizations(self) -> Organizations:
@@ -1291,10 +1335,10 @@ class WorkspaceManager(Manager):
         return Billing(self)
 
     @ property
-    def regions(self) -> List[Region]:
+    def regions(self) -> NamedList[Region]:
         """Return a list of available regions."""
         res = self._get('regions')
-        return [Region.from_dict(item, self) for item in res.json()]
+        return NamedList([Region.from_dict(item, self) for item in res.json()])
 
     def create_workspace_group(
         self, name: str, region: Union[str, Region],

@@ -12,6 +12,7 @@ from .. import connection
 from ..exceptions import ManagementError
 from .manager import Manager
 from .region import Region
+from .utils import NamedList
 from .utils import to_datetime
 from .utils import vars_to_str
 
@@ -337,16 +338,16 @@ class ClusterManager(Manager):
     obj_type = 'cluster'
 
     @property
-    def clusters(self) -> List[Cluster]:
+    def clusters(self) -> NamedList[Cluster]:
         """Return a list of available clusters."""
         res = self._get('clusters')
-        return [Cluster.from_dict(item, self) for item in res.json()]
+        return NamedList([Cluster.from_dict(item, self) for item in res.json()])
 
     @property
-    def regions(self) -> List[Region]:
+    def regions(self) -> NamedList[Region]:
         """Return a list of available regions."""
         res = self._get('regions')
-        return [Region.from_dict(item, self) for item in res.json()]
+        return NamedList([Region.from_dict(item, self) for item in res.json()])
 
     def create_cluster(
         self, name: str, region: Union[str, Region], admin_password: str,
