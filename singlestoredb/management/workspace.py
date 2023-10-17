@@ -298,7 +298,6 @@ class StagesObjectTextWriter(io.StringIO):
 
     def close(self) -> None:
         """Write the content to the stage path."""
-        print('CLOSING')
         self._stages._upload(self.getvalue(), self._stage_path)
         super().close()
 
@@ -695,13 +694,18 @@ class Stages(object):
             return out
         return [x['path'] for x in res['content'] or []]
 
-    def listdir(self, stage_path: PathLike, *, recursive: bool = False) -> List[str]:
+    def listdir(
+        self,
+        stage_path: PathLike = '/',
+        *,
+        recursive: bool = False,
+    ) -> List[str]:
         """
         List the files / folders at the given path.
 
         Parameters
         ----------
-        stage_path : Path or str
+        stage_path : Path or str, optional
             Path to the stage location
 
         Returns
