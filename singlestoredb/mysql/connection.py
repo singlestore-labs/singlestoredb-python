@@ -759,8 +759,9 @@ class Connection(BaseConnection):
         """
         # if DEBUG:
         #     print("DEBUG: sending query:", sql)
-        if fusion.is_management_query(sql):
-            self._result = fusion.execute(self, sql)
+        handler = fusion.is_fusion_query(sql)
+        if handler is not None:
+            self._result = fusion.execute(self, sql, handler=handler)
             self._affected_rows = self._result.affected_rows
         else:
             if isinstance(sql, str):

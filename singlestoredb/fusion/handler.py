@@ -1,142 +1,379 @@
 #!/usr/bin/env python3
-import json
+import abc
+import functools
 import re
+import textwrap
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import Iterable
 from typing import List
 from typing import Tuple
 
+from parsimonious import Grammar
+from parsimonious import ParseError
+from parsimonious.nodes import Node
+from parsimonious.nodes import NodeVisitor
+
+from . import api
 from . import result
 from ..connection import Connection
+from ..management.workspace import WorkspaceManager
 
-SQLResults = Tuple[List[Tuple[str, int]], List[Tuple[Any, ...]]]
+CORE_GRAMMAR = r'''
+    ws = ~r"(\s*(/\*.*\*/)*\s*)*"
+    qs = ~r"\"([^\"]*)\"|'([^\']*)'"
+    number = ~r"\d+(\.\d+)"
+    comma = ws "," ws
+    open_paren = ws "(" ws
+    close_paren = ws ")" ws
+'''
 
 
-class Handler:
+def get_keywords(sql: str) -> Tuple[str, ...]:
+    """Return all all-caps words from the beginning of the line."""
+    m = re.match(r'^\s*([A-Z0-9_]+(\s+|$))+', sql)
+    if not m:
+        return tuple()
+    return tuple(re.split(r'\s+', m.group(0).strip()))
 
-    def __init__(self, connection: Connection, manager: Any):
-        super().__init__()
+
+def process_optional(m: Any) -> str:
+    """Create options or groups of options."""
+    sql = m.group(1).strip()
+    if '|' in sql:
+        return f'( {sql} )*'
+    return f'( {sql} )?'
+
+
+def process_alternates(m: Any) -> str:
+    """Make alternates mandatory groups."""
+    sql = m.group(1).strip()
+    if '|' in sql:
+        return f'( {sql} )'
+    raise ValueError(f'alternates must contain "|": {sql}')
+
+
+def process_repeats(m: Any) -> str:
+    """Add repeated patterns."""
+    sql = m.group(1).strip()
+    return f'open_paren? {sql} ws ( comma {sql} ws )* close_paren?'
+
+
+def lower_and_regex(m: Any) -> str:
+    """Lowercase and convert literal to regex."""
+    sql = m.group(1)
+    return f'~"{sql.lower()}"i'
+
+
+def split_unions(sql: str) -> str:
+    """
+    Convert SQL in the form '[ x ] [ y ]' to '[ x | y ]'.
+
+    Parameters
+    ----------
+    sql : str
+        SQL grammar
+
+    Returns
+    -------
+    str
+
+    """
+    in_alternate = False
+    out = []
+    for c in sql:
+        if c == '{':
+            in_alternate = True
+            out.append(c)
+        elif c == '}':
+            in_alternate = False
+            out.append(c)
+        elif not in_alternate and c == '|':
+            out.append(']')
+            out.append(' ')
+            out.append('[')
+        else:
+            out.append(c)
+    return ''.join(out)
+
+
+def expand_rules(rules: Dict[str, str], m: Any) -> str:
+    """
+    Return expanded grammar syntax for given rule.
+
+    Parameters
+    ----------
+    ops : Dict[str, str]
+        Dictionary of rules in grammar
+
+    Returns
+    -------
+    str
+
+    """
+    txt = m.group(1)
+    if txt in rules:
+        return f' {rules[txt]} '
+    return f' <{txt}> '
+
+
+def build_cmd(sql: str) -> str:
+    """Pre-process grammar to construct top-level command."""
+    if ';' not in sql:
+        raise ValueError('a semi-colon exist at the end of the primary rule')
+
+    # Pre-space
+    m = re.match(r'^\s*', sql)
+    space = m.group(0) if m else ''
+
+    # Split on ';' on a line by itself
+    begin, end = sql.split(';', 1)
+
+    # Get statement keywords
+    keywords = get_keywords(begin)
+    cmd = '_'.join(x.lower() for x in keywords) + '_cmd'
+
+    # Collapse multi-line to one
+    begin = re.sub(r'\s+', r' ', begin)
+
+    return f'{space}{cmd} ={begin}\n{end}'
+
+
+def build_help(sql: str) -> str:
+    """Construct full help syntax."""
+    if ';' not in sql:
+        raise ValueError('a semi-colon exist at the end of the primary rule')
+
+    # Split on ';' on a line by itself
+    cmd, end = sql.split(';', 1)
+
+    rules = {}
+    for line in end.split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+        name, value = line.split('=', 1)
+        name = name.strip()
+        value = value.strip()
+        rules[name] = value
+
+    while re.search(r' [a-z0-9_]+ ', cmd):
+        cmd = re.sub(r' ([a-z0-9_]+) ', functools.partial(expand_rules, rules), cmd)
+
+    return textwrap.dedent(cmd).rstrip() + ';'
+
+
+def get_rule_info(sql: str) -> Dict[str, Any]:
+    """Compute metadata about rule used in coallescing parsed output."""
+    return dict(
+        n_keywords=len(get_keywords(sql)),
+        repeats=',...' in sql,
+    )
+
+
+def process_grammar(grammar: str) -> Tuple[Grammar, Tuple[str, ...], Dict[str, Any], str]:
+    """
+    Convert SQL grammar to a Parsimonious grammar.
+
+    Parameters
+    ----------
+    grammar : str
+        The SQL grammar
+
+    Returns
+    -------
+    (Grammar, Tuple[str, ...], Dict[str, Any], str) - Grammar is the parsimonious
+    grammar object. The tuple is a series of the keywords that start the command.
+    The dictionary is a set of metadata about each rule. The final string is
+    a human-readable version of the grammar for documentation and errors.
+
+    """
+    out = []
+    rules = {}
+    rule_info = {}
+
+    command_key = get_keywords(grammar)
+    help_txt = build_help(grammar)
+    grammar = build_cmd(grammar)
+
+    # Make sure grouping characters all have whitespace around them
+    grammar = re.sub(r' *(\[|\{|\||\}|\]) *', r' \1 ', grammar)
+
+    for line in grammar.split('\n'):
+        if not line.strip():
+            continue
+
+        op, sql = line.split('=', 1)
+        op = op.strip()
+        sql = sql.strip()
+        sql = split_unions(sql)
+
+        rules[op] = sql
+        rule_info[op] = get_rule_info(sql)
+
+        # Convert consecutive optionals to a union
+        sql = re.sub(r'\]\s+\[', r' | ', sql)
+
+        # Lower-case keywords and make them case-insensitive
+        sql = re.sub(r'\b([A-Z0-9]+)\b', lower_and_regex, sql)
+
+        # Convert literal strings to 'qs'
+        sql = re.sub(r"'[^']+'", r'qs', sql)
+
+        # Convert [...] groups to (...)*
+        sql = re.sub(r'\[([^\]]+)\]', process_optional, sql)
+
+        # Convert {...} groups to (...)
+        sql = re.sub(r'\{([^\}]+)\}', process_alternates, sql)
+
+        # Convert <...> to ... (<...> is the form for core types)
+        sql = re.sub(r'<([a-z0-9_]+)>', r'\1', sql)
+
+        # Insert ws between every token to allow for whitespace and comments
+        sql = ' ws '.join(re.split(r'\s+', sql)) + ' ws'
+
+        # Remove ws in optional groupings
+        sql = sql.replace('( ws', '(')
+        sql = sql.replace('| ws', '|')
+
+        # Convert | to /
+        sql = sql.replace('|', '/')
+
+        # Remove ws after operation names, all operations contain ws at the end
+        sql = re.sub(r'(\s+[a-z0-9_]+)\s+ws\b', r'\1', sql)
+
+        # Convert foo,... to foo ("," foo)*
+        sql = re.sub(r'(\S+),...', process_repeats, sql)
+
+        # Remove ws before / and )
+        sql = re.sub(r'(\s*\S+\s+)ws\s+/', r'\1/', sql)
+        sql = re.sub(r'(\s*\S+\s+)ws\s+\)', r'\1)', sql)
+
+        # Make sure every operation ends with ws
+        sql = re.sub(r'\s+ws\s+ws$', r' ws', sql + ' ws')
+
+        out.append(f'{op} = {sql}')
+
+    for k, v in list(rules.items()):
+        while re.search(r' ([a-z0-9_]+) ', v):
+            v = re.sub(r' ([a-z0-9_]+) ', functools.partial(expand_rules, rules), v)
+        rules[k] = v
+
+    for k, v in list(rules.items()):
+        while re.search(r' <([a-z0-9_]+)> ', v):
+            v = re.sub(r' <([a-z0-9_]+)> ', r' \1 ', v)
+        rules[k] = v
+
+    cmds = ' / '.join(x for x in rules if x.endswith('_cmd'))
+    cmds = f'init = ws ( {cmds} ) ws ";"? ws\n'
+
+    return Grammar(cmds + CORE_GRAMMAR + '\n'.join(out)), command_key, rule_info, help_txt
+
+
+def flatten(items: Iterable[Any]) -> List[Any]:
+    """Flatten a list of iterables."""
+    out = []
+    for x in items:
+        if isinstance(x, (str, bytes, dict)):
+            out.append(x)
+        elif isinstance(x, Iterable):
+            for sub_x in flatten(x):
+                if sub_x is not None:
+                    out.append(sub_x)
+        elif x is not None:
+            out.append(x)
+    return out
+
+
+def merge_dicts(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Merge list of dictionaries together."""
+    out: Dict[str, Any] = {}
+    for x in items:
+        if isinstance(x, dict):
+            same = list(set(x.keys()).intersection(set(out.keys())))
+            if same:
+                raise ValueError(f"found duplicate rules for '{same[0]}'")
+            out.update(x)
+    return out
+
+
+class SQLHandler(NodeVisitor):
+    """Base class for all SQL handler classes."""
+
+    grammar: Grammar = Grammar(CORE_GRAMMAR)
+    command_key: Tuple[str, ...] = ()
+    rule_info: Dict[str, Any] = {}
+    help: str = ''
+
+    process_grammar = staticmethod(process_grammar)
+
+    _is_compiled: bool = False
+
+    def __init__(self, connection: Connection, manager: WorkspaceManager):
         self.connection = connection
         self.manager = manager
 
-    def handle_generic(self, action: str, params: Dict[str, Any]) -> SQLResults:
-        print('<UNKNOWN ACTION>', action, params)
-        return [], []
+    @classmethod
+    def compile(cls, grammar: str = '') -> None:
+        if cls._is_compiled:
+            return
 
-    def __call__(
-        self,
-        action: str,
-        params: Dict[str, Any],
-    ) -> result.DummySQLResult:
+        cls.grammar, cls.command_key, cls.rule_info, cls.help = \
+            cls.process_grammar(grammar or cls.__doc__ or '')
+
+        cls._is_compiled = True
+
+    @classmethod
+    def register(cls, overwrite: bool = False) -> None:
+        """
+        Register the handler class.
+
+        Paraemeters
+        -----------
+        overwrite : bool, optional
+            Overwrite an existing command with the same name?
+
+        """
+        cls.compile()
+        api.register_handler(cls, overwrite=overwrite)
+
+    def execute(self, sql: str) -> result.DummySQLResult:
+        """
+        Parse the SQL and invoke the handler method.
+
+        Parameters
+        ----------
+        sql : str
+            SQL statement to execute
+
+        Returns
+        -------
+        DummySQLResult
+
+        """
+        type(self).compile()
         try:
-            func = getattr(self, f'handle_{action}')
-        except AttributeError:
-            desc, data = self.handle_generic(action, params)
-        else:
-            desc, data = func(params)
+            params = self.visit(type(self).grammar.parse(sql))
+            return result.DummySQLResult.from_SQLResult(self.connection, self.run(params))
+        except ParseError as exc:
+            s = str(exc)
+            msg = ''
+            m = re.search(r'(The non-matching portion.*$)', s)
+            if m:
+                msg = ' ' + m.group(1)
+            m = re.search(r"(Rule) '.+?'( didn't match at.*$)", s)
+            if m:
+                msg = ' ' + m.group(1) + m.group(2)
+            raise ValueError(
+                f'Could not parse statement.{msg} '
+                'Expecting:\n' + textwrap.indent(type(self).help, '  '),
+            )
 
-        out = result.DummySQLResult(self.connection)
-        out.inject_data(desc, data)
-        return out
-
-    def handle_show_regions(self, params: Dict[str, Any]) -> SQLResults:
-        desc = [
-            ('Name', result.STRING),
-            ('ID', result.STRING),
-            ('Provider', result.STRING),
-        ]
-        is_like = self.build_like_func(params.get('like', None))
-        return desc, [(x.name, x.id, x.provider)
-                      for x in self.manager.regions if is_like(x.name)]
-
-    def handle_show_workspace_groups(self, params: Dict[str, Any]) -> SQLResults:
-        desc = [
-            ('Name', result.STRING),
-            ('ID', result.STRING),
-            ('Region Name', result.STRING),
-            ('Firewall Ranges', result.JSON),
-        ]
-        if params.get('extended'):
-            desc += [
-                ('Created At', result.DATETIME),
-                ('Terminated At', result.DATETIME),
-            ]
-
-            def fields(x: Any) -> Any:
-                return (
-                    x.name, x.id, x.region.name,
-                    json.dumps(x.firewall_ranges),
-                    x.created_at, x.terminated_at,
-                )
-        else:
-            def fields(x: Any) -> Any:
-                return (x.name, x.id, x.region.name, x.firewall_ranges)
-        is_like = self.build_like_func(params.get('like', None))
-        return (
-            desc,
-            [fields(x) for x in self.manager.workspace_groups if is_like(x.name)],
-        )
-
-    def handle_show_workspaces(self, params: Dict[str, Any]) -> SQLResults:
-        desc = [
-            ('Name', result.STRING),
-            ('ID', result.STRING),
-            ('Size', result.STRING),
-            ('State', result.STRING),
-        ]
-
-        if 'in_group' in params:
-            workspace_group_id = [
-                x.id for x in self.manager.workspace_groups
-                if x.name == params['in_group']
-            ]
-            if not workspace_group_id:
-                raise ValueError(
-                    'no workspace group found with name "{}"'.format(params['in_group']),
-                )
-            workspace = self.manager.get_workspace_group(workspace_group_id[0])
-        else:
-            workspace = self.manager.get_workspace_group(params['in_group_id'])
-
-        if params.get('extended'):
-            desc += [
-                ('Endpoint', result.STRING),
-                ('Created At', result.DATETIME),
-                ('Terminated At', result.DATETIME),
-            ]
-
-            def fields(x: Any) -> Any:
-                return (
-                    x.name, x.id, x.size, x.state,
-                    x.endpoint, x.created_at, x.terminated_at,
-                )
-        else:
-            def fields(x: Any) -> Any:
-                return (x.name, x.id, x.size, x.state)
-
-        is_like = self.build_like_func(params.get('like', None))
-
-        return desc, [fields(x) for x in workspace.workspaces if is_like(x.name)]
-
-    def handle_create_workspace(self, params: Dict[str, Any]) -> SQLResults:
-        if 'in_group' in params:
-            workspace_group_id = [
-                x.id for x in self.manager.workspace_groups
-                if x.name == params['in_group']
-            ]
-            if not workspace_group_id:
-                raise ValueError(
-                    'no workspace group found with name "{}"'.format(params['in_group']),
-                )
-            workspace_group_id = workspace_group_id[0]
-        else:
-            workspace_group_id = params['in_group_id']
-
-        self.manager.create_workspace(
-            params['name'], workspace_group_id, size=params.get('with_size'),
-        )
-        return [], []
+    @abc.abstractmethod
+    def run(self, params: Dict[str, Any]) -> result.SQLResult:
+        """Run the handler command."""
+        raise NotImplementedError
 
     def build_like_func(self, like: str) -> Callable[[str], bool]:
         """Construct a function to apply the LIKE clause."""
@@ -152,4 +389,69 @@ class Handler:
 
             def is_like(x: Any) -> bool:
                 return bool(regex.match(x))
+
         return is_like
+
+    def visit_qs(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Quoted strings."""
+        if node is None:
+            return None
+        return node.match.group(1) or node.match.group(2)
+
+    def visit_ws(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Whitespace and comments."""
+        return
+
+    def visit_comma(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Single comma."""
+        return
+
+    def visit_open_paren(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Open parenthesis."""
+        return
+
+    def visit_close_paren(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Close parenthesis."""
+        return
+
+    def visit_init(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Entry point of the grammar."""
+        _, out, *_ = visited_children
+        return out
+
+    def generic_visit(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """
+        Handle all undefined rules.
+
+        This method processes all user-defined rules. Each rule results in
+        a dictionary with a single key corresponding to the rule name, with
+        a value corresponding to the data value following the rule keywords.
+
+        If no value exists, the value True is used. If the rule is not a
+        rule with possible repeated values, a single value is used. If the
+        rule can have repeated values, a list of values is returned.
+
+        """
+        # Call a grammar operation
+        if node.expr_name in type(self).rule_info:
+            n_keywords = type(self).rule_info[node.expr_name]['n_keywords']
+            repeats = type(self).rule_info[node.expr_name]['repeats']
+
+            # If this is the top-level command, create the final result
+            if node.expr_name.endswith('_cmd'):
+                return merge_dicts(flatten(visited_children)[n_keywords:])
+
+            # Filter out stray empty strings
+            out = [x for x in flatten(visited_children)[n_keywords:] if x]
+
+            if repeats:
+                return {node.expr_name: out}
+
+            return {node.expr_name: out[0] if out else True}
+
+        if hasattr(node, 'match'):
+            if not visited_children and not node.match.groups():
+                return node.text
+            return visited_children or list(node.match.groups())
+
+        return visited_children or node.text

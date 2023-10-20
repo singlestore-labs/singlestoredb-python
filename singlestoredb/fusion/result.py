@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 from typing import Any
 from typing import List
 from typing import Optional
@@ -15,6 +17,8 @@ from ..mysql.constants.FIELD_TYPE import LONGLONG  # noqa: F401
 from ..mysql.constants.FIELD_TYPE import STRING  # noqa: F401
 from ..utils.results import Description
 from ..utils.results import format_results
+
+SQLResult = Tuple[List[Tuple[str, int]], List[Tuple[Any, ...]]]
 
 
 class DummyField(object):
@@ -42,6 +46,17 @@ class DummySQLResult:
         self.converters: List[Any] = []
         self.fields: List[DummyField] = []
         self._row_idx: int = -1
+
+    @classmethod
+    def from_SQLResult(
+            cls,
+            connection: connection.Connection,
+            result: SQLResult,
+    ) -> DummySQLResult:
+        """Construct a DummySQLResult instance from a SQLResult tuple."""
+        out = cls(connection)
+        out.inject_data(*result)
+        return out
 
     def _read_rowdata_packet_unbuffered(self, size: int = 1) -> Optional[List[Any]]:
         if not self.rows:

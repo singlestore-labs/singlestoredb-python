@@ -433,9 +433,11 @@ class Cursor(connection.Cursor):
             else:
                 query = query % args
 
-    def _execute_management_query(
-        self, oper: Union[str, bytes],
+    def _execute_fusion_query(
+        self,
+        oper: Union[str, bytes],
         params: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
+        handler: Any = None,
     ) -> int:
         oper = mogrify(oper, params)
 
@@ -447,7 +449,11 @@ class Cursor(connection.Cursor):
         results_type = self._results_type
         self._results_type = 'tuples'
         try:
-            mgmt_res = fusion.execute(self._connection, oper)  # type: ignore
+            mgmt_res = fusion.execute(
+                self._connection,  # type: ignore
+                oper,
+                handler=handler,
+            )
         finally:
             self._results_type = results_type
 
@@ -496,8 +502,9 @@ class Cursor(connection.Cursor):
 
         self._validate_param_subs(oper, params)
 
-        if fusion.is_management_query(oper):
-            return self._execute_management_query(oper, params)
+        handler = fusion.is_fusion_query(oper)
+        if handler is not None:
+            return self._execute_fusion_query(oper, params, handler=handler)
 
         oper, params = self._connection._convert_params(oper, params)
 
