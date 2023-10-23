@@ -8,6 +8,7 @@ from typing import Callable
 from typing import Dict
 from typing import Iterable
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 from parsimonious import Grammar
@@ -15,10 +16,8 @@ from parsimonious import ParseError
 from parsimonious.nodes import Node
 from parsimonious.nodes import NodeVisitor
 
-from . import api
 from . import result
 from ..connection import Connection
-from ..management.workspace import WorkspaceManager
 
 CORE_GRAMMAR = r'''
     ws = ~r"(\s*(/\*.*\*/)*\s*)*"
@@ -30,9 +29,9 @@ CORE_GRAMMAR = r'''
 '''
 
 
-def get_keywords(sql: str) -> Tuple[str, ...]:
+def get_keywords(grammar: str) -> Tuple[str, ...]:
     """Return all all-caps words from the beginning of the line."""
-    m = re.match(r'^\s*([A-Z0-9_]+(\s+|$))+', sql)
+    m = re.match(r'^\s*([A-Z0-9_]+(\s+|$))+', grammar)
     if not m:
         return tuple()
     return tuple(re.split(r'\s+', m.group(0).strip()))
@@ -66,13 +65,13 @@ def lower_and_regex(m: Any) -> str:
     return f'~"{sql.lower()}"i'
 
 
-def split_unions(sql: str) -> str:
+def split_unions(grammar: str) -> str:
     """
-    Convert SQL in the form '[ x ] [ y ]' to '[ x | y ]'.
+    Convert grammar in the form '[ x ] [ y ]' to '[ x | y ]'.
 
     Parameters
     ----------
-    sql : str
+    grammar : str
         SQL grammar
 
     Returns
@@ -82,7 +81,7 @@ def split_unions(sql: str) -> str:
     """
     in_alternate = False
     out = []
-    for c in sql:
+    for c in grammar:
         if c == '{':
             in_alternate = True
             out.append(c)
@@ -118,17 +117,17 @@ def expand_rules(rules: Dict[str, str], m: Any) -> str:
     return f' <{txt}> '
 
 
-def build_cmd(sql: str) -> str:
+def build_cmd(grammar: str) -> str:
     """Pre-process grammar to construct top-level command."""
-    if ';' not in sql:
+    if ';' not in grammar:
         raise ValueError('a semi-colon exist at the end of the primary rule')
 
     # Pre-space
-    m = re.match(r'^\s*', sql)
+    m = re.match(r'^\s*', grammar)
     space = m.group(0) if m else ''
 
     # Split on ';' on a line by itself
-    begin, end = sql.split(';', 1)
+    begin, end = grammar.split(';', 1)
 
     # Get statement keywords
     keywords = get_keywords(begin)
@@ -140,13 +139,13 @@ def build_cmd(sql: str) -> str:
     return f'{space}{cmd} ={begin}\n{end}'
 
 
-def build_help(sql: str) -> str:
+def build_help(grammar: str) -> str:
     """Construct full help syntax."""
-    if ';' not in sql:
+    if ';' not in grammar:
         raise ValueError('a semi-colon exist at the end of the primary rule')
 
     # Split on ';' on a line by itself
-    cmd, end = sql.split(';', 1)
+    cmd, end = grammar.split(';', 1)
 
     rules = {}
     for line in end.split('\n'):
@@ -164,11 +163,16 @@ def build_help(sql: str) -> str:
     return textwrap.dedent(cmd).rstrip() + ';'
 
 
-def get_rule_info(sql: str) -> Dict[str, Any]:
+def strip_comments(grammar: str) -> str:
+    """Strip comments from grammar."""
+    return re.sub(r'^\s*#.*$', r'', grammar, flags=re.M)
+
+
+def get_rule_info(grammar: str) -> Dict[str, Any]:
     """Compute metadata about rule used in coallescing parsed output."""
     return dict(
-        n_keywords=len(get_keywords(sql)),
-        repeats=',...' in sql,
+        n_keywords=len(get_keywords(grammar)),
+        repeats=',...' in grammar,
     )
 
 
@@ -193,6 +197,7 @@ def process_grammar(grammar: str) -> Tuple[Grammar, Tuple[str, ...], Dict[str, A
     rules = {}
     rule_info = {}
 
+    grammar = strip_comments(grammar)
     command_key = get_keywords(grammar)
     help_txt = build_help(grammar)
     grammar = build_cmd(grammar)
@@ -301,28 +306,51 @@ def merge_dicts(items: List[Dict[str, Any]]) -> Dict[str, Any]:
 class SQLHandler(NodeVisitor):
     """Base class for all SQL handler classes."""
 
+    #: Parsimonious grammar object
     grammar: Grammar = Grammar(CORE_GRAMMAR)
+
+    #: SQL keywords that start the command
     command_key: Tuple[str, ...] = ()
+
+    #: Metadata about the parse rules
     rule_info: Dict[str, Any] = {}
+
+    #: Help string for use in error messages
     help: str = ''
 
-    process_grammar = staticmethod(process_grammar)
+    #: Rule validation functions
+    validators: Dict[str, Callable[..., Any]] = {}
 
     _is_compiled: bool = False
 
-    def __init__(self, connection: Connection, manager: WorkspaceManager):
+    def __init__(self, connection: Connection):
         self.connection = connection
-        self.manager = manager
 
     @classmethod
     def compile(cls, grammar: str = '') -> None:
+        """
+        Compile the grammar held in the docstring.
+
+        This method modifies attributes on the class: ``grammar``,
+        ``command_key``, ``rule_info``, and ``help``.
+
+        Parameters
+        ----------
+        grammar : str, optional
+            Grammar to use instead of docstring
+
+        """
         if cls._is_compiled:
             return
 
         cls.grammar, cls.command_key, cls.rule_info, cls.help = \
-            cls.process_grammar(grammar or cls.__doc__ or '')
+            process_grammar(grammar or cls.__doc__ or '')
 
         cls._is_compiled = True
+
+    def create_result(self) -> result.FusionSQLResult:
+        """Return a new result object."""
+        return result.FusionSQLResult(self.connection)
 
     @classmethod
     def register(cls, overwrite: bool = False) -> None:
@@ -335,10 +363,11 @@ class SQLHandler(NodeVisitor):
             Overwrite an existing command with the same name?
 
         """
+        from . import registry
         cls.compile()
-        api.register_handler(cls, overwrite=overwrite)
+        registry.register_handler(cls, overwrite=overwrite)
 
-    def execute(self, sql: str) -> result.DummySQLResult:
+    def execute(self, sql: str) -> result.FusionSQLResult:
         """
         Parse the SQL and invoke the handler method.
 
@@ -354,8 +383,10 @@ class SQLHandler(NodeVisitor):
         """
         type(self).compile()
         try:
-            params = self.visit(type(self).grammar.parse(sql))
-            return result.DummySQLResult.from_SQLResult(self.connection, self.run(params))
+            res = self.run(self.visit(type(self).grammar.parse(sql)))
+            if res is not None:
+                return res
+            return result.FusionSQLResult(self.connection)
         except ParseError as exc:
             s = str(exc)
             msg = ''
@@ -371,12 +402,41 @@ class SQLHandler(NodeVisitor):
             )
 
     @abc.abstractmethod
-    def run(self, params: Dict[str, Any]) -> result.SQLResult:
-        """Run the handler command."""
+    def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
+        """
+        Run the handler command.
+
+        Parameters
+        ----------
+        params : Dict[str, Any]
+            Values parsed from the SQL query. Each rule in the grammar
+            results in a key/value pair in the ``params` dictionary.
+
+        Returns
+        -------
+        SQLResult - tuple containing the column definitions and
+            rows of data in the result
+
+        """
         raise NotImplementedError
 
-    def build_like_func(self, like: str) -> Callable[[str], bool]:
-        """Construct a function to apply the LIKE clause."""
+    def create_like_func(self, like: str) -> Callable[[str], bool]:
+        """
+        Construct a function to apply the LIKE clause.
+
+        Calling the resulting function will return a boolean indicating
+        whether the given string matched the ``like`` pattern.
+
+        Parameters
+        ----------
+        like : str
+            A LIKE pattern (i.e., string with '%' as a wildcard)
+
+        Returns
+        -------
+        function
+
+        """
         if like is None:
             def is_like(x: Any) -> bool:
                 return True
@@ -432,7 +492,7 @@ class SQLHandler(NodeVisitor):
         rule can have repeated values, a list of values is returned.
 
         """
-        # Call a grammar operation
+        # Call a grammar rule
         if node.expr_name in type(self).rule_info:
             n_keywords = type(self).rule_info[node.expr_name]['n_keywords']
             repeats = type(self).rule_info[node.expr_name]['repeats']
@@ -445,9 +505,12 @@ class SQLHandler(NodeVisitor):
             out = [x for x in flatten(visited_children)[n_keywords:] if x]
 
             if repeats:
-                return {node.expr_name: out}
+                return {node.expr_name: self.validate_rule(node.expr_name, out)}
 
-            return {node.expr_name: out[0] if out else True}
+            return {
+                node.expr_name:
+                self.validate_rule(node.expr_name, out[0]) if out else True,
+            }
 
         if hasattr(node, 'match'):
             if not visited_children and not node.match.groups():
@@ -455,3 +518,24 @@ class SQLHandler(NodeVisitor):
             return visited_children or list(node.match.groups())
 
         return visited_children or node.text
+
+    def validate_rule(self, rule: str, value: Any) -> Any:
+        """
+        Validate the value of the given rule.
+
+        Paraemeters
+        -----------
+        rule : str
+            Name of the grammar rule the value belongs to
+        value : Any
+            Value parsed from the query
+
+        Returns
+        -------
+        Any - result of the validator function
+
+        """
+        validator = type(self).validators.get(rule)
+        if validator is not None:
+            return validator(value)
+        return value

@@ -18,10 +18,8 @@ from ..mysql.constants.FIELD_TYPE import STRING  # noqa: F401
 from ..utils.results import Description
 from ..utils.results import format_results
 
-SQLResult = Tuple[List[Tuple[str, int]], List[Tuple[Any, ...]]]
 
-
-class DummyField(object):
+class FusionField(object):
     """Field for PyMySQL compatibility."""
 
     def __init__(self, name: str, flags: int, charset: int) -> None:
@@ -30,7 +28,8 @@ class DummyField(object):
         self.charsetnr = charset
 
 
-class DummySQLResult:
+class FusionSQLResult:
+    """Result for Fusion SQL commands."""
 
     def __init__(self, connection: connection.Connection, unbuffered: bool = False):
         self.connection: Any = connection
@@ -44,19 +43,8 @@ class DummySQLResult:
         self.has_next: bool = False
         self.unbuffered_active: bool = False
         self.converters: List[Any] = []
-        self.fields: List[DummyField] = []
+        self.fields: List[FusionField] = []
         self._row_idx: int = -1
-
-    @classmethod
-    def from_SQLResult(
-            cls,
-            connection: connection.Connection,
-            result: SQLResult,
-    ) -> DummySQLResult:
-        """Construct a DummySQLResult instance from a SQLResult tuple."""
-        out = cls(connection)
-        out.inject_data(*result)
-        return out
 
     def _read_rowdata_packet_unbuffered(self, size: int = 1) -> Optional[List[Any]]:
         if not self.rows:
@@ -81,39 +69,52 @@ class DummySQLResult:
         self.rows = []
         self.affected_rows = None
 
-    def inject_data(
-        self,
-        desc: List[Tuple[str, int]],
-        data: List[Tuple[Any, ...]],
-    ) -> None:
-        self.description = []
-        self.rows = []
-        self.affected_rows = 0
-        self.converters = []
-        self.fields = []
+    def add_field(self, name: str, dtype: int) -> None:
+        """
+        Add a new field / column to the data set.
 
-        if not desc:
-            return
+        Parameters
+        ----------
+        name : str
+            The name of the field / column
+        dtype : int
+            The MySQL field type: BLOB, BOOL, DATE, DATETIME,
+            DOUBLE, JSON, LONGLONG, or STRING
 
-        for name, field_type in desc:
-            charset = 0
-            if field_type in [JSON, STRING]:
-                encoding = 'utf-8'
-            elif field_type == BLOB:
-                charset = 63
-                encoding = None
-            else:
-                encoding = 'ascii'
-            self.description.append(
-                Description(name, field_type, None, None, 0, 0, True, 0, charset),
-            )
-            self.fields.append(DummyField(name, 0, charset))
-            # converter = self.connection.decoders.get(field_type)
-            # if converter is converters.through:
-            #    converter = None
-            converter = None
-            # if DEBUG:
-            #    print(f'DEBUG: field={field}, converter={converter}')
-            self.converters.append((encoding, converter))
+        """
+        charset = 0
+        if dtype in (JSON, STRING):
+            encoding = 'utf-8'
+        elif dtype == BLOB:
+            charset = 63
+            encoding = None
+        else:
+            encoding = 'ascii'
+        self.description.append(
+            Description(name, dtype, None, None, 0, 0, True, 0, charset),
+        )
+        self.fields.append(FusionField(name, 0, charset))
+        converter = self.connection.decoders.get(dtype)
+        self.converters.append((encoding, converter))
+
+    def set_rows(self, data: List[Tuple[Any, ...]]) -> None:
+        """
+        Set the rows of the result.
+
+        Parameters
+        ----------
+        data : List[Tuple[Any, ...]]
+            The data should be a list of tuples where each element of the
+            tuple corresponds to a field added to the result with
+            the :meth:`add_field` method.
+
+        """
+        # Convert values
+        for i, row in enumerate(list(data)):
+            new_row = []
+            for (_, converter), value in zip(self.converters, row):
+                new_row.append(converter(value) if converter is not None else value)
+            data[i] = tuple(new_row)
 
         self.rows = format_results(self.connection._results_type, self.description, data)
+        self.affected_rows = 0

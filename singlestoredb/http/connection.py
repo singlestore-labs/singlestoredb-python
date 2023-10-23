@@ -502,7 +502,7 @@ class Cursor(connection.Cursor):
 
         self._validate_param_subs(oper, params)
 
-        handler = fusion.is_fusion_query(oper)
+        handler = fusion.get_handler(oper)
         if handler is not None:
             return self._execute_fusion_query(oper, params, handler=handler)
 
