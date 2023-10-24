@@ -22,7 +22,8 @@ from ..connection import Connection
 CORE_GRAMMAR = r'''
     ws = ~r"(\s*(/\*.*\*/)*\s*)*"
     qs = ~r"\"([^\"]*)\"|'([^\']*)'"
-    number = ~r"\d+(\.\d+)"
+    number = ~r"-?\d+(\.\d+)?|-?\.d+"
+    integer = ~r"-?\d+"
     comma = ws "," ws
     open_paren = ws "(" ws
     close_paren = ws ")" ws

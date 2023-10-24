@@ -13,7 +13,7 @@ from ..mysql.constants.FIELD_TYPE import DATE  # noqa: F401
 from ..mysql.constants.FIELD_TYPE import DATETIME  # noqa: F401
 from ..mysql.constants.FIELD_TYPE import DOUBLE  # noqa: F401
 from ..mysql.constants.FIELD_TYPE import JSON  # noqa: F401
-from ..mysql.constants.FIELD_TYPE import LONGLONG  # noqa: F401
+from ..mysql.constants.FIELD_TYPE import LONGLONG as INTEGER  # noqa: F401
 from ..mysql.constants.FIELD_TYPE import STRING  # noqa: F401
 from ..utils.results import Description
 from ..utils.results import format_results
@@ -79,7 +79,7 @@ class FusionSQLResult:
             The name of the field / column
         dtype : int
             The MySQL field type: BLOB, BOOL, DATE, DATETIME,
-            DOUBLE, JSON, LONGLONG, or STRING
+            DOUBLE, JSON, INTEGER, or STRING
 
         """
         charset = 0
