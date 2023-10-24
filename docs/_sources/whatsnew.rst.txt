@@ -5,6 +5,9 @@ This document outlines features and improvements from each release.
 .. note:: All releases before v1.0.0 are considered pre-release and
    are for non-production testing and evaluation, and may include
    changes to the API.
+v0.9.2 - October 24, 2023
+-------------------------
+* Experimental Fusion SQL interface
 v0.9.1 - October 17, 2023
 -------------------------
 * Add name / ID indexing to workspace groups / workspaces / regions
