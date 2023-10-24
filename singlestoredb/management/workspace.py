@@ -1389,7 +1389,7 @@ class WorkspaceManager(Manager):
             'workspaceGroups', json=dict(
                 name=name, regionID=region,
                 adminPassword=admin_password,
-                firewallRanges=firewall_ranges,
+                firewallRanges=firewall_ranges or [],
                 expiresAt=expires_at,
                 allowAllTraffic=allow_all_traffic,
                 updateWindow=update_window,
