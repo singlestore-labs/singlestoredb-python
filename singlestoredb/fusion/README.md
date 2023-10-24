@@ -36,33 +36,33 @@ class ListDirHandler(SQLHandler):
     SHOW FILES IN directory [ extended ];
 
     # Location of directory to list
-	directory = DIRECTORY '<path>'
+    directory = DIRECTORY '<path>'
 
     # Show extended file attributes?
-	extended = EXTENDED
+    extended = EXTENDED
 
-	"""
+    """
 
     def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
-		# Create a result object
+        # Create a result object
         res = self.create_result()
 
-		# Add a field to the results
+        # Add a field to the results
         res.add_field('Name', result.STRING)
 
-		# See if options were specified
-		if params.get('extended'):
-			res.add_field('Type', result.STRING)
-			res.add_field('Owner', result.INTEGER)
-			res.add_field('Size', result.INTEGER)
+        # See if options were specified
+        if params.get('extended'):
+            res.add_field('Type', result.STRING)
+            res.add_field('Owner', result.INTEGER)
+            res.add_field('Size', result.INTEGER)
 
-			out = []
-			for x in os.listdir(params['directory']):
-				# Add additional fields
-				path = os.path.join(params['directory'], x)
-				stat = os.stat(path)
-				ftype = 'directory' if os.path.isdir(path) else 'file'
-				out.append((x, ftype, stat.st_uid, stat.st_size))
+            out = []
+            for x in os.listdir(params['directory']):
+                # Add additional fields
+                path = os.path.join(params['directory'], x)
+                stat = os.stat(path)
+                ftype = 'directory' if os.path.isdir(path) else 'file'
+                out.append((x, ftype, stat.st_uid, stat.st_size))
 
         else:
             out = [(x,) for x in os.listdir(params['directory'])]
@@ -158,9 +158,9 @@ Validators are simply specified in a validators dictionary on the class.
 def validate_month(mon: Any) -> int:
     """Convert value to int."""
     mon = int(mon)
-	if mon < 0 or mon > 11:
-	    raise ValueError(f'month must be between 0 and 11: {mon}')
-	return mon
+    if mon < 0 or mon > 11:
+        raise ValueError(f'month must be between 0 and 11: {mon}')
+    return mon
 
 
 class ShowMonthHandler(SQLHandler):
@@ -170,12 +170,12 @@ class ShowMonthHandler(SQLHandler):
     # Index of month (0-11)
     index = <integer>
 
-	"""
+    """
 
-	validators = dict(index=validate_month)
+    validators = dict(index=validate_month)
 
     def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
-	    ...
+        ...
 
 
 ShowMonthHandler.register()
