@@ -47,6 +47,7 @@ from .protocol import (
 )
 from . import err
 from ..config import get_option
+from .. import fusion
 from ..connection import Connection as BaseConnection
 
 try:
@@ -758,10 +759,15 @@ class Connection(BaseConnection):
         """
         # if DEBUG:
         #     print("DEBUG: sending query:", sql)
-        if isinstance(sql, str):
-            sql = sql.encode(self.encoding, 'surrogateescape')
-        self._execute_command(COMMAND.COM_QUERY, sql)
-        self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+        handler = fusion.get_handler(sql)
+        if handler is not None:
+            self._result = fusion.execute(self, sql, handler=handler)
+            self._affected_rows = self._result.affected_rows
+        else:
+            if isinstance(sql, str):
+                sql = sql.encode(self.encoding, 'surrogateescape')
+            self._execute_command(COMMAND.COM_QUERY, sql)
+            self._affected_rows = self._read_query_result(unbuffered=unbuffered)
         return self._affected_rows
 
     def next_result(self, unbuffered=False):

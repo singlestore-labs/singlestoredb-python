@@ -41,6 +41,7 @@ except ImportError:
     has_shapely = False
 
 from .. import connection
+from .. import fusion
 from .. import types
 from ..config import get_option
 from ..converters import converters
@@ -56,6 +57,7 @@ from ..exceptions import ProgrammingError
 from ..exceptions import Warning  # noqa: F401
 from ..utils.convert_rows import convert_rows
 from ..utils.debug import log_query
+from ..utils.mogrify import mogrify
 from ..utils.results import Description
 from ..utils.results import format_results
 from ..utils.results import Result
@@ -431,15 +433,78 @@ class Cursor(connection.Cursor):
             else:
                 query = query % args
 
+    def _execute_fusion_query(
+        self,
+        oper: Union[str, bytes],
+        params: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
+        handler: Any = None,
+    ) -> int:
+        oper = mogrify(oper, params)
+
+        if isinstance(oper, bytes):
+            oper = oper.decode('utf-8')
+
+        log_query(oper, None)
+
+        results_type = self._results_type
+        self._results_type = 'tuples'
+        try:
+            mgmt_res = fusion.execute(
+                self._connection,  # type: ignore
+                oper,
+                handler=handler,
+            )
+        finally:
+            self._results_type = results_type
+
+        self._descriptions.append(list(mgmt_res.description))
+        self._results.append(list(mgmt_res.rows))
+        self.rowcount = len(self._results[-1])
+
+        pymy_res = PyMyResult()
+        for field in mgmt_res.fields:
+            pymy_res.append(
+                PyMyField(
+                    field.name,
+                    field.flags,
+                    field.charsetnr,
+                ),
+            )
+
+        self._pymy_results.append(pymy_res)
+
+        if self._results and self._results[0]:
+            self._row_idx = 0
+            self._result_idx = 0
+
+        return self.rowcount
+
     def _execute(
         self, oper: str,
         params: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
         is_callproc: bool = False,
     ) -> int:
+        self._descriptions = []
+        self._results = []
+        self._pymy_results = []
+        self._row_idx = -1
+        self._result_idx = -1
+        self.rowcount = 0
+        self._expect_results = False
+
         if self._connection is None:
             raise ProgrammingError(errno=2048, msg='Connection is closed.')
 
+        sql_type = 'exec'
+        if re.match(r'^\s*(select|show|call|echo|describe|with)\s+', oper, flags=re.I):
+            self._expect_results = True
+            sql_type = 'query'
+
         self._validate_param_subs(oper, params)
+
+        handler = fusion.get_handler(oper)
+        if handler is not None:
+            return self._execute_fusion_query(oper, params, handler=handler)
 
         oper, params = self._connection._convert_params(oper, params)
 
@@ -454,12 +519,6 @@ class Cursor(connection.Cursor):
             )
         if self._connection._database:
             data['database'] = self._connection._database
-
-        self._expect_results = False
-        sql_type = 'exec'
-        if re.match(r'^\s*(select|show|call|echo|describe|with)\s+', oper, flags=re.I):
-            self._expect_results = True
-            sql_type = 'query'
 
         if sql_type == 'query':
             res = self._post('query/tuples', json=data)
@@ -478,12 +537,6 @@ class Cursor(connection.Cursor):
             raise InterfaceError(errno=res.status_code, msg='HTTP Error')
 
         out = json.loads(res.text)
-
-        self._descriptions = []
-        self._results = []
-        self._row_idx = -1
-        self._result_idx = -1
-        self.rowcount = 0
 
         if sql_type == 'query':
             # description: (name, type_code, display_size, internal_size,
