@@ -20,10 +20,11 @@ repos:
     -   id: flake8
         exclude: singlestoredb/clients/pymysqlsv/
         additional_dependencies: [flake8-typing-imports==1.12.0]
--   repo: https://github.com/pre-commit/mirrors-autopep8
+-   repo: https://github.com/hhatto/autopep8
     rev: v2.0.4
     hooks:
     -   id: autopep8
+        args: [--diff]
 -   repo: https://github.com/asottile/reorder_python_imports
     rev: v3.12.0
     hooks:
