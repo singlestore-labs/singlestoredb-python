@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import re
+import sys
 from typing import Dict
 from typing import Optional
 from typing import Type
@@ -10,9 +11,12 @@ from . import result
 from .. import connection
 from .handler import SQLHandler
 
-_handlers: Dict[str, Type[SQLHandler]] = {}
-_handlers_re: Optional[re.Pattern[str]] = None
 _enabled = ('1', 'yes', 'on', 'enabled', 'true')
+_handlers: Dict[str, Type[SQLHandler]] = {}
+if sys.version_info < (3, 9):
+    _handlers_re: Optional[re.Pattern] = None
+else:
+    _handlers_re: Optional[re.Pattern[str]] = None
 
 
 def register_handler(handler: Type[SQLHandler], overwrite: bool = False) -> None:
