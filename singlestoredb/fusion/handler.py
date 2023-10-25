@@ -21,8 +21,8 @@ from ..connection import Connection
 
 CORE_GRAMMAR = r'''
     ws = ~r"(\s*(/\*.*\*/)*\s*)*"
-    qs = ~r"\"([^\"]*)\"|'([^\']*)'"
-    number = ~r"-?\d+(\.\d+)?|-?\.d+"
+    qs = ~r"\"([^\"]*)\"|'([^\']*)'|`([^\`]*)`|(\S+)"
+    number = ~r"[-+]?(\d*\.)?\d+(e[-+]?\d+)?"i
     integer = ~r"-?\d+"
     comma = ws "," ws
     open_paren = ws "(" ws
@@ -32,10 +32,10 @@ CORE_GRAMMAR = r'''
 
 def get_keywords(grammar: str) -> Tuple[str, ...]:
     """Return all all-caps words from the beginning of the line."""
-    m = re.match(r'^\s*([A-Z0-9_]+(\s+|$))+', grammar)
+    m = re.match(r'^\s*([A-Z0-9_]+(\s+|$|;))+', grammar)
     if not m:
         return tuple()
-    return tuple(re.split(r'\s+', m.group(0).strip()))
+    return tuple(re.split(r'\s+', m.group(0).replace(';', '').strip()))
 
 
 def process_optional(m: Any) -> str:
@@ -322,6 +322,7 @@ class SQLHandler(NodeVisitor):
     #: Rule validation functions
     validators: Dict[str, Callable[..., Any]] = {}
 
+    _grammar: str = CORE_GRAMMAR
     _is_compiled: bool = False
 
     def __init__(self, connection: Connection):
@@ -347,6 +348,7 @@ class SQLHandler(NodeVisitor):
         cls.grammar, cls.command_key, cls.rule_info, cls.help = \
             process_grammar(grammar or cls.__doc__ or '')
 
+        cls._grammar = grammar or cls.__doc__ or ''
         cls._is_compiled = True
 
     def create_result(self) -> result.FusionSQLResult:
@@ -384,10 +386,15 @@ class SQLHandler(NodeVisitor):
         """
         type(self).compile()
         try:
-            res = self.run(self.visit(type(self).grammar.parse(sql)))
+            params = self.visit(type(self).grammar.parse(sql))
+            for k, v in params.items():
+                params[k] = self.validate_rule(k, v)
+            res = self.run(params)
             if res is not None:
                 return res
-            return result.FusionSQLResult(self.connection)
+            res = result.FusionSQLResult(self.connection)
+            res.set_rows([])
+            return res
         except ParseError as exc:
             s = str(exc)
             msg = ''
@@ -421,7 +428,7 @@ class SQLHandler(NodeVisitor):
         """
         raise NotImplementedError
 
-    def create_like_func(self, like: str) -> Callable[[str], bool]:
+    def create_like_func(self, like: Optional[str]) -> Callable[[str], bool]:
         """
         Construct a function to apply the LIKE clause.
 
@@ -457,7 +464,16 @@ class SQLHandler(NodeVisitor):
         """Quoted strings."""
         if node is None:
             return None
-        return node.match.group(1) or node.match.group(2)
+        return node.match.group(1) or node.match.group(2) or \
+            node.match.group(3) or node.match.group(4)
+
+    def visit_number(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Numeric value."""
+        return float(node.match.group(0))
+
+    def visit_integer(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Integer value."""
+        return int(node.match.group(0))
 
     def visit_ws(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Whitespace and comments."""
@@ -505,13 +521,10 @@ class SQLHandler(NodeVisitor):
             # Filter out stray empty strings
             out = [x for x in flatten(visited_children)[n_keywords:] if x]
 
-            if repeats:
-                return {node.expr_name: self.validate_rule(node.expr_name, out)}
+            if repeats or len(out) > 1:
+                return {node.expr_name: out}
 
-            return {
-                node.expr_name:
-                self.validate_rule(node.expr_name, out[0]) if out else True,
-            }
+            return {node.expr_name: out[0] if out else True}
 
         if hasattr(node, 'match'):
             if not visited_children and not node.match.groups():

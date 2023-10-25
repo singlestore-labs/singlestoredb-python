@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # type: ignore
-"""SingleStoreDB HTTP connection testing."""
+"""SingleStoreDB Management API testing."""
 import os
 import pathlib
 import random

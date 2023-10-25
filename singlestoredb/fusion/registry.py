@@ -3,7 +3,9 @@ import os
 import re
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
+from typing import Tuple
 from typing import Type
 from typing import Union
 
@@ -110,3 +112,56 @@ def execute(
             raise RuntimeError(f'could not find handler for query: {sql}')
 
     return handler(connection).execute(sql)
+
+
+class ShowFusionCommandsHandler(SQLHandler):
+    """
+    SHOW FUSION COMMANDS [ like ];
+
+    # LIKE pattern
+    like = LIKE '<pattern>'
+
+    """
+
+    def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
+        res = self.create_result()
+        res.add_field('Command', result.STRING)
+
+        is_like = self.create_like_func(params.get('like'))
+
+        data: List[Tuple[Any, ...]] = []
+        for _, v in sorted(_handlers.items()):
+            if v is type(self):
+                continue
+            if is_like(' '.join(v.command_key)):
+                data.append((v.help,))
+
+        res.set_rows(data)
+
+        return res
+
+
+ShowFusionCommandsHandler.register()
+
+
+class ShowFusionGrammarHandler(SQLHandler):
+    """
+    SHOW FUSION GRAMMAR for_query;
+
+    # Query to show grammar for
+    for_query = FOR '<query>'
+
+    """
+
+    def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
+        res = self.create_result()
+        res.add_field('Grammar', result.STRING)
+        handler = get_handler(params['for_query'])
+        data: List[Tuple[Any, ...]] = []
+        if handler is not None:
+            data.append((handler._grammar,))
+        res.set_rows(data)
+        return res
+
+
+ShowFusionGrammarHandler.register()
