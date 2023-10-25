@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.9.4 - October 25, 2023
+-------------------------
+* Fusion fixes
+
 v0.9.2 - October 24, 2023
 -------------------------
 * Experimental Fusion SQL interface
