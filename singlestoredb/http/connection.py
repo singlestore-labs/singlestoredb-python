@@ -543,7 +543,7 @@ class Cursor(connection.Cursor):
             #               precision, scale, null_ok, column_flags, charset)
 
             # Remove converters for things the JSON parser already converted
-            http_converters = dict(converters)
+            http_converters = dict(self._connection.decoders)
             http_converters.pop(4, None)
             http_converters.pop(5, None)
             http_converters.pop(6, None)
@@ -954,6 +954,9 @@ class Connection(connection.Connection):
 
         version = kwargs.get('version', 'v2')
         self.driver = kwargs.get('driver', 'https')
+
+        self.encoders = {k: v for (k, v) in converters.items() if type(k) is not int}
+        self.decoders = {k: v for (k, v) in converters.items() if type(k) is int}
 
         self._database = kwargs.get('database', get_option('database'))
         self._url = f'{self.driver}://{host}:{port}/api/{version}/'
