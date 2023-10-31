@@ -29,7 +29,6 @@ CORE_GRAMMAR = r'''
     close_paren = ws ")" ws
 '''
 
-
 BUILTINS = {
     '<order-by>': r'''
     order_by = ORDER BY order_by_key_,...
@@ -44,6 +43,13 @@ BUILTINS = {
     '<limit>': r'''
     limit = LIMIT <integer>
     ''',
+}
+
+BUILTIN_DEFAULTS = {  # type: ignore
+    'order_by': {'by': []},
+    'like': None,
+    'extended': False,
+    'limit': None,
 }
 
 
@@ -546,7 +552,7 @@ class SQLHandler(NodeVisitor):
                     if k.endswith('_cmd') or k.endswith('_'):
                         continue
                     if k not in final:
-                        final[k] = v['default']
+                        final[k] = BUILTIN_DEFAULTS.get(k, v['default'])
                 return final
 
             # Filter out stray empty strings
