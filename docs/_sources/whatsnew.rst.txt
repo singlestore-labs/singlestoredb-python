@@ -5,7 +5,10 @@ This document outlines features and improvements from each release.
 .. note:: All releases before v1.0.0 are considered pre-release and
    are for non-production testing and evaluation, and may include
    changes to the API.
-v0.9.4 - October 25, 2023
+v0.9.4 - October 31, 2023
+-------------------------
+* More Fusion enhancements
+v0.9.3 - October 25, 2023
 -------------------------
 * Fusion fixes
 v0.9.2 - October 24, 2023
