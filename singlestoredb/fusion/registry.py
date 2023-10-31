@@ -124,19 +124,19 @@ class ShowFusionCommandsHandler(SQLHandler):
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
-        res = self.create_result()
+        res = result.FusionSQLResult()
         res.add_field('Command', result.STRING)
-
-        is_like = self.create_like_func(params.get('like'))
 
         data: List[Tuple[Any, ...]] = []
         for _, v in sorted(_handlers.items()):
             if v is type(self):
                 continue
-            if is_like(' '.join(v.command_key)):
-                data.append((v.help,))
+            data.append((v.help.lstrip(),))
 
         res.set_rows(data)
+
+        if params['like']:
+            res = res.like(Command=params['like'])
 
         return res
 
@@ -154,7 +154,7 @@ class ShowFusionGrammarHandler(SQLHandler):
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
-        res = self.create_result()
+        res = result.FusionSQLResult()
         res.add_field('Grammar', result.STRING)
         handler = get_handler(params['for_query'])
         data: List[Tuple[Any, ...]] = []

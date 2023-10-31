@@ -10,6 +10,7 @@ from .. import result
 from ...management import manage_workspaces
 from ...management.workspace import WorkspaceGroup
 from ..handler import SQLHandler
+from ..result import FusionSQLResult
 
 manager = manage_workspaces(os.environ.get('SINGLESTOREDB_MANAGEMENT_TOKEN', 'DEAD'))
 
@@ -43,24 +44,22 @@ def get_workspace_group(params: Dict[str, Any]) -> WorkspaceGroup:
 
 class ShowRegionsHandler(SQLHandler):
     """
-    SHOW REGIONS [ like ];
-
-    # Region name pattern
-    like = LIKE '<pattern>'
+    SHOW REGIONS [ <like> ] [ <order-by> ] [ <limit> ];
 
     """
 
-    def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
-        res = self.create_result()
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        res = FusionSQLResult()
         res.add_field('Name', result.STRING)
         res.add_field('ID', result.STRING)
         res.add_field('Provider', result.STRING)
 
-        is_like = self.create_like_func(params.get('like', None))
+        res.set_rows([(x.name, x.id, x.provider) for x in manager.regions])
 
-        res.set_rows([(x.name, x.id, x.provider)
-                      for x in manager.regions if is_like(x.name)])
-        return res
+        if params['like']:
+            res = res.like(Name=params['like'])
+
+        return res.order_by(**params['order_by']).limit(params['limit'])
 
 
 ShowRegionsHandler.register()
@@ -68,24 +67,18 @@ ShowRegionsHandler.register()
 
 class ShowWorkspaceGroupsHandler(SQLHandler):
     """
-    SHOW WORKSPACE GROUPS [ like ] [ extended ];
-
-    # Workspace group name pattern
-    like = LIKE '<pattern>'
-
-    # Add additional data columns
-    extended = EXTENDED
+    SHOW WORKSPACE GROUPS [ <like> ] [ <extended> ] [ <order-by> ] [ <limit> ];
 
     """
 
-    def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
-        res = self.create_result()
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        res = FusionSQLResult()
         res.add_field('Name', result.STRING)
         res.add_field('ID', result.STRING)
         res.add_field('Region Name', result.STRING)
         res.add_field('Firewall Ranges', result.JSON)
 
-        if params.get('extended'):
+        if params['extended']:
             res.add_field('Created At', result.DATETIME)
             res.add_field('Terminated At', result.DATETIME)
 
@@ -100,11 +93,12 @@ class ShowWorkspaceGroupsHandler(SQLHandler):
             def fields(x: Any) -> Any:
                 return (x.name, x.id, x.region.name, x.firewall_ranges)
 
-        is_like = self.create_like_func(params.get('like', None))
+        res.set_rows([fields(x) for x in manager.workspace_groups])
 
-        res.set_rows([fields(x) for x in manager.workspace_groups if is_like(x.name)])
+        if params['like']:
+            res = res.like(Name=params['like'])
 
-        return res
+        return res.order_by(**params['order_by']).limit(params['limit'])
 
 
 ShowWorkspaceGroupsHandler.register()
@@ -112,7 +106,8 @@ ShowWorkspaceGroupsHandler.register()
 
 class ShowWorkspacesHandler(SQLHandler):
     """
-    SHOW WORKSPACES IN GROUP { group_id | group_name } [ like ] [ extended ];
+    SHOW WORKSPACES IN GROUP { group_id | group_name }
+        [ <like> ] [ <extended> ] [ <order-by> ] [ <limit> ];
 
     # ID of group
     group_id = ID '<group-id>'
@@ -120,16 +115,10 @@ class ShowWorkspacesHandler(SQLHandler):
     # Name of group
     group_name = '<group-name>'
 
-    # Workspace group name pattern
-    like = LIKE '<pattern>'
-
-    # Add additional data columns
-    extended = EXTENDED
-
     """
 
-    def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
-        res = self.create_result()
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        res = FusionSQLResult()
         res.add_field('Name', result.STRING)
         res.add_field('ID', result.STRING)
         res.add_field('Size', result.STRING)
@@ -137,7 +126,7 @@ class ShowWorkspacesHandler(SQLHandler):
 
         workspace_group = get_workspace_group(params)
 
-        if params.get('extended'):
+        if params['extended']:
             res.add_field('Endpoint', result.STRING)
             res.add_field('Created At', result.DATETIME)
             res.add_field('Terminated At', result.DATETIME)
@@ -152,11 +141,12 @@ class ShowWorkspacesHandler(SQLHandler):
             def fields(x: Any) -> Any:
                 return (x.name, x.id, x.size, x.state)
 
-        is_like = self.create_like_func(params.get('like', None))
+        res.set_rows([fields(x) for x in workspace_group.workspaces])
 
-        res.set_rows([fields(x) for x in workspace_group.workspaces if is_like(x.name)])
+        if params['like']:
+            res = res.like(Name=params['like'])
 
-        return res
+        return res.order_by(**params['order_by']).limit(params['limit'])
 
 
 ShowWorkspacesHandler.register()
@@ -194,9 +184,9 @@ class CreateWorkspaceGroupHandler(SQLHandler):
 
     """
 
-    def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         # Only create if one doesn't exist
-        if params.get('if_not_exists'):
+        if params['if_not_exists']:
             try:
                 get_workspace_group(params)
                 return None
@@ -204,7 +194,7 @@ class CreateWorkspaceGroupHandler(SQLHandler):
                 pass
 
         # Get region ID
-        if 'region_name' in params:
+        if params['region_name']:
             regs = [x for x in manager.regions if x.name == params['region_name']]
             if not regs:
                 raise ValueError(f'no region found with name "{params["region_name"]}"')
@@ -219,12 +209,12 @@ class CreateWorkspaceGroupHandler(SQLHandler):
         manager.create_workspace_group(
             params['group_name'],
             region=region_id,
-            admin_password=params.get('with_password'),
-            expires_at=params.get('expires_at'),
-            firewall_ranges=params.get('with_firewall_ranges', []),
+            admin_password=params['with_password'],
+            expires_at=params['expires_at'],
+            firewall_ranges=params['with_firewall_ranges'],
         )
 
-        return self.create_result()
+        return None
 
 
 CreateWorkspaceGroupHandler.register()
@@ -256,11 +246,11 @@ class CreateWorkspaceHandler(SQLHandler):
 
     """
 
-    def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         workspace_group = get_workspace_group(params)
 
         # Only create if one doesn't exist
-        if params.get('if_not_exists'):
+        if params['if_not_exists']:
             try:
                 workspace_group.workspaces[params['workspace_name']]
                 return None
@@ -269,7 +259,7 @@ class CreateWorkspaceHandler(SQLHandler):
 
         workspace_group.create_workspace(
             params['workspace_name'], size=params['size'],
-            wait_on_active=params.get('wait_on_active', False),
+            wait_on_active=params['wait_on_active'],
         )
 
         return None
@@ -297,14 +287,14 @@ class DropWorkspaceGroupHandler(SQLHandler):
 
     """
 
-    def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         try:
-            name_or_id = params.get('group_name', params.get('group_id'))
+            name_or_id = params['group_name'] or params['group_id']
             wg = manager.workspace_groups[name_or_id]
-            wg.terminate(wait_on_terminated=params.get('wait_on_terminated', False))
+            wg.terminate(wait_on_terminated=params['wait_on_terminated'])
 
         except KeyError:
-            if not params.get('if_exists'):
+            if not params['if_exists']:
                 raise ValueError(f"could not find workspace group '{name_or_id}'")
 
         return None
@@ -338,18 +328,16 @@ class DropWorkspaceHandler(SQLHandler):
 
     """
 
-    def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         try:
-            workspace_name_or_id = params.get(
-                'workspace_name', params.get('workspace_id'),
-            )
-            group_name_or_id = params.get('group_name', params.get('group_id'))
+            workspace_name_or_id = params['workspace_name'] or params['workspace_id']
+            group_name_or_id = params['group_name'] or params['group_id']
             wg = manager.workspace_groups[group_name_or_id]
             ws = wg.workspaces[workspace_name_or_id]
-            ws.terminate(wait_on_terminated=params.get('wait_on_terminated', False))
+            ws.terminate(wait_on_terminated=params['wait_on_terminated'])
 
         except KeyError:
-            if not params.get('if_exists'):
+            if not params['if_exists']:
                 raise ValueError(
                     f"could not find workspace '{workspace_name_or_id}' "
                     f"in group '{group_name_or_id}'",

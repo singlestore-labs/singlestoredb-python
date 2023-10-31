@@ -1076,6 +1076,9 @@ class Connection(metaclass=abc.ABCMeta):
         # For backwards compatibility with SQLAlchemy package
         self._driver = Driver(self.driver)
 
+        # Output decoders
+        self.decoders: Dict[int, Callable[[Any], Any]] = {}
+
     @classmethod
     def _convert_params(
         cls, oper: str,

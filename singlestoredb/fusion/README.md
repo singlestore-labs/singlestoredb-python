@@ -33,13 +33,10 @@ from singlestoredb.fusion.handler import SQLHandler
 
 class ListDirHandler(SQLHandler):
     """
-    SHOW FILES IN directory [ extended ];
+    SHOW FILES IN directory [ <extended> ];
 
     # Location of directory to list
     directory = DIRECTORY '<path>'
-
-    # Show extended file attributes?
-    extended = EXTENDED
 
     """
 
@@ -51,7 +48,7 @@ class ListDirHandler(SQLHandler):
         res.add_field('Name', result.STRING)
 
         # See if options were specified
-        if params.get('extended'):
+        if params['extended']:
             res.add_field('Type', result.STRING)
             res.add_field('Owner', result.INTEGER)
             res.add_field('Size', result.INTEGER)
@@ -96,6 +93,10 @@ can be placed anywhere in the block. Rules may contain any of the following:
   The identifier is currently for documentation purposes. It is not parsed.
 * **Numeric literals** - floats and integers can be specified by `<number>` and
   `<integer>`, respectively.
+* **Builtins** - there are several builtin rules that are common enough across
+  queries that they are built into the grammar. These rules are kebab-case strings
+  surrounded by `<` and `>` (but unlike quoted strings, there are no quotes).
+  The builtins are documented in the next section.
 * **Optional blocks** - tokens surrounded by brackets (`[]`) are considered optional.
 * **Selection blocks** - tokens surrounded by braces (`{}`) are used to specify a
   choice of tokens. Each choice is separatade by `|`. For example, to allow
@@ -111,6 +112,25 @@ when determining if a submitted query is a Fusion SQL query. In the example
 above, if a user submits a query that begins with `SHOW FILES IN`, that query
 will be forwarded to the handler class.
 
+#### Builtin rules
+
+There are several builtin rules that are used across many queries. These rules
+are simply referenced in the top-level command grammar. The values come out
+in the parameter dictionary like other rules.
+
+* **<extended>** The `extended` rule is a boolean with the grammar `EXTENDED`.
+  This is typically used to display extra information in the output table.
+* **<like>** The `like` rule is used to apply a `LIKE` clause to filter
+  results. The grammar is simply `LIKE '<pattern>'`.
+* **<order-by>** The `order-by` rule is used to parse sort keys for the result.
+  The grammar is effectively `ORDER BY name [ ASC | DESC ],...`. The parsed
+  parameters from this is a dictionary as follows:
+  `{'order_by': {'by': [str, ...], 'ascending': [bool, ...]}}`. This format
+  is used because the value of `order_by` can be used directly by the `order_by`
+  method of `FusionSQLResult` as keyword parameters
+  (e.g. `res.order_by(**params['order_by'])`).
+* **<limit>** Limit the results to the specified number of rows. The grammar
+  is `LIMIT <integer>`.
 
 ### Writing the `run` method
 
@@ -124,9 +144,9 @@ Parsed values that correspond to a single value are stored in the dictionary
 as a single value. If the rule corresponds to a repeated value, the value in the
 dictionary is a list. If there are no values corresponding to the syntax (i.e.
 it contains only keywords), the value stored in the dictionary is `True`. If
-a value corresponds to an optional rule, the key will only exist if the
-rule was found in the given query. The same is true for selection blocks where
-they are mandatory, but only one variant can be specified.
+a value corresponds to an optional rule, the key will contain `False` for boolean
+values, `[]` for repeated values, or `None` for other values.  The same is true
+for selection blocks where they are mandatory, but only one variant can be specified.
 
 The return value of the `run` method is a `FusionSQLResult`. This object mimics
 the `SQLResult` object in the SingleStoreDB Python client so that it can be
@@ -222,7 +242,7 @@ class CreateWorkspaceGroupHandler(SQLHandler):
 
     def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
         # Only create if one doesn't exist
-        if params.get('if_not_exists'):
+        if params['if_not_exists']:
             try:
                 get_workspace_group(params)
                 return None
@@ -230,7 +250,7 @@ class CreateWorkspaceGroupHandler(SQLHandler):
                 pass
 
         # Get region ID
-        if 'region_name' in params:
+        if params['region_name']:
             regs = [x for x in manager.regions if x.name == params['region_name']]
             if not regs:
                 raise ValueError(f'no region found with name "{params["region_name"]}"')
@@ -246,9 +266,9 @@ class CreateWorkspaceGroupHandler(SQLHandler):
         manager.create_workspace_group(
             params['group_name'],
             region=region_id,
-            admin_password=params.get('with_password'),
-            expires_at=params.get('expires_at'),
-            firewall_ranges=params.get('with_firewall_ranges', []),
+            admin_password=params['with_password'],
+            expires_at=params['expires_at'],
+            firewall_ranges=params['with_firewall_ranges'],
         )
 
         return self.create_result()

@@ -21,7 +21,7 @@ from ..connection import Connection
 
 CORE_GRAMMAR = r'''
     ws = ~r"(\s*(/\*.*\*/)*\s*)*"
-    qs = ~r"\"([^\"]*)\"|'([^\']*)'|`([^\`]*)`|(\S+)"
+    qs = ~r"\"([^\"]*)\"|'([^\']*)'|`([^\`]*)`|([A-Za-z0-9_\-\.]+)"
     number = ~r"[-+]?(\d*\.)?\d+(e[-+]?\d+)?"i
     integer = ~r"-?\d+"
     comma = ws "," ws
@@ -30,12 +30,34 @@ CORE_GRAMMAR = r'''
 '''
 
 
+BUILTINS = {
+    '<order-by>': r'''
+    order_by = ORDER BY order_by_key_,...
+    order_by_key_ = '<key>' [ ASC | DESC ]
+    ''',
+    '<like>': r'''
+    like = LIKE '<pattern>'
+    ''',
+    '<extended>': r'''
+    extended = EXTENDED
+    ''',
+    '<limit>': r'''
+    limit = LIMIT <integer>
+    ''',
+}
+
+
 def get_keywords(grammar: str) -> Tuple[str, ...]:
     """Return all all-caps words from the beginning of the line."""
     m = re.match(r'^\s*([A-Z0-9_]+(\s+|$|;))+', grammar)
     if not m:
         return tuple()
     return tuple(re.split(r'\s+', m.group(0).replace(';', '').strip()))
+
+
+def is_bool(grammar: str) -> bool:
+    """Determine if the rule is a boolean."""
+    return bool(re.match(r'[A-Z0-9_\s*]+', grammar))
 
 
 def process_optional(m: Any) -> str:
@@ -158,10 +180,15 @@ def build_help(grammar: str) -> str:
         value = value.strip()
         rules[name] = value
 
-    while re.search(r' [a-z0-9_]+ ', cmd):
-        cmd = re.sub(r' ([a-z0-9_]+) ', functools.partial(expand_rules, rules), cmd)
+    while re.search(r' [a-z0-9_]+\b', cmd):
+        cmd = re.sub(r' ([a-z0-9_]+)\b', functools.partial(expand_rules, rules), cmd)
 
-    return textwrap.dedent(cmd).rstrip() + ';'
+    cmd = textwrap.dedent(cmd).rstrip() + ';'
+    cmd = re.sub(r'  +', ' ', cmd)
+    cmd = re.sub(r'^ ', '    ', cmd, flags=re.M)
+    cmd = re.sub(r'\s+,\.\.\.', ',...', cmd)
+
+    return cmd
 
 
 def strip_comments(grammar: str) -> str:
@@ -174,7 +201,21 @@ def get_rule_info(grammar: str) -> Dict[str, Any]:
     return dict(
         n_keywords=len(get_keywords(grammar)),
         repeats=',...' in grammar,
+        default=False if is_bool(grammar) else [] if ',...' in grammar else None,
     )
+
+
+def inject_builtins(grammar: str) -> str:
+    """Inject complex builtin rules."""
+    for k, v in BUILTINS.items():
+        if re.search(k, grammar):
+            grammar = re.sub(
+                k,
+                k.replace('<', '').replace('>', '').replace('-', '_'),
+                grammar,
+            )
+            grammar += v
+    return grammar
 
 
 def process_grammar(grammar: str) -> Tuple[Grammar, Tuple[str, ...], Dict[str, Any], str]:
@@ -199,6 +240,7 @@ def process_grammar(grammar: str) -> Tuple[Grammar, Tuple[str, ...], Dict[str, A
     rule_info = {}
 
     grammar = strip_comments(grammar)
+    grammar = inject_builtins(grammar)
     command_key = get_keywords(grammar)
     help_txt = build_help(grammar)
     grammar = build_cmd(grammar)
@@ -351,10 +393,6 @@ class SQLHandler(NodeVisitor):
         cls._grammar = grammar or cls.__doc__ or ''
         cls._is_compiled = True
 
-    def create_result(self) -> result.FusionSQLResult:
-        """Return a new result object."""
-        return result.FusionSQLResult(self.connection)
-
     @classmethod
     def register(cls, overwrite: bool = False) -> None:
         """
@@ -389,12 +427,17 @@ class SQLHandler(NodeVisitor):
             params = self.visit(type(self).grammar.parse(sql))
             for k, v in params.items():
                 params[k] = self.validate_rule(k, v)
+
             res = self.run(params)
             if res is not None:
+                res.format_results(self.connection)
                 return res
-            res = result.FusionSQLResult(self.connection)
+
+            res = result.FusionSQLResult()
             res.set_rows([])
+            res.format_results(self.connection)
             return res
+
         except ParseError as exc:
             s = str(exc)
             msg = ''
@@ -427,38 +470,6 @@ class SQLHandler(NodeVisitor):
 
         """
         raise NotImplementedError
-
-    def create_like_func(self, like: Optional[str]) -> Callable[[str], bool]:
-        """
-        Construct a function to apply the LIKE clause.
-
-        Calling the resulting function will return a boolean indicating
-        whether the given string matched the ``like`` pattern.
-
-        Parameters
-        ----------
-        like : str
-            A LIKE pattern (i.e., string with '%' as a wildcard)
-
-        Returns
-        -------
-        function
-
-        """
-        if like is None:
-            def is_like(x: Any) -> bool:
-                return True
-        else:
-            regex = re.compile(
-                '^{}$'.format(
-                    re.sub(r'\\%', r'.*', re.sub(r'([^\w])', r'\\\1', like)),
-                ), flags=re.I,
-            )
-
-            def is_like(x: Any) -> bool:
-                return bool(regex.match(x))
-
-        return is_like
 
     def visit_qs(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Quoted strings."""
@@ -496,6 +507,20 @@ class SQLHandler(NodeVisitor):
         _, out, *_ = visited_children
         return out
 
+    def visit_order_by(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Handle ORDER BY."""
+        by = []
+        ascending = []
+        data = [x for x in flatten(visited_children)[2:] if x]
+        for item in data:
+            value = item.popitem()[-1]
+            if not isinstance(value, list):
+                value = [value]
+            value.append('A')
+            by.append(value[0])
+            ascending.append(value[1].upper().startswith('A'))
+        return {'order_by': {'by': by, 'ascending': ascending}}
+
     def generic_visit(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """
         Handle all undefined rules.
@@ -516,7 +541,13 @@ class SQLHandler(NodeVisitor):
 
             # If this is the top-level command, create the final result
             if node.expr_name.endswith('_cmd'):
-                return merge_dicts(flatten(visited_children)[n_keywords:])
+                final = merge_dicts(flatten(visited_children)[n_keywords:])
+                for k, v in type(self).rule_info.items():
+                    if k.endswith('_cmd') or k.endswith('_'):
+                        continue
+                    if k not in final:
+                        final[k] = v['default']
+                return final
 
             # Filter out stray empty strings
             out = [x for x in flatten(visited_children)[n_keywords:] if x]
