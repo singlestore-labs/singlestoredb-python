@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import operator
 import re
-import sys
 from typing import Any
 from typing import Iterable
 from typing import List
@@ -50,13 +49,7 @@ class FusionSQLColumn(object):
         return gen()
 
 
-if sys.version_info < (3, 9):
-    StrDict = dict
-else:
-    StrDict = dict[str, int]
-
-
-class FieldIndexDict(StrDict):
+class FieldIndexDict(dict):  # type: ignore
     """Case-insensitive dictionary for column name lookups."""
 
     def __getitem__(self, key: str) -> int:
