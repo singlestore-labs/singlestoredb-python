@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.9.5 - October 31, 2023
+-------------------------
+* Add defaults for builtin Fusion rules
+
 v0.9.4 - October 31, 2023
 -------------------------
 * More Fusion enhancements
