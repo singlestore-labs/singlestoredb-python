@@ -63,7 +63,7 @@ def get_keywords(grammar: str) -> Tuple[str, ...]:
 
 def is_bool(grammar: str) -> bool:
     """Determine if the rule is a boolean."""
-    return bool(re.match(r'[A-Z0-9_\s*]+', grammar))
+    return bool(re.match(r'^[A-Z0-9_\s*]+$', grammar))
 
 
 def process_optional(m: Any) -> str:

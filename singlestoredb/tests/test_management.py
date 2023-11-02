@@ -70,15 +70,17 @@ class TestCluster(unittest.TestCase):
         out = self.manager.regions
         providers = {x.provider for x in out}
         names = [x.name for x in out]
-        ids = [x.id for x in out]
         assert 'Azure' in providers, providers
         assert 'GCP' in providers, providers
         assert 'AWS' in providers, providers
 
         objs = {}
+        ids = []
         for item in out:
+            ids.append(item.id)
             objs[item.id] = item
-            objs[item.name] = item
+            if item.name not in objs:
+                objs[item.name] = item
 
         name = random.choice(names)
         assert out[name] == objs[name]
@@ -245,15 +247,17 @@ class TestWorkspace(unittest.TestCase):
         out = self.manager.regions
         providers = {x.provider for x in out}
         names = [x.name for x in out]
-        ids = [x.id for x in out]
         assert 'Azure' in providers, providers
         assert 'GCP' in providers, providers
         assert 'AWS' in providers, providers
 
         objs = {}
+        ids = []
         for item in out:
+            ids.append(item.id)
             objs[item.id] = item
-            objs[item.name] = item
+            if item.name not in objs:
+                objs[item.name] = item
 
         name = random.choice(names)
         assert out[name] == objs[name]

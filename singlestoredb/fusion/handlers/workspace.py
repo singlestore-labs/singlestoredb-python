@@ -24,7 +24,7 @@ def dt_isoformat(dt: Optional[datetime.datetime]) -> Optional[str]:
 
 def get_workspace_group(params: Dict[str, Any]) -> WorkspaceGroup:
     """Find a workspace group matching group_id or group_name."""
-    if 'group_name' in params:
+    if params['group_name']:
         workspace_groups = [
             x for x in manager.workspace_groups
             if x.name == params['group_name']
@@ -75,12 +75,12 @@ class ShowWorkspaceGroupsHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('Name', result.STRING)
         res.add_field('ID', result.STRING)
-        res.add_field('Region Name', result.STRING)
-        res.add_field('Firewall Ranges', result.JSON)
+        res.add_field('Region', result.STRING)
+        res.add_field('FirewallRanges', result.JSON)
 
         if params['extended']:
-            res.add_field('Created At', result.DATETIME)
-            res.add_field('Terminated At', result.DATETIME)
+            res.add_field('CreatedAt', result.DATETIME)
+            res.add_field('TerminatedAt', result.DATETIME)
 
             def fields(x: Any) -> Any:
                 return (
@@ -91,7 +91,7 @@ class ShowWorkspaceGroupsHandler(SQLHandler):
                 )
         else:
             def fields(x: Any) -> Any:
-                return (x.name, x.id, x.region.name, x.firewall_ranges)
+                return (x.name, x.id, x.region.name, json.dumps(x.firewall_ranges))
 
         res.set_rows([fields(x) for x in manager.workspace_groups])
 
@@ -128,8 +128,8 @@ class ShowWorkspacesHandler(SQLHandler):
 
         if params['extended']:
             res.add_field('Endpoint', result.STRING)
-            res.add_field('Created At', result.DATETIME)
-            res.add_field('Terminated At', result.DATETIME)
+            res.add_field('CreatedAt', result.DATETIME)
+            res.add_field('TerminatedAt', result.DATETIME)
 
             def fields(x: Any) -> Any:
                 return (
@@ -197,7 +197,7 @@ class CreateWorkspaceGroupHandler(SQLHandler):
         if params['region_name']:
             regs = [x for x in manager.regions if x.name == params['region_name']]
             if not regs:
-                raise ValueError(f'no region found with name "{params["region_name"]}"')
+                raise KeyError(f'no region found with name "{params["region_name"]}"')
             if len(regs) > 1:
                 raise ValueError(
                     f'multiple regions found with the name "{params["region_name"]}"',
@@ -295,7 +295,7 @@ class DropWorkspaceGroupHandler(SQLHandler):
 
         except KeyError:
             if not params['if_exists']:
-                raise ValueError(f"could not find workspace group '{name_or_id}'")
+                raise KeyError(f"could not find workspace group '{name_or_id}'")
 
         return None
 
@@ -338,7 +338,7 @@ class DropWorkspaceHandler(SQLHandler):
 
         except KeyError:
             if not params['if_exists']:
-                raise ValueError(
+                raise KeyError(
                     f"could not find workspace '{workspace_name_or_id}' "
                     f"in group '{group_name_or_id}'",
                 )

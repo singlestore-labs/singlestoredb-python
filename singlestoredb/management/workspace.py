@@ -8,6 +8,7 @@ import io
 import os
 import pathlib
 import re
+import time
 from typing import Any
 from typing import BinaryIO
 from typing import Dict
@@ -854,9 +855,12 @@ class Workspace(object):
     """
 
     def __init__(
-        self, name: str, workspace_id: str,
+        self,
+        name: str,
+        workspace_id: str,
         workspace_group: Union[str, 'WorkspaceGroup'],
-        size: str, state: str,
+        size: str,
+        state: str,
         created_at: Union[str, datetime.datetime],
         terminated_at: Optional[Union[str, datetime.datetime]] = None,
         endpoint: Optional[str] = None,
@@ -1093,7 +1097,7 @@ class WorkspaceGroup(object):
         return Stages(self, self._manager)
 
     def refresh(self) -> 'WorkspaceGroup':
-        """Update teh object to the current state."""
+        """Update the object to the current state."""
         if self._manager is None:
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
@@ -1166,11 +1170,16 @@ class WorkspaceGroup(object):
             )
         self._manager._delete(f'workspaceGroups/{self.id}', params=dict(force=force))
         if wait_on_terminated:
-            self._manager._wait_on_state(
-                self._manager.get_workspace_group(self.id),
-                'Terminated', interval=wait_interval, timeout=wait_timeout,
-            )
-            self.refresh()
+            while True:
+                self.refresh()
+                if self.terminated_at is not None:
+                    break
+                if wait_timeout <= 0:
+                    raise ManagementError(
+                        msg='Exceeded waiting time for WorkspaceGroup to terminate',
+                    )
+                time.sleep(wait_interval)
+                wait_timeout -= wait_interval
 
     def create_workspace(
         self, name: str, size: Optional[str] = None,
