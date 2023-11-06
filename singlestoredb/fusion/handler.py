@@ -27,6 +27,7 @@ CORE_GRAMMAR = r'''
     comma = ws "," ws
     open_paren = ws "(" ws
     close_paren = ws ")" ws
+    select = ~r"SELECT"i ws ~r".+" ws
 '''
 
 BUILTINS = {
@@ -55,7 +56,7 @@ BUILTIN_DEFAULTS = {  # type: ignore
 
 def get_keywords(grammar: str) -> Tuple[str, ...]:
     """Return all all-caps words from the beginning of the line."""
-    m = re.match(r'^\s*([A-Z0-9_]+(\s+|$|;))+', grammar)
+    m = re.match(r'^\s*((?:[A-Z0-9_]+|=)(\s+|$|;))+', grammar)
     if not m:
         return tuple()
     return tuple(re.split(r'\s+', m.group(0).replace(';', '').strip()))
@@ -274,6 +275,9 @@ def process_grammar(grammar: str) -> Tuple[Grammar, Tuple[str, ...], Dict[str, A
 
         # Convert literal strings to 'qs'
         sql = re.sub(r"'[^']+'", r'qs', sql)
+
+        # Convert special characters to literal tokens
+        sql = re.sub(r'([=]) ', r" '\1' ", sql)
 
         # Convert [...] groups to (...)*
         sql = re.sub(r'\[([^\]]+)\]', process_optional, sql)
@@ -512,6 +516,10 @@ class SQLHandler(NodeVisitor):
         """Entry point of the grammar."""
         _, out, *_ = visited_children
         return out
+
+    def visit_select(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        out = ' '.join(flatten(visited_children))
+        return {'select': out}
 
     def visit_order_by(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Handle ORDER BY."""
