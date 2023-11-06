@@ -1284,6 +1284,7 @@ def connect(
     nan_as_null: Optional[bool] = None,
     inf_as_null: Optional[bool] = None,
     encoding_errors: Optional[str] = None,
+    track_env: Optional[bool] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1340,24 +1341,26 @@ def connect(
         The form of the query results: tuples, namedtuples, dicts
     results_format : str, optional
         Deprecated. This option has been renamed to results_type.
-    program_name: str, optional
+    program_name : str, optional
         Name of the program
-    conn_attrs: dict, optional
+    conn_attrs : dict, optional
         Additional connection attributes for telemetry. Example:
         {'program_version': "1.0.2", "_connector_name": "dbt connector"}
     multi_statements: bool, optional
         Should multiple statements be allowed within a single query?
-    connect_timeout: int, optional
+    connect_timeout : int, optional
         The timeout for connecting to the database in seconds.
         (default: 10, min: 1, max: 31536000)
-    nan_as_null: bool, optional
+    nan_as_null : bool, optional
         Should NaN values be treated as NULLs when used in parameter
         substitutions including uploaded data?
-    inf_as_null: bool, optional
+    inf_as_null : bool, optional
         Should Inf values be treated as NULLs when used in parameter
         substitutions including uploaded data?
-    encoding_errors: str, optional
+    encoding_errors : str, optional
         The error handler name for value decoding errors
+    track_env : bool, optional
+        Should the connection track the SINGLESTOREDB_URL environment variable?
 
     Examples
     --------

@@ -48,6 +48,7 @@ from .protocol import (
 from . import err
 from ..config import get_option
 from .. import fusion
+from .. import connection
 from ..connection import Connection as BaseConnection
 
 try:
@@ -239,6 +240,8 @@ class Connection(BaseConnection):
     inf_as_null : bool, optional
         Should Inf values be treated as NULLs in parameter substitution including
         uploading data?
+    track_env : bool, optional
+        Should the connection track the SINGLESTOREDB_URL environment variable?
 
     See `Connection <https://www.python.org/dev/peps/pep-0249/#connection-objects>`_
     in the specification.
@@ -307,6 +310,7 @@ class Connection(BaseConnection):
         nan_as_null=None,
         inf_as_null=None,
         encoding_errors='strict',
+        track_env=False,
     ):
         BaseConnection.__init__(**dict(locals()))
 
@@ -424,8 +428,7 @@ class Connection(BaseConnection):
         self.encoding = charset_by_name(self.charset).encoding
 
         client_flag |= CLIENT.CAPABILITIES
-        if self.db:
-            client_flag |= CLIENT.CONNECT_WITH_DB
+        client_flag |= CLIENT.CONNECT_WITH_DB
 
         self.client_flag = client_flag
 
@@ -534,7 +537,10 @@ class Connection(BaseConnection):
                 if k not in self._connect_attrs:
                     self._connect_attrs[k] = v
 
-        if defer_connect:
+        self._in_sync = False
+        self._track_env = bool(track_env) or self.host == 'singlestore.com'
+
+        if defer_connect or self._track_env:
             self._sock = None
         else:
             self.connect()
@@ -866,6 +872,51 @@ class Connection(BaseConnection):
         self.encoding = encoding
         self.collation = collation
 
+    def _sync_connection(self):
+        """Synchronize connection with env variable."""
+        if self._in_sync:
+            return
+
+        if not self._track_env:
+            return
+
+        url = os.environ.get('SINGLESTOREDB_URL')
+        if not url:
+            return
+
+        out = {}
+        urlp = connection._parse_url(url)
+        out.update(urlp)
+
+        out = connection._cast_params(out)
+
+        # Set default port based on driver.
+        if 'port' not in out or not out['port']:
+            out['port'] = int(get_option('port') or 3306)
+
+        # If there is no user and the password is empty, remove the password key.
+        if 'user' not in out and not out.get('password', None):
+            out.pop('password', None)
+
+        if out['host'] == 'singlestore.com':
+            raise err.InterfaceError(0, 'Connection URL has not been established')
+
+        # If it's just a password change, we don't need to reconnect
+        if (self.host, self.port, self.user, self.db) == \
+                (out['host'], out['port'], out['user'], out.get('database')):
+            return
+
+        self.host = out['host']
+        self.port = out['port']
+        self.user = out['user']
+        self.password = out['password']
+        self.db = out.get('database')
+        try:
+            self._in_sync = True
+            self.connect()
+        finally:
+            self._in_sync = False
+
     def connect(self, sock=None):
         """
         Connect to server using existing parameters.
@@ -939,6 +990,7 @@ class Connection(BaseConnection):
 
             if self.autocommit_mode is not None:
                 self.autocommit(self.autocommit_mode)
+
         except BaseException as e:
             self._rfile = None
             if sock is not None:
@@ -1096,6 +1148,8 @@ class Connection(BaseConnection):
         ValueError : If no username was specified.
 
         """
+        self._sync_connection()
+
         if not self._sock:
             raise err.InterfaceError(0, 'The connection has been closed')
 
@@ -1193,10 +1247,11 @@ class Connection(BaseConnection):
         else:  # pragma: no cover - no testing against servers w/o secure auth (>=5.0)
             data += authresp + b'\0'
 
-        if self.db and self.server_capabilities & CLIENT.CONNECT_WITH_DB:
-            if isinstance(self.db, str):
-                self.db = self.db.encode(self.encoding)
-            data += self.db + b'\0'
+        if self.server_capabilities & CLIENT.CONNECT_WITH_DB:
+            db = self.db
+            if isinstance(db, str):
+                db = db.encode(self.encoding)
+            data += (db or b'') + b'\0'
 
         if self.server_capabilities & CLIENT.PLUGIN_AUTH:
             data += (plugin_name or b'') + b'\0'

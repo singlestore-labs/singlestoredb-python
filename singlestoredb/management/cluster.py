@@ -447,7 +447,7 @@ def manage_cluster(
     """
     warnings.warn(
         'The cluster management API is deprecated; '
-        'use manage_workspace instead.',
+        'use manage_workspaces instead.',
         category=DeprecationWarning,
     )
     return ClusterManager(access_token=access_token, base_url=base_url, version=version)

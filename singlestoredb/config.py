@@ -208,6 +208,12 @@ register_option(
     environ='SINGLESTOREDB_INF_AS_NULL',
 )
 
+register_option(
+    'track_env', 'bool', check_bool, False,
+    'Should connections track the SINGLESTOREDB_URL environment variable?',
+    environ='SINGLESTOREDB_TRACK_ENV',
+)
+
 #
 # Query results options
 #

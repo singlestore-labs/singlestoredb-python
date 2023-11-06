@@ -5,6 +5,7 @@ import decimal
 import functools
 import json
 import math
+import os
 import re
 import time
 from base64 import b64decode
@@ -18,6 +19,7 @@ from typing import Sequence
 from typing import Tuple
 from typing import Union
 from urllib.parse import urljoin
+from urllib.parse import urlparse
 
 import requests
 
@@ -952,17 +954,20 @@ class Connection(connection.Connection):
                 'statements within a query',
             )
 
-        version = kwargs.get('version', 'v2')
+        self._version = kwargs.get('version', 'v2')
         self.driver = kwargs.get('driver', 'https')
 
         self.encoders = {k: v for (k, v) in converters.items() if type(k) is not int}
         self.decoders = {k: v for (k, v) in converters.items() if type(k) is int}
 
         self._database = kwargs.get('database', get_option('database'))
-        self._url = f'{self.driver}://{host}:{port}/api/{version}/'
+        self._url = f'{self.driver}://{host}:{port}/api/{self._version}/'
         self._messages: List[Tuple[int, str]] = []
         self._autocommit: bool = True
         self._conv = kwargs.get('conv', None)
+        self._in_sync: bool = False
+        self._track_env: bool = kwargs.get('track_env', False) \
+            or host == 'singlestore.com'
 
     @property
     def messages(self) -> List[Tuple[int, str]]:
@@ -971,6 +976,65 @@ class Connection(connection.Connection):
     def connect(self) -> 'Connection':
         """Connect to the server."""
         return self
+
+    def _sync_connection(self, kwargs: Dict[str, Any]) -> None:
+        """Synchronize connection with env variable."""
+        if self._sess is None:
+            raise InterfaceError(errno=2048, msg='Connection is closed.')
+
+        if self._in_sync:
+            return
+
+        if not self._track_env:
+            return
+
+        url = os.environ.get('SINGLESTOREDB_URL')
+        if not url:
+            return
+
+        out = {}
+        urlp = connection._parse_url(url)
+        out.update(urlp)
+        out = connection._cast_params(out)
+
+        # Set default port based on driver.
+        if 'port' not in out or not out['port']:
+            if out.get('driver', 'https') == 'http':
+                out['port'] = int(get_option('port') or 80)
+            else:
+                out['port'] = int(get_option('port') or 443)
+
+        # If there is no user and the password is empty, remove the password key.
+        if 'user' not in out and not out.get('password', None):
+            out.pop('password', None)
+
+        if out['host'] == 'singlestore.com':
+            raise InterfaceError(0, 'Connection URL has not been established')
+
+        # Get current connection attributes
+        curr_url = urlparse(self._url, scheme='singlestoredb', allow_fragments=True)
+        auth = tuple(self._sess.auth)  # type: ignore
+
+        # If it's just a password change, we don't need to reconnect
+        if (curr_url.hostname, curr_url.port, auth[0], self._database) == \
+                (out['host'], out['port'], out['user'], out.get('database')):
+            return
+
+        try:
+            self._in_sync = True
+            sess = requests.Session()
+            sess.auth = (out['user'], out['password'])
+            sess.headers.update(self._sess.headers)
+            sess.verify = self._sess.verify
+            sess.cert = self._sess.cert
+            self._database = out.get('database')
+            self._url = f'{out.get("driver", "https")}://{out["host"]}:{out["port"]}' \
+                        f'/api/{self._version}/'
+            self._sess = sess
+            if self._database:
+                kwargs['json']['database'] = self._database
+        finally:
+            self._in_sync = False
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
@@ -992,8 +1056,12 @@ class Connection(connection.Connection):
         """
         if self._sess is None:
             raise InterfaceError(errno=2048, msg='Connection is closed.')
+
+        self._sync_connection(kwargs)
+
         if 'timeout' not in kwargs:
             kwargs['timeout'] = get_option('connect_timeout')
+
         return self._sess.post(urljoin(self._url, path), *args, **kwargs)
 
     def close(self) -> None:
@@ -1070,14 +1138,21 @@ class Connection(connection.Connection):
 
 
 def connect(
-    host: Optional[str] = None, user: Optional[str] = None,
-    password: Optional[str] = None, port: Optional[int] = None,
-    database: Optional[str] = None, driver: Optional[str] = None,
-    pure_python: Optional[bool] = None, local_infile: Optional[bool] = None,
+    host: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    port: Optional[int] = None,
+    database: Optional[str] = None,
+    driver: Optional[str] = None,
+    pure_python: Optional[bool] = None,
+    local_infile: Optional[bool] = None,
     charset: Optional[str] = None,
-    ssl_key: Optional[str] = None, ssl_cert: Optional[str] = None,
-    ssl_ca: Optional[str] = None, ssl_disabled: Optional[bool] = None,
-    ssl_cipher: Optional[str] = None, ssl_verify_cert: Optional[bool] = None,
+    ssl_key: Optional[str] = None,
+    ssl_cert: Optional[str] = None,
+    ssl_ca: Optional[str] = None,
+    ssl_disabled: Optional[bool] = None,
+    ssl_cipher: Optional[str] = None,
+    ssl_verify_cert: Optional[bool] = None,
     ssl_verify_identity: Optional[bool] = None,
     conv: Optional[Dict[int, Callable[..., Any]]] = None,
     credential_type: Optional[str] = None,
@@ -1092,5 +1167,6 @@ def connect(
     nan_as_null: Optional[bool] = None,
     inf_as_null: Optional[bool] = None,
     encoding_errors: Optional[str] = None,
+    track_env: Optional[bool] = None,
 ) -> Connection:
     return Connection(**dict(locals()))
