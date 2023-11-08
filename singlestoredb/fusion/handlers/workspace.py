@@ -1,45 +1,15 @@
 #!/usr/bin/env python3
-import datetime
 import json
-import os
 from typing import Any
 from typing import Dict
 from typing import Optional
 
 from .. import result
-from ...management import manage_workspaces
-from ...management.workspace import WorkspaceGroup
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
-
-manager = manage_workspaces(os.environ.get('SINGLESTOREDB_MANAGEMENT_TOKEN', 'DEAD'))
-
-
-def dt_isoformat(dt: Optional[datetime.datetime]) -> Optional[str]:
-    """Convert datetime to string."""
-    if dt is None:
-        return None
-    return dt.isoformat()
-
-
-def get_workspace_group(params: Dict[str, Any]) -> WorkspaceGroup:
-    """Find a workspace group matching group_id or group_name."""
-    if params['group_name']:
-        workspace_groups = [
-            x for x in manager.workspace_groups
-            if x.name == params['group_name']
-        ]
-        if not workspace_groups:
-            raise KeyError(
-                'no workspace group found with name "{}"'.format(params['group_name']),
-            )
-        if len(workspace_groups) > 1:
-            ids = ', '.join(x.id for x in workspace_groups)
-            raise ValueError(
-                f'more than one workspace group with given name was found: {ids}',
-            )
-        return workspace_groups[0]
-    return manager.get_workspace_group(params['group_id'])
+from .utils import dt_isoformat
+from .utils import get_workspace_group
+from .utils import get_workspace_manager
 
 
 class ShowRegionsHandler(SQLHandler):
@@ -49,6 +19,8 @@ class ShowRegionsHandler(SQLHandler):
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        manager = get_workspace_manager()
+
         res = FusionSQLResult()
         res.add_field('Name', result.STRING)
         res.add_field('ID', result.STRING)
@@ -72,6 +44,8 @@ class ShowWorkspaceGroupsHandler(SQLHandler):
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        manager = get_workspace_manager()
+
         res = FusionSQLResult()
         res.add_field('Name', result.STRING)
         res.add_field('ID', result.STRING)
@@ -185,6 +159,8 @@ class CreateWorkspaceGroupHandler(SQLHandler):
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        manager = get_workspace_manager()
+
         # Only create if one doesn't exist
         if params['if_not_exists']:
             try:
@@ -288,6 +264,8 @@ class DropWorkspaceGroupHandler(SQLHandler):
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        manager = get_workspace_manager()
+
         try:
             name_or_id = params['group_name'] or params['group_id']
             wg = manager.workspace_groups[name_or_id]
@@ -329,6 +307,8 @@ class DropWorkspaceHandler(SQLHandler):
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        manager = get_workspace_manager()
+
         try:
             workspace_name_or_id = params['workspace_name'] or params['workspace_id']
             group_name_or_id = params['group_name'] or params['group_id']

@@ -55,6 +55,9 @@ for file in sorted(txt_files):
         # Change ShowAccessor to Connection.show
         txt = re.sub(r'>ShowAccessor\.', r'>Connection.show.', txt)
 
+        # Change workspace.Stages to workspace.stages
+        txt = re.sub(r'>workspace\.Stages\.', r'>workspace.stages.', txt)
+
         # Fix class / method links
         txt = re.sub(
             r'(<a\s+[^>]+>)?(\s*<code[^>]*>\s*<span\s+class="pre">\s*)([\w\.]+)(\s*</span>\s*</code>)',

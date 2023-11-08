@@ -3,6 +3,7 @@
 """SingleStoreDB Fusion testing."""
 import os
 import random
+import secrets
 import time
 import unittest
 from typing import Any
@@ -92,6 +93,7 @@ class TestFusion(unittest.TestCase):
 @pytest.mark.management
 class TestManagementAPIFusion(unittest.TestCase):
 
+    id: str = secrets.token_hex(8)
     dbname: str = ''
     dbexisted: bool = False
     workspace_groups: List[Any] = []
@@ -104,15 +106,21 @@ class TestManagementAPIFusion(unittest.TestCase):
         us_regions = [x for x in mgr.regions if x.name.startswith('US')]
         non_us_regions = [x for x in mgr.regions if not x.name.startswith('US')]
         wg = mgr.create_workspace_group(
-            'A Fusion Testing', region=random.choice(us_regions), firewall_ranges=[],
+            f'A Fusion Testing {cls.id}',
+            region=random.choice(us_regions),
+            firewall_ranges=[],
         )
         cls.workspace_groups.append(wg)
         wg = mgr.create_workspace_group(
-            'B Fusion Testing', region=random.choice(us_regions), firewall_ranges=[],
+            f'B Fusion Testing {cls.id}',
+            region=random.choice(us_regions),
+            firewall_ranges=[],
         )
         cls.workspace_groups.append(wg)
         wg = mgr.create_workspace_group(
-            'C Fusion Testing', region=random.choice(non_us_regions), firewall_ranges=[],
+            f'C Fusion Testing {cls.id}',
+            region=random.choice(non_us_regions),
+            firewall_ranges=[],
         )
         cls.workspace_groups.append(wg)
 
@@ -193,18 +201,18 @@ class TestManagementAPIFusion(unittest.TestCase):
         assert len(wgs) >= 3
 
         names = [x[0] for x in wgs]
-        assert 'A Fusion Testing' in names
-        assert 'B Fusion Testing' in names
-        assert 'C Fusion Testing' in names
+        assert f'A Fusion Testing {self.id}' in names
+        assert f'B Fusion Testing {self.id}' in names
+        assert f'C Fusion Testing {self.id}' in names
 
         # LIKE clause
-        self.cur.execute('show workspace groups like "A%sion Testing"')
+        self.cur.execute(f'show workspace groups like "A%sion Testing {self.id}"')
         wgs = list(self.cur)
 
         names = [x[0] for x in wgs]
-        assert 'A Fusion Testing' in names
-        assert 'B Fusion Testing' not in names
-        assert 'C Fusion Testing' not in names
+        assert f'A Fusion Testing {self.id}' in names
+        assert f'B Fusion Testing {self.id}' not in names
+        assert f'C Fusion Testing {self.id}' not in names
 
         # LIMIT clause
         self.cur.execute('show workspace groups limit 2')
@@ -222,16 +230,20 @@ class TestManagementAPIFusion(unittest.TestCase):
 
         # ORDER BY
         self.cur.execute(
-            'show workspace groups like "% Fusion Testing" order by name desc',
+            f'show workspace groups like "% Fusion Testing {self.id}" order by name desc',
         )
         wgs = list(self.cur)
 
         names = [x[0] for x in wgs]
-        assert names == ['C Fusion Testing', 'B Fusion Testing', 'A Fusion Testing']
+        assert names == [
+            f'C Fusion Testing {self.id}',
+            f'B Fusion Testing {self.id}',
+            f'A Fusion Testing {self.id}',
+        ]
 
         # All options
         self.cur.execute(
-            'show workspace groups like "% Fusion Testing" '
+            f'show workspace groups like "% Fusion Testing {self.id}" '
             'extended order by name desc limit 2',
         )
         wgs = list(self.cur)
@@ -239,20 +251,23 @@ class TestManagementAPIFusion(unittest.TestCase):
         names = [x[0] for x in wgs]
 
         assert len(desc) == 6
-        assert names == ['C Fusion Testing', 'B Fusion Testing']
+        assert names == [f'C Fusion Testing {self.id}', f'B Fusion Testing {self.id}']
 
     def test_show_workspaces(self):
         mgr = s2.manage_workspaces()
-        wg = mgr.workspace_groups['B Fusion Testing']
+        wg = mgr.workspace_groups[f'B Fusion Testing {self.id}']
 
         self.cur.execute(
-            'create workspace show-ws-1 in group "B Fusion Testing" with size S-00',
+            'create workspace show-ws-1 in group '
+            f'"B Fusion Testing {self.id}" with size S-00',
         )
         self.cur.execute(
-            'create workspace show-ws-2 in group "B Fusion Testing" with size S-00',
+            'create workspace show-ws-2 in group '
+            f'"B Fusion Testing {self.id}" with size S-00',
         )
         self.cur.execute(
-            'create workspace show-ws-3 in group "B Fusion Testing" with size S-00',
+            'create workspace show-ws-3 in group '
+            f'"B Fusion Testing {self.id}" with size S-00',
         )
 
         time.sleep(30)
@@ -271,7 +286,7 @@ class TestManagementAPIFusion(unittest.TestCase):
             time.sleep(30)
 
         # SHOW
-        self.cur.execute('show workspaces in group "B Fusion Testing"')
+        self.cur.execute(f'show workspaces in group "B Fusion Testing {self.id}"')
         desc = self.cur.description
         out = list(self.cur)
         names = [x[0] for x in out]
@@ -295,7 +310,10 @@ class TestManagementAPIFusion(unittest.TestCase):
         assert 'show-ws-3' in names
 
         # LIKE clause
-        self.cur.execute('show workspaces in group "B Fusion Testing" like "%2"')
+        self.cur.execute(
+            'show workspaces in group '
+            f'"B Fusion Testing {self.id}" like "%2"',
+        )
         out = list(self.cur)
         names = [x[0] for x in out]
         assert len(out) >= 1
@@ -305,7 +323,10 @@ class TestManagementAPIFusion(unittest.TestCase):
         assert 'show-ws-3' not in names
 
         # Extended attributes
-        self.cur.execute('show workspaces in group "B Fusion Testing" extended')
+        self.cur.execute(
+            'show workspaces in group '
+            f'"B Fusion Testing {self.id}" extended',
+        )
         desc = self.cur.description
         out = list(self.cur)
         assert len(desc) == 7
@@ -315,7 +336,10 @@ class TestManagementAPIFusion(unittest.TestCase):
         ]
 
         # ORDER BY
-        self.cur.execute('show workspaces in group "B Fusion Testing" order by name desc')
+        self.cur.execute(
+            'show workspaces in group '
+            f'"B Fusion Testing {self.id}" order by name desc',
+        )
         out = list(self.cur)
         desc = self.cur.description
         assert len(desc) == 4
@@ -324,7 +348,8 @@ class TestManagementAPIFusion(unittest.TestCase):
 
         # LIMIT clause
         self.cur.execute(
-            'show workspaces in group "B Fusion Testing" order by name desc limit 2',
+            'show workspaces in group '
+            f'"B Fusion Testing {self.id}" order by name desc limit 2',
         )
         out = list(self.cur)
         desc = self.cur.description
@@ -334,7 +359,7 @@ class TestManagementAPIFusion(unittest.TestCase):
 
         # All options
         self.cur.execute(
-            'show workspaces in group "B Fusion Testing" '
+            f'show workspaces in group "B Fusion Testing {self.id}" '
             'like "show-ws%" extended order by name desc limit 2',
         )
         out = list(self.cur)
@@ -345,17 +370,17 @@ class TestManagementAPIFusion(unittest.TestCase):
 
     def test_create_drop_workspace(self):
         mgr = s2.manage_workspaces()
-        wg = mgr.workspace_groups['A Fusion Testing']
+        wg = mgr.workspace_groups[f'A Fusion Testing {self.id}']
 
         self.cur.execute(
-            'create workspace foobar-1 in group "A Fusion Testing" '
+            f'create workspace foobar-1 in group "A Fusion Testing {self.id}" '
             'with size S-00 wait on active',
         )
         foobar_1 = [x for x in wg.workspaces if x.name == 'foobar-1']
         assert len(foobar_1) == 1
 
         self.cur.execute(
-            'create workspace foobar-2 in group "A Fusion Testing" '
+            f'create workspace foobar-2 in group "A Fusion Testing {self.id}" '
             'with size S-00 wait on active',
         )
         foobar_2 = [x for x in wg.workspaces if x.name == 'foobar-2']
@@ -363,7 +388,7 @@ class TestManagementAPIFusion(unittest.TestCase):
 
         # Drop by name
         self.cur.execute(
-            'drop workspace "foobar-1" in group "A Fusion Testing" '
+            f'drop workspace "foobar-1" in group "A Fusion Testing {self.id}" '
             'wait on terminated',
         )
         foobar_1 = [x for x in wg.workspaces if x.name == 'foobar-1']
@@ -373,7 +398,7 @@ class TestManagementAPIFusion(unittest.TestCase):
         foobar_2_id = foobar_2[0].id
         self.cur.execute(
             f'drop workspace id {foobar_2_id} in group '
-            '"A Fusion Testing" wait on terminated',
+            f'"A Fusion Testing {self.id}" wait on terminated',
         )
         foobar_2 = [x for x in wg.workspaces if x.name == 'foobar-2']
         assert len(foobar_2) == 0
@@ -382,13 +407,13 @@ class TestManagementAPIFusion(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.cur.execute(
                 f'drop workspace id {foobar_2_id} '
-                'in group "A Fusion Testing"',
+                f'in group "A Fusion Testing {self.id}"',
             )
 
         # Drop non-existent by ID with IF EXISTS
         self.cur.execute(
             f'drop workspace IF EXISTS id {foobar_2_id} '
-            'in group "A Fusion Testing"',
+            f'in group "A Fusion Testing {self.id}"',
         )
 
     def test_create_drop_workspace_group(self):

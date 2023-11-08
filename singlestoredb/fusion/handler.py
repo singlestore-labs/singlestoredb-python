@@ -20,14 +20,15 @@ from . import result
 from ..connection import Connection
 
 CORE_GRAMMAR = r'''
-    ws = ~r"(\s*(/\*.*\*/)*\s*)*"
+    ws = ~r"(\s+|(\s*/\*.*\*/\s*)+)"
     qs = ~r"\"([^\"]*)\"|'([^\']*)'|`([^\`]*)`|([A-Za-z0-9_\-\.]+)"
     number = ~r"[-+]?(\d*\.)?\d+(e[-+]?\d+)?"i
     integer = ~r"-?\d+"
-    comma = ws "," ws
-    open_paren = ws "(" ws
-    close_paren = ws ")" ws
-    select = ~r"SELECT"i ws ~r".+" ws
+    comma = ws* "," ws*
+    eq = ws* "=" ws*
+    open_paren = ws* "(" ws*
+    close_paren = ws* ")" ws*
+    select = ~r"SELECT"i ws+ ~r".+" ws*
 '''
 
 BUILTINS = {
@@ -56,7 +57,7 @@ BUILTIN_DEFAULTS = {  # type: ignore
 
 def get_keywords(grammar: str) -> Tuple[str, ...]:
     """Return all all-caps words from the beginning of the line."""
-    m = re.match(r'^\s*((?:[A-Z0-9_]+|=)(\s+|$|;))+', grammar)
+    m = re.match(r'^\s*((?:[A-Z0-9_]+)(\s+|$|;))+', grammar)
     if not m:
         return tuple()
     return tuple(re.split(r'\s+', m.group(0).replace(';', '').strip()))
@@ -86,7 +87,7 @@ def process_alternates(m: Any) -> str:
 def process_repeats(m: Any) -> str:
     """Add repeated patterns."""
     sql = m.group(1).strip()
-    return f'open_paren? {sql} ws ( comma {sql} ws )* close_paren?'
+    return f'open_paren? {sql} ws* ( comma {sql} ws* )* close_paren?'
 
 
 def lower_and_regex(m: Any) -> str:
@@ -277,7 +278,7 @@ def process_grammar(grammar: str) -> Tuple[Grammar, Tuple[str, ...], Dict[str, A
         sql = re.sub(r"'[^']+'", r'qs', sql)
 
         # Convert special characters to literal tokens
-        sql = re.sub(r'([=]) ', r" '\1' ", sql)
+        sql = re.sub(r'([=]) ', r' eq ', sql)
 
         # Convert [...] groups to (...)*
         sql = re.sub(r'\[([^\]]+)\]', process_optional, sql)
@@ -310,6 +311,15 @@ def process_grammar(grammar: str) -> Tuple[Grammar, Tuple[str, ...], Dict[str, A
 
         # Make sure every operation ends with ws
         sql = re.sub(r'\s+ws\s+ws$', r' ws', sql + ' ws')
+        sql = re.sub(r'(\s+ws)*\s+ws\*$', r' ws*', sql)
+        sql = re.sub(r'\s+ws$', r' ws*', sql)
+        sql = re.sub(r'\s+ws\s+\(', r' ws* (', sql)
+        sql = re.sub(r'\)\s+ws\s+', r') ws* ', sql)
+        sql = re.sub(r'\s+ws\s+', r' ws+ ', sql)
+        sql = re.sub(r'\?\s+ws\+', r'? ws*', sql)
+
+        # Remove extra ws around eq
+        sql = re.sub(r'ws\+\s*eq\b', r'eq', sql)
 
         out.append(f'{op} = {sql}')
 
@@ -324,7 +334,7 @@ def process_grammar(grammar: str) -> Tuple[Grammar, Tuple[str, ...], Dict[str, A
         rules[k] = v
 
     cmds = ' / '.join(x for x in rules if x.endswith('_cmd'))
-    cmds = f'init = ws ( {cmds} ) ws ";"? ws\n'
+    cmds = f'init = ws* ( {cmds} ) ws* ";"? ws*\n'
 
     return Grammar(cmds + CORE_GRAMMAR + '\n'.join(out)), command_key, rule_info, help_txt
 
@@ -498,6 +508,10 @@ class SQLHandler(NodeVisitor):
 
     def visit_ws(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Whitespace and comments."""
+        return
+
+    def visit_eq(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Equals sign."""
         return
 
     def visit_comma(self, node: Node, visited_children: Iterable[Any]) -> Any:

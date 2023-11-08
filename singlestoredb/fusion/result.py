@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import operator
 import re
 from typing import Any
 from typing import Iterable
@@ -387,9 +386,12 @@ class FusionSQLResult(object):
         ascending = list(reversed(ascending))
 
         out = self.copy()
-        for i, b in enumerate(by):
+        for i, byvar in enumerate(by):
             out.rows.sort(
-                key=operator.itemgetter(self._field_indexes[b]),
+                key=lambda x: (
+                    0 if x[self._field_indexes[byvar]] is None else 1,
+                    x[self._field_indexes[byvar]],
+                ),
                 reverse=not ascending[i],
             )
         return out
