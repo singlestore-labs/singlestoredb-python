@@ -198,10 +198,12 @@ class StagesObject(object):
                 msg='No Stages object is associated with this object.',
             )
 
-        return self._stages.download(
+        return self._stages.download_file(
             self.path, local_path=local_path,
             overwrite=overwrite, encoding=encoding,
         )
+
+    download_file = download
 
     def remove(self) -> None:
         """Delete the stage file."""
@@ -230,7 +232,7 @@ class StagesObject(object):
 
         self._stages.removedirs(self.path)
 
-    def rename(self, new_path: PathLike, *, overwrite: bool = False) -> StagesObject:
+    def rename(self, new_path: PathLike, *, overwrite: bool = False) -> None:
         """
         Move the stage file to a new location.
 
@@ -246,7 +248,10 @@ class StagesObject(object):
             raise ManagementError(
                 msg='No Stages object is associated with this object.',
             )
-        return self._stages.rename(self.path, new_path, overwrite=overwrite)
+        out = self._stages.rename(self.path, new_path, overwrite=overwrite)
+        self.name = out.name
+        self.path = out.path
+        return None
 
     def exists(self) -> bool:
         """Does the file / folder exist?"""
@@ -384,7 +389,7 @@ class Stages(object):
             return StagesObjectTextWriter('', self, stage_path)
 
         if 'r' in mode:
-            content = self.download(stage_path)
+            content = self.download_file(stage_path)
             if isinstance(content, bytes):
                 if 'b' in mode:
                     return StagesObjectBytesReader(content)
@@ -400,7 +405,7 @@ class Stages(object):
 
     def upload_file(
         self,
-        local_path: PathLike,
+        local_path: Union[PathLike, TextIO, BinaryIO],
         stage_path: PathLike,
         *,
         overwrite: bool = False,
@@ -410,15 +415,17 @@ class Stages(object):
 
         Parameters
         ----------
-        local_path : Path or str
-            Path to the local file
+        local_path : Path or str or file-like
+            Path to the local file or an open file object
         stage_path : Path or str
             Path to the stage file
         overwrite : bool, optional
             Should the ``stage_path`` be overwritten if it exists already?
 
         """
-        if not os.path.isfile(local_path):
+        if isinstance(local_path, (TextIO, BinaryIO)):
+            pass
+        elif not os.path.isfile(local_path):
             raise IsADirectoryError(f'local path is not a file: {local_path}')
 
         if self.exists(stage_path):
@@ -427,6 +434,8 @@ class Stages(object):
 
             self.remove(stage_path)
 
+        if isinstance(local_path, (TextIO, BinaryIO)):
+            return self._upload(local_path, stage_path, overwrite=overwrite)
         return self._upload(open(local_path, 'rb'), stage_path, overwrite=overwrite)
 
     def upload_folder(
@@ -727,7 +736,7 @@ class Stages(object):
 
         raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
 
-    def download(
+    def download_file(
         self,
         stage_path: PathLike,
         local_path: Optional[PathLike] = None,
@@ -773,6 +782,41 @@ class Stages(object):
             return out.decode(encoding)
 
         return out
+
+    def download_folder(
+        self,
+        stage_path: PathLike,
+        local_path: PathLike = '.',
+        *,
+        overwrite: bool = False,
+    ) -> None:
+        """
+        Download a Stages folder to a local directory.
+
+        Parameters
+        ----------
+        stage_path : Path or str
+            Path to the stage file
+        local_path : Path or str
+            Path to local directory target location
+        overwrite : bool, optional
+            Should an existing directory / files be overwritten if they exist?
+
+        """
+        if local_path is not None and not overwrite and os.path.exists(local_path):
+            raise OSError(
+                'target directory already exists; '
+                'use overwrite=True to replace',
+            )
+        if not self.is_dir(stage_path):
+            raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
+
+        for f in self.listdir(stage_path, recursive=True):
+            if self.is_dir(f):
+                continue
+            target = os.path.normpath(os.path.join(local_path, f))
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            self.download_file(f, target, overwrite=overwrite)
 
     def remove(self, stage_path: PathLike) -> None:
         """

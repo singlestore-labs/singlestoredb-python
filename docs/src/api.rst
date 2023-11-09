@@ -240,7 +240,8 @@ methods and attributes.
 
    Stages
    Stages.open
-   Stages.download
+   Stages.download_file
+   Stages.download_folder
    Stages.upload_file
    Stages.upload_folder
    Stages.info

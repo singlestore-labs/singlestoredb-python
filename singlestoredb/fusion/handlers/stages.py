@@ -108,7 +108,7 @@ class DownloadStageFileHandler(SQLHandler):
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         wg = get_workspace_group(params)
 
-        out = wg.stages.download(
+        out = wg.stages.download_file(
             params['stage_path'],
             local_path=params['local_path'] or None,
             overwrite=params['overwrite'],

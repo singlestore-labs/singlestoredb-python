@@ -31,16 +31,16 @@ class TestFusion(unittest.TestCase):
             utils.drop_database(cls.dbname)
 
     def setUp(self):
-        self.enabled = os.environ.get('SINGLESTOREDB_ENABLE_FUSION')
-        os.environ['SINGLESTOREDB_ENABLE_FUSION'] = '1'
+        self.enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLED')
+        os.environ['SINGLESTOREDB_FUSION_ENABLED'] = '1'
         self.conn = s2.connect(database=type(self).dbname, local_infile=True)
         self.cur = self.conn.cursor()
 
     def tearDown(self):
         if self.enabled:
-            os.environ['SINGLESTOREDB_ENABLE_FUSION'] = self.enabled
+            os.environ['SINGLESTOREDB_FUSION_ENABLED'] = self.enabled
         else:
-            del os.environ['SINGLESTOREDB_ENABLE_FUSION']
+            del os.environ['SINGLESTOREDB_FUSION_ENABLED']
 
         try:
             if self.cur is not None:
@@ -57,17 +57,17 @@ class TestFusion(unittest.TestCase):
             pass
 
     def test_env_var(self):
-        os.environ['SINGLESTOREDB_ENABLE_FUSION'] = '0'
+        os.environ['SINGLESTOREDB_FUSION_ENABLED'] = '0'
 
         with self.assertRaises(s2.ProgrammingError):
             self.cur.execute('show fusion commands')
 
-        del os.environ['SINGLESTOREDB_ENABLE_FUSION']
+        del os.environ['SINGLESTOREDB_FUSION_ENABLED']
 
         with self.assertRaises(s2.ProgrammingError):
             self.cur.execute('show fusion commands')
 
-        os.environ['SINGLESTOREDB_ENABLE_FUSION'] = 'yes'
+        os.environ['SINGLESTOREDB_FUSION_ENABLED'] = 'yes'
 
         self.cur.execute('show fusion commands')
         assert list(self.cur)
@@ -132,16 +132,16 @@ class TestManagementAPIFusion(unittest.TestCase):
             cls.workspace_groups.pop().terminate(force=True)
 
     def setUp(self):
-        self.enabled = os.environ.get('SINGLESTOREDB_ENABLE_FUSION')
-        os.environ['SINGLESTOREDB_ENABLE_FUSION'] = '1'
+        self.enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLED')
+        os.environ['SINGLESTOREDB_FUSION_ENABLED'] = '1'
         self.conn = s2.connect(database=type(self).dbname, local_infile=True)
         self.cur = self.conn.cursor()
 
     def tearDown(self):
         if self.enabled:
-            os.environ['SINGLESTOREDB_ENABLE_FUSION'] = self.enabled
+            os.environ['SINGLESTOREDB_FUSION_ENABLED'] = self.enabled
         else:
-            del os.environ['SINGLESTOREDB_ENABLE_FUSION']
+            del os.environ['SINGLESTOREDB_FUSION_ENABLED']
 
         try:
             if self.cur is not None:

@@ -474,7 +474,7 @@ class TestStages(unittest.TestCase):
         with st.open('open_test.sql', 'w') as wfile:
             wfile.write(open(TEST_DIR / 'test2.sql').read())
 
-        txt = st.download('open_test.sql', encoding='utf-8')
+        txt = st.download_file('open_test.sql', encoding='utf-8')
 
         assert txt == open(TEST_DIR / 'test2.sql').read()
 
@@ -484,7 +484,7 @@ class TestStages(unittest.TestCase):
             wfile.write(line)
         wfile.close()
 
-        txt = st.download('open_raw_test.sql', encoding='utf-8')
+        txt = st.download_file('open_raw_test.sql', encoding='utf-8')
 
         assert txt == open(TEST_DIR / 'test.sql').read()
 
@@ -524,7 +524,7 @@ class TestStages(unittest.TestCase):
             wfile.write(line)
         wfile.close()
 
-        txt = st.download(f.path, encoding='utf-8')
+        txt = st.download_file(f.path, encoding='utf-8')
 
         assert txt == open(TEST_DIR / 'test.sql').read()
 
@@ -786,7 +786,7 @@ class TestStages(unittest.TestCase):
         # rename
         assert st.exists('obj_test.sql')
         assert not st.exists('obj_test_2.sql')
-        f1 = f1.rename('obj_test_2.sql')
+        f1.rename('obj_test_2.sql')
         assert not st.exists('obj_test.sql')
         assert st.exists('obj_test_2.sql')
         assert f1.abspath() == 'obj_test_2.sql'

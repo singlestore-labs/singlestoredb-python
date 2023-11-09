@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import os
 import re
 from typing import Any
 from typing import Dict
@@ -11,9 +10,9 @@ from typing import Union
 
 from . import result
 from .. import connection
+from ..config import get_option
 from .handler import SQLHandler
 
-_enabled = ('1', 'yes', 'on', 'enabled', 'true')
 _handlers: Dict[str, Type[SQLHandler]] = {}
 _handlers_re: Optional[Any] = None
 
@@ -64,7 +63,7 @@ def get_handler(sql: Union[str, bytes]) -> Optional[Type[SQLHandler]]:
     None - if no matching handler could be found
 
     """
-    if not os.environ.get('SINGLESTOREDB_ENABLE_FUSION', '').lower() in _enabled:
+    if not get_option('fusion.enabled'):
         return None
 
     if isinstance(sql, (bytes, bytearray)):
@@ -103,7 +102,7 @@ def execute(
     FusionSQLResult
 
     """
-    if not os.environ.get('SINGLESTOREDB_ENABLE_FUSION', '').lower() in _enabled:
+    if not get_option('fusion.enabled'):
         raise RuntimeError('management API queries have not been enabled')
 
     if handler is None:

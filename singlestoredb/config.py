@@ -214,6 +214,12 @@ register_option(
     environ='SINGLESTOREDB_TRACK_ENV',
 )
 
+register_option(
+    'fusion.enabled', 'bool', check_bool, False,
+    'Should Fusion SQL queries be enabled?',
+    environ='SINGLESTOREDB_FUSION_ENABLED',
+)
+
 #
 # Query results options
 #
