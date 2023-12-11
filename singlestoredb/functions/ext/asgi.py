@@ -25,6 +25,8 @@ $ SINGLESTOREDB_EXT_FUNCTIONS='myfuncs.[percentage_90,percentage_95]' \
 import importlib
 import itertools
 import os
+import urllib
+from types import ModuleType
 from typing import Any
 from typing import Awaitable
 from typing import Callable
@@ -38,6 +40,7 @@ from typing import Union
 
 from . import json as jdata
 from . import rowdat_1
+from ... import connection
 from ...mysql.constants import FIELD_TYPE as ft
 from ..signature import get_signature
 from ..signature import signature_to_sql
@@ -122,9 +125,33 @@ def make_func(name: str, func: Callable[..., Any]) -> Callable[..., Any]:
     Callable
 
     '''
-    async def do_func(row_ids: Sequence[int], rows: Sequence[Any]) -> List[Any]:
-        '''Call function on given rows of data.'''
-        return list(zip(row_ids, func_map(func, rows)))
+    data_format = getattr(func, '_singlestoredb_attrs', {}).get('data_format', 'python')
+
+    if data_format == 'python':
+        async def do_func(row_ids: Sequence[int], rows: Sequence[Any]) -> List[Any]:
+            '''Call function on given rows of data.'''
+            return list(zip(row_ids, func_map(func, rows)))
+
+    elif data_format == 'arrow':
+        async def do_func(row_ids: Sequence[int], rows: Sequence[Any]) -> List[Any]:
+            '''Call function on given rows of data.'''
+            return list(
+                zip(
+                    row_ids.to_numpy(),  # type: ignore
+                    func(
+                        *[
+                            x.to_numpy(zero_copy_only=False)
+                            for x in rows
+                        ],
+                    ),  # type: ignore
+                ),
+            )
+
+    else:
+        # All other vector formats use the same function wrapper
+        async def do_func(row_ids: Sequence[int], rows: Sequence[Any]) -> List[Any]:
+            '''Call function on given rows of data.'''
+            return list(zip(row_ids, func(*rows)))
 
     do_func.__name__ = name
     do_func.__doc__ = func.__doc__
@@ -133,6 +160,9 @@ def make_func(name: str, func: Callable[..., Any]) -> Callable[..., Any]:
 
     # Store signature for generating CREATE FUNCTION calls
     do_func._ext_func_signature = sig  # type: ignore
+
+    # Set data format
+    do_func._ext_func_data_format = data_format  # type: ignore
 
     # Setup argument types for rowdat_1 parser
     colspec = []
@@ -159,6 +189,8 @@ def create_app(
             Iterable[str],
             Callable[..., Any],
             Iterable[Callable[..., Any]],
+            ModuleType,
+            Iterable[ModuleType],
         ]
     ] = None,
 
@@ -193,15 +225,36 @@ def create_app(
 
     # Look up Python function specifications
     if functions is None:
-        for k, v in os.environ.items():
-            if k.startswith('SINGLESTOREDB_EXT_FUNCTIONS'):
-                specs.append(v)
+        env_vars = [
+            x for x in os.environ.keys()
+            if x.startswith('SINGLESTOREDB_EXT_FUNCTIONS')
+        ]
+        if env_vars:
+            specs = [os.environ[x] for x in env_vars]
+        else:
+            import __main__
+            specs = [
+                x for x in vars(__main__).values()
+                if hasattr(x, '_singlestoredb_attrs')
+            ]
+    elif isinstance(functions, ModuleType):
+        specs = [
+            x for x in vars(functions).values()
+            if hasattr(x, '_singlestoredb_attrs')
+        ]
     elif isinstance(functions, str):
         specs = [functions]
     elif callable(functions):
         specs = [functions]
     else:
-        specs = list(functions)
+        items = list(functions)
+        if items and isinstance(items[0], ModuleType):
+            specs = [
+                x for x in vars(items).values()
+                if hasattr(x, '_singlestoredb_attrs')
+            ]
+        else:
+            specs = items
 
     # Add functions to application
     endpoints = dict()
@@ -217,7 +270,7 @@ def create_app(
                 endpoints[alias.encode('utf-8')] = func
         else:
             alias = funcs.__name__
-            func = make_func(alias, item)
+            func = make_func(alias, funcs)
             endpoints[alias.encode('utf-8')] = func
 
     # Plain text response start
@@ -254,14 +307,54 @@ def create_app(
 
     # Data format + version handlers
     handlers = {
-        (b'application/octet-stream', b'1.0'): dict(
+        (b'application/octet-stream', b'1.0', 'python'): dict(
             load=rowdat_1.load,
             dump=rowdat_1.dump,
             response=rowdat_1_response_dict,
         ),
-        (b'application/json', b'1.0'): dict(
+        (b'application/octet-stream', b'1.0', 'pandas'): dict(
+            load=rowdat_1.load_pandas,
+            dump=rowdat_1.dump_pandas,
+            response=rowdat_1_response_dict,
+        ),
+        (b'application/octet-stream', b'1.0', 'numpy'): dict(
+            load=rowdat_1.load_numpy,
+            dump=rowdat_1.dump_numpy,
+            response=rowdat_1_response_dict,
+        ),
+        (b'application/octet-stream', b'1.0', 'polars'): dict(
+            load=rowdat_1.load_polars,
+            dump=rowdat_1.dump_polars,
+            response=rowdat_1_response_dict,
+        ),
+        (b'application/octet-stream', b'1.0', 'arrow'): dict(
+            load=rowdat_1.load_arrow,
+            dump=rowdat_1.dump_arrow,
+            response=rowdat_1_response_dict,
+        ),
+        (b'application/json', b'1.0', 'python'): dict(
             load=jdata.load,
             dump=jdata.dump,
+            response=json_response_dict,
+        ),
+        (b'application/json', b'1.0', 'pandas'): dict(
+            load=jdata.load_pandas,
+            dump=jdata.dump_pandas,
+            response=json_response_dict,
+        ),
+        (b'application/json', b'1.0', 'numpy'): dict(
+            load=jdata.load_numpy,
+            dump=jdata.dump_numpy,
+            response=json_response_dict,
+        ),
+        (b'application/json', b'1.0', 'polars'): dict(
+            load=jdata.load_polars,
+            dump=jdata.dump_polars,
+            response=json_response_dict,
+        ),
+        (b'application/json', b'1.0', 'arrow'): dict(
+            load=jdata.load_arrow,
+            dump=jdata.dump_arrow,
             response=json_response_dict,
         ),
     }
@@ -301,6 +394,7 @@ def create_app(
         accepts = headers.get(b'accepts', content_type)
         func_name = headers.get(b's2-ef-name', b'')
         func = endpoints.get(func_name)
+        data_format = func._ext_func_data_format  # type: ignore
 
         # Call the endpoint
         if method == 'POST' and func is not None and path == invoke_path:
@@ -312,8 +406,8 @@ def create_app(
                 more_body = request.get('more_body', False)
 
             data_version = headers.get(b's2-ef-version', b'')
-            input_handler = handlers[(content_type, data_version)]
-            output_handler = handlers[(accepts, data_version)]
+            input_handler = handlers[(content_type, data_version, data_format)]
+            output_handler = handlers[(accepts, data_version, data_format)]
 
             out = await func(
                 *input_handler['load'](
@@ -353,5 +447,46 @@ def create_app(
         out = body_response_dict.copy()
         out['body'] = body
         await send(out)
+
+    def show_create_functions(
+        base_url: str = 'http://localhost:8000',
+        data_format: str = 'rowdat_1',
+    ) -> List[str]:
+        out = []
+        for key, endpoint in endpoints.items():
+            out.append(
+                signature_to_sql(
+                    endpoint._ext_func_signature,  # type: ignore
+                    base_url=urllib.parse.urljoin(base_url, '/invoke'),
+                    data_format=data_format,
+                ),
+            )
+        return out
+
+    app.show_create_functions = show_create_functions  # type: ignore
+
+    def register_functions(
+        *connection_args: Any,
+        base_url: str = 'http://localhost:8000',
+        data_format: str = 'rowdat_1',
+        **connection_kwargs: Any,
+    ) -> None:
+        with connection.connect(*connection_args, **connection_kwargs) as conn:
+            with conn.cursor() as cur:
+                for func in app.show_create_functions(base_url=base_url):  # type: ignore
+                    cur.execute(func)
+
+    app.register_functions = register_functions  # type: ignore
+
+    def drop_functions(
+        *connection_args: Any,
+        **connection_kwargs: Any,
+    ) -> None:
+        with connection.connect(*connection_args, **connection_kwargs) as conn:
+            with conn.cursor() as cur:
+                for key in endpoints.keys():
+                    cur.execute(f'DROP FUNCTION IF EXISTS `{key.decode("utf8")}`')
+
+    app.drop_functions = drop_functions  # type: ignore
 
     return app

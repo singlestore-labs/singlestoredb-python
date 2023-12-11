@@ -3,10 +3,20 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <Python.h>
+#include <pybuffer.h>
 
 #ifndef Py_LIMITED_API
 #include <datetime.h>
 #endif
+
+#ifndef PyBUF_WRITE
+#define PyBUF_WRITE 0x200
+#endif
+
+#define VECTOR_TYPE_PANDAS 0
+#define VECTOR_TYPE_NUMPY 1
+#define VECTOR_TYPE_ARROW 2
+#define VECTOR_TYPE_POLARS 3
 
 #define ACCEL_OUT_TUPLES 0
 #define ACCEL_OUT_STRUCTSEQUENCES 1
@@ -367,6 +377,9 @@ typedef struct {
     PyObject *rows;
     PyObject *namedtuple;
     PyObject *Row;
+    PyObject *Series;
+    PyObject *array;
+    PyObject *vectorize;
 } PyStrings;
 
 static PyStrings PyStr = {0};
@@ -382,6 +395,11 @@ typedef struct {
     PyObject *datetime_timedelta;
     PyObject *datetime_datetime;
     PyObject *collections_namedtuple;
+    PyObject *pandas_Series;
+    PyObject *polars_Series;
+    PyObject *pyarrow_array;
+    PyObject *numpy_array;
+    PyObject *numpy_vectorize;
 } PyFunctions;
 
 static PyFunctions PyFunc = {0};
@@ -1757,6 +1775,831 @@ error:
     goto exit;
 }
 
+
+static PyObject *create_pandas_index(PyObject *py_memviewc) {
+    return PyObject_CallFunction(PyFunc.pandas_Series, "O", py_memviewc);
+}
+
+
+static PyObject *create_pandas_series(PyObject *py_memviewc, int data_type, PyObject *py_index, PyObject *py_name, PyObject *py_objs) {
+    PyObject *py_in = NULL;
+    PyObject *py_out = NULL;
+
+    // data, index, dtype, name, copy
+    py_out = PyObject_CallFunction(PyFunc.pandas_Series, "OOOOO", py_memviewc, py_index, Py_None, py_name, Py_False);
+    if (!py_out) goto error;
+
+    // Add series to the output, remapping string values as needed
+    switch(data_type) {
+    case MYSQL_TYPE_VARCHAR:
+    case MYSQL_TYPE_JSON:
+    case MYSQL_TYPE_SET:
+    case MYSQL_TYPE_ENUM:
+    case MYSQL_TYPE_VAR_STRING:
+    case MYSQL_TYPE_STRING:
+    case MYSQL_TYPE_GEOMETRY:
+    case MYSQL_TYPE_TINY_BLOB:
+    case MYSQL_TYPE_MEDIUM_BLOB:
+    case MYSQL_TYPE_LONG_BLOB:
+    case MYSQL_TYPE_BLOB:
+    case -MYSQL_TYPE_VARCHAR:
+    case -MYSQL_TYPE_JSON:
+    case -MYSQL_TYPE_SET:
+    case -MYSQL_TYPE_ENUM:
+    case -MYSQL_TYPE_VAR_STRING:
+    case -MYSQL_TYPE_STRING:
+    case -MYSQL_TYPE_GEOMETRY:
+    case -MYSQL_TYPE_TINY_BLOB:
+    case -MYSQL_TYPE_MEDIUM_BLOB:
+    case -MYSQL_TYPE_LONG_BLOB:
+    case -MYSQL_TYPE_BLOB:
+        py_in = py_out;
+        py_out = PyObject_CallMethod(py_in, "map", "O", py_objs);
+        if (!py_out) goto error;
+        break;
+    }
+
+exit:
+    Py_XDECREF(py_in);
+
+    return py_out;
+
+error:
+    Py_XDECREF(py_out);
+    py_out = NULL;
+
+    goto exit;
+}
+
+
+static PyObject *create_polars_index(PyObject *py_memviewc) {
+    return PyObject_CallFunction(PyFunc.polars_Series, "OO", Py_None, py_memviewc);
+}
+
+
+static PyObject *create_polars_series(PyObject *py_memviewc, int data_type, PyObject *py_index, PyObject *py_name, PyObject *py_objs) {
+    PyObject *py_in = NULL;
+    PyObject *py_out = NULL;
+
+    // data, index, dtype, name, copy
+    py_out = PyObject_CallFunction(PyFunc.polars_Series, "OO", py_name, py_memviewc);
+    if (!py_out) goto error;
+
+    // Add series to the output, remapping string values as needed
+    switch(data_type) {
+    case MYSQL_TYPE_VARCHAR:
+    case MYSQL_TYPE_JSON:
+    case MYSQL_TYPE_SET:
+    case MYSQL_TYPE_ENUM:
+    case MYSQL_TYPE_VAR_STRING:
+    case MYSQL_TYPE_STRING:
+    case MYSQL_TYPE_GEOMETRY:
+    case MYSQL_TYPE_TINY_BLOB:
+    case MYSQL_TYPE_MEDIUM_BLOB:
+    case MYSQL_TYPE_LONG_BLOB:
+    case MYSQL_TYPE_BLOB:
+    case -MYSQL_TYPE_VARCHAR:
+    case -MYSQL_TYPE_JSON:
+    case -MYSQL_TYPE_SET:
+    case -MYSQL_TYPE_ENUM:
+    case -MYSQL_TYPE_VAR_STRING:
+    case -MYSQL_TYPE_STRING:
+    case -MYSQL_TYPE_GEOMETRY:
+    case -MYSQL_TYPE_TINY_BLOB:
+    case -MYSQL_TYPE_MEDIUM_BLOB:
+    case -MYSQL_TYPE_LONG_BLOB:
+    case -MYSQL_TYPE_BLOB:
+        py_in = py_out;
+        py_out = PyObject_CallMethod(py_in, "replace", "O", py_objs);
+        if (!py_out) goto error;
+        break;
+    }
+
+exit:
+    Py_XDECREF(py_in);
+
+    return py_out;
+
+error:
+    Py_XDECREF(py_out);
+    py_out = NULL;
+
+    goto exit;
+}
+
+
+static PyObject *create_numpy_index(PyObject *py_memviewc) {
+    PyObject *py_out = NULL;
+    PyObject *py_args = NULL;
+    PyObject *py_kwargs = NULL;
+
+    py_args = PyTuple_New(1);
+    if (!py_args) goto error;
+    CHECKRC(PyTuple_SetItem(py_args, 0, py_memviewc));
+
+    py_kwargs = PyDict_New();
+    if (!py_kwargs) goto error;
+    CHECKRC(PyDict_SetItemString(py_kwargs, "copy", Py_False));
+
+    // data, index, dtype, name, copy
+    py_out = PyObject_Call(PyFunc.numpy_array, py_args, py_kwargs);
+    if (!py_out) goto error;
+
+exit:
+    Py_XDECREF(py_args);
+    Py_XDECREF(py_kwargs);
+
+    return py_out;
+
+error:
+    Py_XDECREF(py_out);
+    py_out = NULL;
+
+    goto exit;
+}
+
+
+static PyObject *create_numpy_array(PyObject *py_memviewc, int data_type, PyObject *py_index, PyObject *py_name, PyObject *py_objs) {
+    PyObject *py_in = NULL;
+    PyObject *py_out = NULL;
+    PyObject *py_args = NULL;
+    PyObject *py_kwargs = NULL;
+    PyObject *py_vec_func = NULL;
+
+    py_args = PyTuple_New(1);
+    if (!py_args) goto error;
+    CHECKRC(PyTuple_SetItem(py_args, 0, py_memviewc));
+    Py_INCREF(py_memviewc);
+
+    py_kwargs = PyDict_New();
+    if (!py_kwargs) goto error;
+    CHECKRC(PyDict_SetItemString(py_kwargs, "copy", Py_False));
+
+    // data, index, dtype, name, copy
+    py_out = PyObject_Call(PyFunc.numpy_array, py_args, py_kwargs);
+    if (!py_out) goto error;
+
+    // Add series to the output, remapping string values as needed
+    switch(data_type) {
+    case MYSQL_TYPE_VARCHAR:
+    case MYSQL_TYPE_JSON:
+    case MYSQL_TYPE_SET:
+    case MYSQL_TYPE_ENUM:
+    case MYSQL_TYPE_VAR_STRING:
+    case MYSQL_TYPE_STRING:
+    case MYSQL_TYPE_GEOMETRY:
+    case MYSQL_TYPE_TINY_BLOB:
+    case MYSQL_TYPE_MEDIUM_BLOB:
+    case MYSQL_TYPE_LONG_BLOB:
+    case MYSQL_TYPE_BLOB:
+    case -MYSQL_TYPE_VARCHAR:
+    case -MYSQL_TYPE_JSON:
+    case -MYSQL_TYPE_SET:
+    case -MYSQL_TYPE_ENUM:
+    case -MYSQL_TYPE_VAR_STRING:
+    case -MYSQL_TYPE_STRING:
+    case -MYSQL_TYPE_GEOMETRY:
+    case -MYSQL_TYPE_TINY_BLOB:
+    case -MYSQL_TYPE_MEDIUM_BLOB:
+    case -MYSQL_TYPE_LONG_BLOB:
+    case -MYSQL_TYPE_BLOB:
+        py_vec_func = PyObject_CallFunction(PyFunc.numpy_vectorize, "Os", PyObject_GetAttrString(py_objs, "get"), "O");
+        py_in = py_out;
+        py_out = PyObject_CallFunction(py_vec_func, "O", py_in);
+        if (!py_out) goto error;
+        break;
+    }
+
+exit:
+    Py_XDECREF(py_in);
+    Py_XDECREF(py_args);
+    Py_XDECREF(py_kwargs);
+    Py_XDECREF(py_vec_func);
+
+    return py_out;
+
+error:
+    Py_XDECREF(py_out);
+    py_out = NULL;
+
+    goto exit;
+}
+
+
+static PyObject *create_arrow_index(PyObject *py_memviewc) {
+    return PyObject_CallFunction(PyFunc.pyarrow_array, "O", py_memviewc);
+}
+
+
+static PyObject *create_pyarrow_array(PyObject *py_memviewc, int data_type, PyObject *py_index, PyObject *py_name, PyObject *py_objs) {
+    PyObject *py_out = NULL;
+    PyObject *py_arr = NULL;
+
+    py_arr = create_numpy_array(py_memviewc, data_type, py_index, py_name, py_objs);
+    if (!py_arr) goto error;
+
+    py_out = PyObject_CallFunction(PyFunc.pyarrow_array, "O", py_arr);
+    if (!py_out) goto error;
+
+exit:
+    Py_XDECREF(py_arr);
+
+    return py_out;
+
+error:
+    Py_XDECREF(py_out);
+    py_out = NULL;
+
+    goto exit;
+}
+
+
+static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *kwargs, int vector_type) {
+    PyObject *py_data = NULL;
+    PyObject *py_out = NULL;
+    PyObject *py_colspec = NULL;
+    PyObject *py_str = NULL;
+    PyObject *py_blob = NULL;
+    PyObject *py_memview = NULL;
+    PyObject *py_memviewc = NULL;
+    PyObject *py_ser = NULL;
+    PyObject *py_out_ser = NULL;
+    PyObject *py_index = NULL;
+    PyObject *py_objs = NULL;
+    Py_ssize_t length = 0;
+    uint8_t is_null = 0;
+    int8_t i8 = 0;
+    int16_t i16 = 0;
+    int32_t i32 = 0;
+    int64_t i64 = 0;
+    uint8_t u8 = 0;
+    uint16_t u16 = 0;
+    uint32_t u32 = 0;
+    uint64_t u64 = 0;
+    float flt = 0;
+    double dbl = 0;
+    int *ctypes = NULL;
+    PyObject **cnames = NULL;
+    char *data = NULL;
+    char *orig_data = NULL;
+    char *end = NULL;
+    unsigned long long n_cols = 0;
+    unsigned long long i = 0;
+    unsigned long long j = 0;
+    char *keywords[] = {"colspec", "data", NULL};
+    uint64_t n_rows = 0;
+    int *item_sizes = NULL;
+    char **data_formats = NULL;
+    void **out_cols = NULL;
+    int64_t *out_row_ids = NULL;
+
+    // Parse function args.
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO", keywords, &py_colspec, &py_data)) {
+        goto error;
+    }
+
+    CHECKRC(PyBytes_AsStringAndSize(py_data, &data, &length));
+    end = data + (unsigned long long)length;
+    orig_data = data;
+
+    // Get number of columns
+    n_cols = PyObject_Length(py_colspec);
+    if (n_cols == 0) {
+        goto error;
+    }
+
+    // Determine column types
+    ctypes = calloc(sizeof(int), n_cols);
+    if (!ctypes) goto error;
+    cnames = calloc(sizeof(PyObject*), n_cols);
+    if (!cnames) goto error;
+    for (i = 0; i < n_cols; i++) {
+        PyObject *py_cspec = PySequence_GetItem(py_colspec, i);
+        if (!py_cspec) goto error;
+        PyObject *py_ctype = PySequence_GetItem(py_cspec, 1);
+        if (!py_ctype) { Py_DECREF(py_cspec); goto error; }
+        PyObject *py_name = PySequence_GetItem(py_cspec, 0);
+        if (!py_name) { Py_DECREF(py_cspec); Py_DECREF(py_ctype); goto error; }
+        ctypes[i] = (int)PyLong_AsLong(py_ctype);
+        cnames[i] = py_name;
+        Py_DECREF(py_ctype);
+        Py_DECREF(py_cspec);
+        if (PyErr_Occurred()) { goto error; }
+    }
+
+    // Determine number of rows
+    item_sizes = malloc(sizeof(int) * n_cols);
+    if (!item_sizes) goto error;
+    data_formats = malloc(sizeof(char*) * n_cols);
+    if (!data_formats) goto error;
+    while (end > data) {
+        // Row ID
+        data += 8;
+
+        for (i = 0; i < n_cols; i++) {
+            // Null slot
+            data += 1;
+
+            // Data row
+            switch (ctypes[i]) {
+            case MYSQL_TYPE_NULL:
+                item_sizes[i] = 1;
+                data_formats[i] = "b";
+                data += 1;
+                break;
+
+            case MYSQL_TYPE_BIT:
+                // TODO
+                break;
+
+            case MYSQL_TYPE_TINY:
+            case -MYSQL_TYPE_TINY:
+                item_sizes[i] = 1;
+                data_formats[i] = (ctypes[i] < 0) ? "B" : "b";
+                data += 1;
+                break;
+
+            case MYSQL_TYPE_SHORT:
+            case -MYSQL_TYPE_SHORT:
+                item_sizes[i] = 2;
+                data_formats[i] = (ctypes[i] < 0) ? "H" : "h";
+                data += 2;
+                break;
+
+            case MYSQL_TYPE_LONG:
+            case -MYSQL_TYPE_LONG:
+            case MYSQL_TYPE_INT24:
+            case -MYSQL_TYPE_INT24:
+                item_sizes[i] = 4;
+                data_formats[i] = (ctypes[i] < 0) ? "L" : "l";
+                data += 4;
+                break;
+
+            case MYSQL_TYPE_LONGLONG:
+            case -MYSQL_TYPE_LONGLONG:
+                item_sizes[i] = 8;
+                data_formats[i] = (ctypes[i] < 0) ? "Q" : "q";
+                data += 8;
+                break;
+
+            case MYSQL_TYPE_FLOAT:
+                item_sizes[i] = 4;
+                data_formats[i] = "f";
+                data += 4;
+                break;
+
+            case MYSQL_TYPE_DOUBLE:
+                item_sizes[i] = 8;
+                data_formats[i] = "d";
+                data += 8;
+                break;
+
+            case MYSQL_TYPE_DECIMAL:
+            case MYSQL_TYPE_NEWDECIMAL:
+                // TODO
+                break;
+
+            case MYSQL_TYPE_DATE:
+            case MYSQL_TYPE_NEWDATE:
+                // TODO
+                break;
+
+            case MYSQL_TYPE_TIME:
+                // TODO
+                break;
+
+            case MYSQL_TYPE_DATETIME:
+                // TODO
+                break;
+
+            case MYSQL_TYPE_TIMESTAMP:
+                // TODO
+                break;
+
+            case MYSQL_TYPE_YEAR:
+                data += 2;
+                break;
+
+            case MYSQL_TYPE_VARCHAR:
+            case MYSQL_TYPE_JSON:
+            case MYSQL_TYPE_SET:
+            case MYSQL_TYPE_ENUM:
+            case MYSQL_TYPE_VAR_STRING:
+            case MYSQL_TYPE_STRING:
+            case MYSQL_TYPE_GEOMETRY:
+            case MYSQL_TYPE_TINY_BLOB:
+            case MYSQL_TYPE_MEDIUM_BLOB:
+            case MYSQL_TYPE_LONG_BLOB:
+            case MYSQL_TYPE_BLOB:
+                item_sizes[i] = 8;
+                data_formats[i] = "Q";
+                i64 = *(int64_t*)data;
+                data += 8;
+                data += i64;
+                break;
+
+            // Use negative to indicate binary
+            case -MYSQL_TYPE_VARCHAR:
+            case -MYSQL_TYPE_JSON:
+            case -MYSQL_TYPE_SET:
+            case -MYSQL_TYPE_ENUM:
+            case -MYSQL_TYPE_VAR_STRING:
+            case -MYSQL_TYPE_STRING:
+            case -MYSQL_TYPE_GEOMETRY:
+            case -MYSQL_TYPE_TINY_BLOB:
+            case -MYSQL_TYPE_MEDIUM_BLOB:
+            case -MYSQL_TYPE_LONG_BLOB:
+                item_sizes[i] = 8;
+                data_formats[i] = "Q";
+                i64 = *(int64_t*)data;
+                data += 8;
+                data += i64;
+                break;
+            }
+        }
+
+        n_rows += 1;
+    }
+
+    // Reset data pointer
+    data = orig_data;
+
+    // Allocate data columns
+    out_cols = malloc(n_cols * sizeof(char*));
+    if (!out_cols) goto error;
+    for (i = 0; i < n_cols; i++) {
+        out_cols[i] = malloc(item_sizes[i] * n_rows);
+    }
+
+    // Allocate row ID array
+    out_row_ids = malloc(sizeof(int64_t) * n_rows);
+    if (!out_row_ids) goto error;
+
+    // Create dict for strings/blobs
+    py_objs = PyDict_New();
+    if (!py_objs) goto error;
+    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(0), Py_None));
+
+    // Build output arrays
+    j = 0;
+    while (end > data) {
+        if (j >= n_rows) goto error;
+
+        out_row_ids[j] = *(int64_t*)data; data += 8;
+
+        for (i = 0; i < n_cols; i++) {
+            is_null = (data[0] == '\x01');
+            data += 1;
+
+            switch (ctypes[i]) {
+            case MYSQL_TYPE_NULL:
+                i8 = 0; data += 1;
+                memcpy(out_cols[i] + j * 1, &i8, 1);
+                break;
+
+            case MYSQL_TYPE_BIT:
+                // TODO
+                break;
+
+            case MYSQL_TYPE_TINY:
+                // TODO: missing values
+                i8 = (is_null) ? -127 : *(int8_t*)data; data += 1;
+                memcpy(out_cols[i] + j * 1, &i8, 1);
+                break;
+
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_TINY:
+                u8 = (is_null) ? 0 : *(uint8_t*)data; data += 1;
+                memcpy(out_cols[i] + j * 1, &u8, 1);
+                break;
+
+            case MYSQL_TYPE_SHORT:
+                i16 = (is_null) ? -32768 : *(int16_t*)data; data += 2;
+                memcpy(out_cols[i] + j * 2, &i16, 2);
+                break;
+
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_SHORT:
+                u16 = (is_null) ? 0 : *(uint16_t*)data; data += 2;
+                memcpy(out_cols[i] + j * 2, &u16, 2);
+                break;
+
+            case MYSQL_TYPE_LONG:
+            case MYSQL_TYPE_INT24:
+                i32 = (is_null) ? -2147483648 : *(int32_t*)data; data += 4;
+                memcpy(out_cols[i] + j * 4, &i32, 4);
+                break;
+
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_LONG:
+            case -MYSQL_TYPE_INT24:
+                u32 = (is_null) ? 0 : *(uint32_t*)data; data += 4;
+                memcpy(out_cols[i] + j * 4, &u32, 4);
+                break;
+
+            case MYSQL_TYPE_LONGLONG:
+                i64 = (is_null) ? -2^63 : *(int64_t*)data; data += 8;
+                memcpy(out_cols[i] + j * 8, &i64, 8);
+                break;
+
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_LONGLONG:
+                u64 = (is_null) ? 0 : *(uint64_t*)data; data += 8;
+                memcpy(out_cols[i] + j * 8, &u64, 8);
+                break;
+
+            case MYSQL_TYPE_FLOAT:
+                flt = (is_null) ? NAN : *(float*)data; data += 4;
+                memcpy(out_cols[i] + j * 4, &flt, 4);
+                break;
+
+            case MYSQL_TYPE_DOUBLE:
+                dbl = (is_null) ? NAN : *(double*)data; data += 8;
+                memcpy(out_cols[i] + j * 8, &dbl, 8);
+                break;
+
+            case MYSQL_TYPE_DECIMAL:
+            case MYSQL_TYPE_NEWDECIMAL:
+                // TODO
+                break;
+
+            case MYSQL_TYPE_DATE:
+            case MYSQL_TYPE_NEWDATE:
+                // TODO
+                break;
+
+            case MYSQL_TYPE_TIME:
+                // TODO
+                break;
+
+            case MYSQL_TYPE_DATETIME:
+                // TODO
+                break;
+
+            case MYSQL_TYPE_TIMESTAMP:
+                // TODO
+                break;
+
+            case MYSQL_TYPE_YEAR:
+                u16 = (is_null) ? 0 : *(uint16_t*)data; data += 2;
+                memcpy(out_cols[i] + j * 2, &u16, 2);
+                break;
+
+            case MYSQL_TYPE_VARCHAR:
+            case MYSQL_TYPE_JSON:
+            case MYSQL_TYPE_SET:
+            case MYSQL_TYPE_ENUM:
+            case MYSQL_TYPE_VAR_STRING:
+            case MYSQL_TYPE_STRING:
+            case MYSQL_TYPE_GEOMETRY:
+            case MYSQL_TYPE_TINY_BLOB:
+            case MYSQL_TYPE_MEDIUM_BLOB:
+            case MYSQL_TYPE_LONG_BLOB:
+            case MYSQL_TYPE_BLOB:
+                i64 = *(int64_t*)data; data += 8;
+                if (is_null) {
+                    u64 = 0;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                } else {
+                    py_str = PyUnicode_FromStringAndSize(data, (Py_ssize_t)i64);
+                    data += i64;
+                    if (!py_str) goto error;
+                    u64 = (uint64_t)py_str;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_str));
+                    Py_CLEAR(py_str);
+                }
+                break;
+
+            // Use negative to indicate binary
+            case -MYSQL_TYPE_VARCHAR:
+            case -MYSQL_TYPE_JSON:
+            case -MYSQL_TYPE_SET:
+            case -MYSQL_TYPE_ENUM:
+            case -MYSQL_TYPE_VAR_STRING:
+            case -MYSQL_TYPE_STRING:
+            case -MYSQL_TYPE_GEOMETRY:
+            case -MYSQL_TYPE_TINY_BLOB:
+            case -MYSQL_TYPE_MEDIUM_BLOB:
+            case -MYSQL_TYPE_LONG_BLOB:
+            case -MYSQL_TYPE_BLOB:
+                i64 = *(int64_t*)data; data += 8;
+                if (is_null) {
+                    u64 = 0;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                } else {
+                    py_blob = PyBytes_FromStringAndSize(data, (Py_ssize_t)i64);
+                    data += i64;
+                    if (!py_blob) goto error;
+                    u64 = (uint64_t)py_blob;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_blob));
+                    Py_CLEAR(py_blob);
+                }
+                break;
+
+            default:
+                goto error;
+            }
+        }
+
+        j += 1;
+    }
+
+    py_out = PyTuple_New(2);
+    if (!py_out) goto error;
+
+    py_out_ser = PyList_New(n_cols);
+    if (!py_out_ser) goto error;
+
+    // Create Series of row IDs
+    py_memview = PyMemoryView_FromMemory((char*)out_row_ids, n_rows * 8, PyBUF_WRITE);
+    if (!py_memview) goto error;
+
+    py_memviewc = PyObject_CallMethod(py_memview, "cast", "s", "Q");
+    Py_CLEAR(py_memview);
+    if (!py_memviewc) goto error;
+
+    switch (vector_type) {
+    case VECTOR_TYPE_PANDAS:
+        py_index = create_pandas_index(py_memviewc);
+        break;
+    case VECTOR_TYPE_NUMPY:
+        py_index = create_numpy_index(py_memviewc);
+        break;
+    case VECTOR_TYPE_ARROW:
+        py_index = create_arrow_index(py_memviewc);
+        break;
+    case VECTOR_TYPE_POLARS:
+        py_index = create_polars_index(py_memviewc);
+        break;
+    }
+    Py_CLEAR(py_memviewc);
+    if (!py_index) goto error;
+
+    CHECKRC(PyTuple_SetItem(py_out, 0, py_index));
+    CHECKRC(PyTuple_SetItem(py_out, 1, py_out_ser));
+
+    // Convert C buffers to pandas.Series
+    for (i = 0; i < n_cols; i++) {
+        py_memview = PyMemoryView_FromMemory(out_cols[i], n_rows * item_sizes[i], PyBUF_WRITE);
+        if (!py_memview) goto error;
+
+        py_memviewc = PyObject_CallMethod(py_memview, "cast", "s", data_formats[i]);
+        Py_CLEAR(py_memview);
+        if (!py_memviewc) goto error;
+
+        switch (vector_type) {
+        case VECTOR_TYPE_PANDAS:
+            py_ser = create_pandas_series(py_memviewc, ctypes[i], py_index, cnames[i], py_objs);
+            break;
+        case VECTOR_TYPE_NUMPY:
+            py_ser = create_numpy_array(py_memviewc, ctypes[i], py_index, cnames[i], py_objs);
+            break;
+        case VECTOR_TYPE_ARROW:
+            py_ser = create_pyarrow_array(py_memviewc, ctypes[i], py_index, cnames[i], py_objs);
+            break;
+        case VECTOR_TYPE_POLARS:
+            py_ser = create_polars_series(py_memviewc, ctypes[i], py_index, cnames[i], py_objs);
+            break;
+        }
+
+        Py_CLEAR(py_memviewc);
+        if (!py_ser) goto error;
+
+        CHECKRC(PyList_SetItem(py_out_ser, i, py_ser));
+
+        py_ser = NULL;
+    }
+
+exit:
+    if (ctypes) free(ctypes);
+    if (cnames) {
+        for (i = 0; i < n_cols; i++) {
+            Py_XDECREF(cnames[i]);
+        }
+        free(cnames);
+    }
+    if (out_cols) free(out_cols);
+    if (data_formats) free(data_formats);
+    if (item_sizes) free(item_sizes);
+
+    Py_XDECREF(py_str);
+    Py_XDECREF(py_blob);
+    Py_XDECREF(py_objs);
+    Py_XDECREF(py_memview);
+    Py_XDECREF(py_memviewc);
+    Py_XDECREF(py_ser);
+
+    return py_out;
+
+error:
+    Py_XDECREF(py_out);
+    py_out = NULL;
+
+    goto exit;
+}
+
+
+int ensure_pandas() {
+    if (PyFunc.pandas_Series) goto exit;
+
+    // Import pandas if it exists
+    PyObject *pandas_mod = PyImport_ImportModule("pandas");
+    if (!pandas_mod) goto error;
+
+    PyFunc.pandas_Series = PyObject_GetAttr(pandas_mod, PyStr.Series);
+    if (!PyFunc.pandas_Series) goto error;
+
+exit:
+    return 0;
+
+error:
+    return -1;
+}
+
+
+int ensure_polars() {
+    if (PyFunc.polars_Series) goto exit;
+
+    // Import polars if it exists
+    PyObject *polars_mod = PyImport_ImportModule("polars");
+    if (!polars_mod) goto error;
+
+    PyFunc.polars_Series = PyObject_GetAttr(polars_mod, PyStr.Series);
+    if (!PyFunc.polars_Series) goto error;
+
+exit:
+    return 0;
+
+error:
+    return -1;
+}
+
+
+int ensure_pyarrow() {
+    if (PyFunc.pyarrow_array) goto exit;
+
+    // Import pyarrow if it exists
+    PyObject *pyarrow_mod = PyImport_ImportModule("pyarrow");
+    if (!pyarrow_mod) goto error;
+
+    PyFunc.pyarrow_array = PyObject_GetAttr(pyarrow_mod, PyStr.array);
+    if (!PyFunc.pyarrow_array) goto error;
+
+exit:
+    return 0;
+
+error:
+    return -1;
+}
+
+
+int ensure_numpy() {
+    if (PyFunc.numpy_array && PyFunc.numpy_vectorize) goto exit;
+
+    // Import numpy if it exists
+    PyObject *numpy_mod = PyImport_ImportModule("numpy");
+    if (!numpy_mod) goto error;
+
+    PyFunc.numpy_array = PyObject_GetAttr(numpy_mod, PyStr.array);
+    if (!PyFunc.numpy_array) goto error;
+
+    PyFunc.numpy_vectorize = PyObject_GetAttr(numpy_mod, PyStr.vectorize);
+    if (!PyFunc.numpy_vectorize) goto error;
+
+exit:
+    return 0;
+
+error:
+    return -1;
+}
+
+
+static PyObject *load_rowdat_1_pandas(PyObject *self, PyObject *args, PyObject *kwargs) {
+    if (ensure_pandas() < 0) return NULL;
+    return load_rowdat_1_vector(self, args, kwargs, VECTOR_TYPE_PANDAS);
+}
+
+
+static PyObject *load_rowdat_1_polars(PyObject *self, PyObject *args, PyObject *kwargs) {
+    if (ensure_polars() < 0) return NULL;
+    return load_rowdat_1_vector(self, args, kwargs, VECTOR_TYPE_POLARS);
+}
+
+
+static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *kwargs) {
+    if (ensure_numpy() < 0) return NULL;
+    return load_rowdat_1_vector(self, args, kwargs, VECTOR_TYPE_NUMPY);
+}
+
+
+static PyObject *load_rowdat_1_arrow(PyObject *self, PyObject *args, PyObject *kwargs) {
+    if (ensure_pyarrow() < 0) return NULL;
+    return load_rowdat_1_vector(self, args, kwargs, VECTOR_TYPE_ARROW);
+}
+
+
 static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs) {
     PyObject *py_data = NULL;
     PyObject *py_out = NULL;
@@ -2063,6 +2906,7 @@ error:
     goto exit;
 }
 
+
 static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs) {
     PyObject *py_returns = NULL;
     PyObject *py_data = NULL;
@@ -2361,10 +3205,15 @@ error:
     goto exit;
 }
 
+
 static PyMethodDef PyMySQLAccelMethods[] = {
     {"read_rowdata_packet", (PyCFunction)read_rowdata_packet, METH_VARARGS | METH_KEYWORDS, "PyMySQL row data packet reader"},
-    {"load_rowdat_1", (PyCFunction)load_rowdat_1, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions"},
     {"dump_rowdat_1", (PyCFunction)dump_rowdat_1, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 formatter for external functions"},
+    {"load_rowdat_1", (PyCFunction)load_rowdat_1, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions"},
+    {"load_rowdat_1_pandas", (PyCFunction)load_rowdat_1_pandas, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions which creates pandas.Series"},
+    {"load_rowdat_1_numpy", (PyCFunction)load_rowdat_1_numpy, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions which creates numpy.arrays"},
+    {"load_rowdat_1_arrow", (PyCFunction)load_rowdat_1_arrow, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions which creates pyarrow.arrays"},
+    {"load_rowdat_1_polars", (PyCFunction)load_rowdat_1_polars, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions which creates polars.Series"},
     {NULL, NULL, 0, NULL}
 };
 
@@ -2423,6 +3272,9 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     PyStr.rows = PyUnicode_FromString("rows");
     PyStr.namedtuple = PyUnicode_FromString("namedtuple");
     PyStr.Row = PyUnicode_FromString("Row");
+    PyStr.Series = PyUnicode_FromString("Series");
+    PyStr.array = PyUnicode_FromString("array");
+    PyStr.vectorize = PyUnicode_FromString("vectorize");
 
     PyObject *decimal_mod = PyImport_ImportModule("decimal");
     if (!decimal_mod) goto error;

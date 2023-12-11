@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.Stage.is\_dir
+================================================
+.. currentmodule:: singlestoredb.management.workspace
+.. automethod:: Stage.is_dir

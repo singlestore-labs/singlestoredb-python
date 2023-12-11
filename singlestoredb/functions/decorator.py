@@ -34,6 +34,7 @@ def udf(
     replace: bool = False,
     remote_service: Optional[str] = None,
     link: Optional[str] = None,
+    data_format: Optional[str] = None,
 ) -> Callable[..., Any]:
     """
     Apply attributes to a UDF.
@@ -89,6 +90,8 @@ def udf(
         environment, this URL is generated automatically.
     link : str, optional
         Name of link to use to connect to remote service
+    data_format : str, optional
+        The data format of each parameter: python, pandas, arrow, polars
 
     Returns
     -------
@@ -136,10 +139,7 @@ def udf(
     if returns is not None and not isinstance(returns, str):
         raise TypeError(f'unrecognized return type: {returns}')
 
-    def wrapper(*args: Any, **kwargs: Any) -> Callable[..., Any]:
-        return func(*args, **kwargs)  # type: ignore
-
-    wrapper._singlestoredb_attrs = {  # type: ignore
+    _singlestoredb_attrs = {  # type: ignore
         k: v for k, v in dict(
             name=name,
             database=database,
@@ -154,12 +154,30 @@ def udf(
             replace=bool(replace),
             remote_service=remote_service,
             link=link,
+            data_format=data_format,
         ).items() if v is not None
     }
 
+    # No func was specified, this is an uncalled decorator that will get
+    # called later, so the wrapper much be created with the func passed
+    # in at that time.
     if func is None:
         def decorate(func: Callable[..., Any]) -> Callable[..., Any]:
+            def wrapper(*args: Any, **kwargs: Any) -> Callable[..., Any]:
+                return func(*args, **kwargs)  # type: ignore
+            wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
             return functools.wraps(func)(wrapper)
         return decorate
 
+    def wrapper(*args: Any, **kwargs: Any) -> Callable[..., Any]:
+        return func(*args, **kwargs)  # type: ignore
+
+    wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
+
     return functools.wraps(func)(wrapper)
+
+
+udf.pandas = functools.partial(udf, data_format='pandas')  # type: ignore
+udf.polars = functools.partial(udf, data_format='polars')  # type: ignore
+udf.arrow = functools.partial(udf, data_format='arrow')  # type: ignore
+udf.numpy = functools.partial(udf, data_format='numpy')  # type: ignore

@@ -34,7 +34,7 @@ v0.9.1 - October 17, 2023
 
 v0.9.0 - October 16, 2023
 -------------------------
-* Add Stages to Management API
+* Add Stage to Management API
 
 v0.8.9 - October 4, 2023
 ------------------------

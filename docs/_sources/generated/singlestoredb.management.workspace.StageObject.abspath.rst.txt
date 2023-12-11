@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.StageObject.abspath
+======================================================
+.. currentmodule:: singlestoredb.management.workspace
+.. automethod:: StageObject.abspath

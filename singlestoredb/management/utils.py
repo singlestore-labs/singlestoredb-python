@@ -11,8 +11,12 @@ from typing import Optional
 from typing import SupportsIndex
 from typing import TypeVar
 from typing import Union
+from urllib.parse import urlparse
+
+import jwt
 
 from .. import converters
+from ..config import get_option
 
 JSON = Union[str, List[str], Dict[str, 'JSON']]
 JSONObj = Dict[str, JSON]
@@ -25,6 +29,39 @@ if sys.version_info < (3, 10):
 else:
     PathLike = Union[str, os.PathLike[str]]
     PathLikeABC = os.PathLike[str]
+
+
+def get_token() -> Optional[str]:
+    """Return the token for the Management API."""
+    # See if an API key is configured
+    tok = get_option('management.token')
+    if tok:
+        return tok
+
+    # See if the connection URL contains a JWT
+    url = get_option('host')
+    if not url:
+        return None
+
+    urlp = urlparse(url, scheme='singlestoredb', allow_fragments=True)
+    if urlp.password:
+        try:
+            jwt.decode(urlp.password, options={'verify_signature': False})
+            return urlp.password
+        except jwt.DecodeError:
+            pass
+
+    # Didn't find a key anywhere
+    return None
+
+
+def get_organization() -> Optional[str]:
+    """Return the organization for the current token or environment."""
+    org = os.environ.get('SINGLESTOREDB_ORGANIZATION')
+    if org:
+        return org
+
+    return None
 
 
 class NamedList(List[T]):

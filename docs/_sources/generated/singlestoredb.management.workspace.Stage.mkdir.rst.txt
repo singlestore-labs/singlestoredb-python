@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.Stage.mkdir
+==============================================
+.. currentmodule:: singlestoredb.management.workspace
+.. automethod:: Stage.mkdir

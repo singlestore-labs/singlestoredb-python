@@ -33,7 +33,7 @@ class TestCluster(unittest.TestCase):
         cls.manager = s2.manage_cluster()
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20)
+        cls.password = secrets.token_urlsafe(20) + '-x&'
 
         cls.cluster = cls.manager.create_cluster(
             clean_name('cm-test-{}'.format(secrets.token_urlsafe(20)[:20])),
@@ -362,7 +362,7 @@ class TestWorkspace(unittest.TestCase):
 
 
 @pytest.mark.management
-class TestStages(unittest.TestCase):
+class TestStage(unittest.TestCase):
 
     manager = None
     wg = None
@@ -393,7 +393,7 @@ class TestStages(unittest.TestCase):
         cls.password = None
 
     def test_upload_file(self):
-        st = self.wg.stages
+        st = self.wg.stage
 
         root = st.info('')
         assert str(root.path) == '.'
@@ -439,7 +439,7 @@ class TestStages(unittest.TestCase):
         assert f.type == 'file'
 
     def test_open(self):
-        st = self.wg.stages
+        st = self.wg.stage
 
         # See if error is raised for non-existent file
         with self.assertRaises(s2.ManagementError):
@@ -498,7 +498,7 @@ class TestStages(unittest.TestCase):
         assert txt == open(TEST_DIR / 'test.sql').read()
 
     def test_obj_open(self):
-        st = self.wg.stages
+        st = self.wg.stage
 
         # Load test file
         f = st.upload_file(TEST_DIR / 'test.sql', 'obj_open_test.sql')
@@ -538,7 +538,7 @@ class TestStages(unittest.TestCase):
         assert txt == open(TEST_DIR / 'test.sql').read()
 
     def test_os_directories(self):
-        st = self.wg.stages
+        st = self.wg.stage
 
         # mkdir
         st.mkdir('mkdir_test_1')
@@ -613,7 +613,7 @@ class TestStages(unittest.TestCase):
             st.removedirs('mkdir_test.sql')
 
     def test_os_files(self):
-        st = self.wg.stages
+        st = self.wg.stage
 
         st.upload_file(TEST_DIR / 'test.sql', 'files_test.sql')
         st.upload_file(TEST_DIR / 'test.sql', 'files_test_1/nest_1/nested_files_test.sql')
@@ -647,7 +647,7 @@ class TestStages(unittest.TestCase):
         assert not st.is_dir('files_test_1')
 
     def test_os_rename(self):
-        st = self.wg.stages
+        st = self.wg.stage
 
         st.upload_file(TEST_DIR / 'test.sql', 'rename_test.sql')
         st.upload_file(
@@ -712,8 +712,8 @@ class TestStages(unittest.TestCase):
             'rename_test_2/nest_1/nested_rename_test_3.sql', overwrite=True,
         )
 
-    def test_stages_object(self):
-        st = self.wg.stages
+    def test_stage_object(self):
+        st = self.wg.stage
 
         f1 = st.upload_file(TEST_DIR / 'test.sql', 'obj_test.sql')
         f2 = st.upload_file(TEST_DIR / 'test.sql', 'obj_test/nest_1/obj_test.sql')

@@ -55,8 +55,8 @@ for file in sorted(txt_files):
         # Change ShowAccessor to Connection.show
         txt = re.sub(r'>ShowAccessor\.', r'>Connection.show.', txt)
 
-        # Change workspace.Stages to workspace.stages
-        txt = re.sub(r'>workspace\.Stages\.', r'>workspace.stages.', txt)
+        # Change workspace.Stage to workspace.stage
+        txt = re.sub(r'>workspace\.Stage\.', r'>workspace.stage.', txt)
 
         # Fix class / method links
         txt = re.sub(

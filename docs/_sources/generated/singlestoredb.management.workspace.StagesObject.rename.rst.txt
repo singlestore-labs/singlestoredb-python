@@ -1,4 +1,0 @@
-﻿singlestoredb.management.workspace.StagesObject.rename
-======================================================
-.. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StagesObject.rename

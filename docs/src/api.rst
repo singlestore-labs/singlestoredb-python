@@ -190,7 +190,7 @@ or by retrieving an element from :attr:`WorkspaceManager.workspace_groups`.
 
    WorkspaceGroup
    WorkspaceGroup.workspaces
-   WorkspaceGroup.stages
+   WorkspaceGroup.stage
    WorkspaceGroup.create_workspace
    WorkspaceGroup.refresh
    WorkspaceGroup.update
@@ -226,11 +226,11 @@ Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
    Region
 
 
-Stages
-......
+Stage
+.....
 
-To interact with Stages, use the :attr:`WorkspaceManager.stages` attribute.
-It will return a :class:`Stages` object which defines the following
+To interact with Stage, use the :attr:`WorkspaceManager.stage` attribute.
+It will return a :class:`Stage` object which defines the following
 methods and attributes.
 
 .. currentmodule:: singlestoredb.management.workspace
@@ -238,51 +238,51 @@ methods and attributes.
 .. autosummary::
    :toctree: generated/
 
-   Stages
-   Stages.open
-   Stages.download_file
-   Stages.download_folder
-   Stages.upload_file
-   Stages.upload_folder
-   Stages.info
-   Stages.listdir
-   Stages.exists
-   Stages.is_dir
-   Stages.is_file
-   Stages.mkdir
-   Stages.rename
-   Stages.remove
-   Stages.removedirs
-   Stages.rmdir
+   Stage
+   Stage.open
+   Stage.download_file
+   Stage.download_folder
+   Stage.upload_file
+   Stage.upload_folder
+   Stage.info
+   Stage.listdir
+   Stage.exists
+   Stage.is_dir
+   Stage.is_file
+   Stage.mkdir
+   Stage.rename
+   Stage.remove
+   Stage.removedirs
+   Stage.rmdir
 
 
-StagesObject
-............
+StageObject
+...........
 
-:class:`StagesObject`s are returned by the :meth:`StagesObject.upload_file`
-:meth:`StagesObject.upload_folder`, :meth:`StagesObject.mkdir`,
-:meth:`StagesObject.rename`, and :meth:`StagesObject.info` methods.
+:class:`StageObject`s are returned by the :meth:`StageObject.upload_file`
+:meth:`StageObject.upload_folder`, :meth:`StageObject.mkdir`,
+:meth:`StageObject.rename`, and :meth:`StageObject.info` methods.
 
 .. currentmodule:: singlestoredb.management.workspace
 
 .. autosummary::
    :toctree: generated/
 
-   StagesObject
-   StagesObject.open
-   StagesObject.download
-   StagesObject.exists
-   StagesObject.is_dir
-   StagesObject.is_file
-   StagesObject.abspath
-   StagesObject.basename
-   StagesObject.dirname
-   StagesObject.getmtime
-   StagesObject.getctime
-   StagesObject.rename
-   StagesObject.remove
-   StagesObject.removedirs
-   StagesObject.rmdir
+   StageObject
+   StageObject.open
+   StageObject.download
+   StageObject.exists
+   StageObject.is_dir
+   StageObject.is_file
+   StageObject.abspath
+   StageObject.basename
+   StageObject.dirname
+   StageObject.getmtime
+   StageObject.getctime
+   StageObject.rename
+   StageObject.remove
+   StageObject.removedirs
+   StageObject.rmdir
 
 
 Configuration

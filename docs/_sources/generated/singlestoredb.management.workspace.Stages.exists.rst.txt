@@ -1,4 +1,0 @@
-﻿singlestoredb.management.workspace.Stages.exists
-================================================
-.. currentmodule:: singlestoredb.management.workspace
-.. automethod:: Stages.exists

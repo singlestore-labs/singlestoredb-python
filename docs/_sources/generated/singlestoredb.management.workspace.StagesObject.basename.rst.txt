@@ -1,4 +1,0 @@
-﻿singlestoredb.management.workspace.StagesObject.basename
-========================================================
-.. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StagesObject.basename

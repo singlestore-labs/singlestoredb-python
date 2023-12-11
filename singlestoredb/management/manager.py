@@ -14,6 +14,20 @@ import requests
 
 from .. import config
 from ..exceptions import ManagementError
+from .utils import get_organization
+from .utils import get_token
+
+
+def set_organization(kwargs: Dict[str, Any]) -> None:
+    """Set the organization ID in the dictionary."""
+    if kwargs.get('params', {}).get('organizationID', None):
+        return
+
+    org = get_organization()
+    if org:
+        if 'params' not in kwargs:
+            kwargs['params'] = {}
+        kwargs['params']['organizationID'] = org
 
 
 class Manager(object):
@@ -30,12 +44,11 @@ class Manager(object):
 
     def __init__(
         self, access_token: Optional[str] = None, version: Optional[str] = None,
-        base_url: Optional[str] = None,
+        base_url: Optional[str] = None, *, organization_id: Optional[str] = None,
     ):
         from .. import __version__ as client_version
         access_token = (
-            access_token or
-            config.get_option('management.token')
+            access_token or get_token()
         )
         if not access_token:
             raise ManagementError(msg='No management token was configured.')
@@ -51,6 +64,8 @@ class Manager(object):
             version or type(self).default_version,
         ) + '/'
         self._params: Dict[str, str] = {}
+        if organization_id:
+            self._params['organizationID'] = organization_id
 
     def _check(
         self, res: requests.Response, url: str, params: Dict[str, Any],
@@ -103,6 +118,7 @@ class Manager(object):
         """
         if self._params:
             kwargs['params'] = self._params
+        set_organization(kwargs)
         return self._check(
             self._sess.get(
                 urljoin(self._base_url, path),
@@ -131,6 +147,7 @@ class Manager(object):
         """
         if self._params:
             kwargs['params'] = self._params
+        set_organization(kwargs)
         return self._check(
             self._sess.post(
                 urljoin(self._base_url, path),
@@ -159,6 +176,7 @@ class Manager(object):
         """
         if self._params:
             kwargs['params'] = self._params
+        set_organization(kwargs)
         return self._check(
             self._sess.put(
                 urljoin(self._base_url, path),
@@ -187,6 +205,7 @@ class Manager(object):
         """
         if self._params:
             kwargs['params'] = self._params
+        set_organization(kwargs)
         return self._check(
             self._sess.delete(
                 urljoin(self._base_url, path),
@@ -215,6 +234,7 @@ class Manager(object):
         """
         if self._params:
             kwargs['params'] = self._params
+        set_organization(kwargs)
         return self._check(
             self._sess.patch(
                 urljoin(self._base_url, path),

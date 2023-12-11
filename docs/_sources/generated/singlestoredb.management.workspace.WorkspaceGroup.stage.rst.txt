@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.WorkspaceGroup.stage
+=======================================================
+.. currentmodule:: singlestoredb.management.workspace
+.. autoproperty:: WorkspaceGroup.stage

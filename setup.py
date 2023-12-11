@@ -30,8 +30,8 @@ class bdist_wheel_abi3(bdist_wheel):
             if universal2_flags:
                 plat = plat.replace('x86_64', 'universal2')
 
-            # on CPython, our wheels are abi3 and compatible back to 3.6
-            return 'cp36', 'abi3', plat
+            # on CPython, our wheels are abi3 and compatible back to 3.8
+            return 'cp38', 'abi3', plat
 
         return python, abi, plat
 

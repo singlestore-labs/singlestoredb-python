@@ -1,4 +1,0 @@
-﻿singlestoredb.management.workspace.Stages.upload\_file
-======================================================
-.. currentmodule:: singlestoredb.management.workspace
-.. automethod:: Stages.upload_file

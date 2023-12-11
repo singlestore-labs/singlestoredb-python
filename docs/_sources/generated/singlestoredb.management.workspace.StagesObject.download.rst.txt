@@ -1,4 +1,0 @@
-﻿singlestoredb.management.workspace.StagesObject.download
-========================================================
-.. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StagesObject.download

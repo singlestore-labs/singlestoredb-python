@@ -1,4 +1,0 @@
-﻿singlestoredb.management.workspace.StagesObject.dirname
-=======================================================
-.. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StagesObject.dirname

@@ -427,6 +427,8 @@ def manage_cluster(
     access_token: Optional[str] = None,
     version: str = ClusterManager.default_version,
     base_url: str = ClusterManager.default_base_url,
+    *,
+    organization_id: Optional[str] = None,
 ) -> ClusterManager:
     """
     Retrieve a SingleStoreDB cluster manager.
@@ -439,6 +441,8 @@ def manage_cluster(
         Version of the API to use
     base_url : str, optional
         Base URL of the cluster management API
+    organization_id: str, optional
+        ID of organization, if using a JWT for authentication
 
     Returns
     -------
@@ -450,4 +454,7 @@ def manage_cluster(
         'use manage_workspaces instead.',
         category=DeprecationWarning,
     )
-    return ClusterManager(access_token=access_token, base_url=base_url, version=version)
+    return ClusterManager(
+        access_token=access_token, base_url=base_url,
+        version=version, organization_id=organization_id,
+    )

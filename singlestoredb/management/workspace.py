@@ -31,12 +31,12 @@ from .utils import to_datetime
 from .utils import vars_to_str
 
 
-class StagesObject(object):
+class StageObject(object):
     """
-    Stages file / folder object.
+    Stage file / folder object.
 
     This object is not instantiated directly. It is used in the results
-    of various operations in ``WorkspaceGroup.stages`` methods.
+    of various operations in ``WorkspaceGroup.stage`` methods.
 
     """
 
@@ -83,27 +83,27 @@ class StagesObject(object):
         #: Contents of a directory
         self.content: List[str] = content or []
 
-        self._stages: Optional[Stages] = None
+        self._stage: Optional[Stage] = None
 
     @classmethod
     def from_dict(
         cls,
         obj: Dict[str, Any],
-        stages: Stages,
-    ) -> StagesObject:
+        stage: Stage,
+    ) -> StageObject:
         """
-        Construct a StagesObject from a dictionary of values.
+        Construct a StageObject from a dictionary of values.
 
         Parameters
         ----------
         obj : dict
             Dictionary of values
-        stages : Stages
-            Stages object to use as the parent
+        stage : Stage
+            Stage object to use as the parent
 
         Returns
         -------
-        :class:`StagesObject`
+        :class:`StageObject`
 
         """
         out = cls(
@@ -117,7 +117,7 @@ class StagesObject(object):
             last_modified=to_datetime(obj['last_modified']),
             writable=bool(obj['writable']),
         )
-        out._stages = stages
+        out._stage = stage
         return out
 
     def __str__(self) -> str:
@@ -151,15 +151,15 @@ class StagesObject(object):
 
         Returns
         -------
-        StagesObjectBytesReader - 'rb' or 'b' mode
-        StagesObjectBytesWriter - 'wb' or 'xb' mode
-        StagesObjectTextReader - 'r' or 'rt' mode
-        StagesObjectTextWriter - 'w', 'x', 'wt' or 'xt' mode
+        StageObjectBytesReader - 'rb' or 'b' mode
+        StageObjectBytesWriter - 'wb' or 'xb' mode
+        StageObjectTextReader - 'r' or 'rt' mode
+        StageObjectTextWriter - 'w', 'x', 'wt' or 'xt' mode
 
         """
-        if self._stages is None:
+        if self._stage is None:
             raise ManagementError(
-                msg='No Stages object is associated with this object.',
+                msg='No Stage object is associated with this object.',
             )
 
         if self.is_dir():
@@ -167,7 +167,7 @@ class StagesObject(object):
                 f'directories can not be read or written: {self.path}',
             )
 
-        return self._stages.open(self.path, mode=mode, encoding=encoding)
+        return self._stage.open(self.path, mode=mode, encoding=encoding)
 
     def download(
         self,
@@ -193,12 +193,12 @@ class StagesObject(object):
         bytes or str or None
 
         """
-        if self._stages is None:
+        if self._stage is None:
             raise ManagementError(
-                msg='No Stages object is associated with this object.',
+                msg='No Stage object is associated with this object.',
             )
 
-        return self._stages.download_file(
+        return self._stage.download_file(
             self.path, local_path=local_path,
             overwrite=overwrite, encoding=encoding,
         )
@@ -207,30 +207,30 @@ class StagesObject(object):
 
     def remove(self) -> None:
         """Delete the stage file."""
-        if self._stages is None:
+        if self._stage is None:
             raise ManagementError(
-                msg='No Stages object is associated with this object.',
+                msg='No Stage object is associated with this object.',
             )
 
-        self._stages.remove(self.path)
+        self._stage.remove(self.path)
 
     def rmdir(self) -> None:
         """Delete the empty stage directory."""
-        if self._stages is None:
+        if self._stage is None:
             raise ManagementError(
-                msg='No Stages object is associated with this object.',
+                msg='No Stage object is associated with this object.',
             )
 
-        self._stages.rmdir(self.path)
+        self._stage.rmdir(self.path)
 
     def removedirs(self) -> None:
         """Delete the stage directory recursively."""
-        if self._stages is None:
+        if self._stage is None:
             raise ManagementError(
-                msg='No Stages object is associated with this object.',
+                msg='No Stage object is associated with this object.',
             )
 
-        self._stages.removedirs(self.path)
+        self._stage.removedirs(self.path)
 
     def rename(self, new_path: PathLike, *, overwrite: bool = False) -> None:
         """
@@ -244,22 +244,22 @@ class StagesObject(object):
             Should path be overwritten if it already exists?
 
         """
-        if self._stages is None:
+        if self._stage is None:
             raise ManagementError(
-                msg='No Stages object is associated with this object.',
+                msg='No Stage object is associated with this object.',
             )
-        out = self._stages.rename(self.path, new_path, overwrite=overwrite)
+        out = self._stage.rename(self.path, new_path, overwrite=overwrite)
         self.name = out.name
         self.path = out.path
         return None
 
     def exists(self) -> bool:
         """Does the file / folder exist?"""
-        if self._stages is None:
+        if self._stage is None:
             raise ManagementError(
-                msg='No Stages object is associated with this object.',
+                msg='No Stage object is associated with this object.',
             )
-        return self._stages.exists(self.path)
+        return self._stage.exists(self.path)
 
     def is_dir(self) -> bool:
         """Is the stage object a directory?"""
@@ -294,48 +294,48 @@ class StagesObject(object):
         return self.created_at.timestamp()
 
 
-class StagesObjectTextWriter(io.StringIO):
-    """StringIO wrapper for writing to Stages."""
+class StageObjectTextWriter(io.StringIO):
+    """StringIO wrapper for writing to Stage."""
 
-    def __init__(self, buffer: Optional[str], stages: Stages, stage_path: PathLike):
-        self._stages = stages
+    def __init__(self, buffer: Optional[str], stage: Stage, stage_path: PathLike):
+        self._stage = stage
         self._stage_path = stage_path
         super().__init__(buffer)
 
     def close(self) -> None:
         """Write the content to the stage path."""
-        self._stages._upload(self.getvalue(), self._stage_path)
+        self._stage._upload(self.getvalue(), self._stage_path)
         super().close()
 
 
-class StagesObjectTextReader(io.StringIO):
-    """StringIO wrapper for reading from Stages."""
+class StageObjectTextReader(io.StringIO):
+    """StringIO wrapper for reading from Stage."""
 
 
-class StagesObjectBytesWriter(io.BytesIO):
-    """BytesIO wrapper for writing to Stages."""
+class StageObjectBytesWriter(io.BytesIO):
+    """BytesIO wrapper for writing to Stage."""
 
-    def __init__(self, buffer: bytes, stages: Stages, stage_path: PathLike):
-        self._stages = stages
+    def __init__(self, buffer: bytes, stage: Stage, stage_path: PathLike):
+        self._stage = stage
         self._stage_path = stage_path
         super().__init__(buffer)
 
     def close(self) -> None:
         """Write the content to the stage path."""
-        self._stages._upload(self.getvalue(), self._stage_path)
+        self._stage._upload(self.getvalue(), self._stage_path)
         super().close()
 
 
-class StagesObjectBytesReader(io.BytesIO):
-    """BytesIO wrapper for reading from Stages."""
+class StageObjectBytesReader(io.BytesIO):
+    """BytesIO wrapper for reading from Stage."""
 
 
-class Stages(object):
+class Stage(object):
     """
-    Stages manager.
+    Stage manager.
 
     This object is not instantiated directly.
-    It is returned by ``WorkspaceGroup.stages``.
+    It is returned by ``WorkspaceGroup.stage``.
 
     """
 
@@ -369,10 +369,10 @@ class Stages(object):
 
         Returns
         -------
-        StagesObjectBytesReader - 'rb' or 'b' mode
-        StagesObjectBytesWriter - 'wb' or 'xb' mode
-        StagesObjectTextReader - 'r' or 'rt' mode
-        StagesObjectTextWriter - 'w', 'x', 'wt' or 'xt' mode
+        StageObjectBytesReader - 'rb' or 'b' mode
+        StageObjectBytesWriter - 'wb' or 'xb' mode
+        StageObjectTextReader - 'r' or 'rt' mode
+        StageObjectTextWriter - 'w', 'x', 'wt' or 'xt' mode
 
         """
         if '+' in mode or 'a' in mode:
@@ -385,19 +385,19 @@ class Stages(object):
                     raise FileExistsError(f'stage path already exists: {stage_path}')
                 self.remove(stage_path)
             if 'b' in mode:
-                return StagesObjectBytesWriter(b'', self, stage_path)
-            return StagesObjectTextWriter('', self, stage_path)
+                return StageObjectBytesWriter(b'', self, stage_path)
+            return StageObjectTextWriter('', self, stage_path)
 
         if 'r' in mode:
             content = self.download_file(stage_path)
             if isinstance(content, bytes):
                 if 'b' in mode:
-                    return StagesObjectBytesReader(content)
+                    return StageObjectBytesReader(content)
                 encoding = 'utf-8' if encoding is None else encoding
-                return StagesObjectTextReader(content.decode(encoding))
+                return StageObjectTextReader(content.decode(encoding))
 
             if isinstance(content, str):
-                return StagesObjectTextReader(content)
+                return StageObjectTextReader(content)
 
             raise ValueError(f'unrecognized file content type: {type(content)}')
 
@@ -409,7 +409,7 @@ class Stages(object):
         stage_path: PathLike,
         *,
         overwrite: bool = False,
-    ) -> StagesObject:
+    ) -> StageObject:
         """
         Upload a local file.
 
@@ -447,7 +447,7 @@ class Stages(object):
         recursive: bool = True,
         include_root: bool = False,
         ignore: Optional[Union[PathLike, List[PathLike]]] = None,
-    ) -> StagesObject:
+    ) -> StageObject:
         """
         Upload a folder recursively.
 
@@ -502,7 +502,7 @@ class Stages(object):
         stage_path: PathLike,
         *,
         overwrite: bool = False,
-    ) -> StagesObject:
+    ) -> StageObject:
         """
         Upload content to a stage file.
 
@@ -529,7 +529,7 @@ class Stages(object):
 
         return self.info(stage_path)
 
-    def mkdir(self, stage_path: PathLike, overwrite: bool = False) -> StagesObject:
+    def mkdir(self, stage_path: PathLike, overwrite: bool = False) -> StageObject:
         """
         Make a directory in the stage.
 
@@ -542,7 +542,7 @@ class Stages(object):
 
         Returns
         -------
-        StagesObject
+        StageObject
 
         """
         if self.exists(stage_path):
@@ -565,7 +565,7 @@ class Stages(object):
         new_path: PathLike,
         *,
         overwrite: bool = False,
-    ) -> StagesObject:
+    ) -> StageObject:
         """
         Move the stage file to a new location.
 
@@ -595,7 +595,7 @@ class Stages(object):
 
         return self.info(new_path)
 
-    def info(self, stage_path: PathLike) -> StagesObject:
+    def info(self, stage_path: PathLike) -> StageObject:
         """
         Return information about a stage location.
 
@@ -606,7 +606,7 @@ class Stages(object):
 
         Returns
         -------
-        StagesObject
+        StageObject
 
         """
         res = self._manager._get(
@@ -614,7 +614,7 @@ class Stages(object):
             params=dict(metadata=1),
         ).json()
 
-        return StagesObject.from_dict(res, self)
+        return StageObject.from_dict(res, self)
 
     def exists(self, stage_path: PathLike) -> bool:
         """
@@ -687,7 +687,7 @@ class Stages(object):
         Parameters
         ----------
         stage_path : Path or str
-            Path to the folder in Stages
+            Path to the folder in Stage
         recursive : bool, optional
             Should folders be listed recursively?
 
@@ -730,8 +730,8 @@ class Stages(object):
         if info.type == 'directory':
             out = self._listdir(stage_path, recursive=recursive)
             if stage_path:
-                stages_path_n = len(stage_path.split('/'))
-                out = ['/'.join(x.split('/')[stages_path_n:]) for x in out]
+                stage_path_n = len(stage_path.split('/'))
+                out = ['/'.join(x.split('/')[stage_path_n:]) for x in out]
             return out
 
         raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
@@ -791,7 +791,7 @@ class Stages(object):
         overwrite: bool = False,
     ) -> None:
         """
-        Download a Stages folder to a local directory.
+        Download a Stage folder to a local directory.
 
         Parameters
         ----------
@@ -1132,13 +1132,13 @@ class WorkspaceGroup(object):
         return out
 
     @property
-    def stages(self) -> Stages:
-        """Stages manager."""
+    def stage(self) -> Stage:
+        """Stage manager."""
         if self._manager is None:
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
-        return Stages(self, self._manager)
+        return Stage(self, self._manager)
 
     def refresh(self) -> 'WorkspaceGroup':
         """Update the object to the current state."""
@@ -1534,6 +1534,8 @@ def manage_workspaces(
     access_token: Optional[str] = None,
     version: str = WorkspaceManager.default_version,
     base_url: str = WorkspaceManager.default_base_url,
+    *,
+    organization_id: Optional[str] = None,
 ) -> WorkspaceManager:
     """
     Retrieve a SingleStoreDB workspace manager.
@@ -1546,6 +1548,8 @@ def manage_workspaces(
         Version of the API to use
     base_url : str, optional
         Base URL of the workspace management API
+    organization_id : str, optional
+        ID of organization, if using a JWT for authentication
 
     Returns
     -------
@@ -1554,5 +1558,5 @@ def manage_workspaces(
     """
     return WorkspaceManager(
         access_token=access_token, base_url=base_url,
-        version=version,
+        version=version, organization_id=organization_id,
     )

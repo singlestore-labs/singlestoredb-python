@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.Stage.rmdir
+==============================================
+.. currentmodule:: singlestoredb.management.workspace
+.. automethod:: Stage.rmdir
