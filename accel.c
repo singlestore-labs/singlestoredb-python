@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <Python.h>
-#include <pybuffer.h>
 
 #ifndef Py_LIMITED_API
 #include <datetime.h>
