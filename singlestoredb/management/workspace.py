@@ -1140,6 +1140,8 @@ class WorkspaceGroup(object):
             )
         return Stage(self, self._manager)
 
+    stages = stage
+
     def refresh(self) -> 'WorkspaceGroup':
         """Update the object to the current state."""
         if self._manager is None:
