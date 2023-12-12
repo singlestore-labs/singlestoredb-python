@@ -14,6 +14,7 @@
    .. rubric:: Attributes
    .. autosummary::
       ~WorkspaceGroup.stage
+      ~WorkspaceGroup.stages
       ~WorkspaceGroup.workspaces
       ~WorkspaceGroup.name
       ~WorkspaceGroup.id

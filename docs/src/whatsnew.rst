@@ -8,6 +8,14 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.10.0 - December 12, 2023
+---------------------------
+* Add JWT authentication support to Fusion
+* Add experimental vector data format support to UDF server
+* Rename ``stages`` to ``stage``
+* Add ``track_env`` connection parameter to automatically track the ``SINGLESTOREDB_URL``
+  environment variable
+
 v0.9.6 - November 2, 2023
 -------------------------
 * Fusion fixes and testing
