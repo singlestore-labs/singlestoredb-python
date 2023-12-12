@@ -731,7 +731,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         {
             self->structsequence_desc.name = "singlestoredb.Row";
             self->structsequence_desc.doc = "Row of data values";
-            self->structsequence_desc.n_in_sequence = self->n_cols;
+            self->structsequence_desc.n_in_sequence = (int)self->n_cols;
             self->structsequence_desc.fields = calloc(self->n_cols + 1, sizeof(PyStructSequence_Field));
             if (!self->structsequence_desc.fields) goto error;
             for (unsigned long i = 0; i < self->n_cols; i++) {
@@ -2049,7 +2049,7 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
     uint64_t n_rows = 0;
     int *item_sizes = NULL;
     char **data_formats = NULL;
-    void **out_cols = NULL;
+    char **out_cols = NULL;
     int64_t *out_row_ids = NULL;
 
     // Parse function args.
@@ -2262,7 +2262,7 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
 
             case MYSQL_TYPE_TINY:
                 // TODO: missing values
-                i8 = (is_null) ? -127 : *(int8_t*)data; data += 1;
+                i8 = (is_null) ? SCHAR_MIN : *(int8_t*)data; data += 1;
                 memcpy(out_cols[i] + j * 1, &i8, 1);
                 break;
 
@@ -2273,7 +2273,7 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
                 break;
 
             case MYSQL_TYPE_SHORT:
-                i16 = (is_null) ? -32768 : *(int16_t*)data; data += 2;
+                i16 = (is_null) ? SHRT_MIN : *(int16_t*)data; data += 2;
                 memcpy(out_cols[i] + j * 2, &i16, 2);
                 break;
 
@@ -2285,7 +2285,7 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
 
             case MYSQL_TYPE_LONG:
             case MYSQL_TYPE_INT24:
-                i32 = (is_null) ? -2147483648 : *(int32_t*)data; data += 4;
+                i32 = (is_null) ? INT_MIN : *(int32_t*)data; data += 4;
                 memcpy(out_cols[i] + j * 4, &i32, 4);
                 break;
 
@@ -2297,7 +2297,7 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
                 break;
 
             case MYSQL_TYPE_LONGLONG:
-                i64 = (is_null) ? -2^63 : *(int64_t*)data; data += 8;
+                i64 = (is_null) ? LLONG_MIN : *(int64_t*)data; data += 8;
                 memcpy(out_cols[i] + j * 8, &i64, 8);
                 break;
 
