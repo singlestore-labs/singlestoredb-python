@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.10.1 - December 13, 2023
+---------------------------
+* Cache regions in Management API
+* Add dummy fields to Region objects if the region ID does not point to an existing region
+
 v0.10.0 - December 12, 2023
 ---------------------------
 * Add JWT authentication support to Fusion

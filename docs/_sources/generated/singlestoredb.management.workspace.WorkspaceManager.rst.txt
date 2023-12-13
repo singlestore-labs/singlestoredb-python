@@ -10,6 +10,7 @@
       ~WorkspaceManager.create_workspace_group
       ~WorkspaceManager.get_workspace
       ~WorkspaceManager.get_workspace_group
+      ~WorkspaceManager.regions
    .. rubric:: Attributes
    .. autosummary::
       ~WorkspaceManager.billing
@@ -17,5 +18,4 @@
       ~WorkspaceManager.default_version
       ~WorkspaceManager.obj_type
       ~WorkspaceManager.organizations
-      ~WorkspaceManager.regions
       ~WorkspaceManager.workspace_groups
