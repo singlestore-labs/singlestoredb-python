@@ -28,6 +28,7 @@ from .utils import NamedList
 from .utils import PathLike
 from .utils import snake_to_camel
 from .utils import to_datetime
+from .utils import ttl_property
 from .utils import vars_to_str
 
 
@@ -1119,7 +1120,7 @@ class WorkspaceGroup(object):
         try:
             region = [x for x in manager.regions if x.id == obj['regionID']][0]
         except IndexError:
-            region = None
+            region = Region(obj.get('regionID', '<unknown>'), '<unknown>', '<unknown>')
         out = cls(
             name=obj['name'],
             id=obj['workspaceGroupID'],
@@ -1377,23 +1378,23 @@ class WorkspaceManager(Manager):
     #: Object type
     obj_type = 'workspace'
 
-    @ property
+    @property
     def workspace_groups(self) -> NamedList[WorkspaceGroup]:
         """Return a list of available workspace groups."""
         res = self._get('workspaceGroups')
         return NamedList([WorkspaceGroup.from_dict(item, self) for item in res.json()])
 
-    @ property
+    @property
     def organizations(self) -> Organizations:
         """Return the organizations."""
         return Organizations(self)
 
-    @ property
+    @property
     def billing(self) -> Billing:
         """Return the current billing information."""
         return Billing(self)
 
-    @ property
+    @ttl_property(datetime.timedelta(hours=1))
     def regions(self) -> NamedList[Region]:
         """Return a list of available regions."""
         res = self._get('regions')

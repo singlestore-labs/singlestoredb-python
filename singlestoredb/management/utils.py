@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 """SingleStoreDB Cluster Management."""
 import datetime
+import functools
 import os
 import re
 import sys
 from typing import Any
+from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -31,37 +33,44 @@ else:
     PathLikeABC = os.PathLike[str]
 
 
-def get_token() -> Optional[str]:
-    """Return the token for the Management API."""
-    # See if an API key is configured
-    tok = get_option('management.token')
-    if tok:
-        return tok
+class TTLProperty(object):
+    """Property with time limit."""
 
-    # See if the connection URL contains a JWT
-    url = get_option('host')
-    if not url:
-        return None
+    def __init__(self, fget: Callable[[Any], Any], ttl: datetime.timedelta):
+        self.fget = fget
+        self.ttl = ttl
+        self._last_executed = datetime.datetime(2000, 1, 1)
+        self._last_result = None
+        self.__doc__ = fget.__doc__
+        self._name = ''
 
-    urlp = urlparse(url, scheme='singlestoredb', allow_fragments=True)
-    if urlp.password:
-        try:
-            jwt.decode(urlp.password, options={'verify_signature': False})
-            return urlp.password
-        except jwt.DecodeError:
-            pass
+    def reset(self) -> None:
+        self._last_executed = datetime.datetime(2000, 1, 1)
+        self._last_result = None
 
-    # Didn't find a key anywhere
-    return None
+    def __set_name__(self, owner: Any, name: str) -> None:
+        self._name = name
+
+    def __get__(self, obj: Any, objtype: Any = None) -> Any:
+        if obj is None:
+            return self
+
+        if self._last_result is not None \
+                and (datetime.datetime.now() - self._last_executed) < self.ttl:
+            return self._last_result
+
+        self._last_result = self.fget(obj)
+        self._last_executed = datetime.datetime.now()
+
+        return self._last_result
 
 
-def get_organization() -> Optional[str]:
-    """Return the organization for the current token or environment."""
-    org = os.environ.get('SINGLESTOREDB_ORGANIZATION')
-    if org:
-        return org
-
-    return None
+def ttl_property(ttl: datetime.timedelta) -> Callable[[Any], Any]:
+    """Property with a time-to-live."""
+    def wrapper(func: Callable[[Any], Any]) -> Any:
+        out = TTLProperty(func, ttl=ttl)
+        return functools.wraps(func)(out)
+    return wrapper
 
 
 class NamedList(List[T]):
@@ -105,6 +114,39 @@ class NamedList(List[T]):
             if default:
                 return default[0]
             raise
+
+
+def get_token() -> Optional[str]:
+    """Return the token for the Management API."""
+    # See if an API key is configured
+    tok = get_option('management.token')
+    if tok:
+        return tok
+
+    # See if the connection URL contains a JWT
+    url = get_option('host')
+    if not url:
+        return None
+
+    urlp = urlparse(url, scheme='singlestoredb', allow_fragments=True)
+    if urlp.password:
+        try:
+            jwt.decode(urlp.password, options={'verify_signature': False})
+            return urlp.password
+        except jwt.DecodeError:
+            pass
+
+    # Didn't find a key anywhere
+    return None
+
+
+def get_organization() -> Optional[str]:
+    """Return the organization for the current token or environment."""
+    org = os.environ.get('SINGLESTOREDB_ORGANIZATION')
+    if org:
+        return org
+
+    return None
 
 
 def enable_http_tracing() -> None:
