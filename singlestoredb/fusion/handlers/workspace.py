@@ -80,8 +80,10 @@ ShowWorkspaceGroupsHandler.register()
 
 class ShowWorkspacesHandler(SQLHandler):
     """
-    SHOW WORKSPACES IN GROUP { group_id | group_name }
-        [ <like> ] [ <extended> ] [ <order-by> ] [ <limit> ];
+    SHOW WORKSPACES [ in_group ] [ <like> ] [ <extended> ] [ <order-by> ] [ <limit> ];
+
+    # Workspace group
+    in_group = IN GROUP { group_id | group_name }
 
     # ID of group
     group_id = ID '<group-id>'
@@ -198,9 +200,11 @@ CreateWorkspaceGroupHandler.register()
 
 class CreateWorkspaceHandler(SQLHandler):
     """
-    CREATE WORKSPACE [ if_not_exists ] workspace_name
-        IN GROUP { group_id | group_name }
+    CREATE WORKSPACE [ if_not_exists ] workspace_name [ in_group ]
         WITH SIZE size [ wait_on_active ];
+
+    # Create workspace in workspace group
+    in_group = IN GROUP { group_id | group_name }
 
     # Only run command if workspace doesn't already exist
     if_not_exists = IF NOT EXISTS
@@ -264,15 +268,15 @@ class DropWorkspaceGroupHandler(SQLHandler):
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        manager = get_workspace_manager()
-
         try:
-            name_or_id = params['group_name'] or params['group_id']
-            wg = manager.workspace_groups[name_or_id]
-            wg.terminate(wait_on_terminated=params['wait_on_terminated'])
+            workspace_group = get_workspace_group(params)
+            if workspace_group.terminated_at is not None:
+                raise KeyError
+            workspace_group.terminate(wait_on_terminated=params['wait_on_terminated'])
 
         except KeyError:
             if not params['if_exists']:
+                name_or_id = params['group_id'] or params['group_name']
                 raise KeyError(f"could not find workspace group '{name_or_id}'")
 
         return None
@@ -284,7 +288,10 @@ DropWorkspaceGroupHandler.register()
 class DropWorkspaceHandler(SQLHandler):
     """
     DROP WORKSPACE [ if_exists ] { workspace_id | workspace_name }
-        IN GROUP { group_id | group_name } [ wait_on_terminated ];
+        [ in_group ] [ wait_on_terminated ];
+
+    # Workspace group
+    in_group = IN GROUP { group_id | group_name }
 
     # Only drop workspace if it exists
     if_exists = IF EXISTS
@@ -307,16 +314,15 @@ class DropWorkspaceHandler(SQLHandler):
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        manager = get_workspace_manager()
-
         try:
+            workspace_group = get_workspace_group(params)
             workspace_name_or_id = params['workspace_name'] or params['workspace_id']
-            group_name_or_id = params['group_name'] or params['group_id']
-            wg = manager.workspace_groups[group_name_or_id]
-            ws = wg.workspaces[workspace_name_or_id]
+            ws = workspace_group.workspaces[workspace_name_or_id]
             ws.terminate(wait_on_terminated=params['wait_on_terminated'])
 
         except KeyError:
+            group_name_or_id = params['in_group'].get('group_id', None) or \
+                               params['in_group'].get('group_name', None)
             if not params['if_exists']:
                 raise KeyError(
                     f"could not find workspace '{workspace_name_or_id}' "

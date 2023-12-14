@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import datetime
+import os
 from typing import Any
 from typing import Dict
 from typing import Optional
@@ -26,15 +27,16 @@ def get_workspace_group(params: Dict[str, Any]) -> WorkspaceGroup:
     """Find a workspace group matching group_id or group_name."""
     manager = get_workspace_manager()
 
-    if params['group_name']:
+    group_name = params.get('group_name') or params.get('in_group', {}).get('group_name')
+    if group_name:
         workspace_groups = [
             x for x in manager.workspace_groups
-            if x.name == params['group_name']
+            if x.name == group_name
         ]
 
         if not workspace_groups:
             raise KeyError(
-                'no workspace group found with name "{}"'.format(params['group_name']),
+                'no workspace group found with name "{}"'.format(group_name),
             )
 
         if len(workspace_groups) > 1:
@@ -45,4 +47,16 @@ def get_workspace_group(params: Dict[str, Any]) -> WorkspaceGroup:
 
         return workspace_groups[0]
 
-    return manager.get_workspace_group(params['group_id'])
+    group_id = params.get('group_id') or params.get('in_group', {}).get('group_id')
+    if group_id:
+        return manager.get_workspace_group(group_id)
+
+    if os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP'):
+        return manager.get_workspace_group(
+            os.environ['SINGLESTOREDB_WORKSPACE_GROUP'],
+        )
+
+    if os.environ.get('SINGLESTOREDB_CLUSTER'):
+        raise ValueError('clusters and shared workspaces are not currently supported')
+
+    raise KeyError('no workspace group was specified')
