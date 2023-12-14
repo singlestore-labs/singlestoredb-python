@@ -27,7 +27,8 @@ def get_workspace_group(params: Dict[str, Any]) -> WorkspaceGroup:
     """Find a workspace group matching group_id or group_name."""
     manager = get_workspace_manager()
 
-    group_name = params.get('group_name') or params.get('in_group', {}).get('group_name')
+    group_name = params.get('group_name') or \
+        (params.get('in_group') or {}).get('group_name')
     if group_name:
         workspace_groups = [
             x for x in manager.workspace_groups
@@ -47,7 +48,8 @@ def get_workspace_group(params: Dict[str, Any]) -> WorkspaceGroup:
 
         return workspace_groups[0]
 
-    group_id = params.get('group_id') or params.get('in_group', {}).get('group_id')
+    group_id = params.get('group_id') or \
+        (params.get('in_group') or {}).get('group_id')
     if group_id:
         return manager.get_workspace_group(group_id)
 

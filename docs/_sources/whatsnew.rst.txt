@@ -5,6 +5,9 @@ This document outlines features and improvements from each release.
 .. note:: All releases before v1.0.0 are considered pre-release and
    are for non-production testing and evaluation, and may include
    changes to the API.
+v0.10.2 - December 14, 2023
+---------------------------
+* Make workspace group optional in Fusion SQL if it is specified in the environment
 v0.10.1 - December 13, 2023
 ---------------------------
 * Cache regions in Management API
