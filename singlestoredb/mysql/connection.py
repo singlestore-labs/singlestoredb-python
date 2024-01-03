@@ -762,7 +762,7 @@ class Connection(BaseConnection):
         return self.cursorclass(self)
 
     # The following methods are INTERNAL USE ONLY (called from Cursor)
-    def query(self, sql, unbuffered=False):
+    def query(self, sql, unbuffered=False, data_input_stream=None):
         """
         Run a query on the server.
 
@@ -779,7 +779,10 @@ class Connection(BaseConnection):
             if isinstance(sql, str):
                 sql = sql.encode(self.encoding, 'surrogateescape')
             self._execute_command(COMMAND.COM_QUERY, sql)
-            self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+            self._affected_rows = self._read_query_result(
+                unbuffered=unbuffered,
+                data_input_stream=data_input_stream,
+            )
         return self._affected_rows
 
     def next_result(self, unbuffered=False):
@@ -1129,13 +1132,13 @@ class Connection(BaseConnection):
                 CR.CR_SERVER_GONE_ERROR, f'MySQL server has gone away ({e!r})',
             )
 
-    def _read_query_result(self, unbuffered=False):
+    def _read_query_result(self, unbuffered=False, data_input_stream=None):
         self._result = None
         if unbuffered:
             result = self.resultclass(self, unbuffered=unbuffered)
         else:
             result = self.resultclass(self)
-            result.read()
+            result.read(data_input_stream)
         self._result = result
         if result.server_status is not None:
             self.server_status = result.server_status
@@ -1541,14 +1544,14 @@ class MySQLResult:
         if self.unbuffered_active:
             self._finish_unbuffered_query()
 
-    def read(self):
+    def read(self, data_input_stream=None):
         try:
             first_packet = self.connection._read_packet()
 
             if first_packet.is_ok_packet():
                 self._read_ok_packet(first_packet)
             elif first_packet.is_load_local_packet():
-                self._read_load_local_packet(first_packet)
+                self._read_load_local_packet(first_packet, data_input_stream)
             else:
                 self._read_result_packet(first_packet)
         finally:
@@ -1593,13 +1596,13 @@ class MySQLResult:
         self.message = ok_packet.message
         self.has_next = ok_packet.has_next
 
-    def _read_load_local_packet(self, first_packet):
+    def _read_load_local_packet(self, first_packet, data_input_stream=None):
         if not self.connection._local_infile:
             raise RuntimeError(
                 '**WARN**: Received LOAD_LOCAL packet but local_infile option is false.',
             )
         load_packet = LoadLocalPacketWrapper(first_packet)
-        sender = LoadLocalFile(load_packet.filename, self.connection)
+        sender = LoadLocalFile(load_packet.filename, self.connection, data_input_stream)
         try:
             sender.send_data()
         except Exception:
@@ -1774,32 +1777,54 @@ class MySQLResultSV(MySQLResult):
 
 class LoadLocalFile:
 
-    def __init__(self, filename, connection):
+    def __init__(self, filename, connection, data_input_stream):
         self.filename = filename
         self.connection = connection
+        self.input_stream = data_input_stream
 
     def send_data(self):
         """Send data packets from the local file to the server"""
         if not self.connection._sock:
             raise err.InterfaceError(0, '')
         conn = self.connection
-
-        try:
-            with open(self.filename, 'rb') as open_file:
+        if self.input_stream is None:
+            try:
+                with open(self.filename, 'rb') as open_file:
+                    packet_size = min(
+                        conn.max_allowed_packet, 16 * 1024,
+                    )  # 16KB is efficient enough
+                    while True:
+                        chunk = open_file.read(packet_size)
+                        if not chunk:
+                            break
+                        conn.write_packet(chunk)
+            except OSError:
+                raise err.OperationalError(
+                    ER.FILE_NOT_FOUND,
+                    f"Can't find file '{self.filename}'",
+                )
+            finally:
+                if not conn._closed:
+                    # send the empty packet to signify we are done sending data
+                    conn.write_packet(b'')
+        else:
+            try:
                 packet_size = min(
-                    conn.max_allowed_packet, 16 * 1024,
-                )  # 16KB is efficient enough
+                    conn.max_allowed_packet, 256 * 1024,
+                )  # 256KB
+                self.input_stream.seek(0)
                 while True:
-                    chunk = open_file.read(packet_size)
+                    chunk = self.input_stream.read(packet_size)
                     if not chunk:
                         break
                     conn.write_packet(chunk)
-        except OSError:
-            raise err.OperationalError(
-                ER.FILE_NOT_FOUND,
-                f"Can't find file '{self.filename}'",
-            )
-        finally:
-            if not conn._closed:
-                # send the empty packet to signify we are done sending data
-                conn.write_packet(b'')
+            except AttributeError:
+                raise err.OperationalError(
+                    ER.CHECKREAD,
+                    "Can't read the stream attached to LOAD DATA statement. "
+                    'Make sure that the object implements read(size: int) -> bytes',
+                )
+            finally:
+                if not conn._closed:
+                    # send the empty packet to signify we are done sending data
+                    conn.write_packet(b'')

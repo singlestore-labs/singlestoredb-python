@@ -1,4 +1,5 @@
 # type: ignore
+import io
 import re
 from collections import namedtuple
 
@@ -277,6 +278,41 @@ class Cursor(BaseCursor):
         self.rowcount = rows
         return rows
 
+    def load_data(self, query, data_input_stream: io.BytesIO, args=None):
+        """
+        Execute a LOAD DATA query, reading the data from data_input_stream
+        instead of the file.
+
+        If args is a list or tuple, :1, :2, etc. can be used as a
+        placeholder in the query.  If args is a dict, :name can be used
+        as a placeholder in the query.
+
+
+        Parameters
+        ----------
+        query : str
+            Query to execute. File name is ignored
+        data_input_stream : AVRO-formatted io.BytesIO object.
+            TODO: accept an iterable of rows
+        args : Sequnce[Any], optional
+            Sequence of sequences or mappings. It is used as parameter.
+
+        Returns
+        -------
+        int : Number of affected rows.
+
+        """
+        while self.nextset():
+            pass
+
+        log_query(query, args)
+
+        query = self.mogrify(query, args)
+
+        result = self._query(query, data_input_stream)
+        self._executed = query
+        return result
+
     def callproc(self, procname, args=()):
         """
         Execute stored procedure procname with args.
@@ -380,10 +416,10 @@ class Cursor(BaseCursor):
             raise IndexError('out of range')
         self._rownumber = r
 
-    def _query(self, q):
+    def _query(self, q, data_input_stream=None):
         conn = self._get_db()
         self._clear_result()
-        conn.query(q)
+        conn.query(q, data_input_stream=data_input_stream)
         self._do_get_result()
         return self.rowcount
 
