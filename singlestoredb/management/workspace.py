@@ -523,7 +523,7 @@ class Stage(object):
             self.remove(stage_path)
 
         self._manager._put(
-            f'stages/{self._workspace_group.id}/fs/{stage_path}',
+            f'stage/{self._workspace_group.id}/fs/{stage_path}',
             files={'file': content},
             headers={'Content-Type': None},
         )
@@ -553,7 +553,7 @@ class Stage(object):
             self.remove(stage_path)
 
         self._manager._put(
-            f'stages/{self._workspace_group.id}/fs/{stage_path}',
+            f'stage/{self._workspace_group.id}/fs/{stage_path}',
         )
 
         return self.info(stage_path)
@@ -590,7 +590,7 @@ class Stage(object):
             self.remove(new_path)
 
         self._manager._patch(
-            f'stages/{self._workspace_group.id}/fs/{old_path}',
+            f'stage/{self._workspace_group.id}/fs/{old_path}',
             json=dict(newPath=new_path),
         )
 
@@ -611,7 +611,7 @@ class Stage(object):
 
         """
         res = self._manager._get(
-            f'stages/{self._workspace_group.id}/fs/{stage_path}',
+            f'stage/{self._workspace_group.id}/fs/{stage_path}',
             params=dict(metadata=1),
         ).json()
 
@@ -694,7 +694,7 @@ class Stage(object):
 
         """
         res = self._manager._get(
-            f'stages/{self._workspace_group.id}/fs/{stage_path}',
+            f'stage/{self._workspace_group.id}/fs/{stage_path}',
         ).json()
         if recursive:
             out = []
@@ -771,7 +771,7 @@ class Stage(object):
             raise IsADirectoryError(f'stage path is a directory: {stage_path}')
 
         out = self._manager._get(
-            f'stages/{self._workspace_group.id}/fs/{stage_path}',
+            f'stage/{self._workspace_group.id}/fs/{stage_path}',
         ).content
 
         if local_path is not None:
@@ -835,7 +835,7 @@ class Stage(object):
                 f'use rmdir or removedirs: {stage_path}',
             )
 
-        self._manager._delete(f'stages/{self._workspace_group.id}/fs/{stage_path}')
+        self._manager._delete(f'stage/{self._workspace_group.id}/fs/{stage_path}')
 
     def removedirs(self, stage_path: PathLike) -> None:
         """
@@ -851,7 +851,7 @@ class Stage(object):
         if info.type != 'directory':
             raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
 
-        self._manager._delete(f'stages/{self._workspace_group.id}/fs/{stage_path}')
+        self._manager._delete(f'stage/{self._workspace_group.id}/fs/{stage_path}')
 
     def rmdir(self, stage_path: PathLike) -> None:
         """
@@ -870,7 +870,7 @@ class Stage(object):
         if self.listdir(stage_path):
             raise OSError(f'stage folder is not empty, use removedirs: {stage_path}')
 
-        self._manager._delete(f'stages/{self._workspace_group.id}/fs/{stage_path}')
+        self._manager._delete(f'stage/{self._workspace_group.id}/fs/{stage_path}')
 
     def __str__(self) -> str:
         """Return string representation."""
