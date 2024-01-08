@@ -50,6 +50,7 @@ from ..config import get_option
 from .. import fusion
 from .. import connection
 from ..connection import Connection as BaseConnection
+from ..utils.debug import log_query
 
 try:
     import ssl
@@ -663,6 +664,7 @@ class Connection(BaseConnection):
 
     def _send_autocommit_mode(self):
         """Set whether or not to commit after every execute()."""
+        log_query('SET AUTOCOMMIT = %s' % self.escape(self.autocommit_mode))
         self._execute_command(
             COMMAND.COM_QUERY, 'SET AUTOCOMMIT = %s' % self.escape(self.autocommit_mode),
         )
@@ -670,6 +672,7 @@ class Connection(BaseConnection):
 
     def begin(self):
         """Begin transaction."""
+        log_query('BEGIN')
         self._execute_command(COMMAND.COM_QUERY, 'BEGIN')
         self._read_ok_packet()
 
@@ -681,6 +684,7 @@ class Connection(BaseConnection):
         in the specification.
 
         """
+        log_query('COMMIT')
         self._execute_command(COMMAND.COM_QUERY, 'COMMIT')
         self._read_ok_packet()
 
@@ -692,11 +696,13 @@ class Connection(BaseConnection):
         in the specification.
 
         """
+        log_query('ROLLBACK')
         self._execute_command(COMMAND.COM_QUERY, 'ROLLBACK')
         self._read_ok_packet()
 
     def show_warnings(self):
         """Send the "SHOW WARNINGS" SQL command."""
+        log_query('SHOW WARNINGS')
         self._execute_command(COMMAND.COM_QUERY, 'SHOW WARNINGS')
         result = self.resultclass(self)
         result.read()
@@ -909,7 +915,10 @@ class Connection(BaseConnection):
         self.host = out['host']
         self.port = out['port']
         self.user = out['user']
-        self.password = out['password']
+        if isinstance(out['password'], str):
+            self.password = out['password'].encode('latin-1')
+        else:
+            self.password = out['password'] or b''
         self.db = out.get('database')
         try:
             self._in_sync = True
