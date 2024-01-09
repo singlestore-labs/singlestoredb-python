@@ -302,7 +302,7 @@ class FieldDescriptorPacket(MysqlPacket):
             self.name,
             self.type_code,
             self.flags,
-            self.charsetnr
+            self.charsetnr,
         )
 
 
