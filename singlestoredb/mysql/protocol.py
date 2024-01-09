@@ -295,13 +295,14 @@ class FieldDescriptorPacket(MysqlPacket):
         return self.length
 
     def __str__(self):
-        return '%s %r.%r.%r, type=%s, flags=%x' % (
+        return '%s %r.%r.%r, type=%s, flags=%x, charsetnr=%s' % (
             self.__class__,
             self.db,
             self.table_name,
             self.name,
             self.type_code,
             self.flags,
+            self.charsetnr
         )
 
 
