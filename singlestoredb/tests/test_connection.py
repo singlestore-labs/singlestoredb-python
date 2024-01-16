@@ -53,6 +53,22 @@ class TestConnection(unittest.TestCase):
         dbs = set([x[0] for x in self.cur.fetchall()])
         assert type(self).dbname in dbs, dbs
 
+    def test_connection_create_database_st(self):
+        self.cur.execute('set global is_shared_tier = 0')
+        databae_name_create = 'test_create_st{}'.format(uuid.uuid4()).replace('-', '_')
+
+        current_database_name = self.conn.create_database_st(databae_name_create)
+        assert current_database_name == databae_name_create
+
+        self.cur.execute(f'use {databae_name_create}')
+        self.cur.execute('set global is_shared_tier = 1')
+
+        current_database_name = self.conn.create_database_st('dbname_should_be_ignored')
+        assert current_database_name == databae_name_create
+
+        self.cur.execute('set global is_shared_tier = 0')
+        self.cur.execute(f'drop database {databae_name_create}')
+
     def test_cast_bool_param(self):
         cbp = sc.cast_bool_param
 

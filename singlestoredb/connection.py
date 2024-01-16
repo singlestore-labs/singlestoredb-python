@@ -1144,6 +1144,19 @@ class Connection(metaclass=abc.ABCMeta):
                     out = [{k: v for k, v in zip(names, row)} for row in out]
             return out
 
+    def create_database_st(self, name: str) -> str:
+        if self.vars['is_shared_tier']:
+            print(
+                'Command ignored. Shared Deployments have a database created by default.',
+            )
+            out = self._iquery('SELECT DATABASE() as CurrentDatabase')
+            return out[0]['CurrentDatabase']
+        else:
+            escaped_name = quote_identifier(name)
+            self._iquery(f'create database {escaped_name}')
+            print(f'Database {name} created')
+            return name
+
     @abc.abstractmethod
     def close(self) -> None:
         """Close the database connection."""
