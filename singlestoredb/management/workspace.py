@@ -604,13 +604,8 @@ class Stage(object):
             else:
                 self.remove(new_path)
 
-        old_path = str(old_path)
-        if old_is_dir and not old_path.endswith('/'):
-            old_path = old_path + '/'
-
-        new_path = str(new_path)
-        if new_is_dir and not new_path.endswith('/'):
-            new_path = new_path + '/'
+        old_path = re.sub(r'/*$', r'', str(old_path))
+        new_path = re.sub(r'/*$', r'', str(new_path))
 
         self._manager._patch(
             f'stage/{self._workspace_group.id}/fs/{old_path}',
