@@ -396,7 +396,7 @@ class TestStage(unittest.TestCase):
         st = self.wg.stage
 
         root = st.info('')
-        assert str(root.path) == '.'
+        assert str(root.path) == '/'
         assert root.type == 'directory'
 
         # Upload file
@@ -425,8 +425,8 @@ class TestStage(unittest.TestCase):
         with self.assertRaises(IsADirectoryError):
             st.upload_file(TEST_DIR, 'test3.sql')
 
-        lib = st.mkdir('/lib')
-        assert str(lib.path) == 'lib'
+        lib = st.mkdir('/lib/')
+        assert str(lib.path) == 'lib/'
         assert lib.type == 'directory'
 
         # Try to overwrite stage folder with file
@@ -434,7 +434,10 @@ class TestStage(unittest.TestCase):
             st.upload_file(TEST_DIR / 'test2.sql', lib.path, overwrite=True)
 
         # Write file into folder
-        f = st.upload_file(TEST_DIR / 'test2.sql', lib.path / 'upload_test2.sql')
+        f = st.upload_file(
+            TEST_DIR / 'test2.sql',
+            os.path.join(lib.path, 'upload_test2.sql'),
+        )
         assert str(f.path) == 'lib/upload_test2.sql'
         assert f.type == 'file'
 
@@ -587,14 +590,14 @@ class TestStage(unittest.TestCase):
 
         # rmdir
         before = st.listdir('/', recursive=True)
-        st.rmdir('mkdir_test_1')
+        st.rmdir('mkdir_test_1/')
         after = st.listdir('/', recursive=True)
         assert 'mkdir_test_1' in before
         assert 'mkdir_test_1' not in after
         assert list(sorted(before)) == list(sorted(after + ['mkdir_test_1']))
 
         with self.assertRaises(OSError):
-            st.rmdir('mkdir_test_2')
+            st.rmdir('mkdir_test_2/')
 
         st.upload_file(TEST_DIR / 'test.sql', 'mkdir_test.sql')
 
@@ -603,7 +606,7 @@ class TestStage(unittest.TestCase):
 
         # removedirs
         before = st.listdir('/')
-        st.removedirs('mkdir_test_2')
+        st.removedirs('mkdir_test_2/')
         after = st.listdir('/')
         assert 'mkdir_test_2' in before
         assert 'mkdir_test_2' not in after
@@ -669,32 +672,32 @@ class TestStage(unittest.TestCase):
         # rename directory
         assert 'rename_test_1' in st.listdir('/')
         assert 'rename_test_2' not in st.listdir('/')
-#       st.rename('rename_test_1', 'rename_test_2')
-#       assert 'rename_test_1' not in st.listdir('/')
-#       assert 'rename_test_2' in st.listdir('/')
-        assert st.is_file('rename_test_1/nest_1/nested_rename_test.sql')
-        assert st.is_file('rename_test_1/nest_1/nested_rename_test_2.sql')
+        st.rename('rename_test_1/', 'rename_test_2/')
+        assert 'rename_test_1' not in st.listdir('/')
+        assert 'rename_test_2' in st.listdir('/')
+        assert st.is_file('rename_test_2/nest_1/nested_rename_test.sql')
+        assert st.is_file('rename_test_2/nest_1/nested_rename_test_2.sql')
 
         # rename nested
-        assert 'rename_test_1/nest_1/nested_rename_test.sql' in st.listdir(
+        assert 'rename_test_2/nest_1/nested_rename_test.sql' in st.listdir(
             '/', recursive=True,
         )
-        assert 'rename_test_1/nest_1/nested_rename_test_3.sql' not in st.listdir(
+        assert 'rename_test_2/nest_1/nested_rename_test_3.sql' not in st.listdir(
             '/', recursive=True,
         )
         st.rename(
-            'rename_test_1/nest_1/nested_rename_test.sql',
-            'rename_test_1/nest_1/nested_rename_test_3.sql',
+            'rename_test_2/nest_1/nested_rename_test.sql',
+            'rename_test_2/nest_1/nested_rename_test_3.sql',
         )
-        assert 'rename_test_1/nest_1/nested_rename_test.sql' not in st.listdir(
+        assert 'rename_test_2/nest_1/nested_rename_test.sql' not in st.listdir(
             '/', recursive=True,
         )
-        assert 'rename_test_1/nest_1/nested_rename_test_3.sql' in st.listdir(
+        assert 'rename_test_2/nest_1/nested_rename_test_3.sql' in st.listdir(
             '/', recursive=True,
         )
-        assert not st.is_file('rename_test_1/nest_1/nested_rename_test.sql')
-        assert st.is_file('rename_test_1/nest_1/nested_rename_test_2.sql')
-        assert st.is_file('rename_test_1/nest_1/nested_rename_test_3.sql')
+        assert not st.is_file('rename_test_2/nest_1/nested_rename_test.sql')
+        assert st.is_file('rename_test_2/nest_1/nested_rename_test_2.sql')
+        assert st.is_file('rename_test_2/nest_1/nested_rename_test_3.sql')
 
         # non-existent file
         with self.assertRaises(OSError):
@@ -704,12 +707,12 @@ class TestStage(unittest.TestCase):
         with self.assertRaises(OSError):
             st.rename(
                 'rename_test_2.sql',
-                'rename_test_1/nest_1/nested_rename_test_3.sql',
+                'rename_test_2/nest_1/nested_rename_test_3.sql',
             )
 
         st.rename(
             'rename_test_2.sql',
-            'rename_test_1/nest_1/nested_rename_test_3.sql', overwrite=True,
+            'rename_test_2/nest_1/nested_rename_test_3.sql', overwrite=True,
         )
 
     def test_stage_object(self):
@@ -717,7 +720,7 @@ class TestStage(unittest.TestCase):
 
         f1 = st.upload_file(TEST_DIR / 'test.sql', 'obj_test.sql')
         f2 = st.upload_file(TEST_DIR / 'test.sql', 'obj_test/nest_1/obj_test.sql')
-        d2 = st.info('obj_test/nest_1')
+        d2 = st.info('obj_test/nest_1/')
 
         # is_file / is_dir
         assert not f1.is_dir()
@@ -730,15 +733,15 @@ class TestStage(unittest.TestCase):
         # abspath / basename / dirname / exists
         assert f1.abspath() == 'obj_test.sql'
         assert f1.basename() == 'obj_test.sql'
-        assert f1.dirname() == ''
+        assert f1.dirname() == '/'
         assert f1.exists()
         assert f2.abspath() == 'obj_test/nest_1/obj_test.sql'
         assert f2.basename() == 'obj_test.sql'
-        assert f2.dirname() == 'obj_test/nest_1'
+        assert f2.dirname() == 'obj_test/nest_1/'
         assert f2.exists()
-        assert d2.abspath() == 'obj_test/nest_1'
+        assert d2.abspath() == 'obj_test/nest_1/'
         assert d2.basename() == 'nest_1'
-        assert d2.dirname() == 'obj_test'
+        assert d2.dirname() == 'obj_test/'
         assert d2.exists()
 
         # download

@@ -6,7 +6,6 @@ import datetime
 import glob
 import io
 import os
-import pathlib
 import re
 import time
 from typing import Any
@@ -44,7 +43,7 @@ class StageObject(object):
     def __init__(
         self,
         name: str,
-        path: PathLike,
+        path: str,
         size: int,
         type: str,
         format: str,
@@ -57,8 +56,11 @@ class StageObject(object):
         #: Name of file / folder
         self.name = name
 
+        if type == 'directory':
+            path = re.sub(r'/*$', r'', str(path)) + '/'
+
         #: Path of file / folder
-        self.path = pathlib.PurePath(path)
+        self.path = path
 
         #: Size of the object (in bytes)
         self.size = size
@@ -280,7 +282,7 @@ class StageObject(object):
 
     def dirname(self) -> str:
         """Return the directory name of the object."""
-        return os.path.dirname(self.path)
+        return re.sub(r'/*$', r'', os.path.dirname(re.sub(r'/*$', r'', self.path))) + '/'
 
     def getmtime(self) -> float:
         """Return the last modified datetime as a UNIX timestamp."""
@@ -546,6 +548,8 @@ class Stage(object):
         StageObject
 
         """
+        stage_path = re.sub(r'/*$', r'', str(stage_path))
+
         if self.exists(stage_path):
             if not overwrite:
                 return self.info(stage_path)
@@ -583,29 +587,17 @@ class Stage(object):
         if not self.exists(old_path):
             raise OSError(f'stage path does not exist: {old_path}')
 
-        old_is_dir = self.is_dir(old_path)
-        new_is_dir = old_is_dir
-
         if self.exists(new_path):
             if not overwrite:
                 raise OSError(f'stage path already exists: {new_path}')
 
-            new_is_dir = self.is_dir(new_path)
-
-            if old_is_dir != new_is_dir:
+            if str(old_path).endswith('/') and not str(new_path).endswith('/'):
                 raise OSError('original and new paths are not the same type')
 
-            new_path = str(new_path)
-            if new_is_dir and not new_path.endswith('/'):
-                new_path = new_path + '/'
-
-            if new_is_dir:
+            if str(new_path).endswith('/'):
                 self.removedirs(new_path)
             else:
                 self.remove(new_path)
-
-        old_path = re.sub(r'/*$', r'', str(old_path))
-        new_path = re.sub(r'/*$', r'', str(new_path))
 
         self._manager._patch(
             f'stage/{self._workspace_group.id}/fs/{old_path}',
@@ -628,6 +620,8 @@ class Stage(object):
         StageObject
 
         """
+        stage_path = re.sub(r'/*$', r'', str(stage_path))
+
         res = self._manager._get(
             f'stage/{self._workspace_group.id}/fs/{stage_path}',
             params=dict(metadata=1),
@@ -865,13 +859,10 @@ class Stage(object):
             Path to the stage location
 
         """
-        info = self.info(stage_path)
-        if info.type != 'directory':
-            raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
-
-        stage_path = str(stage_path)
-        if not stage_path.endswith('/'):
-            stage_path = stage_path + '/'
+        if not str(stage_path).endswith('/'):
+            raise NotADirectoryError(
+                f'folder paths must end with a trailing slash (/): {stage_path}',
+            )
 
         self._manager._delete(f'stage/{self._workspace_group.id}/fs/{stage_path}')
 
@@ -885,16 +876,13 @@ class Stage(object):
             Path to the stage location
 
         """
-        info = self.info(stage_path)
-        if info.type != 'directory':
-            raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
+        if not str(stage_path).endswith('/'):
+            raise NotADirectoryError(
+                f'folder paths must end with a trailing slash (/): {stage_path}',
+            )
 
         if self.listdir(stage_path):
             raise OSError(f'stage folder is not empty, use removedirs: {stage_path}')
-
-        stage_path = str(stage_path)
-        if not stage_path.endswith('/'):
-            stage_path = stage_path + '/'
 
         self._manager._delete(f'stage/{self._workspace_group.id}/fs/{stage_path}')
 
