@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.10.3 - January 17, 2023
+--------------------------
+* Change Stage URLs
+* Fix password encoding in deferred connections
+
 v0.10.2 - December 14, 2023
 ---------------------------
 * Make workspace group optional in Fusion SQL if it is specified in the environment

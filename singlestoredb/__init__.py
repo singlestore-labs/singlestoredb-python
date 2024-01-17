@@ -13,7 +13,7 @@ Examples
 
 """
 
-__version__ = '0.10.2'
+__version__ = '0.10.3'
 
 from .alchemy import create_engine
 from .config import options, get_option, set_option, describe_option
