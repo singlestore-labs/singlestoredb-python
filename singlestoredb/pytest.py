@@ -5,12 +5,12 @@ import logging
 import os
 import subprocess
 import time
-from typing import Optional
+from typing import Optional, Iterator, Generator
 
 import pytest
 
 from . import connect
-from .connection import Connection
+from .connection import Connection, Cursor
 
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ def execution_mode() -> PytestMode:
 
 
 @pytest.fixture(scope="session")
-def node_name():
+def node_name() -> Iterator[str]:
     """Determine the name of this worker node"""
 
     worker = os.environ.get("PYTEST_XDIST_WORKER")
@@ -76,7 +76,7 @@ def node_name():
 class _TestContainerManager():
     """Manages the setup and teardown of a SingleStoreDB Dev Container"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.container_name = "singlestoredb-test-container"
         self.dev_image_name = "ghcr.io/singlestore-labs/singlestoredb-dev"
 
@@ -93,7 +93,7 @@ class _TestContainerManager():
 
         self.url = f"root:{self.root_password}@127.0.0.1:3306"
 
-    def start(self):
+    def start(self) -> None:
         command = ' '.join(self._start_command())
 
         logger.info(f"Starting container {self.container_name}")
@@ -109,7 +109,7 @@ class _TestContainerManager():
         logger.debug("Container started")
 
 
-    def _start_command(self):
+    def _start_command(self) -> Iterator[str]:
         yield "docker run -d --name"
         yield self.container_name
         for key, value in self.environment_vars.items():
@@ -125,12 +125,12 @@ class _TestContainerManager():
 
         yield self.dev_image_name
 
-    def print_logs(self):
+    def print_logs(self) -> None:
         logs_command = ["docker", "logs", self.container_name]
         logger.info(f"Getting logs")
         logger.info(subprocess.check_output(logs_command))
 
-    def connect(self):
+    def connect(self) -> Connection:
         # Run all but one attempts trying again if they fail
         for i in range(STARTUP_CONNECT_ATTEMPTS - 1):
             try:
@@ -148,10 +148,12 @@ class _TestContainerManager():
                 self.print_logs()
                 raise RuntimeError("Failed to connect to database") from e
 
-    def wait_till_connections_closed(self):
+    def wait_till_connections_closed(self) -> None:
         heart_beat = connect(self.url)
         for i in range(TEARDOWN_WAIT_ATTEMPTS):
             connections = self.get_open_connections(heart_beat)
+            if connections is None:
+                raise RuntimeError("Could not determine the number of open connections.")
             logger.debug(f"Waiting for other connections (n={connections-1}) to close (attempt #{i})")
             time.sleep(TEARDOWN_WAIT_SECONDS)
         else:
@@ -166,7 +168,7 @@ class _TestContainerManager():
         
         return None
 
-    def stop(self):
+    def stop(self) -> None:
         logger.info("Cleaning up SingleStore DB dev container")
         logger.debug("Stopping container")
         try:
@@ -184,7 +186,7 @@ class _TestContainerManager():
 
 
 @pytest.fixture(scope="session")
-def singlestoredb_test_container(pytest_mode: PytestMode):
+def singlestoredb_test_container(pytest_mode: PytestMode) -> Iterator[_TestContainerManager]:
     """Sets up and tears down the test container"""
 
     if not isinstance(pytest_mode, PytestMode):
@@ -216,7 +218,7 @@ def singlestoredb_test_container(pytest_mode: PytestMode):
 
 
 @pytest.fixture(scope="session")
-def singlestoredb_connection(singlestoredb_test_container: _TestContainerManager):
+def singlestoredb_connection(singlestoredb_test_container: _TestContainerManager) -> Iterator[Connection]:
     """Creates and closes the connection"""
 
     connection = singlestoredb_test_container.connect()
@@ -231,7 +233,7 @@ def singlestoredb_connection(singlestoredb_test_container: _TestContainerManager
 class _NameAllocator():
     """Generates unique names for each database"""
 
-    def __init__(self, id: str):
+    def __init__(self, id: str) -> None:
         self.id = id
         self.names = 0
 
@@ -242,14 +244,14 @@ class _NameAllocator():
 
 
 @pytest.fixture(scope="session")
-def name_allocator(node_name: str):
+def name_allocator(node_name: str) -> Iterator[_NameAllocator]:
     """Makes a worker-local name allocator using the node name"""
 
     yield _NameAllocator(node_name)
 
 
 @pytest.fixture
-def singlestoredb_tempdb(singlestoredb_connection: Connection, name_allocator: _NameAllocator):
+def singlestoredb_tempdb(singlestoredb_connection: Connection, name_allocator: _NameAllocator) -> Iterator[Cursor]:
     """Provides a connection to a unique temporary test database"""
 
     assert singlestoredb_connection.is_connected(), "Database is no longer connected"
