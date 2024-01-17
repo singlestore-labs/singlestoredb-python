@@ -14,6 +14,21 @@ INSERT INTO data SET id='e', name='elephants', value=0;
 
 COMMIT;
 
+CREATE ROWSTORE TABLE IF NOT EXISTS data_with_nulls (
+    id VARCHAR(255) NOT NULL,
+    name VARCHAR(255),
+    value BIGINT,
+    PRIMARY KEY (id) USING HASH
+) DEFAULT CHARSET = utf8 COLLATE = utf8_unicode_ci;
+
+INSERT INTO data_with_nulls SET id='a', name='antelopes', value=2;
+INSERT INTO data_with_nulls SET id='b', name=NULL, value=2;
+INSERT INTO data_with_nulls SET id='c', name=NULL, value=5;
+INSERT INTO data_with_nulls SET id='d', name='dogs', value=NULL;
+INSERT INTO data_with_nulls SET id='e', name='elephants', value=0;
+
+COMMIT;
+
 CREATE OR REPLACE PROCEDURE get_animal(nm VARCHAR(255) NOT NULL COLLATE utf8_unicode_ci) AS
 BEGIN
     ECHO SELECT value FROM data WHERE name = nm; --

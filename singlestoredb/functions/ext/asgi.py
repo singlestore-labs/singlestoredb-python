@@ -22,7 +22,7 @@ $ SINGLESTOREDB_EXT_FUNCTIONS='myfuncs.[percentage_90,percentage_95]' \
     uvicorn --factory singlestoredb.functions.ext:create_app
 
 '''
-import importlib
+import importlib.util
 import itertools
 import os
 import urllib
@@ -125,33 +125,34 @@ def make_func(name: str, func: Callable[..., Any]) -> Callable[..., Any]:
     Callable
 
     '''
-    data_format = getattr(func, '_singlestoredb_attrs', {}).get('data_format', 'python')
+    attrs = getattr(func, '_singlestoredb_attrs', {})
+    data_format = attrs.get('data_format') or 'python'
+    include_masks = attrs.get('include_masks', False)
 
     if data_format == 'python':
-        async def do_func(row_ids: Sequence[int], rows: Sequence[Any]) -> List[Any]:
+        async def do_func(
+            row_ids: Sequence[int],
+            rows: Sequence[Sequence[Any]],
+        ) -> Tuple[
+            Sequence[int],
+            List[Tuple[Any]],
+        ]:
             '''Call function on given rows of data.'''
-            return list(zip(row_ids, func_map(func, rows)))
-
-    elif data_format == 'arrow':
-        async def do_func(row_ids: Sequence[int], rows: Sequence[Any]) -> List[Any]:
-            '''Call function on given rows of data.'''
-            return list(
-                zip(
-                    row_ids.to_numpy(),  # type: ignore
-                    func(
-                        *[
-                            x.to_numpy(zero_copy_only=False)
-                            for x in rows
-                        ],
-                    ),  # type: ignore
-                ),
-            )
+            return row_ids, list(zip(func_map(func, rows)))
 
     else:
-        # All other vector formats use the same function wrapper
-        async def do_func(row_ids: Sequence[int], rows: Sequence[Any]) -> List[Any]:
-            '''Call function on given rows of data.'''
-            return list(zip(row_ids, func(*rows)))
+        # Vector formats use the same function wrapper
+        async def do_func(  # type: ignore
+            row_ids: Sequence[int],
+            cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
+        ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
+            '''Call function on given cols of data.'''
+            # TODO: only supports a single return value
+            if include_masks:
+                out = func(*cols)
+                assert isinstance(out, tuple)
+                return row_ids, [out]
+            return row_ids, [(func(*[x[0] for x in cols]), None)]
 
     do_func.__name__ = name
     do_func.__doc__ = func.__doc__
@@ -221,7 +222,7 @@ def create_app(
     '''
 
     # List of functions specs
-    specs: List[Union[str, Callable[..., Any]]] = []
+    specs: List[Union[str, Callable[..., Any], ModuleType]] = []
 
     # Look up Python function specifications
     if functions is None:
@@ -233,41 +234,54 @@ def create_app(
             specs = [os.environ[x] for x in env_vars]
         else:
             import __main__
-            specs = [
-                x for x in vars(__main__).values()
-                if hasattr(x, '_singlestoredb_attrs')
-            ]
+            specs = [__main__]
+
     elif isinstance(functions, ModuleType):
-        specs = [
-            x for x in vars(functions).values()
-            if hasattr(x, '_singlestoredb_attrs')
-        ]
+        specs = [functions]
+
     elif isinstance(functions, str):
         specs = [functions]
+
     elif callable(functions):
         specs = [functions]
+
     else:
-        items = list(functions)
-        if items and isinstance(items[0], ModuleType):
-            specs = [
-                x for x in vars(items).values()
-                if hasattr(x, '_singlestoredb_attrs')
-            ]
-        else:
-            specs = items
+        specs = list(functions)
 
     # Add functions to application
     endpoints = dict()
     for funcs in itertools.chain(specs):
-        if isinstance(funcs, str):
-            pkg_path, func_names = funcs.rsplit('.', 1)
-            pkg = importlib.import_module(pkg_path)
 
-            # Add endpoint for each exported function
-            for name, alias in get_func_names(func_names):
-                item = getattr(pkg, name)
-                func = make_func(alias, item)
-                endpoints[alias.encode('utf-8')] = func
+        if isinstance(funcs, str):
+            # Module name
+            if importlib.util.find_spec(funcs) is not None:
+                items = importlib.import_module(funcs)
+                for x in vars(items).values():
+                    if not hasattr(x, '_singlestoredb_attrs'):
+                        continue
+                    name = x._singlestoredb_attrs.get('name', x.__name__)
+                    func = make_func(name, x)
+                    endpoints[name.encode('utf-8')] = func
+
+            # Fully qualified function name
+            else:
+                pkg_path, func_names = funcs.rsplit('.', 1)
+                pkg = importlib.import_module(pkg_path)
+
+                # Add endpoint for each exported function
+                for name, alias in get_func_names(func_names):
+                    item = getattr(pkg, name)
+                    func = make_func(alias, item)
+                    endpoints[alias.encode('utf-8')] = func
+
+        elif isinstance(funcs, ModuleType):
+            for x in vars(funcs).values():
+                if not hasattr(x, '_singlestoredb_attrs'):
+                    continue
+                name = x._singlestoredb_attrs.get('name', x.__name__)
+                func = make_func(name, x)
+                endpoints[name.encode('utf-8')] = func
+
         else:
             alias = funcs.__name__
             func = make_func(alias, funcs)
@@ -394,10 +408,10 @@ def create_app(
         accepts = headers.get(b'accepts', content_type)
         func_name = headers.get(b's2-ef-name', b'')
         func = endpoints.get(func_name)
-        data_format = func._ext_func_data_format  # type: ignore
 
         # Call the endpoint
         if method == 'POST' and func is not None and path == invoke_path:
+            data_format = func._ext_func_data_format  # type: ignore
             data = []
             more_body = True
             while more_body:
@@ -414,7 +428,7 @@ def create_app(
                     func._ext_func_colspec, b''.join(data),  # type: ignore
                 ),
             )
-            body = output_handler['dump'](func._ext_func_returns, out)  # type: ignore
+            body = output_handler['dump'](func._ext_func_returns, *out)  # type: ignore
 
             await send(output_handler['response'])
 
@@ -473,7 +487,10 @@ def create_app(
     ) -> None:
         with connection.connect(*connection_args, **connection_kwargs) as conn:
             with conn.cursor() as cur:
-                for func in app.show_create_functions(base_url=base_url):  # type: ignore
+                for func in app.show_create_functions(  # type: ignore
+                                base_url=base_url,
+                                data_format=data_format,
+                ):  # type: ignore
                     cur.execute(func)
 
     app.register_functions = register_functions  # type: ignore

@@ -1,12 +1,44 @@
 #!/usr/bin/env python3
 import json
 from typing import Any
-from typing import Iterable
 from typing import List
 from typing import Tuple
 
+from ..dtypes import DEFAULT_VALUES
+from ..dtypes import NUMPY_TYPE_MAP
+from ..dtypes import PANDAS_TYPE_MAP
+from ..dtypes import POLARS_TYPE_MAP
+from ..dtypes import PYARROW_TYPE_MAP
 
-def load(colspec: Iterable[Tuple[str, int]], data: bytes) -> Tuple[List[int], List[Any]]:
+try:
+    import numpy as np
+    has_numpy = True
+except ImportError:
+    has_numpy = False
+
+try:
+    import polars as pl
+    has_polars = True
+except ImportError:
+    has_polars = False
+
+try:
+    import pandas as pd
+    has_pandas = True
+except ImportError:
+    has_pandas = False
+
+try:
+    import pyarrow as pa
+    has_pyarrow = True
+except ImportError:
+    has_pyarrow = False
+
+
+def load(
+    colspec: List[Tuple[str, int]],
+    data: bytes,
+) -> Tuple[List[int], List[Any]]:
     '''
     Convert bytes in JSON format into rows of data.
 
@@ -19,7 +51,7 @@ def load(colspec: Iterable[Tuple[str, int]], data: bytes) -> Tuple[List[int], Li
 
     Returns
     -------
-    Tuple[List[int] List[List[Any]]]
+    Tuple[List[int], List[Any]]
 
     '''
     row_ids = []
@@ -31,7 +63,7 @@ def load(colspec: Iterable[Tuple[str, int]], data: bytes) -> Tuple[List[int], Li
 
 
 def _load_vectors(
-    colspec: Iterable[Tuple[str, int]],
+    colspec: List[Tuple[str, int]],
     data: bytes,
 ) -> Tuple[List[int], List[Any]]:
     '''
@@ -49,12 +81,23 @@ def _load_vectors(
     Tuple[List[int] List[List[Any]]]
 
     '''
-    row_ids, rows = load(colspec, data)
-    return row_ids, list(map(list, zip(*rows)))
+    row_ids = []
+    cols: List[Tuple[Any, Any]] = []
+    defaults: List[Any] = []
+    for row_id, *row in json.loads(data.decode('utf-8'))['data']:
+        row_ids.append(row_id)
+        if not defaults:
+            defaults = [DEFAULT_VALUES[colspec[i][1]] for i, _ in enumerate(row)]
+        if not cols:
+            cols = [([], []) for _ in row]
+        for i, x in enumerate(row):
+            cols[i][0].append(x if x is not None else defaults[i])
+            cols[i][1].append(False if x is not None else True)
+    return row_ids, cols
 
 
 def load_pandas(
-    colspec: Iterable[Tuple[str, int]],
+    colspec: List[Tuple[str, int]],
     data: bytes,
 ) -> Tuple[List[int], List[Any]]:
     '''
@@ -72,15 +115,26 @@ def load_pandas(
     Tuple[pd.Series[int], List[pd.Series[Any]]
 
     '''
-    import pandas as pd
+    if not has_pandas or not has_numpy:
+        raise RuntimeError('This operation requires pandas and numpy to be installed')
+
     row_ids, cols = _load_vectors(colspec, data)
-    index = pd.Series(row_ids)
-    return pd.Series(row_ids), \
-        [pd.Series(data, index=index, name=x[0]) for x in zip(cols, colspec)]
+    index = pd.Series(row_ids, dtype=np.longlong)
+    return index, \
+        [
+            (
+                pd.Series(
+                    data, index=index, name=spec[0],
+                    dtype=PANDAS_TYPE_MAP[spec[1]],
+                ),
+                pd.Series(mask, index=index, dtype=np.longlong),
+            )
+            for (data, mask), spec in zip(cols, colspec)
+        ]
 
 
 def load_polars(
-    colspec: Iterable[Tuple[str, int]],
+    colspec: List[Tuple[str, int]],
     data: bytes,
 ) -> Tuple[List[int], List[Any]]:
     '''
@@ -98,13 +152,22 @@ def load_polars(
     Tuple[polars.Series[int], List[polars.Series[Any]]
 
     '''
-    import polars as pl
+    if not has_polars or not has_numpy:
+        raise RuntimeError('This operation requires polars and numpy to be installed')
+
     row_ids, cols = _load_vectors(colspec, data)
-    return pl.Series(None, row_ids), [pl.Series(x[0], data) for x in zip(cols, colspec)]
+    return pl.Series(None, row_ids, dtype=pl.Int64), \
+        [
+            (
+                pl.Series(spec[0], data, dtype=POLARS_TYPE_MAP[spec[1]]),
+                pl.Series(None, mask, dtype=pl.Boolean),
+            )
+            for (data, mask), spec in zip(cols, colspec)
+        ]
 
 
 def load_numpy(
-    colspec: Iterable[Tuple[str, int]],
+    colspec: List[Tuple[str, int]],
     data: bytes,
 ) -> Tuple[Any, List[Any]]:
     '''
@@ -122,13 +185,22 @@ def load_numpy(
     Tuple[np.ndarray[int], List[np.ndarray[Any]]
 
     '''
-    import numpy as np
+    if not has_numpy:
+        raise RuntimeError('This operation requires numpy to be installed')
+
     row_ids, cols = _load_vectors(colspec, data)
-    return np.asarray(row_ids), [np.asarray(x) for x in cols]
+    return np.asarray(row_ids, dtype=np.longlong), \
+        [
+            (
+                np.asarray(data, dtype=NUMPY_TYPE_MAP[spec[1]]),
+                np.asarray(mask, dtype=np.bool_),
+            )
+            for (data, mask), spec in zip(cols, colspec)
+        ]
 
 
 def load_arrow(
-    colspec: Iterable[Tuple[str, int]],
+    colspec: List[Tuple[str, int]],
     data: bytes,
 ) -> Tuple[Any, List[Any]]:
     '''
@@ -146,14 +218,27 @@ def load_arrow(
     Tuple[pyarrow.Array[int], List[pyarrow.Array[Any]]
 
     '''
-    import pyarrow as pa
+    if not has_pyarrow or not has_numpy:
+        raise RuntimeError('This operation requires pyarrow and numpy to be installed')
+
     row_ids, cols = _load_vectors(colspec, data)
-    return pa.array(row_ids), [pa.array(x) for x in cols]
+    return pa.array(row_ids, type=pa.int64()), \
+        [
+            (
+                pa.array(
+                    data, type=PYARROW_TYPE_MAP[dtype],
+                    mask=pa.array(mask, type=pa.bool_()),
+                ),
+                pa.array(mask, type=pa.bool_()),
+            )
+            for (data, mask), (name, dtype) in zip(cols, colspec)
+        ]
 
 
 def dump(
-    returns: Iterable[int],
-    data: Iterable[Tuple[int, Any]],
+    returns: List[int],
+    row_ids: List[int],
+    rows: List[List[Any]],
 ) -> bytes:
     '''
     Convert a list of lists of data into JSON format.
@@ -162,7 +247,9 @@ def dump(
     ----------
     returns : List[int]
         The returned data type
-    data : Tuple[int, Any]
+    row_ids : List[int]
+        Row IDs
+    rows : List[List[Any]]
         The rows of data to serialize
 
     Returns
@@ -170,12 +257,46 @@ def dump(
     bytes
 
     '''
-    return json.dumps(dict(data=list(data))).encode('utf-8')
+    data = list(zip(row_ids, *list(zip(*rows))))
+    return json.dumps(dict(data=data)).encode('utf-8')
+
+
+def _dump_vectors(
+    returns: List[int],
+    row_ids: List[int],
+    cols: List[Tuple[Any, Any]],
+) -> bytes:
+    '''
+    Convert a list of lists of data into JSON format.
+
+    Parameters
+    ----------
+    returns : List[int]
+        The returned data type
+    row_ids : List[int]
+        Row IDs
+    cols : List[Tuple[Any, Any]]
+        The rows of data to serialize
+
+    Returns
+    -------
+    bytes
+
+    '''
+    masked_cols = []
+    for i, (data, mask) in enumerate(cols):
+        if mask is not None:
+            masked_cols.append([d if m is not None else None for d, m in zip(data, mask)])
+        else:
+            masked_cols.append(cols[i][0])
+    data = list(zip(row_ids, *cols))
+    return json.dumps(dict(data=data)).encode('utf-8')
 
 
 def dump_pandas(
-    returns: Iterable[int],
-    data: Iterable[Tuple[int, Any]],
+    returns: List[int],
+    row_ids: List[int],
+    cols: List[Tuple[Any, Any]],
 ) -> bytes:
     '''
     Convert a list of pd.Series of data into JSON format.
@@ -184,7 +305,9 @@ def dump_pandas(
     ----------
     returns : List[int]
         The returned data type
-    data : List[pd.Series[Any]]
+    row_ids : pd.Series[int]
+        Row IDs
+    cols : List[Tuple[pd.Series[Any], pd.Series[bool]]]
         The rows of data to serialize
 
     Returns
@@ -193,12 +316,14 @@ def dump_pandas(
 
     '''
     import pandas as pd
-    return dump(returns, pd.concat(data, axis=1).to_json(orient='values'))
+    df = pd.concat([row_ids] + [x[0] for x in cols], axis=1)
+    return ('{"data": %s}' % df.to_json(orient='values')).encode('utf-8')
 
 
 def dump_polars(
-    returns: Iterable[int],
-    data: Iterable[Tuple[int, Any]],
+    returns: List[int],
+    row_ids: 'pl.Series[int]',
+    cols: List[Tuple['pl.Series[Any]', 'pl.Series[int]']],
 ) -> bytes:
     '''
     Convert a list of polars.Series of data into JSON format.
@@ -207,7 +332,8 @@ def dump_polars(
     ----------
     returns : List[int]
         The returned data type
-    data : List[polars.Series[Any]]
+    row_ids : List[int]
+    cols : List[Tuple[polars.Series[Any], polars.Series[bool]]
         The rows of data to serialize
 
     Returns
@@ -215,12 +341,17 @@ def dump_polars(
     bytes
 
     '''
-    return dump(returns, list(zip(*data)))
+    return _dump_vectors(
+        returns,
+        row_ids.to_list(),
+        [(x[0].to_list(), x[1].to_list() if x[1] is not None else None) for x in cols],
+    )
 
 
 def dump_numpy(
-    returns: Iterable[int],
-    data: Iterable[Tuple[int, Any]],
+    returns: List[int],
+    row_ids: 'np.typing.NDArray[np.int64]',
+    cols: List[Tuple['np.typing.NDArray[Any]', 'np.typing.NDArray[np.bool_]']],
 ) -> bytes:
     '''
     Convert a list of np.ndarrays of data into JSON format.
@@ -229,7 +360,9 @@ def dump_numpy(
     ----------
     returns : List[int]
         The returned data type
-    data : List[np.ndarray[Any]]
+    row_ids : List[int]
+        Row IDs
+    cols : List[Tuple[np.ndarray[Any], np.ndarray[bool]]]
         The rows of data to serialize
 
     Returns
@@ -237,12 +370,17 @@ def dump_numpy(
     bytes
 
     '''
-    return dump(returns, list(zip(*data)))
+    return _dump_vectors(
+        returns,
+        row_ids.tolist(),
+        [(x[0].tolist(), x[1].tolist() if x[1] is not None else None) for x in cols],
+    )
 
 
 def dump_arrow(
-    returns: Iterable[int],
-    data: Iterable[Tuple[int, Any]],
+    returns: List[int],
+    row_ids: 'pa.Array[int]',
+    cols: List[Tuple['pa.Array[int]', 'pa.Array[bool]']],
 ) -> bytes:
     '''
     Convert a list of pyarrow.Arrays of data into JSON format.
@@ -251,7 +389,9 @@ def dump_arrow(
     ----------
     returns : List[int]
         The returned data type
-    data : List[pyarrow.Array[Any]]
+    row_ids : pyarrow.Array[int]
+        Row IDs
+    cols : List[Tuple[pyarrow.Array[Any], pyarrow.Array[Any]]]
         The rows of data to serialize
 
     Returns
@@ -259,7 +399,8 @@ def dump_arrow(
     bytes
 
     '''
-    return dump(
+    return _dump_vectors(
         returns,
-        list(zip(*[x.to_numpy(zero_copy_only=False) for x in data])),  # type: ignore
+        row_ids.tolist(),
+        [(x[0].tolist(), x[1].tolist() if x[1] is not None else None) for x in cols],
     )

@@ -323,26 +323,26 @@ class TestUDF(unittest.TestCase):
         # Override return value with callable
         @udf(returns=dt.SMALLINT)
         def foo(x: int) -> int: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) RETURNS SMALLINT NOT NULL'
-
-        # Override return value with string
-        @udf(returns=dt.SMALLINT(nullable=True))
-        def foo(x: int) -> int: ...
         assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) RETURNS SMALLINT NULL'
 
+        # Override return value with string
+        @udf(returns=dt.SMALLINT(nullable=False))
+        def foo(x: int) -> int: ...
+        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) RETURNS SMALLINT NOT NULL'
+
         # Override multiple params with one type
-        @udf(args=dt.SMALLINT(nullable=True))
+        @udf(args=dt.SMALLINT(nullable=False))
         def foo(x: int, y: float, z: np.int8) -> int: ...
-        assert to_sql(foo) == '`foo`(`x` SMALLINT NULL, ' \
-            '`y` SMALLINT NULL, ' \
-            '`z` SMALLINT NULL) RETURNS BIGINT NOT NULL'
+        assert to_sql(foo) == '`foo`(`x` SMALLINT NOT NULL, ' \
+            '`y` SMALLINT NOT NULL, ' \
+            '`z` SMALLINT NOT NULL) RETURNS BIGINT NOT NULL'
 
         # Override with list
         @udf(args=[dt.SMALLINT, dt.FLOAT, dt.CHAR(30)])
         def foo(x: int, y: float, z: str) -> int: ...
-        assert to_sql(foo) == '`foo`(`x` SMALLINT NOT NULL, ' \
-            '`y` FLOAT NOT NULL, ' \
-            '`z` CHAR(30) NOT NULL) RETURNS BIGINT NOT NULL'
+        assert to_sql(foo) == '`foo`(`x` SMALLINT NULL, ' \
+            '`y` FLOAT NULL, ' \
+            '`z` CHAR(30) NULL) RETURNS BIGINT NOT NULL'
 
         # Override with too short of a list
         @udf(args=[dt.SMALLINT, dt.FLOAT])
@@ -359,16 +359,16 @@ class TestUDF(unittest.TestCase):
         # Override with list
         @udf(args=[dt.SMALLINT, dt.FLOAT, dt.CHAR(30)])
         def foo(x: int, y: float, z: str) -> int: ...
-        assert to_sql(foo) == '`foo`(`x` SMALLINT NOT NULL, ' \
-            '`y` FLOAT NOT NULL, ' \
-            '`z` CHAR(30) NOT NULL) RETURNS BIGINT NOT NULL'
+        assert to_sql(foo) == '`foo`(`x` SMALLINT NULL, ' \
+            '`y` FLOAT NULL, ' \
+            '`z` CHAR(30) NULL) RETURNS BIGINT NOT NULL'
 
         # Override with dict
         @udf(args=dict(x=dt.SMALLINT, z=dt.CHAR(30)))
         def foo(x: int, y: float, z: str) -> int: ...
-        assert to_sql(foo) == '`foo`(`x` SMALLINT NOT NULL, ' \
+        assert to_sql(foo) == '`foo`(`x` SMALLINT NULL, ' \
             '`y` DOUBLE NOT NULL, ' \
-            '`z` CHAR(30) NOT NULL) RETURNS BIGINT NOT NULL'
+            '`z` CHAR(30) NULL) RETURNS BIGINT NOT NULL'
 
         # Override with empty dict
         @udf(args=dict())
@@ -385,11 +385,11 @@ class TestUDF(unittest.TestCase):
             '`z` TEXT NOT NULL) RETURNS BIGINT NOT NULL'
 
         # Override parameters and return value
-        @udf(args=dict(x=dt.SMALLINT, z=dt.CHAR(30)), returns=dt.SMALLINT(nullable=True))
+        @udf(args=dict(x=dt.SMALLINT, z=dt.CHAR(30)), returns=dt.SMALLINT(nullable=False))
         def foo(x: int, y: float, z: str) -> int: ...
-        assert to_sql(foo) == '`foo`(`x` SMALLINT NOT NULL, ' \
+        assert to_sql(foo) == '`foo`(`x` SMALLINT NULL, ' \
             '`y` DOUBLE NOT NULL, ' \
-            '`z` CHAR(30) NOT NULL) RETURNS SMALLINT NULL'
+            '`z` CHAR(30) NULL) RETURNS SMALLINT NOT NULL'
 
         # Override parameter with incorrect type
         with self.assertRaises(TypeError):
@@ -424,275 +424,275 @@ class TestUDF(unittest.TestCase):
                               'RETURNS BIGINT NOT NULL'
 
     def test_dtypes(self):
-        assert dt.BOOL() == 'BOOL NOT NULL'
-        assert dt.BOOL(nullable=True) == 'BOOL NULL'
-        assert dt.BOOL(default=False) == 'BOOL NOT NULL DEFAULT 0'
-        assert dt.BOOL(default=True) == 'BOOL NOT NULL DEFAULT 1'
-        assert dt.BOOL(default='a') == 'BOOL NOT NULL DEFAULT 1'
+        assert dt.BOOL() == 'BOOL NULL'
+        assert dt.BOOL(nullable=False) == 'BOOL NOT NULL'
+        assert dt.BOOL(default=False) == 'BOOL NULL DEFAULT 0'
+        assert dt.BOOL(default=True) == 'BOOL NULL DEFAULT 1'
+        assert dt.BOOL(default='a') == 'BOOL NULL DEFAULT 1'
 
-        assert dt.BOOLEAN() == 'BOOLEAN NOT NULL'
-        assert dt.BOOLEAN(nullable=True) == 'BOOLEAN NULL'
-        assert dt.BOOLEAN(default=False) == 'BOOLEAN NOT NULL DEFAULT 0'
-        assert dt.BOOLEAN(default=True) == 'BOOLEAN NOT NULL DEFAULT 1'
-        assert dt.BOOLEAN(default='a') == 'BOOLEAN NOT NULL DEFAULT 1'
+        assert dt.BOOLEAN() == 'BOOLEAN NULL'
+        assert dt.BOOLEAN(nullable=False) == 'BOOLEAN NOT NULL'
+        assert dt.BOOLEAN(default=False) == 'BOOLEAN NULL DEFAULT 0'
+        assert dt.BOOLEAN(default=True) == 'BOOLEAN NULL DEFAULT 1'
+        assert dt.BOOLEAN(default='a') == 'BOOLEAN NULL DEFAULT 1'
 
-        assert dt.BIT() == 'BIT NOT NULL'
-        assert dt.BIT(nullable=True) == 'BIT NULL'
-        assert dt.BIT(default=100) == 'BIT NOT NULL DEFAULT 100'
+        assert dt.BIT() == 'BIT NULL'
+        assert dt.BIT(nullable=False) == 'BIT NOT NULL'
+        assert dt.BIT(default=100) == 'BIT NULL DEFAULT 100'
 
-        assert dt.TINYINT() == 'TINYINT NOT NULL'
-        assert dt.TINYINT(5) == 'TINYINT(5) NOT NULL'
-        assert dt.TINYINT(nullable=True) == 'TINYINT NULL'
-        assert dt.TINYINT(default=100) == 'TINYINT NOT NULL DEFAULT 100'
+        assert dt.TINYINT() == 'TINYINT NULL'
+        assert dt.TINYINT(5) == 'TINYINT(5) NULL'
+        assert dt.TINYINT(nullable=False) == 'TINYINT NOT NULL'
+        assert dt.TINYINT(default=100) == 'TINYINT NULL DEFAULT 100'
         assert dt.TINYINT(unsigned=True, default=100) == \
-            'TINYINT UNSIGNED NOT NULL DEFAULT 100'
+            'TINYINT UNSIGNED NULL DEFAULT 100'
 
-        assert dt.TINYINT_UNSIGNED() == 'TINYINT UNSIGNED NOT NULL'
-        assert dt.TINYINT_UNSIGNED(5) == 'TINYINT(5) UNSIGNED NOT NULL'
-        assert dt.TINYINT_UNSIGNED(nullable=True) == 'TINYINT UNSIGNED NULL'
-        assert dt.TINYINT_UNSIGNED(default=100) == 'TINYINT UNSIGNED NOT NULL DEFAULT 100'
+        assert dt.TINYINT_UNSIGNED() == 'TINYINT UNSIGNED NULL'
+        assert dt.TINYINT_UNSIGNED(5) == 'TINYINT(5) UNSIGNED NULL'
+        assert dt.TINYINT_UNSIGNED(nullable=False) == 'TINYINT UNSIGNED NOT NULL'
+        assert dt.TINYINT_UNSIGNED(default=100) == 'TINYINT UNSIGNED NULL DEFAULT 100'
 
-        assert dt.SMALLINT() == 'SMALLINT NOT NULL'
-        assert dt.SMALLINT(5) == 'SMALLINT(5) NOT NULL'
-        assert dt.SMALLINT(nullable=True) == 'SMALLINT NULL'
-        assert dt.SMALLINT(default=100) == 'SMALLINT NOT NULL DEFAULT 100'
+        assert dt.SMALLINT() == 'SMALLINT NULL'
+        assert dt.SMALLINT(5) == 'SMALLINT(5) NULL'
+        assert dt.SMALLINT(nullable=False) == 'SMALLINT NOT NULL'
+        assert dt.SMALLINT(default=100) == 'SMALLINT NULL DEFAULT 100'
         assert dt.SMALLINT(unsigned=True, default=100) == \
-            'SMALLINT UNSIGNED NOT NULL DEFAULT 100'
+            'SMALLINT UNSIGNED NULL DEFAULT 100'
 
-        assert dt.SMALLINT_UNSIGNED() == 'SMALLINT UNSIGNED NOT NULL'
-        assert dt.SMALLINT_UNSIGNED(5) == 'SMALLINT(5) UNSIGNED NOT NULL'
-        assert dt.SMALLINT_UNSIGNED(nullable=True) == 'SMALLINT UNSIGNED NULL'
+        assert dt.SMALLINT_UNSIGNED() == 'SMALLINT UNSIGNED NULL'
+        assert dt.SMALLINT_UNSIGNED(5) == 'SMALLINT(5) UNSIGNED NULL'
+        assert dt.SMALLINT_UNSIGNED(nullable=False) == 'SMALLINT UNSIGNED NOT NULL'
         assert dt.SMALLINT_UNSIGNED(default=100) == \
-            'SMALLINT UNSIGNED NOT NULL DEFAULT 100'
+            'SMALLINT UNSIGNED NULL DEFAULT 100'
 
-        assert dt.MEDIUMINT() == 'MEDIUMINT NOT NULL'
-        assert dt.MEDIUMINT(5) == 'MEDIUMINT(5) NOT NULL'
-        assert dt.MEDIUMINT(nullable=True) == 'MEDIUMINT NULL'
-        assert dt.MEDIUMINT(default=100) == 'MEDIUMINT NOT NULL DEFAULT 100'
+        assert dt.MEDIUMINT() == 'MEDIUMINT NULL'
+        assert dt.MEDIUMINT(5) == 'MEDIUMINT(5) NULL'
+        assert dt.MEDIUMINT(nullable=False) == 'MEDIUMINT NOT NULL'
+        assert dt.MEDIUMINT(default=100) == 'MEDIUMINT NULL DEFAULT 100'
         assert dt.MEDIUMINT(unsigned=True, default=100) == \
-            'MEDIUMINT UNSIGNED NOT NULL DEFAULT 100'
+            'MEDIUMINT UNSIGNED NULL DEFAULT 100'
 
-        assert dt.MEDIUMINT_UNSIGNED() == 'MEDIUMINT UNSIGNED NOT NULL'
-        assert dt.MEDIUMINT_UNSIGNED(5) == 'MEDIUMINT(5) UNSIGNED NOT NULL'
-        assert dt.MEDIUMINT_UNSIGNED(nullable=True) == 'MEDIUMINT UNSIGNED NULL'
+        assert dt.MEDIUMINT_UNSIGNED() == 'MEDIUMINT UNSIGNED NULL'
+        assert dt.MEDIUMINT_UNSIGNED(5) == 'MEDIUMINT(5) UNSIGNED NULL'
+        assert dt.MEDIUMINT_UNSIGNED(nullable=False) == 'MEDIUMINT UNSIGNED NOT NULL'
         assert dt.MEDIUMINT_UNSIGNED(default=100) == \
-            'MEDIUMINT UNSIGNED NOT NULL DEFAULT 100'
+            'MEDIUMINT UNSIGNED NULL DEFAULT 100'
 
-        assert dt.INT() == 'INT NOT NULL'
-        assert dt.INT(5) == 'INT(5) NOT NULL'
-        assert dt.INT(nullable=True) == 'INT NULL'
-        assert dt.INT(default=100) == 'INT NOT NULL DEFAULT 100'
+        assert dt.INT() == 'INT NULL'
+        assert dt.INT(5) == 'INT(5) NULL'
+        assert dt.INT(nullable=False) == 'INT NOT NULL'
+        assert dt.INT(default=100) == 'INT NULL DEFAULT 100'
         assert dt.INT(unsigned=True, default=100) == \
-            'INT UNSIGNED NOT NULL DEFAULT 100'
+            'INT UNSIGNED NULL DEFAULT 100'
 
-        assert dt.INT_UNSIGNED() == 'INT UNSIGNED NOT NULL'
-        assert dt.INT_UNSIGNED(5) == 'INT(5) UNSIGNED NOT NULL'
-        assert dt.INT_UNSIGNED(nullable=True) == 'INT UNSIGNED NULL'
+        assert dt.INT_UNSIGNED() == 'INT UNSIGNED NULL'
+        assert dt.INT_UNSIGNED(5) == 'INT(5) UNSIGNED NULL'
+        assert dt.INT_UNSIGNED(nullable=False) == 'INT UNSIGNED NOT NULL'
         assert dt.INT_UNSIGNED(default=100) == \
-            'INT UNSIGNED NOT NULL DEFAULT 100'
+            'INT UNSIGNED NULL DEFAULT 100'
 
-        assert dt.INTEGER() == 'INTEGER NOT NULL'
-        assert dt.INTEGER(5) == 'INTEGER(5) NOT NULL'
-        assert dt.INTEGER(nullable=True) == 'INTEGER NULL'
-        assert dt.INTEGER(default=100) == 'INTEGER NOT NULL DEFAULT 100'
+        assert dt.INTEGER() == 'INTEGER NULL'
+        assert dt.INTEGER(5) == 'INTEGER(5) NULL'
+        assert dt.INTEGER(nullable=False) == 'INTEGER NOT NULL'
+        assert dt.INTEGER(default=100) == 'INTEGER NULL DEFAULT 100'
         assert dt.INTEGER(unsigned=True, default=100) == \
-            'INTEGER UNSIGNED NOT NULL DEFAULT 100'
+            'INTEGER UNSIGNED NULL DEFAULT 100'
 
-        assert dt.INTEGER_UNSIGNED() == 'INTEGER UNSIGNED NOT NULL'
-        assert dt.INTEGER_UNSIGNED(5) == 'INTEGER(5) UNSIGNED NOT NULL'
-        assert dt.INTEGER_UNSIGNED(nullable=True) == 'INTEGER UNSIGNED NULL'
+        assert dt.INTEGER_UNSIGNED() == 'INTEGER UNSIGNED NULL'
+        assert dt.INTEGER_UNSIGNED(5) == 'INTEGER(5) UNSIGNED NULL'
+        assert dt.INTEGER_UNSIGNED(nullable=False) == 'INTEGER UNSIGNED NOT NULL'
         assert dt.INTEGER_UNSIGNED(default=100) == \
-            'INTEGER UNSIGNED NOT NULL DEFAULT 100'
+            'INTEGER UNSIGNED NULL DEFAULT 100'
 
-        assert dt.BIGINT() == 'BIGINT NOT NULL'
-        assert dt.BIGINT(5) == 'BIGINT(5) NOT NULL'
-        assert dt.BIGINT(nullable=True) == 'BIGINT NULL'
-        assert dt.BIGINT(default=100) == 'BIGINT NOT NULL DEFAULT 100'
+        assert dt.BIGINT() == 'BIGINT NULL'
+        assert dt.BIGINT(5) == 'BIGINT(5) NULL'
+        assert dt.BIGINT(nullable=False) == 'BIGINT NOT NULL'
+        assert dt.BIGINT(default=100) == 'BIGINT NULL DEFAULT 100'
         assert dt.BIGINT(unsigned=True, default=100) == \
-            'BIGINT UNSIGNED NOT NULL DEFAULT 100'
+            'BIGINT UNSIGNED NULL DEFAULT 100'
 
-        assert dt.BIGINT_UNSIGNED() == 'BIGINT UNSIGNED NOT NULL'
-        assert dt.BIGINT_UNSIGNED(5) == 'BIGINT(5) UNSIGNED NOT NULL'
-        assert dt.BIGINT_UNSIGNED(nullable=True) == 'BIGINT UNSIGNED NULL'
+        assert dt.BIGINT_UNSIGNED() == 'BIGINT UNSIGNED NULL'
+        assert dt.BIGINT_UNSIGNED(5) == 'BIGINT(5) UNSIGNED NULL'
+        assert dt.BIGINT_UNSIGNED(nullable=False) == 'BIGINT UNSIGNED NOT NULL'
         assert dt.BIGINT_UNSIGNED(default=100) == \
-            'BIGINT UNSIGNED NOT NULL DEFAULT 100'
+            'BIGINT UNSIGNED NULL DEFAULT 100'
 
-        assert dt.BIGINT() == 'BIGINT NOT NULL'
-        assert dt.BIGINT(5) == 'BIGINT(5) NOT NULL'
-        assert dt.BIGINT(nullable=True) == 'BIGINT NULL'
-        assert dt.BIGINT(default=100) == 'BIGINT NOT NULL DEFAULT 100'
+        assert dt.BIGINT() == 'BIGINT NULL'
+        assert dt.BIGINT(5) == 'BIGINT(5) NULL'
+        assert dt.BIGINT(nullable=False) == 'BIGINT NOT NULL'
+        assert dt.BIGINT(default=100) == 'BIGINT NULL DEFAULT 100'
         assert dt.BIGINT(unsigned=True, default=100) == \
-            'BIGINT UNSIGNED NOT NULL DEFAULT 100'
+            'BIGINT UNSIGNED NULL DEFAULT 100'
 
-        assert dt.FLOAT() == 'FLOAT NOT NULL'
-        assert dt.FLOAT(5) == 'FLOAT(5) NOT NULL'
-        assert dt.FLOAT(nullable=True) == 'FLOAT NULL'
-        assert dt.FLOAT(default=1.234) == 'FLOAT NOT NULL DEFAULT 1.234e0'
+        assert dt.FLOAT() == 'FLOAT NULL'
+        assert dt.FLOAT(5) == 'FLOAT(5) NULL'
+        assert dt.FLOAT(nullable=False) == 'FLOAT NOT NULL'
+        assert dt.FLOAT(default=1.234) == 'FLOAT NULL DEFAULT 1.234e0'
 
-        assert dt.DOUBLE() == 'DOUBLE NOT NULL'
-        assert dt.DOUBLE(5) == 'DOUBLE(5) NOT NULL'
-        assert dt.DOUBLE(nullable=True) == 'DOUBLE NULL'
-        assert dt.DOUBLE(default=1.234) == 'DOUBLE NOT NULL DEFAULT 1.234e0'
+        assert dt.DOUBLE() == 'DOUBLE NULL'
+        assert dt.DOUBLE(5) == 'DOUBLE(5) NULL'
+        assert dt.DOUBLE(nullable=False) == 'DOUBLE NOT NULL'
+        assert dt.DOUBLE(default=1.234) == 'DOUBLE NULL DEFAULT 1.234e0'
 
-        assert dt.REAL() == 'REAL NOT NULL'
-        assert dt.REAL(5) == 'REAL(5) NOT NULL'
-        assert dt.REAL(nullable=True) == 'REAL NULL'
-        assert dt.REAL(default=1.234) == 'REAL NOT NULL DEFAULT 1.234e0'
+        assert dt.REAL() == 'REAL NULL'
+        assert dt.REAL(5) == 'REAL(5) NULL'
+        assert dt.REAL(nullable=False) == 'REAL NOT NULL'
+        assert dt.REAL(default=1.234) == 'REAL NULL DEFAULT 1.234e0'
 
         with self.assertRaises(TypeError):
             dt.DECIMAL()
         with self.assertRaises(TypeError):
             dt.DECIMAL(5)
-        assert dt.DECIMAL(10, 5) == 'DECIMAL(10, 5) NOT NULL'
-        assert dt.DECIMAL(10, 5, nullable=True) == 'DECIMAL(10, 5) NULL'
+        assert dt.DECIMAL(10, 5) == 'DECIMAL(10, 5) NULL'
+        assert dt.DECIMAL(10, 5, nullable=False) == 'DECIMAL(10, 5) NOT NULL'
         assert dt.DECIMAL(10, 5, default=1.234) == \
-            'DECIMAL(10, 5) NOT NULL DEFAULT 1.234e0'
+            'DECIMAL(10, 5) NULL DEFAULT 1.234e0'
 
         with self.assertRaises(TypeError):
             dt.DEC()
         with self.assertRaises(TypeError):
             dt.DEC(5)
-        assert dt.DEC(10, 5) == 'DEC(10, 5) NOT NULL'
-        assert dt.DEC(10, 5, nullable=True) == 'DEC(10, 5) NULL'
+        assert dt.DEC(10, 5) == 'DEC(10, 5) NULL'
+        assert dt.DEC(10, 5, nullable=False) == 'DEC(10, 5) NOT NULL'
         assert dt.DEC(10, 5, default=1.234) == \
-            'DEC(10, 5) NOT NULL DEFAULT 1.234e0'
+            'DEC(10, 5) NULL DEFAULT 1.234e0'
 
         with self.assertRaises(TypeError):
             dt.FIXED()
         with self.assertRaises(TypeError):
             dt.FIXED(5)
-        assert dt.FIXED(10, 5) == 'FIXED(10, 5) NOT NULL'
-        assert dt.FIXED(10, 5, nullable=True) == 'FIXED(10, 5) NULL'
+        assert dt.FIXED(10, 5) == 'FIXED(10, 5) NULL'
+        assert dt.FIXED(10, 5, nullable=False) == 'FIXED(10, 5) NOT NULL'
         assert dt.FIXED(10, 5, default=1.234) == \
-            'FIXED(10, 5) NOT NULL DEFAULT 1.234e0'
+            'FIXED(10, 5) NULL DEFAULT 1.234e0'
 
         with self.assertRaises(TypeError):
             dt.NUMERIC()
         with self.assertRaises(TypeError):
             dt.NUMERIC(5)
-        assert dt.NUMERIC(10, 5) == 'NUMERIC(10, 5) NOT NULL'
-        assert dt.NUMERIC(10, 5, nullable=True) == 'NUMERIC(10, 5) NULL'
+        assert dt.NUMERIC(10, 5) == 'NUMERIC(10, 5) NULL'
+        assert dt.NUMERIC(10, 5, nullable=False) == 'NUMERIC(10, 5) NOT NULL'
         assert dt.NUMERIC(10, 5, default=1.234) == \
-            'NUMERIC(10, 5) NOT NULL DEFAULT 1.234e0'
+            'NUMERIC(10, 5) NULL DEFAULT 1.234e0'
 
-        assert dt.DATE() == 'DATE NOT NULL'
-        assert dt.DATE(nullable=True) == 'DATE NULL'
+        assert dt.DATE() == 'DATE NULL'
+        assert dt.DATE(nullable=False) == 'DATE NOT NULL'
         assert dt.DATE(default=datetime.date(2020, 1, 2)) == \
-            "DATE NOT NULL DEFAULT '2020-01-02'"
+            "DATE NULL DEFAULT '2020-01-02'"
 
-        assert dt.TIME() == 'TIME NOT NULL'
-        assert dt.TIME(6) == 'TIME(6) NOT NULL'
-        assert dt.TIME(nullable=True) == 'TIME NULL'
+        assert dt.TIME() == 'TIME NULL'
+        assert dt.TIME(6) == 'TIME(6) NULL'
+        assert dt.TIME(nullable=False) == 'TIME NOT NULL'
         assert dt.TIME(default=datetime.timedelta(seconds=1000)) == \
-            "TIME NOT NULL DEFAULT '00:16:40'"
+            "TIME NULL DEFAULT '00:16:40'"
 
-        assert dt.DATETIME() == 'DATETIME NOT NULL'
-        assert dt.DATETIME(6) == 'DATETIME(6) NOT NULL'
-        assert dt.DATETIME(nullable=True) == 'DATETIME NULL'
+        assert dt.DATETIME() == 'DATETIME NULL'
+        assert dt.DATETIME(6) == 'DATETIME(6) NULL'
+        assert dt.DATETIME(nullable=False) == 'DATETIME NOT NULL'
         assert dt.DATETIME(default=datetime.datetime(2020, 1, 2, 3, 4, 5)) == \
-            "DATETIME NOT NULL DEFAULT '2020-01-02 03:04:05'"
+            "DATETIME NULL DEFAULT '2020-01-02 03:04:05'"
 
-        assert dt.TIMESTAMP() == 'TIMESTAMP NOT NULL'
-        assert dt.TIMESTAMP(6) == 'TIMESTAMP(6) NOT NULL'
-        assert dt.TIMESTAMP(nullable=True) == 'TIMESTAMP NULL'
+        assert dt.TIMESTAMP() == 'TIMESTAMP NULL'
+        assert dt.TIMESTAMP(6) == 'TIMESTAMP(6) NULL'
+        assert dt.TIMESTAMP(nullable=False) == 'TIMESTAMP NOT NULL'
         assert dt.TIMESTAMP(default=datetime.datetime(2020, 1, 2, 3, 4, 5)) == \
-            "TIMESTAMP NOT NULL DEFAULT '2020-01-02 03:04:05'"
+            "TIMESTAMP NULL DEFAULT '2020-01-02 03:04:05'"
 
-        assert dt.YEAR() == 'YEAR NOT NULL'
-        assert dt.YEAR(nullable=True) == 'YEAR NULL'
-        assert dt.YEAR(default=1961) == 'YEAR NOT NULL DEFAULT 1961'
+        assert dt.YEAR() == 'YEAR NULL'
+        assert dt.YEAR(nullable=False) == 'YEAR NOT NULL'
+        assert dt.YEAR(default=1961) == 'YEAR NULL DEFAULT 1961'
 
-        assert dt.CHAR() == 'CHAR NOT NULL'
-        assert dt.CHAR(10) == 'CHAR(10) NOT NULL'
+        assert dt.CHAR() == 'CHAR NULL'
+        assert dt.CHAR(10) == 'CHAR(10) NULL'
         assert dt.CHAR(charset=dt.utf8, collate=dt.utf8_bin) == \
-            'CHAR CHARACTER SET utf8 COLLATE utf8_bin NOT NULL'
-        assert dt.CHAR(nullable=True) == 'CHAR NULL'
-        assert dt.CHAR(default='hi') == "CHAR NOT NULL DEFAULT 'hi'"
+            'CHAR CHARACTER SET utf8 COLLATE utf8_bin NULL'
+        assert dt.CHAR(nullable=False) == 'CHAR NOT NULL'
+        assert dt.CHAR(default='hi') == "CHAR NULL DEFAULT 'hi'"
 
-        assert dt.VARCHAR() == 'VARCHAR NOT NULL'
-        assert dt.VARCHAR(10) == 'VARCHAR(10) NOT NULL'
+        assert dt.VARCHAR() == 'VARCHAR NULL'
+        assert dt.VARCHAR(10) == 'VARCHAR(10) NULL'
         assert dt.VARCHAR(charset=dt.utf8, collate=dt.utf8_bin) == \
-            'VARCHAR CHARACTER SET utf8 COLLATE utf8_bin NOT NULL'
-        assert dt.VARCHAR(nullable=True) == 'VARCHAR NULL'
-        assert dt.VARCHAR(default='hi') == "VARCHAR NOT NULL DEFAULT 'hi'"
+            'VARCHAR CHARACTER SET utf8 COLLATE utf8_bin NULL'
+        assert dt.VARCHAR(nullable=False) == 'VARCHAR NOT NULL'
+        assert dt.VARCHAR(default='hi') == "VARCHAR NULL DEFAULT 'hi'"
 
-        assert dt.LONGTEXT() == 'LONGTEXT NOT NULL'
-        assert dt.LONGTEXT(10) == 'LONGTEXT(10) NOT NULL'
+        assert dt.LONGTEXT() == 'LONGTEXT NULL'
+        assert dt.LONGTEXT(10) == 'LONGTEXT(10) NULL'
         assert dt.LONGTEXT(charset=dt.utf8, collate=dt.utf8_bin) == \
-            'LONGTEXT CHARACTER SET utf8 COLLATE utf8_bin NOT NULL'
-        assert dt.LONGTEXT(nullable=True) == 'LONGTEXT NULL'
-        assert dt.LONGTEXT(default='hi') == "LONGTEXT NOT NULL DEFAULT 'hi'"
+            'LONGTEXT CHARACTER SET utf8 COLLATE utf8_bin NULL'
+        assert dt.LONGTEXT(nullable=False) == 'LONGTEXT NOT NULL'
+        assert dt.LONGTEXT(default='hi') == "LONGTEXT NULL DEFAULT 'hi'"
 
-        assert dt.MEDIUMTEXT() == 'MEDIUMTEXT NOT NULL'
-        assert dt.MEDIUMTEXT(10) == 'MEDIUMTEXT(10) NOT NULL'
+        assert dt.MEDIUMTEXT() == 'MEDIUMTEXT NULL'
+        assert dt.MEDIUMTEXT(10) == 'MEDIUMTEXT(10) NULL'
         assert dt.MEDIUMTEXT(charset=dt.utf8, collate=dt.utf8_bin) == \
-            'MEDIUMTEXT CHARACTER SET utf8 COLLATE utf8_bin NOT NULL'
-        assert dt.MEDIUMTEXT(nullable=True) == 'MEDIUMTEXT NULL'
-        assert dt.MEDIUMTEXT(default='hi') == "MEDIUMTEXT NOT NULL DEFAULT 'hi'"
+            'MEDIUMTEXT CHARACTER SET utf8 COLLATE utf8_bin NULL'
+        assert dt.MEDIUMTEXT(nullable=False) == 'MEDIUMTEXT NOT NULL'
+        assert dt.MEDIUMTEXT(default='hi') == "MEDIUMTEXT NULL DEFAULT 'hi'"
 
-        assert dt.TEXT() == 'TEXT NOT NULL'
-        assert dt.TEXT(10) == 'TEXT(10) NOT NULL'
+        assert dt.TEXT() == 'TEXT NULL'
+        assert dt.TEXT(10) == 'TEXT(10) NULL'
         assert dt.TEXT(charset=dt.utf8, collate=dt.utf8_bin) == \
-            'TEXT CHARACTER SET utf8 COLLATE utf8_bin NOT NULL'
-        assert dt.TEXT(nullable=True) == 'TEXT NULL'
-        assert dt.TEXT(default='hi') == "TEXT NOT NULL DEFAULT 'hi'"
+            'TEXT CHARACTER SET utf8 COLLATE utf8_bin NULL'
+        assert dt.TEXT(nullable=False) == 'TEXT NOT NULL'
+        assert dt.TEXT(default='hi') == "TEXT NULL DEFAULT 'hi'"
 
-        assert dt.TINYTEXT() == 'TINYTEXT NOT NULL'
-        assert dt.TINYTEXT(10) == 'TINYTEXT(10) NOT NULL'
+        assert dt.TINYTEXT() == 'TINYTEXT NULL'
+        assert dt.TINYTEXT(10) == 'TINYTEXT(10) NULL'
         assert dt.TINYTEXT(charset=dt.utf8, collate=dt.utf8_bin) == \
-            'TINYTEXT CHARACTER SET utf8 COLLATE utf8_bin NOT NULL'
-        assert dt.TINYTEXT(nullable=True) == 'TINYTEXT NULL'
-        assert dt.TINYTEXT(default='hi') == "TINYTEXT NOT NULL DEFAULT 'hi'"
+            'TINYTEXT CHARACTER SET utf8 COLLATE utf8_bin NULL'
+        assert dt.TINYTEXT(nullable=False) == 'TINYTEXT NOT NULL'
+        assert dt.TINYTEXT(default='hi') == "TINYTEXT NULL DEFAULT 'hi'"
 
-        assert dt.BINARY() == 'BINARY NOT NULL'
-        assert dt.BINARY(10) == 'BINARY(10) NOT NULL'
+        assert dt.BINARY() == 'BINARY NULL'
+        assert dt.BINARY(10) == 'BINARY(10) NULL'
         assert dt.BINARY(collate=dt.utf8_bin) == \
-            'BINARY COLLATE utf8_bin NOT NULL'
-        assert dt.BINARY(nullable=True) == 'BINARY NULL'
-        assert dt.BINARY(default='hi') == "BINARY NOT NULL DEFAULT 'hi'"
+            'BINARY COLLATE utf8_bin NULL'
+        assert dt.BINARY(nullable=False) == 'BINARY NOT NULL'
+        assert dt.BINARY(default='hi') == "BINARY NULL DEFAULT 'hi'"
 
-        assert dt.VARBINARY() == 'VARBINARY NOT NULL'
-        assert dt.VARBINARY(10) == 'VARBINARY(10) NOT NULL'
+        assert dt.VARBINARY() == 'VARBINARY NULL'
+        assert dt.VARBINARY(10) == 'VARBINARY(10) NULL'
         assert dt.VARBINARY(collate=dt.utf8_bin) == \
-            'VARBINARY COLLATE utf8_bin NOT NULL'
-        assert dt.VARBINARY(nullable=True) == 'VARBINARY NULL'
-        assert dt.VARBINARY(default='hi') == "VARBINARY NOT NULL DEFAULT 'hi'"
+            'VARBINARY COLLATE utf8_bin NULL'
+        assert dt.VARBINARY(nullable=False) == 'VARBINARY NOT NULL'
+        assert dt.VARBINARY(default='hi') == "VARBINARY NULL DEFAULT 'hi'"
 
-        assert dt.BLOB() == 'BLOB NOT NULL'
-        assert dt.BLOB(10) == 'BLOB(10) NOT NULL'
+        assert dt.BLOB() == 'BLOB NULL'
+        assert dt.BLOB(10) == 'BLOB(10) NULL'
         assert dt.BLOB(collate=dt.utf8_bin) == \
-            'BLOB COLLATE utf8_bin NOT NULL'
-        assert dt.BLOB(nullable=True) == 'BLOB NULL'
-        assert dt.BLOB(default='hi') == "BLOB NOT NULL DEFAULT 'hi'"
+            'BLOB COLLATE utf8_bin NULL'
+        assert dt.BLOB(nullable=False) == 'BLOB NOT NULL'
+        assert dt.BLOB(default='hi') == "BLOB NULL DEFAULT 'hi'"
 
-        assert dt.TINYBLOB() == 'TINYBLOB NOT NULL'
-        assert dt.TINYBLOB(10) == 'TINYBLOB(10) NOT NULL'
+        assert dt.TINYBLOB() == 'TINYBLOB NULL'
+        assert dt.TINYBLOB(10) == 'TINYBLOB(10) NULL'
         assert dt.TINYBLOB(collate=dt.utf8_bin) == \
-            'TINYBLOB COLLATE utf8_bin NOT NULL'
-        assert dt.TINYBLOB(nullable=True) == 'TINYBLOB NULL'
-        assert dt.TINYBLOB(default='hi') == "TINYBLOB NOT NULL DEFAULT 'hi'"
+            'TINYBLOB COLLATE utf8_bin NULL'
+        assert dt.TINYBLOB(nullable=False) == 'TINYBLOB NOT NULL'
+        assert dt.TINYBLOB(default='hi') == "TINYBLOB NULL DEFAULT 'hi'"
 
-        assert dt.JSON() == 'JSON NOT NULL'
-        assert dt.JSON(10) == 'JSON(10) NOT NULL'
+        assert dt.JSON() == 'JSON NULL'
+        assert dt.JSON(10) == 'JSON(10) NULL'
         assert dt.JSON(charset=dt.utf8, collate=dt.utf8_bin) == \
-            'JSON CHARACTER SET utf8 COLLATE utf8_bin NOT NULL'
-        assert dt.JSON(nullable=True) == 'JSON NULL'
-        assert dt.JSON(default='hi') == "JSON NOT NULL DEFAULT 'hi'"
+            'JSON CHARACTER SET utf8 COLLATE utf8_bin NULL'
+        assert dt.JSON(nullable=False) == 'JSON NOT NULL'
+        assert dt.JSON(default='hi') == "JSON NULL DEFAULT 'hi'"
 
-        assert dt.GEOGRAPHYPOINT() == 'GEOGRAPHYPOINT NOT NULL'
-        assert dt.GEOGRAPHYPOINT(nullable=True) == 'GEOGRAPHYPOINT NULL'
-        assert dt.GEOGRAPHYPOINT(default='hi') == "GEOGRAPHYPOINT NOT NULL DEFAULT 'hi'"
+        assert dt.GEOGRAPHYPOINT() == 'GEOGRAPHYPOINT NULL'
+        assert dt.GEOGRAPHYPOINT(nullable=False) == 'GEOGRAPHYPOINT NOT NULL'
+        assert dt.GEOGRAPHYPOINT(default='hi') == "GEOGRAPHYPOINT NULL DEFAULT 'hi'"
 
-        assert dt.GEOGRAPHY() == 'GEOGRAPHY NOT NULL'
-        assert dt.GEOGRAPHY(nullable=True) == 'GEOGRAPHY NULL'
-        assert dt.GEOGRAPHY(default='hi') == "GEOGRAPHY NOT NULL DEFAULT 'hi'"
+        assert dt.GEOGRAPHY() == 'GEOGRAPHY NULL'
+        assert dt.GEOGRAPHY(nullable=False) == 'GEOGRAPHY NOT NULL'
+        assert dt.GEOGRAPHY(default='hi') == "GEOGRAPHY NULL DEFAULT 'hi'"
 
         with self.assertRaises(AssertionError):
             dt.RECORD()
         assert dt.RECORD(('a', dt.INT), ('b', dt.FLOAT)) == \
-            'RECORD(`a` INT NOT NULL, `b` FLOAT NOT NULL) NOT NULL'
-        assert dt.RECORD(('a', dt.INT), ('b', dt.FLOAT), nullable=True) == \
-            'RECORD(`a` INT NOT NULL, `b` FLOAT NOT NULL) NULL'
+            'RECORD(`a` INT NULL, `b` FLOAT NULL) NULL'
+        assert dt.RECORD(('a', dt.INT), ('b', dt.FLOAT), nullable=False) == \
+            'RECORD(`a` INT NULL, `b` FLOAT NULL) NOT NULL'
 
-        assert dt.ARRAY(dt.INT) == 'ARRAY(INT NOT NULL) NOT NULL'
-        assert dt.ARRAY(dt.INT, nullable=True) == 'ARRAY(INT NOT NULL) NULL'
+        assert dt.ARRAY(dt.INT) == 'ARRAY(INT NULL) NULL'
+        assert dt.ARRAY(dt.INT, nullable=False) == 'ARRAY(INT NULL) NOT NULL'
