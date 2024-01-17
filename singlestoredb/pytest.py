@@ -5,7 +5,7 @@ import logging
 import os
 import subprocess
 import time
-from typing import Optional, Iterator, Generator
+from typing import Optional, Iterator
 
 import pytest
 
@@ -67,10 +67,10 @@ def node_name() -> Iterator[str]:
 
     if worker is None:
         logger.debug("XDIST environment vars not found")
-        return "master"
-    
+        yield "master"
+
     logger.debug(f"PYTEST_XDIST_WORKER == {worker}")
-    return worker
+    yield worker
 
 
 class _TestContainerManager():
@@ -94,7 +94,7 @@ class _TestContainerManager():
         self.url = f"root:{self.root_password}@127.0.0.1:3306"
 
     def start(self) -> None:
-        command = ' '.join(self._start_command())
+        command = " ".join(self._start_command())
 
         logger.info(f"Starting container {self.container_name}")
         try:
@@ -105,9 +105,11 @@ class _TestContainerManager():
             subprocess.check_call(command, shell=True, env=env)
         except Exception as e:
             logger.exception(e)
-            raise RuntimeError("Failed to start container. Is one already running?") from e
+            raise RuntimeError(
+                "Failed to start container. "
+                "Is one already running?"
+            ) from e
         logger.debug("Container started")
-
 
     def _start_command(self) -> Iterator[str]:
         yield "docker run -d --name"
@@ -127,7 +129,7 @@ class _TestContainerManager():
 
     def print_logs(self) -> None:
         logs_command = ["docker", "logs", self.container_name]
-        logger.info(f"Getting logs")
+        logger.info("Getting logs")
         logger.info(subprocess.check_output(logs_command))
 
     def connect(self) -> Connection:
@@ -154,7 +156,10 @@ class _TestContainerManager():
             connections = self.get_open_connections(heart_beat)
             if connections is None:
                 raise RuntimeError("Could not determine the number of open connections.")
-            logger.debug(f"Waiting for other connections (n={connections-1}) to close (attempt #{i})")
+            logger.debug(
+                f"Waiting for other connections (n={connections-1}) "
+                f"to close (attempt #{i})"
+            )
             time.sleep(TEARDOWN_WAIT_SECONDS)
         else:
             logger.warning("Timed out while waiting for other connections to close")
@@ -162,10 +167,12 @@ class _TestContainerManager():
 
     def get_open_connections(self, conn: Connection) -> Optional[int]:
         for row in conn.show.status(extended=True):
-            logger.info(f"{row['Name']} = {row['Value']}")
-            if row['Name'] == 'Threads_connected':
-                return int(row['Value'])
-        
+            name = row["Name"]
+            value = row["Value"]
+            logger.info(f"{name} = {value}")
+            if name == "Threads_connected":
+                return int(value)
+
         return None
 
     def stop(self) -> None:
@@ -186,7 +193,9 @@ class _TestContainerManager():
 
 
 @pytest.fixture(scope="session")
-def singlestoredb_test_container(pytest_mode: PytestMode) -> Iterator[_TestContainerManager]:
+def singlestoredb_test_container(
+    pytest_mode: PytestMode,
+) -> Iterator[_TestContainerManager]:
     """Sets up and tears down the test container"""
 
     if not isinstance(pytest_mode, PytestMode):
@@ -200,7 +209,7 @@ def singlestoredb_test_container(pytest_mode: PytestMode) -> Iterator[_TestConta
         container_manager.start()
         yield container_manager
         container_manager.stop()
-        
+
     # In distributed execution as leader,
     # do the steps but wait for other workers before stopping
     elif pytest_mode == PytestMode.LEADER:
@@ -218,11 +227,13 @@ def singlestoredb_test_container(pytest_mode: PytestMode) -> Iterator[_TestConta
 
 
 @pytest.fixture(scope="session")
-def singlestoredb_connection(singlestoredb_test_container: _TestContainerManager) -> Iterator[Connection]:
+def singlestoredb_connection(
+    singlestoredb_test_container: _TestContainerManager
+) -> Iterator[Connection]:
     """Creates and closes the connection"""
 
     connection = singlestoredb_test_container.connect()
-    logger.debug(f"Connected to database.")
+    logger.debug("Connected to database.")
 
     yield connection
 
@@ -251,7 +262,9 @@ def name_allocator(node_name: str) -> Iterator[_NameAllocator]:
 
 
 @pytest.fixture
-def singlestoredb_tempdb(singlestoredb_connection: Connection, name_allocator: _NameAllocator) -> Iterator[Cursor]:
+def singlestoredb_tempdb(
+    singlestoredb_connection: Connection, name_allocator: _NameAllocator
+) -> Iterator[Cursor]:
     """Provides a connection to a unique temporary test database"""
 
     assert singlestoredb_connection.is_connected(), "Database is no longer connected"
@@ -263,7 +276,6 @@ def singlestoredb_tempdb(singlestoredb_connection: Connection, name_allocator: _
         cursor.execute(f"USE {db}")
 
         yield cursor
-        
+
         logger.debug(f"Dropping temporary DB \"{db}\"")
         cursor.execute(f"DROP DATABASE {db}")
-
