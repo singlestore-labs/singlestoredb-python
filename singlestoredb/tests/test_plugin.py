@@ -8,7 +8,7 @@ would fail if any other test had been run on the same database.
 from singlestoredb.connection import Cursor
 
 
-CREATE_TABLE_STATEMENT = "create table test_dict (a text)"
+CREATE_TABLE_STATEMENT = 'create table test_dict (a text)'
 
 
 def test_tempdb1(singlestoredb_tempdb: Cursor):
