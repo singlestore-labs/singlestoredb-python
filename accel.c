@@ -12,15 +12,25 @@
 #define PyBUF_WRITE 0x200
 #endif
 
-#define VECTOR_TYPE_PANDAS 0
-#define VECTOR_TYPE_NUMPY 1
-#define VECTOR_TYPE_ARROW 2
-#define VECTOR_TYPE_POLARS 3
-
 #define ACCEL_OUT_TUPLES 0
 #define ACCEL_OUT_STRUCTSEQUENCES 1
 #define ACCEL_OUT_DICTS 2
 #define ACCEL_OUT_NAMEDTUPLES 3
+
+#define NUMPY_BOOL 1
+#define NUMPY_INT8 2
+#define NUMPY_INT16 3
+#define NUMPY_INT32 4
+#define NUMPY_INT64 5
+#define NUMPY_UINT8 6
+#define NUMPY_UINT16 7
+#define NUMPY_UINT32 8
+#define NUMPY_UINT64 9
+#define NUMPY_FLOAT32 10
+#define NUMPY_FLOAT64 11
+#define NUMPY_TIMEDELTA 12
+#define NUMPY_DATETIME 13
+#define NUMPY_OBJECT 14
 
 #define MYSQL_FLAG_NOT_NULL 1
 #define MYSQL_FLAG_PRI_KEY 2
@@ -319,14 +329,14 @@ typedef struct {
 inline int IMAX(int a, int b) { return((a) > (b) ? a : b); }
 inline int IMIN(int a, int b) { return((a) < (b) ? a : b); }
 
-char *PyUnicode_AsUTF8(PyObject *unicode) {
+char *_PyUnicode_AsUTF8(PyObject *unicode) {
     PyObject *bytes = PyUnicode_AsEncodedString(unicode, "utf-8", "strict");
     if (!bytes) return NULL;
 
     char *str = NULL;
     Py_ssize_t str_l = 0;
     if (PyBytes_AsStringAndSize(bytes, &str, &str_l) < 0) {
-	return NULL;
+        return NULL;
     }
 
     char *out = calloc(str_l + 1, 1);
@@ -394,9 +404,6 @@ typedef struct {
     PyObject *datetime_timedelta;
     PyObject *datetime_datetime;
     PyObject *collections_namedtuple;
-    PyObject *pandas_Series;
-    PyObject *polars_Series;
-    PyObject *pyarrow_array;
     PyObject *numpy_array;
     PyObject *numpy_vectorize;
 } PyFunctions;
@@ -408,6 +415,8 @@ static PyFunctions PyFunc = {0};
 //
 typedef struct {
     PyObject *namedtuple_kwargs;
+    PyObject *create_numpy_array_args;
+    PyObject *create_numpy_array_kwargs;
 } PyObjects;
 
 static PyObjects PyObj = {0};
@@ -544,7 +553,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         }
         PyObject *py_encoding_errors = PyDict_GetItemString(py_options, "encoding_errors");
         if (py_encoding_errors) {
-            self->encoding_errors = PyUnicode_AsUTF8(py_encoding_errors);
+            self->encoding_errors = _PyUnicode_AsUTF8(py_encoding_errors);
             if (!self->encoding_errors) goto error;
         }
     }
@@ -664,7 +673,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         Py_XINCREF(self->py_encodings[i]);
 
         self->encodings[i] = (!py_encoding || py_encoding == Py_None) ?
-                              NULL : PyUnicode_AsUTF8(py_encoding);
+                              NULL : _PyUnicode_AsUTF8(py_encoding);
 
         self->py_invalid_values[i] = (!py_invalid_value || py_invalid_value == Py_None) ?
                                       NULL : py_converter;
@@ -735,7 +744,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
             self->structsequence_desc.fields = calloc(self->n_cols + 1, sizeof(PyStructSequence_Field));
             if (!self->structsequence_desc.fields) goto error;
             for (unsigned long i = 0; i < self->n_cols; i++) {
-                self->structsequence_desc.fields[i].name = PyUnicode_AsUTF8(self->py_names[i]);
+                self->structsequence_desc.fields[i].name = _PyUnicode_AsUTF8(self->py_names[i]);
                 self->structsequence_desc.fields[i].doc = NULL;
             }
             self->structsequence = PyStructSequence_NewType(&self->structsequence_desc);
@@ -1561,7 +1570,7 @@ static PyObject *read_row_from_packet(
                     break;
 
                 default:
-                    PyErr_Format(PyExc_TypeError, "Unknown type code: %ld",
+                    PyErr_Format(PyExc_TypeError, "unknown type code: %ld",
                                  py_state->type_codes[i], NULL);
                     goto error;
                 }
@@ -1775,205 +1784,58 @@ error:
 }
 
 
-static PyObject *create_pandas_index(PyObject *py_memviewc) {
-    return PyObject_CallFunction(PyFunc.pandas_Series, "O", py_memviewc);
-}
-
-
-static PyObject *create_pandas_series(PyObject *py_memviewc, int data_type, PyObject *py_index, PyObject *py_name, PyObject *py_objs) {
+static PyObject *create_numpy_array(PyObject *py_memview, char *data_format, int data_type, PyObject *py_objs) {
+    PyObject *py_memviewc = NULL;
     PyObject *py_in = NULL;
     PyObject *py_out = NULL;
-
-    // data, index, dtype, name, copy
-    py_out = PyObject_CallFunction(PyFunc.pandas_Series, "OOOOO", py_memviewc, py_index, Py_None, py_name, Py_False);
-    if (!py_out) goto error;
-
-    // Add series to the output, remapping string values as needed
-    switch(data_type) {
-    case MYSQL_TYPE_VARCHAR:
-    case MYSQL_TYPE_JSON:
-    case MYSQL_TYPE_SET:
-    case MYSQL_TYPE_ENUM:
-    case MYSQL_TYPE_VAR_STRING:
-    case MYSQL_TYPE_STRING:
-    case MYSQL_TYPE_GEOMETRY:
-    case MYSQL_TYPE_TINY_BLOB:
-    case MYSQL_TYPE_MEDIUM_BLOB:
-    case MYSQL_TYPE_LONG_BLOB:
-    case MYSQL_TYPE_BLOB:
-    case -MYSQL_TYPE_VARCHAR:
-    case -MYSQL_TYPE_JSON:
-    case -MYSQL_TYPE_SET:
-    case -MYSQL_TYPE_ENUM:
-    case -MYSQL_TYPE_VAR_STRING:
-    case -MYSQL_TYPE_STRING:
-    case -MYSQL_TYPE_GEOMETRY:
-    case -MYSQL_TYPE_TINY_BLOB:
-    case -MYSQL_TYPE_MEDIUM_BLOB:
-    case -MYSQL_TYPE_LONG_BLOB:
-    case -MYSQL_TYPE_BLOB:
-        py_in = py_out;
-        py_out = PyObject_CallMethod(py_in, "map", "O", py_objs);
-        if (!py_out) goto error;
-        break;
-    }
-
-exit:
-    Py_XDECREF(py_in);
-
-    return py_out;
-
-error:
-    Py_XDECREF(py_out);
-    py_out = NULL;
-
-    goto exit;
-}
-
-
-static PyObject *create_polars_index(PyObject *py_memviewc) {
-    return PyObject_CallFunction(PyFunc.polars_Series, "OO", Py_None, py_memviewc);
-}
-
-
-static PyObject *create_polars_series(PyObject *py_memviewc, int data_type, PyObject *py_index, PyObject *py_name, PyObject *py_objs) {
-    PyObject *py_in = NULL;
-    PyObject *py_out = NULL;
-
-    // data, index, dtype, name, copy
-    py_out = PyObject_CallFunction(PyFunc.polars_Series, "OO", py_name, py_memviewc);
-    if (!py_out) goto error;
-
-    // Add series to the output, remapping string values as needed
-    switch(data_type) {
-    case MYSQL_TYPE_VARCHAR:
-    case MYSQL_TYPE_JSON:
-    case MYSQL_TYPE_SET:
-    case MYSQL_TYPE_ENUM:
-    case MYSQL_TYPE_VAR_STRING:
-    case MYSQL_TYPE_STRING:
-    case MYSQL_TYPE_GEOMETRY:
-    case MYSQL_TYPE_TINY_BLOB:
-    case MYSQL_TYPE_MEDIUM_BLOB:
-    case MYSQL_TYPE_LONG_BLOB:
-    case MYSQL_TYPE_BLOB:
-    case -MYSQL_TYPE_VARCHAR:
-    case -MYSQL_TYPE_JSON:
-    case -MYSQL_TYPE_SET:
-    case -MYSQL_TYPE_ENUM:
-    case -MYSQL_TYPE_VAR_STRING:
-    case -MYSQL_TYPE_STRING:
-    case -MYSQL_TYPE_GEOMETRY:
-    case -MYSQL_TYPE_TINY_BLOB:
-    case -MYSQL_TYPE_MEDIUM_BLOB:
-    case -MYSQL_TYPE_LONG_BLOB:
-    case -MYSQL_TYPE_BLOB:
-        py_in = py_out;
-        py_out = PyObject_CallMethod(py_in, "replace", "O", py_objs);
-        if (!py_out) goto error;
-        break;
-    }
-
-exit:
-    Py_XDECREF(py_in);
-
-    return py_out;
-
-error:
-    Py_XDECREF(py_out);
-    py_out = NULL;
-
-    goto exit;
-}
-
-
-static PyObject *create_numpy_index(PyObject *py_memviewc) {
-    PyObject *py_out = NULL;
-    PyObject *py_args = NULL;
-    PyObject *py_kwargs = NULL;
-
-    py_args = PyTuple_New(1);
-    if (!py_args) goto error;
-    CHECKRC(PyTuple_SetItem(py_args, 0, py_memviewc));
-
-    py_kwargs = PyDict_New();
-    if (!py_kwargs) goto error;
-    CHECKRC(PyDict_SetItemString(py_kwargs, "copy", Py_False));
-
-    // data, index, dtype, name, copy
-    py_out = PyObject_Call(PyFunc.numpy_array, py_args, py_kwargs);
-    if (!py_out) goto error;
-
-exit:
-    Py_XDECREF(py_args);
-    Py_XDECREF(py_kwargs);
-
-    return py_out;
-
-error:
-    Py_XDECREF(py_out);
-    py_out = NULL;
-
-    goto exit;
-}
-
-
-static PyObject *create_numpy_array(PyObject *py_memviewc, int data_type, PyObject *py_index, PyObject *py_name, PyObject *py_objs) {
-    PyObject *py_in = NULL;
-    PyObject *py_out = NULL;
-    PyObject *py_args = NULL;
-    PyObject *py_kwargs = NULL;
     PyObject *py_vec_func = NULL;
 
-    py_args = PyTuple_New(1);
-    if (!py_args) goto error;
-    CHECKRC(PyTuple_SetItem(py_args, 0, py_memviewc));
+    py_memviewc = PyObject_CallMethod(py_memview, "cast", "s", data_format);
+    if (!py_memviewc) goto error;
+
+    CHECKRC(PyTuple_SetItem(PyObj.create_numpy_array_args, 0, py_memviewc));
     Py_INCREF(py_memviewc);
 
-    py_kwargs = PyDict_New();
-    if (!py_kwargs) goto error;
-    CHECKRC(PyDict_SetItemString(py_kwargs, "copy", Py_False));
-
-    // data, index, dtype, name, copy
-    py_out = PyObject_Call(PyFunc.numpy_array, py_args, py_kwargs);
+    py_out = PyObject_Call(PyFunc.numpy_array, PyObj.create_numpy_array_args, PyObj.create_numpy_array_kwargs);
     if (!py_out) goto error;
 
     // Add series to the output, remapping string values as needed
-    switch(data_type) {
-    case MYSQL_TYPE_VARCHAR:
-    case MYSQL_TYPE_JSON:
-    case MYSQL_TYPE_SET:
-    case MYSQL_TYPE_ENUM:
-    case MYSQL_TYPE_VAR_STRING:
-    case MYSQL_TYPE_STRING:
-    case MYSQL_TYPE_GEOMETRY:
-    case MYSQL_TYPE_TINY_BLOB:
-    case MYSQL_TYPE_MEDIUM_BLOB:
-    case MYSQL_TYPE_LONG_BLOB:
-    case MYSQL_TYPE_BLOB:
-    case -MYSQL_TYPE_VARCHAR:
-    case -MYSQL_TYPE_JSON:
-    case -MYSQL_TYPE_SET:
-    case -MYSQL_TYPE_ENUM:
-    case -MYSQL_TYPE_VAR_STRING:
-    case -MYSQL_TYPE_STRING:
-    case -MYSQL_TYPE_GEOMETRY:
-    case -MYSQL_TYPE_TINY_BLOB:
-    case -MYSQL_TYPE_MEDIUM_BLOB:
-    case -MYSQL_TYPE_LONG_BLOB:
-    case -MYSQL_TYPE_BLOB:
-        py_vec_func = PyObject_CallFunction(PyFunc.numpy_vectorize, "Os", PyObject_GetAttrString(py_objs, "get"), "O");
-        py_in = py_out;
-        py_out = PyObject_CallFunction(py_vec_func, "O", py_in);
-        if (!py_out) goto error;
-        break;
+    if (py_objs) {
+        switch(data_type) {
+        case MYSQL_TYPE_VARCHAR:
+        case MYSQL_TYPE_JSON:
+        case MYSQL_TYPE_SET:
+        case MYSQL_TYPE_ENUM:
+        case MYSQL_TYPE_VAR_STRING:
+        case MYSQL_TYPE_STRING:
+        case MYSQL_TYPE_GEOMETRY:
+        case MYSQL_TYPE_TINY_BLOB:
+        case MYSQL_TYPE_MEDIUM_BLOB:
+        case MYSQL_TYPE_LONG_BLOB:
+        case MYSQL_TYPE_BLOB:
+        case -MYSQL_TYPE_VARCHAR:
+        case -MYSQL_TYPE_JSON:
+        case -MYSQL_TYPE_SET:
+        case -MYSQL_TYPE_ENUM:
+        case -MYSQL_TYPE_VAR_STRING:
+        case -MYSQL_TYPE_STRING:
+        case -MYSQL_TYPE_GEOMETRY:
+        case -MYSQL_TYPE_TINY_BLOB:
+        case -MYSQL_TYPE_MEDIUM_BLOB:
+        case -MYSQL_TYPE_LONG_BLOB:
+        case -MYSQL_TYPE_BLOB:
+            py_vec_func = PyObject_CallFunction(PyFunc.numpy_vectorize, "Os", PyObject_GetAttrString(py_objs, "get"), "O");
+            py_in = py_out;
+            py_out = PyObject_CallFunction(py_vec_func, "O", py_in);
+            if (!py_out) goto error;
+            break;
+        }
     }
 
 exit:
     Py_XDECREF(py_in);
-    Py_XDECREF(py_args);
-    Py_XDECREF(py_kwargs);
     Py_XDECREF(py_vec_func);
+    Py_XDECREF(py_memviewc);
 
     return py_out;
 
@@ -1985,46 +1847,40 @@ error:
 }
 
 
-static PyObject *create_arrow_index(PyObject *py_memviewc) {
-    return PyObject_CallFunction(PyFunc.pyarrow_array, "O", py_memviewc);
-}
+int ensure_numpy() {
+    if (PyFunc.numpy_array && PyFunc.numpy_vectorize) goto exit;
 
+    // Import numpy if it exists
+    PyObject *numpy_mod = PyImport_ImportModule("numpy");
+    if (!numpy_mod) goto error;
 
-static PyObject *create_pyarrow_array(PyObject *py_memviewc, int data_type, PyObject *py_index, PyObject *py_name, PyObject *py_objs) {
-    PyObject *py_out = NULL;
-    PyObject *py_arr = NULL;
+    PyFunc.numpy_array = PyObject_GetAttr(numpy_mod, PyStr.array);
+    if (!PyFunc.numpy_array) goto error;
 
-    py_arr = create_numpy_array(py_memviewc, data_type, py_index, py_name, py_objs);
-    if (!py_arr) goto error;
-
-    py_out = PyObject_CallFunction(PyFunc.pyarrow_array, "O", py_arr);
-    if (!py_out) goto error;
+    PyFunc.numpy_vectorize = PyObject_GetAttr(numpy_mod, PyStr.vectorize);
+    if (!PyFunc.numpy_vectorize) goto error;
 
 exit:
-    Py_XDECREF(py_arr);
-
-    return py_out;
+    return 0;
 
 error:
-    Py_XDECREF(py_out);
-    py_out = NULL;
-
-    goto exit;
+    return -1;
 }
 
 
-static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *kwargs, int vector_type) {
+static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *kwargs) {
     PyObject *py_data = NULL;
     PyObject *py_out = NULL;
     PyObject *py_colspec = NULL;
     PyObject *py_str = NULL;
     PyObject *py_blob = NULL;
     PyObject *py_memview = NULL;
-    PyObject *py_memviewc = NULL;
-    PyObject *py_ser = NULL;
-    PyObject *py_out_ser = NULL;
+    PyObject *py_arr = NULL;
+    PyObject *py_out_pairs = NULL;
     PyObject *py_index = NULL;
     PyObject *py_objs = NULL;
+    PyObject *py_mask = NULL;
+    PyObject *py_pair = NULL;
     Py_ssize_t length = 0;
     uint8_t is_null = 0;
     int8_t i8 = 0;
@@ -2038,7 +1894,6 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
     float flt = 0;
     double dbl = 0;
     int *ctypes = NULL;
-    PyObject **cnames = NULL;
     char *data = NULL;
     char *orig_data = NULL;
     char *end = NULL;
@@ -2050,7 +1905,10 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
     int *item_sizes = NULL;
     char **data_formats = NULL;
     char **out_cols = NULL;
+    char **mask_cols = NULL;
     int64_t *out_row_ids = NULL;
+
+    if (ensure_numpy() < 0) goto error;
 
     // Parse function args.
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO", keywords, &py_colspec, &py_data)) {
@@ -2070,20 +1928,21 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
     // Determine column types
     ctypes = calloc(sizeof(int), n_cols);
     if (!ctypes) goto error;
-    cnames = calloc(sizeof(PyObject*), n_cols);
-    if (!cnames) goto error;
     for (i = 0; i < n_cols; i++) {
         PyObject *py_cspec = PySequence_GetItem(py_colspec, i);
         if (!py_cspec) goto error;
         PyObject *py_ctype = PySequence_GetItem(py_cspec, 1);
         if (!py_ctype) { Py_DECREF(py_cspec); goto error; }
-        PyObject *py_name = PySequence_GetItem(py_cspec, 0);
-        if (!py_name) { Py_DECREF(py_cspec); Py_DECREF(py_ctype); goto error; }
         ctypes[i] = (int)PyLong_AsLong(py_ctype);
-        cnames[i] = py_name;
         Py_DECREF(py_ctype);
         Py_DECREF(py_cspec);
         if (PyErr_Occurred()) { goto error; }
+    }
+
+#define CHECKSIZE(x) \
+    if ((data + x) > end) { \
+        PyErr_SetString(PyExc_ValueError, "data length does not align with specified column values"); \
+        goto error; \
     }
 
     // Determine number of rows
@@ -2093,26 +1952,29 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
     if (!data_formats) goto error;
     while (end > data) {
         // Row ID
+        CHECKSIZE(8);
         data += 8;
 
         for (i = 0; i < n_cols; i++) {
             // Null slot
+            CHECKSIZE(1);
             data += 1;
 
             // Data row
             switch (ctypes[i]) {
             case MYSQL_TYPE_NULL:
-                item_sizes[i] = 1;
-                data_formats[i] = "b";
-                data += 1;
+                PyErr_SetString(PyExc_TypeError, "unsupported data type: NULL");
+                goto error;
                 break;
 
             case MYSQL_TYPE_BIT:
-                // TODO
+                PyErr_SetString(PyExc_TypeError, "unsupported data type: BIT");
+                goto error;
                 break;
 
             case MYSQL_TYPE_TINY:
             case -MYSQL_TYPE_TINY:
+                CHECKSIZE(1);
                 item_sizes[i] = 1;
                 data_formats[i] = (ctypes[i] < 0) ? "B" : "b";
                 data += 1;
@@ -2120,6 +1982,7 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
 
             case MYSQL_TYPE_SHORT:
             case -MYSQL_TYPE_SHORT:
+                CHECKSIZE(2);
                 item_sizes[i] = 2;
                 data_formats[i] = (ctypes[i] < 0) ? "H" : "h";
                 data += 2;
@@ -2129,25 +1992,29 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
             case -MYSQL_TYPE_LONG:
             case MYSQL_TYPE_INT24:
             case -MYSQL_TYPE_INT24:
+                CHECKSIZE(4);
                 item_sizes[i] = 4;
-                data_formats[i] = (ctypes[i] < 0) ? "L" : "l";
+                data_formats[i] = (ctypes[i] < 0) ? "I" : "i";
                 data += 4;
                 break;
 
             case MYSQL_TYPE_LONGLONG:
             case -MYSQL_TYPE_LONGLONG:
+                CHECKSIZE(8);
                 item_sizes[i] = 8;
                 data_formats[i] = (ctypes[i] < 0) ? "Q" : "q";
                 data += 8;
                 break;
 
             case MYSQL_TYPE_FLOAT:
+                CHECKSIZE(4);
                 item_sizes[i] = 4;
                 data_formats[i] = "f";
                 data += 4;
                 break;
 
             case MYSQL_TYPE_DOUBLE:
+                CHECKSIZE(8);
                 item_sizes[i] = 8;
                 data_formats[i] = "d";
                 data += 8;
@@ -2155,27 +2022,33 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
 
             case MYSQL_TYPE_DECIMAL:
             case MYSQL_TYPE_NEWDECIMAL:
-                // TODO
+                PyErr_SetString(PyExc_TypeError, "unsupported data type: DECIMAL");
+                goto error;
                 break;
 
             case MYSQL_TYPE_DATE:
             case MYSQL_TYPE_NEWDATE:
-                // TODO
+                PyErr_SetString(PyExc_TypeError, "unsupported data type: DATE");
+                goto error;
                 break;
 
             case MYSQL_TYPE_TIME:
-                // TODO
+                PyErr_SetString(PyExc_TypeError, "unsupported data type: TIME");
+                goto error;
                 break;
 
             case MYSQL_TYPE_DATETIME:
-                // TODO
+                PyErr_SetString(PyExc_TypeError, "unsupported data type: DATETIME");
+                goto error;
                 break;
 
             case MYSQL_TYPE_TIMESTAMP:
-                // TODO
+                PyErr_SetString(PyExc_TypeError, "unsupported data type: TIMESTAMP");
+                goto error;
                 break;
 
             case MYSQL_TYPE_YEAR:
+                CHECKSIZE(2);
                 data += 2;
                 break;
 
@@ -2190,10 +2063,12 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
             case MYSQL_TYPE_MEDIUM_BLOB:
             case MYSQL_TYPE_LONG_BLOB:
             case MYSQL_TYPE_BLOB:
+                CHECKSIZE(8);
                 item_sizes[i] = 8;
                 data_formats[i] = "Q";
                 i64 = *(int64_t*)data;
                 data += 8;
+                CHECKSIZE(i64);
                 data += i64;
                 break;
 
@@ -2208,10 +2083,12 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
             case -MYSQL_TYPE_TINY_BLOB:
             case -MYSQL_TYPE_MEDIUM_BLOB:
             case -MYSQL_TYPE_LONG_BLOB:
+                CHECKSIZE(8);
                 item_sizes[i] = 8;
                 data_formats[i] = "Q";
                 i64 = *(int64_t*)data;
                 data += 8;
+                CHECKSIZE(i64);
                 data += i64;
                 break;
             }
@@ -2226,8 +2103,13 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
     // Allocate data columns
     out_cols = malloc(n_cols * sizeof(char*));
     if (!out_cols) goto error;
+    mask_cols = malloc(n_cols * sizeof(char*));
+    if (!mask_cols) goto error;
     for (i = 0; i < n_cols; i++) {
         out_cols[i] = malloc(item_sizes[i] * n_rows);
+        if (!out_cols[i]) goto error;
+        mask_cols[i] = malloc(1 * n_rows);
+        if (!mask_cols[i]) goto error;
     }
 
     // Allocate row ID array
@@ -2250,6 +2132,8 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
             is_null = (data[0] == '\x01');
             data += 1;
 
+            ((char*)mask_cols[i])[j] = (is_null) ? '\x01' : '\x00';
+
             switch (ctypes[i]) {
             case MYSQL_TYPE_NULL:
                 i8 = 0; data += 1;
@@ -2261,8 +2145,7 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
                 break;
 
             case MYSQL_TYPE_TINY:
-                // TODO: missing values
-                i8 = (is_null) ? SCHAR_MIN : *(int8_t*)data; data += 1;
+                i8 = (is_null) ? 0 : *(int8_t*)data; data += 1;
                 memcpy(out_cols[i] + j * 1, &i8, 1);
                 break;
 
@@ -2273,7 +2156,7 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
                 break;
 
             case MYSQL_TYPE_SHORT:
-                i16 = (is_null) ? SHRT_MIN : *(int16_t*)data; data += 2;
+                i16 = (is_null) ? 0 : *(int16_t*)data; data += 2;
                 memcpy(out_cols[i] + j * 2, &i16, 2);
                 break;
 
@@ -2285,7 +2168,7 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
 
             case MYSQL_TYPE_LONG:
             case MYSQL_TYPE_INT24:
-                i32 = (is_null) ? INT_MIN : *(int32_t*)data; data += 4;
+                i32 = (is_null) ? 0 : *(int32_t*)data; data += 4;
                 memcpy(out_cols[i] + j * 4, &i32, 4);
                 break;
 
@@ -2297,7 +2180,7 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
                 break;
 
             case MYSQL_TYPE_LONGLONG:
-                i64 = (is_null) ? LLONG_MIN : *(int64_t*)data; data += 8;
+                i64 = (is_null) ? 0 : *(int64_t*)data; data += 8;
                 memcpy(out_cols[i] + j * 8, &i64, 8);
                 break;
 
@@ -2408,87 +2291,66 @@ static PyObject *load_rowdat_1_vector(PyObject *self, PyObject *args, PyObject *
     py_out = PyTuple_New(2);
     if (!py_out) goto error;
 
-    py_out_ser = PyList_New(n_cols);
-    if (!py_out_ser) goto error;
+    py_out_pairs = PyList_New(n_cols);
+    if (!py_out_pairs) goto error;
 
     // Create Series of row IDs
     py_memview = PyMemoryView_FromMemory((char*)out_row_ids, n_rows * 8, PyBUF_WRITE);
     if (!py_memview) goto error;
 
-    py_memviewc = PyObject_CallMethod(py_memview, "cast", "s", "Q");
+    py_index = create_numpy_array(py_memview, "Q", 0, NULL);
     Py_CLEAR(py_memview);
-    if (!py_memviewc) goto error;
-
-    switch (vector_type) {
-    case VECTOR_TYPE_PANDAS:
-        py_index = create_pandas_index(py_memviewc);
-        break;
-    case VECTOR_TYPE_NUMPY:
-        py_index = create_numpy_index(py_memviewc);
-        break;
-    case VECTOR_TYPE_ARROW:
-        py_index = create_arrow_index(py_memviewc);
-        break;
-    case VECTOR_TYPE_POLARS:
-        py_index = create_polars_index(py_memviewc);
-        break;
-    }
-    Py_CLEAR(py_memviewc);
     if (!py_index) goto error;
 
     CHECKRC(PyTuple_SetItem(py_out, 0, py_index));
-    CHECKRC(PyTuple_SetItem(py_out, 1, py_out_ser));
+    CHECKRC(PyTuple_SetItem(py_out, 1, py_out_pairs));
 
-    // Convert C buffers to pandas.Series
+    // Convert C buffers to numpy arrays and masks
     for (i = 0; i < n_cols; i++) {
+        py_pair = PyTuple_New(2);
+        if (!py_pair) goto error;
+
         py_memview = PyMemoryView_FromMemory(out_cols[i], n_rows * item_sizes[i], PyBUF_WRITE);
         if (!py_memview) goto error;
 
-        py_memviewc = PyObject_CallMethod(py_memview, "cast", "s", data_formats[i]);
+        py_arr = create_numpy_array(py_memview, data_formats[i], ctypes[i], py_objs);
         Py_CLEAR(py_memview);
-        if (!py_memviewc) goto error;
+        if (!py_arr) goto error;
 
-        switch (vector_type) {
-        case VECTOR_TYPE_PANDAS:
-            py_ser = create_pandas_series(py_memviewc, ctypes[i], py_index, cnames[i], py_objs);
-            break;
-        case VECTOR_TYPE_NUMPY:
-            py_ser = create_numpy_array(py_memviewc, ctypes[i], py_index, cnames[i], py_objs);
-            break;
-        case VECTOR_TYPE_ARROW:
-            py_ser = create_pyarrow_array(py_memviewc, ctypes[i], py_index, cnames[i], py_objs);
-            break;
-        case VECTOR_TYPE_POLARS:
-            py_ser = create_polars_series(py_memviewc, ctypes[i], py_index, cnames[i], py_objs);
-            break;
-        }
+        py_memview = PyMemoryView_FromMemory(mask_cols[i], n_rows * 1, PyBUF_WRITE);
+        if (!py_memview) goto error;
 
-        Py_CLEAR(py_memviewc);
-        if (!py_ser) goto error;
+        py_mask = create_numpy_array(py_memview, "?", 0, NULL);
+        Py_CLEAR(py_memview);
+        if (!py_mask) goto error;
 
-        CHECKRC(PyList_SetItem(py_out_ser, i, py_ser));
+        if (!py_arr) goto error;
+        if (!py_mask) goto error;
 
-        py_ser = NULL;
+        CHECKRC(PyTuple_SetItem(py_pair, 0, py_arr));
+        py_arr = NULL;
+
+        CHECKRC(PyTuple_SetItem(py_pair, 1, py_mask));
+        py_mask = NULL;
+
+        CHECKRC(PyList_SetItem(py_out_pairs, i, py_pair));
+        py_pair = NULL;
     }
 
 exit:
     if (ctypes) free(ctypes);
-    if (cnames) {
-        for (i = 0; i < n_cols; i++) {
-            Py_XDECREF(cnames[i]);
-        }
-        free(cnames);
-    }
     if (out_cols) free(out_cols);
+    if (mask_cols) free(mask_cols);
     if (data_formats) free(data_formats);
     if (item_sizes) free(item_sizes);
 
     Py_XDECREF(py_str);
+    Py_XDECREF(py_arr);
+    Py_XDECREF(py_mask);
+    Py_XDECREF(py_pair);
     Py_XDECREF(py_blob);
     Py_XDECREF(py_objs);
     Py_XDECREF(py_memview);
-    Py_XDECREF(py_memviewc);
-    Py_XDECREF(py_ser);
 
     return py_out;
 
@@ -2500,102 +2362,1324 @@ error:
 }
 
 
-int ensure_pandas() {
-    if (PyFunc.pandas_Series) goto exit;
+static char *get_array_base_address(PyObject *py_array) {
+    char *out = NULL;
+    PyObject *py_array_interface = NULL;
+    PyObject *py_data = NULL;
+    PyObject *py_address = NULL;
 
-    // Import pandas if it exists
-    PyObject *pandas_mod = PyImport_ImportModule("pandas");
-    if (!pandas_mod) goto error;
+    if (py_array == Py_None) goto exit;
 
-    PyFunc.pandas_Series = PyObject_GetAttr(pandas_mod, PyStr.Series);
-    if (!PyFunc.pandas_Series) goto error;
+    py_array_interface = PyObject_GetAttrString(py_array, "__array_interface__");
+    if (!py_array_interface) goto error;
 
-exit:
-    return 0;
+    py_data = PyDict_GetItemString(py_array_interface, "data");
+    if (!py_data) goto error;
 
-error:
-    return -1;
-}
+    py_address = PyTuple_GetItem(py_data, 0);
+    if (!py_address) goto error;
 
-
-int ensure_polars() {
-    if (PyFunc.polars_Series) goto exit;
-
-    // Import polars if it exists
-    PyObject *polars_mod = PyImport_ImportModule("polars");
-    if (!polars_mod) goto error;
-
-    PyFunc.polars_Series = PyObject_GetAttr(polars_mod, PyStr.Series);
-    if (!PyFunc.polars_Series) goto error;
+    out = (char*)PyLong_AsUnsignedLongLong(py_address);
 
 exit:
-    return 0;
+    Py_XDECREF(py_array_interface);
+
+    return out;
 
 error:
-    return -1;
+    goto exit;
 }
 
 
-int ensure_pyarrow() {
-    if (PyFunc.pyarrow_array) goto exit;
+static int get_numpy_col_type(PyObject *py_array) {
+    int out = 0;
+    char *str = NULL;
+    PyObject *py_array_interface = NULL;
+    PyObject *py_typestr = NULL;
 
-    // Import pyarrow if it exists
-    PyObject *pyarrow_mod = PyImport_ImportModule("pyarrow");
-    if (!pyarrow_mod) goto error;
+    if (py_array == Py_None) goto error;
 
-    PyFunc.pyarrow_array = PyObject_GetAttr(pyarrow_mod, PyStr.array);
-    if (!PyFunc.pyarrow_array) goto error;
+    py_array_interface = PyObject_GetAttrString(py_array, "__array_interface__");
+    if (!py_array_interface) goto error;
+
+    py_typestr = PyDict_GetItemString(py_array_interface, "typestr");
+    if (!py_typestr) goto error;
+
+    str = _PyUnicode_AsUTF8(py_typestr);
+    if (!str) goto error;
+
+    switch (str[1]) {
+    case 'b':
+        out = NUMPY_BOOL;
+        break;
+    case 'i':
+        switch (str[2]) {
+        case '1':
+            out = NUMPY_INT8;
+            break;
+        case '2':
+            out = NUMPY_INT16;
+            break;
+        case '4':
+            out = NUMPY_INT32;
+            break;
+        case '8':
+            out = NUMPY_INT64;
+            break;
+        }
+        break;
+    case 'u':
+        switch (str[2]) {
+        case '1':
+            out = NUMPY_UINT8;
+            break;
+        case '2':
+            out = NUMPY_UINT16;
+            break;
+        case '4':
+            out = NUMPY_UINT32;
+            break;
+        case '8':
+            out = NUMPY_UINT64;
+            break;
+        }
+        break;
+    case 'f':
+        switch (str[2]) {
+        case '4':
+            out = NUMPY_FLOAT32;
+            break;
+        case '8':
+            out = NUMPY_FLOAT64;
+            break;
+        }
+        break;
+    case 'O':
+        out = NUMPY_OBJECT;
+        break;
+    case 'm':
+        out = NUMPY_TIMEDELTA;
+        break;
+    case 'M':
+        out = NUMPY_DATETIME;
+        break;
+    default:
+        goto error;
+    }
 
 exit:
-    return 0;
+    Py_XDECREF(py_array_interface);
+
+    if (str) free(str);
+
+    return out;
 
 error:
-    return -1;
+    out = 0;
+    goto exit;
 }
 
 
-int ensure_numpy() {
-    if (PyFunc.numpy_array && PyFunc.numpy_vectorize) goto exit;
+//
+// Convert Python objects to rowdat_1 format
+//
+// The inputs must look like:
+//
+// [mysql-type-1, mysql-type-2, ...], row-id-array, [(array-1, mask-1), (array-2, mask-2), ...]
+//
+// The number of elements in the first argument must be the same as the number
+// of elements in the last parameter. The number of elements in the second
+// parameter must equal the number of elements in each of the array-1 and mask-1
+// parameters. The mask parameters may be Py_None.
+//
+static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *kwargs) {
+    PyObject *py_returns = NULL;
+    PyObject *py_row_ids = NULL;
+    PyObject *py_cols = NULL;
+    PyObject *py_out = NULL;
+    unsigned long long n_cols = 0;
+    unsigned long long n_rows = 0;
+    uint8_t is_null = 0;
+    int8_t i8 = 0;
+    int16_t i16 = 0;
+    int32_t i32 = 0;
+    int64_t i64 = 0;
+    uint8_t u8 = 0;
+    uint16_t u16 = 0;
+    uint32_t u32 = 0;
+    uint64_t u64 = 0;
+    float flt = 0;
+    double dbl = 0;
+    char *out = NULL;
+    unsigned long long out_l = 0;
+    unsigned long long out_idx = 0;
+    int *returns = NULL;
+    char *keywords[] = {"returns", "row_ids", "cols", NULL};
+    unsigned long long i = 0;
+    unsigned long long j = 0;
+    char **cols = NULL;
+    char **masks = NULL;
+    int *col_types = NULL;
+    int64_t *row_ids = NULL;
 
-    // Import numpy if it exists
-    PyObject *numpy_mod = PyImport_ImportModule("numpy");
-    if (!numpy_mod) goto error;
+    // Parse function args.
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOO", keywords, &py_returns, &py_row_ids, &py_cols)) {
+        goto error;
+    }
 
-    PyFunc.numpy_array = PyObject_GetAttr(numpy_mod, PyStr.array);
-    if (!PyFunc.numpy_array) goto error;
+    if (PyObject_Length(py_returns) != PyObject_Length(py_cols)) {
+        PyErr_SetString(PyExc_ValueError, "number of return values does not match number of returned columns");
+        goto error;
+    }
 
-    PyFunc.numpy_vectorize = PyObject_GetAttr(numpy_mod, PyStr.vectorize);
-    if (!PyFunc.numpy_vectorize) goto error;
+    n_rows = (unsigned long long)PyObject_Length(py_row_ids);
+    if (n_rows == 0) {
+        py_out = PyBytes_FromStringAndSize("", 0);
+        goto exit;
+    }
+
+    // Verify all data lengths agree
+    n_cols = (unsigned long long)PyObject_Length(py_returns);
+    if (n_cols == 0) {
+        py_out = PyBytes_FromStringAndSize("", 0);
+        goto exit;
+    }
+    for (i = 0; i < n_cols; i++) {
+        PyObject *py_item = PyList_GetItem(py_cols, i);
+        if (!py_item) goto error;
+
+        PyObject *py_data = PyTuple_GetItem(py_item, 0);
+        if (!py_data) goto error;
+
+        if ((unsigned long long)PyObject_Length(py_data) != n_rows) {
+            PyErr_SetString(PyExc_ValueError, "mismatched lengths of column values");
+            goto error;
+        }
+
+        PyObject *py_mask = PyTuple_GetItem(py_item, 1);
+        if (!py_mask) goto error;
+
+        if (py_mask != Py_None && (unsigned long long)PyObject_Length(py_mask) != n_rows) {
+            PyErr_SetString(PyExc_ValueError, "length of mask values does not match the length of data rows");
+            goto error;
+        }
+    }
+
+    row_ids = (int64_t*)get_array_base_address(py_row_ids);
+    if (!row_ids) {
+        PyErr_SetString(PyExc_ValueError, "unable to get base address of row IDs");
+        goto error;
+    }
+
+    // Starting size, it will be resized later
+    out_l = 256 * n_cols;
+    out_idx = 0;
+    out = malloc(out_l);
+    if (!out) goto error;
+
+    // Get return types
+    returns = malloc(sizeof(int) * n_cols);
+    if (!returns) goto error;
+
+    for (i = 0; i < n_cols; i++) {
+        PyObject *py_item = PySequence_GetItem(py_returns, i);
+        if (!py_item) goto error;
+        returns[i] = (int)PyLong_AsLong(py_item);
+        Py_DECREF(py_item);
+        if (PyErr_Occurred()) { goto error; }
+    }
+
+    // Get column array memory
+    cols = calloc(sizeof(char*), n_cols);
+    if (!cols) goto error;
+    col_types = calloc(sizeof(int), n_cols);
+    if (!col_types) goto error;
+    masks = calloc(sizeof(char*), n_cols);
+    if (!masks) goto error;
+    for (i = 0; i < n_cols; i++) {
+        PyObject *py_item = PyList_GetItem(py_cols, i);
+        if (!py_item) goto error;
+
+        PyObject *py_data = PyTuple_GetItem(py_item, 0);
+        if (!py_data) goto error;
+
+        cols[i] = get_array_base_address(py_data);
+        if (!cols[i]) {
+            PyErr_SetString(PyExc_ValueError, "unable to get base address of data column");
+            goto error;
+        }
+
+        col_types[i] = get_numpy_col_type(py_data);
+        if (!col_types[i]) {
+            PyErr_SetString(PyExc_ValueError, "unable to get column type of data column");
+            goto error;
+        }
+
+        PyObject *py_mask = PyTuple_GetItem(py_item, 1);
+        if (!py_mask) goto error;
+
+        masks[i] = get_array_base_address(py_mask);
+        if (masks[i] && get_numpy_col_type(py_mask) != NUMPY_BOOL) {
+            PyErr_SetString(PyExc_ValueError, "mask must only contain boolean values");
+            goto error;
+        }
+    }
+
+#define CHECKMEM(x) \
+    if ((out_idx + x) > out_l) { \
+        out_l = out_l * 2 + x; \
+        out = realloc(out, out_l); \
+        if (!out) goto error; \
+    }
+
+    for (j = 0; j < n_rows; j++) {
+
+        CHECKMEM(8);
+        memcpy(out+out_idx, &row_ids[j], 8);
+        out_idx += 8;
+
+        for (i = 0; i < n_cols; i++) {
+
+            if (masks[i]) {
+                is_null = *(masks[i] + j) != '\x00';
+            } else {
+                is_null = 0;
+            }
+
+            CHECKMEM(1);
+            memcpy(out+out_idx, &is_null, 1);
+            out_idx += 1;
+
+#define CHECK_TINYINT(x, unsigned_input) if ((x) < ((unsigned_input) ? 0 : -128) || (x) > 127) { \
+        PyErr_SetString(PyExc_ValueError, "value is outside the valid range for TINYINT"); \
+        goto error; \
+    }
+#define CHECK_UNSIGNED_TINYINT(x, unsigned_input) if ((x) < 0 || (x) > 255) { \
+        PyErr_SetString(PyExc_ValueError, "value is outside the valid range for UNSIGNED TINYINT"); \
+        goto error; \
+    }
+#define CHECK_SMALLINT(x, unsigned_input) if ((x) < ((unsigned_input) ? 0 : -32768) || (x) > 32767) { \
+        PyErr_SetString(PyExc_ValueError, "value is outside the valid range for SMALLINT"); \
+        goto error; \
+    }
+#define CHECK_UNSIGNED_SMALLINT(x, unsigned_input) if ((x) < 0 || (x) > 65535) { \
+        PyErr_SetString(PyExc_ValueError, "value is outside the valid range for UNSIGNED SMALLINT"); \
+        goto error; \
+    }
+#define CHECK_MEDIUMINT(x, unsigned_input) if ((x) < ((unsigned_input) ? 0 : -8388608) || (x) > 8388607) { \
+        PyErr_SetString(PyExc_ValueError, "value is outside the valid range for MEDIUMINT"); \
+        goto error; \
+    }
+#define CHECK_UNSIGNED_MEDIUMINT(x, unsigned_input) if ((x) < 0 || (x) > 16777215) { \
+        PyErr_SetString(PyExc_ValueError, "value is outside the valid range for UNSIGNED MEDIUMINT"); \
+        goto error; \
+    }
+#define CHECK_INT(x, unsigned_input) if ((x) < ((unsigned_input) ? 0 : -2147483648) || (x) > 2147483647) { \
+        PyErr_SetString(PyExc_ValueError, "value is outside the valid range for INT"); \
+        goto error; \
+    }
+#define CHECK_UNSIGNED_INT(x, unsigned_input) if ((x) < 0 || (x) > 4294967295) { \
+        PyErr_SetString(PyExc_ValueError, "value is outside the valid range for UNSIGNED INT"); \
+        goto error; \
+    }
+#define CHECK_BIGINT(x, unsigned_input) if ((x) < ((unsigned_input) ? 0 : -9223372036854775808) || (x) > 9223372036854775807) { \
+        PyErr_SetString(PyExc_ValueError, "value is outside the valid range for BIGINT"); \
+        goto error; \
+    }
+#define CHECK_UNSIGNED_BIGINT(x, unsigned_input) if ((x) < 0 || (x) > 18446744073709551615) { \
+        PyErr_SetString(PyExc_ValueError, "value is outside the valid range for UNSIGNED BIGINT"); \
+        goto error; \
+    }
+#define CHECK_YEAR(x) if (!(((x) >= 0 && (x) <= 99) || ((x) >= 1901 && (x) <= 2155))) { \
+        PyErr_SetString(PyExc_ValueError, "value is outside the valid range for YEAR"); \
+        goto error; \
+    }
+
+            switch (returns[i]) {
+            case MYSQL_TYPE_BIT:
+                PyErr_SetString(PyExc_ValueError, "unsupported data type: BIT");
+                goto error;
+                break;
+
+            case MYSQL_TYPE_TINY:
+                CHECKMEM(1);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_TINYINT(i8, 0);
+                    i8 = (int8_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT8:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_TINYINT(i8, 0);
+                    i8 = (int8_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT16:
+                    i16 = *(int16_t*)(cols[i] + j * 2);
+                    CHECK_TINYINT(i16, 0);
+                    i8 = (int8_t)((is_null) ? 0 : i16);
+                    break;
+                case NUMPY_INT32:
+                    i32 = *(int32_t*)(cols[i] + j * 4);
+                    CHECK_TINYINT(i32, 0);
+                    i8 = (int8_t)((is_null) ? 0 : i32);
+                    break;
+                case NUMPY_INT64:
+                    i64 = *(int64_t*)(cols[i] + j * 8);
+                    CHECK_TINYINT(i64, 0);
+                    i8 = (int8_t)((is_null) ? 0 : i64);
+                    break;
+                case NUMPY_UINT8:
+                    u8 = *(uint8_t*)(cols[i] + j * 1);
+                    CHECK_TINYINT(u8, 1);
+                    i8 = (int8_t)((is_null) ? 0 : u8);
+                    break;
+                case NUMPY_UINT16:
+                    u16 = *(uint16_t*)(cols[i] + j * 2);
+                    CHECK_TINYINT(u16, 1);
+                    i8 = (int8_t)((is_null) ? 0 : u16);
+                    break;
+                case NUMPY_UINT32:
+                    u32 = *(uint32_t*)(cols[i] + j * 4);
+                    CHECK_TINYINT(u32, 1);
+                    i8 = (int8_t)((is_null) ? 0 : u32);
+                    break;
+                case NUMPY_UINT64:
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+                    CHECK_TINYINT(u64, 1);
+                    i8 = (int8_t)((is_null) ? 0 : u64);
+                    break;
+                case NUMPY_FLOAT32:
+                    flt = *(float*)(cols[i] + j * 4);
+                    CHECK_TINYINT(flt, 0);
+                    i8 = (int8_t)((is_null) ? 0 : flt);
+                    break;
+                case NUMPY_FLOAT64:
+                    dbl = *(double*)(cols[i] + j * 8);
+                    CHECK_TINYINT(dbl, 0);
+                    i8 = (int8_t)((is_null) ? 0 : dbl);
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type TINYINT");
+                    goto error;
+                }
+                memcpy(out+out_idx, &i8, 1);
+                out_idx += 1;
+                break;
+
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_TINY:
+                CHECKMEM(1);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_TINYINT(i8, 0);
+                    u8 = (uint8_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT8:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_TINYINT(i8, 0);
+                    u8 = (uint8_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT16:
+                    i16 = *(int16_t*)(cols[i] + j * 2);
+                    CHECK_UNSIGNED_TINYINT(i16, 0);
+                    u8 = (uint8_t)((is_null) ? 0 : i16);
+                    break;
+                case NUMPY_INT32:
+                    i32 = *(int32_t*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_TINYINT(i32, 0);
+                    u8 = (uint8_t)((is_null) ? 0 : i32);
+                    break;
+                case NUMPY_INT64:
+                    i64 = *(int64_t*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_TINYINT(i64, 0);
+                    u8 = (uint8_t)((is_null) ? 0 : i64);
+                    break;
+                case NUMPY_UINT8:
+                    u8 = *(uint8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_TINYINT(u8, 1);
+                    u8 = (uint8_t)((is_null) ? 0 : u8);
+                    break;
+                case NUMPY_UINT16:
+                    u16 = *(uint16_t*)(cols[i] + j * 2);
+                    CHECK_UNSIGNED_TINYINT(u16, 1);
+                    u8 = (uint8_t)((is_null) ? 0 : u16);
+                    break;
+                case NUMPY_UINT32:
+                    u32 = *(uint32_t*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_TINYINT(u32, 1);
+                    u8 = (uint8_t)((is_null) ? 0 : u32);
+                    break;
+                case NUMPY_UINT64:
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_TINYINT(u64, 1);
+                    u8 = (uint8_t)((is_null) ? 0 : u64);
+                    break;
+                case NUMPY_FLOAT32:
+                    flt = *(float*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_TINYINT(flt, 0);
+                    u8 = (uint8_t)((is_null) ? 0 : flt);
+                    break;
+                case NUMPY_FLOAT64:
+                    dbl = *(double*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_TINYINT(dbl, 0);
+                    u8 = (uint8_t)((is_null) ? 0 : dbl);
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type UNSIGNED TINYINT");
+                    goto error;
+                }
+                memcpy(out+out_idx, &u8, 1);
+                out_idx += 1;
+                break;
+
+            case MYSQL_TYPE_SHORT:
+                CHECKMEM(2);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_SMALLINT(i8, 0);
+                    i16 = (int16_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT8:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_SMALLINT(i8, 0);
+                    i16 = (int16_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT16:
+                    i16 = *(int16_t*)(cols[i] + j * 2);
+                    CHECK_SMALLINT(i16, 0);
+                    i16 = (int16_t)((is_null) ? 0 : i16);
+                    break;
+                case NUMPY_INT32:
+                    i32 = *(int32_t*)(cols[i] + j * 4);
+                    CHECK_SMALLINT(i32, 0);
+                    i16 = (int16_t)((is_null) ? 0 : i32);
+                    break;
+                case NUMPY_INT64:
+                    i64 = *(int64_t*)(cols[i] + j * 8);
+                    CHECK_SMALLINT(i64, 0);
+                    i16 = (int16_t)((is_null) ? 0 : i64);
+                    break;
+                case NUMPY_UINT8:
+                    u8 = *(uint8_t*)(cols[i] + j * 1);
+                    CHECK_SMALLINT(u8, 1);
+                    i16 = (int16_t)((is_null) ? 0 : u8);
+                    break;
+                case NUMPY_UINT16:
+                    u16 = *(uint16_t*)(cols[i] + j * 2);
+                    CHECK_SMALLINT(u16, 1);
+                    i16 = (int16_t)((is_null) ? 0 : u16);
+                    break;
+                case NUMPY_UINT32:
+                    u32 = *(uint32_t*)(cols[i] + j * 4);
+                    CHECK_SMALLINT(u32, 1);
+                    i16 = (int16_t)((is_null) ? 0 : u32);
+                    break;
+                case NUMPY_UINT64:
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+                    CHECK_SMALLINT(u64, 1);
+                    i16 = (int16_t)((is_null) ? 0 : u64);
+                    break;
+                case NUMPY_FLOAT32:
+                    flt = *(float*)(cols[i] + j * 4);
+                    CHECK_SMALLINT(flt, 0);
+                    i16 = (int16_t)((is_null) ? 0 : flt);
+                    break;
+                case NUMPY_FLOAT64:
+                    dbl = *(double*)(cols[i] + j * 8);
+                    CHECK_SMALLINT(dbl, 0);
+                    i16 = (int16_t)((is_null) ? 0 : dbl);
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type SMALLINT");
+                    goto error;
+                }
+                memcpy(out+out_idx, &i16, 2);
+                out_idx += 2;
+                break;
+
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_SHORT:
+                CHECKMEM(2);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_SMALLINT(i8, 0);
+                    u16 = (uint16_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT8:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_SMALLINT(i8, 0);
+                    u16 = (uint16_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT16:
+                    i16 = *(int16_t*)(cols[i] + j * 2);
+                    CHECK_UNSIGNED_SMALLINT(i16, 0);
+                    u16 = (uint16_t)((is_null) ? 0 : i16);
+                    break;
+                case NUMPY_INT32:
+                    i32 = *(int32_t*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_SMALLINT(i32, 0);
+                    u16 = (uint16_t)((is_null) ? 0 : i32);
+                    break;
+                case NUMPY_INT64:
+                    i64 = *(int64_t*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_SMALLINT(i64, 0);
+                    u16 = (uint16_t)((is_null) ? 0 : i64);
+                    break;
+                case NUMPY_UINT8:
+                    u8 = *(uint8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_SMALLINT(u8, 1);
+                    u16 = (uint16_t)((is_null) ? 0 : u8);
+                    break;
+                case NUMPY_UINT16:
+                    u16 = *(uint16_t*)(cols[i] + j * 2);
+                    CHECK_UNSIGNED_SMALLINT(u16, 1);
+                    u16 = (uint16_t)((is_null) ? 0 : u16);
+                    break;
+                case NUMPY_UINT32:
+                    u32 = *(uint32_t*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_SMALLINT(u32, 1);
+                    u16 = (uint16_t)((is_null) ? 0 : u32);
+                    break;
+                case NUMPY_UINT64:
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_SMALLINT(u64, 1);
+                    u16 = (uint16_t)((is_null) ? 0 : u64);
+                    break;
+                case NUMPY_FLOAT32:
+                    flt = *(float*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_SMALLINT(flt, 0);
+                    u16 = (uint16_t)((is_null) ? 0 : flt);
+                    break;
+                case NUMPY_FLOAT64:
+                    dbl = *(double*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_SMALLINT(dbl, 0);
+                    u16 = (uint16_t)((is_null) ? 0 : dbl);
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type UNSIGNED MEDIUMINT");
+                    goto error;
+                }
+                memcpy(out+out_idx, &u16, 2);
+                out_idx += 2;
+                break;
+
+            case MYSQL_TYPE_INT24:
+                CHECKMEM(4);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_MEDIUMINT(i8, 0);
+                    i32 = (int32_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT8:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_MEDIUMINT(i8, 0);
+                    i32 = (int32_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT16:
+                    i16 = *(int16_t*)(cols[i] + j * 2);
+                    CHECK_MEDIUMINT(i16, 0);
+                    i32 = (int32_t)((is_null) ? 0 : i16);
+                    break;
+                case NUMPY_INT32:
+                    i32 = *(int32_t*)(cols[i] + j * 4);
+                    CHECK_MEDIUMINT(i32, 0);
+                    i32 = (int32_t)((is_null) ? 0 : i32);
+                    break;
+                case NUMPY_INT64:
+                    i64 = *(int64_t*)(cols[i] + j * 8);
+                    CHECK_MEDIUMINT(i64, 0);
+                    i32 = (int32_t)((is_null) ? 0 : i64);
+                    break;
+                case NUMPY_UINT8:
+                    u8 = *(uint8_t*)(cols[i] + j * 1);
+                    CHECK_MEDIUMINT(u8, 1);
+                    i32 = (int32_t)((is_null) ? 0 : u8);
+                    break;
+                case NUMPY_UINT16:
+                    u16 = *(uint16_t*)(cols[i] + j * 2);
+                    CHECK_MEDIUMINT(u16, 1);
+                    i32 = (int32_t)((is_null) ? 0 : u16);
+                    break;
+                case NUMPY_UINT32:
+                    u32 = *(uint32_t*)(cols[i] + j * 4);
+                    CHECK_MEDIUMINT(u32, 1);
+                    i32 = (int32_t)((is_null) ? 0 : u32);
+                    break;
+                case NUMPY_UINT64:
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+                    CHECK_MEDIUMINT(u64, 1);
+                    i32 = (int32_t)((is_null) ? 0 : u64);
+                    break;
+                case NUMPY_FLOAT32:
+                    flt = *(float*)(cols[i] + j * 4);
+                    CHECK_MEDIUMINT(flt, 0);
+                    i32 = (int32_t)((is_null) ? 0 : flt);
+                    break;
+                case NUMPY_FLOAT64:
+                    dbl = *(double*)(cols[i] + j * 8);
+                    CHECK_MEDIUMINT(dbl, 0);
+                    i32 = (int32_t)((is_null) ? 0 : dbl);
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type MEDIUMINT");
+                    goto error;
+                }
+                memcpy(out+out_idx, &i32, 4);
+                out_idx += 4;
+                break;
+
+            case MYSQL_TYPE_LONG:
+                CHECKMEM(4);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_INT(i8, 0);
+                    i32 = (int32_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT8:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_INT(i8, 0);
+                    i32 = (int32_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT16:
+                    i16 = *(int16_t*)(cols[i] + j * 2);
+                    CHECK_INT(i16, 0);
+                    i32 = (int32_t)((is_null) ? 0 : i16);
+                    break;
+                case NUMPY_INT32:
+                    i32 = *(int32_t*)(cols[i] + j * 4);
+                    CHECK_INT(i32, 0);
+                    i32 = (int32_t)((is_null) ? 0 : i32);
+                    break;
+                case NUMPY_INT64:
+                    i64 = *(int64_t*)(cols[i] + j * 8);
+                    CHECK_INT(i64, 0);
+                    i32 = (int32_t)((is_null) ? 0 : i64);
+                    break;
+                case NUMPY_UINT8:
+                    u8 = *(uint8_t*)(cols[i] + j * 1);
+                    CHECK_INT(u8, 1);
+                    i32 = (int32_t)((is_null) ? 0 : u8);
+                    break;
+                case NUMPY_UINT16:
+                    u16 = *(uint16_t*)(cols[i] + j * 2);
+                    CHECK_INT(u16, 1);
+                    i32 = (int32_t)((is_null) ? 0 : u16);
+                    break;
+                case NUMPY_UINT32:
+                    u32 = *(uint32_t*)(cols[i] + j * 4);
+                    CHECK_INT(u32, 1);
+                    i32 = (int32_t)((is_null) ? 0 : u32);
+                    break;
+                case NUMPY_UINT64:
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+                    CHECK_INT(u64, 1);
+                    i32 = (int32_t)((is_null) ? 0 : u64);
+                    break;
+                case NUMPY_FLOAT32:
+                    flt = *(float*)(cols[i] + j * 4);
+                    CHECK_INT(flt, 0);
+                    i32 = (int32_t)((is_null) ? 0 : flt);
+                    break;
+                case NUMPY_FLOAT64:
+                    dbl = *(double*)(cols[i] + j * 8);
+                    CHECK_INT(dbl, 0);
+                    i32 = (int32_t)((is_null) ? 0 : dbl);
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type INT");
+                    goto error;
+                }
+                memcpy(out+out_idx, &i32, 4);
+                out_idx += 4;
+                break;
+
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_INT24:
+                CHECKMEM(4);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_MEDIUMINT(i8, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT8:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_MEDIUMINT(i8, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT16:
+                    i16 = *(int16_t*)(cols[i] + j * 2);
+                    CHECK_UNSIGNED_MEDIUMINT(i16, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : i16);
+                    break;
+                case NUMPY_INT32:
+                    i32 = *(int32_t*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_MEDIUMINT(i32, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : i32);
+                    break;
+                case NUMPY_INT64:
+                    i64 = *(int64_t*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_MEDIUMINT(i64, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : i64);
+                    break;
+                case NUMPY_UINT8:
+                    u8 = *(uint8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_MEDIUMINT(u8, 1);
+                    u32 = (uint32_t)((is_null) ? 0 : u8);
+                    break;
+                case NUMPY_UINT16:
+                    u16 = *(uint16_t*)(cols[i] + j * 2);
+                    CHECK_UNSIGNED_MEDIUMINT(u16, 1);
+                    u32 = (uint32_t)((is_null) ? 0 : u16);
+                    break;
+                case NUMPY_UINT32:
+                    u32 = *(uint32_t*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_MEDIUMINT(u32, 1);
+                    u32 = (uint32_t)((is_null) ? 0 : u32);
+                    break;
+                case NUMPY_UINT64:
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_MEDIUMINT(u64, 1);
+                    u32 = (uint32_t)((is_null) ? 0 : u64);
+                    break;
+                case NUMPY_FLOAT32:
+                    flt = *(float*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_MEDIUMINT(flt, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : flt);
+                    break;
+                case NUMPY_FLOAT64:
+                    dbl = *(double*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_MEDIUMINT(dbl, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : dbl);
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type UNSIGNED MEDIUMINT");
+                    goto error;
+                }
+                memcpy(out+out_idx, &u32, 4);
+                out_idx += 4;
+                break;
+
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_LONG:
+                CHECKMEM(4);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_INT(i8, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT8:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_INT(i8, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT16:
+                    i16 = *(int16_t*)(cols[i] + j * 2);
+                    CHECK_UNSIGNED_INT(i16, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : i16);
+                    break;
+                case NUMPY_INT32:
+                    i32 = *(int32_t*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_INT(i32, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : i32);
+                    break;
+                case NUMPY_INT64:
+                    i64 = *(int64_t*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_INT(i64, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : i64);
+                    break;
+                case NUMPY_UINT8:
+                    u8 = *(uint8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_INT(u8, 1);
+                    u32 = (uint32_t)((is_null) ? 0 : u8);
+                    break;
+                case NUMPY_UINT16:
+                    u16 = *(uint16_t*)(cols[i] + j * 2);
+                    CHECK_UNSIGNED_INT(u16, 1);
+                    u32 = (uint32_t)((is_null) ? 0 : u16);
+                    break;
+                case NUMPY_UINT32:
+                    u32 = *(uint32_t*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_INT(u32, 1);
+                    u32 = (uint32_t)((is_null) ? 0 : u32);
+                    break;
+                case NUMPY_UINT64:
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_INT(u64, 1);
+                    u32 = (uint32_t)((is_null) ? 0 : u64);
+                    break;
+                case NUMPY_FLOAT32:
+                    flt = *(float*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_INT(flt, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : flt);
+                    break;
+                case NUMPY_FLOAT64:
+                    dbl = *(double*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_INT(dbl, 0);
+                    u32 = (uint32_t)((is_null) ? 0 : dbl);
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type UNSIGNED INT");
+                    goto error;
+                }
+                memcpy(out+out_idx, &u32, 4);
+                out_idx += 4;
+                break;
+
+            case MYSQL_TYPE_LONGLONG:
+                CHECKMEM(8);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_BIGINT(i8, 0);
+                    i64 = (int64_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT8:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_BIGINT(i8, 0);
+                    i64 = (int64_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT16:
+                    i16 = *(int16_t*)(cols[i] + j * 2);
+                    CHECK_BIGINT(i16, 0);
+                    i64 = (int64_t)((is_null) ? 0 : i16);
+                    break;
+                case NUMPY_INT32:
+                    i32 = *(int32_t*)(cols[i] + j * 4);
+                    CHECK_BIGINT(i32, 0);
+                    i64 = (int64_t)((is_null) ? 0 : i32);
+                    break;
+                case NUMPY_INT64:
+                    i64 = *(int64_t*)(cols[i] + j * 8);
+                    CHECK_BIGINT(i64, 0);
+                    i64 = (int64_t)((is_null) ? 0 : i64);
+                    break;
+                case NUMPY_UINT8:
+                    u8 = *(uint8_t*)(cols[i] + j * 1);
+                    CHECK_BIGINT(u8, 1);
+                    i64 = (int64_t)((is_null) ? 0 : u8);
+                    break;
+                case NUMPY_UINT16:
+                    u16 = *(uint16_t*)(cols[i] + j * 2);
+                    CHECK_BIGINT(u16, 1);
+                    i64 = (int64_t)((is_null) ? 0 : u16);
+                    break;
+                case NUMPY_UINT32:
+                    u32 = *(uint32_t*)(cols[i] + j * 4);
+                    CHECK_BIGINT(u32, 1);
+                    i64 = (int64_t)((is_null) ? 0 : u32);
+                    break;
+                case NUMPY_UINT64:
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+                    CHECK_BIGINT(u64, 1);
+                    i64 = (int64_t)((is_null) ? 0 : u64);
+                    break;
+                case NUMPY_FLOAT32:
+                    flt = *(float*)(cols[i] + j * 4);
+                    CHECK_BIGINT(flt, 0);
+                    i64 = (int64_t)((is_null) ? 0 : flt);
+                    break;
+                case NUMPY_FLOAT64:
+                    dbl = *(double*)(cols[i] + j * 8);
+                    CHECK_BIGINT(dbl, 0);
+                    i64 = (int64_t)((is_null) ? 0 : dbl);
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type BIGINT");
+                    goto error;
+                }
+                memcpy(out+out_idx, &i64, 8);
+                out_idx += 8;
+                break;
+
+            // Use negative to indicate unsigned
+            case -MYSQL_TYPE_LONGLONG:
+                CHECKMEM(8);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_BIGINT(i8, 0);
+                    u64 = (uint64_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT8:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_BIGINT(i8, 0);
+                    u64 = (uint64_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT16:
+                    i16 = *(int16_t*)(cols[i] + j * 2);
+                    CHECK_UNSIGNED_BIGINT(i16, 0);
+                    u64 = (uint64_t)((is_null) ? 0 : i16);
+                    break;
+                case NUMPY_INT32:
+                    i32 = *(int32_t*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_BIGINT(i32, 0);
+                    u64 = (uint64_t)((is_null) ? 0 : i32);
+                    break;
+                case NUMPY_INT64:
+                    i64 = *(int64_t*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_BIGINT(i64, 0);
+                    u64 = (uint64_t)((is_null) ? 0 : i64);
+                    break;
+                case NUMPY_UINT8:
+                    u8 = *(uint8_t*)(cols[i] + j * 1);
+                    CHECK_UNSIGNED_BIGINT(u8, 1);
+                    u64 = (uint64_t)((is_null) ? 0 : u8);
+                    break;
+                case NUMPY_UINT16:
+                    u16 = *(uint16_t*)(cols[i] + j * 2);
+                    CHECK_UNSIGNED_BIGINT(u16, 1);
+                    u64 = (uint64_t)((is_null) ? 0 : u16);
+                    break;
+                case NUMPY_UINT32:
+                    u32 = *(uint32_t*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_BIGINT(u32, 1);
+                    u64 = (uint64_t)((is_null) ? 0 : u32);
+                    break;
+                case NUMPY_UINT64:
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_BIGINT(u64, 1);
+                    u64 = (uint64_t)((is_null) ? 0 : u64);
+                    break;
+                case NUMPY_FLOAT32:
+                    flt = *(float*)(cols[i] + j * 4);
+                    CHECK_UNSIGNED_BIGINT(flt, 0);
+                    u64 = (uint64_t)((is_null) ? 0 : flt);
+                    break;
+                case NUMPY_FLOAT64:
+                    dbl = *(double*)(cols[i] + j * 8);
+                    CHECK_UNSIGNED_BIGINT(dbl, 0);
+                    u64 = (uint64_t)((is_null) ? 0 : dbl);
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type UNSIGNED BIGINT");
+                    goto error;
+                }
+                memcpy(out+out_idx, &u64, 8);
+                out_idx += 8;
+                break;
+
+            case MYSQL_TYPE_FLOAT:
+                CHECKMEM(4);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    flt = (float)((is_null) ? 0 : *(int8_t*)(cols[i] + j * 1));
+                    break;
+                case NUMPY_INT8:
+                    flt = (float)((is_null) ? 0 : *(int8_t*)(cols[i] + j * 1));
+                    break;
+                case NUMPY_INT16:
+                    flt = (float)((is_null) ? 0 : *(int16_t*)(cols[i] + j * 2));
+                    break;
+                case NUMPY_INT32:
+                    flt = (float)((is_null) ? 0 : *(int32_t*)(cols[i] + j * 4));
+                    break;
+                case NUMPY_INT64:
+                    flt = (float)((is_null) ? 0 : *(int64_t*)(cols[i] + j * 8));
+                    break;
+                case NUMPY_UINT8:
+                    flt = (float)((is_null) ? 0 : *(uint8_t*)(cols[i] + j * 1));
+                    break;
+                case NUMPY_UINT16:
+                    flt = (float)((is_null) ? 0 : *(uint16_t*)(cols[i] + j * 2));
+                    break;
+                case NUMPY_UINT32:
+                    flt = (float)((is_null) ? 0 : *(uint32_t*)(cols[i] + j * 4));
+                    break;
+                case NUMPY_UINT64:
+                    flt = (float)((is_null) ? 0 : *(uint64_t*)(cols[i] + j * 8));
+                    break;
+                case NUMPY_FLOAT32:
+                    flt = (float)((is_null) ? 0 : *(float*)(cols[i] + j * 4));
+                    break;
+                case NUMPY_FLOAT64:
+                    flt = (float)((is_null) ? 0 : *(double*)(cols[i] + j * 8));
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type FLOAT");
+                    goto error;
+                }
+                memcpy(out+out_idx, &flt, 4);
+                out_idx += 4;
+                break;
+
+            case MYSQL_TYPE_DOUBLE:
+                CHECKMEM(8);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    dbl = (double)((is_null) ? 0 : *(int8_t*)(cols[i] + j * 1));
+                    break;
+                case NUMPY_INT8:
+                    dbl = (double)((is_null) ? 0 : *(int8_t*)(cols[i] + j * 1));
+                    break;
+                case NUMPY_INT16:
+                    dbl = (double)((is_null) ? 0 : *(int16_t*)(cols[i] + j * 2));
+                    break;
+                case NUMPY_INT32:
+                    dbl = (double)((is_null) ? 0 : *(int32_t*)(cols[i] + j * 4));
+                    break;
+                case NUMPY_INT64:
+                    dbl = (double)((is_null) ? 0 : *(int64_t*)(cols[i] + j * 8));
+                    break;
+                case NUMPY_UINT8:
+                    dbl = (double)((is_null) ? 0 : *(uint8_t*)(cols[i] + j * 1));
+                    break;
+                case NUMPY_UINT16:
+                    dbl = (double)((is_null) ? 0 : *(uint16_t*)(cols[i] + j * 2));
+                    break;
+                case NUMPY_UINT32:
+                    dbl = (double)((is_null) ? 0 : *(uint32_t*)(cols[i] + j * 4));
+                    break;
+                case NUMPY_UINT64:
+                    dbl = (double)((is_null) ? 0 : *(uint64_t*)(cols[i] + j * 8));
+                    break;
+                case NUMPY_FLOAT32:
+                    dbl = (double)((is_null) ? 0 : *(float*)(cols[i] + j * 4));
+                    break;
+                case NUMPY_FLOAT64:
+                    dbl = (double)((is_null) ? 0 : *(double*)(cols[i] + j * 8));
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type FLOAT");
+                    goto error;
+                }
+                memcpy(out+out_idx, &dbl, 8);
+                out_idx += 8;
+                break;
+
+            case MYSQL_TYPE_DECIMAL:
+                // TODO
+                PyErr_SetString(PyExc_ValueError, "unsupported data type: DECIMAL");
+                goto error;
+                break;
+
+            case MYSQL_TYPE_DATE:
+            case MYSQL_TYPE_NEWDATE:
+                // TODO
+                PyErr_SetString(PyExc_ValueError, "unsupported data type: DATE");
+                goto error;
+                break;
+
+            case MYSQL_TYPE_TIME:
+                // TODO
+                PyErr_SetString(PyExc_ValueError, "unsupported data type: TIME");
+                goto error;
+                break;
+
+            case MYSQL_TYPE_DATETIME:
+                // TODO
+                PyErr_SetString(PyExc_ValueError, "unsupported data type: DATETIME");
+                goto error;
+                break;
+
+            case MYSQL_TYPE_TIMESTAMP:
+                // TODO
+                PyErr_SetString(PyExc_ValueError, "unsupported data type: TIMESTAMP");
+                goto error;
+                break;
+
+            case MYSQL_TYPE_YEAR:
+                CHECKMEM(2);
+                switch (col_types[i]) {
+                case NUMPY_BOOL:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_YEAR(i8);
+                    i16 = (int16_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT8:
+                    i8 = *(int8_t*)(cols[i] + j * 1);
+                    CHECK_YEAR(i8);
+                    i16 = (int16_t)((is_null) ? 0 : i8);
+                    break;
+                case NUMPY_INT16:
+                    i16 = *(int16_t*)(cols[i] + j * 2);
+                    CHECK_YEAR(i16);
+                    i16 = (int16_t)((is_null) ? 0 : i16);
+                    break;
+                case NUMPY_INT32:
+                    i32 = *(int32_t*)(cols[i] + j * 4);
+                    CHECK_YEAR(i32);
+                    i16 = (int16_t)((is_null) ? 0 : i32);
+                    break;
+                case NUMPY_INT64:
+                    i64 = *(int64_t*)(cols[i] + j * 8);
+                    CHECK_YEAR(i64);
+                    i16 = (int16_t)((is_null) ? 0 : i64);
+                    break;
+                case NUMPY_UINT8:
+                    u8 = *(uint8_t*)(cols[i] + j * 1);
+                    CHECK_YEAR(u8);
+                    i16 = (int16_t)((is_null) ? 0 : u8);
+                    break;
+                case NUMPY_UINT16:
+                    u16 = *(uint16_t*)(cols[i] + j * 2);
+                    CHECK_YEAR(u16);
+                    i16 = (int16_t)((is_null) ? 0 : u16);
+                    break;
+                case NUMPY_UINT32:
+                    u32 = *(uint32_t*)(cols[i] + j * 4);
+                    CHECK_YEAR(u32);
+                    i16 = (int16_t)((is_null) ? 0 : u32);
+                    break;
+                case NUMPY_UINT64:
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+                    CHECK_YEAR(u64);
+                    i16 = (int16_t)((is_null) ? 0 : u64);
+                    break;
+                case NUMPY_FLOAT32:
+                    flt = *(float*)(cols[i] + j * 4);
+                    CHECK_YEAR(flt);
+                    i16 = (int16_t)((is_null) ? 0 : flt);
+                    break;
+                case NUMPY_FLOAT64:
+                    dbl = *(double*)(cols[i] + j * 8);
+                    CHECK_YEAR(dbl);
+                    i16 = (int16_t)((is_null) ? 0 : dbl);
+                    break;
+                default:
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for output type YEAR");
+                    goto error;
+                }
+                memcpy(out+out_idx, &i16, 2);
+                out_idx += 2;
+                break;
+
+            case MYSQL_TYPE_VARCHAR:
+            case MYSQL_TYPE_JSON:
+            case MYSQL_TYPE_SET:
+            case MYSQL_TYPE_ENUM:
+            case MYSQL_TYPE_VAR_STRING:
+            case MYSQL_TYPE_STRING:
+            case MYSQL_TYPE_GEOMETRY:
+            case MYSQL_TYPE_TINY_BLOB:
+            case MYSQL_TYPE_MEDIUM_BLOB:
+            case MYSQL_TYPE_LONG_BLOB:
+            case MYSQL_TYPE_BLOB:
+                if  (col_types[i] != NUMPY_OBJECT) {
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for character output types");
+                    goto error;
+                }
+
+                if (is_null) {
+                    CHECKMEM(8);
+                    i64 = 0;
+                    memcpy(out+out_idx, &i64, 8);
+                    out_idx += 8;
+
+                } else {
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+
+                    PyObject *py_str = (PyObject*)u64;
+                    if (!py_str) goto error;
+
+                    if (py_str == Py_None) {
+                        CHECKMEM(8);
+                        i64 = 0;
+                        memcpy(out+out_idx, &i64, 8);
+                        out_idx += 8;
+                    } else {
+                        PyObject *py_bytes = PyUnicode_AsEncodedString(py_str, "utf-8", "strict");
+                        if (!py_bytes) goto error;
+
+                        char *str = NULL;
+                        Py_ssize_t str_l = 0;
+                        if (PyBytes_AsStringAndSize(py_bytes, &str, &str_l) < 0) {
+                            Py_DECREF(py_bytes);
+                            goto error;
+                        }
+
+                        CHECKMEM(8+str_l);
+                        i64 = str_l;
+                        memcpy(out+out_idx, &i64, 8);
+                        out_idx += 8;
+                        memcpy(out+out_idx, str, str_l);
+                        out_idx += str_l;
+                        Py_DECREF(py_bytes);
+                    }
+                }
+                break;
+
+            // Use negative to indicate binary
+            case -MYSQL_TYPE_VARCHAR:
+            case -MYSQL_TYPE_JSON:
+            case -MYSQL_TYPE_SET:
+            case -MYSQL_TYPE_ENUM:
+            case -MYSQL_TYPE_VAR_STRING:
+            case -MYSQL_TYPE_STRING:
+            case -MYSQL_TYPE_GEOMETRY:
+            case -MYSQL_TYPE_TINY_BLOB:
+            case -MYSQL_TYPE_MEDIUM_BLOB:
+            case -MYSQL_TYPE_LONG_BLOB:
+            case -MYSQL_TYPE_BLOB:
+                if  (col_types[i] != NUMPY_OBJECT) {
+                    PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for binary output types");
+                    goto error;
+                }
+
+                if (is_null) {
+                    CHECKMEM(8);
+                    i64 = 0;
+                    memcpy(out+out_idx, &i64, 8);
+                    out_idx += 8;
+
+                } else {
+                    u64 = *(uint64_t*)(cols[i] + j * 8);
+
+                    PyObject *py_bytes = (PyObject*)u64;
+
+                    if (py_bytes == Py_None) {
+                        CHECKMEM(8);
+                        i64 = 0;
+                        memcpy(out+out_idx, &i64, 8);
+                        out_idx += 8;
+                    } else {
+                        char *str = NULL;
+                        Py_ssize_t str_l = 0;
+                        if (PyBytes_AsStringAndSize(py_bytes, &str, &str_l) < 0) {
+                            goto error;
+                        }
+
+                        CHECKMEM(8+str_l);
+                        i64 = str_l;
+                        memcpy(out+out_idx, &i64, 8);
+                        out_idx += 8;
+                        memcpy(out+out_idx, str, str_l);
+                        out_idx += str_l;
+                    }
+                }
+                break;
+
+            default:
+                PyErr_Format(PyExc_ValueError, "unrecognized database data type: %d", returns[i]);
+                goto error;
+            }
+        }
+    }
+
+    py_out = PyMemoryView_FromMemory(out, out_idx, PyBUF_WRITE);
+    if (!py_out) goto error;
 
 exit:
-    return 0;
+    if (returns) free(returns);
+    if (masks) free(masks);
+    if (cols) free(cols);
+    if (col_types) free(col_types);
+
+    return py_out;
 
 error:
-    return -1;
-}
+    if (!py_out && out) free(out);
+    Py_XDECREF(py_out);
+    py_out = NULL;
 
-
-static PyObject *load_rowdat_1_pandas(PyObject *self, PyObject *args, PyObject *kwargs) {
-    if (ensure_pandas() < 0) return NULL;
-    return load_rowdat_1_vector(self, args, kwargs, VECTOR_TYPE_PANDAS);
-}
-
-
-static PyObject *load_rowdat_1_polars(PyObject *self, PyObject *args, PyObject *kwargs) {
-    if (ensure_polars() < 0) return NULL;
-    return load_rowdat_1_vector(self, args, kwargs, VECTOR_TYPE_POLARS);
-}
-
-
-static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *kwargs) {
-    if (ensure_numpy() < 0) return NULL;
-    return load_rowdat_1_vector(self, args, kwargs, VECTOR_TYPE_NUMPY);
-}
-
-
-static PyObject *load_rowdat_1_arrow(PyObject *self, PyObject *args, PyObject *kwargs) {
-    if (ensure_pyarrow() < 0) return NULL;
-    return load_rowdat_1_vector(self, args, kwargs, VECTOR_TYPE_ARROW);
+    goto exit;
 }
 
 
@@ -2908,11 +3992,13 @@ error:
 
 static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs) {
     PyObject *py_returns = NULL;
-    PyObject *py_data = NULL;
+    PyObject *py_rows = NULL;
     PyObject *py_out = NULL;
-    PyObject *py_data_iter = NULL;
+    PyObject *py_rows_iter = NULL;
     PyObject *py_row = NULL;
     PyObject *py_row_iter = NULL;
+    PyObject *py_row_ids = NULL;
+    PyObject *py_row_ids_iter = NULL;
     PyObject *py_item = NULL;
     uint64_t row_id = 0;
     uint8_t is_null = 0;
@@ -2929,37 +4015,37 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     char *out = NULL;
     unsigned long long out_l = 0;
     unsigned long long out_idx = 0;
-    Py_ssize_t length = 0;
     int *returns = NULL;
-    unsigned long long returns_l = 0;
-    char *keywords[] = {"returns", "data", NULL};
+    char *keywords[] = {"returns", "row_ids", "data", NULL};
     unsigned long long i = 0;
+    unsigned long long n_cols = 0;
+    unsigned long long n_rows = 0;
 
     // Parse function args.
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO", keywords, &py_returns, &py_data)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOO", keywords, &py_returns, &py_row_ids, &py_rows)) {
         goto error;
     }
 
-    length = PyObject_Length(py_data);
-    if (length == 0) {
+    n_rows = (unsigned long long)PyObject_Length(py_rows);
+    if (n_rows == 0) {
         py_out = PyBytes_FromStringAndSize("", 0);
         goto exit;
     }
 
     // Starting size, it will be resized later
-    out_l = 256 * length;
+    out_l = 256 * n_rows;
     out_idx = 0;
     out = malloc(out_l);
     if (!out) goto error;
 
     // Get return types
-    returns_l = (unsigned long long)PyObject_Length(py_returns);
-    if (returns_l == 0) goto error;
+    n_cols = (unsigned long long)PyObject_Length(py_returns);
+    if (n_cols == 0) goto error;
 
-    returns = malloc(sizeof(int) * length);
+    returns = malloc(sizeof(int) * n_cols);
     if (!returns) goto error;
 
-    for (i = 0; i < returns_l; i++) {
+    for (i = 0; i < n_cols; i++) {
         PyObject *py_item = PySequence_GetItem(py_returns, i);
         if (!py_item) goto error;
         returns[i] = (int)PyLong_AsLong(py_item);
@@ -2974,15 +4060,18 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
         if (!out) goto error; \
     }
 
-    py_data_iter = PyObject_GetIter(py_data);
-    if (!py_data_iter) goto error;
+    py_rows_iter = PyObject_GetIter(py_rows);
+    if (!py_rows_iter) goto error;
 
-    while ((py_row = PyIter_Next(py_data_iter))) {
+    py_row_ids_iter = PyObject_GetIter(py_row_ids);
+    if (!py_row_ids_iter) goto error;
+
+    while ((py_row = PyIter_Next(py_rows_iter))) {
         py_row_iter = PyObject_GetIter(py_row);
         if (!py_row_iter) goto error;
 
         // First item is always a row ID
-        py_item = PyIter_Next(py_row_iter);
+        py_item = PyIter_Next(py_row_ids_iter);
         if (!py_item) goto error;
         row_id = (int64_t)PyLong_AsLongLong(py_item);
 
@@ -3120,7 +4209,12 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
             case MYSQL_TYPE_MEDIUM_BLOB:
             case MYSQL_TYPE_LONG_BLOB:
             case MYSQL_TYPE_BLOB:
-                {
+                if (is_null) {
+                    CHECKMEM(8);
+                    i64 = 0;
+                    memcpy(out+out_idx, &i64, 8);
+                    out_idx += 8;
+                } else {
                     PyObject *py_bytes = PyUnicode_AsEncodedString(py_item, "utf-8", "strict");
                     if (!py_bytes) goto error;
 
@@ -3153,7 +4247,12 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
             case -MYSQL_TYPE_MEDIUM_BLOB:
             case -MYSQL_TYPE_LONG_BLOB:
             case -MYSQL_TYPE_BLOB:
-                {
+                if (is_null) {
+                    CHECKMEM(8);
+                    i64 = 0;
+                    memcpy(out+out_idx, &i64, 8);
+                    out_idx += 8;
+                } else {
                     char *str = NULL;
                     Py_ssize_t str_l = 0;
                     if (PyBytes_AsStringAndSize(py_item, &str, &str_l) < 0) {
@@ -3183,21 +4282,22 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
         py_row = NULL;
     }
 
-    py_out = PyBytes_FromStringAndSize(out, out_idx);
+    py_out = PyMemoryView_FromMemory(out, out_idx, PyBUF_WRITE);
     if (!py_out) goto error;
 
 exit:
     if (returns) free(returns);
-    if (out) free(out);
 
     Py_XDECREF(py_item);
     Py_XDECREF(py_row_iter);
+    Py_XDECREF(py_row_ids_iter);
     Py_XDECREF(py_row);
-    Py_XDECREF(py_data_iter);
+    Py_XDECREF(py_rows_iter);
 
     return py_out;
 
 error:
+    if (!py_out && out) free(out);
     Py_XDECREF(py_out);
     py_out = NULL;
 
@@ -3209,10 +4309,8 @@ static PyMethodDef PyMySQLAccelMethods[] = {
     {"read_rowdata_packet", (PyCFunction)read_rowdata_packet, METH_VARARGS | METH_KEYWORDS, "PyMySQL row data packet reader"},
     {"dump_rowdat_1", (PyCFunction)dump_rowdat_1, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 formatter for external functions"},
     {"load_rowdat_1", (PyCFunction)load_rowdat_1, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions"},
-    {"load_rowdat_1_pandas", (PyCFunction)load_rowdat_1_pandas, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions which creates pandas.Series"},
+    {"dump_rowdat_1_numpy", (PyCFunction)dump_rowdat_1_numpy, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 formatter for external functions which takes numpy.arrays"},
     {"load_rowdat_1_numpy", (PyCFunction)load_rowdat_1_numpy, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions which creates numpy.arrays"},
-    {"load_rowdat_1_arrow", (PyCFunction)load_rowdat_1_arrow, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions which creates pyarrow.arrays"},
-    {"load_rowdat_1_polars", (PyCFunction)load_rowdat_1_polars, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions which creates polars.Series"},
     {NULL, NULL, 0, NULL}
 };
 
@@ -3302,6 +4400,15 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     PyObj.namedtuple_kwargs = PyDict_New();
     if (!PyObj.namedtuple_kwargs) goto error;
     if (PyDict_SetItemString(PyObj.namedtuple_kwargs, "rename", Py_True)) {
+        goto error;
+    }
+
+    PyObj.create_numpy_array_args = PyTuple_New(1);
+    if (!PyObj.create_numpy_array_args) goto error;
+
+    PyObj.create_numpy_array_kwargs = PyDict_New();
+    if (!PyObj.create_numpy_array_kwargs) goto error;
+    if (PyDict_SetItemString(PyObj.create_numpy_array_kwargs, "copy", Py_False)) {
         goto error;
     }
 

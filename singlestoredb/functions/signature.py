@@ -121,6 +121,47 @@ sql_type_map = {
     'time6': 'TIME(6)',
 }
 
+sql_to_type_map = {
+    'BOOL': 'bool',
+    'TINYINT': 'int8',
+    'TINYINT UNSIGNED': 'uint8',
+    'SMALLINT': 'int16',
+    'SMALLINT UNSIGNED': 'int16',
+    'MEDIUMINT': 'int32',
+    'MEDIUMINT UNSIGNED': 'int32',
+    'INT24': 'int32',
+    'INT24 UNSIGNED': 'int32',
+    'INT': 'int32',
+    'INT UNSIGNED': 'int32',
+    'INTEGER': 'int32',
+    'INTEGER UNSIGNED': 'int32',
+    'BIGINT': 'int64',
+    'BIGINT UNSIGNED': 'int64',
+    'FLOAT': 'float32',
+    'DOUBLE': 'float64',
+    'REAL': 'float64',
+    'DATE': 'date',
+    'TIME': 'time',
+    'TIME(6)': 'time6',
+    'DATETIME': 'datetime',
+    'DATETIME(6)': 'datetime',
+    'TIMESTAMP': 'datetime',
+    'TIMESTAMP(6)': 'datetime',
+    'YEAR': 'uint64',
+    'CHAR': 'str',
+    'VARCHAR': 'str',
+    'TEXT': 'str',
+    'TINYTEXT': 'str',
+    'MEDIUMTEXT': 'str',
+    'LONGTEXT': 'str',
+    'BINARY': 'bytes',
+    'VARBINARY': 'bytes',
+    'BLOB': 'bytes',
+    'TINYBLOB': 'bytes',
+    'MEDIUMBLOB': 'bytes',
+    'LONGBLOB': 'bytes',
+}
+
 
 class Collection:
     """Base class for collection data types."""
@@ -431,13 +472,15 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
             )
 
     for i, arg in enumerate(arg_names):
-        arg_type = '#sql'
         if isinstance(args_overrides, list):
             sql = args_overrides[i]
+            arg_type = sql_to_dtype(sql)
         elif isinstance(args_overrides, dict) and arg in args_overrides:
             sql = args_overrides[arg]
+            arg_type = sql_to_dtype(sql)
         elif isinstance(args_overrides, str):
             sql = args_overrides
+            arg_type = sql_to_dtype(sql)
         elif args_overrides is not None \
                 and not isinstance(args_overrides, (list, dict, str)):
             raise TypeError(f'unrecognized type for arguments: {args_overrides}')
@@ -445,23 +488,23 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
             arg_type = collapse_dtypes([
                 classify_dtype(x) for x in simplify_dtype(annotations[arg])
             ])
-            sql = None
+            sql = dtype_to_sql(arg_type)
         args.append(dict(name=arg, dtype=arg_type, sql=sql, default=defaults[i]))
 
     if returns_overrides is None \
             and signature.return_annotation is inspect.Signature.empty:
         raise TypeError(f'no return value annotation in function {name}')
 
-    out_type = '#sql'
     if isinstance(returns_overrides, str):
         sql = returns_overrides
+        out_type = sql_to_dtype(sql)
     elif returns_overrides is not None and not isinstance(returns_overrides, str):
         raise TypeError(f'unrecognized type for return value: {returns_overrides}')
     else:
-        sql = None
         out_type = collapse_dtypes([
             classify_dtype(x) for x in simplify_dtype(signature.return_annotation)
         ])
+        sql = dtype_to_sql(out_type)
     out['returns'] = dict(dtype=out_type, sql=sql, default=None)
 
     copied_keys = ['database', 'environment', 'packages', 'resources', 'replace']
@@ -473,6 +516,47 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
     out['doc'] = func.__doc__
 
     return out
+
+
+def sql_to_dtype(sql: str) -> str:
+    """
+    Convert a SQL type into a normalized data type identifier.
+
+    Parameters
+    ----------
+    sql : str
+        SQL data type specification
+
+    Returns
+    -------
+    str
+
+    """
+    sql = re.sub(r'\s+', r' ', sql.upper().strip())
+
+    m = re.match(r'(\w+)(\([^\)]+\))?', sql)
+    if not m:
+        raise TypeError(f'unrecognized data type: {sql}')
+
+    sql_type = m.group(1)
+    type_attrs = re.split(r'\s*,\s*', m.group(2) or '')
+
+    if sql_type in ('DATETIME', 'TIME', 'TIMESTAMP') and \
+            type_attrs and type_attrs[0] == '6':
+        sql_type += '(6)'
+
+    elif ' UNSIGNED' in sql:
+        sql_type += ' UNSIGNED'
+
+    try:
+        dtype = sql_to_type_map[sql_type]
+    except KeyError:
+        raise TypeError(f'unrecognized data type: {sql_type}')
+
+    if ' NOT NULL' not in sql:
+        dtype += '?'
+
+    return dtype
 
 
 def dtype_to_sql(dtype: str, default: Any = None) -> str:
@@ -546,26 +630,17 @@ def signature_to_sql(
     '''
     args = []
     for arg in signature['args']:
-        if arg.get('sql'):
-            # Use default value from Python function if SQL doesn't set one
+        # Use default value from Python function if SQL doesn't set one
+        default = ''
+        if not re.search(r'\s+default\s+\S', arg['sql'], flags=re.I):
             default = ''
-            if not re.search(r'\s+default\s+\S', arg['sql'], flags=re.I):
-                default = ''
-                if arg.get('default', None) is not None:
-                    default = f' DEFAULT {escape_item(arg["default"], "utf8")}'
-            args.append(escape_name(arg['name']) + ' ' + arg['sql'] + default)
-        else:
-            args.append(
-                escape_name(arg['name']) + ' ' +
-                dtype_to_sql(arg['dtype'], arg.get('default', None)),
-            )
+            if arg.get('default', None) is not None:
+                default = f' DEFAULT {escape_item(arg["default"], "utf8")}'
+        args.append(escape_name(arg['name']) + ' ' + arg['sql'] + default)
 
     returns = ''
     if signature.get('returns'):
-        if signature['returns'].get('sql'):
-            res = signature['returns']['sql']
-        else:
-            res = dtype_to_sql(signature['returns']['dtype'])
+        res = signature['returns']['sql']
         returns = f' RETURNS {res}'
 
     host = os.environ.get('SINGLESTOREDB_EXT_HOST', '127.0.0.1')

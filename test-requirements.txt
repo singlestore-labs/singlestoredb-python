@@ -1,5 +1,6 @@
 coverage
 pandas
+parameterized
 pygeos ; python_version < "3.12"
 pytest
 pytest-cov

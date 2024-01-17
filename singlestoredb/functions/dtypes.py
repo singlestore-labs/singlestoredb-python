@@ -10,6 +10,24 @@ from typing import Union
 
 from ..mysql.converters import escape_item  # type: ignore
 
+try:
+    import numpy as np
+    has_numpy = True
+except ImportError:
+    has_numpy = False
+
+try:
+    import polars as pl
+    has_polars = True
+except ImportError:
+    has_polars = False
+
+try:
+    import pyarrow as pa
+    has_pyarrow = True
+except ImportError:
+    has_pyarrow = False
+
 
 DataType = Union[str, Callable[..., Any]]
 
@@ -76,6 +94,185 @@ utf8mb4_persian_ci = 'utf8mb4_persian_ci'
 utf8mb4_esperanto_ci = 'utf8mb4_esperanto_ci'
 utf8mb4_hungarian_ci = 'utf8mb4_hungarian_ci'
 utf8mb4_sinhala_ci = 'utf8mb4_sinhala_ci'
+
+DEFAULT_VALUES = {
+    0: 0,  # Decimal
+    1: 0,  # Tiny
+    -1: 0,  # Unsigned Tiny
+    2: 0,  # Short
+    -2: 0,  # Unsigned Short
+    3: 0,  # Long
+    -3: 0,  # Unsigned Long
+    4: float('nan'),  # Float
+    5: float('nan'),  # Double,
+    6: None,  # Null,
+    7: 0,  # Timestamp
+    8: 0,  # LongLong
+    -8: 0,  # Unsigned Longlong
+    9: 0,  # Int24
+    -9: 0,  # Unsigned Int24
+    10: 0,  # Date
+    11: 0,  # Time
+    12: 0,  # Datetime
+    13: 0,  # Year
+    15: None,  # Varchar
+    -15: None,  # Varbinary
+    16: 0,  # Bit
+    245: None,  # JSON
+    246: 0,  # NewDecimal
+    247: None,  # Enum
+    248: None,  # Set
+    249: None,  # TinyText
+    -249: None,  # TinyBlob
+    250: None,  # MediumText
+    -250: None,  # MediumBlob
+    251: None,  # LongText
+    -251: None,  # LongBlob
+    252: None,  # Text
+    -252: None,  # Blob
+    253: None,  # VarString
+    -253: None,  # VarBinary
+    254: None,  # String
+    -254: None,  # Binary
+    255: None,  # Geometry
+}
+
+if has_numpy:
+    NUMPY_TYPE_MAP = {
+        0: object,  # Decimal
+        1: np.int8,  # Tiny
+        -1: np.uint8,  # Unsigned Tiny
+        2: np.int16,  # Short
+        -2: np.uint16,  # Unsigned Short
+        3: np.int32,  # Long
+        -3: np.uint32,  # Unsigned Long
+        4: np.single,  # Float
+        5: np.double,  # Double,
+        6: object,  # Null,
+        7: object,  # Timestamp
+        8: np.int64,  # LongLong
+        -8: np.uint64,  # Unsigned LongLong
+        9: np.int32,  # Int24
+        -9: np.uint32,  # Unsigned Int24
+        10: object,  # Date
+        11: object,  # Time
+        12: object,  # Datetime
+        13: np.int16,  # Year
+        15: object,  # Varchar
+        -15: object,  # Varbinary
+        16: object,  # Bit
+        245: object,  # JSON
+        246: object,  # NewDecimal
+        247: object,  # Enum
+        248: object,  # Set
+        249: object,  # TinyText
+        -249: object,  # TinyBlob
+        250: object,  # MediumText
+        -250: object,  # MediumBlob
+        251: object,  # LongText
+        -251: object,  # LongBlob
+        252: object,  # Blob
+        -252: object,  # Text
+        253: object,  # VarString
+        -253: object,  # VarBlob
+        254: object,  # String
+        -254: object,  # Binary
+        255: object,  # Geometry
+    }
+else:
+    NUMPY_TYPE_MAP = {}
+
+PANDAS_TYPE_MAP = NUMPY_TYPE_MAP
+
+if has_pyarrow:
+    PYARROW_TYPE_MAP = {
+        0: pa.string(),  # Decimal
+        1: pa.int8(),  # Tiny
+        -1: pa.uint8(),  # Unsigned Tiny
+        2: pa.int16(),  # Short
+        -2: pa.uint16(),  # Unsigned Short
+        3: pa.int32(),  # Long
+        -3: pa.uint32(),  # Unsigned Long
+        4: pa.float32(),  # Float
+        5: pa.float64(),  # Double,
+        6: pa.null(),  # Null,
+        7: pa.timestamp('ns'),  # Timestamp
+        8: pa.int64(),  # LongLong
+        -8: pa.uint64(),  # Unsigned LongLong
+        9: pa.int32(),  # Int24
+        -9: pa.uint32(),  # Unsigned Int24
+        10: pa.date64(),  # Date
+        11: pa.duration('ns'),  # Time
+        12: pa.timestamp('ns'),  # Datetime
+        13: pa.int16(),  # Year
+        15: pa.string(),  # Varchar
+        -15: pa.binary(),  # Varbinary
+        16: pa.binary(),  # Bit
+        245: pa.string(),  # JSON
+        246: pa.string(),  # NewDecimal
+        247: pa.string(),  # Enum
+        248: pa.string(),  # Set
+        249: pa.string(),  # TinyText
+        -249: pa.binary(),  # TinyBlob
+        250: pa.string(),  # MediumText
+        -250: pa.binary(),  # MediumBlob
+        251: pa.string(),  # LongText
+        -251: pa.binary(),  # LongBlob
+        252: pa.string(),  # Text
+        -252: pa.binary(),  # Blob
+        253: pa.string(),  # VarString
+        -253: pa.binary(),  # VarBinary
+        254: pa.string(),  # String
+        -254: pa.binary(),  # Binary
+        255: pa.string(),  # Geometry
+    }
+else:
+    PYARROW_TYPE_MAP = {}
+
+if has_polars:
+    POLARS_TYPE_MAP = {
+        0: pl.Utf8,  # Decimal
+        1: pl.Int8,  # Tiny
+        -1: pl.UInt8,  # Unsigned Tiny
+        2: pl.Int16,  # Short
+        -2: pl.UInt16,  # Unsigned Short
+        3: pl.Int32,  # Long
+        -3: pl.UInt32,  # Unsigned Long
+        4: pl.Float32,  # Float
+        5: pl.Float64,  # Double,
+        6: pl.Null,  # Null,
+        7: pl.Datetime,  # Timestamp
+        8: pl.Int64,  # LongLong
+        -8: pl.UInt64,  # Unsigned LongLong
+        9: pl.Int32,  # Int24
+        -9: pl.UInt32,  # Unsigned Int24
+        10: pl.Date,  # Date
+        11: pl.Time,  # Time
+        12: pl.Datetime,  # Datetime
+        13: pl.Int16,  # Year
+        15: pl.Utf8,  # Varchar
+        -15: pl.Utf8,  # Varbinary
+        16: pl.Binary,  # Bit
+        245: pl.Utf8,  # JSON
+        246: pl.Utf8,  # NewDecimal
+        247: pl.Utf8,  # Enum
+        248: pl.Utf8,  # Set
+        249: pl.Utf8,  # TinyText
+        -249: pl.Utf8,  # TinyBlob
+        250: pl.Utf8,  # MediumBlob
+        -250: pl.Utf8,  # MediumText
+        251: pl.Utf8,  # LongBlob
+        -251: pl.Utf8,  # LongText
+        252: pl.Utf8,  # Blob
+        -252: pl.Utf8,  # Text
+        253: pl.Utf8,  # VarString
+        -253: pl.Utf8,  # VarBinary
+        254: pl.Utf8,  # String
+        -254: pl.Utf8,  # Binary
+        255: pl.Utf8,  # Geometry
+    }
+else:
+    POLARS_TYPE_MAP = {}
 
 
 def _modifiers(
@@ -144,7 +341,7 @@ def _bool(x: Optional[bool] = None) -> Optional[bool]:
     return bool(x)
 
 
-def BOOL(*, nullable: bool = False, default: Optional[bool] = None) -> str:
+def BOOL(*, nullable: bool = True, default: Optional[bool] = None) -> str:
     """
     BOOL type specification.
 
@@ -163,7 +360,7 @@ def BOOL(*, nullable: bool = False, default: Optional[bool] = None) -> str:
     return 'BOOL' + _modifiers(nullable=nullable, default=_bool(default))
 
 
-def BOOLEAN(*, nullable: bool = False, default: Optional[bool] = None) -> str:
+def BOOLEAN(*, nullable: bool = True, default: Optional[bool] = None) -> str:
     """
     BOOLEAN type specification.
 
@@ -182,7 +379,7 @@ def BOOLEAN(*, nullable: bool = False, default: Optional[bool] = None) -> str:
     return 'BOOLEAN' + _modifiers(nullable=nullable, default=_bool(default))
 
 
-def BIT(*, nullable: bool = False, default: Optional[int] = None) -> str:
+def BIT(*, nullable: bool = True, default: Optional[int] = None) -> str:
     """
     BIT type specification.
 
@@ -204,7 +401,7 @@ def BIT(*, nullable: bool = False, default: Optional[int] = None) -> str:
 def TINYINT(
     display_width: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[int] = None,
     unsigned: bool = False,
 ) -> str:
@@ -234,7 +431,7 @@ def TINYINT(
 def TINYINT_UNSIGNED(
     display_width: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[int] = None,
 ) -> str:
     """
@@ -261,7 +458,7 @@ def TINYINT_UNSIGNED(
 def SMALLINT(
     display_width: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[int] = None,
     unsigned: bool = False,
 ) -> str:
@@ -291,7 +488,7 @@ def SMALLINT(
 def SMALLINT_UNSIGNED(
     display_width: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[int] = None,
 ) -> str:
     """
@@ -318,7 +515,7 @@ def SMALLINT_UNSIGNED(
 def MEDIUMINT(
     display_width: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[int] = None,
     unsigned: bool = False,
 ) -> str:
@@ -348,7 +545,7 @@ def MEDIUMINT(
 def MEDIUMINT_UNSIGNED(
     display_width: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[int] = None,
 ) -> str:
     """
@@ -375,7 +572,7 @@ def MEDIUMINT_UNSIGNED(
 def INT(
     display_width: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[int] = None,
     unsigned: bool = False,
 ) -> str:
@@ -405,7 +602,7 @@ def INT(
 def INT_UNSIGNED(
     display_width: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[int] = None,
 ) -> str:
     """
@@ -432,7 +629,7 @@ def INT_UNSIGNED(
 def INTEGER(
     display_width: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[int] = None,
     unsigned: bool = False,
 ) -> str:
@@ -462,7 +659,7 @@ def INTEGER(
 def INTEGER_UNSIGNED(
     display_width: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[int] = None,
 ) -> str:
     """
@@ -489,7 +686,7 @@ def INTEGER_UNSIGNED(
 def BIGINT(
     display_width: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[int] = None,
     unsigned: bool = False,
 ) -> str:
@@ -519,7 +716,7 @@ def BIGINT(
 def BIGINT_UNSIGNED(
     display_width: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[int] = None,
 ) -> str:
     """
@@ -546,7 +743,7 @@ def BIGINT_UNSIGNED(
 def FLOAT(
     display_decimals: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[float] = None,
 ) -> str:
     """
@@ -573,7 +770,7 @@ def FLOAT(
 def DOUBLE(
     display_decimals: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[float] = None,
 ) -> str:
     """
@@ -600,7 +797,7 @@ def DOUBLE(
 def REAL(
     display_decimals: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[float] = None,
 ) -> str:
     """
@@ -628,7 +825,7 @@ def DECIMAL(
     precision: int,
     scale: int,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[Union[str, decimal.Decimal]] = None,
 ) -> str:
     """
@@ -658,7 +855,7 @@ def DEC(
     precision: int,
     scale: int,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[Union[str, decimal.Decimal]] = None,
 ) -> str:
     """
@@ -688,7 +885,7 @@ def FIXED(
     precision: int,
     scale: int,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[Union[str, decimal.Decimal]] = None,
 ) -> str:
     """
@@ -718,7 +915,7 @@ def NUMERIC(
     precision: int,
     scale: int,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[Union[str, decimal.Decimal]] = None,
 ) -> str:
     """
@@ -746,7 +943,7 @@ def NUMERIC(
 
 def DATE(
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[Union[str, datetime.date]] = None,
 ) -> str:
     """
@@ -770,7 +967,7 @@ def DATE(
 def TIME(
     precision: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[Union[str, datetime.timedelta]] = None,
 ) -> str:
     """
@@ -797,7 +994,7 @@ def TIME(
 def DATETIME(
     precision: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[Union[str, datetime.datetime]] = None,
 ) -> str:
     """
@@ -824,7 +1021,7 @@ def DATETIME(
 def TIMESTAMP(
     precision: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[Union[str, datetime.datetime]] = None,
 ) -> str:
     """
@@ -848,7 +1045,7 @@ def TIMESTAMP(
     return out + _modifiers(nullable=nullable, default=default)
 
 
-def YEAR(*, nullable: bool = False, default: Optional[int] = None) -> str:
+def YEAR(*, nullable: bool = True, default: Optional[int] = None) -> str:
     """
     YEAR type specification.
 
@@ -870,7 +1067,7 @@ def YEAR(*, nullable: bool = False, default: Optional[int] = None) -> str:
 def CHAR(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
@@ -906,7 +1103,7 @@ def CHAR(
 def VARCHAR(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
@@ -942,7 +1139,7 @@ def VARCHAR(
 def LONGTEXT(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
@@ -978,7 +1175,7 @@ def LONGTEXT(
 def MEDIUMTEXT(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
@@ -1014,7 +1211,7 @@ def MEDIUMTEXT(
 def TEXT(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
@@ -1050,7 +1247,7 @@ def TEXT(
 def TINYTEXT(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
@@ -1086,7 +1283,7 @@ def TINYTEXT(
 def BINARY(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[bytes] = None,
     collate: Optional[str] = None,
 ) -> str:
@@ -1118,7 +1315,7 @@ def BINARY(
 def VARBINARY(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[bytes] = None,
     collate: Optional[str] = None,
 ) -> str:
@@ -1150,7 +1347,7 @@ def VARBINARY(
 def LONGBLOB(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[bytes] = None,
     collate: Optional[str] = None,
 ) -> str:
@@ -1182,7 +1379,7 @@ def LONGBLOB(
 def MEDIUMBLOB(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[bytes] = None,
     collate: Optional[str] = None,
 ) -> str:
@@ -1214,7 +1411,7 @@ def MEDIUMBLOB(
 def BLOB(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[bytes] = None,
     collate: Optional[str] = None,
 ) -> str:
@@ -1246,7 +1443,7 @@ def BLOB(
 def TINYBLOB(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[bytes] = None,
     collate: Optional[str] = None,
 ) -> str:
@@ -1278,7 +1475,7 @@ def TINYBLOB(
 def JSON(
     length: Optional[int] = None,
     *,
-    nullable: bool = False,
+    nullable: bool = True,
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
@@ -1311,7 +1508,7 @@ def JSON(
     )
 
 
-def GEOGRAPHYPOINT(*, nullable: bool = False, default: Optional[str] = None) -> str:
+def GEOGRAPHYPOINT(*, nullable: bool = True, default: Optional[str] = None) -> str:
     """
     GEOGRAPHYPOINT type specification.
 
@@ -1330,7 +1527,7 @@ def GEOGRAPHYPOINT(*, nullable: bool = False, default: Optional[str] = None) -> 
     return 'GEOGRAPHYPOINT' + _modifiers(nullable=nullable, default=default)
 
 
-def GEOGRAPHY(*, nullable: bool = False, default: Optional[str] = None) -> str:
+def GEOGRAPHY(*, nullable: bool = True, default: Optional[str] = None) -> str:
     """
     GEOGRAPHYPOINT type specification.
 
@@ -1349,7 +1546,7 @@ def GEOGRAPHY(*, nullable: bool = False, default: Optional[str] = None) -> str:
     return 'GEOGRAPHY' + _modifiers(nullable=nullable, default=default)
 
 
-def RECORD(*args: Tuple[str, DataType], nullable: bool = False) -> str:
+def RECORD(*args: Tuple[str, DataType], nullable: bool = True) -> str:
     """
     RECORD type specification.
 
@@ -1375,7 +1572,7 @@ def RECORD(*args: Tuple[str, DataType], nullable: bool = False) -> str:
     return f'RECORD({", ".join(fields)})' + _modifiers(nullable=nullable)
 
 
-def ARRAY(dtype: DataType, nullable: bool = False) -> str:
+def ARRAY(dtype: DataType, nullable: bool = True) -> str:
     """
     ARRAY type specification.
 

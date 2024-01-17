@@ -35,6 +35,7 @@ def udf(
     remote_service: Optional[str] = None,
     link: Optional[str] = None,
     data_format: Optional[str] = None,
+    include_masks: bool = False,
 ) -> Callable[..., Any]:
     """
     Apply attributes to a UDF.
@@ -92,6 +93,10 @@ def udf(
         Name of link to use to connect to remote service
     data_format : str, optional
         The data format of each parameter: python, pandas, arrow, polars
+    include_masks : bool, optional
+        Should boolean masks be included with each input parameter to indicate
+        which elements are NULL? This is only used when a input parameters are
+        configured to a vector type (numpy, pandas, polars, arrow).
 
     Returns
     -------
@@ -139,6 +144,12 @@ def udf(
     if returns is not None and not isinstance(returns, str):
         raise TypeError(f'unrecognized return type: {returns}')
 
+    if include_masks and data_format == 'python':
+        raise RuntimeError(
+            'include_masks is only valid when using '
+            'vectors for input parameters',
+        )
+
     _singlestoredb_attrs = {  # type: ignore
         k: v for k, v in dict(
             name=name,
@@ -155,6 +166,7 @@ def udf(
             remote_service=remote_service,
             link=link,
             data_format=data_format,
+            include_masks=include_masks,
         ).items() if v is not None
     }
 
