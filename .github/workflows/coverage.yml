@@ -47,7 +47,7 @@ jobs:
 
       - name: Run MySQL protocol tests
         run: |
-          pytest -q --cov=singlestoredb ${{ env.TEST_HOME }}
+          pytest --config-file=${{ env.TEST_CONFIG_FILE }} -q --cov=singlestoredb ${{ env.TEST_HOME }}
         env:
           COVERAGE_FILE: "coverage-mysql.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3306"
