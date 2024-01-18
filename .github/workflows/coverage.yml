@@ -42,7 +42,7 @@ jobs:
 
       - name: Determine path to installed package
         run: |
-          dirname `python3 -c 'import singlestoredb.tests; print("TEST_HOME=" + singlestoredb.tests.__file__)'` >> $GITHUB_ENV
+          cd / && dirname `python3 -c 'import singlestoredb.tests; print("TEST_HOME=" + singlestoredb.tests.__file__)'` >> $GITHUB_ENV
 
       - name: Run MySQL protocol tests
         run: |
