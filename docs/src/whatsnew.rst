@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.10.4 - January 18, 2023
+--------------------------
+* Fix deferred connection URL in HTTP
+
 v0.10.3 - January 17, 2023
 --------------------------
 * Change Stage URLs
