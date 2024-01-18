@@ -909,7 +909,6 @@ class Connection(connection.Connection):
 
     def __init__(self, **kwargs: Any):
         from .. import __version__ as client_version
-
         connection.Connection.__init__(self, **kwargs)
 
         host = kwargs.get('host', get_option('host'))
@@ -990,6 +989,8 @@ class Connection(connection.Connection):
 
         url = os.environ.get('SINGLESTOREDB_URL')
         if not url:
+            if self._url and self._url.split('://', 1)[-1].startswith('singlestore.com'):
+                raise InterfaceError(0, 'Connection URL has not been established')
             return
 
         out = {}
@@ -1013,7 +1014,10 @@ class Connection(connection.Connection):
 
         # Get current connection attributes
         curr_url = urlparse(self._url, scheme='singlestoredb', allow_fragments=True)
-        auth = tuple(self._sess.auth)  # type: ignore
+        if self._sess.auth is not None:
+            auth = tuple(self._sess.auth)  # type: ignore
+        else:
+            auth = (None, None)  # type: ignore
 
         # If it's just a password change, we don't need to reconnect
         if (curr_url.hostname, curr_url.port, auth[0], self._database) == \
