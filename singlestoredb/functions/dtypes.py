@@ -8,6 +8,7 @@ from typing import Optional
 from typing import Tuple
 from typing import Union
 
+from ..converters import converters
 from ..mysql.converters import escape_item  # type: ignore
 
 try:
@@ -95,6 +96,27 @@ utf8mb4_esperanto_ci = 'utf8mb4_esperanto_ci'
 utf8mb4_hungarian_ci = 'utf8mb4_hungarian_ci'
 utf8mb4_sinhala_ci = 'utf8mb4_sinhala_ci'
 
+
+def identity(x: Any) -> Any:
+    return x
+
+
+def utf8str(x: Any) -> Optional[str]:
+    if x is None:
+        return x
+    if isinstance(x, str):
+        return x
+    return str(x, 'utf-8')
+
+
+def bytestr(x: Any) -> Optional[bytes]:
+    if x is None:
+        return x
+    if isinstance(x, bytes):
+        return x
+    return bytes.fromhex(x)
+
+
 DEFAULT_VALUES = {
     0: 0,  # Decimal
     1: 0,  # Tiny
@@ -136,6 +158,30 @@ DEFAULT_VALUES = {
     -254: None,  # Binary
     255: None,  # Geometry
 }
+
+PYTHON_CONVERTERS = {
+    -1: converters[1],
+    -2: converters[2],
+    -3: converters[3],
+    -8: converters[8],
+    -9: converters[9],
+    15: utf8str,
+    -15: bytestr,
+    249: utf8str,
+    -249: bytestr,
+    250: utf8str,
+    -250: bytestr,
+    251: utf8str,
+    -251: bytestr,
+    252: utf8str,
+    -252: bytestr,
+    254: utf8str,
+    -254: bytestr,
+    255: utf8str,
+}
+
+PYTHON_CONVERTERS = dict(list(converters.items()) + list(PYTHON_CONVERTERS.items()))
+
 
 if has_numpy:
     NUMPY_TYPE_MAP = {

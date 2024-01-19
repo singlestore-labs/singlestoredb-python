@@ -9,6 +9,7 @@ from ..dtypes import NUMPY_TYPE_MAP
 from ..dtypes import PANDAS_TYPE_MAP
 from ..dtypes import POLARS_TYPE_MAP
 from ..dtypes import PYARROW_TYPE_MAP
+from ..dtypes import PYTHON_CONVERTERS
 
 try:
     import numpy as np
@@ -35,6 +36,25 @@ except ImportError:
     has_pyarrow = False
 
 
+class JSONEncoder(json.JSONEncoder):
+
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, bytes):
+            return obj.hex()
+        return json.JSONEncoder.default(self, obj)
+
+
+def decode_row(coltypes: List[int], row: List[Any]) -> List[Any]:
+    out = []
+    for dtype, item in zip(coltypes, row):
+        out.append(PYTHON_CONVERTERS[dtype](item))  # type: ignore
+    return out
+
+
+def decode_value(coltype: int, data: Any) -> Any:
+    return PYTHON_CONVERTERS[coltype](data)  # type: ignore
+
+
 def load(
     colspec: List[Tuple[str, int]],
     data: bytes,
@@ -58,7 +78,7 @@ def load(
     rows = []
     for row_id, *row in json.loads(data.decode('utf-8'))['data']:
         row_ids.append(row_id)
-        rows.append(row)
+        rows.append(decode_row([x[1] for x in colspec], row))
     return row_ids, rows
 
 
@@ -90,8 +110,8 @@ def _load_vectors(
             defaults = [DEFAULT_VALUES[colspec[i][1]] for i, _ in enumerate(row)]
         if not cols:
             cols = [([], []) for _ in row]
-        for i, x in enumerate(row):
-            cols[i][0].append(x if x is not None else defaults[i])
+        for i, (spec, x) in enumerate(zip(colspec, row)):
+            cols[i][0].append(decode_value(spec[1], x) if x is not None else defaults[i])
             cols[i][1].append(False if x is not None else True)
     return row_ids, cols
 
@@ -258,7 +278,7 @@ def dump(
 
     '''
     data = list(zip(row_ids, *list(zip(*rows))))
-    return json.dumps(dict(data=data)).encode('utf-8')
+    return json.dumps(dict(data=data), cls=JSONEncoder).encode('utf-8')
 
 
 def _dump_vectors(
@@ -289,8 +309,8 @@ def _dump_vectors(
             masked_cols.append([d if m is not None else None for d, m in zip(data, mask)])
         else:
             masked_cols.append(cols[i][0])
-    data = list(zip(row_ids, *cols))
-    return json.dumps(dict(data=data)).encode('utf-8')
+    data = list(zip(row_ids, *masked_cols))
+    return json.dumps(dict(data=data), cls=JSONEncoder).encode('utf-8')
 
 
 def dump_pandas(
