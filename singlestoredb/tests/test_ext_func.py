@@ -32,6 +32,7 @@ def get_open_port() -> int:
 def start_http_server(database, data_format='rowdat_1'):
     """Start an external function server."""
     port = get_open_port()
+    print(f'Start UDF HTTP server on http://{HTTP_HOST}:{port}')
     proc = subprocess.Popen(
         ['uvicorn', 'singlestoredb.functions.ext:create_app'],
         env=dict(
@@ -70,6 +71,8 @@ def start_http_server(database, data_format='rowdat_1'):
             cur.execute('show functions')
             for item in list(cur):
                 cur.execute(f'show create function `{item[0]}`')
+                for func in list(cur):
+                    print(*func)
 
     return proc, HTTP_HOST, port
 
