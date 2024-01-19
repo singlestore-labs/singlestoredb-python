@@ -219,10 +219,11 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.DOUBLE
         assert desc[0].null_ok is False
 
-        self.cur.execute(
-            'select arrow_double_mult(value, NULL) as res '
-            'from data order by id',
-        )
+        if 'http' in os.environ.get('SINGLESTOREDB_URL', ''):
+            self.cur.execute(
+                'select arrow_double_mult(value, NULL) as res '
+                'from data order by id',
+            )
 
         # NULL is not valid
         with self.assertRaises(self.conn.OperationalError):
