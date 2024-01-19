@@ -540,6 +540,12 @@ class Cursor(connection.Cursor):
 
         out = json.loads(res.text)
 
+        if 'error' in out:
+            raise OperationalError(
+                errno=out['error'].get('code', 0),
+                msg=out['error'].get('message', 'HTTP Error'),
+            )
+
         if sql_type == 'query':
             # description: (name, type_code, display_size, internal_size,
             #               precision, scale, null_ok, column_flags, charset)
