@@ -219,6 +219,11 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.DOUBLE
         assert desc[0].null_ok is False
 
+        self.cur.execute(
+            'select arrow_double_mult(value, NULL) as res '
+            'from data order by id',
+        )
+
         # NULL is not valid
         with self.assertRaises(self.conn.OperationalError):
             self.cur.execute(
@@ -313,7 +318,8 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(None,), (None,), (None,), (None,), (None,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(None,), (None,), (None,), (None,), (None,)]
 
     def test_int_mult(self):
         self.cur.execute(
