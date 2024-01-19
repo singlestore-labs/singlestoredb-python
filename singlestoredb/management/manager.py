@@ -278,12 +278,14 @@ class Manager(object):
             x.lower().strip()
             for x in (isinstance(state, str) and [state] or state)
         ]
+
         if getattr(out, 'state', None) is None:
             raise ManagementError(
                 msg='{} object does not have a `state` attribute'.format(
                     type(out).__name__,
                 ),
             )
+
         while True:
             if getattr(out, 'state').lower() in states:
                 break
@@ -294,5 +296,17 @@ class Manager(object):
                 )
             time.sleep(interval)
             timeout -= interval
-            out = getattr(self, f'get_{self.obj_type}')(out.id)
+
+            # Get new state, if authorization errors happen, ignore them and
+            # keep trying. In the notebook environment, the JWT doesn't always
+            # get updated immediately.
+            while timeout > 0:
+                try:
+                    out = getattr(self, f'get_{self.obj_type}')(out.id)
+                    break
+                except ManagementError as exc:
+                    if exc.errno == 401:
+                        time.sleep(interval)
+                        timeout -= interval
+
         return out
