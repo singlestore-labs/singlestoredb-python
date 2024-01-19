@@ -144,7 +144,8 @@ class TestExtFunc(unittest.TestCase):
     def test_double_mult(self):
         self.cur.execute('select double_mult(value, 100) as res from data order by id')
 
-        assert list(self.cur) == [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -165,7 +166,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -186,7 +188,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -207,7 +210,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
