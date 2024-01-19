@@ -232,7 +232,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -253,7 +254,8 @@ class TestExtFunc(unittest.TestCase):
             'data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(200.0,), (200.0,), (500.0,), (None,), (0.0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200.0,), (200.0,), (500.0,), (None,), (0.0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -266,7 +268,8 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(None,), (None,), (None,), (None,), (None,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(None,), (None,), (None,), (None,), (None,)]
 
     def test_float_mult(self):
         self.cur.execute(
@@ -274,7 +277,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -295,7 +299,8 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(200.0,), (200.0,), (500.0,), (None,), (0.0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200.0,), (200.0,), (500.0,), (None,), (0.0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -316,7 +321,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -337,7 +343,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (127,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (127,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -358,7 +365,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (127,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (127,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -379,7 +387,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (127,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (127,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -400,7 +409,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (127,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (127,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -421,7 +431,8 @@ class TestExtFunc(unittest.TestCase):
             'data order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (127,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (127,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -442,7 +453,8 @@ class TestExtFunc(unittest.TestCase):
             'data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (None,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (None,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -456,7 +468,8 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (0,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (0,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -470,7 +483,8 @@ class TestExtFunc(unittest.TestCase):
             'as res from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (None,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (None,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -484,7 +498,8 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (0,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (0,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -498,7 +513,8 @@ class TestExtFunc(unittest.TestCase):
             'as res from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (None,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (None,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -512,7 +528,8 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (0,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (0,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -526,7 +543,8 @@ class TestExtFunc(unittest.TestCase):
             'as res from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (None,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (None,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -540,7 +558,8 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (None,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (None,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -554,7 +573,8 @@ class TestExtFunc(unittest.TestCase):
             'as res from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(127,), (127,), (127,), (None,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(127,), (127,), (127,), (None,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -568,7 +588,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -589,7 +610,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -610,7 +632,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -631,7 +654,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -652,7 +676,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -673,7 +698,8 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (None,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (None,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -687,7 +713,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -708,7 +735,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -729,7 +757,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -750,7 +779,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -771,7 +801,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -792,7 +823,8 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (None,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (None,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -806,7 +838,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -827,7 +860,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -848,7 +882,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -869,7 +904,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -890,7 +926,8 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (None,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (None,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -904,7 +941,8 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (400,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (400,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -925,7 +963,8 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (None,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (None,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -939,7 +978,8 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [(200,), (200,), (500,), (None,), (0,)]
+        assert [tuple(x) for x in self.cur] == \
+               [(200,), (200,), (500,), (None,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -953,7 +993,7 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [
+        assert [tuple(x) for x in self.cur] == [
             ('antelopesantelopes',),
             ('bearsbears',),
             ('catscatscatscatscats',),
@@ -980,7 +1020,7 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [
+        assert [tuple(x) for x in self.cur] == [
             ('antelopesantelopes',),
             ('bearsbears',),
             ('catscatscatscatscats',),
@@ -1007,7 +1047,7 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [
+        assert [tuple(x) for x in self.cur] == [
             ('antelopesantelopes',),
             ('bearsbears',),
             ('catscatscatscatscats',),
@@ -1034,7 +1074,7 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [
+        assert [tuple(x) for x in self.cur] == [
             ('antelopesantelopes',),
             ('bearsbears',),
             ('catscatscatscatscats',),
@@ -1061,7 +1101,7 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [
+        assert [tuple(x) for x in self.cur] == [
             ('antelopesantelopes',),
             ('bearsbears',),
             ('catscatscatscatscats',),
@@ -1088,7 +1128,7 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [
+        assert [tuple(x) for x in self.cur] == [
             ('antelopesantelopes',),
             (None,),
             (None,),
@@ -1108,7 +1148,7 @@ class TestExtFunc(unittest.TestCase):
             'from data order by id',
         )
 
-        assert list(self.cur) == [
+        assert [tuple(x) for x in self.cur] == [
             ('antelopesantelopes',),
             ('bearsbears',),
             ('catscatscatscatscats',),
@@ -1135,7 +1175,7 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
-        assert list(self.cur) == [
+        assert [tuple(x) for x in self.cur] == [
             ('antelopesantelopes',),
             (None,),
             (None,),
