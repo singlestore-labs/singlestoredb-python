@@ -16,7 +16,14 @@ from . import utils
 from singlestoredb.functions.ext import create_app
 
 
-HTTP_HOST = '127.0.0.1'
+try:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(('8.8.8.8', 80))
+    HTTP_HOST = s.getsockname()[0]
+except Exception:
+    HTTP_HOST = '127.0.0.1'
+finally:
+    s.close()
 
 
 def get_open_port() -> int:
