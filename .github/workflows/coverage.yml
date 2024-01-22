@@ -53,6 +53,7 @@ jobs:
           COVERAGE_FILE: "coverage-mysql.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3306"
           SINGLESTOREDB_PURE_PYTHON: 0
+          SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
           SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
 
       - name: Run MySQL protocol tests (pure Python)
@@ -62,6 +63,7 @@ jobs:
           COVERAGE_FILE: "coverage-mysql-py.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3306"
           SINGLESTOREDB_PURE_PYTHON: 1
+          SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
           SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
 
       - name: Run HTTP protocol tests
@@ -70,6 +72,7 @@ jobs:
         env:
           COVERAGE_FILE: "coverage-http.cov"
           SINGLESTOREDB_URL: "http://root:root@127.0.0.1:9000"
+          SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
           SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
           # Can not change databases using HTTP API. The URL below will be
           # used to create the database and the generated database name will
