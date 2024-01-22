@@ -35,8 +35,8 @@ class PytestMode(Enum):
 
 
 @pytest.fixture(scope='session')
-def execution_mode() -> PytestMode:
-    """Determine the execution mode for this process"""
+def pytest_mode() -> PytestMode:
+    """Determine the pytest mode for this process"""
 
     worker = os.environ.get('PYTEST_XDIST_WORKER')
     worker_count = os.environ.get('PYTEST_XDIST_WORKER_COUNT')
