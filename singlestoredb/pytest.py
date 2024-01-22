@@ -28,14 +28,14 @@ TEARDOWN_WAIT_ATTEMPTS = 20
 TEARDOWN_WAIT_SECONDS = 2
 
 
-class PytestMode(Enum):
+class ExecutionMode(Enum):
     SEQUENTIAL = 1
     LEADER = 2
     FOLLOWER = 3
 
 
 @pytest.fixture(scope='session')
-def pytest_mode() -> PytestMode:
+def execution_mode() -> ExecutionMode:
     """Determine the pytest mode for this process"""
 
     worker = os.environ.get('PYTEST_XDIST_WORKER')
@@ -44,21 +44,21 @@ def pytest_mode() -> PytestMode:
     # If we're not in pytest-xdist, the mode is Sequential
     if worker is None or worker_count is None:
         logger.debug('XDIST environment vars not found')
-        return PytestMode.SEQUENTIAL
+        return ExecutionMode.SEQUENTIAL
 
     logger.debug(f'PYTEST_XDIST_WORKER == {worker}')
     logger.debug(f'PYTEST_XDIST_WORKER_COUNT == {worker_count}')
 
     # If we're the only worker, than the mode is Sequential
     if worker_count == '1':
-        return PytestMode.SEQUENTIAL
+        return ExecutionMode.SEQUENTIAL
     else:
         # The first worker (named "gw0") is the leader
         # if there are multiple workers
         if worker == 'gw0':
-            return PytestMode.LEADER
+            return ExecutionMode.LEADER
         else:
-            return PytestMode.FOLLOWER
+            return ExecutionMode.FOLLOWER
 
 
 @pytest.fixture(scope='session')
@@ -196,17 +196,17 @@ class _TestContainerManager():
 
 @pytest.fixture(scope='session')
 def singlestoredb_test_container(
-    pytest_mode: PytestMode,
+    execution_mode: ExecutionMode,
 ) -> Iterator[_TestContainerManager]:
     """Sets up and tears down the test container"""
 
-    if not isinstance(pytest_mode, PytestMode):
-        raise TypeError(f"Invalid execution mode '{pytest_mode}'")
+    if not isinstance(execution_mode, ExecutionMode):
+        raise TypeError(f"Invalid execution mode '{execution_mode}'")
 
     container_manager = _TestContainerManager()
 
     # In sequential operation do all the steps
-    if pytest_mode == PytestMode.SEQUENTIAL:
+    if execution_mode == ExecutionMode.SEQUENTIAL:
         logger.debug('Not distributed')
         container_manager.start()
         yield container_manager
@@ -214,7 +214,7 @@ def singlestoredb_test_container(
 
     # In distributed execution as leader,
     # do the steps but wait for other workers before stopping
-    elif pytest_mode == PytestMode.LEADER:
+    elif execution_mode == ExecutionMode.LEADER:
         logger.debug('Distributed leader')
         container_manager.start()
         yield container_manager
@@ -223,7 +223,7 @@ def singlestoredb_test_container(
 
     # In distributed exeuction as a non-leader,
     # don't worry about the container lifecycle
-    elif pytest_mode == PytestMode.FOLLOWER:
+    elif execution_mode == ExecutionMode.FOLLOWER:
         logger.debug('Distributed follower')
         yield container_manager
 
