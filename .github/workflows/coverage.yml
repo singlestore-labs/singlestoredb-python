@@ -17,7 +17,7 @@ jobs:
         ports:
           - 3307:3306
           - 8081:8080
-          - 9081:9000
+          - 9081:9081
         env:
           SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
           ROOT_PASSWORD: "root"
