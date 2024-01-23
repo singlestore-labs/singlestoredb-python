@@ -1058,6 +1058,84 @@ class Workspace(object):
         kwargs['host'] = self.endpoint
         return connection.connect(**kwargs)
 
+    def suspend(
+        self,
+        wait_on_suspended: bool = False,
+        wait_interval: int = 20,
+        wait_timeout: int = 600,
+    ) -> None:
+        """
+        Suspend the workspace.
+
+        Parameters
+        ----------
+        wait_on_suspended : bool, optional
+            Wait for the workspace to go into 'Suspended' mode before returning
+        wait_interval : int, optional
+            Number of seconds between each server check
+        wait_timeout : int, optional
+            Total number of seconds to check server before giving up
+
+        Raises
+        ------
+        ManagementError
+            If timeout is reached
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        self._manager._post(
+            f'workspaces/{self.id}/suspend',
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+        )
+        if wait_on_suspended:
+            self._manager._wait_on_state(
+                self._manager.get_workspace(self.id),
+                'Suspended', interval=wait_interval, timeout=wait_timeout,
+            )
+            self.refresh()
+
+    def resume(
+        self,
+        wait_on_resumed: bool = False,
+        wait_interval: int = 20,
+        wait_timeout: int = 600,
+    ) -> None:
+        """
+        Resume the workspace.
+
+        Parameters
+        ----------
+        wait_on_resumed : bool, optional
+            Wait for the workspace to go into 'Resumed' or 'Active' mode before returning
+        wait_interval : int, optional
+            Number of seconds between each server check
+        wait_timeout : int, optional
+            Total number of seconds to check server before giving up
+
+        Raises
+        ------
+        ManagementError
+            If timeout is reached
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        self._manager._post(
+            f'workspaces/{self.id}/resume',
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+        )
+        if wait_on_resumed:
+            self._manager._wait_on_state(
+                self._manager.get_workspace(self.id),
+                ['Resumed', 'Active'], interval=wait_interval, timeout=wait_timeout,
+            )
+            self.refresh()
+
 
 class WorkspaceGroup(object):
     """
@@ -1093,7 +1171,7 @@ class WorkspaceGroup(object):
         #: Timestamp of when the workspace group was created
         self.created_at = to_datetime(created_at)
 
-        #: Region of the cluster (see :class:`Region`)
+        #: Region of the workspace group (see :class:`Region`)
         self.region = region
 
         #: List of allowed incoming IP addresses / ranges
@@ -1174,14 +1252,14 @@ class WorkspaceGroup(object):
         firewall_ranges: Optional[List[str]] = None,
     ) -> None:
         """
-        Update the cluster definition.
+        Update the workspace group definition.
 
         Parameters
         ----------
         name : str, optional
-            Cluster name
+            Workspace group name
         admim_password : str, optional
-            Admin password for the cluster
+            Admin password for the workspace group
         firewall_ranges : Sequence[str], optional
             List of allowed incoming IP addresses
 
@@ -1213,7 +1291,7 @@ class WorkspaceGroup(object):
         force : bool, optional
             Terminate a workspace group even if it has active workspaces
         wait_on_terminated : bool, optional
-            Wait for the cluster to go into 'Terminated' mode before returning
+            Wait for the workspace group to go into 'Terminated' mode before returning
         wait_interval : int, optional
             Number of seconds between each server check
         wait_timeout : int, optional

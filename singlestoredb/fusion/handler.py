@@ -442,6 +442,13 @@ class SQLHandler(NodeVisitor):
         DummySQLResult
 
         """
+        import warnings
+        warnings.warn(
+            'Fusion SQL is currently a preview feature. '
+            'Run `SHOW FUSION COMMANDS` to see all commands.',
+            RuntimeWarning,
+        )
+
         type(self).compile()
         try:
             params = self.visit(type(self).grammar.parse(sql))

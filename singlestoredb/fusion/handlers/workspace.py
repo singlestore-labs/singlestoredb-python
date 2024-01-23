@@ -8,6 +8,7 @@ from .. import result
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
 from .utils import dt_isoformat
+from .utils import get_workspace
 from .utils import get_workspace_group
 from .utils import get_workspace_manager
 
@@ -34,7 +35,7 @@ class ShowRegionsHandler(SQLHandler):
         return res.order_by(**params['order_by']).limit(params['limit'])
 
 
-ShowRegionsHandler.register()
+ShowRegionsHandler.register(overwrite=True)
 
 
 class ShowWorkspaceGroupsHandler(SQLHandler):
@@ -75,7 +76,7 @@ class ShowWorkspaceGroupsHandler(SQLHandler):
         return res.order_by(**params['order_by']).limit(params['limit'])
 
 
-ShowWorkspaceGroupsHandler.register()
+ShowWorkspaceGroupsHandler.register(overwrite=True)
 
 
 class ShowWorkspacesHandler(SQLHandler):
@@ -125,7 +126,7 @@ class ShowWorkspacesHandler(SQLHandler):
         return res.order_by(**params['order_by']).limit(params['limit'])
 
 
-ShowWorkspacesHandler.register()
+ShowWorkspacesHandler.register(overwrite=True)
 
 
 class CreateWorkspaceGroupHandler(SQLHandler):
@@ -195,7 +196,7 @@ class CreateWorkspaceGroupHandler(SQLHandler):
         return None
 
 
-CreateWorkspaceGroupHandler.register()
+CreateWorkspaceGroupHandler.register(overwrite=True)
 
 
 class CreateWorkspaceHandler(SQLHandler):
@@ -245,16 +246,90 @@ class CreateWorkspaceHandler(SQLHandler):
         return None
 
 
-CreateWorkspaceHandler.register()
+CreateWorkspaceHandler.register(overwrite=True)
+
+
+class SuspendWorkspaceHandler(SQLHandler):
+    """
+    SUSPEND WORKSPACE workspace [ in_group ] [ wait_on_suspended ];
+
+    # Workspace
+    workspace = { workspace_id | workspace_name }
+
+    # ID of workspace
+    workspace_id = ID '<workspace-id>'
+
+    # Name of workspace
+    workspace_name = '<workspace-name>'
+
+    # Workspace group
+    in_group = IN GROUP { group_id | group_name }
+
+    # ID of workspace group
+    group_id = ID '<group-id>'
+
+    # Name of workspace group
+    group_name = '<group-name>'
+
+    # Wait for workspace to be suspended before continuing
+    wait_on_suspended = WAIT ON SUSPENDED
+
+    """
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        ws = get_workspace(params)
+        ws.suspend(wait_on_suspended=params['wait_on_suspended'])
+        return None
+
+
+SuspendWorkspaceHandler.register(overwrite=True)
+
+
+class ResumeWorkspaceHandler(SQLHandler):
+    """
+    RESUME WORKSPACE workspace [ in_group ] [ wait_on_resumed ];
+
+    # Workspace
+    workspace = { workspace_id | workspace_name }
+
+    # ID of workspace
+    workspace_id = ID '<workspace-id>'
+
+    # Name of workspace
+    workspace_name = '<workspace-name>'
+
+    # Workspace group
+    in_group = IN GROUP { group_id | group_name }
+
+    # ID of workspace group
+    group_id = ID '<group-id>'
+
+    # Name of workspace group
+    group_name = '<group-name>'
+
+    # Wait for workspace to be resumed before continuing
+    wait_on_resumed = WAIT ON RESUMED
+
+    """
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        ws = get_workspace(params)
+        ws.resume(wait_on_resumed=params['wait_on_resumed'])
+        return None
+
+
+ResumeWorkspaceHandler.register(overwrite=True)
 
 
 class DropWorkspaceGroupHandler(SQLHandler):
     """
-    DROP WORKSPACE GROUP [ if_exists ] { group_id | group_name }
-        [ wait_on_terminated ];
+    DROP WORKSPACE GROUP [ if_exists ] group [ wait_on_terminated ];
 
     # Only run command if the workspace group exists
     if_exists = IF EXISTS
+
+    # Workspace group
+    group = { group_id | group_name }
 
     # ID of the workspace group to delete
     group_id = ID '<group-id>'
@@ -282,25 +357,27 @@ class DropWorkspaceGroupHandler(SQLHandler):
         return None
 
 
-DropWorkspaceGroupHandler.register()
+DropWorkspaceGroupHandler.register(overwrite=True)
 
 
 class DropWorkspaceHandler(SQLHandler):
     """
-    DROP WORKSPACE [ if_exists ] { workspace_id | workspace_name }
-        [ in_group ] [ wait_on_terminated ];
-
-    # Workspace group
-    in_group = IN GROUP { group_id | group_name }
+    DROP WORKSPACE [ if_exists ] workspace [ in_group ] [ wait_on_terminated ];
 
     # Only drop workspace if it exists
     if_exists = IF EXISTS
+
+    # Workspace
+    workspace = { workspace_id | workspace_name }
 
     # ID of workspace
     workspace_id = ID '<workspace-id>'
 
     # Name of workspace
     workspace_name = '<workspace-name>'
+
+    # Workspace group
+    in_group = IN GROUP { group_id | group_name }
 
     # ID of workspace group
     group_id = ID '<group-id>'
@@ -315,14 +392,14 @@ class DropWorkspaceHandler(SQLHandler):
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         try:
-            workspace_group = get_workspace_group(params)
-            workspace_name_or_id = params['workspace_name'] or params['workspace_id']
-            ws = workspace_group.workspaces[workspace_name_or_id]
+            ws = get_workspace(params)
             ws.terminate(wait_on_terminated=params['wait_on_terminated'])
 
         except KeyError:
             group_name_or_id = params['in_group'].get('group_id', None) or \
-                               params['in_group'].get('group_name', None)
+                params['in_group'].get('group_name', None)
+            workspace_name_or_id = params['workspace'].get('workspace_id', None) or \
+                params['workspace'].get('workspace_name', None)
             if not params['if_exists']:
                 raise KeyError(
                     f"could not find workspace '{workspace_name_or_id}' "
@@ -332,4 +409,4 @@ class DropWorkspaceHandler(SQLHandler):
         return None
 
 
-DropWorkspaceHandler.register()
+DropWorkspaceHandler.register(overwrite=True)

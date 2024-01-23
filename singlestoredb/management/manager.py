@@ -11,6 +11,8 @@ from typing import Union
 from urllib.parse import urljoin
 
 import requests
+from requests.adapters import HTTPAdapter
+from requests.adapters import Retry
 
 from .. import config
 from ..exceptions import ManagementError
@@ -59,6 +61,15 @@ class Manager(object):
             'Accept': 'application/json',
             'User-Agent': f'SingleStoreDB-Python/{client_version}',
         })
+        self._sess.mount(
+            'http://',
+            HTTPAdapter(
+                max_retries=Retry(
+                    total=5, backoff_factor=1,
+                    status_forcelist=[401, 500, 502, 503, 504],
+                ),
+            ),
+        )
         self._base_url = urljoin(
             base_url or type(self).default_base_url,
             version or type(self).default_version,

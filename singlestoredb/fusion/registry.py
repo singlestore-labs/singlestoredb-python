@@ -43,7 +43,7 @@ def register_handler(handler: Type[SQLHandler], overwrite: bool = False) -> None
     _handlers[key] = handler
 
     # Build regex to detect fusion query
-    keys = sorted(_handlers.keys(), key=lambda x: -len(x[0]))
+    keys = sorted(_handlers.keys(), key=lambda x: (-len(x), x))
     keys_str = '|'.join(x.replace(' ', '\\s+') for x in keys)
     _handlers_re = re.compile(f'^\\s*({keys_str})(?:\\s+|;|$)', flags=re.I)
 

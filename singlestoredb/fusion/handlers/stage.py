@@ -12,13 +12,25 @@ from .utils import get_workspace_group
 
 class ShowStageFilesHandler(SQLHandler):
     """
-    SHOW STAGE FILES IN GROUP { group_id | group_name } [ at_path ]
-        [ <like> ] [ <order-by> ] [ <limit> ] [ recursive ] [ extended ];
+    SHOW STAGE FILES [ in_group ] [ at_path ] [ <like> ] [ <order-by> ]
+                     [ <limit> ] [ recursive ] [ extended ];
 
+    # Workspace group
+    in_group = IN GROUP { group_id | group_name }
+
+    # ID of group
     group_id = ID '<group-id>'
+
+    # Name of group
     group_name = '<group-name>'
+
+    # Stage path to list
     at_path = AT '<path>'
+
+    # Should the listing be recursive?
     recursive = RECURSIVE
+
+    # Should extended attributes be shown?
     extended = EXTENDED
 
     """
@@ -68,13 +80,24 @@ ShowStageFilesHandler.register(overwrite=True)
 
 class UploadStageFileHandler(SQLHandler):
     """
-    UPLOAD FILE local_path TO STAGE stage_path
-        IN GROUP { group_id | group_name } [ overwrite ];
+    UPLOAD FILE TO STAGE stage_path [ in_group ] FROM local_path [ overwrite ];
 
-    local_path = '<local-path>'
+    # Path to stage file
     stage_path = '<stage-path>'
+
+    # Workspace group
+    in_group = IN GROUP { group_id | group_name }
+
+    # ID of group
     group_id = ID '<group-id>'
+
+    # Name of group
     group_name = '<group-name>'
+
+    # Path to local file
+    local_path = '<local-path>'
+
+    # Should an existing file be overwritten?
     overwrite = OVERWRITE
 
     """
@@ -88,19 +111,33 @@ class UploadStageFileHandler(SQLHandler):
         return None
 
 
-UploadStageFileHandler.register()
+UploadStageFileHandler.register(overwrite=True)
 
 
 class DownloadStageFileHandler(SQLHandler):
     """
-    DOWNLOAD STAGE FILE stage_path IN GROUP { group_id | group_name }
-        [ local_path ] [ overwrite ] [ encoding ];
+    DOWNLOAD STAGE FILE stage_path [ in_group ] [ local_path ]
+                                   [ overwrite ] [ encoding ];
 
+    # Path to stage file
     stage_path = '<stage-path>'
+
+    # Workspace group
+    in_group = IN GROUP { group_id | group_name }
+
+    # ID of group
     group_id = ID '<group-id>'
+
+    # Name of group
     group_name = '<group-name>'
+
+    # Path to local file
     local_path = TO '<local-path>'
+
+    # Should an existing file be overwritten?
     overwrite = OVERWRITE
+
+    # File encoding
     encoding = ENCODING '<encoding>'
 
     """
@@ -127,15 +164,23 @@ class DownloadStageFileHandler(SQLHandler):
         return None
 
 
-DownloadStageFileHandler.register()
+DownloadStageFileHandler.register(overwrite=True)
 
 
 class DropStageFileHandler(SQLHandler):
     """
-    DROP STAGE FILE stage_path IN GROUP { group_id | group_name };
+    DROP STAGE FILE stage_path [ in_group ];
 
+    # Path to stage file
     stage_path = '<stage-path>'
+
+    # Workspace group
+    in_group = IN GROUP { group_id | group_name }
+
+    # ID of group
     group_id = ID '<group-id>'
+
+    # Name of group
     group_name = '<group-name>'
 
     """
@@ -146,16 +191,26 @@ class DropStageFileHandler(SQLHandler):
         return None
 
 
-DropStageFileHandler.register()
+DropStageFileHandler.register(overwrite=True)
 
 
 class DropStageFolderHandler(SQLHandler):
     """
-    DROP STAGE FOLDER stage_path IN GROUP { group_id | group_name } [ recursive ];
+    DROP STAGE FOLDER stage_path [ in_group ] [ recursive ];
 
+    # Path to stage folder
     stage_path = '<stage-path>'
+
+    # Workspace group
+    in_group = IN GROUP { group_id | group_name }
+
+    # ID of group
     group_id = ID '<group-id>'
+
+    # Name of group
     group_name = '<group-name>'
+
+    # Should folers be deleted recursively?
     recursive = RECURSIVE
 
     """
@@ -169,16 +224,26 @@ class DropStageFolderHandler(SQLHandler):
         return None
 
 
-DropStageFolderHandler.register()
+DropStageFolderHandler.register(overwrite=True)
 
 
 class CreateStageFolderHandler(SQLHandler):
     """
-    CREATE STAGE FOLDER stage_path IN GROUP { group_id | group_name } [ overwrite ];
+    CREATE STAGE FOLDER stage_path [ in_group ] [ overwrite ];
 
-    stage_path = '<stage-path>'
+    # Workspace group
+    in_group = IN GROUP { group_id | group_name }
+
+    # ID of group
     group_id = ID '<group-id>'
+
+    # Name of group
     group_name = '<group-name>'
+
+    # Path to stage folder
+    stage_path = '<stage-path>'
+
+    # Should an existing folder be overwritten?
     overwrite = OVERWRITE
 
     """
@@ -189,4 +254,4 @@ class CreateStageFolderHandler(SQLHandler):
         return None
 
 
-CreateStageFolderHandler.register()
+CreateStageFolderHandler.register(overwrite=True)
