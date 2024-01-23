@@ -122,12 +122,14 @@ jobs:
         if: ${{ matrix.driver != 'https' }}
         run: pytest -q singlestoredb/tests/test_basics.py
         env:
+          PYTHONPATH: ${{ github.workspace }}
           SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
 
       - name: Run tests
         if: ${{ matrix.driver == 'https' }}
         run: pytest -q singlestoredb/tests/test_basics.py
         env:
+          PYTHONPATH: ${{ github.workspace }}
           SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
 
 
