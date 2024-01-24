@@ -40,16 +40,11 @@ jobs:
 
       - name: Install SingleStore package
         run: |
-          python setup.py install
-
-      - name: Determine path to installed package
-        run: |
-          echo TEST_CONFIG_FILE=$(pwd)/setup.cfg >> $GITHUB_ENV
-          cd / && dirname `python3 -c 'import singlestoredb.tests; print("TEST_HOME=" + singlestoredb.tests.__file__)'` >> $GITHUB_ENV
+          pip install .
 
       - name: Run MySQL protocol tests
         run: |
-          pytest --config-file=${{ env.TEST_CONFIG_FILE }} -q --cov=singlestoredb ${{ env.TEST_HOME }}
+          pytest -q --cov=singlestoredb --pyargs singlestoredb.tests
         env:
           COVERAGE_FILE: "coverage-mysql.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3307"
@@ -59,7 +54,7 @@ jobs:
 
       - name: Run MySQL protocol tests (pure Python)
         run: |
-          pytest --config-file=${{ env.TEST_CONFIG_FILE }} -q -m 'not management' --cov=singlestoredb ${{ env.TEST_HOME }}
+          pytest -q -m 'not management' --cov=singlestoredb --pyargs singlestoredb.tests
         env:
           COVERAGE_FILE: "coverage-mysql-py.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3307"
@@ -69,7 +64,7 @@ jobs:
 
       - name: Run HTTP protocol tests
         run: |
-          pytest --config-file=${{ env.TEST_CONFIG_FILE }} -q -m 'not management' --cov=singlestoredb ${{ env.TEST_HOME }}
+          pytest -q -m 'not management' --cov=singlestoredb --pyargs singlestoredb.tests
         env:
           COVERAGE_FILE: "coverage-http.cov"
           SINGLESTOREDB_URL: "http://root:root@127.0.0.1:9081"

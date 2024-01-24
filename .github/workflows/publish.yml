@@ -81,10 +81,6 @@ jobs:
           pip install -r requirements.txt
           pip install -r test-requirements.txt
 
-      - name: Determine path to installed package
-        run: |
-          echo TEST_HOME=$(python3 -c 'import os; print(os.path.dirname(os.__file__))')/site-packages/singlestoredb/tests >> $GITHUB_ENV
-
       - name: Build sdist
         if: runner.os == 'Linux'
         run: |
@@ -105,7 +101,7 @@ jobs:
           CIBW_ARCHS_MACOS: "universal2"
           CIBW_BUILD: "cp39-*"
           CIBW_SKIP: "pp* *-musllinux* *-manylinux_i686"
-          CIBW_TEST_COMMAND: "pytest --config-file={project}/setup.cfg ${{ env.TEST_HOME }}/test_basics.py"
+          CIBW_TEST_COMMAND: "pytest --pyargs singlestoredb.tests.test_basics"
           CIBW_TEST_REQUIRES: "pytest"
           CIBW_ENVIRONMENT: "SINGLESTOREDB_URL='mysql://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0'"
           PYTHONPATH: ${{ github.workspace }}
