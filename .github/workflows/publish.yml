@@ -83,7 +83,7 @@ jobs:
 
       - name: Determine path to installed package
         run: |
-          echo TEST_CONFIG_FILE=$(pwd)/setup.cfg >> $GITHUB_ENV
+          echo TEST_CONFIG_FILE=${{ github.workspace }}/setup.cfg >> $GITHUB_ENV
           echo TEST_HOME=$(python3 -c 'import os; print(os.path.dirname(os.__file__))')/site-packages/singlestoredb/tests >> $GITHUB_ENV
 
       - name: Build sdist
