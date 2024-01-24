@@ -606,6 +606,8 @@ class Connection(BaseConnection):
         Error : If the connection is already closed.
 
         """
+        if self.host == 'singlestore.com':
+            return
         if self._closed:
             raise err.Error('Already closed')
         self._closed = True

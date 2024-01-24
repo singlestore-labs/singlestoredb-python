@@ -961,6 +961,7 @@ class Connection(connection.Connection):
 
         self._database = kwargs.get('database', get_option('database'))
         self._url = f'{self.driver}://{host}:{port}/api/{self._version}/'
+        self._host = host
         self._messages: List[Tuple[int, str]] = []
         self._autocommit: bool = True
         self._conv = kwargs.get('conv', None)
@@ -989,7 +990,7 @@ class Connection(connection.Connection):
 
         url = os.environ.get('SINGLESTOREDB_URL')
         if not url:
-            if self._url and self._url.split('://', 1)[-1].startswith('singlestore.com'):
+            if self._host == 'singlestore.com':
                 raise InterfaceError(0, 'Connection URL has not been established')
             return
 
@@ -1032,6 +1033,7 @@ class Connection(connection.Connection):
             sess.verify = self._sess.verify
             sess.cert = self._sess.cert
             self._database = out.get('database')
+            self._host = out['host']
             self._url = f'{out.get("driver", "https")}://{out["host"]}:{out["port"]}' \
                         f'/api/{self._version}/'
             self._sess = sess
@@ -1070,18 +1072,24 @@ class Connection(connection.Connection):
 
     def close(self) -> None:
         """Close the connection."""
+        if self._host == 'singlestore.com':
+            return
         if self._sess is None:
             raise Error(errno=2048, msg='Connection is closed')
         self._sess = None
 
     def autocommit(self, value: bool = True) -> None:
         """Set autocommit mode."""
+        if self._host == 'singlestore.com':
+            return
         if self._sess is None:
             raise InterfaceError(errno=2048, msg='Connection is closed')
         self._autocommit = value
 
     def commit(self) -> None:
         """Commit the pending transaction."""
+        if self._host == 'singlestore.com':
+            return
         if self._sess is None:
             raise InterfaceError(errno=2048, msg='Connection is closed')
         if self._autocommit:
@@ -1090,6 +1098,8 @@ class Connection(connection.Connection):
 
     def rollback(self) -> None:
         """Rollback the pending transaction."""
+        if self._host == 'singlestore.com':
+            return
         if self._sess is None:
             raise InterfaceError(errno=2048, msg='Connection is closed')
         if self._autocommit:
