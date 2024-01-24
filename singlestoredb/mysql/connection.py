@@ -673,6 +673,8 @@ class Connection(BaseConnection):
     def begin(self):
         """Begin transaction."""
         log_query('BEGIN')
+        if self.host == 'singlestore.com':
+            return
         self._execute_command(COMMAND.COM_QUERY, 'BEGIN')
         self._read_ok_packet()
 
@@ -685,6 +687,8 @@ class Connection(BaseConnection):
 
         """
         log_query('COMMIT')
+        if self.host == 'singlestore.com':
+            return
         self._execute_command(COMMAND.COM_QUERY, 'COMMIT')
         self._read_ok_packet()
 
@@ -697,6 +701,8 @@ class Connection(BaseConnection):
 
         """
         log_query('ROLLBACK')
+        if self.host == 'singlestore.com':
+            return
         self._execute_command(COMMAND.COM_QUERY, 'ROLLBACK')
         self._read_ok_packet()
 
@@ -905,7 +911,7 @@ class Connection(BaseConnection):
             out.pop('password', None)
 
         if out['host'] == 'singlestore.com':
-            return
+            raise err.InterfaceError(0, 'Connection URL has not been established')
 
         # If it's just a password change, we don't need to reconnect
         if (self.host, self.port, self.user, self.db) == \
@@ -920,7 +926,6 @@ class Connection(BaseConnection):
         else:
             self.password = out['password'] or b''
         self.db = out.get('database')
-
         try:
             self._in_sync = True
             self.connect()
