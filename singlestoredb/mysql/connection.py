@@ -905,7 +905,7 @@ class Connection(BaseConnection):
             out.pop('password', None)
 
         if out['host'] == 'singlestore.com':
-            raise err.InterfaceError(0, 'Connection URL has not been established')
+            return
 
         # If it's just a password change, we don't need to reconnect
         if (self.host, self.port, self.user, self.db) == \
@@ -920,6 +920,7 @@ class Connection(BaseConnection):
         else:
             self.password = out['password'] or b''
         self.db = out.get('database')
+
         try:
             self._in_sync = True
             self.connect()
