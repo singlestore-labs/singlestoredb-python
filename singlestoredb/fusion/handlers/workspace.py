@@ -393,6 +393,8 @@ class DropWorkspaceHandler(SQLHandler):
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         try:
             ws = get_workspace(params)
+            if ws.terminated_at is not None:
+                raise KeyError
             ws.terminate(wait_on_terminated=params['wait_on_terminated'])
 
         except KeyError:

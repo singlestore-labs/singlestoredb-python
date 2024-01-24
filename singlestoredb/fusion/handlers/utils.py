@@ -5,6 +5,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from ...exceptions import ManagementError
 from ...management import get_token
 from ...management import manage_workspaces
 from ...management.workspace import Workspace
@@ -54,7 +55,7 @@ def get_workspace_group(params: Dict[str, Any]) -> WorkspaceGroup:
 
         if not workspace_groups:
             raise KeyError(
-                f'no workspace group found with name "{group_name}"',
+                f'no workspace group found with name: {group_name}',
             )
 
         if len(workspace_groups) > 1:
@@ -69,12 +70,25 @@ def get_workspace_group(params: Dict[str, Any]) -> WorkspaceGroup:
         (params.get('in_group') or {}).get('group_id') or \
         (params.get('group') or {}).get('group_id')
     if group_id:
-        return manager.get_workspace_group(group_id)
+        try:
+            return manager.get_workspace_group(group_id)
+        except ManagementError as exc:
+            if exc.errno == 404:
+                raise KeyError(f'no workspace group found with ID: {group_id}')
+            raise
 
     if os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP'):
-        return manager.get_workspace_group(
-            os.environ['SINGLESTOREDB_WORKSPACE_GROUP'],
-        )
+        try:
+            return manager.get_workspace_group(
+                os.environ['SINGLESTOREDB_WORKSPACE_GROUP'],
+            )
+        except ManagementError as exc:
+            if exc.errno == 404:
+                raise KeyError(
+                    'no workspace found with ID: '
+                    f'{os.environ["SINGLESTOREDB_WORKSPACE_GROUP"]}',
+                )
+            raise
 
     if os.environ.get('SINGLESTOREDB_CLUSTER'):
         raise ValueError('clusters and shared workspaces are not currently supported')
@@ -109,7 +123,7 @@ def get_workspace(params: Dict[str, Any]) -> Workspace:
 
         if not workspaces:
             raise KeyError(
-                f'no workspace found with name "{workspace_name}"',
+                f'no workspace found with name: {workspace_name}',
             )
 
         if len(workspaces) > 1:
@@ -123,12 +137,25 @@ def get_workspace(params: Dict[str, Any]) -> Workspace:
     workspace_id = params.get('workspace_id') or \
         (params.get('workspace') or {}).get('workspace_id')
     if workspace_id:
-        return manager.get_workspace(workspace_id)
+        try:
+            return manager.get_workspace(workspace_id)
+        except ManagementError as exc:
+            if exc.errno == 404:
+                raise KeyError(f'no workspace found with ID: {workspace_id}')
+            raise
 
     if os.environ.get('SINGLESTOREDB_WORKSPACE'):
-        return manager.get_workspace(
-            os.environ['SINGLESTOREDB_WORKSPACE'],
-        )
+        try:
+            return manager.get_workspace(
+                os.environ['SINGLESTOREDB_WORKSPACE'],
+            )
+        except ManagementError as exc:
+            if exc.errno == 404:
+                raise KeyError(
+                    'no workspace found with ID: '
+                    f'{os.environ["SINGLESTOREDB_WORKSPACE"]}',
+                )
+            raise
 
     if os.environ.get('SINGLESTOREDB_CLUSTER'):
         raise ValueError('clusters and shared workspaces are not currently supported')
