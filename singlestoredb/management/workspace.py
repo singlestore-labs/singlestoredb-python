@@ -1086,10 +1086,7 @@ class Workspace(object):
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
-        self._manager._post(
-            f'workspaces/{self.id}/suspend',
-            headers={'Content-Type': 'application/x-www-form-urlencoded'},
-        )
+        self._manager._post(f'workspaces/{self.id}/suspend')
         if wait_on_suspended:
             self._manager._wait_on_state(
                 self._manager.get_workspace(self.id),
@@ -1125,10 +1122,7 @@ class Workspace(object):
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
-        self._manager._post(
-            f'workspaces/{self.id}/resume',
-            headers={'Content-Type': 'application/x-www-form-urlencoded'},
-        )
+        self._manager._post(f'workspaces/{self.id}/resume')
         if wait_on_resumed:
             self._manager._wait_on_state(
                 self._manager.get_workspace(self.id),
