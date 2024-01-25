@@ -6,7 +6,6 @@ from typing import Dict
 from typing import Optional
 
 from ...exceptions import ManagementError
-from ...management import get_token
 from ...management import manage_workspaces
 from ...management.workspace import Workspace
 from ...management.workspace import WorkspaceGroup
@@ -15,7 +14,7 @@ from ...management.workspace import WorkspaceManager
 
 def get_workspace_manager() -> WorkspaceManager:
     """Return a new workspace manager."""
-    return manage_workspaces(get_token())
+    return manage_workspaces()
 
 
 def dt_isoformat(dt: Optional[datetime.datetime]) -> Optional[str]:

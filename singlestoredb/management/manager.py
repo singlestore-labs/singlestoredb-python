@@ -10,9 +10,8 @@ from typing import Optional
 from typing import Union
 from urllib.parse import urljoin
 
+import jwt
 import requests
-from requests.adapters import HTTPAdapter
-from requests.adapters import Retry
 
 from .. import config
 from ..exceptions import ManagementError
@@ -32,6 +31,15 @@ def set_organization(kwargs: Dict[str, Any]) -> None:
         kwargs['params']['organizationID'] = org
 
 
+def is_jwt(token: str) -> bool:
+    """Is the given token a JWT?"""
+    try:
+        jwt.decode(token, options={'verify_signature': False})
+        return True
+    except jwt.DecodeError:
+        return False
+
+
 class Manager(object):
     """SingleStoreDB manager base class."""
 
@@ -49,11 +57,13 @@ class Manager(object):
         base_url: Optional[str] = None, *, organization_id: Optional[str] = None,
     ):
         from .. import __version__ as client_version
+        refresh_token = not bool(access_token)
         access_token = (
             access_token or get_token()
         )
         if not access_token:
             raise ManagementError(msg='No management token was configured.')
+        self._auth_is_jwt = refresh_token and is_jwt(access_token)
         self._sess = requests.Session()
         self._sess.headers.update({
             'Authorization': f'Bearer {access_token}',
@@ -61,15 +71,6 @@ class Manager(object):
             'Accept': 'application/json',
             'User-Agent': f'SingleStoreDB-Python/{client_version}',
         })
-        self._sess.mount(
-            'http://',
-            HTTPAdapter(
-                max_retries=Retry(
-                    total=5, backoff_factor=1,
-                    status_forcelist=[401, 500, 502, 503, 504],
-                ),
-            ),
-        )
         self._base_url = urljoin(
             base_url or type(self).default_base_url,
             version or type(self).default_version,
@@ -109,6 +110,31 @@ class Manager(object):
             raise ManagementError(errno=res.status_code, msg=msg, response=txt)
         return res
 
+    def _doit(
+        self,
+        method: str,
+        path: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> requests.Response:
+        """Perform HTTP request and retry as needed."""
+        retries = 5
+        while retries > 0:
+            res = getattr(self._sess, method.lower())(
+                urljoin(self._base_url, path), *args, **kwargs,
+            )
+            # Retry for authentication errors because the JWT in the
+            # notebook env might need to be refreshed.
+            if self._auth_is_jwt and res.status_code == 401:
+                time.sleep(5)
+                self._sess.headers.update({
+                    'Authorization': f'Bearer {get_token()}',
+                })
+                retries -= 1
+                continue
+            break
+        return res
+
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
         Invoke a GET request.
@@ -130,13 +156,7 @@ class Manager(object):
         if self._params:
             kwargs['params'] = self._params
         set_organization(kwargs)
-        return self._check(
-            self._sess.get(
-                urljoin(self._base_url, path),
-                *args, **kwargs,
-            ),
-            path, kwargs,
-        )
+        return self._check(self._doit('get', path, *args, **kwargs), path, kwargs)
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
@@ -159,13 +179,7 @@ class Manager(object):
         if self._params:
             kwargs['params'] = self._params
         set_organization(kwargs)
-        return self._check(
-            self._sess.post(
-                urljoin(self._base_url, path),
-                *args, **kwargs,
-            ),
-            path, kwargs,
-        )
+        return self._check(self._doit('post', path, *args, **kwargs), path, kwargs)
 
     def _put(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
@@ -188,13 +202,7 @@ class Manager(object):
         if self._params:
             kwargs['params'] = self._params
         set_organization(kwargs)
-        return self._check(
-            self._sess.put(
-                urljoin(self._base_url, path),
-                *args, **kwargs,
-            ),
-            path, kwargs,
-        )
+        return self._check(self._doit('put', path, *args, **kwargs), path, kwargs)
 
     def _delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
@@ -217,13 +225,7 @@ class Manager(object):
         if self._params:
             kwargs['params'] = self._params
         set_organization(kwargs)
-        return self._check(
-            self._sess.delete(
-                urljoin(self._base_url, path),
-                *args, **kwargs,
-            ),
-            path, kwargs,
-        )
+        return self._check(self._doit('delete', path, *args, **kwargs), path, kwargs)
 
     def _patch(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
@@ -246,13 +248,7 @@ class Manager(object):
         if self._params:
             kwargs['params'] = self._params
         set_organization(kwargs)
-        return self._check(
-            self._sess.patch(
-                urljoin(self._base_url, path),
-                *args, **kwargs,
-            ),
-            path, kwargs,
-        )
+        return self._check(self._doit('patch', path, *args, **kwargs), path, kwargs)
 
     def _wait_on_state(
         self,
