@@ -303,17 +303,6 @@ class Manager(object):
                 )
             time.sleep(interval)
             timeout -= interval
-
-            # Get new state, if authorization errors happen, ignore them and
-            # keep trying. In the notebook environment, the JWT doesn't always
-            # get updated immediately.
-            while timeout > 0:
-                try:
-                    out = getattr(self, f'get_{self.obj_type}')(out.id)
-                    break
-                except ManagementError as exc:
-                    if exc.errno == 401:
-                        time.sleep(interval)
-                        timeout -= interval
+            out = getattr(self, f'get_{self.obj_type}')(out.id)
 
         return out
