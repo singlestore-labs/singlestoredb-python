@@ -243,6 +243,11 @@ register_option(
     environ='SINGLESTOREDB_RESULTS_ARRAYSIZE',
 )
 
+register_option(
+    'results.arrow_batch', 'int', check_int, 10000,
+    'Number of result rows to group in one arrow record batch',
+    environ='SINGLESTOREDB_ARROW_BATCH_SIZE',
+)
 
 #
 # Workspace manager options

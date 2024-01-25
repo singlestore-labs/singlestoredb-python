@@ -1,6 +1,7 @@
 # type: ignore
 import re
 from collections import namedtuple
+import pyarrow
 
 from . import err
 from ..connection import Cursor as BaseCursor
@@ -52,6 +53,7 @@ class Cursor(BaseCursor):
         self._result = None
         self._rows = None
         self.lastrowid = None
+        self._is_arrow = False
 
     @property
     def messages(self):
@@ -202,6 +204,17 @@ class Cursor(BaseCursor):
         self._executed = query
         return result
 
+    def execute_arrow(self, query, args=None, result_batch_size=10000):
+        while self.nextset():
+            pass
+        query = self.mogrify(query, args)
+        query += f" OPTION (result_arrow_batch = {result_batch_size})"
+        log_query(query, args)
+        self._is_arrow = True
+        result = self._query(query)
+        self._executed = query
+        return result
+
     def executemany(self, query, args=None):
         """
         Run several data against one query.
@@ -343,6 +356,26 @@ class Cursor(BaseCursor):
         result = self._rows[self._rownumber]
         self._rownumber += 1
         return result
+
+    @staticmethod
+    def _decode_arrow_batch(buf):
+        with pyarrow.ipc.open_stream(buf) as reader:
+            schema = reader.schema
+            batches = [b for b in reader]
+        return schema, batches[0]
+
+    def fetchmany_arrow(self, result_type='pandas.DataFrame'):
+        if not self._is_arrow:
+            return None
+        row_arrow_buf = self.fetchone()
+        if row_arrow_buf is None or len(row_arrow_buf) == 0:
+            return None
+        schema, arrow_batch = self._decode_arrow_batch(row_arrow_buf[0])
+        # log_query(f'Batch schema {schema}')
+        if result_type == 'pyarrow.Table':
+            return pyarrow.Table.from_batches([arrow_batch])
+
+        return pyarrow.Table.from_batches([arrow_batch]).to_pandas()
 
     def fetchmany(self, size=None):
         """Fetch several rows."""

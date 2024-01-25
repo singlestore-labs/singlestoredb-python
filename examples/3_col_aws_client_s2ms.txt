@@ -1,0 +1,31 @@
+[QUERY] SELECT i,d,t FROM 3_col_test
+regular_read rows: 1000000
+func:regular_read args:[(<singlestoredb.mysql.connection.Connection object at 0x7f9c33a70e20>, 'SELECT i,d,t FROM 3_col_test'), {}] took: 1.7470 sec
+[QUERY] SELECT i,d,t FROM 3_col_test OPTION (result_arrow_batch = 10000)
+arrow_read_pandas, shape: (1000000, 3)
+func:arrow_read_pandas args:[(<singlestoredb.mysql.connection.Connection object at 0x7f9c33a70e20>, 'SELECT i,d,t FROM 3_col_test'), {}] took: 1.1593 sec
+[QUERY] SELECT i,d,t FROM 3_col_test
+regular_read rows: 1000000
+func:regular_read args:[(<singlestoredb.mysql.connection.Connection object at 0x7f9c33a70e20>, 'SELECT i,d,t FROM 3_col_test'), {}] took: 1.8819 sec
+[QUERY] SELECT i,d,t FROM 3_col_test OPTION (result_arrow_batch = 10000)
+arrow_read_pandas, shape: (1000000, 3)
+func:arrow_read_pandas args:[(<singlestoredb.mysql.connection.Connection object at 0x7f9c33a70e20>, 'SELECT i,d,t FROM 3_col_test'), {}] took: 1.0446 sec
+[QUERY] SELECT i,d,t FROM 3_col_test
+regular_read rows: 1000000
+func:regular_read args:[(<singlestoredb.mysql.connection.Connection object at 0x7f9c33a70e20>, 'SELECT i,d,t FROM 3_col_test'), {}] took: 1.6137 sec
+[QUERY] SELECT i,d,t FROM 3_col_test OPTION (result_arrow_batch = 10000)
+arrow_read_pandas, shape: (1000000, 3)
+func:arrow_read_pandas args:[(<singlestoredb.mysql.connection.Connection object at 0x7f9c33a70e20>, 'SELECT i,d,t FROM 3_col_test'), {}] took: 1.0651 sec
+[QUERY] SELECT i,d,t FROM 3_col_test
+regular_read rows: 1000000
+func:regular_read args:[(<singlestoredb.mysql.connection.Connection object at 0x7f9c33a70e20>, 'SELECT i,d,t FROM 3_col_test'), {}] took: 1.8754 sec
+[QUERY] SELECT i,d,t FROM 3_col_test OPTION (result_arrow_batch = 10000)
+arrow_read_pandas, shape: (1000000, 3)
+func:arrow_read_pandas args:[(<singlestoredb.mysql.connection.Connection object at 0x7f9c33a70e20>, 'SELECT i,d,t FROM 3_col_test'), {}] took: 1.1144 sec
+[QUERY] SELECT i,d,t FROM 3_col_test
+regular_read rows: 1000000
+func:regular_read args:[(<singlestoredb.mysql.connection.Connection object at 0x7f9c33a70e20>, 'SELECT i,d,t FROM 3_col_test'), {}] took: 1.5989 sec
+[QUERY] SELECT i,d,t FROM 3_col_test OPTION (result_arrow_batch = 10000)
+arrow_read_pandas, shape: (1000000, 3)
+func:arrow_read_pandas args:[(<singlestoredb.mysql.connection.Connection object at 0x7f9c33a70e20>, 'SELECT i,d,t FROM 3_col_test'), {}] took: 1.0736 sec
+Total regular: 8.716911315917969, total arrow: 5.4570019245147705
