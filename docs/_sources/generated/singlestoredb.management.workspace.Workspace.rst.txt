@@ -9,6 +9,8 @@
       ~Workspace.connect
       ~Workspace.from_dict
       ~Workspace.refresh
+      ~Workspace.resume
+      ~Workspace.suspend
       ~Workspace.terminate
    .. rubric:: Attributes
    .. autosummary::
