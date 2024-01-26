@@ -132,10 +132,15 @@ class Manager(object):
             # notebook env might need to be refreshed.
             if self._auth_is_jwt and res.status_code == 401:
                 logging.debug('authorization error with JWT; retrying')
+                access_token: Optional[str] = str(self._sess.headers['Authorization'])
+                logging.debug(f'old JWT: {access_token}')
                 time.sleep(5)
-                self._sess.headers.update({
-                    'Authorization': f'Bearer {get_token()}',
-                })
+                access_token = get_token()
+                logging.debug(f'new JWT: {access_token}')
+                if access_token is not None:
+                    self._sess.headers.update({
+                        'Authorization': f'Bearer {access_token}',
+                    })
                 retries -= 1
                 continue
             elif res.status_code == 401:
