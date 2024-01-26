@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 """SingleStoreDB Base Manager."""
-import logging
 import os
 import sys
 import time
@@ -58,13 +57,11 @@ class Manager(object):
         base_url: Optional[str] = None, *, organization_id: Optional[str] = None,
     ):
         from .. import __version__ as client_version
-        refresh_token = not bool(access_token)
         access_token = (
             access_token or get_token()
         )
         if not access_token:
             raise ManagementError(msg='No management token was configured.')
-        self._auth_is_jwt = refresh_token and is_jwt(access_token)
         self._sess = requests.Session()
         self._sess.headers.update({
             'Authorization': f'Bearer {access_token}',
@@ -118,35 +115,10 @@ class Manager(object):
         *args: Any,
         **kwargs: Any,
     ) -> requests.Response:
-        """Perform HTTP request and retry as needed."""
-        retries = 5
-        while retries > 0:
-            if self._auth_is_jwt:
-                logging.debug('making request with JWT')
-            else:
-                logging.debug('making request without JWT')
-            res = getattr(self._sess, method.lower())(
-                urljoin(self._base_url, path), *args, **kwargs,
-            )
-            # Retry for authentication errors because the JWT in the
-            # notebook env might need to be refreshed.
-            if self._auth_is_jwt and res.status_code == 401:
-                logging.debug('authorization error with JWT; retrying')
-                access_token: Optional[str] = str(self._sess.headers['Authorization'])
-                logging.debug(f'old JWT: {access_token}')
-                time.sleep(5)
-                access_token = get_token()
-                logging.debug(f'new JWT: {access_token}')
-                if access_token is not None:
-                    self._sess.headers.update({
-                        'Authorization': f'Bearer {access_token}',
-                    })
-                retries -= 1
-                continue
-            elif res.status_code == 401:
-                logging.debug('authorization error; no retries')
-            break
-        return res
+        """Perform HTTP request."""
+        return getattr(self._sess, method.lower())(
+            urljoin(self._base_url, path), *args, **kwargs,
+        )
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
