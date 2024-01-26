@@ -123,10 +123,12 @@ def get_token() -> Optional[str]:
     if tok:
         return tok
 
-    # See if the connection URL contains a JWT
-    url = get_option('host')
+    url = os.environ.get('SINGLESTOREDB_URL')
     if not url:
-        return None
+        # See if the connection URL contains a JWT
+        url = get_option('host')
+        if not url:
+            return None
 
     urlp = urlparse(url, scheme='singlestoredb', allow_fragments=True)
     if urlp.password:
