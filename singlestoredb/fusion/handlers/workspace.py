@@ -323,7 +323,7 @@ ResumeWorkspaceHandler.register(overwrite=True)
 
 class DropWorkspaceGroupHandler(SQLHandler):
     """
-    DROP WORKSPACE GROUP [ if_exists ] group [ wait_on_terminated ];
+    DROP WORKSPACE GROUP [ if_exists ] group [ wait_on_terminated ] [ force ];
 
     # Only run command if the workspace group exists
     if_exists = IF EXISTS
@@ -340,6 +340,9 @@ class DropWorkspaceGroupHandler(SQLHandler):
     # Wait for termination to complete before continuing
     wait_on_terminated = WAIT ON TERMINATED
 
+    # Should the workspace group be terminated even if it has workspaces?
+    force = FORCE
+
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
@@ -347,7 +350,10 @@ class DropWorkspaceGroupHandler(SQLHandler):
             workspace_group = get_workspace_group(params)
             if workspace_group.terminated_at is not None:
                 raise KeyError
-            workspace_group.terminate(wait_on_terminated=params['wait_on_terminated'])
+            workspace_group.terminate(
+                wait_on_terminated=params['wait_on_terminated'],
+                force=params['force'],
+            )
 
         except KeyError:
             if not params['if_exists']:

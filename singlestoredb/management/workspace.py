@@ -1005,6 +1005,7 @@ class Workspace(object):
         wait_on_terminated: bool = False,
         wait_interval: int = 10,
         wait_timeout: int = 600,
+        force: bool = False,
     ) -> None:
         """
         Terminate the workspace.
@@ -1017,6 +1018,8 @@ class Workspace(object):
             Number of seconds between each server check
         wait_timeout : int, optional
             Total number of seconds to check server before giving up
+        force : bool, optional
+            Should the workspace group be terminated even if it has workspaces?
 
         Raises
         ------
@@ -1028,7 +1031,8 @@ class Workspace(object):
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
-        self._manager._delete(f'workspaces/{self.id}')
+        force_str = 'true' if force else 'false'
+        self._manager._delete(f'workspaces/{self.id}?force={force_str}')
         if wait_on_terminated:
             self._manager._wait_on_state(
                 self._manager.get_workspace(self.id),
