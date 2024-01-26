@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """SingleStoreDB Base Manager."""
+import logging
 import os
 import sys
 import time
@@ -126,12 +127,15 @@ class Manager(object):
             # Retry for authentication errors because the JWT in the
             # notebook env might need to be refreshed.
             if self._auth_is_jwt and res.status_code == 401:
+                logging.debug('authorization error with JWT; retrying')
                 time.sleep(5)
                 self._sess.headers.update({
                     'Authorization': f'Bearer {get_token()}',
                 })
                 retries -= 1
                 continue
+            elif res.status_code == 401:
+                logging.debug('authorization error; no retries')
             break
         return res
 
