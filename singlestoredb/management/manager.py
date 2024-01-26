@@ -121,6 +121,10 @@ class Manager(object):
         """Perform HTTP request and retry as needed."""
         retries = 5
         while retries > 0:
+            if self._auth_is_jwt:
+                logging.debug('making request with JWT')
+            else:
+                logging.debug('making request without JWT')
             res = getattr(self._sess, method.lower())(
                 urljoin(self._base_url, path), *args, **kwargs,
             )
