@@ -7,6 +7,7 @@ would fail if any other test had been run on the same database.
 """
 from singlestoredb.connection import Cursor
 
+pytest_plugins = ('singlestoredb.pytest',)
 
 CREATE_TABLE_STATEMENT = 'create table test_dict (a text)'
 
