@@ -1,0 +1,4 @@
+﻿singlestoredb.connection.Cursor.setinputsizes
+=============================================
+.. currentmodule:: singlestoredb.connection
+.. automethod:: Cursor.setinputsizes

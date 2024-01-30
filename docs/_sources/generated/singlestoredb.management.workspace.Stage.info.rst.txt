@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.Stage.info
+=============================================
+.. currentmodule:: singlestoredb.management.workspace
+.. automethod:: Stage.info

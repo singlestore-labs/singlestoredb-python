@@ -1,0 +1,209 @@
+
+#
+# This workflow depends heavily on cibuildwheels.
+# https://cibuildwheel.readthedocs.io/en/stable/
+#
+
+name: Publish packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      publish_pypi:
+        description: "Publish PyPI packages on success?"
+        required: true
+        type: boolean
+        default: true
+#     publish_anaconda:
+#       description: "Publish Anaconda packages on success?"
+#       required: true
+#       type: boolean
+#       default: true
+      build_number:
+        description: "Package build number"
+        required: true
+        type: string
+        default: 0
+
+jobs:
+
+  setup-database:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          python --version
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Initialize database
+        id: initialize-database
+        run: |
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+    outputs:
+      cluster-id: ${{ steps.initialize-database.outputs.cluster-id }}
+      cluster-host: ${{ steps.initialize-database.outputs.cluster-host }}
+      cluster-database: ${{ steps.initialize-database.outputs.cluster-database }}
+
+  build-and-test:
+    needs: setup-database
+
+    name: Build and test wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-20.04
+          - macos-11
+          - windows-2019
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r test-requirements.txt
+
+      - name: Build sdist
+        if: runner.os == 'Linux'
+        run: |
+          python -m build --sdist
+
+      - name: Set up QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: all
+
+      - name: Build and test wheels
+        uses: pypa/cibuildwheel@v2.11.3
+        env:
+          # configure cibuildwheel to build native archs ('auto'), and some
+          # emulated ones
+          CIBW_ARCHS_LINUX: "auto aarch64"
+          CIBW_ARCHS_MACOS: "universal2"
+          CIBW_BUILD: "cp39-*"
+          CIBW_SKIP: "pp* *-musllinux* *-manylinux_i686"
+          CIBW_TEST_COMMAND: "pytest -v --pyargs singlestoredb.tests.test_basics"
+          CIBW_TEST_REQUIRES: "pytest"
+          CIBW_ENVIRONMENT: "SINGLESTOREDB_URL='mysql://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0'"
+          PYTHONPATH: ${{ github.workspace }}
+
+#     - name: Build conda
+#       if: ${{ matrix.os != 'windows-latest' }}
+#       run: |
+#         # $CONDA is an environment variable pointing to the root of the miniconda directory
+#         echo $CONDA/bin >> $GITHUB_PATH
+#         conda update conda
+#         conda install conda-build anaconda-client conda-verify
+#         mkdir conda-bld
+#         cd conda.recipe
+#         conda build -c singlestore -c conda-forge --output-folder ../conda-bld --no-test --no-anaconda-upload .
+
+#     - name: Build conda (Windows)
+#       if: ${{ matrix.os == 'windows-latest' }}
+#       run: |
+#         C:\Miniconda\condabin\conda.bat update conda
+#         C:\Miniconda\condabin\conda.bat install conda-build anaconda-client conda-verify
+#         mkdir conda-bld
+#         cd conda.recipe
+#         C:\Miniconda\condabin\conda.bat build -c singlestore -c conda-forge --output-folder ../conda-bld --no-test --no-anaconda-upload .
+
+      - name: Merge wheels and sdist
+        run: |
+          mkdir -p dist
+          mv ./wheelhouse/*.whl ./dist/.
+
+      - name: Archive source dist and wheel
+        uses: actions/upload-artifact@v3
+        with:
+          name: artifacts
+          path: dist
+          retention-days: 2
+
+#    - name: Archive conda
+#       uses: actions/upload-artifact@v3
+#       with:
+#         name: conda-${{ matrix.os }}
+#         path: ./conda-bld
+#         retention-days: 2
+
+  publish:
+    needs: build-and-test
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install twine
+
+      - name: Download wheels and sdist
+        uses: actions/download-artifact@v3
+        with:
+          name: artifacts
+          path: dist
+
+      - name: Publish PyPI package
+        if: ${{ github.event_name == 'release' || github.event.inputs.publish_pypi == 'true' }}
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
+        run: |
+          ls ./dist/*
+          twine upload ./dist/*
+
+#     - name: Publish Conda package
+#       if: ${{ github.event_name == 'release' || github.event.inputs.publish_anaconda == 'true' }}
+#       env:
+#         PACKAGE_BUILD_NUMBER: ${{ github.event.inputs.build_number }}
+#       run: |
+#         echo $CONDA/bin >> $GITHUB_PATH
+#         anaconda -t "${{ secrets.ANACONDA_TOKEN }}" upload --no-progress --user SingleStore --label main conda-bld/*/singlestoredb-*.tar.bz2
+#
+
+  shutdown-database:
+    needs: [setup-database, build-and-test]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          python --version
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Drop database
+        if: ${{ always() }}
+        run: |
+          python resources/drop_db.py --user "${{ secrets.CLUSTER_USER }}" --password "${{ secrets.CLUSTER_PASSWORD }}" --host "${{ needs.setup-database.outputs.cluster-host }}" --port 3306 --database "${{ needs.setup-database.outputs.cluster-database }}"
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      - name: Shutdown workspace
+        if: ${{ always() }}
+        run: |
+          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v1/workspaces/${{ env.CLUSTER_ID }}"
+        env:
+          CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}

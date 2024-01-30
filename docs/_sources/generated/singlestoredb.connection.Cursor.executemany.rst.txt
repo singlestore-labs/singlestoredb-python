@@ -1,0 +1,4 @@
+﻿singlestoredb.connection.Cursor.executemany
+===========================================
+.. currentmodule:: singlestoredb.connection
+.. automethod:: Cursor.executemany

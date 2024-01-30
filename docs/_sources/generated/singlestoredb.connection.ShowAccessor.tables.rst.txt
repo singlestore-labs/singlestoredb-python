@@ -1,0 +1,4 @@
+﻿singlestoredb.connection.ShowAccessor.tables
+============================================
+.. currentmodule:: singlestoredb.connection
+.. automethod:: ShowAccessor.tables

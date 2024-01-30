@@ -1,0 +1,168 @@
+name: Smoke test
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+
+jobs:
+
+  setup-database:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python --version
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Initialize database
+        id: initialize-database
+        run: |
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+    outputs:
+      cluster-id: ${{ steps.initialize-database.outputs.cluster-id }}
+      cluster-host: ${{ steps.initialize-database.outputs.cluster-host }}
+      cluster-database: ${{ steps.initialize-database.outputs.cluster-database }}
+
+
+  smoke-test:
+    needs: setup-database
+
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-20.04
+        python-version:
+          - "3.8"
+          - "3.9"
+          - "3.10"
+          - "3.11"
+          - "3.12"
+        driver:
+          - mysql
+          - https
+        pure-python:
+          - 0
+        buffered:
+          - 1
+        # Manually include a few runs of specific configurations
+        include:
+          - os: ubuntu-20.04
+            python-version: "3.11"
+            driver: mysql
+            pure-python: 1
+            buffered: 1
+#         - os: ubuntu-20.04
+#           python-version: "3.11"
+#           driver: mysql
+#           pure-python: 1
+#           buffered: 0
+#         - os: ubuntu-20.04
+#           python-version: "3.11"
+#           driver: mysql
+#           pure-python: 0
+#           buffered: 0
+          - os: macos-latest
+            python-version: "3.11"
+            driver: mysql
+            pure-python: 0
+            buffered: 1
+          - os: macos-latest
+            python-version: "3.11"
+            driver: https
+            pure-python: 0
+            buffered: 1
+          - os: windows-latest
+            python-version: "3.11"
+            driver: mysql
+            pure-python: 0
+            buffered: 1
+          - os: windows-latest
+            python-version: "3.11"
+            driver: https
+            pure-python: 0
+            buffered: 1
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r test-requirements.txt
+
+      - name: Install SingleStore package
+        run: |
+          pip install .
+
+      - name: Run tests
+        if: ${{ matrix.driver != 'https' }}
+        run: pytest -v --pyargs singlestoredb.tests.test_basics
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
+
+      - name: Run tests
+        if: ${{ matrix.driver == 'https' }}
+        run: pytest -v --pyargs singlestoredb.tests.test_basics
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
+
+
+  shutdown-database:
+    needs: [setup-database, smoke-test]
+    if: ${{ always() }}
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python --version
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Drop database
+        if: ${{ always() }}
+        run: |
+          python resources/drop_db.py --user "${{ secrets.CLUSTER_USER }}" --password "${{ secrets.CLUSTER_PASSWORD }}" --host "${{ needs.setup-database.outputs.cluster-host }}" --port 3306 --database "${{ needs.setup-database.outputs.cluster-database }}"
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      - name: Shutdown workspace
+        if: ${{ always() }}
+        run: |
+          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v1/workspaces/${{ env.CLUSTER_ID }}"
+        env:
+          CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}

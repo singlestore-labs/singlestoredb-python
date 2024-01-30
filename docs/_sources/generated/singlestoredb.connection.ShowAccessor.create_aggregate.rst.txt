@@ -1,0 +1,4 @@
+﻿singlestoredb.connection.ShowAccessor.create\_aggregate
+=======================================================
+.. currentmodule:: singlestoredb.connection
+.. automethod:: ShowAccessor.create_aggregate

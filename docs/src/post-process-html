@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+import glob
+import os
+import re
+import sys
+from typing import Any
+
+CWD = os.getcwd()
+BASE = sys.argv[1]
+
+
+def check_link(m: Any) -> str:
+    link, pre, txt, post = m.groups()
+    if not link and txt in links:
+        return f'<a href="{links[txt]}">{pre}{txt}{post}</a>'
+    return m.group(0)
+
+
+os.chdir(BASE)
+
+# Get list of generated HTML files and the class / method they belong to
+links = {}
+for f in glob.glob(os.path.join('generated', '*.html')):
+    m = re.search(r'([A-Z]\w+)\.html$', f)
+    if m:
+        links[m.group(1)] = f.split(os.sep)[-1]
+        continue
+
+    m = re.search(r'([A-Z]\w+\.[a-z]\w+)\.html$', f)
+    if m:
+        links[m.group(1)] = f.split(os.sep)[-1]
+
+# Get list of HTML files
+txt_files = []
+for root, dirs, files in os.walk('.'):
+    for file in files:
+        ext = file.split('.')[-1]
+        if ext in ['html', 'txt', 'svg', 'js', 'css', 'rst']:
+            txt_files.append(os.path.join(root, file))
+
+with open(os.path.join('_static', 'custom.css'), 'w') as custom_css:
+    with open(os.path.join(CWD, 'custom.css'), 'r') as input_css:
+        custom_css.write(input_css.read().strip())
+
+# Process text files
+for file in sorted(txt_files):
+    with open(file, 'r') as txt_file:
+        txt = txt_file.read()
+
+        # Remove module names from hidden modules
+        txt = re.sub(
+            r'(">)singlestoredb\.(connection|management)\.([\w\.]+</a>)', r'\1\3', txt,
+        )
+
+        # Change ShowAccessor to Connection.show
+        txt = re.sub(r'>ShowAccessor\.', r'>Connection.show.', txt)
+
+        # Change workspace.Stage to workspace.stage
+        txt = re.sub(r'>workspace\.Stage\.', r'>workspace.stage.', txt)
+
+        # Fix class / method links
+        txt = re.sub(
+            r'(<a\s+[^>]+>)?(\s*<code[^>]*>\s*<span\s+class="pre">\s*)([\w\.]+)(\s*</span>\s*</code>)',
+            check_link, txt,
+        )
+
+        # Trim trailing whitespace
+        txt = re.sub(r'\s+\n', r'\n', txt)
+
+        # Fix end-of-files
+        txt = re.sub(r'\s*$', r'', txt) + '\n'
+
+    with open(file, 'w') as txt_file:
+        txt_file.write(txt)

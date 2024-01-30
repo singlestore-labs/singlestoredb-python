@@ -1,0 +1,148 @@
+@import url('https://fonts.googleapis.com/css2?family=Inconsolata&display=swap');
+code.docutils > .pre {
+    color: #505050 !important
+}
+.rst-content dl:not(.docutils) dl dt {
+    border-width: 0px !important;
+    background-color: transparent !important;
+    margin-bottom: 0px !important;
+}
+.rst-content table.field-list td.field-body {
+    padding-top: 1px;
+}
+.rst-content dl:not(.docutils) dl dt strong {
+    font-size: 115%;
+}
+.rst-content dl:not(.docutils) dl dt span {
+    font-style: italic;
+    font-weight: normal;
+}
+.rst-content dl:not(.docutils) dl dt span.classifier:before {
+    content: ' (';
+}
+.rst-content dl:not(.docutils) dl dt span.classifier:after {
+    content: ')';
+}
+.rst-content dl:not(.docutils) dl dt span.optional,
+.rst-content dl:not(.docutils) dl dt span.opt-sep {
+    font-weight: normal;
+}
+.rst-content dl:not(.docutils) dl dt .classifier-delimiter {
+    display: none;
+}
+.rst-content dl:not(.docutils) dl dd strong {
+    font-weight: bold;
+    font-size: smaller;
+}
+/* Theme Overrides */
+.wy-side-nav-search {
+    background-color: black !important;
+}
+.wy-side-nav-search .version {
+    color: rgb(197, 80, 255) !important;
+}
+.wy-menu-vertical {
+    color: rgba(150, 94, 151, 0.2) !important;
+}
+.wy-menu-vertical a {
+    color: #666 !important;
+}
+.wy-menu-vertical li.current {
+    background-color: #e8e8e8;
+}
+.wy-menu-vertical li.toctree-l2.current>a, .wy-menu-vertical li.toctree-l2.current li.toctree-l3>a {
+    background-color: rgba(192, 192, 192, 0.2);
+}
+.wy-menu-vertical li.toctree-l3.current>a, .wy-menu-vertical li.toctree-l3.current li.toctree-l4>a {
+    background-color: rgba(192, 192, 192, 0.2);
+}
+.wy-menu-vertical header, .wy-menu-vertical p.caption {
+    color: rgb(136, 0, 204);
+}
+.wy-nav-side {
+    background-color: rgb(243, 243, 245);
+}
+.wy-menu-vertical a:visited {
+/*  color: #4c4a57 !important;*/
+}
+.wy-nav-content a:link {
+    color: #80c !important;
+}
+.wy-menu-vertical li.current>a, .wy-menu-vertical li.on a {
+    color: #80c !important;
+}
+.wy-menu-vertical a:hover {
+    color: #a0f !important;
+    background-color: rgba(192, 192, 192, 0.2);
+}
+html.writer-html4 .rst-content dl:not(.docutils)>dt, html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple)>dt {
+    color: #80c;
+}
+.wy-grid-for-nav {
+}
+html.writer-html4 .rst-content dl:not(.docutils)>dt,
+html.writer-html5 .rst-content dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple)>dt {
+    color: ;
+    border-top: rgba(150, 94, 151, 0) !important;
+    background-color: rgba(192, 192, 192, 0.2) !important;
+    padding: 15px;
+}
+.rst-content .note .admonition-title, .rst-content .note .wy-alert-title, .rst-content .seealso .admonition-title, .rst-content .seealso .wy-alert-title, .rst-content .wy-alert-info.admonition-todo .admonition-title, .rst-content .wy-alert-info.admonition-todo .wy-alert-title, .rst-content .wy-alert-info.admonition .admonition-title, .rst-content .wy-alert-info.admonition .wy-alert-title, .rst-content .wy-alert-info.attention .admonition-title, .rst-content .wy-alert-info.attention .wy-alert-title, .rst-content .wy-alert-info.caution .admonition-title, .rst-content .wy-alert-info.caution .wy-alert-title, .rst-content .wy-alert-info.danger .admonition-title, .rst-content .wy-alert-info.danger .wy-alert-title, .rst-content .wy-alert-info.error .admonition-title, .rst-content .wy-alert-info.error .wy-alert-title, .rst-content .wy-alert-info.hint .admonition-title, .rst-content .wy-alert-info.hint .wy-alert-title, .rst-content .wy-alert-info.important .admonition-title, .rst-content .wy-alert-info.important .wy-alert-title, .rst-content .wy-alert-info.tip .admonition-title, .rst-content .wy-alert-info.tip .wy-alert-title, .rst-content .wy-alert-info.warning .admonition-title, .rst-content .wy-alert-info.warning .wy-alert-title, .rst-content .wy-alert.wy-alert-info .admonition-title, .wy-alert.wy-alert-info .rst-content .admonition-title, .wy-alert.wy-alert-info .wy-alert-title {
+    background-color: #563ec2;
+}
+.rst-content .note, .rst-content .seealso, .rst-content .wy-alert-info.admonition, .rst-content .wy-alert-info.admonition-todo, .rst-content .wy-alert-info.attention, .rst-content .wy-alert-info.caution, .rst-content .wy-alert-info.danger, .rst-content .wy-alert-info.error, .rst-content .wy-alert-info.hint, .rst-content .wy-alert-info.important, .rst-content .wy-alert-info.tip, .rst-content .wy-alert-info.warning, .wy-alert.wy-alert-info {
+    background-color: #f3f2fc;
+}
+.rst-content .linenodiv pre, .rst-content div[class^=highlight] pre, .rst-content pre.literal-block {
+    -webkit-font-smoothing: antialiased;
+    font-family: Inconsolata, monospace;
+    font-weight: light;
+    font-size: 15px;
+}
+/* prompt */
+.highlight .gp {
+    color: #BBDEFB !important;
+}
+/* punctuation */
+.highlight .p {
+    color: #aaa !important;
+}
+/* operator */
+.highlight .o {
+    color: #ddd !important;
+}
+/* keyword / constant */
+.highlight .k, .highlight .kn, .highlight .ow, .highlight .kc,
+.highlight .kd, .highlight .kp, .highlight .kr, .highlight .kl {
+    color: rgba(189, 147, 249) !important;
+}
+/* strings */
+.highlight .s, .highlight .s1, .highlight .s2 {
+    color: rgba(255, 121, 198) !important;
+}
+/* attributes / methods */
+.highlight .n, .highlight .na, .highlight .nf {
+    color: #ddd !important;
+}
+/* builtin */
+.highlight .nb {
+    color: #B39DDB !important;
+}
+/* output */
+.highlight .go {
+    color: #eee !important;
+}
+/* comment */
+.highlight .c, .highlight .ch, .highlight .cm, .highlight .cp,
+.highlight .cpf, .highlight .c1, .highlight .cs {
+    color: #BBDEFB !important;
+}
+/* number */
+.highlight .m, .highlight .il, .highlight .mb, .highlight .mf,
+.highlight .mh, .highlight .mi {
+    color: #9FA8DA !important;
+}
+/* error */
+.highlight .err {
+    color: #f00 !important;
+}

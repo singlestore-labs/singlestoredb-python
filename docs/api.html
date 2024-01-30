@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Reference &mdash; SingleStoreDB 0.10.6 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="singlestoredb.connect" href="generated/singlestoredb.connect.html" />
+    <link rel="prev" title="Getting Started" href="getting-started.html" />
+</head>
+<body class="wy-body-for-nav">
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          <a href="index.html" class="icon icon-home">
+            SingleStoreDB
+          </a>
+              <div class="version">
+                0.10.6
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="whatsnew.html">What’s New</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting Started</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#connections">Connections</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.connect.html">singlestoredb.connect</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.create_engine.html">singlestoredb.create_engine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#connection">Connection</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.html">Connection</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.autocommit.html">Connection.autocommit</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.close.html">Connection.close</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.commit.html">Connection.commit</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.rollback.html">Connection.rollback</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.cursor.html">Connection.cursor</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.is_connected.html">Connection.is_connected</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.enable_data_api.html">Connection.enable_data_api</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.disable_data_api.html">Connection.disable_data_api</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.aggregates.html">Connection.show.aggregates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.columns.html">Connection.show.columns</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_aggregate.html">Connection.show.create_aggregate</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_function.html">Connection.show.create_function</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_pipeline.html">Connection.show.create_pipeline</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_table.html">Connection.show.create_table</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_view.html">Connection.show.create_view</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.databases.html">Connection.show.databases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.database_status.html">Connection.show.database_status</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.errors.html">Connection.show.errors</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.functions.html">Connection.show.functions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.global_status.html">Connection.show.global_status</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.indexes.html">Connection.show.indexes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.partitions.html">Connection.show.partitions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.pipelines.html">Connection.show.pipelines</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.plan.html">Connection.show.plan</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.plancache.html">Connection.show.plancache</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.procedures.html">Connection.show.procedures</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.processlist.html">Connection.show.processlist</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.reproduction.html">Connection.show.reproduction</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.schemas.html">Connection.show.schemas</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.session_status.html">Connection.show.session_status</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.status.html">Connection.show.status</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.table_status.html">Connection.show.table_status</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.tables.html">Connection.show.tables</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.warnings.html">Connection.show.warnings</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#showresult">ShowResult</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#cursor">Cursor</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.html">Cursor</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.callproc.html">Cursor.callproc</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.close.html">Cursor.close</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.execute.html">Cursor.execute</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.executemany.html">Cursor.executemany</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchone.html">Cursor.fetchone</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchmany.html">Cursor.fetchmany</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchall.html">Cursor.fetchall</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.nextset.html">Cursor.nextset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.setinputsizes.html">Cursor.setinputsizes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.setoutputsize.html">Cursor.setoutputsize</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.scroll.html">Cursor.scroll</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.next.html">Cursor.next</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.is_connected.html">Cursor.is_connected</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#utilities">Utilities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.auth.get_jwt.html">singlestoredb.auth.get_jwt</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#management-api">Management API</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.manage_workspaces.html">singlestoredb.manage_workspaces</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#workspacemanager">WorkspaceManager</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.html">workspace.WorkspaceManager</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.workspace_groups.html">workspace.WorkspaceManager.workspace_groups</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html">workspace.WorkspaceManager.regions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace_group.html">workspace.WorkspaceManager.create_workspace_group</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace.html">workspace.WorkspaceManager.create_workspace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace_group.html">workspace.WorkspaceManager.get_workspace_group</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace.html">workspace.WorkspaceManager.get_workspace</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#workspacegroup">WorkspaceGroup</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.html">workspace.WorkspaceGroup</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.workspaces.html">workspace.WorkspaceGroup.workspaces</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.stage.html">workspace.WorkspaceGroup.stage</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.create_workspace.html">workspace.WorkspaceGroup.create_workspace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.refresh.html">workspace.WorkspaceGroup.refresh</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.update.html">workspace.WorkspaceGroup.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.terminate.html">workspace.WorkspaceGroup.terminate</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#workspace">Workspace</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.html">workspace.Workspace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.connect.html">workspace.Workspace.connect</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.refresh.html">workspace.Workspace.refresh</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.terminate.html">workspace.Workspace.terminate</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#region">Region</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.region.Region.html">region.Region</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#stage">Stage</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.html">workspace.Stage</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.open.html">workspace.stage.open</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.download_file.html">workspace.stage.download_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.download_folder.html">workspace.stage.download_folder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.upload_file.html">workspace.stage.upload_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.upload_folder.html">workspace.stage.upload_folder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.info.html">workspace.stage.info</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.listdir.html">workspace.stage.listdir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.exists.html">workspace.stage.exists</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.is_dir.html">workspace.stage.is_dir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.is_file.html">workspace.stage.is_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.mkdir.html">workspace.stage.mkdir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.rename.html">workspace.stage.rename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.remove.html">workspace.stage.remove</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.removedirs.html">workspace.stage.removedirs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.rmdir.html">workspace.stage.rmdir</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#stageobject">StageObject</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.html">workspace.StageObject</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.open.html">workspace.StageObject.open</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.download.html">workspace.StageObject.download</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.exists.html">workspace.StageObject.exists</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.is_dir.html">workspace.StageObject.is_dir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.is_file.html">workspace.StageObject.is_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.abspath.html">workspace.StageObject.abspath</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.basename.html">workspace.StageObject.basename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.dirname.html">workspace.StageObject.dirname</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.getmtime.html">workspace.StageObject.getmtime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.getctime.html">workspace.StageObject.getctime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rename.html">workspace.StageObject.rename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.remove.html">workspace.StageObject.remove</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.removedirs.html">workspace.StageObject.removedirs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rmdir.html">workspace.StageObject.rmdir</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.get_option.html">singlestoredb.get_option</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.set_option.html">singlestoredb.set_option</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.describe_option.html">singlestoredb.describe_option</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+</ul>
+        </div>
+      </div>
+    </nav>
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">SingleStoreDB</a>
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">API Reference</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/api.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+  <span class="target" id="module-singlestoredb"></span><section id="api-reference">
+<span id="api"></span><h1>API Reference<a class="headerlink" href="#api-reference" title="Permalink to this heading">¶</a></h1>
+<section id="connections">
+<span id="api-functions"></span><h2>Connections<a class="headerlink" href="#connections" title="Permalink to this heading">¶</a></h2>
+<p>The <a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">connect()</span></code></a> function is the primary entry point for the SingleStore
+package. It connects to a SingleStore database using either
+<a class="reference external" href="https://peps.python.org/pep-0249/">DB-API</a> compliant parameters,
+or a connection string in the form of a URL.</p>
+<p>The <a class="reference internal" href="generated/singlestoredb.create_engine.html#singlestoredb.create_engine" title="singlestoredb.create_engine"><code class="xref py py-func docutils literal notranslate"><span class="pre">create_engine()</span></code></a> function is used with the SQLAlchemy package
+to create an SQLAlchemy engine for SingleStoreDB connections. This is
+primarily for use in environments where the connection parameters are
+stored in environment variables so that you can create SingleStoreDB
+connections without specifying any parameters in the code itself.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">connect</span></code></a>([host, user, password, port, ...])</p></td>
+<td><p>Return a SingleStoreDB connection.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.create_engine.html#singlestoredb.create_engine" title="singlestoredb.create_engine"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_engine</span></code></a>(*args, **kwargs)</p></td>
+<td><p>Create an SQLAlchemy engine for SingleStoreDB.</p></td>
+</tr>
+</tbody>
+</table>
+<section id="connection">
+<h3>Connection<a class="headerlink" href="#connection" title="Permalink to this heading">¶</a></h3>
+<p>Connection objects are created by the <a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">singlestoredb.connect()</span></code></a> function. They are
+used to create<a href="singlestoredb.connection.Cursor.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Cursor</span></code></a> objects for querying the database.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.html#singlestoredb.connection.Connection" title="singlestoredb.connection.Connection"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection</span></code></a>(**kwargs)</p></td>
+<td><p>SingleStoreDB connection.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.autocommit.html#singlestoredb.connection.Connection.autocommit" title="singlestoredb.connection.Connection.autocommit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.autocommit</span></code></a>([value])</p></td>
+<td><p>Set autocommit mode.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.close.html#singlestoredb.connection.Connection.close" title="singlestoredb.connection.Connection.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.close</span></code></a>()</p></td>
+<td><p>Close the database connection.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.commit.html#singlestoredb.connection.Connection.commit" title="singlestoredb.connection.Connection.commit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.commit</span></code></a>()</p></td>
+<td><p>Commit the pending transaction.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.rollback.html#singlestoredb.connection.Connection.rollback" title="singlestoredb.connection.Connection.rollback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.rollback</span></code></a>()</p></td>
+<td><p>Rollback the pending transaction.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.cursor.html#singlestoredb.connection.Connection.cursor" title="singlestoredb.connection.Connection.cursor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.cursor</span></code></a>()</p></td>
+<td><p>Create a new cursor object.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.is_connected.html#singlestoredb.connection.Connection.is_connected" title="singlestoredb.connection.Connection.is_connected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.is_connected</span></code></a>()</p></td>
+<td><p>Determine if the database is still connected.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.enable_data_api.html#singlestoredb.connection.Connection.enable_data_api" title="singlestoredb.connection.Connection.enable_data_api"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.enable_data_api</span></code></a>([port])</p></td>
+<td><p>Enable the data API in the server.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.disable_data_api.html#singlestoredb.connection.Connection.disable_data_api" title="singlestoredb.connection.Connection.disable_data_api"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.disable_data_api</span></code></a>()</p></td>
+<td><p>Disable the data API.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The <code class="xref py py-attr docutils literal notranslate"><span class="pre">Connection.show</span></code> attribute of the connection objects allow you to access various
+information about the server. The available operations are shown below.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.aggregates.html#singlestoredb.connection.ShowAccessor.aggregates" title="singlestoredb.connection.ShowAccessor.aggregates"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.aggregates</span></code></a>()</p></td>
+<td><p>Show all aggregate functions in the current database.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.columns.html#singlestoredb.connection.ShowAccessor.columns" title="singlestoredb.connection.ShowAccessor.columns"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.columns</span></code></a>(table[, full])</p></td>
+<td><p>Show the column information for the given table.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_aggregate.html#singlestoredb.connection.ShowAccessor.create_aggregate" title="singlestoredb.connection.ShowAccessor.create_aggregate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.create_aggregate</span></code></a>(name)</p></td>
+<td><p>Show the function creation code for the given aggregate function.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_function.html#singlestoredb.connection.ShowAccessor.create_function" title="singlestoredb.connection.ShowAccessor.create_function"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.create_function</span></code></a>(name)</p></td>
+<td><p>Show the function creation code for the given function.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_pipeline.html#singlestoredb.connection.ShowAccessor.create_pipeline" title="singlestoredb.connection.ShowAccessor.create_pipeline"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.create_pipeline</span></code></a>(name[, extended])</p></td>
+<td><p>Show the pipeline creation code for the given pipeline.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_table.html#singlestoredb.connection.ShowAccessor.create_table" title="singlestoredb.connection.ShowAccessor.create_table"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.create_table</span></code></a>(name)</p></td>
+<td><p>Show the table creation code for the given table.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_view.html#singlestoredb.connection.ShowAccessor.create_view" title="singlestoredb.connection.ShowAccessor.create_view"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.create_view</span></code></a>(name)</p></td>
+<td><p>Show the view creation code for the given view.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.databases.html#singlestoredb.connection.ShowAccessor.databases" title="singlestoredb.connection.ShowAccessor.databases"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.databases</span></code></a>([extended])</p></td>
+<td><p>Show all databases in the server.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.database_status.html#singlestoredb.connection.ShowAccessor.database_status" title="singlestoredb.connection.ShowAccessor.database_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.database_status</span></code></a>()</p></td>
+<td><p>Show status of the current database.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.errors.html#singlestoredb.connection.ShowAccessor.errors" title="singlestoredb.connection.ShowAccessor.errors"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.errors</span></code></a>()</p></td>
+<td><p>Show errors.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.functions.html#singlestoredb.connection.ShowAccessor.functions" title="singlestoredb.connection.ShowAccessor.functions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.functions</span></code></a>()</p></td>
+<td><p>Show all functions in the current database.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.global_status.html#singlestoredb.connection.ShowAccessor.global_status" title="singlestoredb.connection.ShowAccessor.global_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.global_status</span></code></a>()</p></td>
+<td><p>Show global status of the current server.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.indexes.html#singlestoredb.connection.ShowAccessor.indexes" title="singlestoredb.connection.ShowAccessor.indexes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.indexes</span></code></a>(table)</p></td>
+<td><p>Show all indexes in the given table.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.partitions.html#singlestoredb.connection.ShowAccessor.partitions" title="singlestoredb.connection.ShowAccessor.partitions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.partitions</span></code></a>([extended])</p></td>
+<td><p>Show partitions in the current database.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.pipelines.html#singlestoredb.connection.ShowAccessor.pipelines" title="singlestoredb.connection.ShowAccessor.pipelines"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.pipelines</span></code></a>()</p></td>
+<td><p>Show all pipelines in the current database.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.plan.html#singlestoredb.connection.ShowAccessor.plan" title="singlestoredb.connection.ShowAccessor.plan"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.plan</span></code></a>(plan_id[, json])</p></td>
+<td><p>Show the plan for the given plan ID.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.plancache.html#singlestoredb.connection.ShowAccessor.plancache" title="singlestoredb.connection.ShowAccessor.plancache"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.plancache</span></code></a>()</p></td>
+<td><p>Show all query statements compiled and executed.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.procedures.html#singlestoredb.connection.ShowAccessor.procedures" title="singlestoredb.connection.ShowAccessor.procedures"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.procedures</span></code></a>()</p></td>
+<td><p>Show all procedures in the current database.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.processlist.html#singlestoredb.connection.ShowAccessor.processlist" title="singlestoredb.connection.ShowAccessor.processlist"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.processlist</span></code></a>()</p></td>
+<td><p>Show details about currently running threads.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.reproduction.html#singlestoredb.connection.ShowAccessor.reproduction" title="singlestoredb.connection.ShowAccessor.reproduction"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.reproduction</span></code></a>([outfile])</p></td>
+<td><p>Show troubleshooting data for query optimizer and code generation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.schemas.html#singlestoredb.connection.ShowAccessor.schemas" title="singlestoredb.connection.ShowAccessor.schemas"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.schemas</span></code></a>()</p></td>
+<td><p>Show schemas in the server.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.session_status.html#singlestoredb.connection.ShowAccessor.session_status" title="singlestoredb.connection.ShowAccessor.session_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.session_status</span></code></a>()</p></td>
+<td><p>Show server status information for a session.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.status.html#singlestoredb.connection.ShowAccessor.status" title="singlestoredb.connection.ShowAccessor.status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.status</span></code></a>([extended])</p></td>
+<td><p>Show server status information.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.table_status.html#singlestoredb.connection.ShowAccessor.table_status" title="singlestoredb.connection.ShowAccessor.table_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.table_status</span></code></a>()</p></td>
+<td><p>Show table status information for the current database.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.tables.html#singlestoredb.connection.ShowAccessor.tables" title="singlestoredb.connection.ShowAccessor.tables"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.tables</span></code></a>([extended])</p></td>
+<td><p>Show tables in the current database.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.warnings.html#singlestoredb.connection.ShowAccessor.warnings" title="singlestoredb.connection.ShowAccessor.warnings"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.show.warnings</span></code></a>()</p></td>
+<td><p>Show warnings.</p></td>
+</tr>
+</tbody>
+</table>
+<section id="showresult">
+<h4>ShowResult<a class="headerlink" href="#showresult" title="Permalink to this heading">¶</a></h4>
+<p>The results of the above methods and attributes are in the form of a
+<a class="reference internal" href="generated/singlestoredb.connection.ShowResult.html#singlestoredb.connection.ShowResult" title="singlestoredb.connection.ShowResult"><code class="xref py py-class docutils literal notranslate"><span class="pre">ShowResult</span></code></a> object. This object is primarily used to display
+information to the screen or web browser, but columns from the output
+can also be accessed using dictionary-like key access syntax or
+attributes.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.ShowResult.html#singlestoredb.connection.ShowResult" title="singlestoredb.connection.ShowResult"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ShowResult</span></code></a>(*args, **kwargs)</p></td>
+<td><p>Simple result object.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="cursor">
+<h3>Cursor<a class="headerlink" href="#cursor" title="Permalink to this heading">¶</a></h3>
+<p>Cursors are used to query the database and download results.  They are
+created using the <a class="reference internal" href="generated/singlestoredb.connection.Connection.cursor.html#singlestoredb.connection.Connection.cursor" title="singlestoredb.connection.Connection.cursor"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Connection.cursor()</span></code></a> method.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.html#singlestoredb.connection.Cursor" title="singlestoredb.connection.Cursor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor</span></code></a>(connection)</p></td>
+<td><p>Database cursor for submitting commands and queries.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.callproc.html#singlestoredb.connection.Cursor.callproc" title="singlestoredb.connection.Cursor.callproc"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.callproc</span></code></a>(name[, params])</p></td>
+<td><p>Call a stored procedure.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.close.html#singlestoredb.connection.Cursor.close" title="singlestoredb.connection.Cursor.close"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.close</span></code></a>()</p></td>
+<td><p>Close the cursor.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.execute.html#singlestoredb.connection.Cursor.execute" title="singlestoredb.connection.Cursor.execute"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.execute</span></code></a>(query[, args])</p></td>
+<td><p>Execute a SQL statement.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.executemany.html#singlestoredb.connection.Cursor.executemany" title="singlestoredb.connection.Cursor.executemany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.executemany</span></code></a>(query[, args])</p></td>
+<td><p>Execute SQL code against multiple sets of parameters.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchone.html#singlestoredb.connection.Cursor.fetchone" title="singlestoredb.connection.Cursor.fetchone"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchone</span></code></a>()</p></td>
+<td><p>Fetch a single row from the result set.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchmany.html#singlestoredb.connection.Cursor.fetchmany" title="singlestoredb.connection.Cursor.fetchmany"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchmany</span></code></a>([size])</p></td>
+<td><p>Fetch <cite>size</cite> rows from the result.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.fetchall.html#singlestoredb.connection.Cursor.fetchall" title="singlestoredb.connection.Cursor.fetchall"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.fetchall</span></code></a>()</p></td>
+<td><p>Fetch all rows in the result set.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.nextset.html#singlestoredb.connection.Cursor.nextset" title="singlestoredb.connection.Cursor.nextset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.nextset</span></code></a>()</p></td>
+<td><p>Skip to the next available result set.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.setinputsizes.html#singlestoredb.connection.Cursor.setinputsizes" title="singlestoredb.connection.Cursor.setinputsizes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.setinputsizes</span></code></a>(sizes)</p></td>
+<td><p>Predefine memory areas for parameters.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.setoutputsize.html#singlestoredb.connection.Cursor.setoutputsize" title="singlestoredb.connection.Cursor.setoutputsize"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.setoutputsize</span></code></a>(size[, column])</p></td>
+<td><p>Set a column buffer size for fetches of large columns.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.scroll.html#singlestoredb.connection.Cursor.scroll" title="singlestoredb.connection.Cursor.scroll"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.scroll</span></code></a>(value[, mode])</p></td>
+<td><p>Scroll the cursor to the position in the result set.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.next.html#singlestoredb.connection.Cursor.next" title="singlestoredb.connection.Cursor.next"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.next</span></code></a>()</p></td>
+<td><p>Return the next row from the result set for use in iterators.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Cursor.is_connected.html#singlestoredb.connection.Cursor.is_connected" title="singlestoredb.connection.Cursor.is_connected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cursor.is_connected</span></code></a>()</p></td>
+<td><p>Is the cursor still connected?</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="utilities">
+<h2>Utilities<a class="headerlink" href="#utilities" title="Permalink to this heading">¶</a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.auth.get_jwt.html#singlestoredb.auth.get_jwt" title="singlestoredb.auth.get_jwt"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_jwt</span></code></a>(email[, url, clusters, databases, ...])</p></td>
+<td><p>Retrieve a JWT token from the SingleStoreDB single-sign-on URL.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="management-api">
+<h2>Management API<a class="headerlink" href="#management-api" title="Permalink to this heading">¶</a></h2>
+<p>The management objects allow you to create, destroy, and interact with
+workspaces in the SingleStoreDB Cloud.</p>
+<p>The <code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code> function will return a<a href="singlestoredb.management.workspace.WorkspaceManager.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a>
+object that can be used to interact with the Management API.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.manage_workspaces.html#singlestoredb.manage_workspaces" title="singlestoredb.manage_workspaces"><code class="xref py py-obj docutils literal notranslate"><span class="pre">manage_workspaces</span></code></a>([access_token, version, ...])</p></td>
+<td><p>Retrieve a SingleStoreDB workspace manager.</p></td>
+</tr>
+</tbody>
+</table>
+<section id="workspacemanager">
+<h3>WorkspaceManager<a class="headerlink" href="#workspacemanager" title="Permalink to this heading">¶</a></h3>
+<p>WorkspaceManager objects are returned by the <a class="reference internal" href="generated/singlestoredb.manage_workspaces.html#singlestoredb.manage_workspaces" title="singlestoredb.manage_workspaces"><code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code></a> function.
+They allow you to retrieve information about workspaces in your account, or
+create new ones.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.html#singlestoredb.management.workspace.WorkspaceManager" title="singlestoredb.management.workspace.WorkspaceManager"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a>([access_token, version, ...])</p></td>
+<td><p>SingleStoreDB workspace manager.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.workspace_groups.html#singlestoredb.management.workspace.WorkspaceManager.workspace_groups" title="singlestoredb.management.workspace.WorkspaceManager.workspace_groups"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.workspace_groups</span></code></a></p></td>
+<td><p>Return a list of available workspace groups.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html#singlestoredb.management.workspace.WorkspaceManager.regions" title="singlestoredb.management.workspace.WorkspaceManager.regions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a></p></td>
+<td><p>Return a list of available regions.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace_group.html#singlestoredb.management.workspace.WorkspaceManager.create_workspace_group" title="singlestoredb.management.workspace.WorkspaceManager.create_workspace_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.create_workspace_group</span></code></a>(...)</p></td>
+<td><p>Create a new workspace group.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace.html#singlestoredb.management.workspace.WorkspaceManager.create_workspace" title="singlestoredb.management.workspace.WorkspaceManager.create_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.create_workspace</span></code></a>(name, ...)</p></td>
+<td><p>Create a new workspace.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace_group.html#singlestoredb.management.workspace.WorkspaceManager.get_workspace_group" title="singlestoredb.management.workspace.WorkspaceManager.get_workspace_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace_group</span></code></a>(id)</p></td>
+<td><p>Retrieve a workspace group definition.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace.html#singlestoredb.management.workspace.WorkspaceManager.get_workspace" title="singlestoredb.management.workspace.WorkspaceManager.get_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace</span></code></a>(id)</p></td>
+<td><p>Retrieve a workspace definition.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="workspacegroup">
+<h3>WorkspaceGroup<a class="headerlink" href="#workspacegroup" title="Permalink to this heading">¶</a></h3>
+<p>WorkspaceGroup objects are retrieved from <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace_group.html#singlestoredb.management.workspace.WorkspaceManager.get_workspace_group" title="singlestoredb.management.workspace.WorkspaceManager.get_workspace_group"><code class="xref py py-meth docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace_group()</span></code></a>
+or by retrieving an element from <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.workspace_groups.html#singlestoredb.management.workspace.WorkspaceManager.workspace_groups" title="singlestoredb.management.workspace.WorkspaceManager.workspace_groups"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.workspace_groups</span></code></a>.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.html#singlestoredb.management.workspace.WorkspaceGroup" title="singlestoredb.management.workspace.WorkspaceGroup"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup</span></code></a>(name, id, created_at, region, ...)</p></td>
+<td><p>SingleStoreDB workspace group definition.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.workspaces.html#singlestoredb.management.workspace.WorkspaceGroup.workspaces" title="singlestoredb.management.workspace.WorkspaceGroup.workspaces"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.workspaces</span></code></a></p></td>
+<td><p>Return a list of available workspaces.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.stage.html#singlestoredb.management.workspace.WorkspaceGroup.stage" title="singlestoredb.management.workspace.WorkspaceGroup.stage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.stage</span></code></a></p></td>
+<td><p>Stage manager.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.create_workspace.html#singlestoredb.management.workspace.WorkspaceGroup.create_workspace" title="singlestoredb.management.workspace.WorkspaceGroup.create_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.create_workspace</span></code></a>(name[, ...])</p></td>
+<td><p>Create a new workspace.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.refresh.html#singlestoredb.management.workspace.WorkspaceGroup.refresh" title="singlestoredb.management.workspace.WorkspaceGroup.refresh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.refresh</span></code></a>()</p></td>
+<td><p>Update the object to the current state.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.update.html#singlestoredb.management.workspace.WorkspaceGroup.update" title="singlestoredb.management.workspace.WorkspaceGroup.update"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.update</span></code></a>([name, ...])</p></td>
+<td><p>Update the workspace group definition.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.terminate.html#singlestoredb.management.workspace.WorkspaceGroup.terminate" title="singlestoredb.management.workspace.WorkspaceGroup.terminate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceGroup.terminate</span></code></a>([force, ...])</p></td>
+<td><p>Terminate the workspace group.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="workspace">
+<h3>Workspace<a class="headerlink" href="#workspace" title="Permalink to this heading">¶</a></h3>
+<p>Workspaces are created within WorkspaceGroups. They can be created using either
+<a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceGroup.create_workspace.html#singlestoredb.management.workspace.WorkspaceGroup.create_workspace" title="singlestoredb.management.workspace.WorkspaceGroup.create_workspace"><code class="xref py py-meth docutils literal notranslate"><span class="pre">WorkspaceGroup.create_workspace()</span></code></a> or retrieved from
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.workspaces</span></code>.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.html#singlestoredb.management.workspace.Workspace" title="singlestoredb.management.workspace.Workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace</span></code></a>(name, workspace_id, ...[, ...])</p></td>
+<td><p>SingleStoreDB workspace definition.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.connect.html#singlestoredb.management.workspace.Workspace.connect" title="singlestoredb.management.workspace.Workspace.connect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace.connect</span></code></a>(**kwargs)</p></td>
+<td><p>Create a connection to the database server for this workspace.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.refresh.html#singlestoredb.management.workspace.Workspace.refresh" title="singlestoredb.management.workspace.Workspace.refresh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace.refresh</span></code></a>()</p></td>
+<td><p>Update the object to the current state.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Workspace.terminate.html#singlestoredb.management.workspace.Workspace.terminate" title="singlestoredb.management.workspace.Workspace.terminate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Workspace.terminate</span></code></a>([wait_on_terminated, ...])</p></td>
+<td><p>Terminate the workspace.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="region">
+<h3>Region<a class="headerlink" href="#region" title="Permalink to this heading">¶</a></h3>
+<p>Region objects are accessed from the <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html#singlestoredb.management.workspace.WorkspaceManager.regions" title="singlestoredb.management.workspace.WorkspaceManager.regions"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a> attribute.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.region.Region.html#singlestoredb.management.region.Region" title="singlestoredb.management.region.Region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Region</span></code></a>(id, name, provider)</p></td>
+<td><p>Cluster region information.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="stage">
+<h3>Stage<a class="headerlink" href="#stage" title="Permalink to this heading">¶</a></h3>
+<p>To interact with Stage, use the <code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.stage</span></code> attribute.
+It will return a<a href="singlestoredb.management.workspace.Stage.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Stage</span></code></a> object which defines the following
+methods and attributes.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.html#singlestoredb.management.workspace.Stage" title="singlestoredb.management.workspace.Stage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage</span></code></a>(workspace_group, manager)</p></td>
+<td><p>Stage manager.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.open.html#singlestoredb.management.workspace.Stage.open" title="singlestoredb.management.workspace.Stage.open"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.open</span></code></a>(stage_path[, mode, encoding])</p></td>
+<td><p>Open a Stage path for reading or writing.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.download_file.html#singlestoredb.management.workspace.Stage.download_file" title="singlestoredb.management.workspace.Stage.download_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.download_file</span></code></a>(stage_path[, ...])</p></td>
+<td><p>Download the content of a stage path.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.download_folder.html#singlestoredb.management.workspace.Stage.download_folder" title="singlestoredb.management.workspace.Stage.download_folder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.download_folder</span></code></a>(stage_path[, ...])</p></td>
+<td><p>Download a Stage folder to a local directory.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.upload_file.html#singlestoredb.management.workspace.Stage.upload_file" title="singlestoredb.management.workspace.Stage.upload_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.upload_file</span></code></a>(local_path, stage_path, *)</p></td>
+<td><p>Upload a local file.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.upload_folder.html#singlestoredb.management.workspace.Stage.upload_folder" title="singlestoredb.management.workspace.Stage.upload_folder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.upload_folder</span></code></a>(local_path, stage_path, *)</p></td>
+<td><p>Upload a folder recursively.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.info.html#singlestoredb.management.workspace.Stage.info" title="singlestoredb.management.workspace.Stage.info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.info</span></code></a>(stage_path)</p></td>
+<td><p>Return information about a stage location.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.listdir.html#singlestoredb.management.workspace.Stage.listdir" title="singlestoredb.management.workspace.Stage.listdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.listdir</span></code></a>([stage_path, recursive])</p></td>
+<td><p>List the files / folders at the given path.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.exists.html#singlestoredb.management.workspace.Stage.exists" title="singlestoredb.management.workspace.Stage.exists"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.exists</span></code></a>(stage_path)</p></td>
+<td><p>Does the given stage path exist?</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.is_dir.html#singlestoredb.management.workspace.Stage.is_dir" title="singlestoredb.management.workspace.Stage.is_dir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.is_dir</span></code></a>(stage_path)</p></td>
+<td><p>Is the given stage path a directory?</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.is_file.html#singlestoredb.management.workspace.Stage.is_file" title="singlestoredb.management.workspace.Stage.is_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.is_file</span></code></a>(stage_path)</p></td>
+<td><p>Is the given stage path a file?</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.mkdir.html#singlestoredb.management.workspace.Stage.mkdir" title="singlestoredb.management.workspace.Stage.mkdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.mkdir</span></code></a>(stage_path[, overwrite])</p></td>
+<td><p>Make a directory in the stage.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.rename.html#singlestoredb.management.workspace.Stage.rename" title="singlestoredb.management.workspace.Stage.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.rename</span></code></a>(old_path, new_path, *[, overwrite])</p></td>
+<td><p>Move the stage file to a new location.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.remove.html#singlestoredb.management.workspace.Stage.remove" title="singlestoredb.management.workspace.Stage.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.remove</span></code></a>(stage_path)</p></td>
+<td><p>Delete a stage location.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.removedirs.html#singlestoredb.management.workspace.Stage.removedirs" title="singlestoredb.management.workspace.Stage.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.removedirs</span></code></a>(stage_path)</p></td>
+<td><p>Delete a stage folder recursively.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.rmdir.html#singlestoredb.management.workspace.Stage.rmdir" title="singlestoredb.management.workspace.Stage.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.rmdir</span></code></a>(stage_path)</p></td>
+<td><p>Delete a stage folder.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="stageobject">
+<h3>StageObject<a class="headerlink" href="#stageobject" title="Permalink to this heading">¶</a></h3>
+<p><code class="xref py py-class docutils literal notranslate"><span class="pre">StageObject`s</span> <span class="pre">are</span> <span class="pre">returned</span> <span class="pre">by</span> <span class="pre">the</span> <span class="pre">:meth:`StageObject.upload_file</span></code>
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">StageObject.upload_folder()</span></code>, <code class="xref py py-meth docutils literal notranslate"><span class="pre">StageObject.mkdir()</span></code>,
+<a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rename.html#singlestoredb.management.workspace.StageObject.rename" title="singlestoredb.management.workspace.StageObject.rename"><code class="xref py py-meth docutils literal notranslate"><span class="pre">StageObject.rename()</span></code></a>, and <code class="xref py py-meth docutils literal notranslate"><span class="pre">StageObject.info()</span></code> methods.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.html#singlestoredb.management.workspace.StageObject" title="singlestoredb.management.workspace.StageObject"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject</span></code></a>(name, path, size, type, format, ...)</p></td>
+<td><p>Stage file / folder object.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.open.html#singlestoredb.management.workspace.StageObject.open" title="singlestoredb.management.workspace.StageObject.open"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.open</span></code></a>([mode, encoding])</p></td>
+<td><p>Open a Stage path for reading or writing.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.download.html#singlestoredb.management.workspace.StageObject.download" title="singlestoredb.management.workspace.StageObject.download"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.download</span></code></a>([local_path, ...])</p></td>
+<td><p>Download the content of a stage path.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.exists.html#singlestoredb.management.workspace.StageObject.exists" title="singlestoredb.management.workspace.StageObject.exists"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.exists</span></code></a>()</p></td>
+<td><p>Does the file / folder exist?</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.is_dir.html#singlestoredb.management.workspace.StageObject.is_dir" title="singlestoredb.management.workspace.StageObject.is_dir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.is_dir</span></code></a>()</p></td>
+<td><p>Is the stage object a directory?</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.is_file.html#singlestoredb.management.workspace.StageObject.is_file" title="singlestoredb.management.workspace.StageObject.is_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.is_file</span></code></a>()</p></td>
+<td><p>Is the stage object a file?</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.abspath.html#singlestoredb.management.workspace.StageObject.abspath" title="singlestoredb.management.workspace.StageObject.abspath"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.abspath</span></code></a>()</p></td>
+<td><p>Return the full path of the object.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.basename.html#singlestoredb.management.workspace.StageObject.basename" title="singlestoredb.management.workspace.StageObject.basename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.basename</span></code></a>()</p></td>
+<td><p>Return the basename of the object.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.dirname.html#singlestoredb.management.workspace.StageObject.dirname" title="singlestoredb.management.workspace.StageObject.dirname"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.dirname</span></code></a>()</p></td>
+<td><p>Return the directory name of the object.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.getmtime.html#singlestoredb.management.workspace.StageObject.getmtime" title="singlestoredb.management.workspace.StageObject.getmtime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.getmtime</span></code></a>()</p></td>
+<td><p>Return the last modified datetime as a UNIX timestamp.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.getctime.html#singlestoredb.management.workspace.StageObject.getctime" title="singlestoredb.management.workspace.StageObject.getctime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.getctime</span></code></a>()</p></td>
+<td><p>Return the creation datetime as a UNIX timestamp.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rename.html#singlestoredb.management.workspace.StageObject.rename" title="singlestoredb.management.workspace.StageObject.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.rename</span></code></a>(new_path, *[, overwrite])</p></td>
+<td><p>Move the stage file to a new location.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.remove.html#singlestoredb.management.workspace.StageObject.remove" title="singlestoredb.management.workspace.StageObject.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.remove</span></code></a>()</p></td>
+<td><p>Delete the stage file.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.removedirs.html#singlestoredb.management.workspace.StageObject.removedirs" title="singlestoredb.management.workspace.StageObject.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.removedirs</span></code></a>()</p></td>
+<td><p>Delete the stage directory recursively.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rmdir.html#singlestoredb.management.workspace.StageObject.rmdir" title="singlestoredb.management.workspace.StageObject.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.rmdir</span></code></a>()</p></td>
+<td><p>Delete the empty stage directory.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="configuration">
+<h2>Configuration<a class="headerlink" href="#configuration" title="Permalink to this heading">¶</a></h2>
+<p>The following functions are used to get and set package configuration settings.
+Execute the <code class="xref py py-func docutils literal notranslate"><span class="pre">describe_option()</span></code> function with no parameters to
+see the documentation for all options.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.get_option.html#singlestoredb.get_option" title="singlestoredb.get_option"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_option</span></code></a>(key)</p></td>
+<td><p>Get the value of an option.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.set_option.html#singlestoredb.set_option" title="singlestoredb.set_option"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_option</span></code></a>(*args, **kwargs)</p></td>
+<td><p>Set the value of an option.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.describe_option.html#singlestoredb.describe_option" title="singlestoredb.describe_option"><code class="xref py py-obj docutils literal notranslate"><span class="pre">describe_option</span></code></a>(*keys, **kwargs)</p></td>
+<td><p>Print the description of one or more options.</p></td>
+</tr>
+</tbody>
+</table>
+<p>In addition to the function above, you can access options through the
+<code class="docutils literal notranslate"><span class="pre">singlestoredb.options</span></code> object. This gives you attribute-like access to the option
+values.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [1]: </span><span class="kn">import</span> <span class="nn">singlestoredb</span> <span class="k">as</span> <span class="nn">s2</span>
+<span class="gp">In [2]: </span><span class="n">s2</span><span class="o">.</span><span class="n">describe_option</span><span class="p">(</span><span class="s1">&#39;local_infile&#39;</span><span class="p">)</span>
+<span class="go">local_infile : bool</span>
+<span class="go">    Should it be possible to load local files?</span>
+<span class="go">    [default: False] [currently: False]</span>
+<span class="gp">In [3]: </span><span class="n">s2</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">local_infile</span>
+<span class="gh">Out[3]: </span><span class="go">False</span>
+<span class="gp">In [4]: </span><span class="n">s2</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">local_infile</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="gp">In [5]: </span><span class="n">s2</span><span class="o">.</span><span class="n">describe_option</span><span class="p">(</span><span class="s1">&#39;local_infile&#39;</span><span class="p">)</span>
+<span class="go">local_infile : bool</span>
+<span class="go">    Should it be possible to load local files?</span>
+<span class="go">    [default: False] [currently: True]</span>
+</pre></div>
+</div>
+</section>
+</section>
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="getting-started.html" class="btn btn-neutral float-left" title="Getting Started" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="generated/singlestoredb.connect.html" class="btn btn-neutral float-right" title="singlestoredb.connect" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+  <hr/>
+  <div role="contentinfo">
+    <p>&#169; Copyright 2022 SingleStore. All Rights Reserved.</p>
+  </div>
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+</body>
+</html>

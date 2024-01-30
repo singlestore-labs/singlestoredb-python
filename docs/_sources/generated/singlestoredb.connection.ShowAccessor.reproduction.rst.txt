@@ -1,0 +1,4 @@
+﻿singlestoredb.connection.ShowAccessor.reproduction
+==================================================
+.. currentmodule:: singlestoredb.connection
+.. automethod:: ShowAccessor.reproduction

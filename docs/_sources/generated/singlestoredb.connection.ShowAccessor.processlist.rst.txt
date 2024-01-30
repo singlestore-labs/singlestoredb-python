@@ -1,0 +1,4 @@
+﻿singlestoredb.connection.ShowAccessor.processlist
+=================================================
+.. currentmodule:: singlestoredb.connection
+.. automethod:: ShowAccessor.processlist

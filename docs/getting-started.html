@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Getting Started &mdash; SingleStoreDB 0.10.6 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="API Reference" href="api.html" />
+    <link rel="prev" title="What’s New" href="whatsnew.html" />
+</head>
+<body class="wy-body-for-nav">
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          <a href="index.html" class="icon icon-home">
+            SingleStoreDB
+          </a>
+              <div class="version">
+                0.10.6
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="whatsnew.html">What’s New</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#connect-using-db-api-parameters">Connect using DB-API Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#connect-using-a-url">Connect using a URL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#specifying-additional-connection-parameters">Specifying Additional Connection Parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#executing-queries">Executing Queries</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#parameter-substitution">Parameter Substitution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#named-substitution">Named Substitution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#positional-substitution">Positional Substitution</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#fetching-results">Fetching Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#result-type">Result Type</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#tuples-default">Tuples (Default)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#named-tuples">Named Tuples</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#dictionaries">Dictionaries</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+</ul>
+        </div>
+      </div>
+    </nav>
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">SingleStoreDB</a>
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Getting Started</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/getting-started.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+  <section id="getting-started">
+<h1>Getting Started<a class="headerlink" href="#getting-started" title="Permalink to this heading">¶</a></h1>
+<p>Database connections can be made using either keyword parameters or
+a URL as described in the following sections.</p>
+<section id="connect-using-db-api-parameters">
+<h2>Connect using DB-API Parameters<a class="headerlink" href="#connect-using-db-api-parameters" title="Permalink to this heading">¶</a></h2>
+<p>Connections to SingleStoreDB can be made using the parameters described in
+the <a class="reference external" href="https://peps.python.org/pep-0249/">Python DB-API</a>. The <code class="docutils literal notranslate"><span class="pre">host=</span></code>
+parameter can be either a hostname or IP address (it can also be a
+URL as shown in the following section). The <code class="docutils literal notranslate"><span class="pre">port=</span></code> parameter is an
+integer value of the database server port number. The <code class="docutils literal notranslate"><span class="pre">user=</span></code> and
+<code class="docutils literal notranslate"><span class="pre">password=</span></code> parameters specify the database user credentials. The
+<code class="docutils literal notranslate"><span class="pre">database=</span></code> parameter, optionally, specifies the name of the database
+to connect to.</p>
+<p>A full list of connection parameters can be seen in the API documentation
+for the <a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">singlestoredb.connect()</span></code></a> function.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [1]: </span><span class="kn">import</span> <span class="nn">singlestoredb</span> <span class="k">as</span> <span class="nn">s2</span>
+<span class="gp">In [2]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">,</span> <span class="n">user</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">,</span>
+<span class="gp">   ...: </span>                  <span class="n">password</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">,</span> <span class="n">database</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">)</span>
+<span class="gp">   ...: </span>
+</pre></div>
+</div>
+</section>
+<section id="connect-using-a-url">
+<h2>Connect using a URL<a class="headerlink" href="#connect-using-a-url" title="Permalink to this heading">¶</a></h2>
+<p>In addition, you can user a URL like in the SQLAlchemy package.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [3]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;user:password@host:port/database&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>URLs work equally well to connect to the
+<a class="reference external" href="https://docs.singlestore.com/managed-service/en/reference/data-api.html">Data API</a>.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [4]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;https://user:password@host:port/database&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="specifying-additional-connection-parameters">
+<h2>Specifying Additional Connection Parameters<a class="headerlink" href="#specifying-additional-connection-parameters" title="Permalink to this heading">¶</a></h2>
+<p>Connection parameters can be set either in the URL or
+as parameters. Here <code class="docutils literal notranslate"><span class="pre">local_infile=</span></code> is set as a URL parameter.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [5]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;https://user:password@host:port/database?local_infile=True&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In this example, <code class="docutils literal notranslate"><span class="pre">local_infile=</span></code> and user credentials are specified
+as keyword parameters.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [6]: </span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;https://host:port/database&#39;</span><span class="p">,</span> <span class="n">user</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="s1">&#39;...&#39;</span><span class="p">,</span>
+<span class="gp">   ...: </span>                  <span class="n">local_infile</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">   ...: </span>
+</pre></div>
+</div>
+</section>
+<section id="executing-queries">
+<h2>Executing Queries<a class="headerlink" href="#executing-queries" title="Permalink to this heading">¶</a></h2>
+<p>Once you have a connection established, you can query the database.
+As defined in the DB-API, a cursor is used to execute queries and fetch
+the results.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [7]: </span><span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ...: </span>     <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
+<span class="gp">   ...: </span>     <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+<span class="gp">   ...: </span>         <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ...: </span>
+<span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_profile_type&#39;, &#39;LITE&#39;)</span>
+<span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
+<span class="go">(&#39;autocommit&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;autostats_flush_interval_secs&#39;, &#39;600&#39;)</span>
+</pre></div>
+</div>
+<section id="parameter-substitution">
+<h3>Parameter Substitution<a class="headerlink" href="#parameter-substitution" title="Permalink to this heading">¶</a></h3>
+<p>If your queries require parameter substitutions, they can be specified in
+one of two formats: named (<code class="docutils literal notranslate"><span class="pre">%(name)s</span></code>) or positional (<code class="docutils literal notranslate"><span class="pre">%s</span></code>).</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>As of v0.5.0, the substition parameter has been changed from
+<code class="docutils literal notranslate"><span class="pre">:1</span></code>, <code class="docutils literal notranslate"><span class="pre">:2</span></code>, etc. for list parameters and <code class="docutils literal notranslate"><span class="pre">:foo</span></code>, <code class="docutils literal notranslate"><span class="pre">:bar</span></code>, etc.
+for dictionary parameters to <code class="docutils literal notranslate"><span class="pre">%s</span></code> and <code class="docutils literal notranslate"><span class="pre">%(foo)s</span></code>, <code class="docutils literal notranslate"><span class="pre">%(bar)s</span></code>, etc.
+respectively, to ease the transition from other MySQL Python packages.</p>
+</div>
+<section id="named-substitution">
+<h4>Named Substitution<a class="headerlink" href="#named-substitution" title="Permalink to this heading">¶</a></h4>
+<p>When named parameters
+are used, the data structure passed to the <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.execute()</span></code> method
+must be a dictionary, where the keys map to the names given in the substitutions
+and the values are the values to substitute.</p>
+<p>In the example below, <code class="docutils literal notranslate"><span class="pre">%(pattern)s</span></code> is replaced with the value <code class="docutils literal notranslate"><span class="pre">&quot;auto%&quot;</span></code>. All
+escaping and quoting of the substituted data values is done automatically.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [8]: </span><span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ...: </span>    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like </span><span class="si">%(pattern)s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">pattern</span><span class="o">=</span><span class="s1">&#39;auto%&#39;</span><span class="p">))</span>
+<span class="gp">   ...: </span>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+<span class="gp">   ...: </span>        <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ...: </span>
+<span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_profile_type&#39;, &#39;LITE&#39;)</span>
+<span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
+<span class="go">(&#39;autocommit&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;autostats_flush_interval_secs&#39;, &#39;600&#39;)</span>
+</pre></div>
+</div>
+</section>
+<section id="positional-substitution">
+<h4>Positional Substitution<a class="headerlink" href="#positional-substitution" title="Permalink to this heading">¶</a></h4>
+<p>If positional parameters are used, the data structure passed to the
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.execute()</span></code> method must be a list or tuple with the same
+number of elements as there are <code class="docutils literal notranslate"><span class="pre">%s</span></code> values in the query string.</p>
+<p>In the example below, <code class="docutils literal notranslate"><span class="pre">%s</span></code> is replaced with the value <code class="docutils literal notranslate"><span class="pre">&quot;auto%&quot;</span></code>. All
+escaping and quoting of the substituted data values is done automatically.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [9]: </span><span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ...: </span>    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;auto%&#39;</span><span class="p">])</span>
+<span class="gp">   ...: </span>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+<span class="gp">   ...: </span>        <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ...: </span>
+<span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_profile_type&#39;, &#39;LITE&#39;)</span>
+<span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
+<span class="go">(&#39;autocommit&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;autostats_flush_interval_secs&#39;, &#39;600&#39;)</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<section id="fetching-results">
+<h2>Fetching Results<a class="headerlink" href="#fetching-results" title="Permalink to this heading">¶</a></h2>
+<p>Fetching results can be done in a number of ways. The DB-API specifies three methods
+that can be used to fetch results: <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchone()</span></code>, <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchall()</span></code>,
+and <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchmany()</span></code>.</p>
+<p>The <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchone()</span></code> method fetches a single row of data returned by a query.
+The <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchall()</span></code> method fetches all of the results of a query. The
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchmany()</span></code> method fetches a specified number of rows to retrieve.
+The choice of which one to use depends mostly on the expected size of the result.
+If the result is expected to be fairly small, fetching the entire result in one
+call may be fine. However, if the query result will be large enough to put a strain
+on the client computer’s memory, it may be a better idea to fetch smaller batches
+using <code class="xref py py-meth docutils literal notranslate"><span class="pre">Cursor.fetchmany()</span></code>.</p>
+<p>In additon to the DB-API methods for fetching results, a<a href="singlestoredb.connection.Cursor.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Cursor</span></code></a> can be
+iterated over itself.</p>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [10]: </span><span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ....: </span>    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
+<span class="gp">   ....: </span>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ....: </span>        <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ....: </span>
+<span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_profile_type&#39;, &#39;LITE&#39;)</span>
+<span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
+<span class="go">(&#39;autocommit&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;autostats_flush_interval_secs&#39;, &#39;600&#39;)</span>
+</pre></div>
+</div>
+<section id="result-type">
+<h3>Result Type<a class="headerlink" href="#result-type" title="Permalink to this heading">¶</a></h3>
+<p>In addition to being able to specify the amount of data to be retrieved, you can also
+specify the data structure that the results are returned in. By default, each row of
+data is a tuple with one element per column from the query. However, it is also possible
+to get results back as named tuples or dicts.</p>
+<section id="tuples-default">
+<h4>Tuples (Default)<a class="headerlink" href="#tuples-default" title="Permalink to this heading">¶</a></h4>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [11]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_type</span><span class="o">=</span><span class="s1">&#39;tuples&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+<span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
+<span class="gp">   ....: </span>        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+<span class="gp">   ....: </span>            <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ....: </span>
+<span class="go">(&#39;auto_attach&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;auto_increment_increment&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_increment_offset&#39;, &#39;1&#39;)</span>
+<span class="go">(&#39;auto_profile_type&#39;, &#39;LITE&#39;)</span>
+<span class="go">(&#39;auto_replicate&#39;, &#39;OFF&#39;)</span>
+<span class="go">(&#39;autocommit&#39;, &#39;ON&#39;)</span>
+<span class="go">(&#39;autostats_flush_interval_secs&#39;, &#39;600&#39;)</span>
+</pre></div>
+</div>
+</section>
+<section id="named-tuples">
+<h4>Named Tuples<a class="headerlink" href="#named-tuples" title="Permalink to this heading">¶</a></h4>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [12]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_type</span><span class="o">=</span><span class="s1">&#39;namedtuples&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+<span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
+<span class="gp">   ....: </span>        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+<span class="gp">   ....: </span>            <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ....: </span>
+<span class="go">Row(Variable_name=&#39;auto_attach&#39;, Value=&#39;ON&#39;)</span>
+<span class="go">Row(Variable_name=&#39;auto_increment_increment&#39;, Value=&#39;1&#39;)</span>
+<span class="go">Row(Variable_name=&#39;auto_increment_offset&#39;, Value=&#39;1&#39;)</span>
+<span class="go">Row(Variable_name=&#39;auto_profile_type&#39;, Value=&#39;LITE&#39;)</span>
+<span class="go">Row(Variable_name=&#39;auto_replicate&#39;, Value=&#39;OFF&#39;)</span>
+<span class="go">Row(Variable_name=&#39;autocommit&#39;, Value=&#39;ON&#39;)</span>
+<span class="go">Row(Variable_name=&#39;autostats_flush_interval_secs&#39;, Value=&#39;600&#39;)</span>
+</pre></div>
+</div>
+</section>
+<section id="dictionaries">
+<h4>Dictionaries<a class="headerlink" href="#dictionaries" title="Permalink to this heading">¶</a></h4>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [13]: </span><span class="k">with</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">results_type</span><span class="o">=</span><span class="s1">&#39;dicts&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+<span class="gp">   ....: </span>    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+<span class="gp">   ....: </span>        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;show variables like &quot;auto%&quot;&#39;</span><span class="p">)</span>
+<span class="gp">   ....: </span>        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+<span class="gp">   ....: </span>            <span class="nb">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+<span class="gp">   ....: </span>
+<span class="go">{&#39;Variable_name&#39;: &#39;auto_attach&#39;, &#39;Value&#39;: &#39;ON&#39;}</span>
+<span class="go">{&#39;Variable_name&#39;: &#39;auto_increment_increment&#39;, &#39;Value&#39;: &#39;1&#39;}</span>
+<span class="go">{&#39;Variable_name&#39;: &#39;auto_increment_offset&#39;, &#39;Value&#39;: &#39;1&#39;}</span>
+<span class="go">{&#39;Variable_name&#39;: &#39;auto_profile_type&#39;, &#39;Value&#39;: &#39;LITE&#39;}</span>
+<span class="go">{&#39;Variable_name&#39;: &#39;auto_replicate&#39;, &#39;Value&#39;: &#39;OFF&#39;}</span>
+<span class="go">{&#39;Variable_name&#39;: &#39;autocommit&#39;, &#39;Value&#39;: &#39;ON&#39;}</span>
+<span class="go">{&#39;Variable_name&#39;: &#39;autostats_flush_interval_secs&#39;, &#39;Value&#39;: &#39;600&#39;}</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+</section>
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="whatsnew.html" class="btn btn-neutral float-left" title="What’s New" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="api.html" class="btn btn-neutral float-right" title="API Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+  <hr/>
+  <div role="contentinfo">
+    <p>&#169; Copyright 2022 SingleStore. All Rights Reserved.</p>
+  </div>
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+</body>
+</html>

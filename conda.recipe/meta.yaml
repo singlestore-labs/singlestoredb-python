@@ -1,0 +1,39 @@
+{% set data = load_setup_py_data() %}
+
+package:
+    name: singlestoredb
+    version: {{ data.get('version') }}
+
+source:
+    path: ..
+
+build:
+    number: {{ environ.get('PACKAGE_BUILD_NUMBER', '0') }}
+
+requirements:
+    host:
+        - python {{ python }}
+        - pip
+    run:
+        - python
+        - pyjwt
+        - requests
+        - sqlparams
+
+test:
+    imports:
+        - singlestoredb
+    requires:
+        - coverage
+        - pandas
+        - pytest
+    commands:
+        - pytest -q singlestoredb/tests/test_basics.py
+
+about:
+    home: https://github.com/singlestore-labs/singlestoredb-python
+    license: Apache 2.0
+    license_file: ../LICENSE
+    summary: SingleStore Database Interface
+    doc_url: https://singlestoredb-python.labs.singlestore.com/index.html
+    dev_url: https://github.com/singlestore-labs/singlestoredb-python

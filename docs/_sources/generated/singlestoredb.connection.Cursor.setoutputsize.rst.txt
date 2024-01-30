@@ -1,0 +1,4 @@
+﻿singlestoredb.connection.Cursor.setoutputsize
+=============================================
+.. currentmodule:: singlestoredb.connection
+.. automethod:: Cursor.setoutputsize

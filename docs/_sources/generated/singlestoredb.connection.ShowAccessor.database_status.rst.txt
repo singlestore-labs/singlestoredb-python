@@ -1,0 +1,4 @@
+﻿singlestoredb.connection.ShowAccessor.database\_status
+======================================================
+.. currentmodule:: singlestoredb.connection
+.. automethod:: ShowAccessor.database_status

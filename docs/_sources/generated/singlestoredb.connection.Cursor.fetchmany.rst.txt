@@ -1,0 +1,4 @@
+﻿singlestoredb.connection.Cursor.fetchmany
+=========================================
+.. currentmodule:: singlestoredb.connection
+.. automethod:: Cursor.fetchmany

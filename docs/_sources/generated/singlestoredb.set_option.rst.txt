@@ -1,0 +1,4 @@
+﻿singlestoredb.set\_option
+=========================
+.. currentmodule:: singlestoredb
+.. autofunction:: set_option

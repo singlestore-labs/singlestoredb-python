@@ -1,0 +1,21 @@
+﻿singlestoredb.management.workspace.WorkspaceManager
+===================================================
+.. currentmodule:: singlestoredb.management.workspace
+.. autoclass:: WorkspaceManager
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~WorkspaceManager.__init__
+      ~WorkspaceManager.create_workspace
+      ~WorkspaceManager.create_workspace_group
+      ~WorkspaceManager.get_workspace
+      ~WorkspaceManager.get_workspace_group
+      ~WorkspaceManager.regions
+   .. rubric:: Attributes
+   .. autosummary::
+      ~WorkspaceManager.billing
+      ~WorkspaceManager.default_base_url
+      ~WorkspaceManager.default_version
+      ~WorkspaceManager.obj_type
+      ~WorkspaceManager.organizations
+      ~WorkspaceManager.workspace_groups

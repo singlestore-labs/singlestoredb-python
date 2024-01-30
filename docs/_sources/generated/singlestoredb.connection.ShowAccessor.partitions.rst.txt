@@ -1,0 +1,4 @@
+﻿singlestoredb.connection.ShowAccessor.partitions
+================================================
+.. currentmodule:: singlestoredb.connection
+.. automethod:: ShowAccessor.partitions

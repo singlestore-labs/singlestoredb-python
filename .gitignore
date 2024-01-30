@@ -1,0 +1,81 @@
+## Editor temporary/working/backup files
+.#*
+*\#*\#
+[#]*#
+*~
+*$
+*.bak
+*.old
+*flymake*
+*.kdev4
+*.log
+*.nfs*
+*.swo
+*.swp
+*.pdb
+.project
+.pydevproject
+.settings
+.idea
+.vagrant
+.noseids
+.ipynb_checkpoints
+.tags
+.vscode
+
+## Compiled source
+*.com
+*.class
+*.dll
+*.dylib
+*.exe
+*.o
+*.py[ocd]
+*.so
+*.na
+.build_cache_dir
+MANIFEST
+
+## Python files
+# setup.py working directory
+build
+# sphinx build directory
+docs/src/_build
+# setup.py dist directory
+dist
+# Egg metadata
+*.egg-info
+.eggs
+.pypirc
+
+## tox testing tool
+.tox
+# rope
+.ropeproject
+# wheel files
+*.whl
+**/wheelhouse/*
+# coverage
+.coverage
+swat.egg-info/
+__pycache__/
+_stats.txt
+cover/
+test-reports/
+
+## OS generated files
+.directory
+.gdb_history
+.DS_Store
+ehthumbs.db
+Icon?
+Thumbs.db
+
+## Documentation generated files
+docs/src/_build/doctrees
+docs/src/generated
+
+dask-worker-space
+
+## Test configuration
+singlestoredb/mysql/tests/databases.json
