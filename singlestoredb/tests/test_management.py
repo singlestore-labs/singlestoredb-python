@@ -831,12 +831,12 @@ class TestSecrets(unittest.TestCase):
         self.manager._post(
             'secrets',
             json=dict(
-                name='secret1',
-                value='secret1',
+                name='secret_name',
+                value='secret_value',
             ),
         )
 
-        secret = self.manager.organizations.current.get_secret('secret1')
+        secret = self.manager.organizations.current.get_secret('secret_name')
 
-        assert secret.name == 'secret1'
-        assert secret.value == 'secret1'
+        assert secret.name == 'secret_name'
+        assert secret.value == 'secret_value'
