@@ -828,6 +828,16 @@ class TestSecrets(unittest.TestCase):
 
     def test_get_secret(self):
         # manually create secret and then get secret
+        # try to delete the secret if it exists
+        try:
+            secret = self.manager.organizations.current.get_secret('secret_name')
+            
+            secret_id = secret.id
+            
+            self.manager._delete(f'secrets/{secret_id}')
+        except s2.ManagementError:
+            pass
+        
         self.manager._post(
             'secrets',
             json=dict(

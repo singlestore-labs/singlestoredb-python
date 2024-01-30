@@ -43,14 +43,14 @@ class Secret(object):
         deleted_by: Optional[str] = None,
         deleted_at: Optional[Union[str, datetime.datetime]] = None,
     ):
+        # UUID of the secret
+        self.id = id
+        
         # Name of the secret
         self.name = name
 
         # Value of the secret
         self.value = value
-
-        # UUID of the secret
-        self.id = id
 
         # User who created the secret
         self.created_by = created_by
