@@ -1223,6 +1223,14 @@ class WorkspaceGroup(object):
         return out
 
     @property
+    def organization(self) -> Organization:
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        return self._manager.organization
+
+    @property
     def stage(self) -> Stage:
         """Stage manager."""
         if self._manager is None:
@@ -1478,6 +1486,11 @@ class WorkspaceManager(Manager):
     def organizations(self) -> Organizations:
         """Return the organizations."""
         return Organizations(self)
+
+    @property
+    def organization(self) -> Organization:
+        """ Return the current organization."""
+        return self.organizations.current
 
     @property
     def billing(self) -> Billing:

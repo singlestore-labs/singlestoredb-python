@@ -82,6 +82,7 @@ numeric_sizes = {
     ft.FLOAT: 4,
     ft.DOUBLE: 8,
 }
+medium_int_types = set([ft.INT24, -ft.INT24])
 int_types = set([
     ft.TINY, -ft.TINY, ft.SHORT, -ft.SHORT, ft.INT24, -ft.INT24,
     ft.LONG, -ft.LONG, ft.LONGLONG, -ft.LONGLONG,
@@ -369,6 +370,16 @@ def _dump(
                     out.write(struct.pack(numeric_formats[rtype], default))
                 else:
                     if rtype in int_types:
+                        if rtype == ft.INT24:
+                            if int(value) > 8388607 or int(value) < -8388608:
+                                raise ValueError(
+                                    'value is outside range of MEDIUMINT',
+                                )
+                        elif rtype == -ft.INT24:
+                            if int(value) > 16777215 or int(value) < 0:
+                                raise ValueError(
+                                    'value is outside range of UNSIGNED MEDIUMINT',
+                                )
                         out.write(struct.pack(numeric_formats[rtype], int(value)))
                     else:
                         out.write(struct.pack(numeric_formats[rtype], float(value)))
@@ -437,6 +448,16 @@ def _dump_vectors(
                         out.write(struct.pack(numeric_formats[rtype], default))
                     else:
                         if rtype in int_types:
+                            if rtype == ft.INT24:
+                                if int(value) > 8388607 or int(value) < -8388608:
+                                    raise ValueError(
+                                        'value is outside range of MEDIUMINT',
+                                    )
+                            elif rtype == -ft.INT24:
+                                if int(value) > 16777215 or int(value) < 0:
+                                    raise ValueError(
+                                        'value is outside range of UNSIGNED MEDIUMINT',
+                                    )
                             out.write(struct.pack(numeric_formats[rtype], int(value)))
                         else:
                             out.write(struct.pack(numeric_formats[rtype], float(value)))
@@ -697,18 +718,16 @@ def _dump_arrow_accel(
 
 
 if not has_accel:
-    _load_accel = _load
-    _dump_accel = _dump
-    load = _load
-    dump = _dump
-    load_pandas = _load_pandas
-    dump_pandas = _dump_pandas
-    load_numpy = _load_numpy
-    dump_numpy = _dump_numpy
-    load_arrow = _load_arrow
-    dump_arrow = _dump_arrow
-    load_polars = _load_polars
-    dump_polars = _dump_polars
+    load = _load_accel = _load
+    dump = _dump_accel = _dump
+    load_pandas = _load_pandas_accel = _load_pandas  # noqa: F811
+    dump_pandas = _dump_pandas_accel = _dump_pandas  # noqa: F811
+    load_numpy = _load_numpy_accel = _load_numpy  # noqa: F811
+    dump_numpy = _dump_numpy_accel = _dump_numpy  # noqa: F811
+    load_arrow = _load_arrow_accel = _load_arrow  # noqa: F811
+    dump_arrow = _dump_arrow_accel = _dump_arrow  # noqa: F811
+    load_polars = _load_polars_accel = _load_polars  # noqa: F811
+    dump_polars = _dump_polars_accel = _dump_polars  # noqa: F811
 
 else:
     _load_accel = _singlestoredb_accel.load_rowdat_1

@@ -171,6 +171,7 @@ create new ones.
    :toctree: generated/
 
    WorkspaceManager
+   WorkspaceManager.organization
    WorkspaceManager.workspace_groups
    WorkspaceManager.regions
    WorkspaceManager.create_workspace_group
