@@ -45,7 +45,7 @@ class Secret(object):
     ):
         # UUID of the secret
         self.id = id
-        
+
         # Name of the secret
         self.name = name
 
