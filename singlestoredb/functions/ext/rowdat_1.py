@@ -697,6 +697,8 @@ def _dump_arrow_accel(
 
 
 if not has_accel:
+    _load_accel = _load
+    _dump_accel = _dump
     load = _load
     dump = _dump
     load_pandas = _load_pandas
