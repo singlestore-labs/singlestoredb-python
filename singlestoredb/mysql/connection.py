@@ -916,7 +916,8 @@ class Connection(BaseConnection):
             raise err.InterfaceError(0, 'Connection URL has not been established')
 
         # If it's just a password change, we don't need to reconnect
-        if (self.host, self.port, self.user, self.db) == \
+        if self._sock is not None and \
+                (self.host, self.port, self.user, self.db) == \
                 (out['host'], out['port'], out['user'], out.get('database')):
             return
 
@@ -1167,7 +1168,7 @@ class Connection(BaseConnection):
         """
         self._sync_connection()
 
-        if not self._sock:
+        if self._sock is None:
             raise err.InterfaceError(0, 'The connection has been closed')
 
         # If the last query was unbuffered, make sure it finishes before
