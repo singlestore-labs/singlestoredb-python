@@ -793,3 +793,60 @@ class TestStage(unittest.TestCase):
         assert not st.exists('obj_test.sql')
         assert st.exists('obj_test_2.sql')
         assert f1.abspath() == 'obj_test_2.sql'
+
+
+@pytest.mark.management
+class TestSecrets(unittest.TestCase):
+
+    manager = None
+    wg = None
+    password = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = s2.manage_workspaces()
+
+        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
+        cls.password = secrets.token_urlsafe(20)
+
+        name = clean_name(secrets.token_urlsafe(20)[:20])
+
+        cls.wg = cls.manager.create_workspace_group(
+            f'wg-test-{name}',
+            region=random.choice(us_regions).id,
+            admin_password=cls.password,
+            firewall_ranges=['0.0.0.0/0'],
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.wg is not None:
+            cls.wg.terminate(force=True)
+        cls.wg = None
+        cls.manager = None
+        cls.password = None
+
+    def test_get_secret(self):
+        # manually create secret and then get secret
+        # try to delete the secret if it exists
+        try:
+            secret = self.manager.organizations.current.get_secret('secret_name')
+
+            secret_id = secret.id
+
+            self.manager._delete(f'secrets/{secret_id}')
+        except s2.ManagementError:
+            pass
+
+        self.manager._post(
+            'secrets',
+            json=dict(
+                name='secret_name',
+                value='secret_value',
+            ),
+        )
+
+        secret = self.manager.organizations.current.get_secret('secret_name')
+
+        assert secret.name == 'secret_name'
+        assert secret.value == 'secret_value'
