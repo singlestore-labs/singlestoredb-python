@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v0.10.7 - January 31, 2023
+--------------------------
+* Add secrets managemnt to Management API
+* Refactor UDF data converters
+
 v0.10.6 - January 26, 2023
 --------------------------
 * Add Fusion SQL handlers for suspend and resume

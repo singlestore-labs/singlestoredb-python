@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStoreDB 0.10.6 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 0.10.7 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                0.10.6
+                0.10.7
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -113,6 +113,7 @@
 <li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.manage_workspaces.html">singlestoredb.manage_workspaces</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#workspacemanager">WorkspaceManager</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.html">workspace.WorkspaceManager</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.organization.html">workspace.WorkspaceManager.organization</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.workspace_groups.html">workspace.WorkspaceManager.workspace_groups</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html">workspace.WorkspaceManager.regions</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace_group.html">workspace.WorkspaceManager.create_workspace_group</a></li>
@@ -455,22 +456,25 @@ create new ones.</p>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.html#singlestoredb.management.workspace.WorkspaceManager" title="singlestoredb.management.workspace.WorkspaceManager"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a>([access_token, version, ...])</p></td>
 <td><p>SingleStoreDB workspace manager.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.workspace_groups.html#singlestoredb.management.workspace.WorkspaceManager.workspace_groups" title="singlestoredb.management.workspace.WorkspaceManager.workspace_groups"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.workspace_groups</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.organization.html#singlestoredb.management.workspace.WorkspaceManager.organization" title="singlestoredb.management.workspace.WorkspaceManager.organization"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.organization</span></code></a></p></td>
+<td><p>Return the current organization.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.workspace_groups.html#singlestoredb.management.workspace.WorkspaceManager.workspace_groups" title="singlestoredb.management.workspace.WorkspaceManager.workspace_groups"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.workspace_groups</span></code></a></p></td>
 <td><p>Return a list of available workspace groups.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html#singlestoredb.management.workspace.WorkspaceManager.regions" title="singlestoredb.management.workspace.WorkspaceManager.regions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html#singlestoredb.management.workspace.WorkspaceManager.regions" title="singlestoredb.management.workspace.WorkspaceManager.regions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a></p></td>
 <td><p>Return a list of available regions.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace_group.html#singlestoredb.management.workspace.WorkspaceManager.create_workspace_group" title="singlestoredb.management.workspace.WorkspaceManager.create_workspace_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.create_workspace_group</span></code></a>(...)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace_group.html#singlestoredb.management.workspace.WorkspaceManager.create_workspace_group" title="singlestoredb.management.workspace.WorkspaceManager.create_workspace_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.create_workspace_group</span></code></a>(...)</p></td>
 <td><p>Create a new workspace group.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace.html#singlestoredb.management.workspace.WorkspaceManager.create_workspace" title="singlestoredb.management.workspace.WorkspaceManager.create_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.create_workspace</span></code></a>(name, ...)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.create_workspace.html#singlestoredb.management.workspace.WorkspaceManager.create_workspace" title="singlestoredb.management.workspace.WorkspaceManager.create_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.create_workspace</span></code></a>(name, ...)</p></td>
 <td><p>Create a new workspace.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace_group.html#singlestoredb.management.workspace.WorkspaceManager.get_workspace_group" title="singlestoredb.management.workspace.WorkspaceManager.get_workspace_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace_group</span></code></a>(id)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace_group.html#singlestoredb.management.workspace.WorkspaceManager.get_workspace_group" title="singlestoredb.management.workspace.WorkspaceManager.get_workspace_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace_group</span></code></a>(id)</p></td>
 <td><p>Retrieve a workspace group definition.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace.html#singlestoredb.management.workspace.WorkspaceManager.get_workspace" title="singlestoredb.management.workspace.WorkspaceManager.get_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace</span></code></a>(id)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.get_workspace.html#singlestoredb.management.workspace.WorkspaceManager.get_workspace" title="singlestoredb.management.workspace.WorkspaceManager.get_workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">WorkspaceManager.get_workspace</span></code></a>(id)</p></td>
 <td><p>Retrieve a workspace definition.</p></td>
 </tr>
 </tbody>

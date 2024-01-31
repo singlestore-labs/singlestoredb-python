@@ -13,6 +13,7 @@
       ~WorkspaceGroup.update
    .. rubric:: Attributes
    .. autosummary::
+      ~WorkspaceGroup.organization
       ~WorkspaceGroup.stage
       ~WorkspaceGroup.stages
       ~WorkspaceGroup.workspaces

@@ -17,5 +17,6 @@
       ~WorkspaceManager.default_base_url
       ~WorkspaceManager.default_version
       ~WorkspaceManager.obj_type
+      ~WorkspaceManager.organization
       ~WorkspaceManager.organizations
       ~WorkspaceManager.workspace_groups
