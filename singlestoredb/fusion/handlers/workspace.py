@@ -349,7 +349,7 @@ class DropWorkspaceGroupHandler(SQLHandler):
         try:
             workspace_group = get_workspace_group(params)
             if workspace_group.terminated_at is not None:
-                raise KeyError
+                raise KeyError('workspace group is alread terminated')
             workspace_group.terminate(
                 wait_on_terminated=params['wait_on_terminated'],
                 force=params['force'],
@@ -357,8 +357,7 @@ class DropWorkspaceGroupHandler(SQLHandler):
 
         except KeyError:
             if not params['if_exists']:
-                name_or_id = params['group_id'] or params['group_name']
-                raise KeyError(f"could not find workspace group '{name_or_id}'")
+                raise
 
         return None
 
@@ -400,19 +399,12 @@ class DropWorkspaceHandler(SQLHandler):
         try:
             ws = get_workspace(params)
             if ws.terminated_at is not None:
-                raise KeyError
+                raise KeyError('workspace is already terminated')
             ws.terminate(wait_on_terminated=params['wait_on_terminated'])
 
         except KeyError:
-            group_name_or_id = params['in_group'].get('group_id', None) or \
-                params['in_group'].get('group_name', None)
-            workspace_name_or_id = params['workspace'].get('workspace_id', None) or \
-                params['workspace'].get('workspace_name', None)
             if not params['if_exists']:
-                raise KeyError(
-                    f"could not find workspace '{workspace_name_or_id}' "
-                    f"in group '{group_name_or_id}'",
-                )
+                raise
 
         return None
 
