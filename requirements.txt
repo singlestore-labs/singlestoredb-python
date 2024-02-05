@@ -3,4 +3,3 @@ parsimonious
 PyJWT
 requests
 sqlparams
-wheel
