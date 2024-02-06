@@ -49,14 +49,14 @@ jobs:
         os:
           - ubuntu-20.04
         python-version:
-#         - "3.8"
-#         - "3.9"
-#         - "3.10"
-#         - "3.11"
+          - "3.8"
+          - "3.9"
+          - "3.10"
+          - "3.11"
           - "3.12"
         driver:
           - mysql
-#         - https
+          - https
         pure-python:
           - 0
         buffered:
@@ -106,7 +106,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          #cache: "pip"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -116,8 +116,7 @@ jobs:
 
       - name: Install SingleStore package
         run: |
-          pip list -v
-          pip install .
+          pip install . --no-build-isolation
 
       - name: Run tests
         if: ${{ matrix.driver != 'https' }}
