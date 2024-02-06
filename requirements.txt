@@ -2,5 +2,6 @@ build
 parsimonious
 PyJWT
 requests
+setuptools
 sqlparams
 wheel
