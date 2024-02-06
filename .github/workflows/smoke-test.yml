@@ -116,7 +116,7 @@ jobs:
 
       - name: Install SingleStore package
         run: |
-          pip install . --no-build-isolation
+          pip install . --no-use-pep517
 
       - name: Run tests
         if: ${{ matrix.driver != 'https' }}
