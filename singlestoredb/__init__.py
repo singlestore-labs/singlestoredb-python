@@ -15,7 +15,8 @@ Examples
 
 __version__ = '0.10.7'
 
-from .alchemy import create_engine
+from typing import Any
+
 from .config import options, get_option, set_option, describe_option
 from .connection import connect, apilevel, threadsafety, paramstyle
 from .exceptions import (
@@ -30,3 +31,33 @@ from .types import (
     Date, Time, Timestamp, DateFromTicks, TimeFromTicks, TimestampFromTicks,
     Binary, STRING, BINARY, NUMBER, DATETIME, ROWID,
 )
+
+
+#
+# This function is defined here to prevent the side-effect of
+# attempting to load the SQLAlchemy dialect in the core SDK.
+#
+def create_engine(*args: Any, **kwargs: Any) -> Any:
+    """
+    Create an SQLAlchemy engine for SingleStoreDB.
+
+    Parameters
+    ----------
+    **kwargs : Any
+        The parameters taken here are the same as for
+        `sqlalchemy.create_engine`. However, this function can be
+        called without any parameters in order to inherit parameters
+        set by environment variables or parameters set in by
+        options in Python code.
+
+    See Also
+    --------
+    `sqlalchemy.create_engine`
+
+    Returns
+    -------
+    SQLAlchemy engine
+
+    """
+    from .alchemy import create_engine
+    return create_engine(*args, **kwargs)
