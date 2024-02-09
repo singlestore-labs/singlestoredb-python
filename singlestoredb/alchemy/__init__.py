@@ -8,6 +8,11 @@ try:
     from sqlalchemy_singlestoredb import *  # noqa: F403, F401
     has_sqlalchemy = True
 except ImportError:
+    import warnings
+    warnings.warn(
+        'sqlalchemy_singlestoredb must be installed to use this module',
+        RuntimeWarning,
+    )
     has_sqlalchemy = False
 
 from ..connection import build_params
