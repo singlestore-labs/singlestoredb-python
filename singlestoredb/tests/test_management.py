@@ -395,7 +395,7 @@ class TestStage(unittest.TestCase):
     def test_upload_file(self):
         st = self.wg.stage
 
-        root = st.info('')
+        root = st.info('/')
         assert str(root.path) == '/'
         assert root.type == 'directory'
 
@@ -546,25 +546,28 @@ class TestStage(unittest.TestCase):
         # mkdir
         st.mkdir('mkdir_test_1')
         st.mkdir('mkdir_test_2')
+        with self.assertRaises(s2.ManagementError):
+            st.mkdir('mkdir_test_2/nest_1/nest_2')
+        st.mkdir('mkdir_test_2/nest_1')
         st.mkdir('mkdir_test_2/nest_1/nest_2')
         st.mkdir('mkdir_test_3')
 
-        assert st.exists('mkdir_test_1')
-        assert st.exists('mkdir_test_2')
-        assert st.exists('mkdir_test_2/nest_1')
-        assert st.exists('mkdir_test_2/nest_1/nest_2')
-        assert not st.exists('foo')
-        assert not st.exists('foo/bar')
+        assert st.exists('mkdir_test_1/')
+        assert st.exists('mkdir_test_2/')
+        assert st.exists('mkdir_test_2/nest_1/')
+        assert st.exists('mkdir_test_2/nest_1/nest_2/')
+        assert not st.exists('foo/')
+        assert not st.exists('foo/bar/')
 
-        assert st.is_dir('mkdir_test_1')
-        assert st.is_dir('mkdir_test_2')
-        assert st.is_dir('mkdir_test_2/nest_1')
-        assert st.is_dir('mkdir_test_2/nest_1/nest_2')
+        assert st.is_dir('mkdir_test_1/')
+        assert st.is_dir('mkdir_test_2/')
+        assert st.is_dir('mkdir_test_2/nest_1/')
+        assert st.is_dir('mkdir_test_2/nest_1/nest_2/')
 
-        assert not st.is_file('mkdir_test_1')
-        assert not st.is_file('mkdir_test_2')
-        assert not st.is_file('mkdir_test_2/nest_1')
-        assert not st.is_file('mkdir_test_2/nest_1/nest_2')
+        assert not st.is_file('mkdir_test_1/')
+        assert not st.is_file('mkdir_test_2/')
+        assert not st.is_file('mkdir_test_2/nest_1/')
+        assert not st.is_file('mkdir_test_2/nest_1/nest_2/')
 
         out = st.listdir('/')
         assert 'mkdir_test_1' in out
@@ -618,6 +621,9 @@ class TestStage(unittest.TestCase):
     def test_os_files(self):
         st = self.wg.stage
 
+        st.mkdir('files_test_1')
+        st.mkdir('files_test_1/nest_1')
+
         st.upload_file(TEST_DIR / 'test.sql', 'files_test.sql')
         st.upload_file(TEST_DIR / 'test.sql', 'files_test_1/nest_1/nested_files_test.sql')
         st.upload_file(
@@ -653,10 +659,23 @@ class TestStage(unittest.TestCase):
         st = self.wg.stage
 
         st.upload_file(TEST_DIR / 'test.sql', 'rename_test.sql')
+
+        with self.assertRaises(s2.ManagementError):
+            st.upload_file(
+                TEST_DIR / 'test.sql',
+                'rename_test_1/nest_1/nested_rename_test.sql',
+            )
+
+        st.mkdir('rename_test_1')
+        st.mkdir('rename_test_1/nest_1')
+
+        assert st.exists('/rename_test_1/nest_1/')
+
         st.upload_file(
             TEST_DIR / 'test.sql',
             'rename_test_1/nest_1/nested_rename_test.sql',
         )
+
         st.upload_file(
             TEST_DIR / 'test.sql',
             'rename_test_1/nest_1/nested_rename_test_2.sql',
@@ -717,6 +736,9 @@ class TestStage(unittest.TestCase):
 
     def test_stage_object(self):
         st = self.wg.stage
+
+        st.mkdir('obj_test')
+        st.mkdir('obj_test/nest_1')
 
         f1 = st.upload_file(TEST_DIR / 'test.sql', 'obj_test.sql')
         f2 = st.upload_file(TEST_DIR / 'test.sql', 'obj_test/nest_1/obj_test.sql')
@@ -779,7 +801,7 @@ class TestStage(unittest.TestCase):
 
         d2.rmdir()
 
-        assert not st.exists('obj_test/nest_1')
+        assert not st.exists('obj_test/nest_1/')
         assert not st.exists('obj_test')
 
         # mtime / ctime

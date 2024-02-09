@@ -4,8 +4,8 @@ from typing import Any
 from urllib.parse import quote
 
 try:
-    import sqlalchemy_singlestoredb  # noqa: F401
     import sqlalchemy
+    from sqlalchemy_singlestoredb import *  # noqa: F403, F401
     has_sqlalchemy = True
 except ImportError:
     has_sqlalchemy = False

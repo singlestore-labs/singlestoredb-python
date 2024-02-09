@@ -38,6 +38,7 @@ from typing import Sequence
 from typing import Tuple
 from typing import Union
 
+from . import arrow
 from . import json as jdata
 from . import rowdat_1
 from ... import connection
@@ -308,6 +309,13 @@ def create_app(
         headers=[(b'content-type', b'x-application/rowdat_1')],
     )
 
+    # Apache Arrow response start
+    arrow_response_dict: Dict[str, Any] = dict(
+        type='http.response.start',
+        status=200,
+        headers=[(b'content-type', b'application/vnd.apache.arrow.file')],
+    )
+
     # Path not found response start
     path_not_found_response_dict: Dict[str, Any] = dict(
         type='http.response.start',
@@ -370,6 +378,31 @@ def create_app(
             load=jdata.load_arrow,
             dump=jdata.dump_arrow,
             response=json_response_dict,
+        ),
+        (b'application/vnd.apache.arrow.file', b'1.0', 'python'): dict(
+            load=arrow.load,
+            dump=arrow.dump,
+            response=arrow_response_dict,
+        ),
+        (b'application/vnd.apache.arrow.file', b'1.0', 'pandas'): dict(
+            load=arrow.load_pandas,
+            dump=arrow.dump_pandas,
+            response=arrow_response_dict,
+        ),
+        (b'application/vnd.apache.arrow.file', b'1.0', 'numpy'): dict(
+            load=arrow.load_numpy,
+            dump=arrow.dump_numpy,
+            response=arrow_response_dict,
+        ),
+        (b'application/vnd.apache.arrow.file', b'1.0', 'polars'): dict(
+            load=arrow.load_polars,
+            dump=arrow.dump_polars,
+            response=arrow_response_dict,
+        ),
+        (b'application/vnd.apache.arrow.file', b'1.0', 'arrow'): dict(
+            load=arrow.load_arrow,
+            dump=arrow.dump_arrow,
+            response=arrow_response_dict,
         ),
     }
 

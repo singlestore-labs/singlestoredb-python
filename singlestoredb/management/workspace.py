@@ -116,8 +116,8 @@ class StageObject(object):
             type=obj['type'],
             format=obj['format'],
             mimetype=obj['mimetype'],
-            created=to_datetime(obj['created']),
-            last_modified=to_datetime(obj['last_modified']),
+            created=to_datetime(obj.get('created')),
+            last_modified=to_datetime(obj.get('last_modified')),
             writable=bool(obj['writable']),
         )
         out._stage = stage
@@ -548,7 +548,7 @@ class Stage(object):
         StageObject
 
         """
-        stage_path = re.sub(r'/*$', r'', str(stage_path))
+        stage_path = re.sub(r'/*$', r'', str(stage_path)) + '/'
 
         if self.exists(stage_path):
             if not overwrite:
@@ -620,10 +620,8 @@ class Stage(object):
         StageObject
 
         """
-        stage_path = re.sub(r'/*$', r'', str(stage_path))
-
         res = self._manager._get(
-            f'stage/{self._workspace_group.id}/fs/{stage_path}',
+            re.sub(r'/+$', r'/', f'stage/{self._workspace_group.id}/fs/{stage_path}'),
             params=dict(metadata=1),
         ).json()
 
@@ -647,7 +645,7 @@ class Stage(object):
             self.info(stage_path)
             return True
         except ManagementError as exc:
-            if 'NoSuchKey' in str(exc):
+            if exc.errno == 404:
                 return False
             raise
 
@@ -668,7 +666,7 @@ class Stage(object):
         try:
             return self.info(stage_path).type == 'directory'
         except ManagementError as exc:
-            if 'NoSuchKey' in str(exc):
+            if exc.errno == 404:
                 return False
             raise
 
@@ -689,7 +687,7 @@ class Stage(object):
         try:
             return self.info(stage_path).type != 'directory'
         except ManagementError as exc:
-            if 'NoSuchKey' in str(exc):
+            if exc.errno == 404:
                 return False
             raise
 
@@ -737,7 +735,7 @@ class Stage(object):
 
         """
         stage_path = re.sub(r'^(\./|/)+', r'', str(stage_path))
-        stage_path = re.sub(r'/+$', r'', stage_path)
+        stage_path = re.sub(r'/+$', r'', stage_path) + '/'
 
         info = self.info(stage_path)
         if info.type == 'directory':
