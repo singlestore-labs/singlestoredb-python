@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import tempfile
 from io import BytesIO
 from typing import Any
 from typing import List
@@ -270,10 +269,12 @@ def dump(
     tbl = pa.Table.from_pylist([dict(list(zip(colnames, row))) for row in rows])
     tbl = tbl.add_column(0, '__index__', pa.array(row_ids))
 
-    with tempfile.NamedTemporaryFile() as outfile:
-        pa.feather.write_feather(tbl, outfile.name)
-        with open(outfile.name, 'rb') as infile:
-            return infile.read()
+    sink = pa.BufferOutputStream()
+    batches = tbl.to_batches()
+    with pa.ipc.new_file(sink, batches[0].schema) as writer:
+        for batch in batches:
+            writer.write_batch(batch)
+    return sink.getvalue()
 
 
 def _dump_vectors(
@@ -310,10 +311,12 @@ def _dump_vectors(
     )
     tbl = tbl.add_column(0, '__index__', row_ids)
 
-    with tempfile.NamedTemporaryFile() as outfile:
-        pa.feather.write_feather(tbl, outfile.name)
-        with open(outfile.name, 'rb') as infile:
-            return infile.read()
+    sink = pa.BufferOutputStream()
+    batches = tbl.to_batches()
+    with pa.ipc.new_file(sink, batches[0].schema) as writer:
+        for batch in batches:
+            writer.write_batch(batch)
+    return sink.getvalue()
 
 
 def dump_arrow(
