@@ -215,6 +215,11 @@ class StageObject(object):
                 msg='No Stage object is associated with this object.',
             )
 
+        if self.type == 'directory':
+            raise IsADirectoryError(
+                f'path is a directory; use rmdir or removedirs {self.path}',
+            )
+
         self._stage.remove(self.path)
 
     def rmdir(self) -> None:
@@ -224,6 +229,11 @@ class StageObject(object):
                 msg='No Stage object is associated with this object.',
             )
 
+        if self.type != 'directory':
+            raise NotADirectoryError(
+                f'path is not a directory: {self.path}',
+            )
+
         self._stage.rmdir(self.path)
 
     def removedirs(self) -> None:
@@ -231,6 +241,11 @@ class StageObject(object):
         if self._stage is None:
             raise ManagementError(
                 msg='No Stage object is associated with this object.',
+            )
+
+        if self.type != 'directory':
+            raise NotADirectoryError(
+                f'path is not a directory: {self.path}',
             )
 
         self._stage.removedirs(self.path)

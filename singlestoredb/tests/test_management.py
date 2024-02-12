@@ -615,7 +615,7 @@ class TestStage(unittest.TestCase):
         assert 'mkdir_test_2/' not in after
         assert list(sorted(before)) == list(sorted(after + ['mkdir_test_2/']))
 
-        with self.assertRaises(NotADirectoryError):
+        with self.assertRaises(s2.ManagementError):
             st.removedirs('mkdir_test.sql')
 
     def test_os_files(self):
