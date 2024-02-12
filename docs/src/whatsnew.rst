@@ -8,25 +8,30 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
-v0.10.7 - January 31, 2023
+v1.0.0 - February, 12 2024
+--------------------------
+* Update Stage API
+* Fixes for deferred connections
+
+v0.10.7 - January 31, 2024
 --------------------------
 * Add secrets managemnt to Management API
 * Refactor UDF data converters
 
-v0.10.6 - January 26, 2023
+v0.10.6 - January 26, 2024
 --------------------------
 * Add Fusion SQL handlers for suspend and resume
 * Various Fusion SQL handler fixes
 
-v0.10.5 - January 23, 2023
+v0.10.5 - January 23, 2024
 --------------------------
 * Add pytest plugin
 
-v0.10.4 - January 18, 2023
+v0.10.4 - January 18, 2024
 --------------------------
 * Fix deferred connection URL in HTTP
 
-v0.10.3 - January 17, 2023
+v0.10.3 - January 17, 2024
 --------------------------
 * Change Stage URLs
 * Fix password encoding in deferred connections
