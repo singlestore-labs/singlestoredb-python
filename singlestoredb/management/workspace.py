@@ -737,11 +737,10 @@ class Stage(object):
         stage_path = re.sub(r'^(\./|/)+', r'', str(stage_path))
         stage_path = re.sub(r'/+$', r'', stage_path) + '/'
 
-        info = self.info(stage_path)
-        if info.type == 'directory':
+        if self.is_dir(stage_path):
             out = self._listdir(stage_path, recursive=recursive)
-            if stage_path:
-                stage_path_n = len(stage_path.split('/'))
+            if stage_path != '/':
+                stage_path_n = len(stage_path.split('/')) - 1
                 out = ['/'.join(x.split('/')[stage_path_n:]) for x in out]
             return out
 
@@ -857,11 +856,7 @@ class Stage(object):
             Path to the stage location
 
         """
-        if not str(stage_path).endswith('/'):
-            raise NotADirectoryError(
-                f'folder paths must end with a trailing slash (/): {stage_path}',
-            )
-
+        stage_path = re.sub(r'/*$', r'', str(stage_path)) + '/'
         self._manager._delete(f'stage/{self._workspace_group.id}/fs/{stage_path}')
 
     def rmdir(self, stage_path: PathLike) -> None:
@@ -874,10 +869,7 @@ class Stage(object):
             Path to the stage location
 
         """
-        if not str(stage_path).endswith('/'):
-            raise NotADirectoryError(
-                f'folder paths must end with a trailing slash (/): {stage_path}',
-            )
+        stage_path = re.sub(r'/*$', r'', str(stage_path)) + '/'
 
         if self.listdir(stage_path):
             raise OSError(f'stage folder is not empty, use removedirs: {stage_path}')

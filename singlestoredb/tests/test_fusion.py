@@ -420,38 +420,46 @@ class TestManagementAPIFusion(unittest.TestCase):
         mgr = s2.manage_workspaces()
 
         reg = [x for x in mgr.regions if x.name.startswith('US')][0]
+        wg_name = f'Create WG Test {id(self)}'
 
-        self.cur.execute(
-            'create workspace group "Create WG Test" '
-            f'in region "{reg.name}"',
-        )
-        wg = [x for x in mgr.workspace_groups if x.name == 'Create WG Test']
-        assert len(wg) == 1
+        try:
+            self.cur.execute(
+                f'create workspace group "{wg_name}" '
+                f'in region "{reg.name}"',
+            )
+            wg = [x for x in mgr.workspace_groups if x.name == wg_name]
+            assert len(wg) == 1
 
-        # Drop it by name
-        self.cur.execute(
-            'drop workspace group "Create WG Test" '
-            'wait on terminated',
-        )
-        wg = [x for x in mgr.workspace_groups if x.name == 'Create WG Test']
-        assert len(wg) == 0
+            # Drop it by name
+            self.cur.execute(
+                f'drop workspace group "{wg_name}" '
+                'wait on terminated',
+            )
+            wg = [x for x in mgr.workspace_groups if x.name == wg_name]
+            assert len(wg) == 0
 
-        # Create it again
-        self.cur.execute(
-            f'create workspace group "Create WG Test" in region "{reg.name}"',
-        )
-        wg = [x for x in mgr.workspace_groups if x.name == 'Create WG Test']
-        assert len(wg) == 1
+            # Create it again
+            self.cur.execute(
+                f'create workspace group "{wg_name}" in region "{reg.name}"',
+            )
+            wg = [x for x in mgr.workspace_groups if x.name == wg_name]
+            assert len(wg) == 1
 
-        # Drop it by ID
-        wg_id = wg[0].id
-        self.cur.execute(f'drop workspace group id {wg_id} wait on terminated')
-        wg = [x for x in mgr.workspace_groups if x.name == 'Create WG Test']
-        assert len(wg) == 0
+            # Drop it by ID
+            wg_id = wg[0].id
+            self.cur.execute(f'drop workspace group id {wg_id} wait on terminated')
+            wg = [x for x in mgr.workspace_groups if x.name == wg_name]
+            assert len(wg) == 0
 
-        # Drop non-existent
-        with self.assertRaises(KeyError):
-            self.cur.execute(f'drop workspace group id {wg_id}')
+            # Drop non-existent
+            with self.assertRaises(KeyError):
+                self.cur.execute(f'drop workspace group id {wg_id}')
 
-        # Drop non-existent with IF EXISTS
-        self.cur.execute(f'drop workspace group if exists id {wg_id}')
+            # Drop non-existent with IF EXISTS
+            self.cur.execute(f'drop workspace group if exists id {wg_id}')
+
+        finally:
+            try:
+                mgr.workspace_groups[wg_name].terminate(force=True)
+            except Exception:
+                pass

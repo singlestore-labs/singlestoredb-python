@@ -570,34 +570,34 @@ class TestStage(unittest.TestCase):
         assert not st.is_file('mkdir_test_2/nest_1/nest_2/')
 
         out = st.listdir('/')
-        assert 'mkdir_test_1' in out
-        assert 'mkdir_test_2' in out
-        assert 'mkdir_test_2/nest_1/nest_2' not in out
+        assert 'mkdir_test_1/' in out
+        assert 'mkdir_test_2/' in out
+        assert 'mkdir_test_2/nest_1/nest_2/' not in out
 
         out = st.listdir('/', recursive=True)
-        assert 'mkdir_test_1' in out
-        assert 'mkdir_test_2' in out
-        assert 'mkdir_test_2/nest_1/nest_2' in out
+        assert 'mkdir_test_1/' in out
+        assert 'mkdir_test_2/' in out
+        assert 'mkdir_test_2/nest_1/nest_2/' in out
 
         out = st.listdir('mkdir_test_2')
-        assert 'mkdir_test_1' not in out
-        assert 'nest_1' in out
-        assert 'nest_2' not in out
-        assert 'nest_1/nest_2' not in out
+        assert 'mkdir_test_1/' not in out
+        assert 'nest_1/' in out
+        assert 'nest_2/' not in out
+        assert 'nest_1/nest_2/' not in out
 
         out = st.listdir('mkdir_test_2', recursive=True)
-        assert 'mkdir_test_1' not in out
-        assert 'nest_1' in out
-        assert 'nest_2' not in out
-        assert 'nest_1/nest_2' in out
+        assert 'mkdir_test_1/' not in out
+        assert 'nest_1/' in out
+        assert 'nest_2/' not in out
+        assert 'nest_1/nest_2/' in out
 
         # rmdir
         before = st.listdir('/', recursive=True)
         st.rmdir('mkdir_test_1/')
         after = st.listdir('/', recursive=True)
-        assert 'mkdir_test_1' in before
-        assert 'mkdir_test_1' not in after
-        assert list(sorted(before)) == list(sorted(after + ['mkdir_test_1']))
+        assert 'mkdir_test_1/' in before
+        assert 'mkdir_test_1/' not in after
+        assert list(sorted(before)) == list(sorted(after + ['mkdir_test_1/']))
 
         with self.assertRaises(OSError):
             st.rmdir('mkdir_test_2/')
@@ -611,9 +611,9 @@ class TestStage(unittest.TestCase):
         before = st.listdir('/')
         st.removedirs('mkdir_test_2/')
         after = st.listdir('/')
-        assert 'mkdir_test_2' in before
-        assert 'mkdir_test_2' not in after
-        assert list(sorted(before)) == list(sorted(after + ['mkdir_test_2']))
+        assert 'mkdir_test_2/' in before
+        assert 'mkdir_test_2/' not in after
+        assert list(sorted(before)) == list(sorted(after + ['mkdir_test_2/']))
 
         with self.assertRaises(NotADirectoryError):
             st.removedirs('mkdir_test.sql')
@@ -633,7 +633,7 @@ class TestStage(unittest.TestCase):
 
         # remove
         with self.assertRaises(IsADirectoryError):
-            st.remove('files_test_1')
+            st.remove('files_test_1/')
 
         before = st.listdir('/')
         st.remove('files_test.sql')
@@ -642,18 +642,22 @@ class TestStage(unittest.TestCase):
         assert 'files_test.sql' not in after
         assert list(sorted(before)) == list(sorted(after + ['files_test.sql']))
 
-        before = st.listdir('files_test_1/nest_1')
+        before = st.listdir('files_test_1/nest_1/')
         st.remove('files_test_1/nest_1/nested_files_test.sql')
-        after = st.listdir('files_test_1/nest_1')
+        after = st.listdir('files_test_1/nest_1/')
         assert 'nested_files_test.sql' in before
         assert 'nested_files_test.sql' not in after
-        assert st.is_dir('files_test_1/nest_1')
+        assert st.is_dir('files_test_1/nest_1/')
 
-        # Removing the last file also removes empty directories
+        # Removing the last file does not remove empty directories
         st.remove('files_test_1/nest_1/nested_files_test_2.sql')
         assert not st.is_file('files_test_1/nest_1/nested_files_test_2.sql')
-        assert not st.is_dir('files_test_1/nest_1')
-        assert not st.is_dir('files_test_1')
+        assert st.is_dir('files_test_1/nest_1/')
+        assert st.is_dir('files_test_1/')
+
+        st.removedirs('files_test_1')
+        assert not st.is_dir('files_test_1/nest_1/')
+        assert not st.is_dir('files_test_1/')
 
     def test_os_rename(self):
         st = self.wg.stage
@@ -689,11 +693,11 @@ class TestStage(unittest.TestCase):
         assert 'rename_test_2.sql' in st.listdir('/')
 
         # rename directory
-        assert 'rename_test_1' in st.listdir('/')
-        assert 'rename_test_2' not in st.listdir('/')
+        assert 'rename_test_1/' in st.listdir('/')
+        assert 'rename_test_2/' not in st.listdir('/')
         st.rename('rename_test_1/', 'rename_test_2/')
-        assert 'rename_test_1' not in st.listdir('/')
-        assert 'rename_test_2' in st.listdir('/')
+        assert 'rename_test_1/' not in st.listdir('/')
+        assert 'rename_test_2/' in st.listdir('/')
         assert st.is_file('rename_test_2/nest_1/nested_rename_test.sql')
         assert st.is_file('rename_test_2/nest_1/nested_rename_test_2.sql')
 
