@@ -315,8 +315,8 @@ def _dump_vectors(
 
 def dump_pandas(
     returns: List[int],
-    row_ids: List[int],
-    cols: List[Tuple[Any, Any]],
+    row_ids: 'pd.Series[int]',
+    cols: List[Tuple['pd.Series[int]', 'pd.Series[bool]']],
 ) -> bytes:
     '''
     Convert a list of pd.Series of data into JSON format.
@@ -336,6 +336,7 @@ def dump_pandas(
 
     '''
     import pandas as pd
+    row_ids.index = row_ids
     df = pd.concat([row_ids] + [x[0] for x in cols], axis=1)
     return ('{"data": %s}' % df.to_json(orient='values')).encode('utf-8')
 

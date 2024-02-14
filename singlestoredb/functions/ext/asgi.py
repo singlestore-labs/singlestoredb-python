@@ -23,6 +23,7 @@ $ SINGLESTOREDB_EXT_FUNCTIONS='myfuncs.[percentage_90,percentage_95]' \
 
 '''
 import importlib.util
+import io
 import itertools
 import os
 import urllib
@@ -184,7 +185,7 @@ def make_func(name: str, func: Callable[..., Any]) -> Callable[..., Any]:
     return do_func
 
 
-def create_app(
+def create_app(  # noqa: C901
     functions: Optional[
         Union[
             str,
@@ -538,5 +539,45 @@ def create_app(
                     cur.execute(f'DROP FUNCTION IF EXISTS `{key.decode("utf8")}`')
 
     app.drop_functions = drop_functions  # type: ignore
+
+    async def call(
+        name: str,
+        data_in: io.BytesIO,
+        data_out: io.BytesIO,
+        data_format: str = 'rowdat_1',
+        data_version: str = '1.0',
+    ) -> None:
+
+        async def receive() -> Dict[str, Any]:
+            return dict(body=data_in.read())
+
+        async def send(content: Dict[str, Any]) -> None:
+            status = content.get('status', 200)
+            if status != 200:
+                raise KeyError(f'error occurred when calling `{name}`: {status}')
+            data_out.write(content.get('body', b''))
+
+        accepts = dict(
+            json=b'application/json',
+            rowdat_1=b'application/octet-stream',
+            arrow=b'application/vnd.apache.arrow.file',
+        )
+
+        # Mock an ASGI scope
+        scope = dict(
+            type='http',
+            path='invoke',
+            method='POST',
+            headers={
+                b'content-type': accepts[data_format.lower()],
+                b'accepts': accepts[data_format.lower()],
+                b's2-ef-name': name.encode('utf-8'),
+                b's2-ef-version': data_version.encode('utf-8'),
+            },
+        )
+
+        await app(scope, receive, send)
+
+    app.call = call  # type: ignore
 
     return app
