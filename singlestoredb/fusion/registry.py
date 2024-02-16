@@ -128,8 +128,6 @@ class ShowFusionCommandsHandler(SQLHandler):
 
         data: List[Tuple[Any, ...]] = []
         for _, v in sorted(_handlers.items()):
-            if v is type(self):
-                continue
             data.append((v.help.lstrip(),))
 
         res.set_rows(data)

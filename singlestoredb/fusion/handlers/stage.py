@@ -218,9 +218,9 @@ class DropStageFolderHandler(SQLHandler):
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         wg = get_workspace_group(params)
         if params['recursive']:
-            wg.stage.rmdir(params['stage_path'])
-        else:
             wg.stage.removedirs(params['stage_path'])
+        else:
+            wg.stage.rmdir(params['stage_path'])
         return None
 
 
