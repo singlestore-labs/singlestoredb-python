@@ -11,7 +11,7 @@ This document outlines features and improvements from each release.
 v1.0.1 - February, 16 2024
 --------------------------
 * Fix issues in Fusion SQL Stage commands
-* Add `call` function to UDF app
+* Add ``call`` function to UDF app
 
 v1.0.0 - February, 12 2024
 --------------------------

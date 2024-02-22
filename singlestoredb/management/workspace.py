@@ -7,6 +7,7 @@ import glob
 import io
 import os
 import re
+import socket
 import time
 from typing import Any
 from typing import BinaryIO
@@ -1334,7 +1335,7 @@ class WorkspaceGroup(object):
     def create_workspace(
         self, name: str, size: Optional[str] = None,
         wait_on_active: bool = False, wait_interval: int = 10,
-        wait_timeout: int = 600,
+        wait_timeout: int = 600, add_endpoint_to_firewall_ranges: bool = True,
     ) -> Workspace:
         """
         Create a new workspace.
@@ -1352,6 +1353,9 @@ class WorkspaceGroup(object):
             if wait=True
         wait_interval : int, optional
             Number of seconds between each polling interval
+        add_endpoint_to_firewall_ranges : bool, optional
+            Should the workspace endpoint be added to the workspace group
+            firewall ranges?
 
         Returns
         -------
@@ -1362,10 +1366,17 @@ class WorkspaceGroup(object):
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
-        return self._manager.create_workspace(
+
+        out = self._manager.create_workspace(
             name=name, workspace_group=self, size=size, wait_on_active=wait_on_active,
             wait_interval=wait_interval, wait_timeout=wait_timeout,
         )
+
+        if add_endpoint_to_firewall_ranges and out.endpoint is not None:
+            ip_address = '{}/32'.format(socket.gethostbyname(out.endpoint))
+            self.update(firewall_ranges=self.firewall_ranges+[ip_address])
+
+        return out
 
     @property
     def workspaces(self) -> NamedList[Workspace]:
