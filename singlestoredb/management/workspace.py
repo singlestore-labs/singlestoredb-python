@@ -32,6 +32,11 @@ from .utils import ttl_property
 from .utils import vars_to_str
 
 
+def get_secret(name: str) -> str:
+    """Get a secret from the organization."""
+    return manage_workspaces().organization.get_secret(name).value
+
+
 class StageObject(object):
     """
     Stage file / folder object.
