@@ -57,14 +57,15 @@ class Manager(object):
         base_url: Optional[str] = None, *, organization_id: Optional[str] = None,
     ):
         from .. import __version__ as client_version
-        access_token = (
+        new_access_token = (
             access_token or get_token()
         )
-        if not access_token:
+        if not new_access_token:
             raise ManagementError(msg='No management token was configured.')
+        self._is_jwt = not access_token and new_access_token and is_jwt(new_access_token)
         self._sess = requests.Session()
         self._sess.headers.update({
-            'Authorization': f'Bearer {access_token}',
+            'Authorization': f'Bearer {new_access_token}',
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'User-Agent': f'SingleStoreDB-Python/{client_version}',
@@ -116,6 +117,9 @@ class Manager(object):
         **kwargs: Any,
     ) -> requests.Response:
         """Perform HTTP request."""
+        # Refresh the JWT as needed
+        if self._is_jwt:
+            self._sess.headers.update({'Authorization': f'Bearer {get_token()}'})
         return getattr(self._sess, method.lower())(
             urljoin(self._base_url, path), *args, **kwargs,
         )
