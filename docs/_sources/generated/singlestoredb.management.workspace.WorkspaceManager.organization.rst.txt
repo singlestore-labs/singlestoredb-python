@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.WorkspaceManager.organization
+================================================================
+.. currentmodule:: singlestoredb.management.workspace
+.. autoproperty:: WorkspaceManager.organization

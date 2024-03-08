@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.0.2 - March, 8 2024
+----------------------
+* Add ``singlestoredb.management.get_secret`` function
+* Add ``add_endpoint_to_firewall_ranges=`` parameter to ``create_workspace``
+
 v1.0.1 - February, 16 2024
 --------------------------
 * Fix issues in Fusion SQL Stage commands
