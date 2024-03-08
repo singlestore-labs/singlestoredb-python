@@ -84,7 +84,7 @@ jobs:
       - name: Build sdist
         if: runner.os == 'Linux'
         run: |
-          python -m build --sdist
+          python -m build --sdist --no-isolation
 
       - name: Set up QEMU
         if: runner.os == 'Linux'
