@@ -18,7 +18,7 @@ An example of starting a server is shown below.
 
 Example
 -------
-$ SINGLESTOREDB_EXT_FUNCTIONS='myfuncs.[percentage_90,percentage_95]' \
+$ SINGLESTOREDB_EXT_FUNCTIONS='myfuncs.[percentile_90,percentile_95]' \
     uvicorn --factory singlestoredb.functions.ext:create_app
 
 '''
