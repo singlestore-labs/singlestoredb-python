@@ -149,6 +149,7 @@ def _handle_request(app: Any, connection: Any, client_address: Any) -> None:
             # Write results
             buf = out.getbuffer()
             response_size = len(buf)
+            ofile.truncate(max(128*1024, response_size))
             ofile.write(buf)
             ofile.flush()
 
@@ -159,10 +160,12 @@ def _handle_request(app: Any, connection: Any, client_address: Any) -> None:
             connection.send(struct.pack('<qq', 200, response_size))
 
         except Exception as exc:
-            logger.error(f'error occurred in executing function `{name}`: {exc}')
+            errmsg = f'error occurred in executing function `{name}`: {exc}\n'
             for line in traceback.format_exception(exc):  # type: ignore
-                logger.error(line.rstrip())
-            connection.send(struct.pack('<qq', 500, 0))
+                errmsg += line.rstrip() + '\n'
+            logger.error(errmsg)
+            errlen = len(errmsg)
+            connection.send(struct.pack(f'<qq{errlen}s', 500, str.encode(errmsg)))
             break
 
         finally:
