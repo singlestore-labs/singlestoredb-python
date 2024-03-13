@@ -131,9 +131,9 @@ def _handle_request(app: Any, connection: Any, client_address: Any) -> None:
 
         # Read row data
         response_size = 0
-        ofile.seek(0)
         out = io.BytesIO()
 
+        ifile.seek(0)
         try:
             # Run the function
             asyncio.run(
@@ -150,6 +150,7 @@ def _handle_request(app: Any, connection: Any, client_address: Any) -> None:
             buf = out.getbuffer()
             response_size = len(buf)
             ofile.truncate(max(128*1024, response_size))
+            ofile.seek(0)
             ofile.write(buf)
             ofile.flush()
 
@@ -161,11 +162,15 @@ def _handle_request(app: Any, connection: Any, client_address: Any) -> None:
 
         except Exception as exc:
             errmsg = f'error occurred in executing function `{name}`: {exc}\n'
-            for line in traceback.format_exception(exc):  # type: ignore
-                errmsg += line.rstrip() + '\n'
             logger.error(errmsg.rstrip())
-            errlen = len(errmsg)
-            connection.send(struct.pack(f'<qq{errlen}s', 500, str.encode(errmsg)))
+            for line in traceback.format_exception(exc):  # type: ignore
+                logger.error(line.rstrip())
+            connection.send(
+                struct.pack(
+                    f'<qq{len(errmsg)}s', 500,
+                    len(errmsg), errmsg.encode('utf8'),
+                ),
+            )
             break
 
         finally:
