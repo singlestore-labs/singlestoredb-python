@@ -44,6 +44,7 @@ import asyncio
 import io
 import logging
 import mmap
+import multiprocessing
 import os
 import secrets
 import socket
@@ -217,6 +218,10 @@ if __name__ == '__main__':
         help='logging level',
     )
     parser.add_argument(
+        '--process-mode', metavar='[thread|subprocess]', default='subprocess',
+        help='how to handle concurrent handlers',
+    )
+    parser.add_argument(
         'functions', metavar='module.or.func.path', nargs='*',
         help='functions or modules to export in UDF server',
     )
@@ -271,11 +276,16 @@ if __name__ == '__main__':
             # Listen for the next connection on our port.
             connection, client_address = server.accept()
 
-            # Handle the connection in a separate thread.
-            t = threading.Thread(
+            if args.process_mode == 'thread':
+                tcls = threading.Thread
+            else:
+                tcls = multiprocessing.Process  # type: ignore
+
+            t = tcls(
                 target=_handle_request,
                 args=(app, connection, client_address),
             )
+
             t.start()
 
             # NOTE: The following line forces this process to handle requests
