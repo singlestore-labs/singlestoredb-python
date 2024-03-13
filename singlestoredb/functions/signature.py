@@ -613,6 +613,8 @@ def signature_to_sql(
     signature: Dict[str, Any],
     base_url: Optional[str] = None,
     data_format: str = 'rowdat_1',
+    app_mode: str = 'remote',
+    replace: bool = False,
 ) -> str:
     '''
     Convert a dictionary function signature into SQL.
@@ -646,18 +648,24 @@ def signature_to_sql(
     host = os.environ.get('SINGLESTOREDB_EXT_HOST', '127.0.0.1')
     port = os.environ.get('SINGLESTOREDB_EXT_PORT', '8000')
 
-    url = urljoin(base_url or f'https://{host}:{port}', signature['endpoint'])
+    if app_mode.lower() == 'remote':
+        url = urljoin(base_url or f'https://{host}:{port}', signature['endpoint'])
+    elif base_url is None:
+        raise ValueError('base_url can not be `None`')
+    else:
+        url = base_url
 
     database = ''
     if signature.get('database'):
         database = escape_name(signature['database']) + '.'
 
-    replace = 'OR REPLACE ' if signature.get('replace') else ''
+    or_replace = 'OR REPLACE ' if (bool(signature.get('replace')) or replace) else ''
 
     return (
-        f'CREATE {replace}EXTERNAL FUNCTION {database}{escape_name(signature["name"])}' +
+        f'CREATE {or_replace}EXTERNAL FUNCTION ' +
+        f'{database}{escape_name(signature["name"])}' +
         '(' + ', '.join(args) + ')' + returns +
-        f' AS REMOTE SERVICE "{url}" FORMAT {data_format.upper()};'
+        f' AS {app_mode.upper()} SERVICE "{url}" FORMAT {data_format.upper()};'
     )
 
 

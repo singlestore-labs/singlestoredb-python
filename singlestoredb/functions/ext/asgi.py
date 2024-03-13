@@ -18,7 +18,7 @@ An example of starting a server is shown below.
 
 Example
 -------
-$ SINGLESTOREDB_EXT_FUNCTIONS='myfuncs.[percentile_90,percentile_95]' \
+$ SINGLESTOREDB_EXT_FUNCTIONS='myfuncs.[percentage_90,percentage_95]' \
     uvicorn --factory singlestoredb.functions.ext:create_app
 
 '''
@@ -196,8 +196,10 @@ def create_app(  # noqa: C901
             Iterable[ModuleType],
         ]
     ] = None,
-
-
+    app_mode: str = 'remote',
+    base_url: str = 'http://localhost:8000',
+    data_format: str = 'rowdat_1',
+    data_version: str = '1.0',
 ) -> Callable[..., Any]:
     '''
     Create an external function application.
@@ -497,16 +499,22 @@ def create_app(  # noqa: C901
         await send(out)
 
     def show_create_functions(
-        base_url: str = 'http://localhost:8000',
-        data_format: str = 'rowdat_1',
+        base_url: str = base_url,
+        data_format: str = data_format,
+        app_mode: str = app_mode,
+        replace: bool = False,
     ) -> List[str]:
         out = []
+        if app_mode.lower() == 'remote':
+            base_url = urllib.parse.urljoin(base_url, '/invoke')
         for key, endpoint in endpoints.items():
             out.append(
                 signature_to_sql(
                     endpoint._ext_func_signature,  # type: ignore
-                    base_url=urllib.parse.urljoin(base_url, '/invoke'),
+                    base_url=base_url,
                     data_format=data_format,
+                    app_mode=app_mode,
+                    replace=replace,
                 ),
             )
         return out
@@ -515,8 +523,10 @@ def create_app(  # noqa: C901
 
     def register_functions(
         *connection_args: Any,
-        base_url: str = 'http://localhost:8000',
-        data_format: str = 'rowdat_1',
+        base_url: str = base_url,
+        data_format: str = data_format,
+        app_mode: str = app_mode,
+        replace: bool = False,
         **connection_kwargs: Any,
     ) -> None:
         with connection.connect(*connection_args, **connection_kwargs) as conn:
@@ -524,6 +534,8 @@ def create_app(  # noqa: C901
                 for func in app.show_create_functions(  # type: ignore
                                 base_url=base_url,
                                 data_format=data_format,
+                                app_mode=app_mode,
+                                replace=replace,
                 ):  # type: ignore
                     cur.execute(func)
 
@@ -544,8 +556,8 @@ def create_app(  # noqa: C901
         name: str,
         data_in: io.BytesIO,
         data_out: io.BytesIO,
-        data_format: str = 'rowdat_1',
-        data_version: str = '1.0',
+        data_format: str = data_format,
+        data_version: str = data_version,
     ) -> None:
 
         async def receive() -> Dict[str, Any]:
