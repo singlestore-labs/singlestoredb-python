@@ -163,7 +163,7 @@ def _handle_request(app: Any, connection: Any, client_address: Any) -> None:
             errmsg = f'error occurred in executing function `{name}`: {exc}\n'
             for line in traceback.format_exception(exc):  # type: ignore
                 errmsg += line.rstrip() + '\n'
-            logger.error(errmsg)
+            logger.error(errmsg.rstrip())
             errlen = len(errmsg)
             connection.send(struct.pack(f'<qq{errlen}s', 500, str.encode(errmsg)))
             break
