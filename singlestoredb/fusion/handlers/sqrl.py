@@ -1,4 +1,5 @@
 import requests
+import os
 
 from typing import Any
 from typing import Dict
@@ -14,28 +15,32 @@ class SqrlExplain(SQLHandler):
     string_value = '<string-value>'
 
     """
+    INKEEP_API_KEY = os.getenv('INKEEP_API_KEY')
+    INKEEP_INTEGRATION_ID = os.environ.get('INKEEP_INTEGRATION_ID')
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         prompt = "Explain me this SQL query:" + params['string_value']
         apiUrl = "https://api.inkeep.com/v0/chat_sessions/chat_results"
-        
-        resp=  requests.post(apiUrl,
-        headers={
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + env.inkeepAPIKey,
-        },
-        json={
-            "integration_id": env.inkeepIntegrationId,
-            "chat_session": {
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-               },
-           "stream": False
-        },) 
+
+        resp=  requests.post(
+            apiUrl,
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + INKEEP_API_KEY,
+            },
+            json={
+                "integration_id": INKEEP_INTEGRATION_ID,
+                "chat_session": {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
+                },
+            "stream": False
+            },
+        ) 
  
         if resp.status_code != 200:
             raise ValueError(f'an error occurred: {res.text}')
