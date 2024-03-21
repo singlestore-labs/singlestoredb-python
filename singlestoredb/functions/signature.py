@@ -614,6 +614,7 @@ def signature_to_sql(
     base_url: Optional[str] = None,
     data_format: str = 'rowdat_1',
     app_mode: str = 'remote',
+    link: Optional[str] = None,
     replace: bool = False,
 ) -> str:
     '''
@@ -661,11 +662,18 @@ def signature_to_sql(
 
     or_replace = 'OR REPLACE ' if (bool(signature.get('replace')) or replace) else ''
 
+    link_str = ''
+    if link:
+        if not re.match(r'^[\w_]+$', link):
+            raise ValueError(f'invalid LINK name: {link}')
+        link_str = f' LINK {link}'
+
     return (
         f'CREATE {or_replace}EXTERNAL FUNCTION ' +
         f'{database}{escape_name(signature["name"])}' +
         '(' + ', '.join(args) + ')' + returns +
-        f' AS {app_mode.upper()} SERVICE "{url}" FORMAT {data_format.upper()};'
+        f' AS {app_mode.upper()} SERVICE "{url}" FORMAT {data_format.upper()}'
+        f'{link_str};'
     )
 
 

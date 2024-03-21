@@ -25,7 +25,9 @@ $ SINGLESTOREDB_EXT_FUNCTIONS='myfuncs.[percentage_90,percentage_95]' \
 import importlib.util
 import io
 import itertools
+import json
 import os
+import secrets
 import urllib
 from types import ModuleType
 from typing import Any
@@ -498,15 +500,44 @@ def create_app(  # noqa: C901
         out['body'] = body
         await send(out)
 
+    links: List[str] = []
+
+    def _create_link(
+        config: Optional[Dict[str, Any]],
+        credentials: Optional[Dict[str, Any]],
+    ) -> Tuple[str, str]:
+        """Generate CREATE LINK command."""
+        if not config and not credentials:
+            return '', ''
+
+        link_name = f'link_{secrets.token_hex(16)}'
+        out = [f'CREATE LINK {link_name} AS HTTP']
+
+        if config:
+            out.append(f"CONFIG '{json.dumps(config)}'")
+
+        if credentials:
+            out.append(f"CREDENTIALS '{json.dumps(credentials)}'")
+
+        return link_name, ' '.join(out) + ';'
+
     def show_create_functions(
         base_url: str = base_url,
         data_format: str = data_format,
         app_mode: str = app_mode,
         replace: bool = False,
+        link_config: Optional[Dict[str, Any]] = None,
+        link_credentials: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
+        """Generate CREATE FUNCTION calls."""
         out = []
+        link = ''
         if app_mode.lower() == 'remote':
             base_url = urllib.parse.urljoin(base_url, '/invoke')
+            link, link_str = _create_link(link_config, link_credentials)
+            if link and link_str:
+                links.append(link)
+                out.append(link_str)
         for key, endpoint in endpoints.items():
             out.append(
                 signature_to_sql(
@@ -515,6 +546,7 @@ def create_app(  # noqa: C901
                     data_format=data_format,
                     app_mode=app_mode,
                     replace=replace,
+                    link=link or None,
                 ),
             )
         return out
@@ -527,8 +559,11 @@ def create_app(  # noqa: C901
         data_format: str = data_format,
         app_mode: str = app_mode,
         replace: bool = False,
+        link_config: Optional[Dict[str, Any]] = None,
+        link_credentials: Optional[Dict[str, Any]] = None,
         **connection_kwargs: Any,
     ) -> None:
+        """Register functions with the database."""
         with connection.connect(*connection_args, **connection_kwargs) as conn:
             with conn.cursor() as cur:
                 for func in app.show_create_functions(  # type: ignore
@@ -536,6 +571,8 @@ def create_app(  # noqa: C901
                                 data_format=data_format,
                                 app_mode=app_mode,
                                 replace=replace,
+                                link_config=link_config,
+                                link_credentials=link_credentials,
                 ):  # type: ignore
                     cur.execute(func)
 
@@ -545,8 +582,12 @@ def create_app(  # noqa: C901
         *connection_args: Any,
         **connection_kwargs: Any,
     ) -> None:
+        """Drop registered functions from database."""
         with connection.connect(*connection_args, **connection_kwargs) as conn:
             with conn.cursor() as cur:
+                for link in links:
+                    cur.execute(f'DROP LINK {link}')
+                links[:] = []
                 for key in endpoints.keys():
                     cur.execute(f'DROP FUNCTION IF EXISTS `{key.decode("utf8")}`')
 
