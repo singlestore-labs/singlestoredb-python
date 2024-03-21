@@ -253,6 +253,18 @@ register_option(
     environ=['SINGLESTOREDB_MANAGEMENT_TOKEN'],
 )
 
+register_option(
+    'management.base_url', 'string', check_str, 'https://api.singlestore.com',
+    'Specifies the base URL for the management API.',
+    environ=['SINGLESTOREDB_MANAGEMENT_BASE_URL'],
+)
+
+register_option(
+    'management.version', 'string', check_str, 'v1',
+    'Specifies the version for the management API.',
+    environ=['SINGLESTOREDB_MANAGEMENT_VERSION'],
+)
+
 
 #
 # Debugging options
