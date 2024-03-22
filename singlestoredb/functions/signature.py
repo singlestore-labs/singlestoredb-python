@@ -16,7 +16,6 @@ from typing import Sequence
 from typing import Tuple
 from typing import TypeVar
 from typing import Union
-from urllib.parse import urljoin
 
 try:
     import numpy as np
@@ -611,7 +610,7 @@ def dtype_to_sql(dtype: str, default: Any = None) -> str:
 
 def signature_to_sql(
     signature: Dict[str, Any],
-    base_url: Optional[str] = None,
+    url: Optional[str] = None,
     data_format: str = 'rowdat_1',
     app_mode: str = 'remote',
     link: Optional[str] = None,
@@ -650,11 +649,9 @@ def signature_to_sql(
     port = os.environ.get('SINGLESTOREDB_EXT_PORT', '8000')
 
     if app_mode.lower() == 'remote':
-        url = urljoin(base_url or f'https://{host}:{port}', signature['endpoint'])
-    elif base_url is None:
-        raise ValueError('base_url can not be `None`')
-    else:
-        url = base_url
+        url = url or f'https://{host}:{port}/invoke'
+    elif url is None:
+        raise ValueError('url can not be `None`')
 
     database = ''
     if signature.get('database'):

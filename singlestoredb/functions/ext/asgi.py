@@ -28,7 +28,6 @@ import itertools
 import json
 import os
 import secrets
-import urllib
 from types import ModuleType
 from typing import Any
 from typing import Awaitable
@@ -199,9 +198,11 @@ def create_app(  # noqa: C901
         ]
     ] = None,
     app_mode: str = 'remote',
-    base_url: str = 'http://localhost:8000',
+    url: str = 'http://localhost:8000/invoke',
     data_format: str = 'rowdat_1',
     data_version: str = '1.0',
+    link_config: Optional[Dict[str, Any]] = None,
+    link_credentials: Optional[Dict[str, Any]] = None,
 ) -> Callable[..., Any]:
     '''
     Create an external function application.
@@ -473,7 +474,7 @@ def create_app(  # noqa: C901
         # Handle api reflection
         elif method == 'GET' and path == show_create_function_path:
             host = headers.get(b'host', b'localhost:80')
-            url = f'{scope["scheme"]}://{host.decode("utf-8")}/invoke'
+            reflected_url = f'{scope["scheme"]}://{host.decode("utf-8")}/invoke'
             data_format = 'json' if b'json' in content_type else 'rowdat_1'
 
             syntax = []
@@ -482,7 +483,7 @@ def create_app(  # noqa: C901
                     syntax.append(
                         signature_to_sql(
                             endpoint._ext_func_signature,  # type: ignore
-                            base_url=url,
+                            url=url or reflected_url,
                             data_format=data_format,
                         ),
                     )
@@ -521,19 +522,24 @@ def create_app(  # noqa: C901
 
         return link_name, ' '.join(out) + ';'
 
+    def _drop_links(cur: Any) -> None:
+        while links:
+            cur.execute(f'DROP LINK {links.pop()}')
+
     def show_create_functions(
-        base_url: str = base_url,
+        url: str = url,
         data_format: str = data_format,
         app_mode: str = app_mode,
         replace: bool = False,
-        link_config: Optional[Dict[str, Any]] = None,
-        link_credentials: Optional[Dict[str, Any]] = None,
+        link_config: Optional[Dict[str, Any]] = link_config,
+        link_credentials: Optional[Dict[str, Any]] = link_credentials,
     ) -> List[str]:
         """Generate CREATE FUNCTION calls."""
+        if not endpoints:
+            return []
         out = []
         link = ''
         if app_mode.lower() == 'remote':
-            base_url = urllib.parse.urljoin(base_url, '/invoke')
             link, link_str = _create_link(link_config, link_credentials)
             if link and link_str:
                 links.append(link)
@@ -542,7 +548,7 @@ def create_app(  # noqa: C901
             out.append(
                 signature_to_sql(
                     endpoint._ext_func_signature,  # type: ignore
-                    base_url=base_url,
+                    url=url,
                     data_format=data_format,
                     app_mode=app_mode,
                     replace=replace,
@@ -555,19 +561,21 @@ def create_app(  # noqa: C901
 
     def register_functions(
         *connection_args: Any,
-        base_url: str = base_url,
+        url: str = url,
         data_format: str = data_format,
         app_mode: str = app_mode,
         replace: bool = False,
-        link_config: Optional[Dict[str, Any]] = None,
-        link_credentials: Optional[Dict[str, Any]] = None,
+        link_config: Optional[Dict[str, Any]] = link_config,
+        link_credentials: Optional[Dict[str, Any]] = link_credentials,
         **connection_kwargs: Any,
     ) -> None:
         """Register functions with the database."""
         with connection.connect(*connection_args, **connection_kwargs) as conn:
             with conn.cursor() as cur:
+                if replace:
+                    _drop_links(cur)
                 for func in app.show_create_functions(  # type: ignore
-                                base_url=base_url,
+                                url=url,
                                 data_format=data_format,
                                 app_mode=app_mode,
                                 replace=replace,
@@ -583,11 +591,11 @@ def create_app(  # noqa: C901
         **connection_kwargs: Any,
     ) -> None:
         """Drop registered functions from database."""
+        if not endpoints:
+            return
         with connection.connect(*connection_args, **connection_kwargs) as conn:
             with conn.cursor() as cur:
-                for link in links:
-                    cur.execute(f'DROP LINK {link}')
-                links[:] = []
+                _drop_links(cur)
                 for key in endpoints.keys():
                     cur.execute(f'DROP FUNCTION IF EXISTS `{key.decode("utf8")}`')
 

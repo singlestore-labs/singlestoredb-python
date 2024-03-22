@@ -241,7 +241,7 @@ if __name__ == '__main__':
         args.functions,
         app_mode='collocated',
         data_format='rowdat_1',
-        base_url=args.socket_path,
+        url=args.socket_path,
     )
 
     funcs = app.show_create_functions(replace=True)  # type: ignore
