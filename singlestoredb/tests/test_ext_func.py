@@ -67,7 +67,7 @@ def start_http_server(database, data_format='rowdat_1'):
 
     app = create_app(ext_funcs)
     app.register_functions(
-        base_url=f'http://{HTTP_HOST}:{port}',
+        url=f'http://{HTTP_HOST}:{port}/invoke',
         database=database,
         data_format=data_format,
     )
