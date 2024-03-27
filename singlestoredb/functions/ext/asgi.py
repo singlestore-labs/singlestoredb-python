@@ -38,6 +38,7 @@ from typing import Iterable
 from typing import List
 from typing import Optional
 from typing import Sequence
+from typing import Set
 from typing import Tuple
 from typing import Union
 
@@ -535,7 +536,7 @@ def create_app(  # noqa: C901
 
         return link_name, ' '.join(out) + ';'
 
-    def _locate_app_functions(cur: Any) -> Tuple[set[str], set[str]]:
+    def _locate_app_functions(cur: Any) -> Tuple[Set[str], Set[str]]:
         """Locate all current functions and links belonging to this app."""
         funcs, links = set(), set()
         cur.execute('SHOW FUNCTIONS')
