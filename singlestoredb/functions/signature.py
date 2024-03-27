@@ -5,7 +5,6 @@ import numbers
 import os
 import re
 import string
-import textwrap
 import typing
 from typing import Any
 from typing import Callable
@@ -671,25 +670,4 @@ def signature_to_sql(
         '(' + ', '.join(args) + ')' + returns +
         f' AS {app_mode.upper()} SERVICE "{url}" FORMAT {data_format.upper()}'
         f'{link_str};'
-    )
-
-
-def func_to_env(func: Callable[..., Any]) -> str:
-    # TODO: multiple functions
-    signature = get_signature(func)
-    env_name = signature['environment']
-    replace = 'OR REPLACE ' if signature.get('replace') else ''
-    packages = ', '.join(escape_item(x, 'utf8') for x in signature.get('packages', []))
-    resources = ', '.join(escape_item(x, 'utf8') for x in signature.get('resources', []))
-    code = inspect.getsource(func)
-
-    return (
-        f'CREATE {replace}ENVIRONMENT {env_name} LANGUAGE PYTHON ' +
-        'USING EXPORTS ' + escape_name(func.__name__) + ' ' +
-        (f'\n    PACKAGES ({packages}) ' if packages else '') +
-        (f'\n    RESOURCES ({resources}) ' if resources else '') +
-        '\n    AS CLOUD SERVICE' +
-        '\n    BEGIN\n' +
-        textwrap.indent(code, '    ') +
-        '    END;'
     )

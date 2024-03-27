@@ -22,18 +22,8 @@ def udf(
     func: Optional[Callable[..., Any]] = None,
     *,
     name: Optional[str] = None,
-    database: Optional[str] = None,
-    environment: Optional[str] = None,
-    packages: Optional[Union[str, List[str]]] = None,
-    resources: Optional[Union[str, List[str]]] = None,
-    max_batch_size: int = 500,
-    n_processes: int = 1,
-    n_instances: int = 1,
     args: Optional[Union[DataType, List[DataType], Dict[str, DataType]]] = None,
     returns: Optional[str] = None,
-    replace: bool = False,
-    remote_service: Optional[str] = None,
-    link: Optional[str] = None,
     data_format: Optional[str] = None,
     include_masks: bool = False,
 ) -> Callable[..., Any]:
@@ -46,27 +36,6 @@ def udf(
         The UDF to apply parameters to
     name : str, optional
         The name to use for the UDF in the database
-    database : str, optional
-        The database to create the functions in
-    environment : str, optional
-        The environment to create for the functions
-    packages : str or list-of-strs, optional
-        The package dependency specifications. Strings must be in the
-        format used in requirements.txt files.
-    max_match_size : int, optional
-        The number of rows to batch in the server before sending
-        them to the UDF application
-    n_processes : int, optional
-        The number of sub-processes to spin up to process sub-batches
-        of rows of data. This may be used if the UDF is CPU-intensive
-        and there are free CPUs in the server the web application
-        is running in. If the UDF is very short-running, setting this
-        parameter to greater than one will likey cause the UDF to
-        run slower since the overhead of the extra processes and moving
-        data would be the limiting factor.
-    n_instances : int, optional
-        The number of runtime environments to use to handle data
-        processing requests
     args : str | Callable | List[str | Callable] | Dict[str, str | Callable], optional
         Specifies the data types of the function arguments. Typically,
         the function data types are derived from the function parameter
@@ -83,14 +52,6 @@ def udf(
     returns : str, optional
         Specifies the return data type of the function. If not specified,
         the type annotation from the function is used.
-    replace : bool, optional
-        Should an existing function of the same name be replaced when
-        creating the function in the database?
-    remote_service : str, optional
-        URL of the remote service that handles this function. If using an
-        environment, this URL is generated automatically.
-    link : str, optional
-        Name of link to use to connect to remote service
     data_format : str, optional
         The data format of each parameter: python, pandas, arrow, polars
     include_masks : bool, optional
@@ -103,10 +64,6 @@ def udf(
     Callable
 
     """
-    assert max_batch_size >= 1
-    assert n_processes >= 1
-    assert n_instances >= 1
-
     if args is None:
         pass
     elif isinstance(args, (list, tuple)):
@@ -153,18 +110,8 @@ def udf(
     _singlestoredb_attrs = {  # type: ignore
         k: v for k, v in dict(
             name=name,
-            database=database,
-            environment=environment,
-            packages=listify(packages),
-            resources=listify(resources),
-            max_batch_size=max(1, int(max_batch_size)),
-            n_processes=max(1, int(n_processes)),
-            n_instances=max(1, int(n_instances)),
             args=args,
             returns=returns,
-            replace=bool(replace),
-            remote_service=remote_service,
-            link=link,
             data_format=data_format,
             include_masks=include_masks,
         ).items() if v is not None

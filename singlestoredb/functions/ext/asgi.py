@@ -27,6 +27,7 @@ import io
 import itertools
 import json
 import os
+import re
 import secrets
 from types import ModuleType
 from typing import Any
@@ -221,6 +222,20 @@ def create_app(  # noqa: C901
             * Multiple functions : <pkg1>.[<func1-name,func2-name,...]
             * Function aliases : <pkg1>.[<func1@alias1,func2@alias2,...]
             * Multiple packages : <pkg1>.<func1>:<pkg2>.<func2>
+    app_mode : str, optional
+        The mode of operation for the application: remote or collocated
+    url : str, optional
+        The URL of the function API
+    data_format : str, optional
+        The format of the data rows: 'rowdat_1' or 'json'
+    data_version : str, optional
+        The version of the call format to expect: '1.0'
+    link_config : Dict[str, Any], optional
+        The CONFIG section of a LINK definition. This dictionary gets
+        converted to JSON for the CREATE LINK call.
+    link_credentials : Dict[str, Any], optional
+        The CREDENTIALS section of a LINK definition. This dictionary gets
+        converted to JSON for the CREATE LINK call.
 
     Returns
     -------
@@ -501,8 +516,6 @@ def create_app(  # noqa: C901
         out['body'] = body
         await send(out)
 
-    links: List[str] = []
-
     def _create_link(
         config: Optional[Dict[str, Any]],
         credentials: Optional[Dict[str, Any]],
@@ -522,9 +535,23 @@ def create_app(  # noqa: C901
 
         return link_name, ' '.join(out) + ';'
 
-    def _drop_links(cur: Any) -> None:
-        while links:
-            cur.execute(f'DROP LINK {links.pop()}')
+    def _locate_app_functions(cur: Any) -> Tuple[set[str], set[str]]:
+        """Locate all current functions and links belonging to this app."""
+        funcs, links = set(), set()
+        cur.execute('SHOW FUNCTIONS')
+        for name, ftype, _, _, _, link in list(cur):
+            # Only look at external functions
+            if 'external' not in ftype.lower():
+                continue
+            # See if function URL matches url
+            cur.execute(f'SHOW CREATE FUNCTION `{name}`')
+            for fname, _, code, *_ in list(cur):
+                m = re.search(r" (?:\w+) SERVICE '([^']+)'", code)
+                if m and m.group(1) == url:
+                    funcs.add(fname)
+                    if link:
+                        links.add(link)
+        return funcs, links
 
     def show_create_functions(
         url: str = url,
@@ -537,13 +564,14 @@ def create_app(  # noqa: C901
         """Generate CREATE FUNCTION calls."""
         if not endpoints:
             return []
+
         out = []
         link = ''
         if app_mode.lower() == 'remote':
             link, link_str = _create_link(link_config, link_credentials)
             if link and link_str:
-                links.append(link)
                 out.append(link_str)
+
         for key, endpoint in endpoints.items():
             out.append(
                 signature_to_sql(
@@ -555,6 +583,7 @@ def create_app(  # noqa: C901
                     link=link or None,
                 ),
             )
+
         return out
 
     app.show_create_functions = show_create_functions  # type: ignore
@@ -573,7 +602,11 @@ def create_app(  # noqa: C901
         with connection.connect(*connection_args, **connection_kwargs) as conn:
             with conn.cursor() as cur:
                 if replace:
-                    _drop_links(cur)
+                    funcs, links = _locate_app_functions(cur)
+                    for fname in funcs:
+                        cur.execute(f'DROP FUNCTION IF EXISTS `{fname}`')
+                    for link in links:
+                        cur.execute(f'DROP LINK {link}')
                 for func in app.show_create_functions(  # type: ignore
                                 url=url,
                                 data_format=data_format,
@@ -595,9 +628,11 @@ def create_app(  # noqa: C901
             return
         with connection.connect(*connection_args, **connection_kwargs) as conn:
             with conn.cursor() as cur:
-                _drop_links(cur)
-                for key in endpoints.keys():
-                    cur.execute(f'DROP FUNCTION IF EXISTS `{key.decode("utf8")}`')
+                funcs, links = _locate_app_functions(cur)
+                for fname in funcs:
+                    cur.execute(f'DROP FUNCTION IF EXISTS `{fname}`')
+                for link in links:
+                    cur.execute(f'DROP LINK {link}')
 
     app.drop_functions = drop_functions  # type: ignore
 

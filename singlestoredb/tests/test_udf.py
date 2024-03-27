@@ -412,17 +412,6 @@ class TestUDF(unittest.TestCase):
         assert to_sql(foo) == '`hello``_``world`(`x` BIGINT NOT NULL) ' \
                               'RETURNS BIGINT NOT NULL'
 
-        # Add database name
-        @udf(database='mydb')
-        def foo(x: int) -> int: ...
-        assert to_sql(foo) == '`mydb`.`foo`(`x` BIGINT NOT NULL) ' \
-                              'RETURNS BIGINT NOT NULL'
-
-        @udf(database='my`db')
-        def foo(x: int) -> int: ...
-        assert to_sql(foo) == '`my``db`.`foo`(`x` BIGINT NOT NULL) ' \
-                              'RETURNS BIGINT NOT NULL'
-
     def test_dtypes(self):
         assert dt.BOOL() == 'BOOL NULL'
         assert dt.BOOL(nullable=False) == 'BOOL NOT NULL'
