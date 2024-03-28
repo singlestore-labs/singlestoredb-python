@@ -65,11 +65,13 @@ def start_http_server(database, data_format='rowdat_1'):
         time.sleep(3)
         retries -= 1
 
-    app = create_app(ext_funcs)
-    app.register_functions(
+    app = create_app(
+        ext_funcs,
         url=f'http://{HTTP_HOST}:{port}/invoke',
-        database=database,
         data_format=data_format,
+    )
+    app.register_functions(
+        database=database,
     )
 
     with s2.connect(database=database) as conn:
