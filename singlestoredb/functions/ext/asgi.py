@@ -555,12 +555,7 @@ def create_app(  # noqa: C901
         return funcs, links
 
     def show_create_functions(
-        url: str = url,
-        data_format: str = data_format,
-        app_mode: str = app_mode,
         replace: bool = False,
-        link_config: Optional[Dict[str, Any]] = link_config,
-        link_credentials: Optional[Dict[str, Any]] = link_credentials,
     ) -> List[str]:
         """Generate CREATE FUNCTION calls."""
         if not endpoints:
@@ -591,12 +586,7 @@ def create_app(  # noqa: C901
 
     def register_functions(
         *connection_args: Any,
-        url: str = url,
-        data_format: str = data_format,
-        app_mode: str = app_mode,
         replace: bool = False,
-        link_config: Optional[Dict[str, Any]] = link_config,
-        link_credentials: Optional[Dict[str, Any]] = link_credentials,
         **connection_kwargs: Any,
     ) -> None:
         """Register functions with the database."""
@@ -625,8 +615,6 @@ def create_app(  # noqa: C901
         **connection_kwargs: Any,
     ) -> None:
         """Drop registered functions from database."""
-        if not endpoints:
-            return
         with connection.connect(*connection_args, **connection_kwargs) as conn:
             with conn.cursor() as cur:
                 funcs, links = _locate_app_functions(cur)
