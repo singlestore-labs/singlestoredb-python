@@ -598,14 +598,7 @@ def create_app(  # noqa: C901
                         cur.execute(f'DROP FUNCTION IF EXISTS `{fname}`')
                     for link in links:
                         cur.execute(f'DROP LINK {link}')
-                for func in app.show_create_functions(  # type: ignore
-                                url=url,
-                                data_format=data_format,
-                                app_mode=app_mode,
-                                replace=replace,
-                                link_config=link_config,
-                                link_credentials=link_credentials,
-                ):  # type: ignore
+                for func in app.show_create_functions(replace=replace):  # type: ignore
                     cur.execute(func)
 
     app.register_functions = register_functions  # type: ignore
