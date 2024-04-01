@@ -1,0 +1,63 @@
+name: Publish pure Python package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      publish_pypi:
+        description: "Publish PyPI packages on success?"
+        required: true
+        type: boolean
+        default: false
+#     publish_anaconda:
+#       description: "Publish Anaconda packages on success?"
+#       required: true
+#       type: boolean
+#       default: true
+      build_number:
+        description: "Package build number"
+        required: true
+        type: string
+        default: 0
+
+jobs:
+
+  build-and-test:
+
+    name: Build and test wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r test-requirements.txt
+
+      - name: Build pure Python package
+        if: runner.os == 'Linux'
+        run: |
+          python -m build --wheel --no-isolation
+        env:
+          SINGLESTOREDB_BUILD_EXTENSION: "0"
+
+      - name: Archive source dist and wheel
+        uses: actions/upload-artifact@v3
+        with:
+          name: artifacts
+          path: dist
+          retention-days: 2
