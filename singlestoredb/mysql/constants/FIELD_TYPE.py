@@ -30,3 +30,13 @@ GEOMETRY = 255
 CHAR = TINY
 INTERVAL = ENUM
 BOOL = TINY
+
+# SingleStoreDB-specific.
+# Only enabled when enable_extended_types_metadata=1 in the server.
+BSON = 1001
+FLOAT32_VECTOR = 2001
+FLOAT64_VECTOR = 2002
+INT8_VECTOR = 2003
+INT16_VECTOR = 2004
+INT32_VECTOR = 2005
+INT64_VECTOR = 2006

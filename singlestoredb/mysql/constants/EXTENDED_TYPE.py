@@ -1,0 +1,3 @@
+NONE = 0
+BSON = 1
+VECTOR = 2

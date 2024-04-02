@@ -216,6 +216,12 @@ register_option(
 )
 
 register_option(
+    'enable_extended_data_types', 'bool', check_bool, True,
+    'Should extended data types (BSON, vector) be enabled?',
+    environ='SINGLESTOREDB_ENABLE_EXTENDED_DATA_TYPES',
+)
+
+register_option(
     'fusion.enabled', 'bool', check_bool, False,
     'Should Fusion SQL queries be enabled?',
     environ='SINGLESTOREDB_FUSION_ENABLED',

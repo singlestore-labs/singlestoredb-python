@@ -259,6 +259,8 @@ class Connection(BaseConnection):
         uploading data?
     track_env : bool, optional
         Should the connection track the SINGLESTOREDB_URL environment variable?
+    enable_extended_data_types : bool, optional
+        Should extended data types (BSON, vector) be enabled?
 
     See `Connection <https://www.python.org/dev/peps/pep-0249/#connection-objects>`_
     in the specification.
@@ -328,6 +330,7 @@ class Connection(BaseConnection):
         inf_as_null=None,
         encoding_errors='strict',
         track_env=False,
+        enable_extended_data_types=True,
     ):
         BaseConnection.__init__(**dict(locals()))
 
@@ -609,6 +612,7 @@ class Connection(BaseConnection):
 
         self._in_sync = False
         self._track_env = bool(track_env) or self.host == 'singlestore.com'
+        self._enable_extended_data_types = enable_extended_data_types
 
         if defer_connect or self._track_env:
             self._sock = None
@@ -1068,6 +1072,14 @@ class Connection(BaseConnection):
             if self.sql_mode is not None:
                 c = self.cursor()
                 c.execute('SET sql_mode=%s', (self.sql_mode,))
+                c.close()
+
+            if self._enable_extended_data_types:
+                c = self.cursor()
+                try:
+                    c.execute('SET @@SESSION.enable_extended_types_metadata=on')
+                except self.OperationalError:
+                    pass
                 c.close()
 
             if self.init_command is not None:
