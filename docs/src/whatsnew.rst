@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.0.3 - April, 2 2024
+----------------------
+* Updates to external function application API
+* Add configuration parameter for Management API base URL
+
 v1.0.2 - March, 8 2024
 ----------------------
 * Add ``singlestoredb.management.get_secret`` function

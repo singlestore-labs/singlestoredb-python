@@ -86,6 +86,13 @@ jobs:
         run: |
           python -m build --sdist --no-isolation
 
+      - name: Build pure Python package
+        if: runner.os == 'Linux'
+        run: |
+          python -m build --wheel --no-isolation
+        env:
+          SINGLESTOREDB_BUILD_EXTENSION: "0"
+
       - name: Set up QEMU
         if: runner.os == 'Linux'
         uses: docker/setup-qemu-action@v2
