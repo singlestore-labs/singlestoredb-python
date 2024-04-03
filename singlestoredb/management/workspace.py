@@ -1170,6 +1170,7 @@ class WorkspaceGroup(object):
         region: Optional[Region],
         firewall_ranges: List[str],
         terminated_at: Optional[Union[str, datetime.datetime]],
+        allow_all_traffic: Optional[bool],
     ):
         #: Name of the workspace group
         self.name = name
@@ -1188,6 +1189,9 @@ class WorkspaceGroup(object):
 
         #: Timestamp of when the workspace group was terminated
         self.terminated_at = to_datetime(terminated_at)
+
+        #: Should all traffic be allowed?
+        self.allow_all_traffic = allow_all_traffic
 
         self._manager: Optional[WorkspaceManager] = None
 
@@ -1229,6 +1233,7 @@ class WorkspaceGroup(object):
             region=region,
             firewall_ranges=obj.get('firewallRanges', []),
             terminated_at=obj.get('terminatedAt'),
+            allow_all_traffic=obj.get('allowAllTraffic'),
         )
         out._manager = manager
         return out
@@ -1265,8 +1270,11 @@ class WorkspaceGroup(object):
 
     def update(
         self, name: Optional[str] = None,
-        admin_password: Optional[str] = None,
         firewall_ranges: Optional[List[str]] = None,
+        admin_password: Optional[str] = None,
+        expires_at: Optional[str] = None,
+        allow_all_traffic: Optional[bool] = None,
+        update_window: Optional[Dict[str, int]] = None,
     ) -> None:
         """
         Update the workspace group definition.
@@ -1274,11 +1282,24 @@ class WorkspaceGroup(object):
         Parameters
         ----------
         name : str, optional
-            Workspace group name
-        admim_password : str, optional
-            Admin password for the workspace group
-        firewall_ranges : Sequence[str], optional
-            List of allowed incoming IP addresses
+            Name of the workspace group
+        firewall_ranges : list[str], optional
+            List of allowed CIDR ranges. An empty list indicates that all
+            inbound requests are allowed.
+        admin_password : str, optional
+            Admin password for the workspace group. If no password is supplied,
+            a password will be generated and retured in the response.
+        expires_at : str, optional
+            The timestamp of when the workspace group will expire.
+            If the expiration time is not specified,
+            the workspace group will have no expiration time.
+            At expiration, the workspace group is terminated and all the data is lost.
+            Expiration time can be specified as a timestamp or duration.
+            Example: "2021-01-02T15:04:05Z07:00", "2021-01-02", "3h30m"
+        allow_all_traffic : bool, optional
+            Allow all traffic to the workspace group
+        update_window : Dict[str, int], optional
+            Specify the day and hour of an update window: dict(day=0-6, hour=0-23)
 
         """
         if self._manager is None:
@@ -1287,8 +1308,12 @@ class WorkspaceGroup(object):
             )
         data = {
             k: v for k, v in dict(
-                name=name, adminPassword=admin_password,
+                name=name,
                 firewallRanges=firewall_ranges,
+                adminPassword=admin_password,
+                expiresAt=expires_at,
+                allowAllTraffic=allow_all_traffic,
+                updateWindow=update_window,
             ).items() if v is not None
         }
         self._manager._patch(f'workspaceGroups/{self.id}', json=data)
@@ -1378,8 +1403,12 @@ class WorkspaceGroup(object):
         )
 
         if add_endpoint_to_firewall_ranges and out.endpoint is not None:
+            self.refresh()
             ip_address = '{}/32'.format(socket.gethostbyname(out.endpoint))
-            self.update(firewall_ranges=self.firewall_ranges+[ip_address])
+            self.update(
+                firewall_ranges=self.firewall_ranges+[ip_address],
+                allow_all_traffic=self.allow_all_traffic,
+            )
 
         return out
 

@@ -108,6 +108,7 @@ else:
         admin_password=options.password,
         # firewall_ranges=requests.get('https://api.github.com/meta').json()['actions'],
         firewall_ranges=['0.0.0.0/0'],
+        allow_all_traffic=True,
     )
 
 # Make sure the workspace group exists before continuing
