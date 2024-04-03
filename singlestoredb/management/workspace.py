@@ -7,7 +7,6 @@ import glob
 import io
 import os
 import re
-import socket
 import time
 from typing import Any
 from typing import BinaryIO
@@ -934,6 +933,12 @@ class Workspace(object):
         created_at: Union[str, datetime.datetime],
         terminated_at: Optional[Union[str, datetime.datetime]] = None,
         endpoint: Optional[str] = None,
+        auto_suspend: Optional[Dict[str, Any]] = None,
+        cache_config: Optional[int] = None,
+        deployment_type: Optional[str] = None,
+        resume_attachments: Optional[Dict[str, Any]] = None,
+        scaling_progress: Optional[int] = None,
+        last_resumed_at: Optional[str] = None,
     ):
         #: Name of the workspace
         self.name = name
@@ -963,6 +968,24 @@ class Workspace(object):
         #: Hostname (or IP address) of the workspace database server
         self.endpoint = endpoint
 
+        #: Current auto-suspend settings
+        self.auto_suspend = auto_suspend
+
+        #: Multiplier for the persistent cache
+        self.cache_config = cache_config
+
+        #: Deployment type of the workspace
+        self.deployment_type = deployment_type
+
+        #: Database attachments
+        self.resume_attachments = resume_attachments
+
+        #: Current progress percentage for scaling the workspace
+        self.scaling_progress = scaling_progress
+
+        #: Timestamp when workspace was last resumed
+        self.last_resumed_at = to_datetime(last_resumed_at)
+
         self._manager: Optional[WorkspaceManager] = None
 
     def __str__(self) -> str:
@@ -991,14 +1014,63 @@ class Workspace(object):
 
         """
         out = cls(
-            name=obj['name'], workspace_id=obj['workspaceID'],
+            name=obj['name'],
+            workspace_id=obj['workspaceID'],
             workspace_group=obj['workspaceGroupID'],
-            size=obj.get('size', 'Unknown'), state=obj['state'],
-            created_at=obj['createdAt'], terminated_at=obj.get('terminatedAt'),
+            size=obj.get('size', 'Unknown'),
+            state=obj['state'],
+            created_at=obj['createdAt'],
+            terminated_at=obj.get('terminatedAt'),
             endpoint=obj.get('endpoint'),
+            auto_suspend=obj.get('autoSuspend'),
+            cache_config=obj.get('cacheConfig'),
+            deployment_type=obj.get('deploymentType'),
+            last_resumed_at=obj.get('lastResumedAt'),
+            resume_attachments=obj.get('resumeAttachments'),
+            scaling_progress=obj.get('scalingProgress'),
         )
         out._manager = manager
         return out
+
+    def update(
+        self,
+        auto_suspend: Optional[Dict[str, Any]] = None,
+        cache_config: Optional[int] = None,
+        deployment_type: Optional[str] = None,
+        size: Optional[str] = None,
+    ) -> None:
+        """
+        Update the workspace definition.
+
+        Parameters
+        ----------
+        auto_suspend : Dict[str, Any], optional
+            Auto-suspend mode for the workspace: IDLE, SCHEDULED, DISABLED
+        cache_config : int, optional
+            Specifies the multiplier for the persistent cache associated
+            with the workspace. If specified, it enables the cache configuration
+            multiplier. It can have one of the following values: 1, 2, or 4.
+        deployment_type : str, optional
+            The deployment type that will be applied to all the workspaces
+            within the group
+        size : str, optional
+            Size of the workspace (in workspace size notation), such as "S-1".
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        data = {
+            k: v for k, v in dict(
+                autoSuspend=auto_suspend,
+                cacheConfig=cache_config,
+                deploymentType=deployment_type,
+                size=size,
+            ).items() if v is not None
+        }
+        self._manager._patch(f'workspaces/{self.id}', json=data)
+        self.refresh()
 
     def refresh(self) -> Workspace:
         """Update the object to the current state."""
@@ -1111,6 +1183,7 @@ class Workspace(object):
 
     def resume(
         self,
+        disable_auto_suspend: bool = False,
         wait_on_resumed: bool = False,
         wait_interval: int = 20,
         wait_timeout: int = 600,
@@ -1120,6 +1193,8 @@ class Workspace(object):
 
         Parameters
         ----------
+        disable_auto_suspend : bool, optional
+            Should auto-suspend be disabled?
         wait_on_resumed : bool, optional
             Wait for the workspace to go into 'Resumed' or 'Active' mode before returning
         wait_interval : int, optional
@@ -1137,7 +1212,10 @@ class Workspace(object):
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
-        self._manager._post(f'workspaces/{self.id}/resume')
+        self._manager._post(
+            f'workspaces/{self.id}/resume',
+            json=dict(disableAutoSuspend=disable_auto_suspend),
+        )
         if wait_on_resumed:
             self._manager._wait_on_state(
                 self._manager.get_workspace(self.id),
@@ -1269,7 +1347,8 @@ class WorkspaceGroup(object):
         return self
 
     def update(
-        self, name: Optional[str] = None,
+        self,
+        name: Optional[str] = None,
         firewall_ranges: Optional[List[str]] = None,
         admin_password: Optional[str] = None,
         expires_at: Optional[str] = None,
@@ -1363,9 +1442,15 @@ class WorkspaceGroup(object):
                 wait_timeout -= wait_interval
 
     def create_workspace(
-        self, name: str, size: Optional[str] = None,
-        wait_on_active: bool = False, wait_interval: int = 10,
-        wait_timeout: int = 600, add_endpoint_to_firewall_ranges: bool = True,
+        self,
+        name: str,
+        size: Optional[str] = None,
+        auto_suspend: Optional[Dict[str, Any]] = None,
+        cache_config: Optional[int] = None,
+        enable_kai: Optional[bool] = None,
+        wait_on_active: bool = False,
+        wait_interval: int = 10,
+        wait_timeout: int = 600,
     ) -> Workspace:
         """
         Create a new workspace.
@@ -1376,6 +1461,15 @@ class WorkspaceGroup(object):
             Name of the workspace
         size : str, optional
             Workspace size in workspace size notation (S-00, S-1, etc.)
+        auto_suspend : Dict[str, Any], optional
+            Auto suspend settings for the workspace. If this field is not
+            provided, no settings will be enabled.
+        cache_config : int, optional
+            Specifies the multiplier for the persistent cache associated
+            with the workspace. If specified, it enables the cache configuration
+            multiplier. It can have one of the following values: 1, 2, or 4.
+        enable_kai : bool, optional
+            Whether to create a SingleStore Kai-enabled workspace
         wait_on_active : bool, optional
             Wait for the workspace to be active before returning
         wait_timeout : int, optional
@@ -1383,9 +1477,6 @@ class WorkspaceGroup(object):
             if wait=True
         wait_interval : int, optional
             Number of seconds between each polling interval
-        add_endpoint_to_firewall_ranges : bool, optional
-            Should the workspace endpoint be added to the workspace group
-            firewall ranges?
 
         Returns
         -------
@@ -1398,17 +1489,16 @@ class WorkspaceGroup(object):
             )
 
         out = self._manager.create_workspace(
-            name=name, workspace_group=self, size=size, wait_on_active=wait_on_active,
-            wait_interval=wait_interval, wait_timeout=wait_timeout,
+            name=name,
+            workspace_group=self,
+            size=size,
+            auto_suspend=auto_suspend,
+            cache_config=cache_config,
+            enable_kai=enable_kai,
+            wait_on_active=wait_on_active,
+            wait_interval=wait_interval,
+            wait_timeout=wait_timeout,
         )
-
-        if add_endpoint_to_firewall_ranges and out.endpoint is not None:
-            self.refresh()
-            ip_address = '{}/32'.format(socket.gethostbyname(out.endpoint))
-            self.update(
-                firewall_ranges=self.firewall_ranges+[ip_address],
-                allow_all_traffic=self.allow_all_traffic,
-            )
 
         return out
 
@@ -1554,9 +1644,15 @@ class WorkspaceManager(Manager):
         return NamedList([Region.from_dict(item, self) for item in res.json()])
 
     def create_workspace_group(
-        self, name: str, region: Union[str, Region],
-        firewall_ranges: List[str], admin_password: Optional[str] = None,
+        self,
+        name: str,
+        region: Union[str, Region],
+        firewall_ranges: List[str],
+        admin_password: Optional[str] = None,
+        backup_bucket_kms_key_id: Optional[str] = None,
+        data_bucket_kms_key_id: Optional[str] = None,
         expires_at: Optional[str] = None,
+        smart_dr: Optional[bool] = None,
         allow_all_traffic: Optional[bool] = None,
         update_window: Optional[Dict[str, int]] = None,
     ) -> WorkspaceGroup:
@@ -1575,6 +1671,17 @@ class WorkspaceManager(Manager):
         admin_password : str, optional
             Admin password for the workspace group. If no password is supplied,
             a password will be generated and retured in the response.
+        backup_bucket_kms_key_id : str, optional
+            Specifies the KMS key ID associated with the backup bucket.
+            If specified, enables Customer-Managed Encryption Keys (CMEK)
+            encryption for the backup bucket of the workspace group.
+            This feature is only supported in workspace groups deployed in AWS.
+        data_bucket_kms_key_id : str, optional
+            Specifies the KMS key ID associated with the data bucket.
+            If specified, enables Customer-Managed Encryption Keys (CMEK)
+            encryption for the data bucket and Amazon Elastic Block Store
+            (EBS) volumes of the workspace group. This feature is only supported
+            in workspace groups deployed in AWS.
         expires_at : str, optional
             The timestamp of when the workspace group will expire.
             If the expiration time is not specified,
@@ -1582,6 +1689,10 @@ class WorkspaceManager(Manager):
             At expiration, the workspace group is terminated and all the data is lost.
             Expiration time can be specified as a timestamp or duration.
             Example: "2021-01-02T15:04:05Z07:00", "2021-01-02", "3h30m"
+        smart_dr : bool, optional
+            Enables Smart Disaster Recovery (SmartDR) for the workspace group.
+            SmartDR is a disaster recovery solution that ensures seamless and
+            continuous replication of data from the primary region to a secondary region
         allow_all_traffic : bool, optional
             Allow all traffic to the workspace group
         update_window : Dict[str, int], optional
@@ -1598,8 +1709,11 @@ class WorkspaceManager(Manager):
             'workspaceGroups', json=dict(
                 name=name, regionID=region,
                 adminPassword=admin_password,
+                backupBucketKMSKeyID=backup_bucket_kms_key_id,
+                dataBucketKMSKeyID=data_bucket_kms_key_id,
                 firewallRanges=firewall_ranges or [],
                 expiresAt=expires_at,
+                smartDR=smart_dr,
                 allowAllTraffic=allow_all_traffic,
                 updateWindow=update_window,
             ),
@@ -1607,9 +1721,16 @@ class WorkspaceManager(Manager):
         return self.get_workspace_group(res.json()['workspaceGroupID'])
 
     def create_workspace(
-        self, name: str, workspace_group: Union[str, WorkspaceGroup],
-        size: Optional[str] = None, wait_on_active: bool = False,
-        wait_interval: int = 10, wait_timeout: int = 600,
+        self,
+        name: str,
+        workspace_group: Union[str, WorkspaceGroup],
+        size: Optional[str] = None,
+        auto_suspend: Optional[Dict[str, Any]] = None,
+        cache_config: Optional[int] = None,
+        enable_kai: Optional[bool] = None,
+        wait_on_active: bool = False,
+        wait_interval: int = 10,
+        wait_timeout: int = 600,
     ) -> Workspace:
         """
         Create a new workspace.
@@ -1622,6 +1743,15 @@ class WorkspaceManager(Manager):
             The workspace ID of the workspace
         size : str, optional
             Workspace size in workspace size notation (S-00, S-1, etc.)
+        auto_suspend : Dict[str, Any], optional
+            Auto suspend settings for the workspace. If this field is not
+            provided, no settings will be enabled.
+        cache_config : int, optional
+            Specifies the multiplier for the persistent cache associated
+            with the workspace. If specified, it enables the cache configuration
+            multiplier. It can have one of the following values: 1, 2, or 4.
+        enable_kai : bool, optional
+            Whether to create a SingleStore Kai-enabled workspace
         wait_on_active : bool, optional
             Wait for the workspace to be active before returning
         wait_timeout : int, optional
@@ -1639,14 +1769,20 @@ class WorkspaceManager(Manager):
             workspace_group = workspace_group.id
         res = self._post(
             'workspaces', json=dict(
-                name=name, workspaceGroupID=workspace_group,
+                name=name,
+                workspaceGroupID=workspace_group,
                 size=size,
+                autoSuspend=auto_suspend,
+                cacheConfig=cache_config,
+                enableKai=enable_kai,
             ),
         )
         out = self.get_workspace(res.json()['workspaceID'])
         if wait_on_active:
             out = self._wait_on_state(
-                out, 'Active', interval=wait_interval,
+                out,
+                'Active',
+                interval=wait_interval,
                 timeout=wait_timeout,
             )
         return out

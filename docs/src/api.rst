@@ -211,6 +211,7 @@ Workspaces are created within WorkspaceGroups. They can be created using either
    Workspace
    Workspace.connect
    Workspace.refresh
+   Workspace.update
    Workspace.terminate
 
 
