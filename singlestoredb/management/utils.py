@@ -5,6 +5,7 @@ import functools
 import os
 import re
 import sys
+from collections.abc import Mapping
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -281,4 +282,33 @@ def camel_to_snake(s: Optional[str]) -> Optional[str]:
     out = re.sub(r'([A-Z]+)', r'_\1', s).lower()
     if out and out[0] == '_':
         return out[1:]
+    return out
+
+
+def snake_to_camel_dict(
+    s: Optional[Mapping[str, Any]],
+    cap_first: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """Convert snake-case keys to camel-case keys."""
+    if s is None:
+        return None
+    out = {}
+    for k, v in s.items():
+        if isinstance(s, Mapping):
+            out[str(snake_to_camel(k))] = snake_to_camel_dict(v, cap_first=cap_first)
+        else:
+            out[str(snake_to_camel(k))] = v
+    return out
+
+
+def camel_to_snake_dict(s: Optional[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Convert camel-case keys to snake-case keys."""
+    if s is None:
+        return None
+    out = {}
+    for k, v in s.items():
+        if isinstance(s, Mapping):
+            out[str(camel_to_snake(k))] = camel_to_snake_dict(v)
+        else:
+            out[str(camel_to_snake(k))] = v
     return out

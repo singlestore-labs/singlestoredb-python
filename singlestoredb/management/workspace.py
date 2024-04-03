@@ -8,6 +8,7 @@ import io
 import os
 import re
 import time
+from collections.abc import Mapping
 from typing import Any
 from typing import BinaryIO
 from typing import Dict
@@ -22,10 +23,12 @@ from .billing_usage import BillingUsageItem
 from .manager import Manager
 from .organization import Organization
 from .region import Region
+from .utils import camel_to_snake_dict
 from .utils import from_datetime
 from .utils import NamedList
 from .utils import PathLike
 from .utils import snake_to_camel
+from .utils import snake_to_camel_dict
 from .utils import to_datetime
 from .utils import ttl_property
 from .utils import vars_to_str
@@ -969,7 +972,7 @@ class Workspace(object):
         self.endpoint = endpoint
 
         #: Current auto-suspend settings
-        self.auto_suspend = auto_suspend
+        self.auto_suspend = camel_to_snake_dict(auto_suspend)
 
         #: Multiplier for the persistent cache
         self.cache_config = cache_config
@@ -978,7 +981,7 @@ class Workspace(object):
         self.deployment_type = deployment_type
 
         #: Database attachments
-        self.resume_attachments = resume_attachments
+        self.resume_attachments = camel_to_snake_dict(resume_attachments)
 
         #: Current progress percentage for scaling the workspace
         self.scaling_progress = scaling_progress
@@ -1063,7 +1066,7 @@ class Workspace(object):
             )
         data = {
             k: v for k, v in dict(
-                autoSuspend=auto_suspend,
+                autoSuspend=snake_to_camel_dict(auto_suspend),
                 cacheConfig=cache_config,
                 deploymentType=deployment_type,
                 size=size,
@@ -1080,7 +1083,10 @@ class Workspace(object):
             )
         new_obj = self._manager.get_workspace(self.id)
         for name, value in vars(new_obj).items():
-            setattr(self, name, value)
+            if isinstance(value, Mapping):
+                setattr(self, name, snake_to_camel_dict(value))
+            else:
+                setattr(self, name, value)
         return self
 
     def terminate(
@@ -1343,7 +1349,10 @@ class WorkspaceGroup(object):
             )
         new_obj = self._manager.get_workspace_group(self.id)
         for name, value in vars(new_obj).items():
-            setattr(self, name, value)
+            if isinstance(value, Mapping):
+                setattr(self, name, camel_to_snake_dict(value))
+            else:
+                setattr(self, name, value)
         return self
 
     def update(
@@ -1392,7 +1401,7 @@ class WorkspaceGroup(object):
                 adminPassword=admin_password,
                 expiresAt=expires_at,
                 allowAllTraffic=allow_all_traffic,
-                updateWindow=update_window,
+                updateWindow=snake_to_camel_dict(update_window),
             ).items() if v is not None
         }
         self._manager._patch(f'workspaceGroups/{self.id}', json=data)
@@ -1492,7 +1501,7 @@ class WorkspaceGroup(object):
             name=name,
             workspace_group=self,
             size=size,
-            auto_suspend=auto_suspend,
+            auto_suspend=snake_to_camel_dict(auto_suspend),
             cache_config=cache_config,
             enable_kai=enable_kai,
             wait_on_active=wait_on_active,
@@ -1715,7 +1724,7 @@ class WorkspaceManager(Manager):
                 expiresAt=expires_at,
                 smartDR=smart_dr,
                 allowAllTraffic=allow_all_traffic,
-                updateWindow=update_window,
+                updateWindow=snake_to_camel_dict(update_window),
             ),
         )
         return self.get_workspace_group(res.json()['workspaceGroupID'])
@@ -1772,7 +1781,7 @@ class WorkspaceManager(Manager):
                 name=name,
                 workspaceGroupID=workspace_group,
                 size=size,
-                autoSuspend=auto_suspend,
+                autoSuspend=snake_to_camel_dict(auto_suspend),
                 cacheConfig=cache_config,
                 enableKai=enable_kai,
             ),
