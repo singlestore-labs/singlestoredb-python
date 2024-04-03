@@ -23,3 +23,4 @@
       ~WorkspaceGroup.region
       ~WorkspaceGroup.firewall_ranges
       ~WorkspaceGroup.terminated_at
+      ~WorkspaceGroup.allow_all_traffic

@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.0.4 - April, 3 2024
+----------------------
+* Management API updates
+
 v1.0.3 - April, 2 2024
 ----------------------
 * Updates to external function application API

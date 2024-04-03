@@ -12,6 +12,7 @@
       ~Workspace.resume
       ~Workspace.suspend
       ~Workspace.terminate
+      ~Workspace.update
    .. rubric:: Attributes
    .. autosummary::
       ~Workspace.name
@@ -21,3 +22,9 @@
       ~Workspace.created_at
       ~Workspace.terminated_at
       ~Workspace.endpoint
+      ~Workspace.auto_suspend
+      ~Workspace.cache_config
+      ~Workspace.deployment_type
+      ~Workspace.resume_attachments
+      ~Workspace.scaling_progress
+      ~Workspace.last_resumed_at
