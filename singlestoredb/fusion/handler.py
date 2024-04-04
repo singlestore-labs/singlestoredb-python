@@ -232,7 +232,7 @@ def _to_markdown(txt: str) -> str:
             code = []
             while lines and (not lines[0].strip() or lines[0].startswith(' ')):
                 code.append(lines.pop(0).rstrip())
-            out.extend(['```sql', textwrap.dedent('\n'.join(code)).strip(), '```\n'])
+            out.extend(['```sql', '\n'.join(code).rstrip(), '```\n'])
         else:
             out.append(line)
 
