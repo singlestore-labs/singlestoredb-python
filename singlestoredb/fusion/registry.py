@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import re
+import sys
 from typing import Any
 from typing import Dict
 from typing import List
@@ -120,6 +121,20 @@ class ShowFusionCommandsHandler(SQLHandler):
     # LIKE pattern
     like = LIKE '<pattern>'
 
+    Description
+    -----------
+    Display all Fusion SQL commands.
+
+    Remarks
+    -------
+    * ``LIKE`` indicates a pattern of commands to display. ``%`` is a wildcard.
+
+    Example
+    -------
+    Display all commands starting with 'SHOW'::
+
+        SHOW FUSION COMMANDS LIKE 'SHOW%';
+
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
@@ -128,7 +143,7 @@ class ShowFusionCommandsHandler(SQLHandler):
 
         data: List[Tuple[Any, ...]] = []
         for _, v in sorted(_handlers.items()):
-            data.append((v.help.lstrip(),))
+            data.append((v.syntax.lstrip(),))
 
         res.set_rows(data)
 
@@ -148,6 +163,20 @@ class ShowFusionGrammarHandler(SQLHandler):
     # Query to show grammar for
     for_query = FOR '<query>'
 
+    Description
+    -----------
+    Show the full grammar of a Fusion SQL command for a given query.
+
+    Remarks
+    -------
+    * ``<query>`` is a string containing a Fusion SQL command.
+
+    Example
+    -------
+    Display the full grammar of the ``CREATE WORKSPACE`` command::
+
+        SHOW FUSION GRAMMAR FOR 'CREATE WORKSPACE';
+
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
@@ -162,3 +191,42 @@ class ShowFusionGrammarHandler(SQLHandler):
 
 
 ShowFusionGrammarHandler.register()
+
+
+class ShowFusionHelpHandler(SQLHandler):
+    """
+    SHOW FUSION HELP for_command;
+
+    # Command to show help for
+    for_command = FOR '<command>'
+
+    Description
+    -----------
+    Show the documentation for a Fusion SQL command.
+
+    Example
+    -------
+    Display the help for the ``CREATE WORKSPACE`` command::
+
+        SHOW FUSION HELP FOR 'CREATE WORKSPACE';
+
+    """
+
+    def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
+        handler = get_handler(params['for_command'])
+        if handler is not None:
+            try:
+                from IPython.display import display
+                from IPython.display import Markdown
+                display(Markdown(handler.help))
+            except Exception:
+                print(handler.help)
+        else:
+            print(
+                f'No handler found for command \'{params["for_command"]}\'',
+                file=sys.stderr,
+            )
+        return None
+
+
+ShowFusionHelpHandler.register()

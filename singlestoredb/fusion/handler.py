@@ -170,8 +170,8 @@ def build_cmd(grammar: str) -> str:
     return f'{space}{cmd} ={begin}\n{end}'
 
 
-def build_help(grammar: str) -> str:
-    """Construct full help syntax."""
+def build_syntax(grammar: str) -> str:
+    """Construct full syntax."""
     if ';' not in grammar:
         raise ValueError('a semi-colon exist at the end of the primary rule')
 
@@ -199,8 +199,77 @@ def build_help(grammar: str) -> str:
     return cmd
 
 
+def _format_examples(ex: str) -> str:
+    """Convert examples into sections."""
+    return re.sub(r'(^Example\s+\d+.*$)', r'### \1', ex, flags=re.M)
+
+
+def _to_markdown(txt: str) -> str:
+    """Convert formatting to markdown."""
+    txt = txt.replace('``', '`')
+
+    # Format code blocks
+    lines = re.split(r'\n', txt)
+    out = []
+    while lines:
+        line = lines.pop(0)
+        if line.endswith('::'):
+            out.append(line[:-2])
+            code = []
+            while lines and (not lines[0].strip() or lines[0].startswith(' ')):
+                code.append(lines.pop(0).rstrip())
+            out.extend(['```sql', textwrap.dedent('\n'.join(code)).strip(), '```\n'])
+        else:
+            out.append(line)
+
+    return '\n'.join(out)
+
+
+def build_help(syntax: str, grammar: str) -> str:
+    """Build full help text."""
+    syntax = re.sub(r'\s*\n+\s*', r' ', syntax.strip())
+
+    cmd = re.match(r'([A-Z0-9_ ]+)', syntax)
+    if not cmd:
+        raise ValueError(f'no command found: {syntax}')
+
+    out = [f'# {cmd.group(1)}\n\n']
+
+    sections: Dict[str, str] = {}
+    grammar = textwrap.dedent(grammar.rstrip())
+    desc_re = re.compile(r'^([A-Z][\S ]+)\s*^\-\-\-\-+\s*$', flags=re.M)
+    if desc_re.search(grammar):
+        _, *txt = desc_re.split(grammar)
+        txt = [x.strip() for x in txt]
+        sections = {}
+        while txt:
+            key = txt.pop(0)
+            value = txt.pop(0)
+            sections[key.lower()] = _to_markdown(value).strip()
+
+    if 'description' in sections:
+        out.extend([sections['description'], '\n\n'])
+
+    out.extend(['## Syntax\n```sql\n', syntax, '\n```\n\n'])
+
+    if 'remarks' in sections:
+        out.extend(['## Remarks\n', sections['remarks'], '\n\n'])
+
+    if 'examples' in sections:
+        out.extend(['## Examples\n\n', _format_examples(sections['examples']), '\n\n'])
+    elif 'example' in sections:
+        out.extend(['## Example\n\n', _format_examples(sections['example']), '\n\n'])
+
+    if 'see also' in sections:
+        out.extend(['## See Also\n', sections['see also'], '\n\n'])
+
+    return ''.join(out).rstrip() + '\n'
+
+
 def strip_comments(grammar: str) -> str:
     """Strip comments from grammar."""
+    desc_re = re.compile(r'(^\s*Description\s*^\s*-----------\s*$)', flags=re.M)
+    grammar = desc_re.split(grammar, maxsplit=1)[0]
     return re.sub(r'^\s*#.*$', r'', grammar, flags=re.M)
 
 
@@ -226,7 +295,9 @@ def inject_builtins(grammar: str) -> str:
     return grammar
 
 
-def process_grammar(grammar: str) -> Tuple[Grammar, Tuple[str, ...], Dict[str, Any], str]:
+def process_grammar(
+    grammar: str,
+) -> Tuple[Grammar, Tuple[str, ...], Dict[str, Any], str, str]:
     """
     Convert SQL grammar to a Parsimonious grammar.
 
@@ -247,10 +318,12 @@ def process_grammar(grammar: str) -> Tuple[Grammar, Tuple[str, ...], Dict[str, A
     rules = {}
     rule_info = {}
 
+    full_grammar = grammar
     grammar = strip_comments(grammar)
     grammar = inject_builtins(grammar)
     command_key = get_keywords(grammar)
-    help_txt = build_help(grammar)
+    syntax_txt = build_syntax(grammar)
+    help_txt = build_help(syntax_txt, full_grammar)
     grammar = build_cmd(grammar)
 
     # Make sure grouping characters all have whitespace around them
@@ -336,7 +409,10 @@ def process_grammar(grammar: str) -> Tuple[Grammar, Tuple[str, ...], Dict[str, A
     cmds = ' / '.join(x for x in rules if x.endswith('_cmd'))
     cmds = f'init = ws* ( {cmds} ) ws* ";"? ws*\n'
 
-    return Grammar(cmds + CORE_GRAMMAR + '\n'.join(out)), command_key, rule_info, help_txt
+    return (
+        Grammar(cmds + CORE_GRAMMAR + '\n'.join(out)), command_key,
+        rule_info, syntax_txt, help_txt,
+    )
 
 
 def flatten(items: Iterable[Any]) -> List[Any]:
@@ -378,7 +454,10 @@ class SQLHandler(NodeVisitor):
     #: Metadata about the parse rules
     rule_info: Dict[str, Any] = {}
 
-    #: Help string for use in error messages
+    #: Syntax string for use in error messages
+    syntax: str = ''
+
+    #: Full help for the command
     help: str = ''
 
     #: Rule validation functions
@@ -396,7 +475,7 @@ class SQLHandler(NodeVisitor):
         Compile the grammar held in the docstring.
 
         This method modifies attributes on the class: ``grammar``,
-        ``command_key``, ``rule_info``, and ``help``.
+        ``command_key``, ``rule_info``, ``syntax``, and ``help``.
 
         Parameters
         ----------
@@ -407,7 +486,7 @@ class SQLHandler(NodeVisitor):
         if cls._is_compiled:
             return
 
-        cls.grammar, cls.command_key, cls.rule_info, cls.help = \
+        cls.grammar, cls.command_key, cls.rule_info, cls.syntax, cls.help = \
             process_grammar(grammar or cls.__doc__ or '')
 
         cls._grammar = grammar or cls.__doc__ or ''
@@ -476,7 +555,7 @@ class SQLHandler(NodeVisitor):
                 msg = ' ' + m.group(1) + m.group(2)
             raise ValueError(
                 f'Could not parse statement.{msg} '
-                'Expecting:\n' + textwrap.indent(type(self).help, '  '),
+                'Expecting:\n' + textwrap.indent(type(self).syntax, '  '),
             )
 
     @abc.abstractmethod

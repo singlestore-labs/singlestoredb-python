@@ -33,6 +33,41 @@ class ShowStageFilesHandler(SQLHandler):
     # Should extended attributes be shown?
     extended = EXTENDED
 
+    Description
+    -----------
+    Show the files in a workspace group's stage.
+
+    Remarks
+    -------
+    * ``IN GROUP`` specifies the workspace group or workspace group ID.
+      When using an ID, ``IN GROUP ID`` must be used.
+    * ``AT PATH`` specifies the path to list. If no ``AT PATH`` is specified,
+      the root directory is used.
+    * ``LIKE`` allows you to specify a filename pattern using ``%`` as a wildcard.
+    * ``ORDER BY`` allows you to specify the field to sort by.
+    * ``LIMIT`` allows you to set a limit on the number of entries displayed.
+    * ``RECURSIVE`` indicates that the stage should be listed recursively.
+    * ``EXTENDED`` indicates that more detailed information should be displayed.
+
+    Examples
+    --------
+    Example 1: Show files at path
+
+    This example shows how to list files starting at a specific path::
+
+        SHOW STAGE FILES IN GROUP "My Group" AT PATH "/data/";
+
+    Example 2: Show files recursively
+
+    This example show dow to display files recursively and with extra information::
+
+        SHOW STAGE FILES IN GROUP "My Group" RECURSIVE EXTENDED;
+
+    See Also
+    --------
+    * UPLOAD FILE TO STAGE
+    * DOWNLOAD STAGE FILE
+
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
@@ -100,6 +135,30 @@ class UploadStageFileHandler(SQLHandler):
     # Should an existing file be overwritten?
     overwrite = OVERWRITE
 
+    Description
+    -----------
+    Upload a file to the workspace group's stage.
+
+    Remarks
+    -------
+    * ``<stage-path>`` is the path in stage to upload the file to.
+    * ``IN GROUP`` specifies the workspace group or workspace group ID. When
+      using an ID ``IN GROUP ID`` should be used.
+    * ``<local-path>`` is the path on the local machine of the file to upload.
+    * ``OVERWRITE`` indicates that an existing stage file at that path
+      should be overwritten if it exists.
+
+    Examples
+    --------
+    Example 1: Upload with overwrite::
+
+        UPLOAD FILE TO STAGE '/data/stats.csv' IN GROUP 'My Group'
+               FROM '/u/user/stats.csv' OVERWRITE;
+
+    See Also
+    --------
+    * DOWNLOAD STAGE FILE
+
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
@@ -139,6 +198,38 @@ class DownloadStageFileHandler(SQLHandler):
 
     # File encoding
     encoding = ENCODING '<encoding>'
+
+    Description
+    -----------
+    Download a stage file.
+
+    Remarks
+    -------
+    * ``<stage-path>`` is the path in stage to download.
+    * ``IN GROUP`` specifies the workspace group or workspace group ID. When
+      using an ID ``IN GROUP ID`` should be used.
+    * ``<local-path>`` is the destination path for the file. If not specified,
+      the file is returned in a result set.
+    * ``OVERWRITE`` indicates that an existing local file should be overwritten.
+    * ``ENCODING`` specifies the encoding of the file to apply to the downloaded
+      file. By default, files are downloaded as binary. This only option
+      typically only matters if ``<local-path>`` is not specified and the file
+      is to be printed to the screen.
+
+    Examples
+    --------
+    Example 1: Print a file to the screen::
+
+        DOWNLOAD STAGE FILE '/data/stats.csv' IN GROUP 'My Group';
+
+    Example 2: Download a file to a local path with overwrite set::
+
+        DONLOAD STAGE FILE '/data/stats.csv' IN GROUP 'My Group'
+                TO '/u/me/data.csv' OVERWRITE;
+
+    See Also
+    --------
+    * UPLOAD FILE TO STAGE
 
     """
 
@@ -183,6 +274,26 @@ class DropStageFileHandler(SQLHandler):
     # Name of group
     group_name = '<group-name>'
 
+    Description
+    -----------
+    Drop a stage file.
+
+    Remarks
+    -------
+    * ``<stage-path>`` is the path in stage to drop.
+    * ``IN GROUP`` specifies the workspace group or workspace group ID. When
+      using an ID ``IN GROUP ID`` should be used.
+
+    Example
+    --------
+    Drop a specific file from stage::
+
+        DROP STAGE FILE '/data/stats.csv' IN GROUP 'My Group';
+
+    See Also
+    --------
+    * DROP STAGE FOLDER
+
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
@@ -212,6 +323,27 @@ class DropStageFolderHandler(SQLHandler):
 
     # Should folers be deleted recursively?
     recursive = RECURSIVE
+
+    Description
+    -----------
+    Drop a folder from stage.
+
+    Remarks
+    -------
+    * ``<stage-path>`` is the path in stage to drop.
+    * ``IN GROUP`` specifies the workspace group or workspace group ID. When
+      using an ID ``IN GROUP ID`` should be used.
+    * ``RECURSIVE`` indicates that folders should be removed recursively.
+
+    Example
+    -------
+    Drop a folder recursively::
+
+        DROP STAGE FOLDER '/data/' IN GROUP 'My Group' RECURSIVE;
+
+    See Also
+    --------
+    * DROP STAGE FILE
 
     """
 
@@ -245,6 +377,24 @@ class CreateStageFolderHandler(SQLHandler):
 
     # Should an existing folder be overwritten?
     overwrite = OVERWRITE
+
+    Description
+    -----------
+    Create a folder in stage.
+
+    Remarks
+    -------
+    * ``<stage-path>`` is the path to create in stage.
+    * ``IN GROUP`` specifies the workspace group or workspace group ID. When
+      using an ID ``IN GROUP ID`` should be used.
+    * ``OVERWRITE`` indicates that an existing folder should be overwritten
+      with a new folder.
+
+    Example
+    -------
+    Create a folder::
+
+        CREATE STAGE FOLDER `/data/csv/` IN GROUP 'My Group';
 
     """
 

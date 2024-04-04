@@ -17,6 +17,22 @@ class ShowRegionsHandler(SQLHandler):
     """
     SHOW REGIONS [ <like> ] [ <order-by> ] [ <limit> ];
 
+    Description
+    -----------
+    Show all available regions.
+
+    Remarks
+    -------
+    * ``LIKE`` specifies a pattern to match. ``%`` is a wildcard.
+    * ``ORDER BY`` specifies the column names to sort by.
+    * ``LIMIT`` indicates a maximum number of results to return.
+
+    Example
+    -------
+    Show all regions in the US::
+
+        SHOW REGIONS LIKE 'US%' ORDER BY Name;
+
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
@@ -41,6 +57,28 @@ ShowRegionsHandler.register(overwrite=True)
 class ShowWorkspaceGroupsHandler(SQLHandler):
     """
     SHOW WORKSPACE GROUPS [ <like> ] [ <extended> ] [ <order-by> ] [ <limit> ];
+
+    Description
+    -----------
+    Show workspace group information.
+
+    Remarks
+    -------
+    * ``LIKE`` specifies a pattern to match. ``%`` is a wildcard.
+    * ``EXTENDED`` indicates that extra workspace group information should
+      be returned in the result set.
+    * ``ORDER BY`` specifies the column names to sort by.
+    * ``LIMIT`` indicates a maximum number of results to return.
+
+    Example
+    -------
+    Display workspace groups that match a pattern incuding extended information::
+
+        SHOW WORKSPACE GROUPS LIKE 'Marketing%' EXTENDED ORDER BY Name;
+
+    See Also
+    --------
+    * SHOW WORKSPACES
 
     """
 
@@ -91,6 +129,30 @@ class ShowWorkspacesHandler(SQLHandler):
 
     # Name of group
     group_name = '<group-name>'
+
+    Description
+    -----------
+    Show workspaces in a workspace group.
+
+    Remarks
+    -------
+    * ``IN GROUP`` specifies the workspace group to list workspaces for. If a
+      workspace group ID is specified, you should use ``IN GROUP ID``.
+    * ``LIKE`` specifies a pattern to match. ``%`` is a wildcard.
+    * ``EXTENDED`` indicates that extra workspace group information should
+      be returned in the result set.
+    * ``ORDER BY`` specifies the column names to sort by.
+    * ``LIMIT`` indicates a maximum number of results to return.
+
+    Example
+    -------
+    Display workspaces in a workspace group including extended information::
+
+        SHOW WORKSPACES IN GROUP 'My Group' EXTENDED ORDER BY Name;
+
+    See Also
+    --------
+    * SHOW WORKSPACE GROUPS
 
     """
 
@@ -159,6 +221,37 @@ class CreateWorkspaceGroupHandler(SQLHandler):
     # Incoming IP ranges
     with_firewall_ranges = WITH FIREWALL RANGES '<ip-range>',...
 
+    Description
+    -----------
+    Create a workspace group.
+
+    Remarks
+    -------
+    * ``IF NOT EXISTS`` indicates that the creation of the workspace group
+      will only be attempted if a workspace group with that name doesn't
+      already exist.
+    * ``IN REGION`` specifies the region to create the workspace group in.
+      If a region ID is used, ``IN REGION ID`` should be used.
+    * ``EXPIRES AT`` specifies an expiration date/time or interval.
+    * ``WITH FIREWALL RANGES`` indicates IP ranges to allow access to the
+       workspace group.
+
+    Examples
+    --------
+    Example 1: Create workspace group in US East 2 (Ohio)::
+
+        CREATE WORKSPACE GROUP 'My Group' IN REGION 'US East 2 (Ohio)';
+
+    Example 2: Create workspace group with region ID and accessible from anywhere::
+
+        CREATE WORKSPACE GROUP 'My Group'
+               IN REGION ID '93b61160-0cae-4e11-a5de-977b8e2e3ee5'
+               WITH FIREWALL RANGES '0.0.0.0/0';
+
+    See Also
+    --------
+    * SHOW WORKSPACE GROUPS
+
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
@@ -225,6 +318,32 @@ class CreateWorkspaceHandler(SQLHandler):
     # Wait for workspace to be active before continuing
     wait_on_active = WAIT ON ACTIVE
 
+    Description
+    -----------
+    Create a workspace in a workspace group.
+
+    Remarks
+    -------
+    * ``IF NOT EXISTS`` indicates that the creation of the workspace
+      will only be attempted if a workspace with that name doesn't
+      already exist.
+    * ``IN GROUP`` indicates the workspace group to create the workspace
+      in. If an ID is used, ``IN GROUP ID`` should be used.
+    * ``SIZE`` indicates a cluster size specification such as 'S-00'.
+    * ``WAIT ON ACTIVE`` indicates that execution should be paused until
+      the workspace has reached the ACTIVE state.
+
+    Example
+    -------
+    Create a workspace group and wait until it is active::
+
+        CREATE WORKSPACE 'my-workspace' IN GROUP 'My Group'
+               WITH SIZE 'S-00' WAIT ON ACTIVE;
+
+    See Also
+    --------
+    * CREATE WORKSPACE GROUP
+
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
@@ -274,6 +393,21 @@ class SuspendWorkspaceHandler(SQLHandler):
     # Wait for workspace to be suspended before continuing
     wait_on_suspended = WAIT ON SUSPENDED
 
+    Description
+    -----------
+    Suspend a workspace.
+
+    Remarks
+    -------
+    * ``IN GROUP`` indicates the workspace group of the workspace.
+      If an ID is used, ``IN GROUP ID`` should be used.
+    * ``WAIT ON SUSPENDED`` indicates that execution should be paused until
+      the workspace has reached the SUSPENDED state.
+
+    See Also
+    --------
+    * RESUME WORKSPACE
+
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
@@ -310,6 +444,17 @@ class ResumeWorkspaceHandler(SQLHandler):
     # Wait for workspace to be resumed before continuing
     wait_on_resumed = WAIT ON RESUMED
 
+    Description
+    -----------
+    Resume a workspace.
+
+    Remarks
+    -------
+    * ``IN GROUP`` indicates the workspace group of the workspace.
+      If an ID is used, ``IN GROUP ID`` should be used.
+    * ``WAIT ON RESUMED`` indicates that execution should be paused until
+      the workspace has reached the RESUMED state.
+
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
@@ -342,6 +487,29 @@ class DropWorkspaceGroupHandler(SQLHandler):
 
     # Should the workspace group be terminated even if it has workspaces?
     force = FORCE
+
+    Description
+    -----------
+    Drop a workspace group.
+
+    Remarks
+    -------
+    * ``IF EXISTS`` indicates that the dropping of the workspace group should
+      only be attempted if a workspace group with the given name exists.
+    * ``WAIT ON TERMINATED`` specifies that execution should be paused
+      until the workspace group reaches the TERMINATED state.
+    * ``FORCE`` specifies that the workspace group should be terminated
+      even if it contains workspaces.
+
+    Example
+    -------
+    Drop a workspace group and all workspaces within it::
+
+        DROP WORKSPACE GROUP 'My Group' FORCE;
+
+    See Also
+    --------
+    * DROP WORKSPACE
 
     """
 
@@ -392,6 +560,29 @@ class DropWorkspaceHandler(SQLHandler):
 
     # Wait for workspace to be terminated before continuing
     wait_on_terminated = WAIT ON TERMINATED
+
+    Description
+    -----------
+    Drop a workspace.
+
+    Remarks
+    -------
+    * ``IF EXISTS`` indicates that the dropping of the workspace should
+      only be attempted if a workspace with the given name exists.
+    * ``IN GROUP`` indicates the workspace group of the workspace.
+      If an ID is used, ``IN GROUP ID`` should be used.
+    * ``WAIT ON TERMINATED`` specifies that execution should be paused
+      until the workspace reaches the TERMINATED state.
+
+    Example
+    -------
+    Drop a workspace if it exists::
+
+        DROP WORKSPACE IF EXISTS 'my-workspace' IN GROUP 'My Group';
+
+    See Also
+    --------
+    * DROP WORKSPACE GROUP
 
     """
 
