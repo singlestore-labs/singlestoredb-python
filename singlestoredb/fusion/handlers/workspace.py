@@ -198,6 +198,11 @@ class CreateWorkspaceGroupHandler(SQLHandler):
         [ with_password ]
         [ expires_at ]
         [ with_firewall_ranges ]
+        [ with_backup_bucket_kms_key_id ]
+        [ with_data_bucket_kms_key_id ]
+        [ with_smart_dr ]
+        [ allow_all_traffic ]
+        [ with_update_window ]
     ;
 
     # Only create workspace group if it doesn't exist already
@@ -221,6 +226,21 @@ class CreateWorkspaceGroupHandler(SQLHandler):
     # Incoming IP ranges
     with_firewall_ranges = WITH FIREWALL RANGES '<ip-range>',...
 
+    # Backup bucket key
+    with_backup_bucket_kms_key_id = WITH BACKUP BUCKET KMS KEY ID '<key-id>'
+
+    # Data bucket key
+    with_data_bucket_kms_key_id = WITH DATA BUCKET KMS KEY ID '<key-id>'
+
+    # Smart DR
+    with_smart_dr = WITH SMART DR
+
+    # Allow all incoming traffic
+    allow_all_traffic = ALLOW ALL TRAFFIC
+
+    # Update window
+    with_update_window = WITH UPDATE WINDOW '<day>:<hour>'
+
     Description
     -----------
     Create a workspace group.
@@ -235,6 +255,14 @@ class CreateWorkspaceGroupHandler(SQLHandler):
     * ``EXPIRES AT`` specifies an expiration date/time or interval.
     * ``WITH FIREWALL RANGES`` indicates IP ranges to allow access to the
        workspace group.
+    * ``WITH BACKUP BUCKET KMS KEY ID`` is the key ID associated with the
+      backup bucket.
+    * ``WITH DATA BUCKET KMS KEY ID`` is the key ID associated with the
+      data bucket.
+    * ``WITH SMART DR`` enables smart disaster recovery.
+    * ``ALLOW ALL TRAFFIC`` allows all incoming traffic.
+    * ``WITH UPDATE WINDOW`` specifies tha day (0-6) and hour (0-23) of the
+      update window.
 
     Examples
     --------
@@ -278,12 +306,22 @@ class CreateWorkspaceGroupHandler(SQLHandler):
         else:
             region_id = params['region_id']
 
+        with_update_window = None
+        if params['with_update_window']:
+            day, hour = params['with_update_window'].split(':', 1)
+            with_update_window = dict(day=int(day), hour=int(hour))
+
         manager.create_workspace_group(
             params['group_name'],
             region=region_id,
             admin_password=params['with_password'],
             expires_at=params['expires_at'],
             firewall_ranges=params['with_firewall_ranges'],
+            backup_bucket_kms_key_id=params['with_backup_bucket_kms_key_id'],
+            data_bucket_kms_key_id=params['with_data_bucket_kms_key_id'],
+            smart_dr=params['with_smart_dr'],
+            allow_all_traffic=params['allow_all_traffic'],
+            update_window=with_update_window,
         )
 
         return None
@@ -295,7 +333,8 @@ CreateWorkspaceGroupHandler.register(overwrite=True)
 class CreateWorkspaceHandler(SQLHandler):
     """
     CREATE WORKSPACE [ if_not_exists ] workspace_name [ in_group ]
-        WITH SIZE size [ wait_on_active ];
+        WITH SIZE size [ auto_suspend ] [ enable_kai ]
+        [ with_cache_config ] [ wait_on_active ];
 
     # Create workspace in workspace group
     in_group = IN GROUP { group_id | group_name }
@@ -315,6 +354,15 @@ class CreateWorkspaceHandler(SQLHandler):
     # Runtime size
     size = '<size>'
 
+    # Auto-suspend
+    auto_suspend = AUTO SUSPEND
+
+    # Enable Kai
+    enable_kai = ENABLE KAI
+
+    # Cache config
+    with_cache_config = WITH CACHE CONFIG <integer>
+
     # Wait for workspace to be active before continuing
     wait_on_active = WAIT ON ACTIVE
 
@@ -330,6 +378,8 @@ class CreateWorkspaceHandler(SQLHandler):
     * ``IN GROUP`` indicates the workspace group to create the workspace
       in. If an ID is used, ``IN GROUP ID`` should be used.
     * ``SIZE`` indicates a cluster size specification such as 'S-00'.
+    * ``WITH CACHE CONFIG`` specifies the multiplier for the persistent cache
+      associated with the workspace. It must be 1, 2, or 4.
     * ``WAIT ON ACTIVE`` indicates that execution should be paused until
       the workspace has reached the ACTIVE state.
 
@@ -358,7 +408,11 @@ class CreateWorkspaceHandler(SQLHandler):
                 pass
 
         workspace_group.create_workspace(
-            params['workspace_name'], size=params['size'],
+            params['workspace_name'],
+            size=params['size'],
+            auto_suspend=params['auto_suspend'],
+            enable_kai=params['enable_kai'],
+            cache_config=params['with_cache_config'],
             wait_on_active=params['wait_on_active'],
         )
 
@@ -421,7 +475,8 @@ SuspendWorkspaceHandler.register(overwrite=True)
 
 class ResumeWorkspaceHandler(SQLHandler):
     """
-    RESUME WORKSPACE workspace [ in_group ] [ wait_on_resumed ];
+    RESUME WORKSPACE workspace [ in_group ]
+        [ disable_auto_suspend ] [ wait_on_resumed ];
 
     # Workspace
     workspace = { workspace_id | workspace_name }
@@ -441,6 +496,9 @@ class ResumeWorkspaceHandler(SQLHandler):
     # Name of workspace group
     group_name = '<group-name>'
 
+    # Disable auto-suspend
+    disable_auto_suspend = DISABLE AUTO SUSPEND
+
     # Wait for workspace to be resumed before continuing
     wait_on_resumed = WAIT ON RESUMED
 
@@ -459,7 +517,10 @@ class ResumeWorkspaceHandler(SQLHandler):
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         ws = get_workspace(params)
-        ws.resume(wait_on_resumed=params['wait_on_resumed'])
+        ws.resume(
+            wait_on_resumed=params['wait_on_resumed'],
+            disable_auto_suspend=params['disable_auto_suspend'],
+        )
         return None
 
 

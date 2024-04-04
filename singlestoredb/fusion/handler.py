@@ -45,6 +45,8 @@ BUILTINS = {
     '<limit>': r'''
     limit = LIMIT <integer>
     ''',
+    '<integer>': '',
+    '<number>': '',
 }
 
 BUILTIN_DEFAULTS = {  # type: ignore
@@ -204,6 +206,18 @@ def _format_examples(ex: str) -> str:
     return re.sub(r'(^Example\s+\d+.*$)', r'### \1', ex, flags=re.M)
 
 
+def _format_arguments(arg: str) -> str:
+    """Format arguments as subsections."""
+    out = []
+    for line in arg.split('\n'):
+        if line.startswith('<'):
+            out.append(f'### {line.replace("<", "&lt;").replace(">", "&gt;")}')
+            out.append('')
+        else:
+            out.append(line.strip())
+    return '\n'.join(out)
+
+
 def _to_markdown(txt: str) -> str:
     """Convert formatting to markdown."""
     txt = txt.replace('``', '`')
@@ -251,6 +265,13 @@ def build_help(syntax: str, grammar: str) -> str:
         out.extend([sections['description'], '\n\n'])
 
     out.extend(['## Syntax\n```sql\n', syntax, '\n```\n\n'])
+
+    if 'arguments' in sections:
+        out.extend([
+            '## Arguments\n\n',
+            _format_arguments(sections['arguments']),
+            '\n\n',
+        ])
 
     if 'remarks' in sections:
         out.extend(['## Remarks\n', sections['remarks'], '\n\n'])
