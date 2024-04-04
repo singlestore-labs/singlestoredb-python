@@ -355,7 +355,7 @@ class CreateWorkspaceHandler(SQLHandler):
     size = '<size>'
 
     # Auto-suspend
-    auto_suspend = AUTO SUSPEND suspend_after_seconds suspend_type
+    auto_suspend = AUTO SUSPEND suspend_after_seconds SECONDS suspend_type
     suspend_after_seconds = AFTER <integer>
     suspend_type = WITH TYPE { IDLE | SCHEDULED | DISABLED }
 
@@ -410,10 +410,10 @@ class CreateWorkspaceHandler(SQLHandler):
                 pass
 
         auto_suspend = None
-        if 'auto_suspend' in params:
+        if params['auto_suspend']:
             auto_suspend = dict(
                 suspend_after_seconds=params['auto_suspend'][0]['suspend_after_seconds'],
-                suspend_type=params['auto_suspend'][1]['suspend_type'].upper(),
+                suspend_type=params['auto_suspend'][-1]['suspend_type'].upper(),
             )
 
         workspace_group.create_workspace(
