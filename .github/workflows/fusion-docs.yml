@@ -29,6 +29,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Install package
+        run: |
+          pip install .
+
       - name: Build Fusion docs
         run: |
           python resources/gen_fusion_handlers_doc.py --dir fusion-docs
