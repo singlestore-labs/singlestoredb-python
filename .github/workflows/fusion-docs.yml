@@ -40,6 +40,6 @@ jobs:
 
       - name: Upload release asset
         run: |
-          gh release upload $${ github.ref_name }} fusion-docs.zip
+          gh release upload ${{ github.ref_name }} fusion-docs.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
