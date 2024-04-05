@@ -1,0 +1,41 @@
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+name: Generate Fusion docs
+
+jobs:
+
+  docs:
+    runs-on: ubuntu-20.04
+
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python --version
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build Fusion docs
+        run: |
+          python resources/gen_fusion_handlers_doc.py --dir fusion-docs
+          zip -r fusion-docs.zip fusion-docs
+
+      - name: Upload release asset
+        run: |
+          gh release upload $${ github.ref_name }} fusion-docs.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
