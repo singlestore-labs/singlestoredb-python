@@ -1008,7 +1008,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         raise RuntimeError('no functions specified')
 
     for f in funcs:
-        logger.info(f'function: {f}')
+        logger.info(f)
 
     try:
         if args.db:
