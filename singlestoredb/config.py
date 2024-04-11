@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """SingleStoreDB package options."""
 import functools
+import os
 
 from . import auth
 from .utils.config import check_bool  # noqa: F401
@@ -263,6 +264,129 @@ register_option(
     'management.version', 'string', check_str, 'v1',
     'Specifies the version for the management API.',
     environ=['SINGLESTOREDB_MANAGEMENT_VERSION'],
+)
+
+
+#
+# External function options
+#
+register_option(
+    'external_function.url', 'string', check_str, 'http://localhost:8000/invoke',
+    'Specifies the URL of the external function application.',
+    environ=['SINGLESTOREDB_EXT_FUNC_URL'],
+)
+
+register_option(
+    'external_function.app_mode', 'string',
+    functools.partial(
+        check_str,
+        valid_values=['remote', 'collocated'],
+    ),
+    'remote',
+    'Specifies the mode of operation of the external function application.',
+    environ=['SINGLESTOREDB_EXT_FUNC_APP_MODE'],
+)
+
+register_option(
+    'external_function.data_format', 'string',
+    functools.partial(
+        check_str,
+        valid_values=['rowdat_1', 'json'],
+    ),
+    'rowdat_1',
+    'Specifies the format for the data rows.',
+    environ=['SINGLESTOREDB_EXT_FUNC_DATA_FORMAT'],
+)
+
+register_option(
+    'external_function.data_version', 'string', check_str, '1.0',
+    'Specifies the version of the data format.',
+    environ=['SINGLESTOREDB_EXT_FUNC_DATA_VERSION'],
+)
+
+register_option(
+    'external_function.link_name', 'string', check_str, None,
+    'Specifies the link name to use for remote external functions.',
+    environ=['SINGLESTOREDB_EXT_FUNC_LINK_NAME'],
+)
+
+register_option(
+    'external_function.link_config', 'string', check_str, None,
+    'Specifies the link config in JSON format.',
+    environ=['SINGLESTOREDB_EXT_FUNC_LINK_CONFIG'],
+)
+
+register_option(
+    'external_function.link_credentials', 'string', check_str, None,
+    'Specifies the link credentials in JSON format.',
+    environ=['SINGLESTOREDB_EXT_FUNC_LINK_CREDENTIALS'],
+)
+
+register_option(
+    'external_function.replace_existing', 'bool', check_bool, False,
+    'Should existing functions be replaced when registering external functions?',
+    environ=['SINGLESTOREDB_EXT_FUNC_REPLACE_EXISTING'],
+)
+
+register_option(
+    'external_function.socket_path', 'string', check_str, None,
+    'Specifies the socket path for collocated external functions.',
+    environ=['SINGLESTOREDB_EXT_FUNC_SOCKET_PATH'],
+)
+
+register_option(
+    'external_function.max_connections', 'int', check_int, 32,
+    'Specifies the maximum connections in a collocated external function ' +
+    'before reusing them.',
+    environ=['SINGLESTOREDB_EXT_FUNC_MAX_CONNECTIONS'],
+)
+
+register_option(
+    'external_function.process_mode', 'string',
+    functools.partial(
+        check_str,
+        valid_values=['thread', 'subprocess'],
+    ),
+    'subprocess',
+    'Specifies the method to use for concurrent handlers in ' +
+    'collocated external functions',
+    environ=['SINGLESTOREDB_EXT_FUNC_PROCESS_MODE'],
+)
+
+register_option(
+    'external_function.single_thread', 'bool', check_bool, False,
+    'Should the collocated server run in single-thread mode?',
+    environ=['SINGLESTOREDB_EXT_FUNC_SINGLE_THREAD'],
+)
+
+register_option(
+    'external_function.log_level', 'string',
+    functools.partial(
+        check_str,
+        valid_values=['info', 'debug', 'warning', 'error'],
+    ),
+    'info',
+    'Logging level of external function server.',
+    environ=['SINGLESTOREDB_EXT_FUNC_LOG_LEVEL'],
+)
+
+register_option(
+    'external_function.connection', 'string', check_str,
+    os.environ.get('SINGLESTOREDB_URL') or None,
+    'Specifies the connection string for the database to register functions with.',
+    environ=['SINGLESTOREDB_EXT_FUNC_CONNECTION'],
+)
+
+register_option(
+    'external_function.host', 'string', check_str, '127.0.0.1',
+    'Specifies the host to bind the server to.',
+    environ=['SINGLESTOREDB_EXT_FUNC_HOST'],
+)
+
+register_option(
+    'external_function.port', 'int', check_int, 8000,
+    'Specifies the port to bind the server to.',
+    environ=['SINGLESTOREDB_EXT_FUNC_PORT'],
 )
 
 
