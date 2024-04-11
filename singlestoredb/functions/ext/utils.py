@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+import sys
 import zipfile
 from copy import copy
 from typing import Any
@@ -67,6 +68,7 @@ def read_config(
     with zipfile.ZipFile(archive) as arc:
         try:
             orig_options = tomllib.loads(arc.read(config_file).decode('utf8'))
+            verify_python_version(orig_options)
             for key in keys:
                 path = key.split('.')
                 options = orig_options
@@ -77,6 +79,58 @@ def read_config(
         except KeyError:
             pass
     return defaults
+
+
+def verify_python_version(options: Dict[str, Any]) -> None:
+    """Verify the version of Python matches the pyproject.toml requirement."""
+    requires_python = options.get('project', {}).get('requires_python', None)
+    if not requires_python:
+        return
+
+    m = re.match(r'\s*([<=>])+\s*((?:\d+\.)+\d+)\s*', requires_python)
+    if not m:
+        raise ValueError(f'python version string is not valid: {requires_python}')
+
+    operator = m.group(1)
+    version_info = tuple(int(x) for x in m.group(2))
+
+    if operator == '<=':
+        if not (sys.version_info <= version_info):
+            raise RuntimeError(
+                'python version is not compatible: ' +
+                f'{sys.version_info} > {m.group(2)}',
+            )
+
+    elif operator == '>=':
+        if not (sys.version_info >= version_info):
+            raise RuntimeError(
+                'python version is not compatible: ' +
+                f'{sys.version_info} < {m.group(2)}',
+            )
+
+    elif operator in ['==', '=']:
+        if not (sys.version_info == version_info):
+            raise RuntimeError(
+                'python version is not compatible: ' +
+                f'{sys.version_info} != {m.group(2)}',
+            )
+
+    elif operator == '>':
+        if not (sys.version_info > version_info):
+            raise RuntimeError(
+                'python version is not compatible: ' +
+                f'{sys.version_info} <= {m.group(2)}',
+            )
+
+    elif operator == '<':
+        if not (sys.version_info < version_info):
+            raise RuntimeError(
+                'python version is not compatible: ' +
+                f'{sys.version_info} >= {m.group(2)}',
+            )
+
+    else:
+        raise ValueError(f'invalid python_version operator: {operator}')
 
 
 def to_toml(data: Dict[str, Any]) -> str:

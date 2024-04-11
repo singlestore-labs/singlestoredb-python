@@ -714,7 +714,6 @@ def create_app(  # noqa: C901
         destination: str = '.',
         version: Optional[str] = None,
         dependencies: Optional[List[str]] = None,
-        requires_python: str = '>=3.8',
         authors: Optional[List[Dict[str, str]]] = None,
         maintainers: Optional[List[Dict[str, str]]] = None,
         description: Optional[str] = None,
@@ -745,7 +744,8 @@ def create_app(  # noqa: C901
                         name=name,
                         version=version,
                         dependencies=dependencies,
-                        requires_python=requires_python,
+                        requires_python='== ' +
+                        '.'.join(str(x) for x in sys.version_info[:3]),
                         authors=authors,
                         maintainers=maintainers,
                         description=description,
