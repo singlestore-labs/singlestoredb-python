@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''
+"""
 Module for creating collocated Python UDFs
 
 This module implements the collocated form of external functions for
@@ -37,7 +37,7 @@ With the functions registered, you can now run the UDFs::
     SELECT print_it(3.14, 'my string');
     SELECT print_it_pandas(3.14, 'my string');
 
-'''
+"""
 import argparse
 import array
 import asyncio
@@ -59,6 +59,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Union
 
 from . import asgi
 from . import utils
@@ -70,7 +71,7 @@ logger = utils.get_logger('singlestoredb.functions.ext.mmap')
 
 
 def _handle_request(app: Any, connection: Any, client_address: Any) -> None:
-    '''
+    """
     Handle function call request.
 
     Parameters:
@@ -81,7 +82,7 @@ def _handle_request(app: Any, connection: Any, client_address: Any) -> None:
     client_address : string
         Address of connecting client
 
-    '''
+    """
     logger.info('connection from {}'.format(str(connection).split(', ')[0][-4:]))
 
     # Receive the request header.  Format:
@@ -283,6 +284,14 @@ def main(argv: Optional[List[str]] = None) -> None:
                 wsg.stage.download_file(url.path, local_path)
                 args.functions[i] = local_path
 
+            elif f.startswith('http://') or f.startswith('https://'):
+                if tmpdir is None:
+                    tmpdir = tempfile.TemporaryDirectory()
+
+                local_path = os.path.join(tmpdir.name, f.split('/')[-1])
+                urllib.request.urlretrieve(f, local_path)
+                args.functions[i] = local_path
+
         # See if any of the args are zip files (assume they are environment files)
         modules = [(x, zipfile.is_zipfile(x)) for x in args.functions]
         envs = [x[0] for x in modules if x[1]]
@@ -330,7 +339,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         app_mode='collocated',
     )
 
-    funcs = app.show_create_functions(replace=args.replace_existing)  # type: ignore
+    funcs = app.show_create_functions(replace=args.replace_existing)
     if not funcs:
         raise RuntimeError('no functions specified')
 
@@ -354,7 +363,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         # Register functions with database
         if args.db:
             logger.info('registering functions with database')
-            app.register_functions(args.db, replace=args.replace_existing)  # type: ignore
+            app.register_functions(args.db, replace=args.replace_existing)
 
         # Accept connections forever.
         while True:
@@ -362,9 +371,12 @@ def main(argv: Optional[List[str]] = None) -> None:
             connection, client_address = server.accept()
 
             if args.process_mode == 'thread':
-                tcls = threading.Thread
+                tcls: Union[
+                    type[threading.Thread],
+                    type[multiprocessing.Process],
+                ] = threading.Thread
             else:
-                tcls = multiprocessing.Process  # type: ignore
+                tcls = multiprocessing.Process
 
             t = tcls(
                 target=_handle_request,
@@ -386,7 +398,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     finally:
         if args.db:
             logger.info('dropping functions from database')
-            app.drop_functions(args.db)  # type: ignore
+            app.drop_functions(args.db)
 
         # Remove the socket file before we exit.
         try:
@@ -401,3 +413,5 @@ if __name__ == '__main__':
     except RuntimeError as exc:
         logger.error(str(exc))
         sys.exit(1)
+    except KeyboardInterrupt:
+        pass
