@@ -59,7 +59,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Union
 
 from . import asgi
 from . import utils
@@ -371,12 +370,9 @@ def main(argv: Optional[List[str]] = None) -> None:
             connection, client_address = server.accept()
 
             if args.process_mode == 'thread':
-                tcls: Union[
-                    type[threading.Thread],
-                    type[multiprocessing.Process],
-                ] = threading.Thread
+                tcls = threading.Thread
             else:
-                tcls = multiprocessing.Process
+                tcls = multiprocessing.Process  # type: ignore
 
             t = tcls(
                 target=_handle_request,
