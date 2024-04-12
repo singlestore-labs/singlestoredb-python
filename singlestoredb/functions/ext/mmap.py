@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-'''
+"""
 Module for creating collocated Python UDFs
 
 This module implements the collocated form of external functions for
@@ -37,7 +37,7 @@ With the functions registered, you can now run the UDFs::
     SELECT print_it(3.14, 'my string');
     SELECT print_it_pandas(3.14, 'my string');
 
-'''
+"""
 import argparse
 import array
 import asyncio
@@ -53,21 +53,24 @@ import sys
 import tempfile
 import threading
 import traceback
+import urllib
+import zipfile
 from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
 from . import asgi
+from . import utils
+from ... import manage_workspaces
+from ...config import get_option
 
 
-logger = logging.getLogger('singlestoredb.functions.ext.mmap')
-handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+logger = utils.get_logger('singlestoredb.functions.ext.mmap')
 
 
 def _handle_request(app: Any, connection: Any, client_address: Any) -> None:
-    '''
+    """
     Handle function call request.
 
     Parameters:
@@ -78,7 +81,7 @@ def _handle_request(app: Any, connection: Any, client_address: Any) -> None:
     client_address : string
         Address of connecting client
 
-    '''
+    """
     logger.info('connection from {}'.format(str(connection).split(', ')[0][-4:]))
 
     # Receive the request header.  Format:
@@ -186,76 +189,161 @@ def _handle_request(app: Any, connection: Any, client_address: Any) -> None:
     connection.close()
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        prog='python -m singlestoredb.functions.ext.mmap',
-        description='Run a collacated Python UDF server',
-    )
-    parser.add_argument(
-        '--max-connections', metavar='n', type=int, default=32,
-        help='maximum number of server connections before refusing them',
-    )
-    parser.add_argument(
-        '--single-thread', default=False, action='store_true',
-        help='should the server run in single-thread mode?',
-    )
-    parser.add_argument(
-        '--socket-path', metavar='file-path',
-        default=os.path.join(tempfile.gettempdir(), secrets.token_hex(16)),
-        help='path to communications socket',
-    )
-    parser.add_argument(
-        '--db', metavar='conn-str', default='',
-        help='connection string to use for registering functions',
-    )
-    parser.add_argument(
-        '--replace-existing', action='store_true',
-        help='should existing functions of the same name '
-             'in the database be replaced?',
-    )
-    parser.add_argument(
-        '--log-level', metavar='[info|debug|warning|error]', default='info',
-        help='logging level',
-    )
-    parser.add_argument(
-        '--process-mode', metavar='[thread|subprocess]', default='subprocess',
-        help='how to handle concurrent handlers',
-    )
-    parser.add_argument(
-        'functions', metavar='module.or.func.path', nargs='*',
-        help='functions or modules to export in UDF server',
-    )
-    args = parser.parse_args()
+def main(argv: Optional[List[str]] = None) -> None:
+    """
+    Main program for collocated Python UDFs
 
-    logger.setLevel(getattr(logging, args.log_level.upper()))
+    Parameters
+    ----------
+    argv : List[str], optional
+        List of command-line parameters
+
+    """
+    tmpdir = None
+    functions = []
+    defaults: Dict[str, Any] = {}
+    for i in range(2):
+        parser = argparse.ArgumentParser(
+            prog='python -m singlestoredb.functions.ext.mmap',
+            description='Run a collacated Python UDF server',
+        )
+        parser.add_argument(
+            '--max-connections', metavar='n', type=int,
+            default=get_option('external_function.max_connections'),
+            help='maximum number of server connections before refusing them',
+        )
+        parser.add_argument(
+            '--single-thread', action='store_true',
+            default=get_option('external_function.single_thread'),
+            help='should the server run in single-thread mode?',
+        )
+        parser.add_argument(
+            '--socket-path', metavar='file-path',
+            default=(
+                get_option('external_function.socket_path') or
+                os.path.join(tempfile.gettempdir(), secrets.token_hex(16))
+            ),
+            help='path to communications socket',
+        )
+        parser.add_argument(
+            '--db', metavar='conn-str',
+            default=os.environ.get('SINGLESTOREDB_URL', ''),
+            help='connection string to use for registering functions',
+        )
+        parser.add_argument(
+            '--replace-existing', action='store_true',
+            help='should existing functions of the same name '
+                 'in the database be replaced?',
+        )
+        parser.add_argument(
+            '--log-level', metavar='[info|debug|warning|error]',
+            default=get_option('external_function.log_level'),
+            help='logging level',
+        )
+        parser.add_argument(
+            '--process-mode', metavar='[thread|subprocess]',
+            default=get_option('external_function.process_mode'),
+            help='how to handle concurrent handlers',
+        )
+        parser.add_argument(
+            'functions', metavar='module.or.func.path', nargs='*',
+            help='functions or modules to export in UDF server',
+        )
+
+        args = parser.parse_args(argv)
+
+        logger.setLevel(getattr(logging, args.log_level.upper()))
+
+        if i > 0:
+            break
+
+        # Download Stage files as needed
+        for i, f in enumerate(args.functions):
+            if f.startswith('stage://'):
+                url = urllib.parse.urlparse(f)
+                if not url.path or url.path == '/':
+                    raise ValueError(f'no stage path was specified: {f}')
+                if url.path.endswith('/'):
+                    raise ValueError(f'an environment file must be specified: {f}')
+
+                mgr = manage_workspaces()
+                if url.hostname:
+                    wsg = mgr.get_workspace_group(url.hostname)
+                elif os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP'):
+                    wsg = mgr.get_workspace_group(
+                        os.environ['SINGLESTOREDB_WORKSPACE_GROUP'],
+                    )
+                else:
+                    raise ValueError(f'no workspace group specified: {f}')
+
+                if tmpdir is None:
+                    tmpdir = tempfile.TemporaryDirectory()
+
+                local_path = os.path.join(tmpdir.name, url.path.split('/')[-1])
+                wsg.stage.download_file(url.path, local_path)
+                args.functions[i] = local_path
+
+            elif f.startswith('http://') or f.startswith('https://'):
+                if tmpdir is None:
+                    tmpdir = tempfile.TemporaryDirectory()
+
+                local_path = os.path.join(tmpdir.name, f.split('/')[-1])
+                urllib.request.urlretrieve(f, local_path)
+                args.functions[i] = local_path
+
+        # See if any of the args are zip files (assume they are environment files)
+        modules = [(x, zipfile.is_zipfile(x)) for x in args.functions]
+        envs = [x[0] for x in modules if x[1]]
+        others = [x[0] for x in modules if not x[1]]
+
+        if envs and len(envs) > 1:
+            raise RuntimeError('only one environment file may be specified.')
+
+        if envs and others:
+            raise RuntimeError('environment files and other modules can not be mixed.')
+
+        # See if an environment file was specified. If so, use those settings
+        # as the defaults and reprocess command line.
+        if envs:
+            # Add zip file to the Python path
+            sys.path.insert(0, envs[0])
+            functions = [os.path.splitext(os.path.basename(envs[0]))[0]]
+
+            # Add pyproject.toml variables and redo command-line processing
+            defaults = utils.read_config(
+                envs[0],
+                ['tool.external_function', 'tool.external-function.collocated'],
+            )
+            if defaults:
+                continue
+
+    args.functions = functions or args.functions or None
+    args.replace_existing = args.replace_existing \
+        or defaults.get('replace_existing') \
+        or get_option('external_function.replace_existing')
 
     if os.path.exists(args.socket_path):
         try:
             os.unlink(args.socket_path)
         except (IOError, OSError):
-            logger.error(f'could not remove existing socket path: {args.socket_path}')
-            sys.exit(1)
+            raise RuntimeError(
+                f'could not remove existing socket path: {args.socket_path}',
+            )
 
-    # Create application
+    # Create application from functions / module
     app = asgi.create_app(
-        args.functions,
-        app_mode='collocated',
-        data_format='rowdat_1',
+        functions=args.functions,
         url=args.socket_path,
+        data_format='rowdat_1',
+        app_mode='collocated',
     )
 
-    funcs = app.show_create_functions(replace=True)  # type: ignore
+    funcs = app.show_create_functions(replace=args.replace_existing)
     if not funcs:
-        logger.error('no functions specified')
-        sys.exit(1)
+        raise RuntimeError('no functions specified')
 
     for f in funcs:
         logger.info(f'function: {f}')
-
-    # Register functions with database
-    if args.db:
-        logger.info('registering functions with database')
-        app.register_functions(args.db, replace=args.replace_existing)  # type: ignore
 
     # Create the Unix socket server.
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -270,8 +358,13 @@ if __name__ == '__main__':
     # simple case.
     server.listen(args.max_connections)
 
-    # Accept connections forever.
     try:
+        # Register functions with database
+        if args.db:
+            logger.info('registering functions with database')
+            app.register_functions(args.db, replace=args.replace_existing)
+
+        # Accept connections forever.
         while True:
             # Listen for the next connection on our port.
             connection, client_address = server.accept()
@@ -296,11 +389,25 @@ if __name__ == '__main__':
                 t.join()
 
     except KeyboardInterrupt:
-        sys.exit(0)
+        return
 
     finally:
+        if args.db:
+            logger.info('dropping functions from database')
+            app.drop_functions(args.db)
+
         # Remove the socket file before we exit.
         try:
             os.unlink(args.socket_path)
         except (IOError, OSError):
             logger.error(f'could not remove socket path: {args.socket_path}')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except RuntimeError as exc:
+        logger.error(str(exc))
+        sys.exit(1)
+    except KeyboardInterrupt:
+        pass

@@ -13,7 +13,7 @@ import singlestoredb as s2
 import singlestoredb.mysql.constants.FIELD_TYPE as ft
 from . import ext_funcs
 from . import utils
-from singlestoredb.functions.ext import create_app
+from singlestoredb.functions.ext.asgi import create_app
 
 
 try:
@@ -41,7 +41,7 @@ def start_http_server(database, data_format='rowdat_1'):
     port = get_open_port()
     print(f'Start UDF HTTP server on http://{HTTP_HOST}:{port}')
     proc = subprocess.Popen(
-        ['uvicorn', 'singlestoredb.functions.ext:create_app'],
+        ['uvicorn', 'singlestoredb.functions.ext.asgi:create_app'],
         env=dict(
             PATH=os.environ['PATH'],
             PYTHONPATH=os.environ.get('PYTHONPATH', ''),
