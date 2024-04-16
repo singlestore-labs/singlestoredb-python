@@ -16,6 +16,10 @@
 #define ACCEL_OUT_STRUCTSEQUENCES 1
 #define ACCEL_OUT_DICTS 2
 #define ACCEL_OUT_NAMEDTUPLES 3
+#define ACCEL_OUT_NUMPY 4
+#define ACCEL_OUT_PANDAS 5
+#define ACCEL_OUT_POLARS 6
+#define ACCEL_OUT_ARROW 7
 
 #define NUMPY_BOOL 1
 #define NUMPY_INT8 2
@@ -389,6 +393,9 @@ typedef struct {
     PyObject *Series;
     PyObject *array;
     PyObject *vectorize;
+    PyObject *DataFrame;
+    PyObject *Table;
+    PyObject *from_pylist;
 } PyStrings;
 
 static PyStrings PyStr = {0};
@@ -406,6 +413,10 @@ typedef struct {
     PyObject *collections_namedtuple;
     PyObject *numpy_array;
     PyObject *numpy_vectorize;
+    PyObject *pandas_DataFrame;
+    PyObject *polars_DataFrame;
+    PyObject *pyarrow_Table;
+    PyObject *pyarrow_Table_from_pylist;
 } PyFunctions;
 
 static PyFunctions PyFunc = {0};
@@ -466,9 +477,87 @@ typedef struct {
     char *encoding_errors;
 } StateObject;
 
-static void read_options(MySQLAccelOptions *options, PyObject *dict);
+static int read_options(MySQLAccelOptions *options, PyObject *dict);
 
 #define DESTROY(x) do { if (x) { free((void*)x); (x) = NULL; } } while (0)
+
+int ensure_numpy() {
+    if (PyFunc.numpy_array && PyFunc.numpy_vectorize) goto exit;
+
+    // Import numpy if it exists
+    PyObject *numpy_mod = PyImport_ImportModule("numpy");
+    if (!numpy_mod) goto error;
+
+    PyFunc.numpy_array = PyObject_GetAttr(numpy_mod, PyStr.array);
+    if (!PyFunc.numpy_array) goto error;
+
+    PyFunc.numpy_vectorize = PyObject_GetAttr(numpy_mod, PyStr.vectorize);
+    if (!PyFunc.numpy_vectorize) goto error;
+
+exit:
+    return 0;
+
+error:
+    return -1;
+}
+
+
+int ensure_pandas() {
+    if (PyFunc.pandas_DataFrame) goto exit;
+
+    // Import pandas if it exists
+    PyObject *pandas_mod = PyImport_ImportModule("pandas");
+    if (!pandas_mod) goto error;
+
+    PyFunc.pandas_DataFrame = PyObject_GetAttr(pandas_mod, PyStr.DataFrame);
+    if (!PyFunc.pandas_DataFrame) goto error;
+
+exit:
+    return 0;
+
+error:
+    return -1;
+}
+
+
+int ensure_polars() {
+    if (PyFunc.polars_DataFrame) goto exit;
+
+    // Import polars if it exists
+    PyObject *polars_mod = PyImport_ImportModule("polars");
+    if (!polars_mod) goto error;
+
+    PyFunc.polars_DataFrame = PyObject_GetAttr(polars_mod, PyStr.DataFrame);
+    if (!PyFunc.polars_DataFrame) goto error;
+
+exit:
+    return 0;
+
+error:
+    return -1;
+}
+
+
+int ensure_pyarrow() {
+    if (PyFunc.pyarrow_Table_from_pylist) goto exit;
+
+    // Import pyarrow if it exists
+    PyObject *pyarrow_mod = PyImport_ImportModule("pyarrow");
+    if (!pyarrow_mod) goto error;
+
+    PyFunc.pyarrow_Table = PyObject_GetAttr(pyarrow_mod, PyStr.Table);
+    if (!PyFunc.pyarrow_Table) goto error;
+
+    PyFunc.pyarrow_Table_from_pylist = PyObject_GetAttr(PyFunc.pyarrow_Table, PyStr.from_pylist);
+    if (!PyFunc.pyarrow_Table_from_pylist) goto error;
+
+exit:
+    return 0;
+
+error:
+    return -1;
+}
+
 
 static void State_clear_fields(StateObject *self) {
     if (!self) return;
@@ -709,7 +798,8 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
     Py_XDECREF(py_next_seq_id);
 
     if (py_options && PyDict_Check(py_options)) {
-        read_options(&self->options, py_options);
+        rc = read_options(&self->options, py_options);
+        if (rc) goto error;
     }
 
     switch (self->options.results_type) {
@@ -825,12 +915,13 @@ static PyType_Spec StateType_spec = {
 // End State
 //
 
-static void read_options(MySQLAccelOptions *options, PyObject *dict) {
-    if (!options || !dict) return;
+static int read_options(MySQLAccelOptions *options, PyObject *dict) {
+    if (!options || !dict) return 0;
 
     PyObject *key = NULL;
     PyObject *value = NULL;
     Py_ssize_t pos = 0;
+    int rc = 0;
 
     while (PyDict_Next(dict, &pos, &key, &value)) {
         if (PyUnicode_CompareWithASCIIString(key, "results_type") == 0) {
@@ -846,6 +937,23 @@ static void read_options(MySQLAccelOptions *options, PyObject *dict) {
                      PyUnicode_CompareWithASCIIString(value, "structsequences") == 0) {
                 options->results_type = ACCEL_OUT_STRUCTSEQUENCES;
             }
+            else if (PyUnicode_CompareWithASCIIString(value, "numpy") == 0) {
+                options->results_type = ACCEL_OUT_NUMPY;
+                rc = ensure_numpy();
+            }
+            else if (PyUnicode_CompareWithASCIIString(value, "pandas") == 0) {
+                options->results_type = ACCEL_OUT_PANDAS;
+                rc = ensure_pandas();
+            }
+            else if (PyUnicode_CompareWithASCIIString(value, "polars") == 0) {
+                options->results_type = ACCEL_OUT_POLARS;
+                rc = ensure_polars();
+            }
+            else if (PyUnicode_CompareWithASCIIString(value, "arrow") == 0 ||
+                     PyUnicode_CompareWithASCIIString(value, "pyarrow") == 0) {
+                options->results_type = ACCEL_OUT_ARROW;
+                rc = ensure_pyarrow();
+            }
             else {
                 options->results_type = ACCEL_OUT_TUPLES;
             }
@@ -857,6 +965,8 @@ static void read_options(MySQLAccelOptions *options, PyObject *dict) {
             }
         }
     }
+
+    return rc;
 }
 
 static void raise_exception(
@@ -1323,6 +1433,7 @@ static PyObject *read_row_from_packet(
 
     switch (py_state->options.results_type) {
     case ACCEL_OUT_DICTS:
+    case ACCEL_OUT_ARROW:
         py_result = PyDict_New();
         break;
    case ACCEL_OUT_STRUCTSEQUENCES: {
@@ -1586,6 +1697,7 @@ static PyObject *read_row_from_packet(
             PyStructSequence_SetItem(py_result, i, py_item);
             break;
         case ACCEL_OUT_DICTS:
+        case ACCEL_OUT_ARROW:
             PyDict_SetItem(py_result, py_state->py_names[i], py_item);
             Py_INCREF(py_state->py_names[i]);
             Py_DECREF(py_item);
@@ -1844,27 +1956,6 @@ error:
     py_out = NULL;
 
     goto exit;
-}
-
-
-int ensure_numpy() {
-    if (PyFunc.numpy_array && PyFunc.numpy_vectorize) goto exit;
-
-    // Import numpy if it exists
-    PyObject *numpy_mod = PyImport_ImportModule("numpy");
-    if (!numpy_mod) goto error;
-
-    PyFunc.numpy_array = PyObject_GetAttr(numpy_mod, PyStr.array);
-    if (!PyFunc.numpy_array) goto error;
-
-    PyFunc.numpy_vectorize = PyObject_GetAttr(numpy_mod, PyStr.vectorize);
-    if (!PyFunc.numpy_vectorize) goto error;
-
-exit:
-    return 0;
-
-error:
-    return -1;
 }
 
 
@@ -4372,6 +4463,9 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     PyStr.Series = PyUnicode_FromString("Series");
     PyStr.array = PyUnicode_FromString("array");
     PyStr.vectorize = PyUnicode_FromString("vectorize");
+    PyStr.DataFrame = PyUnicode_FromString("DataFrame");
+    PyStr.Table = PyUnicode_FromString("Table");
+    PyStr.from_pylist = PyUnicode_FromString("from_pylist");
 
     PyObject *decimal_mod = PyImport_ImportModule("decimal");
     if (!decimal_mod) goto error;

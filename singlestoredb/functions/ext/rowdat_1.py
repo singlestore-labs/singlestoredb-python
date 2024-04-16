@@ -287,8 +287,8 @@ def _load_numpy(
     return np.asarray(row_ids, dtype=np.int64), \
         [
             (
-                np.asarray(data, dtype=NUMPY_TYPE_MAP[dtype]),
-                np.asarray(mask, dtype=np.bool_),
+                np.asarray(data, dtype=NUMPY_TYPE_MAP[dtype]),  # type: ignore
+                np.asarray(mask, dtype=np.bool_),  # type: ignore
             )
             for (data, mask), (name, dtype) in zip(cols, colspec)
         ]

@@ -29,12 +29,28 @@ from .cursors import (
     DictCursorSV,
     NamedtupleCursor,
     NamedtupleCursorSV,
+    ArrowCursor,
+    ArrowCursorSV,
+    NumpyCursor,
+    NumpyCursorSV,
+    PandasCursor,
+    PandasCursorSV,
+    PolarsCursor,
+    PolarsCursorSV,
     SSCursor,
     SSCursorSV,
     SSDictCursor,
     SSDictCursorSV,
     SSNamedtupleCursor,
     SSNamedtupleCursorSV,
+    SSArrowCursor,
+    SSArrowCursorSV,
+    SSNumpyCursor,
+    SSNumpyCursorSV,
+    SSPandasCursor,
+    SSPandasCursorSV,
+    SSPolarsCursor,
+    SSPolarsCursorSV,
 )
 from .optionfile import Parser
 from .protocol import (
@@ -443,6 +459,14 @@ class Connection(BaseConnection):
                 self.cursorclass = DictCursor
             elif 'namedtuple' in self.results_type:
                 self.cursorclass = NamedtupleCursor
+            elif 'numpy' in self.results_type:
+                self.cursorclass = NumpyCursor
+            elif 'arrow' in self.results_type:
+                self.cursorclass = ArrowCursor
+            elif 'pandas' in self.results_type:
+                self.cursorclass = PandasCursor
+            elif 'polars' in self.results_type:
+                self.cursorclass = PolarsCursor
             else:
                 self.cursorclass = Cursor
         else:
@@ -450,6 +474,14 @@ class Connection(BaseConnection):
                 self.cursorclass = SSDictCursor
             elif 'namedtuple' in self.results_type:
                 self.cursorclass = SSNamedtupleCursor
+            elif 'numpy' in self.results_type:
+                self.cursorclass = SSNumpyCursor
+            elif 'arrow' in self.results_type:
+                self.cursorclass = SSArrowCursor
+            elif 'pandas' in self.results_type:
+                self.cursorclass = SSPandasCursor
+            elif 'polars' in self.results_type:
+                self.cursorclass = SSPolarsCursor
             else:
                 self.cursorclass = SSCursor
 
@@ -487,6 +519,30 @@ class Connection(BaseConnection):
             elif self.cursorclass is SSNamedtupleCursor:
                 self.cursorclass = SSNamedtupleCursorSV
                 self.results_type = 'namedtuples'
+            elif self.cursorclass is NumpyCursor:
+                self.cursorclass = NumpyCursorSV
+                self.results_type = 'numpy'
+            elif self.cursorclass is SSNumpyCursor:
+                self.cursorclass = SSNumpyCursorSV
+                self.results_type = 'numpy'
+            elif self.cursorclass is ArrowCursor:
+                self.cursorclass = ArrowCursorSV
+                self.results_type = 'arrow'
+            elif self.cursorclass is SSArrowCursor:
+                self.cursorclass = SSArrowCursorSV
+                self.results_type = 'arrow'
+            elif self.cursorclass is PandasCursor:
+                self.cursorclass = PandasCursorSV
+                self.results_type = 'pandas'
+            elif self.cursorclass is SSPandasCursor:
+                self.cursorclass = SSPandasCursorSV
+                self.results_type = 'pandas'
+            elif self.cursorclass is PolarsCursor:
+                self.cursorclass = PolarsCursorSV
+                self.results_type = 'polars'
+            elif self.cursorclass is SSPolarsCursor:
+                self.cursorclass = SSPolarsCursorSV
+                self.results_type = 'polars'
 
         self._result = None
         self._affected_rows = 0
@@ -498,8 +554,15 @@ class Connection(BaseConnection):
         if conv is None:
             conv = converters.conversions
 
+        conv = conv.copy()
+
         self.parse_json = parse_json
         self.invalid_values = (invalid_values or {}).copy()
+
+        # Convert decimals to strings for certain output formats
+        if self.results_type in ['arrow']:
+            conv[245] = None
+            self.parse_json = False
 
         # Need for MySQLdb compatibility.
         self.encoders = {k: v for (k, v) in conv.items() if type(k) is not int}

@@ -212,8 +212,8 @@ def load_numpy(
     return np.asarray(row_ids, dtype=np.longlong), \
         [
             (
-                np.asarray(data, dtype=NUMPY_TYPE_MAP[spec[1]]),
-                np.asarray(mask, dtype=np.bool_),
+                np.asarray(data, dtype=NUMPY_TYPE_MAP[spec[1]]),  # type: ignore
+                np.asarray(mask, dtype=np.bool_),  # type: ignore
             )
             for (data, mask), spec in zip(cols, colspec)
         ]

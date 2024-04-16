@@ -115,7 +115,7 @@ polars_unsigned_int24_arr = \
 polars_string_arr = \
     pl.Series(None, numpy_string_arr.tolist(), dtype=pl.Utf8)
 polars_binary_arr = \
-    pl.Series(None, numpy_binary_arr.tolist(), dtype=pl.Utf8)
+    pl.Series(None, numpy_binary_arr.tolist(), dtype=pl.Binary)
 
 polars_data = [
     (polars_tiny_arr, polars_nulls),

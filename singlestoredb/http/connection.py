@@ -62,6 +62,7 @@ from ..utils.debug import log_query
 from ..utils.mogrify import mogrify
 from ..utils.results import Description
 from ..utils.results import format_results
+from ..utils.results import get_schema
 from ..utils.results import Result
 
 
@@ -333,6 +334,7 @@ class Cursor(connection.Cursor):
         self._row_idx: int = -1
         self._result_idx: int = -1
         self._descriptions: List[List[Description]] = []
+        self._schemas: List[Dict[str, Any]] = []
         self.arraysize: int = get_option('results.arraysize')
         self.rowcount: int = 0
         self.lastrowid: Optional[int] = None
@@ -353,6 +355,14 @@ class Cursor(connection.Cursor):
             return None
         if self._result_idx >= 0 and self._result_idx < len(self._descriptions):
             return self._descriptions[self._result_idx]
+        return None
+
+    @property
+    def _schema(self) -> Optional[Any]:
+        if not self._schemas:
+            return None
+        if self._result_idx >= 0 and self._result_idx < len(self._schemas):
+            return self._schemas[self._result_idx]
         return None
 
     def _post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -460,6 +470,7 @@ class Cursor(connection.Cursor):
             self._results_type = results_type
 
         self._descriptions.append(list(mgmt_res.description))
+        self._schemas.append(get_schema(self._results_type, list(mgmt_res.description)))
         self._results.append(list(mgmt_res.rows))
         self.rowcount = len(self._results[-1])
 
@@ -487,6 +498,7 @@ class Cursor(connection.Cursor):
         is_callproc: bool = False,
     ) -> int:
         self._descriptions = []
+        self._schemas = []
         self._results = []
         self._pymy_results = []
         self._row_idx = -1
@@ -571,6 +583,14 @@ class Cursor(connection.Cursor):
                     if isinstance(k, int):
                         http_converters[k] = v
 
+            # Make JSON a string for Arrow
+            if 'arrow' in self._results_type:
+                def json_to_str(x: Any) -> Optional[str]:
+                    if x is None:
+                        return None
+                    return json.dumps(x)
+                http_converters[245] = json_to_str
+
             results = out['results']
 
             # Convert data to Python types
@@ -616,6 +636,7 @@ class Cursor(connection.Cursor):
                         )
                         pymy_res.append(PyMyField(col['name'], flags, charset))
                     self._descriptions.append(description)
+                    self._schemas.append(get_schema(self._results_type, description))
 
                     rows = convert_rows(result.get('rows', []), convs)
 
@@ -659,6 +680,7 @@ class Cursor(connection.Cursor):
         rowcount = 0
         if args is not None and len(args) > 0:
             description = []
+            schema = {}
             # Detect dataframes
             if hasattr(args, 'itertuples'):
                 argiter = args.itertuples(index=False)  # type: ignore
@@ -668,11 +690,14 @@ class Cursor(connection.Cursor):
                 self.execute(query, params)
                 if self._descriptions:
                     description = self._descriptions[-1]
+                if self._schemas:
+                    schema = self._schemas[-1]
                 if self._rows is not None:
                     results.append(self._rows)
                 rowcount += self.rowcount
             self._results = results
             self._descriptions = [description for _ in range(len(results))]
+            self._schemas = [schema for _ in range(len(results))]
         else:
             self.execute(query)
             rowcount += self.rowcount
@@ -721,6 +746,7 @@ class Cursor(connection.Cursor):
             self._results_type,
             self.description or [],
             out, single=True,
+            schema=self._schema,
         )
 
     def fetchmany(
@@ -752,7 +778,10 @@ class Cursor(connection.Cursor):
             size = max(int(size), 1)
         out = self._rows[self._row_idx:self._row_idx+size]
         self._row_idx += len(out)
-        return format_results(self._results_type, self.description or [], out)
+        return format_results(
+            self._results_type, self.description or [],
+            out, schema=self._schema,
+        )
 
     def fetchall(self) -> Result:
         """
@@ -774,7 +803,10 @@ class Cursor(connection.Cursor):
             return tuple()
         out = list(self._rows[self._row_idx:])
         self._row_idx = len(out)
-        return format_results(self._results_type, self.description or [], out)
+        return format_results(
+            self._results_type, self.description or [],
+            out, schema=self._schema,
+        )
 
     def nextset(self) -> Optional[bool]:
         """Skip to the next available result set."""
