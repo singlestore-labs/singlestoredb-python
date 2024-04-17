@@ -13,6 +13,18 @@ from singlestoredb.tests import utils
 # import pandas as pd
 # import traceback
 
+try:
+    import numpy as np
+    has_numpy = True
+except ImportError:
+    has_numpy = False
+
+try:
+    import pandas as pd
+    has_pandas = True
+except ImportError:
+    has_pandas = False
+
 
 class TestConnection(unittest.TestCase):
 
@@ -720,6 +732,1402 @@ class TestConnection(unittest.TestCase):
 
         assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
         assert typ['bit'] == otype(16), typ['bit']
+
+    def test_alltypes_numpy(self):
+        conn = s2.connect(database=type(self).dbname, results_type='numpy')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes where id = 0')
+        names = [x[0] for x in cur.description]
+        out = cur.fetchone()
+        row = dict(zip(names, out[0]))
+
+        dtypes = [
+            ('id', '<f8'),
+            ('tinyint', '<f4'),
+            ('unsigned_tinyint', '<f4'),
+            ('bool', '<f4'),
+            ('boolean', '<f4'),
+            ('smallint', '<f4'),
+            ('unsigned_smallint', '<f4'),
+            ('mediumint', '<f8'),
+            ('unsigned_mediumint', '<f8'),
+            ('int24', '<f8'),
+            ('unsigned_int24', '<f8'),
+            ('int', '<f8'),
+            ('unsigned_int', '<f8'),
+            ('integer', '<f8'),
+            ('unsigned_integer', '<f8'),
+            ('bigint', '<f8'),
+            ('unsigned_bigint', '<f8'),
+            ('float', '<f4'),
+            ('double', '<f8'),
+            ('real', '<f8'),
+            ('decimal', 'O'),
+            ('dec', 'O'),
+            ('fixed', 'O'),
+            ('numeric', 'O'),
+            ('date', '<M8[D]'),
+            ('time', '<m8[us]'),
+            ('time_6', '<m8[us]'),
+            ('datetime', '<M8[us]'),
+            ('datetime_6', '<M8[us]'),
+            ('timestamp', '<M8[us]'),
+            ('timestamp_6', '<M8[us]'),
+            ('year', '<f8'),
+            ('char_100', 'O'),
+            ('binary_100', 'O'),
+            ('varchar_200', 'O'),
+            ('varbinary_200', 'O'),
+            ('longtext', 'O'),
+            ('mediumtext', 'O'),
+            ('text', 'O'),
+            ('tinytext', 'O'),
+            ('longblob', 'O'),
+            ('mediumblob', 'O'),
+            ('blob', 'O'),
+            ('tinyblob', 'O'),
+            ('json', 'O'),
+            ('enum', 'O'),
+            ('set', 'O'),
+            ('bit', 'O'),
+        ]
+
+        assert out.dtype == dtypes
+
+        bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+        assert row['id'] == 0, row['id']
+        assert row['tinyint'] == 80, row['tinyint']
+        assert row['unsigned_tinyint'] == 85, row['unsigned_tinyint']
+        assert row['bool'] == 0, row['bool']
+        assert row['boolean'] == 1, row['boolean']
+        assert row['smallint'] == -27897, row['smallint']
+        assert row['unsigned_smallint'] == 27897, row['unsigned_smallint']
+        assert row['mediumint'] == 104729, row['mediumint']
+        assert row['unsigned_mediumint'] == 120999, row['unsigned_mediumint']
+        assert row['int24'] == -200899, row['int24']
+        assert row['unsigned_int24'] == 407709, row['unsigned_int24']
+        assert row['int'] == -1295369311, row['int']
+        assert row['unsigned_int'] == 3872362332, row['unsigned_int']
+        assert row['integer'] == -1741727421, row['integer']
+        assert row['unsigned_integer'] == 3198387363, row['unsigned_integer']
+        assert row['bigint'] == -266883847, row['bigint']
+        assert row['unsigned_bigint'] == 980007287362, row['unsigned_bigint']
+        assert row['float'] - -146487000.0 < 0.00001, row['float']
+        assert row['double'] == -474646154.719356, row['double']
+        assert row['real'] == -901409776.279346, row['real']
+        assert row['decimal'] == decimal.Decimal(
+            '28111097.610822',
+        ), row['decimal']
+        assert row['dec'] == decimal.Decimal('389451155.931428'), row['dec']
+        assert row['fixed'] == decimal.Decimal(
+            '-143773416.044092',
+        ), row['fixed']
+        assert row['numeric'] == decimal.Decimal(
+            '866689461.300046',
+        ), row['numeric']
+        assert row['date'] == datetime.date(8524, 11, 10), row['date']
+        assert row['time'] == datetime.timedelta(minutes=7), row['time']
+        assert row['datetime'] == datetime.datetime(
+            9948, 3, 11, 15, 29, 22,
+        ), row['datetime']
+        assert row['datetime_6'] == datetime.datetime(
+            1756, 10, 29, 2, 2, 42, 8,
+        ), row['datetime_6']
+        assert row['timestamp'] == datetime.datetime(
+            1980, 12, 31, 1, 10, 23,
+        ), row['timestamp']
+        assert row['timestamp_6'] == datetime.datetime(
+            1991, 1, 2, 22, 15, 10, 6,
+        ), row['timestamp_6']
+        assert row['year'] == 1923, row['year']
+        assert row['char_100'] == \
+            'This is a test of a 100 character column.', row['char_100']
+        assert row['binary_100'] == bytearray(
+            bits + [0] * 84,
+        ), row['binary_100']
+        assert row['varchar_200'] == \
+            'This is a test of a variable character column.', row['varchar_200']
+        assert row['varbinary_200'] == bytearray(
+            bits * 2,
+        ), row['varbinary_200']
+        assert row['longtext'] == 'This is a longtext column.', row['longtext']
+        assert row['mediumtext'] == 'This is a mediumtext column.', row['mediumtext']
+        assert row['text'] == 'This is a text column.', row['text']
+        assert row['tinytext'] == 'This is a tinytext column.'
+        assert row['longblob'] == bytearray(bits * 3), row['longblob']
+        assert row['mediumblob'] == bytearray(bits * 2), row['mediumblob']
+        assert row['blob'] == bytearray(bits), row['blob']
+        assert row['tinyblob'] == bytearray(
+            [10, 11, 12, 13, 14, 15],
+        ), row['tinyblob']
+        assert row['json'] == {
+            'a': 10, 'b': 2.75,
+            'c': 'hello world',
+        }, row['json']
+        assert row['enum'] == 'one', row['enum']
+        assert row['set'] == 'two', row['set']
+        assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+
+        conn.close()
+
+    def test_alltypes_no_nulls_numpy(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface unsigned int information')
+
+        conn = s2.connect(database=type(self).dbname, results_type='numpy')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes_no_nulls where id = 0')
+        names = [x[0] for x in cur.description]
+        out = cur.fetchone()
+        row = dict(zip(names, out[0]))
+
+        dtypes = [
+            ('id', '<i4'),
+            ('tinyint', 'i1'),
+            ('unsigned_tinyint', 'u1'),
+            ('bool', 'i1'),
+            ('boolean', 'i1'),
+            ('smallint', '<i2'),
+            ('unsigned_smallint', '<u2'),
+            ('mediumint', '<i4'),
+            ('unsigned_mediumint', '<u4'),
+            ('int24', '<i4'),
+            ('unsigned_int24', '<u4'),
+            ('int', '<i4'),
+            ('unsigned_int', '<u4'),
+            ('integer', '<i4'),
+            ('unsigned_integer', '<u4'),
+            ('bigint', '<i8'),
+            ('unsigned_bigint', '<u8'),
+            ('float', '<f4'),
+            ('double', '<f8'),
+            ('real', '<f8'),
+            ('decimal', 'O'),
+            ('dec', 'O'),
+            ('fixed', 'O'),
+            ('numeric', 'O'),
+            ('date', '<M8[D]'),
+            ('time', '<m8[us]'),
+            ('time_6', '<m8[us]'),
+            ('datetime', '<M8[us]'),
+            ('datetime_6', '<M8[us]'),
+            ('timestamp', '<M8[us]'),
+            ('timestamp_6', '<M8[us]'),
+            ('year', '<i2'),
+            ('char_100', 'O'),
+            ('binary_100', 'O'),
+            ('varchar_200', 'O'),
+            ('varbinary_200', 'O'),
+            ('longtext', 'O'),
+            ('mediumtext', 'O'),
+            ('text', 'O'),
+            ('tinytext', 'O'),
+            ('longblob', 'O'),
+            ('mediumblob', 'O'),
+            ('blob', 'O'),
+            ('tinyblob', 'O'),
+            ('json', 'O'),
+            ('enum', 'O'),
+            ('set', 'O'),
+            ('bit', 'O'),
+        ]
+
+        assert out.dtype == dtypes
+
+        bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+        assert row['id'] == 0, row['id']
+        assert row['tinyint'] == 80, row['tinyint']
+        assert row['unsigned_tinyint'] == 85, row['unsigned_tinyint']
+        assert row['bool'] == 0, row['bool']
+        assert row['boolean'] == 1, row['boolean']
+        assert row['smallint'] == -27897, row['smallint']
+        assert row['unsigned_smallint'] == 27897, row['unsigned_smallint']
+        assert row['mediumint'] == 104729, row['mediumint']
+        assert row['unsigned_mediumint'] == 120999, row['unsigned_mediumint']
+        assert row['int24'] == -200899, row['int24']
+        assert row['unsigned_int24'] == 407709, row['unsigned_int24']
+        assert row['int'] == -1295369311, row['int']
+        assert row['unsigned_int'] == 3872362332, row['unsigned_int']
+        assert row['integer'] == -1741727421, row['integer']
+        assert row['unsigned_integer'] == 3198387363, row['unsigned_integer']
+        assert row['bigint'] == -266883847, row['bigint']
+        assert row['unsigned_bigint'] == 980007287362, row['unsigned_bigint']
+        assert row['float'] - -146487000.0 < 0.00001, row['float']
+        assert row['double'] == -474646154.719356, row['double']
+        assert row['real'] == -901409776.279346, row['real']
+        assert row['decimal'] == decimal.Decimal(
+            '28111097.610822',
+        ), row['decimal']
+        assert row['dec'] == decimal.Decimal('389451155.931428'), row['dec']
+        assert row['fixed'] == decimal.Decimal(
+            '-143773416.044092',
+        ), row['fixed']
+        assert row['numeric'] == decimal.Decimal(
+            '866689461.300046',
+        ), row['numeric']
+        assert row['date'] == datetime.date(8524, 11, 10), row['date']
+        assert row['time'] == datetime.timedelta(minutes=7), row['time']
+        assert row['datetime'] == datetime.datetime(
+            9948, 3, 11, 15, 29, 22,
+        ), row['datetime']
+        assert row['datetime_6'] == datetime.datetime(
+            1756, 10, 29, 2, 2, 42, 8,
+        ), row['datetime_6']
+        assert row['timestamp'] == datetime.datetime(
+            1980, 12, 31, 1, 10, 23,
+        ), row['timestamp']
+        assert row['timestamp_6'] == datetime.datetime(
+            1991, 1, 2, 22, 15, 10, 6,
+        ), row['timestamp_6']
+        assert row['year'] == 1923, row['year']
+        assert row['char_100'] == \
+            'This is a test of a 100 character column.', row['char_100']
+        assert row['binary_100'] == bytearray(
+            bits + [0] * 84,
+        ), row['binary_100']
+        assert row['varchar_200'] == \
+            'This is a test of a variable character column.', row['varchar_200']
+        assert row['varbinary_200'] == bytearray(
+            bits * 2,
+        ), row['varbinary_200']
+        assert row['longtext'] == 'This is a longtext column.', row['longtext']
+        assert row['mediumtext'] == 'This is a mediumtext column.', row['mediumtext']
+        assert row['text'] == 'This is a text column.', row['text']
+        assert row['tinytext'] == 'This is a tinytext column.'
+        assert row['longblob'] == bytearray(bits * 3), row['longblob']
+        assert row['mediumblob'] == bytearray(bits * 2), row['mediumblob']
+        assert row['blob'] == bytearray(bits), row['blob']
+        assert row['tinyblob'] == bytearray(
+            [10, 11, 12, 13, 14, 15],
+        ), row['tinyblob']
+        assert row['json'] == {
+            'a': 10, 'b': 2.75,
+            'c': 'hello world',
+        }, row['json']
+        assert row['enum'] == 'one', row['enum']
+        assert row['set'] == 'two', row['set']
+        assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+
+        conn.close()
+
+    def test_alltypes_min_max_numpy(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface unsigned int information')
+
+        conn = s2.connect(database=type(self).dbname, results_type='numpy')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes_no_nulls')
+        cur.fetchall()
+
+        cur.execute('select * from alltypes')
+        cur.fetchall()
+
+        conn.close()
+
+    def test_alltypes_nulls_numpy(self):
+        conn = s2.connect(database=type(self).dbname, results_type='numpy')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes where id = 1')
+        names = [x[0] for x in cur.description]
+        out = cur.fetchone()
+        row = dict(zip(names, out[0]))
+
+        assert row['id'] == 1, row['id']
+        assert np.isnan(row['tinyint']), row['tinyint']
+        assert np.isnan(row['bool']), row['bool']
+        assert np.isnan(row['boolean']), row['boolean']
+        assert np.isnan(row['smallint']), row['smallint']
+        assert np.isnan(row['mediumint']), row['mediumint']
+        assert np.isnan(row['int24']), row['int24']
+        assert np.isnan(row['int']), row['int']
+        assert np.isnan(row['integer']), row['integer']
+        assert np.isnan(row['bigint']), row['bigint']
+        assert np.isnan(row['float']), row['float']
+        assert np.isnan(row['double']), row['double']
+        assert np.isnan(row['real']), row['real']
+        assert row['decimal'] is None, row['decimal']
+        assert row['dec'] is None, row['dec']
+        assert row['fixed'] is None, row['fixed']
+        assert row['numeric'] is None, row['numeric']
+        assert np.isnat(row['date']), row['date']
+        assert np.isnat(row['time']), row['time']
+        assert np.isnat(row['time']), row['time']
+        assert np.isnat(row['datetime']), row['datetime']
+        assert np.isnat(row['datetime_6']), row['datetime_6']
+        assert np.isnat(row['timestamp']), row['timestamp']
+        assert np.isnat(row['timestamp_6']), row['timestamp_6']
+        assert np.isnan(row['year']), row['year']
+        assert row['char_100'] is None, row['char_100']
+        assert row['binary_100'] is None, row['binary_100']
+        assert row['varchar_200'] is None, row['varchar_200']
+        assert row['varbinary_200'] is None, row['varbinary_200']
+        assert row['longtext'] is None, row['longtext']
+        assert row['mediumtext'] is None, row['mediumtext']
+        assert row['text'] is None, row['text']
+        assert row['tinytext'] is None, row['tinytext']
+        assert row['longblob'] is None, row['longblob']
+        assert row['mediumblob'] is None, row['mediumblob']
+        assert row['blob'] is None, row['blob']
+        assert row['tinyblob'] is None, row['tinyblob']
+        assert row['json'] is None, row['json']
+        assert row['enum'] is None, row['enum']
+        assert row['set'] is None, row['set']
+        assert row['bit'] is None, row['bit']
+
+        conn.close()
+
+    def test_alltypes_pandas(self):
+        conn = s2.connect(database=type(self).dbname, results_type='pandas')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes where id = 0')
+        names = [x[0] for x in cur.description]
+        out = cur.fetchone()
+        row = dict(zip(names, out.iloc[0]))
+
+        dtypes = [
+            ('id', 'float64'),
+            ('tinyint', 'float32'),
+            ('unsigned_tinyint', 'float32'),
+            ('bool', 'float32'),
+            ('boolean', 'float32'),
+            ('smallint', 'float32'),
+            ('unsigned_smallint', 'float32'),
+            ('mediumint', 'float64'),
+            ('unsigned_mediumint', 'float64'),
+            ('int24', 'float64'),
+            ('unsigned_int24', 'float64'),
+            ('int', 'float64'),
+            ('unsigned_int', 'float64'),
+            ('integer', 'float64'),
+            ('unsigned_integer', 'float64'),
+            ('bigint', 'float64'),
+            ('unsigned_bigint', 'float64'),
+            ('float', 'float32'),
+            ('double', 'float64'),
+            ('real', 'float64'),
+            ('decimal', 'object'),
+            ('dec', 'object'),
+            ('fixed', 'object'),
+            ('numeric', 'object'),
+            ('date', 'datetime64[s]'),
+            ('time', 'timedelta64[us]'),
+            ('time_6', 'timedelta64[us]'),
+            ('datetime', 'datetime64[us]'),
+            ('datetime_6', 'datetime64[us]'),
+            ('timestamp', 'datetime64[us]'),
+            ('timestamp_6', 'datetime64[us]'),
+            ('year', 'float64'),
+            ('char_100', 'object'),
+            ('binary_100', 'object'),
+            ('varchar_200', 'object'),
+            ('varbinary_200', 'object'),
+            ('longtext', 'object'),
+            ('mediumtext', 'object'),
+            ('text', 'object'),
+            ('tinytext', 'object'),
+            ('longblob', 'object'),
+            ('mediumblob', 'object'),
+            ('blob', 'object'),
+            ('tinyblob', 'object'),
+            ('json', 'object'),
+            ('enum', 'object'),
+            ('set', 'object'),
+            ('bit', 'object'),
+        ]
+
+        assert [(x[0], str(x[1])) for x in out.dtypes.items()] == dtypes
+
+        bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+        assert row['id'] == 0, row['id']
+        assert row['tinyint'] == 80, row['tinyint']
+        assert row['unsigned_tinyint'] == 85, row['unsigned_tinyint']
+        assert row['bool'] == 0, row['bool']
+        assert row['boolean'] == 1, row['boolean']
+        assert row['smallint'] == -27897, row['smallint']
+        assert row['unsigned_smallint'] == 27897, row['unsigned_smallint']
+        assert row['mediumint'] == 104729, row['mediumint']
+        assert row['unsigned_mediumint'] == 120999, row['unsigned_mediumint']
+        assert row['int24'] == -200899, row['int24']
+        assert row['unsigned_int24'] == 407709, row['unsigned_int24']
+        assert row['int'] == -1295369311, row['int']
+        assert row['unsigned_int'] == 3872362332, row['unsigned_int']
+        assert row['integer'] == -1741727421, row['integer']
+        assert row['unsigned_integer'] == 3198387363, row['unsigned_integer']
+        assert row['bigint'] == -266883847, row['bigint']
+        assert row['unsigned_bigint'] == 980007287362, row['unsigned_bigint']
+        assert row['float'] - -146487000.0 < 0.00001, row['float']
+        assert row['double'] == -474646154.719356, row['double']
+        assert row['real'] == -901409776.279346, row['real']
+        assert row['decimal'] == decimal.Decimal(
+            '28111097.610822',
+        ), row['decimal']
+        assert row['dec'] == decimal.Decimal('389451155.931428'), row['dec']
+        assert row['fixed'] == decimal.Decimal(
+            '-143773416.044092',
+        ), row['fixed']
+        assert row['numeric'] == decimal.Decimal(
+            '866689461.300046',
+        ), row['numeric']
+        assert row['date'] == datetime.datetime(8524, 11, 10), row['date']
+        assert row['time'] == datetime.timedelta(minutes=7), row['time']
+        assert row['datetime'] == datetime.datetime(
+            9948, 3, 11, 15, 29, 22,
+        ), row['datetime']
+        assert row['datetime_6'] == datetime.datetime(
+            1756, 10, 29, 2, 2, 42, 8,
+        ), row['datetime_6']
+        assert row['timestamp'] == datetime.datetime(
+            1980, 12, 31, 1, 10, 23,
+        ), row['timestamp']
+        assert row['timestamp_6'] == datetime.datetime(
+            1991, 1, 2, 22, 15, 10, 6,
+        ), row['timestamp_6']
+        assert row['year'] == 1923, row['year']
+        assert row['char_100'] == \
+            'This is a test of a 100 character column.', row['char_100']
+        assert row['binary_100'] == bytearray(
+            bits + [0] * 84,
+        ), row['binary_100']
+        assert row['varchar_200'] == \
+            'This is a test of a variable character column.', row['varchar_200']
+        assert row['varbinary_200'] == bytearray(
+            bits * 2,
+        ), row['varbinary_200']
+        assert row['longtext'] == 'This is a longtext column.', row['longtext']
+        assert row['mediumtext'] == 'This is a mediumtext column.', row['mediumtext']
+        assert row['text'] == 'This is a text column.', row['text']
+        assert row['tinytext'] == 'This is a tinytext column.'
+        assert row['longblob'] == bytearray(bits * 3), row['longblob']
+        assert row['mediumblob'] == bytearray(bits * 2), row['mediumblob']
+        assert row['blob'] == bytearray(bits), row['blob']
+        assert row['tinyblob'] == bytearray(
+            [10, 11, 12, 13, 14, 15],
+        ), row['tinyblob']
+        assert row['json'] == {
+            'a': 10, 'b': 2.75,
+            'c': 'hello world',
+        }, row['json']
+        assert row['enum'] == 'one', row['enum']
+        assert row['set'] == 'two', row['set']
+        assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+
+        conn.close()
+
+    def test_alltypes_no_nulls_pandas(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface unsigned int information')
+
+        conn = s2.connect(database=type(self).dbname, results_type='pandas')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes_no_nulls where id = 0')
+        names = [x[0] for x in cur.description]
+        out = cur.fetchone()
+        row = dict(zip(names, out.iloc[0]))
+
+        dtypes = [
+            ('id', 'int32'),
+            ('tinyint', 'int8'),
+            ('unsigned_tinyint', 'uint8'),
+            ('bool', 'int8'),
+            ('boolean', 'int8'),
+            ('smallint', 'int16'),
+            ('unsigned_smallint', 'uint16'),
+            ('mediumint', 'int32'),
+            ('unsigned_mediumint', 'uint32'),
+            ('int24', 'int32'),
+            ('unsigned_int24', 'uint32'),
+            ('int', 'int32'),
+            ('unsigned_int', 'uint32'),
+            ('integer', 'int32'),
+            ('unsigned_integer', 'uint32'),
+            ('bigint', 'int64'),
+            ('unsigned_bigint', 'uint64'),
+            ('float', 'float32'),
+            ('double', 'float64'),
+            ('real', 'float64'),
+            ('decimal', 'object'),
+            ('dec', 'object'),
+            ('fixed', 'object'),
+            ('numeric', 'object'),
+            ('date', 'datetime64[s]'),
+            ('time', 'timedelta64[us]'),
+            ('time_6', 'timedelta64[us]'),
+            ('datetime', 'datetime64[us]'),
+            ('datetime_6', 'datetime64[us]'),
+            ('timestamp', 'datetime64[us]'),
+            ('timestamp_6', 'datetime64[us]'),
+            ('year', 'int16'),
+            ('char_100', 'object'),
+            ('binary_100', 'object'),
+            ('varchar_200', 'object'),
+            ('varbinary_200', 'object'),
+            ('longtext', 'object'),
+            ('mediumtext', 'object'),
+            ('text', 'object'),
+            ('tinytext', 'object'),
+            ('longblob', 'object'),
+            ('mediumblob', 'object'),
+            ('blob', 'object'),
+            ('tinyblob', 'object'),
+            ('json', 'object'),
+            ('enum', 'object'),
+            ('set', 'object'),
+            ('bit', 'object'),
+        ]
+
+        assert [(x[0], str(x[1])) for x in out.dtypes.items()] == dtypes
+
+        bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+        assert row['id'] == 0, row['id']
+        assert row['tinyint'] == 80, row['tinyint']
+        assert row['unsigned_tinyint'] == 85, row['unsigned_tinyint']
+        assert row['bool'] == 0, row['bool']
+        assert row['boolean'] == 1, row['boolean']
+        assert row['smallint'] == -27897, row['smallint']
+        assert row['unsigned_smallint'] == 27897, row['unsigned_smallint']
+        assert row['mediumint'] == 104729, row['mediumint']
+        assert row['unsigned_mediumint'] == 120999, row['unsigned_mediumint']
+        assert row['int24'] == -200899, row['int24']
+        assert row['unsigned_int24'] == 407709, row['unsigned_int24']
+        assert row['int'] == -1295369311, row['int']
+        assert row['unsigned_int'] == 3872362332, row['unsigned_int']
+        assert row['integer'] == -1741727421, row['integer']
+        assert row['unsigned_integer'] == 3198387363, row['unsigned_integer']
+        assert row['bigint'] == -266883847, row['bigint']
+        assert row['unsigned_bigint'] == 980007287362, row['unsigned_bigint']
+        assert row['float'] - -146487000.0 < 0.00001, row['float']
+        assert row['double'] == -474646154.719356, row['double']
+        assert row['real'] == -901409776.279346, row['real']
+        assert row['decimal'] == decimal.Decimal(
+            '28111097.610822',
+        ), row['decimal']
+        assert row['dec'] == decimal.Decimal('389451155.931428'), row['dec']
+        assert row['fixed'] == decimal.Decimal(
+            '-143773416.044092',
+        ), row['fixed']
+        assert row['numeric'] == decimal.Decimal(
+            '866689461.300046',
+        ), row['numeric']
+        assert row['date'] == datetime.datetime(8524, 11, 10), row['date']
+        assert row['time'] == datetime.timedelta(minutes=7), row['time']
+        assert row['datetime'] == datetime.datetime(
+            9948, 3, 11, 15, 29, 22,
+        ), row['datetime']
+        assert row['datetime_6'] == datetime.datetime(
+            1756, 10, 29, 2, 2, 42, 8,
+        ), row['datetime_6']
+        assert row['timestamp'] == datetime.datetime(
+            1980, 12, 31, 1, 10, 23,
+        ), row['timestamp']
+        assert row['timestamp_6'] == datetime.datetime(
+            1991, 1, 2, 22, 15, 10, 6,
+        ), row['timestamp_6']
+        assert row['year'] == 1923, row['year']
+        assert row['char_100'] == \
+            'This is a test of a 100 character column.', row['char_100']
+        assert row['binary_100'] == bytearray(
+            bits + [0] * 84,
+        ), row['binary_100']
+        assert row['varchar_200'] == \
+            'This is a test of a variable character column.', row['varchar_200']
+        assert row['varbinary_200'] == bytearray(
+            bits * 2,
+        ), row['varbinary_200']
+        assert row['longtext'] == 'This is a longtext column.', row['longtext']
+        assert row['mediumtext'] == 'This is a mediumtext column.', row['mediumtext']
+        assert row['text'] == 'This is a text column.', row['text']
+        assert row['tinytext'] == 'This is a tinytext column.'
+        assert row['longblob'] == bytearray(bits * 3), row['longblob']
+        assert row['mediumblob'] == bytearray(bits * 2), row['mediumblob']
+        assert row['blob'] == bytearray(bits), row['blob']
+        assert row['tinyblob'] == bytearray(
+            [10, 11, 12, 13, 14, 15],
+        ), row['tinyblob']
+        assert row['json'] == {
+            'a': 10, 'b': 2.75,
+            'c': 'hello world',
+        }, row['json']
+        assert row['enum'] == 'one', row['enum']
+        assert row['set'] == 'two', row['set']
+        assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+
+        conn.close()
+
+    def test_alltypes_min_max_pandas(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface unsigned int information')
+
+        conn = s2.connect(database=type(self).dbname, results_type='pandas')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes_no_nulls')
+        cur.fetchall()
+
+        cur.execute('select * from alltypes')
+        cur.fetchall()
+
+        conn.close()
+
+    def test_alltypes_nulls_pandas(self):
+        conn = s2.connect(database=type(self).dbname, results_type='pandas')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes where id = 1')
+        names = [x[0] for x in cur.description]
+        out = cur.fetchone()
+        row = dict(zip(names, out.iloc[0]))
+
+        assert row['id'] == 1, row['id']
+        assert np.isnan(row['tinyint']), row['tinyint']
+        assert np.isnan(row['bool']), row['bool']
+        assert np.isnan(row['boolean']), row['boolean']
+        assert np.isnan(row['smallint']), row['smallint']
+        assert np.isnan(row['mediumint']), row['mediumint']
+        assert np.isnan(row['int24']), row['int24']
+        assert np.isnan(row['int']), row['int']
+        assert np.isnan(row['integer']), row['integer']
+        assert np.isnan(row['bigint']), row['bigint']
+        assert np.isnan(row['float']), row['float']
+        assert np.isnan(row['double']), row['double']
+        assert np.isnan(row['real']), row['real']
+        assert row['decimal'] is None, row['decimal']
+        assert row['dec'] is None, row['dec']
+        assert row['fixed'] is None, row['fixed']
+        assert row['numeric'] is None, row['numeric']
+        assert row['date'] is pd.NaT, row['date']
+        assert row['time'] is pd.NaT, row['time']
+        assert row['time'] is pd.NaT, row['time']
+        assert row['datetime'] is pd.NaT, row['datetime']
+        assert row['datetime_6'] is pd.NaT, row['datetime_6']
+        assert row['timestamp'] is pd.NaT, row['timestamp']
+        assert row['timestamp_6'] is pd.NaT, row['timestamp_6']
+        assert np.isnan(row['year']), row['year']
+        assert row['char_100'] is None, row['char_100']
+        assert row['binary_100'] is None, row['binary_100']
+        assert row['varchar_200'] is None, row['varchar_200']
+        assert row['varbinary_200'] is None, row['varbinary_200']
+        assert row['longtext'] is None, row['longtext']
+        assert row['mediumtext'] is None, row['mediumtext']
+        assert row['text'] is None, row['text']
+        assert row['tinytext'] is None, row['tinytext']
+        assert row['longblob'] is None, row['longblob']
+        assert row['mediumblob'] is None, row['mediumblob']
+        assert row['blob'] is None, row['blob']
+        assert row['tinyblob'] is None, row['tinyblob']
+        assert row['json'] is None, row['json']
+        assert row['enum'] is None, row['enum']
+        assert row['set'] is None, row['set']
+        assert row['bit'] is None, row['bit']
+
+        conn.close()
+
+    def test_alltypes_polars(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface unsigned int information')
+
+        conn = s2.connect(database=type(self).dbname, results_type='polars')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes where id = 0')
+        names = [x[0] for x in cur.description]
+        out = cur.fetchone()
+        row = dict(zip(names, out.row(0)))
+
+        dtypes = [
+            ('id', 'Int32'),
+            ('tinyint', 'Int8'),
+            ('unsigned_tinyint', 'UInt8'),
+            ('bool', 'Int8'),
+            ('boolean', 'Int8'),
+            ('smallint', 'Int16'),
+            ('unsigned_smallint', 'UInt16'),
+            ('mediumint', 'Int32'),
+            ('unsigned_mediumint', 'UInt32'),
+            ('int24', 'Int32'),
+            ('unsigned_int24', 'UInt32'),
+            ('int', 'Int32'),
+            ('unsigned_int', 'UInt32'),
+            ('integer', 'Int32'),
+            ('unsigned_integer', 'UInt32'),
+            ('bigint', 'Int64'),
+            ('unsigned_bigint', 'UInt64'),
+            ('float', 'Float32'),
+            ('double', 'Float64'),
+            ('real', 'Float64'),
+            ('decimal', 'Decimal(precision=22, scale=6)'),
+            ('dec', 'Decimal(precision=22, scale=6)'),
+            ('fixed', 'Decimal(precision=22, scale=6)'),
+            ('numeric', 'Decimal(precision=22, scale=6)'),
+            ('date', 'Date'),
+            ('time', "Duration(time_unit='us')"),
+            ('time_6', "Duration(time_unit='us')"),
+            ('datetime', "Datetime(time_unit='us', time_zone=None)"),
+            ('datetime_6', "Datetime(time_unit='us', time_zone=None)"),
+            ('timestamp', "Datetime(time_unit='us', time_zone=None)"),
+            ('timestamp_6', "Datetime(time_unit='us', time_zone=None)"),
+            ('year', 'Int16'),
+            ('char_100', 'String'),
+            ('binary_100', 'Binary'),
+            ('varchar_200', 'String'),
+            ('varbinary_200', 'Binary'),
+            ('longtext', 'String'),
+            ('mediumtext', 'String'),
+            ('text', 'String'),
+            ('tinytext', 'String'),
+            ('longblob', 'Binary'),
+            ('mediumblob', 'Binary'),
+            ('blob', 'Binary'),
+            ('tinyblob', 'Binary'),
+            ('json', 'Object'),
+            ('enum', 'String'),
+            ('set', 'String'),
+            ('bit', 'Binary'),
+        ]
+
+        assert [(x, str(y)) for x, y in zip(out.columns, out.dtypes)] == dtypes
+
+        bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+        assert row['id'] == 0, row['id']
+        assert row['tinyint'] == 80, row['tinyint']
+        assert row['unsigned_tinyint'] == 85, row['unsigned_tinyint']
+        assert row['bool'] == 0, row['bool']
+        assert row['boolean'] == 1, row['boolean']
+        assert row['smallint'] == -27897, row['smallint']
+        assert row['unsigned_smallint'] == 27897, row['unsigned_smallint']
+        assert row['mediumint'] == 104729, row['mediumint']
+        assert row['unsigned_mediumint'] == 120999, row['unsigned_mediumint']
+        assert row['int24'] == -200899, row['int24']
+        assert row['unsigned_int24'] == 407709, row['unsigned_int24']
+        assert row['int'] == -1295369311, row['int']
+        assert row['unsigned_int'] == 3872362332, row['unsigned_int']
+        assert row['integer'] == -1741727421, row['integer']
+        assert row['unsigned_integer'] == 3198387363, row['unsigned_integer']
+        assert row['bigint'] == -266883847, row['bigint']
+        assert row['unsigned_bigint'] == 980007287362, row['unsigned_bigint']
+        assert row['float'] - -146487000.0 < 0.00001, row['float']
+        assert row['double'] == -474646154.719356, row['double']
+        assert row['real'] == -901409776.279346, row['real']
+        assert row['decimal'] == decimal.Decimal(
+            '28111097.610822',
+        ), row['decimal']
+        assert row['dec'] == decimal.Decimal('389451155.931428'), row['dec']
+        assert row['fixed'] == decimal.Decimal(
+            '-143773416.044092',
+        ), row['fixed']
+        assert row['numeric'] == decimal.Decimal(
+            '866689461.300046',
+        ), row['numeric']
+        assert row['date'] == datetime.date(8524, 11, 10), row['date']
+        assert row['time'] == datetime.timedelta(minutes=7), row['time']
+        assert row['datetime'] == datetime.datetime(
+            9948, 3, 11, 15, 29, 22,
+        ), row['datetime']
+        assert row['datetime_6'] == datetime.datetime(
+            1756, 10, 29, 2, 2, 42, 8,
+        ), row['datetime_6']
+        assert row['timestamp'] == datetime.datetime(
+            1980, 12, 31, 1, 10, 23,
+        ), row['timestamp']
+        assert row['timestamp_6'] == datetime.datetime(
+            1991, 1, 2, 22, 15, 10, 6,
+        ), row['timestamp_6']
+        assert row['year'] == 1923, row['year']
+        assert row['char_100'] == \
+            'This is a test of a 100 character column.', row['char_100']
+        assert row['binary_100'] == bytearray(
+            bits + [0] * 84,
+        ), row['binary_100']
+        assert row['varchar_200'] == \
+            'This is a test of a variable character column.', row['varchar_200']
+        assert row['varbinary_200'] == bytearray(
+            bits * 2,
+        ), row['varbinary_200']
+        assert row['longtext'] == 'This is a longtext column.', row['longtext']
+        assert row['mediumtext'] == 'This is a mediumtext column.', row['mediumtext']
+        assert row['text'] == 'This is a text column.', row['text']
+        assert row['tinytext'] == 'This is a tinytext column.'
+        assert row['longblob'] == bytearray(bits * 3), row['longblob']
+        assert row['mediumblob'] == bytearray(bits * 2), row['mediumblob']
+        assert row['blob'] == bytearray(bits), row['blob']
+        assert row['tinyblob'] == bytearray(
+            [10, 11, 12, 13, 14, 15],
+        ), row['tinyblob']
+        assert row['json'] == {
+            'a': 10, 'b': 2.75,
+            'c': 'hello world',
+        }, row['json']
+        assert row['enum'] == 'one', row['enum']
+        assert row['set'] == 'two', row['set']
+        assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+
+        conn.close()
+
+    def test_alltypes_no_nulls_polars(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface unsigned int information')
+
+        conn = s2.connect(database=type(self).dbname, results_type='polars')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes_no_nulls where id = 0')
+        names = [x[0] for x in cur.description]
+        out = cur.fetchone()
+        row = dict(zip(names, out.row(0)))
+
+        dtypes = [
+            ('id', 'Int32'),
+            ('tinyint', 'Int8'),
+            ('unsigned_tinyint', 'UInt8'),
+            ('bool', 'Int8'),
+            ('boolean', 'Int8'),
+            ('smallint', 'Int16'),
+            ('unsigned_smallint', 'UInt16'),
+            ('mediumint', 'Int32'),
+            ('unsigned_mediumint', 'UInt32'),
+            ('int24', 'Int32'),
+            ('unsigned_int24', 'UInt32'),
+            ('int', 'Int32'),
+            ('unsigned_int', 'UInt32'),
+            ('integer', 'Int32'),
+            ('unsigned_integer', 'UInt32'),
+            ('bigint', 'Int64'),
+            ('unsigned_bigint', 'UInt64'),
+            ('float', 'Float32'),
+            ('double', 'Float64'),
+            ('real', 'Float64'),
+            ('decimal', 'Decimal(precision=22, scale=6)'),
+            ('dec', 'Decimal(precision=22, scale=6)'),
+            ('fixed', 'Decimal(precision=22, scale=6)'),
+            ('numeric', 'Decimal(precision=22, scale=6)'),
+            ('date', 'Date'),
+            ('time', "Duration(time_unit='us')"),
+            ('time_6', "Duration(time_unit='us')"),
+            ('datetime', "Datetime(time_unit='us', time_zone=None)"),
+            ('datetime_6', "Datetime(time_unit='us', time_zone=None)"),
+            ('timestamp', "Datetime(time_unit='us', time_zone=None)"),
+            ('timestamp_6', "Datetime(time_unit='us', time_zone=None)"),
+            ('year', 'Int16'),
+            ('char_100', 'String'),
+            ('binary_100', 'Binary'),
+            ('varchar_200', 'String'),
+            ('varbinary_200', 'Binary'),
+            ('longtext', 'String'),
+            ('mediumtext', 'String'),
+            ('text', 'String'),
+            ('tinytext', 'String'),
+            ('longblob', 'Binary'),
+            ('mediumblob', 'Binary'),
+            ('blob', 'Binary'),
+            ('tinyblob', 'Binary'),
+            ('json', 'Object'),
+            ('enum', 'String'),
+            ('set', 'String'),
+            ('bit', 'Binary'),
+        ]
+
+        assert [(x, str(y)) for x, y in zip(out.columns, out.dtypes)] == dtypes
+
+        bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+        assert row['id'] == 0, row['id']
+        assert row['tinyint'] == 80, row['tinyint']
+        assert row['unsigned_tinyint'] == 85, row['unsigned_tinyint']
+        assert row['bool'] == 0, row['bool']
+        assert row['boolean'] == 1, row['boolean']
+        assert row['smallint'] == -27897, row['smallint']
+        assert row['unsigned_smallint'] == 27897, row['unsigned_smallint']
+        assert row['mediumint'] == 104729, row['mediumint']
+        assert row['unsigned_mediumint'] == 120999, row['unsigned_mediumint']
+        assert row['int24'] == -200899, row['int24']
+        assert row['unsigned_int24'] == 407709, row['unsigned_int24']
+        assert row['int'] == -1295369311, row['int']
+        assert row['unsigned_int'] == 3872362332, row['unsigned_int']
+        assert row['integer'] == -1741727421, row['integer']
+        assert row['unsigned_integer'] == 3198387363, row['unsigned_integer']
+        assert row['bigint'] == -266883847, row['bigint']
+        assert row['unsigned_bigint'] == 980007287362, row['unsigned_bigint']
+        assert row['float'] - -146487000.0 < 0.00001, row['float']
+        assert row['double'] == -474646154.719356, row['double']
+        assert row['real'] == -901409776.279346, row['real']
+        assert row['decimal'] == decimal.Decimal(
+            '28111097.610822',
+        ), row['decimal']
+        assert row['dec'] == decimal.Decimal('389451155.931428'), row['dec']
+        assert row['fixed'] == decimal.Decimal(
+            '-143773416.044092',
+        ), row['fixed']
+        assert row['numeric'] == decimal.Decimal(
+            '866689461.300046',
+        ), row['numeric']
+        assert row['date'] == datetime.date(8524, 11, 10), row['date']
+        assert row['time'] == datetime.timedelta(minutes=7), row['time']
+        assert row['datetime'] == datetime.datetime(
+            9948, 3, 11, 15, 29, 22,
+        ), row['datetime']
+        assert row['datetime_6'] == datetime.datetime(
+            1756, 10, 29, 2, 2, 42, 8,
+        ), row['datetime_6']
+        assert row['timestamp'] == datetime.datetime(
+            1980, 12, 31, 1, 10, 23,
+        ), row['timestamp']
+        assert row['timestamp_6'] == datetime.datetime(
+            1991, 1, 2, 22, 15, 10, 6,
+        ), row['timestamp_6']
+        assert row['year'] == 1923, row['year']
+        assert row['char_100'] == \
+            'This is a test of a 100 character column.', row['char_100']
+        assert row['binary_100'] == bytearray(
+            bits + [0] * 84,
+        ), row['binary_100']
+        assert row['varchar_200'] == \
+            'This is a test of a variable character column.', row['varchar_200']
+        assert row['varbinary_200'] == bytearray(
+            bits * 2,
+        ), row['varbinary_200']
+        assert row['longtext'] == 'This is a longtext column.', row['longtext']
+        assert row['mediumtext'] == 'This is a mediumtext column.', row['mediumtext']
+        assert row['text'] == 'This is a text column.', row['text']
+        assert row['tinytext'] == 'This is a tinytext column.'
+        assert row['longblob'] == bytearray(bits * 3), row['longblob']
+        assert row['mediumblob'] == bytearray(bits * 2), row['mediumblob']
+        assert row['blob'] == bytearray(bits), row['blob']
+        assert row['tinyblob'] == bytearray(
+            [10, 11, 12, 13, 14, 15],
+        ), row['tinyblob']
+        assert row['json'] == {
+            'a': 10, 'b': 2.75,
+            'c': 'hello world',
+        }, row['json']
+        assert row['enum'] == 'one', row['enum']
+        assert row['set'] == 'two', row['set']
+        assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+
+        conn.close()
+
+    def test_alltypes_min_max_polars(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface unsigned int information')
+
+        conn = s2.connect(database=type(self).dbname, results_type='polars')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes_no_nulls')
+        cur.fetchall()
+
+        cur.execute('select * from alltypes')
+        cur.fetchall()
+
+        conn.close()
+
+    def test_alltypes_nulls_polars(self):
+        conn = s2.connect(database=type(self).dbname, results_type='polars')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes where id = 1')
+        names = [x[0] for x in cur.description]
+        out = cur.fetchone()
+        row = dict(zip(names, out.row(0)))
+
+        assert row['id'] == 1, row['id']
+        assert row['tinyint'] is None, row['tinyint']
+        assert row['bool'] is None, row['bool']
+        assert row['boolean'] is None, row['boolean']
+        assert row['smallint'] is None, row['smallint']
+        assert row['mediumint'] is None, row['mediumint']
+        assert row['int24'] is None, row['int24']
+        assert row['int'] is None, row['int']
+        assert row['integer'] is None, row['integer']
+        assert row['bigint'] is None, row['bigint']
+        assert row['float'] is None, row['float']
+        assert row['double'] is None, row['double']
+        assert row['real'] is None, row['real']
+        assert row['decimal'] is None, row['decimal']
+        assert row['dec'] is None, row['dec']
+        assert row['fixed'] is None, row['fixed']
+        assert row['numeric'] is None, row['numeric']
+        assert row['date'] is None, row['date']
+        assert row['time'] is None, row['time']
+        assert row['time'] is None, row['time']
+        assert row['datetime'] is None, row['datetime']
+        assert row['datetime_6'] is None, row['datetime_6']
+        assert row['timestamp'] is None, row['timestamp']
+        assert row['timestamp_6'] is None, row['timestamp_6']
+        assert row['year'] is None, row['year']
+        assert row['char_100'] is None, row['char_100']
+        assert row['binary_100'] is None, row['binary_100']
+        assert row['varchar_200'] is None, row['varchar_200']
+        assert row['varbinary_200'] is None, row['varbinary_200']
+        assert row['longtext'] is None, row['longtext']
+        assert row['mediumtext'] is None, row['mediumtext']
+        assert row['text'] is None, row['text']
+        assert row['tinytext'] is None, row['tinytext']
+        assert row['longblob'] is None, row['longblob']
+        assert row['mediumblob'] is None, row['mediumblob']
+        assert row['blob'] is None, row['blob']
+        assert row['tinyblob'] is None, row['tinyblob']
+        assert row['json'] is None, row['json']
+        assert row['enum'] is None, row['enum']
+        assert row['set'] is None, row['set']
+        assert row['bit'] is None, row['bit']
+
+        conn.close()
+
+    def test_alltypes_arrow(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface unsigned int information')
+
+        conn = s2.connect(database=type(self).dbname, results_type='arrow')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes where id = 0')
+        out = cur.fetchone()
+        row = out.to_pylist()[0]
+
+        dtypes = [
+            ('id', 'int32'),
+            ('tinyint', 'int8'),
+            ('unsigned_tinyint', 'uint8'),
+            ('bool', 'int8'),
+            ('boolean', 'int8'),
+            ('smallint', 'int16'),
+            ('unsigned_smallint', 'uint16'),
+            ('mediumint', 'int32'),
+            ('unsigned_mediumint', 'uint32'),
+            ('int24', 'int32'),
+            ('unsigned_int24', 'uint32'),
+            ('int', 'int32'),
+            ('unsigned_int', 'uint32'),
+            ('integer', 'int32'),
+            ('unsigned_integer', 'uint32'),
+            ('bigint', 'int64'),
+            ('unsigned_bigint', 'uint64'),
+            ('float', 'float'),
+            ('double', 'double'),
+            ('real', 'double'),
+            ('decimal', 'decimal128(22, 6)'),
+            ('dec', 'decimal128(22, 6)'),
+            ('fixed', 'decimal128(22, 6)'),
+            ('numeric', 'decimal128(22, 6)'),
+            ('date', 'date64[ms]'),
+            ('time', 'duration[us]'),
+            ('time_6', 'duration[us]'),
+            ('datetime', 'timestamp[us]'),
+            ('datetime_6', 'timestamp[us]'),
+            ('timestamp', 'timestamp[us]'),
+            ('timestamp_6', 'timestamp[us]'),
+            ('year', 'int16'),
+            ('char_100', 'string'),
+            ('binary_100', 'binary'),
+            ('varchar_200', 'string'),
+            ('varbinary_200', 'binary'),
+            ('longtext', 'string'),
+            ('mediumtext', 'string'),
+            ('text', 'string'),
+            ('tinytext', 'string'),
+            ('longblob', 'binary'),
+            ('mediumblob', 'binary'),
+            ('blob', 'binary'),
+            ('tinyblob', 'binary'),
+            ('json', 'string'),
+            ('enum', 'string'),
+            ('set', 'string'),
+            ('bit', 'binary'),
+        ]
+
+        assert [(x.name, str(x.type)) for x in out.schema] == dtypes
+
+        bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+        print(row)
+
+        assert row['id'] == 0, row['id']
+        assert row['tinyint'] == 80, row['tinyint']
+        assert row['unsigned_tinyint'] == 85, row['unsigned_tinyint']
+        assert row['bool'] == 0, row['bool']
+        assert row['boolean'] == 1, row['boolean']
+        assert row['smallint'] == -27897, row['smallint']
+        assert row['unsigned_smallint'] == 27897, row['unsigned_smallint']
+        assert row['mediumint'] == 104729, row['mediumint']
+        assert row['unsigned_mediumint'] == 120999, row['unsigned_mediumint']
+        assert row['int24'] == -200899, row['int24']
+        assert row['unsigned_int24'] == 407709, row['unsigned_int24']
+        assert row['int'] == -1295369311, row['int']
+        assert row['unsigned_int'] == 3872362332, row['unsigned_int']
+        assert row['integer'] == -1741727421, row['integer']
+        assert row['unsigned_integer'] == 3198387363, row['unsigned_integer']
+        assert row['bigint'] == -266883847, row['bigint']
+        assert row['unsigned_bigint'] == 980007287362, row['unsigned_bigint']
+        assert row['float'] - -146487000.0 < 0.00001, row['float']
+        assert row['double'] == -474646154.719356, row['double']
+        assert row['real'] == -901409776.279346, row['real']
+        assert row['decimal'] == decimal.Decimal(
+            '28111097.610822',
+        ), row['decimal']
+        assert row['dec'] == decimal.Decimal('389451155.931428'), row['dec']
+        assert row['fixed'] == decimal.Decimal(
+            '-143773416.044092',
+        ), row['fixed']
+        assert row['numeric'] == decimal.Decimal(
+            '866689461.300046',
+        ), row['numeric']
+        assert row['date'] == datetime.date(8524, 11, 10), row['date']
+        assert row['time'] == datetime.timedelta(minutes=7), row['time']
+        assert row['datetime'] == datetime.datetime(
+            9948, 3, 11, 15, 29, 22,
+        ), row['datetime']
+        assert row['datetime_6'] == datetime.datetime(
+            1756, 10, 29, 2, 2, 42, 8,
+        ), row['datetime_6']
+        assert row['timestamp'] == datetime.datetime(
+            1980, 12, 31, 1, 10, 23,
+        ), row['timestamp']
+        assert row['timestamp_6'] == datetime.datetime(
+            1991, 1, 2, 22, 15, 10, 6,
+        ), row['timestamp_6']
+        assert row['year'] == 1923, row['year']
+        assert row['char_100'] == \
+            'This is a test of a 100 character column.', row['char_100']
+        assert row['binary_100'] == bytearray(
+            bits + [0] * 84,
+        ), row['binary_100']
+        assert row['varchar_200'] == \
+            'This is a test of a variable character column.', row['varchar_200']
+        assert row['varbinary_200'] == bytearray(
+            bits * 2,
+        ), row['varbinary_200']
+        assert row['longtext'] == 'This is a longtext column.', row['longtext']
+        assert row['mediumtext'] == 'This is a mediumtext column.', row['mediumtext']
+        assert row['text'] == 'This is a text column.', row['text']
+        assert row['tinytext'] == 'This is a tinytext column.'
+        assert row['longblob'] == bytearray(bits * 3), row['longblob']
+        assert row['mediumblob'] == bytearray(bits * 2), row['mediumblob']
+        assert row['blob'] == bytearray(bits), row['blob']
+        assert row['tinyblob'] == bytearray(
+            [10, 11, 12, 13, 14, 15],
+        ), row['tinyblob']
+        assert row['json'] == '{"a":10,"b":2.75,"c":"hello world"}', row['json']
+        assert row['enum'] == 'one', row['enum']
+        assert row['set'] == 'two', row['set']
+        assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+
+        conn.close()
+
+    def test_alltypes_no_nulls_arrow(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface unsigned int information')
+
+        conn = s2.connect(database=type(self).dbname, results_type='arrow')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes_no_nulls where id = 0')
+        out = cur.fetchone()
+
+        row = out.to_pylist()[0]
+
+        dtypes = [
+            ('id', 'int32'),
+            ('tinyint', 'int8'),
+            ('unsigned_tinyint', 'uint8'),
+            ('bool', 'int8'),
+            ('boolean', 'int8'),
+            ('smallint', 'int16'),
+            ('unsigned_smallint', 'uint16'),
+            ('mediumint', 'int32'),
+            ('unsigned_mediumint', 'uint32'),
+            ('int24', 'int32'),
+            ('unsigned_int24', 'uint32'),
+            ('int', 'int32'),
+            ('unsigned_int', 'uint32'),
+            ('integer', 'int32'),
+            ('unsigned_integer', 'uint32'),
+            ('bigint', 'int64'),
+            ('unsigned_bigint', 'uint64'),
+            ('float', 'float'),
+            ('double', 'double'),
+            ('real', 'double'),
+            ('decimal', 'decimal128(22, 6)'),
+            ('dec', 'decimal128(22, 6)'),
+            ('fixed', 'decimal128(22, 6)'),
+            ('numeric', 'decimal128(22, 6)'),
+            ('date', 'date64[ms]'),
+            ('time', 'duration[us]'),
+            ('time_6', 'duration[us]'),
+            ('datetime', 'timestamp[us]'),
+            ('datetime_6', 'timestamp[us]'),
+            ('timestamp', 'timestamp[us]'),
+            ('timestamp_6', 'timestamp[us]'),
+            ('year', 'int16'),
+            ('char_100', 'string'),
+            ('binary_100', 'binary'),
+            ('varchar_200', 'string'),
+            ('varbinary_200', 'binary'),
+            ('longtext', 'string'),
+            ('mediumtext', 'string'),
+            ('text', 'string'),
+            ('tinytext', 'string'),
+            ('longblob', 'binary'),
+            ('mediumblob', 'binary'),
+            ('blob', 'binary'),
+            ('tinyblob', 'binary'),
+            ('json', 'string'),
+            ('enum', 'string'),
+            ('set', 'string'),
+            ('bit', 'binary'),
+        ]
+
+        assert [(x.name, str(x.type)) for x in out.schema] == dtypes
+
+        bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+        assert row['id'] == 0, row['id']
+        assert row['tinyint'] == 80, row['tinyint']
+        assert row['unsigned_tinyint'] == 85, row['unsigned_tinyint']
+        assert row['bool'] == 0, row['bool']
+        assert row['boolean'] == 1, row['boolean']
+        assert row['smallint'] == -27897, row['smallint']
+        assert row['unsigned_smallint'] == 27897, row['unsigned_smallint']
+        assert row['mediumint'] == 104729, row['mediumint']
+        assert row['unsigned_mediumint'] == 120999, row['unsigned_mediumint']
+        assert row['int24'] == -200899, row['int24']
+        assert row['unsigned_int24'] == 407709, row['unsigned_int24']
+        assert row['int'] == -1295369311, row['int']
+        assert row['unsigned_int'] == 3872362332, row['unsigned_int']
+        assert row['integer'] == -1741727421, row['integer']
+        assert row['unsigned_integer'] == 3198387363, row['unsigned_integer']
+        assert row['bigint'] == -266883847, row['bigint']
+        assert row['unsigned_bigint'] == 980007287362, row['unsigned_bigint']
+        assert row['float'] - -146487000.0 < 0.00001, row['float']
+        assert row['double'] == -474646154.719356, row['double']
+        assert row['real'] == -901409776.279346, row['real']
+        assert row['decimal'] == decimal.Decimal(
+            '28111097.610822',
+        ), row['decimal']
+        assert row['dec'] == decimal.Decimal('389451155.931428'), row['dec']
+        assert row['fixed'] == decimal.Decimal(
+            '-143773416.044092',
+        ), row['fixed']
+        assert row['numeric'] == decimal.Decimal(
+            '866689461.300046',
+        ), row['numeric']
+        assert row['date'] == datetime.date(8524, 11, 10), row['date']
+        assert row['time'] == datetime.timedelta(minutes=7), row['time']
+        assert row['datetime'] == datetime.datetime(
+            9948, 3, 11, 15, 29, 22,
+        ), row['datetime']
+        assert row['datetime_6'] == datetime.datetime(
+            1756, 10, 29, 2, 2, 42, 8,
+        ), row['datetime_6']
+        assert row['timestamp'] == datetime.datetime(
+            1980, 12, 31, 1, 10, 23,
+        ), row['timestamp']
+        assert row['timestamp_6'] == datetime.datetime(
+            1991, 1, 2, 22, 15, 10, 6,
+        ), row['timestamp_6']
+        assert row['year'] == 1923, row['year']
+        assert row['char_100'] == \
+            'This is a test of a 100 character column.', row['char_100']
+        assert row['binary_100'] == bytearray(
+            bits + [0] * 84,
+        ), row['binary_100']
+        assert row['varchar_200'] == \
+            'This is a test of a variable character column.', row['varchar_200']
+        assert row['varbinary_200'] == bytearray(
+            bits * 2,
+        ), row['varbinary_200']
+        assert row['longtext'] == 'This is a longtext column.', row['longtext']
+        assert row['mediumtext'] == 'This is a mediumtext column.', row['mediumtext']
+        assert row['text'] == 'This is a text column.', row['text']
+        assert row['tinytext'] == 'This is a tinytext column.'
+        assert row['longblob'] == bytearray(bits * 3), row['longblob']
+        assert row['mediumblob'] == bytearray(bits * 2), row['mediumblob']
+        assert row['blob'] == bytearray(bits), row['blob']
+        assert row['tinyblob'] == bytearray(
+            [10, 11, 12, 13, 14, 15],
+        ), row['tinyblob']
+        assert row['json'] == '{"a":10,"b":2.75,"c":"hello world"}', row['json']
+        assert row['enum'] == 'one', row['enum']
+        assert row['set'] == 'two', row['set']
+        assert row['bit'] == b'\x00\x00\x00\x00\x00\x00\x00\x80', row['bit']
+
+        conn.close()
+
+    def test_alltypes_min_max_arrow(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface unsigned int information')
+
+        conn = s2.connect(database=type(self).dbname, results_type='arrow')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes_no_nulls')
+        cur.fetchall()
+
+        cur.execute('select * from alltypes')
+        cur.fetchall()
+
+        conn.close()
+
+    def test_alltypes_nulls_arrow(self):
+        conn = s2.connect(database=type(self).dbname, results_type='arrow')
+        cur = conn.cursor()
+
+        cur.execute('select * from alltypes where id = 1')
+        out = cur.fetchone()
+        row = out.to_pylist()[0]
+
+        assert row['id'] == 1, row['id']
+        assert row['tinyint'] is None, row['tinyint']
+        assert row['bool'] is None, row['bool']
+        assert row['boolean'] is None, row['boolean']
+        assert row['smallint'] is None, row['smallint']
+        assert row['mediumint'] is None, row['mediumint']
+        assert row['int24'] is None, row['int24']
+        assert row['int'] is None, row['int']
+        assert row['integer'] is None, row['integer']
+        assert row['bigint'] is None, row['bigint']
+        assert row['float'] is None, row['float']
+        assert row['double'] is None, row['double']
+        assert row['real'] is None, row['real']
+        assert row['decimal'] is None, row['decimal']
+        assert row['dec'] is None, row['dec']
+        assert row['fixed'] is None, row['fixed']
+        assert row['numeric'] is None, row['numeric']
+        assert row['date'] is None, row['date']
+        assert row['time'] is None, row['time']
+        assert row['time'] is None, row['time']
+        assert row['datetime'] is None, row['datetime']
+        assert row['datetime_6'] is None, row['datetime_6']
+        assert row['timestamp'] is None, row['timestamp']
+        assert row['timestamp_6'] is None, row['timestamp_6']
+        assert row['year'] is None, row['year']
+        assert row['char_100'] is None, row['char_100']
+        assert row['binary_100'] is None, row['binary_100']
+        assert row['varchar_200'] is None, row['varchar_200']
+        assert row['varbinary_200'] is None, row['varbinary_200']
+        assert row['longtext'] is None, row['longtext']
+        assert row['mediumtext'] is None, row['mediumtext']
+        assert row['text'] is None, row['text']
+        assert row['tinytext'] is None, row['tinytext']
+        assert row['longblob'] is None, row['longblob']
+        assert row['mediumblob'] is None, row['mediumblob']
+        assert row['blob'] is None, row['blob']
+        assert row['tinyblob'] is None, row['tinyblob']
+        assert row['json'] is None, row['json']
+        assert row['enum'] is None, row['enum']
+        assert row['set'] is None, row['set']
+        assert row['bit'] is None, row['bit']
+
+        conn.close()
 
     def test_alltypes_nulls(self):
         self.cur.execute('select * from alltypes where id = 1')

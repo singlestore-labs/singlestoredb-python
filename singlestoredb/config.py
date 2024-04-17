@@ -231,6 +231,7 @@ register_option(
         valid_values=[
             'tuple', 'tuples', 'namedtuple', 'namedtuples',
             'dict', 'dicts', 'structsequence', 'structsequences',
+            'numpy', 'pandas', 'polars', 'arrow', 'pyarrow',
         ],
     ),
     'tuples',

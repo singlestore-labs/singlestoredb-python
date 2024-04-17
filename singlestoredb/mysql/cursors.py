@@ -4,7 +4,9 @@ from collections import namedtuple
 
 from . import err
 from ..connection import Cursor as BaseCursor
+from ..utils import results
 from ..utils.debug import log_query
+from ..utils.results import get_schema
 
 
 #: Regular expression for :meth:`Cursor.executemany`.
@@ -45,6 +47,7 @@ class Cursor(BaseCursor):
         self._connection = connection
         self.warning_count = 0
         self._description = None
+        self._format_schema = None
         self._rownumber = 0
         self.rowcount = -1
         self.arraysize = 1
@@ -61,6 +64,10 @@ class Cursor(BaseCursor):
     @property
     def description(self):
         return self._description
+
+    @property
+    def _schema(self):
+        return self._format_schema
 
     @property
     def connection(self):
@@ -394,6 +401,7 @@ class Cursor(BaseCursor):
         self.rowcount = 0
         self.warning_count = 0
         self._description = None
+        self._format_schema = None
         self.lastrowid = None
         self._rows = None
 
@@ -409,6 +417,10 @@ class Cursor(BaseCursor):
         if self.rowcount == 18446744073709551615:
             self.rowcount = -1
         self._description = result.description
+        self._format_schema = get_schema(
+            self.connection._results_type,
+            result.description,
+        )
         self.lastrowid = result.insert_id
         self._rows = result.rows
 
@@ -438,6 +450,134 @@ class Cursor(BaseCursor):
 
 class CursorSV(Cursor):
     """Cursor class for C extension."""
+
+
+class ArrowCursorMixin:
+    """Fetch methods for Arrow Tables."""
+
+    def fetchone(self):
+        return results.results_to_arrow(
+            self.description, super().fetchone(), single=True, schema=self._schema,
+        )
+
+    def fetchall(self):
+        return results.results_to_arrow(
+            self.description, super().fetchall(), schema=self._schema,
+        )
+
+    def fetchall_unbuffered(self):
+        return results.results_to_arrow(
+            self.description, super().fetchall_unbuffered(), schema=self._schema,
+        )
+
+    def fetchmany(self, size=None):
+        return results.results_to_arrow(
+            self.description, super().fetchmany(size), schema=self._schema,
+        )
+
+
+class ArrowCursor(ArrowCursorMixin, Cursor):
+    """A cursor which returns results as an Arrow Table."""
+
+
+class ArrowCursorSV(ArrowCursorMixin, CursorSV):
+    """A cursor which returns results as an Arrow Table for C extension."""
+
+
+class NumpyCursorMixin:
+    """Fetch methods for numpy arrays."""
+
+    def fetchone(self):
+        return results.results_to_numpy(
+            self.description, super().fetchone(), single=True, schema=self._schema,
+        )
+
+    def fetchall(self):
+        return results.results_to_numpy(
+            self.description, super().fetchall(), schema=self._schema,
+        )
+
+    def fetchall_unbuffered(self):
+        return results.results_to_numpy(
+            self.description, super().fetchall_unbuffered(), schema=self._schema,
+        )
+
+    def fetchmany(self, size=None):
+        return results.results_to_numpy(
+            self.description, super().fetchmany(size), schema=self._schema,
+        )
+
+
+class NumpyCursor(NumpyCursorMixin, Cursor):
+    """A cursor which returns results as a numpy array."""
+
+
+class NumpyCursorSV(NumpyCursorMixin, CursorSV):
+    """A cursor which returns results as a numpy array for C extension."""
+
+
+class PandasCursorMixin:
+    """Fetch methods for pandas DataFrames."""
+
+    def fetchone(self):
+        return results.results_to_pandas(
+            self.description, super().fetchone(), single=True, schema=self._schema,
+        )
+
+    def fetchall(self):
+        return results.results_to_pandas(
+            self.description, super().fetchall(), schema=self._schema,
+        )
+
+    def fetchall_unbuffered(self):
+        return results.results_to_pandas(
+            self.description, super().fetchall_unbuffered(), schema=self._schema,
+        )
+
+    def fetchmany(self, size=None):
+        return results.results_to_pandas(
+            self.description, super().fetchmany(size), schema=self._schema,
+        )
+
+
+class PandasCursor(PandasCursorMixin, Cursor):
+    """A cursor which returns results as a pandas DataFrame."""
+
+
+class PandasCursorSV(PandasCursorMixin, CursorSV):
+    """A cursor which returns results as a pandas DataFrame for C extension."""
+
+
+class PolarsCursorMixin:
+    """Fetch methods for polars DataFrames."""
+
+    def fetchone(self):
+        return results.results_to_polars(
+            self.description, super().fetchone(), single=True, schema=self._schema,
+        )
+
+    def fetchall(self):
+        return results.results_to_polars(
+            self.description, super().fetchall(), schema=self._schema,
+        )
+
+    def fetchall_unbuffered(self):
+        return results.results_to_polars(
+            self.description, super().fetchall_unbuffered(), schema=self._schema,
+        )
+
+    def fetchmany(self, size=None):
+        return results.results_to_polars(
+            self.description, super().fetchmany(size), schema=self._schema,
+        )
+
+
+class PolarsCursor(PolarsCursorMixin, Cursor):
+    """A cursor which returns results as a polars DataFrame."""
+
+
+class PolarsCursorSV(PolarsCursorMixin, CursorSV):
+    """A cursor which returns results as a polars DataFrame for C extension."""
 
 
 class DictCursorMixin:
@@ -698,16 +838,48 @@ class SSCursorSV(SSCursor):
 
 
 class SSDictCursor(DictCursorMixin, SSCursor):
-    """An unbuffered cursor, which returns results as a dictionary"""
+    """An unbuffered cursor, which returns results as a dictionary."""
 
 
 class SSDictCursorSV(SSCursorSV):
-    """An unbuffered cursor for the C extension, which returns a dictionary"""
+    """An unbuffered cursor for the C extension, which returns a dictionary."""
 
 
 class SSNamedtupleCursor(NamedtupleCursorMixin, SSCursor):
-    """An unbuffered cursor, which returns results as a named tuple"""
+    """An unbuffered cursor, which returns results as a named tuple."""
 
 
 class SSNamedtupleCursorSV(SSCursorSV):
-    """An unbuffered cursor for the C extension, which returns results as a named tuple"""
+    """An unbuffered cursor for the C extension, which returns results as named tuple."""
+
+
+class SSArrowCursor(ArrowCursorMixin, SSCursor):
+    """An unbuffered cursor, which returns results as an Arrow Table."""
+
+
+class SSArrowCursorSV(ArrowCursorMixin, SSCursorSV):
+    """An unbuffered cursor, which returns results as an Arrow Table (accelerated)."""
+
+
+class SSNumpyCursor(NumpyCursorMixin, SSCursor):
+    """An unbuffered cursor, which returns results as a numpy array."""
+
+
+class SSNumpyCursorSV(NumpyCursorMixin, SSCursorSV):
+    """An unbuffered cursor, which returns results as a numpy array (accelerated)."""
+
+
+class SSPandasCursor(PandasCursorMixin, SSCursor):
+    """An unbuffered cursor, which returns results as a pandas DataFrame."""
+
+
+class SSPandasCursorSV(PandasCursorMixin, SSCursorSV):
+    """An unbuffered cursor, which returns results as a pandas DataFrame (accelerated)."""
+
+
+class SSPolarsCursor(PolarsCursorMixin, SSCursor):
+    """An unbuffered cursor, which returns results as a polars DataFrame."""
+
+
+class SSPolarsCursorSV(PolarsCursorMixin, SSCursorSV):
+    """An unbuffered cursor, which returns results as a polars DataFrame (accelerated)."""
