@@ -68,6 +68,8 @@ class Description(NamedTuple):
 
 
 if has_numpy:
+    # If an int column is nullable, we need to use floats rather than
+    # ints for numpy and pandas.
     NUMPY_TYPE_MAP_CAST_FLOAT = NUMPY_TYPE_MAP.copy()
     NUMPY_TYPE_MAP_CAST_FLOAT.update({
         1: np.float32,  # Tiny
@@ -81,6 +83,15 @@ if has_numpy:
         9: np.float64,  # Int24
         -9: np.float64,  # Unsigned Int24
         13: np.float64,  # Year
+    })
+
+if has_polars:
+    # Remap date/times to strings; let polars do the parsing
+    POLARS_TYPE_MAP = POLARS_TYPE_MAP.copy()
+    POLARS_TYPE_MAP.update({
+        7: pl.Utf8,
+        10: pl.Utf8,
+        12: pl.Utf8,
     })
 
 
