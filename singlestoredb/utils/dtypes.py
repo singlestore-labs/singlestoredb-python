@@ -170,14 +170,14 @@ if has_polars:
         4: pl.Float32,  # Float
         5: pl.Float64,  # Double,
         6: pl.Null,  # Null,
-        7: pl.Datetime,  # Timestamp
+        7: pl.Utf8,  # Timestamp
         8: pl.Int64,  # LongLong
         -8: pl.UInt64,  # Unsigned LongLong
         9: pl.Int32,  # Int24
         -9: pl.UInt32,  # Unsigned Int24
-        10: pl.Date,  # Date
+        10: pl.Utf8,  # Date
         11: pl.Duration,  # Time
-        12: pl.Datetime,  # Datetime
+        12: pl.Utf8,  # Datetime
         13: pl.Int16,  # Year
         15: pl.Utf8,  # Varchar
         -15: pl.Utf8,  # Varbinary

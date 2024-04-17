@@ -769,7 +769,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         Py_XINCREF(self->py_invalid_values[i]);
 
         self->py_converters[i] = (!py_converter
-                                  || py_converter == Py_None
+                                  // || py_converter == Py_None
                                   || py_converter == py_default_converter) ?
                                  NULL : py_converter;
         Py_XINCREF(self->py_converters[i]);
@@ -1473,8 +1473,12 @@ static PyObject *read_row_from_packet(
                     py_str = PyUnicode_Decode(out, out_l, py_state->encodings[i], py_state->encoding_errors);
                     if (!py_str) goto error;
                 }
-                py_item = PyObject_CallFunctionObjArgs(py_state->py_converters[i], py_str, NULL);
-                Py_CLEAR(py_str);
+                if (py_state->py_converters[i] == Py_None) {
+                    py_item = py_str;
+                } else {
+                    py_item = PyObject_CallFunctionObjArgs(py_state->py_converters[i], py_str, NULL);
+                    Py_CLEAR(py_str);
+                }
                 if (!py_item) goto error;
             }
 

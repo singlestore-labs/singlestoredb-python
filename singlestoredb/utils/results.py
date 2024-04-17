@@ -126,14 +126,31 @@ def _decimalize_polars(desc: Description) -> 'pl.Decimal':
 def _description_to_polars_schema(desc: List[Description]) -> Dict[str, Any]:
     """Convert description to polars DataFrame schema info."""
     if has_polars:
+        with_columns = {}
+        for x in desc:
+            if x.type_code in [7, 12]:
+                if x.scale == 6:
+                    with_columns[x.name] = pl.col(x.name).str.to_datetime(
+                        '%Y-%m-%d %H:%M:%S.%6f', time_unit='us',
+                    )
+                else:
+                    with_columns[x.name] = pl.col(x.name).str.to_datetime(
+                        '%Y-%m-%d %H:%M:%S', time_unit='us',
+                    )
+            elif x.type_code == 10:
+                with_columns[x.name] = pl.col(x.name).str.to_date('%Y-%m-%d')
+
         return dict(
-            schema=[
-                (
-                    x.name, _decimalize_polars(x)
-                    if x.type_code in DECIMAL_TYPES else POLARS_TYPE_MAP[signed(x)],
-                )
-                for x in desc
-            ],
+            schema=dict(
+                schema=[
+                    (
+                        x.name, _decimalize_polars(x)
+                        if x.type_code in DECIMAL_TYPES else POLARS_TYPE_MAP[signed(x)],
+                    )
+                    for x in desc
+                ],
+            ),
+            with_columns=with_columns,
         )
     return {}
 
@@ -272,8 +289,13 @@ def results_to_polars(
     if has_polars:
         schema = _description_to_polars_schema(desc) if schema is None else schema
         if single:
-            return pl.DataFrame([res], **schema)
-        return pl.DataFrame(res, **schema)
+            out = pl.DataFrame([res], **schema.get('schema', {}))
+        else:
+            out = pl.DataFrame(res, **schema.get('schema', {}))
+        with_columns = schema.get('with_columns')
+        if with_columns:
+            return out.with_columns(**with_columns)
+        return out
     warnings.warn(
         'polars is not available; unable to convert to DataFrame',
         RuntimeWarning,

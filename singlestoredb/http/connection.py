@@ -591,6 +591,12 @@ class Cursor(connection.Cursor):
                     return json.dumps(x)
                 http_converters[245] = json_to_str
 
+            # Don't convert date/times in polars
+            elif 'polars' in self._results_type:
+                http_converters.pop(7, None)
+                http_converters.pop(10, None)
+                http_converters.pop(12, None)
+
             results = out['results']
 
             # Convert data to Python types

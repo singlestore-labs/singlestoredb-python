@@ -559,10 +559,16 @@ class Connection(BaseConnection):
         self.parse_json = parse_json
         self.invalid_values = (invalid_values or {}).copy()
 
-        # Convert decimals to strings for certain output formats
+        # Disable JSON parsing for Arrow
         if self.results_type in ['arrow']:
             conv[245] = None
             self.parse_json = False
+
+        # Disable date/time parsing for polars; let polars do the parsing
+        elif self.results_type in ['polars']:
+            conv[7] = None
+            conv[10] = None
+            conv[12] = None
 
         # Need for MySQLdb compatibility.
         self.encoders = {k: v for (k, v) in conv.items() if type(k) is not int}
