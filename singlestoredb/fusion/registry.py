@@ -123,17 +123,28 @@ class ShowFusionCommandsHandler(SQLHandler):
 
     Description
     -----------
-    Display all Fusion SQL commands.
+    Displays a list of all the Fusion commands.
+
+    Arguments
+    ---------
+    * `<pattern>``: A pattern similar to SQL LIKE clause. Uses ``%`` as
+      the wildcard character.
 
     Remarks
     -------
-    * ``LIKE`` indicates a pattern of commands to display. ``%`` is a wildcard.
+    * Use the ``LIKE`` clause to specify a pattern and return only the
+      commands that match the specified pattern.
 
     Example
     -------
-    Display all commands starting with 'SHOW'::
+    The following command returns all the Fusion commands that start
+    with 'SHOW'::
 
-        SHOW FUSION COMMANDS LIKE 'SHOW%';
+        SHOW FUSION COMMANDS LIKE 'SHOW%'
+
+    See Also
+    --------
+    * ``SHOW FUSION HELP``
 
     """
 
@@ -167,13 +178,14 @@ class ShowFusionGrammarHandler(SQLHandler):
     -----------
     Show the full grammar of a Fusion SQL command for a given query.
 
-    Remarks
-    -------
-    * ``<query>`` is a string containing a Fusion SQL command.
+    Arguments
+    ---------
+    * ``<command>``: A Fusion command.
 
     Example
     -------
-    Display the full grammar of the ``CREATE WORKSPACE`` command::
+    The following command displays the grammar for the
+    ``CREATE WORKSPACE`` Fusion command::
 
         SHOW FUSION GRAMMAR FOR 'CREATE WORKSPACE';
 
@@ -202,11 +214,16 @@ class ShowFusionHelpHandler(SQLHandler):
 
     Description
     -----------
-    Show the documentation for a Fusion SQL command.
+    Displays the documentation for a Fusion command.
+
+    Arguments
+    ---------
+    * ``<command>``: A Fusion command.
 
     Example
     -------
-    Display the help for the ``CREATE WORKSPACE`` command::
+    The following command displays the documentation for
+    the ``CREATE WORKSPACE`` Fusion command.
 
         SHOW FUSION HELP FOR 'CREATE WORKSPACE';
 

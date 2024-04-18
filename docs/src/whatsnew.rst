@@ -11,7 +11,7 @@ This document outlines features and improvements from each release.
 v1.1.0 - April, 18 2024
 -----------------------
 * Added new result types: numpy, pandas, polars, arrow
-* Added `SHOW FUSION HELP` command and doc to Fusion SQL handlers
+* Added ``SHOW FUSION HELP`` command and doc to Fusion SQL handlers
 
 v1.0.4 - April, 3 2024
 ----------------------

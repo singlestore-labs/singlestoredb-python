@@ -16,7 +16,7 @@ parser.add_option(
 
 (options, args) = parser.parse_args()
 
-os.makedirs(options.dir)
+os.makedirs(options.dir, exist_ok=True)
 
 for k, v in _handlers.items():
     out_filename = os.path.join(options.dir, k.replace(' ', '_').lower()) + '.md'

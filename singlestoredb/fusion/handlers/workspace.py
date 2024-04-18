@@ -15,21 +15,32 @@ from .utils import get_workspace_manager
 
 class ShowRegionsHandler(SQLHandler):
     """
-    SHOW REGIONS [ <like> ] [ <order-by> ] [ <limit> ];
+    SHOW REGIONS [ <like> ]
+        [ <order-by> ]
+        [ <limit> ];
 
     Description
     -----------
-    Show all available regions.
+    Returns a list of all the valid regions for the user.
+
+    Arguments
+    ---------
+    * ``<pattern>``: A pattern similar to SQL LIKE clause.
+      Uses ``%`` as the wildcard character.
 
     Remarks
     -------
-    * ``LIKE`` specifies a pattern to match. ``%`` is a wildcard.
-    * ``ORDER BY`` specifies the column names to sort by.
-    * ``LIMIT`` indicates a maximum number of results to return.
+    * Use the ``LIKE`` clause to specify a pattern and return only the
+      regions that match the specified pattern.
+    * The ``LIMIT`` clause limits the number of results to the
+      specified number.
+    * Use the ``ORDER BY`` clause to sort the results by the specified
+      key. By default, the results are sorted in the ascending order.
 
     Example
     -------
-    Show all regions in the US::
+    The following command returns a list of all the regions in the US
+    and sorts the results in ascending order by their ``Name``::
 
         SHOW REGIONS LIKE 'US%' ORDER BY Name;
 
@@ -56,29 +67,40 @@ ShowRegionsHandler.register(overwrite=True)
 
 class ShowWorkspaceGroupsHandler(SQLHandler):
     """
-    SHOW WORKSPACE GROUPS [ <like> ] [ <extended> ] [ <order-by> ] [ <limit> ];
+    SHOW WORKSPACE GROUPS [ <like> ]
+        [ <extended> ] [ <order-by> ]
+        [ <limit> ];
 
     Description
     -----------
-    Show workspace group information.
+    Displays information on workspace groups.
+
+    Arguments
+    ---------
+    * ``<pattern>``: A pattern similar to SQL LIKE clause.
+      Uses ``%`` as the wildcard character.
 
     Remarks
     -------
-    * ``LIKE`` specifies a pattern to match. ``%`` is a wildcard.
-    * ``EXTENDED`` indicates that extra workspace group information should
-      be returned in the result set.
-    * ``ORDER BY`` specifies the column names to sort by.
-    * ``LIMIT`` indicates a maximum number of results to return.
+    * Use the ``LIKE`` clause to specify a pattern and return only the
+      workspace groups that match the specified pattern.
+    * The ``LIMIT`` clause limits the number of results to the
+      specified number.
+    * Use the ``ORDER BY`` clause to sort the results by the specified
+      key. By default, the results are sorted in the ascending order.
+    * To return more information about the workspace groups, use the
+      ``EXTENDED`` clause.
 
     Example
     -------
-    Display workspace groups that match a pattern incuding extended information::
+    The following command displays a list of workspace groups with names
+    that match the specified pattern::
 
         SHOW WORKSPACE GROUPS LIKE 'Marketing%' EXTENDED ORDER BY Name;
 
     See Also
     --------
-    * SHOW WORKSPACES
+    * ``SHOW WORKSPACES``
 
     """
 
@@ -119,7 +141,9 @@ ShowWorkspaceGroupsHandler.register(overwrite=True)
 
 class ShowWorkspacesHandler(SQLHandler):
     """
-    SHOW WORKSPACES [ in_group ] [ <like> ] [ <extended> ] [ <order-by> ] [ <limit> ];
+    SHOW WORKSPACES [ in_group ]
+        [ <like> ] [ <extended> ]
+        [ <order-by> ] [ <limit> ];
 
     # Workspace group
     in_group = IN GROUP { group_id | group_name }
@@ -132,27 +156,42 @@ class ShowWorkspacesHandler(SQLHandler):
 
     Description
     -----------
-    Show workspaces in a workspace group.
+    Displays information on workspaces in a workspace group.
+
+    Arguments
+    ---------
+    * ``<group_id>``: The ID of the workspace group that contains
+      the workspace.
+    * ``<group_name>``: The name of the workspace group that
+      contains the workspace.
+    * ``<pattern>``: A pattern similar to SQL LIKE clause.
+      Uses ``%`` as the wildcard character.
 
     Remarks
     -------
-    * ``IN GROUP`` specifies the workspace group to list workspaces for. If a
-      workspace group ID is specified, you should use ``IN GROUP ID``.
-    * ``LIKE`` specifies a pattern to match. ``%`` is a wildcard.
-    * ``EXTENDED`` indicates that extra workspace group information should
-      be returned in the result set.
-    * ``ORDER BY`` specifies the column names to sort by.
-    * ``LIMIT`` indicates a maximum number of results to return.
+    * The ``IN GROUP`` clause specifies the ID or the name of the
+      workspace group that contains the workspace.
+    * Use the ``LIKE`` clause to specify a pattern and return only
+      the workspaces that match the specified pattern.
+    * The ``LIMIT`` clause limits the number of results to the
+      specified number.
+    * Use the ``ORDER BY`` clause to sort the results by the
+      specified key. By default, the results are sorted in the
+      ascending order.
+    * To return more information about the workspaces, use the
+      ``EXTENDED`` clause.
 
     Example
     -------
-    Display workspaces in a workspace group including extended information::
+    The following command displays information on all the workspaces
+    in a workspace group named **wsg1** and sorts the results by
+    workspace name in the ascending order::
 
-        SHOW WORKSPACES IN GROUP 'My Group' EXTENDED ORDER BY Name;
+        SHOW WORKSPACES IN GROUP 'wsg1' EXTENDED ORDER BY Name;
 
     See Also
     --------
-    * SHOW WORKSPACE GROUPS
+    * ``SHOW WORKSPACE GROUPS``
 
     """
 
@@ -243,42 +282,60 @@ class CreateWorkspaceGroupHandler(SQLHandler):
 
     Description
     -----------
-    Create a workspace group.
+    Creates a workspace group.
+
+    Arguments
+    ---------
+    * ``<group-name>``: The name of the workspace group.
+    * ``<region_id>`` or ``<region_name>``: The ID or the name of the region
+      in which the new workspace group is created.
+    * ``<password>``: The admin password of the workspace group.
+      The password must contain:
+        - At least 8 characters
+        - At least one uppercase character
+        - At least one lowercase character
+        - At least one number or special character
+    * ``<expiry_time>``: The timestamp of when the workspace group terminates.
+      Expiration time can be specified as a timestamp or duration.
+    * ``<ip_range>``: A list of allowed IP addresses or CIDR ranges.
+    * ``<backup_key_id>``: The KMS key ID associated with the backup bucket.
+    * ``<data_key_id>``: The KMS key ID associated with the data bucket.
+    * ``<day>:<hour>``: The day of the week (0-6) and the hour of the day
+      (0-23) when the engine updates are applied to the workspace group.
 
     Remarks
     -------
-    * ``IF NOT EXISTS`` indicates that the creation of the workspace group
-      will only be attempted if a workspace group with that name doesn't
-      already exist.
-    * ``IN REGION`` specifies the region to create the workspace group in.
-      If a region ID is used, ``IN REGION ID`` should be used.
-    * ``EXPIRES AT`` specifies an expiration date/time or interval.
-    * ``WITH FIREWALL RANGES`` indicates IP ranges to allow access to the
-       workspace group.
-    * ``WITH BACKUP BUCKET KMS KEY ID`` is the key ID associated with the
-      backup bucket.
-    * ``WITH DATA BUCKET KMS KEY ID`` is the key ID associated with the
-      data bucket.
-    * ``WITH SMART DR`` enables smart disaster recovery.
-    * ``ALLOW ALL TRAFFIC`` allows all incoming traffic.
-    * ``WITH UPDATE WINDOW`` specifies tha day (0-6) and hour (0-23) of the
-      update window.
+    * Specify the ``IF NOT EXISTS`` clause to create a new workspace group only
+      if a workspace group with the specified name does not exist.
+    * If the ``WITH BACKUP BUCKET KMS KEY ID '<backup_key_id>'`` clause is
+      specified, Customer-Managed Encryption Keys (CMEK) encryption is enabled
+      for the data bucket of the workspace group.
+    * If the ``WITH DATA BUCKET KMS KEY ID '<data_key_id>'`` clause is specified,
+      CMEK encryption for the data bucket and Amazon Elastic Block Store (EBS)
+      volumes of the workspace group is enabled.
+    * To enable Smart Disaster Recovery (SmartDR) for the workspace group, specify
+      the WITH SMART DR clause. Refer to Smart Disaster Recovery (DR):
+      SmartDR for more information.
+    * To allow incoming traffic from any IP address, use the ``ALLOW ALL TRAFFIC``
+      clause.
 
     Examples
     --------
-    Example 1: Create workspace group in US East 2 (Ohio)::
+    The following command creates a workspace group named wsg1 in the
+    US East 2 (Ohio) region::
 
-        CREATE WORKSPACE GROUP 'My Group' IN REGION 'US East 2 (Ohio)';
+        CREATE WORKSPACE GROUP 'wsg1' IN REGION 'US East 2 (Ohio)';
 
-    Example 2: Create workspace group with region ID and accessible from anywhere::
+    The following command specifies additional workspace group configuration
+    options::
 
-        CREATE WORKSPACE GROUP 'My Group'
-               IN REGION ID '93b61160-0cae-4e11-a5de-977b8e2e3ee5'
-               WITH FIREWALL RANGES '0.0.0.0/0';
+        CREATE WORKSPACE GROUP 'wsg1'
+            IN REGION ID '93b61160-0000-1000-9000-977b8e2e3ee5'
+            WITH FIREWALL RANGES '0.0.0.0/0';
 
     See Also
     --------
-    * SHOW WORKSPACE GROUPS
+    * ``SHOW WORKSPACE GROUPS``
 
     """
 
@@ -332,9 +389,13 @@ CreateWorkspaceGroupHandler.register(overwrite=True)
 
 class CreateWorkspaceHandler(SQLHandler):
     """
-    CREATE WORKSPACE [ if_not_exists ] workspace_name [ in_group ]
-        WITH SIZE size [ auto_suspend ] [ enable_kai ]
-        [ with_cache_config ] [ wait_on_active ];
+    CREATE WORKSPACE [ if_not_exists ] workspace_name
+        [ in_group ]
+        WITH SIZE size
+        [ auto_suspend ]
+        [ enable_kai ]
+        [ with_cache_config ]
+        [ wait_on_active ];
 
     # Create workspace in workspace group
     in_group = IN GROUP { group_id | group_name }
@@ -370,33 +431,47 @@ class CreateWorkspaceHandler(SQLHandler):
 
     Description
     -----------
-    Create a workspace in a workspace group.
+    Creates a new workspace. Refer to
+    `Creating and Using Workspaces <https://docs.singlestore.com/cloud/getting-started-with-singlestore-helios/about-workspaces/creating-and-using-workspaces/>`_
+    for more information.
+
+    Arguments
+    ---------
+    * ``<workspace_name>``: The name of the workspace.
+    * ``<group_id>`` or ``<group_name>``: The ID or name of the workspace group
+      in which the workspace is created.
+    * ``<workspace_size>``: The size of the workspace in workspace size notation,
+      for example "S-1".
+    * ``<suspend_time>``: The time (in seconds) after which the workspace is
+      suspended, according to the specified auto-suspend type.
+    * ``<multiplier>``: The multiplier for the persistent cache associated with
+      the workspace.
 
     Remarks
     -------
-    * ``IF NOT EXISTS`` indicates that the creation of the workspace
-      will only be attempted if a workspace with that name doesn't
-      already exist.
-    * ``IN GROUP`` indicates the workspace group to create the workspace
-      in. If an ID is used, ``IN GROUP ID`` should be used.
-    * ``SIZE`` indicates a cluster size specification such as 'S-00'.
-    * ``WITH CACHE CONFIG`` specifies the multiplier for the persistent cache
-      associated with the workspace. It must be 1, 2, or 4.
-    * ``WAIT ON ACTIVE`` indicates that execution should be paused until
-      the workspace has reached the ACTIVE state.
+    * Use the ``IF NOT EXISTS`` clause to create a new workspace only if a workspace
+      with the specified name does not exist.
+    * If the ``WITH CACHE CONFIG <multiplier>`` clause is specified, the cache
+      configuration multiplier is enabled for the workspace. It can have the
+      following values: 1, 2, or 4.
+    * The ``WAIT ON ACTIVE`` clause indicates that the execution is paused until this
+      workspace is in ACTIVE state.
+    * Specify the ``ENABLE KAI`` clause to enable SingleStore Kai and the MongoDB®
+      API for the workspace.
 
     Example
     -------
-    Create a workspace group and wait until it is active::
+    The following command creates a workspace named **examplews** in a workspace
+    group named **wsg1**::
 
-        CREATE WORKSPACE 'my-workspace' IN GROUP 'My Group'
-               WITH SIZE 'S-00' WAIT ON ACTIVE;
+        CREATE WORKSPACE 'examplews' IN GROUP 'wsgroup1'
+            WITH SIZE 'S-00' WAIT ON ACTIVE;
 
     See Also
     --------
-    * CREATE WORKSPACE GROUP
+    * ``CREATE WORKSPACE GROUP``
 
-    """
+    """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         workspace_group = get_workspace_group(params)
@@ -433,7 +508,9 @@ CreateWorkspaceHandler.register(overwrite=True)
 
 class SuspendWorkspaceHandler(SQLHandler):
     """
-    SUSPEND WORKSPACE workspace [ in_group ] [ wait_on_suspended ];
+    SUSPEND WORKSPACE workspace
+        [ in_group ]
+        [ wait_on_suspended ];
 
     # Workspace
     workspace = { workspace_id | workspace_name }
@@ -458,20 +535,37 @@ class SuspendWorkspaceHandler(SQLHandler):
 
     Description
     -----------
-    Suspend a workspace.
+    Suspends a workspace.
+
+    Refer to `Manage Workspaces <https://docs.singlestore.com/cloud/user-and-workspace-administration/manage-organizations/manage-workspaces/>`_
+    for more information.
+
+    Arguments
+    ---------
+    * ``<workspace-id>``: The ID of the workspace to suspend.
+    * ``<workspace-name>``: The name of the workspace to suspend.
+    * ``<group-id>``: The ID of the workspace group that contains
+      the workspace.
+    * ``<group-name>``: The name of the workspace group that
+      contains the workspace.
 
     Remarks
     -------
-    * ``IN GROUP`` indicates the workspace group of the workspace.
-      If an ID is used, ``IN GROUP ID`` should be used.
-    * ``WAIT ON SUSPENDED`` indicates that execution should be paused until
-      the workspace has reached the SUSPENDED state.
+    * Use the ``WAIT ON SUSPENDED`` clause to pause query execution
+      until the workspace is in the ``SUSPENDED`` state.
+
+    Example
+    -------
+    The following example suspends a workspace named examplews in
+    a workspace group named **wsg1**::
+
+        SUSPEND WORKSPACE 'examplews' IN GROUP 'wsg1';
 
     See Also
     --------
-    * RESUME WORKSPACE
+    * ``RESUME WORKSPACE``
 
-    """
+    """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         ws = get_workspace(params)
@@ -484,8 +578,10 @@ SuspendWorkspaceHandler.register(overwrite=True)
 
 class ResumeWorkspaceHandler(SQLHandler):
     """
-    RESUME WORKSPACE workspace [ in_group ]
-        [ disable_auto_suspend ] [ wait_on_resumed ];
+    RESUME WORKSPACE workspace
+        [ in_group ]
+        [ disable_auto_suspend ]
+        [ wait_on_resumed ];
 
     # Workspace
     workspace = { workspace_id | workspace_name }
@@ -513,16 +609,38 @@ class ResumeWorkspaceHandler(SQLHandler):
 
     Description
     -----------
-    Resume a workspace.
+    Resumes a workspace.
+
+    Refer to `Manage Workspaces <https://docs.singlestore.com/cloud/user-and-workspace-administration/manage-organizations/manage-workspaces/>`_
+    for more information.
+
+    Arguments
+    ---------
+    * ``<workspace-id>``: The ID of the workspace to resume.
+    * ``<workspace-name>``: The name of the workspace to resume.
+    * ``<group_id>``: The ID of the workspace group that contains
+      the workspace.
+    * ``<group_name>``: The name of the workspace group that
+      contains the workspace.
 
     Remarks
     -------
-    * ``IN GROUP`` indicates the workspace group of the workspace.
-      If an ID is used, ``IN GROUP ID`` should be used.
-    * ``WAIT ON RESUMED`` indicates that execution should be paused until
-      the workspace has reached the RESUMED state.
+    * Use the ``IN GROUP`` clause to specify the ID or name of the
+      workspace group that contains the workspace to resume.
+    * Use the ``WAIT ON RESUMED`` clause to pause query execution
+      until the workspace is in the ``RESUMED`` state.
+    * Specify the ``DISABLE AUTO SUSPEND`` clause to disable
+      auto-suspend for the resumed workspace.
 
-    """
+    Example
+    -------
+    The following example resumes a workspace with the specified ID
+    in a workspace group named **wsg1**::
+
+        RESUME WORKSPACE ID '93b61160-0000-1000-9000-977b8e2e3ee5'
+            IN GROUP 'wsg1';
+
+    """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         ws = get_workspace(params)
@@ -538,7 +656,10 @@ ResumeWorkspaceHandler.register(overwrite=True)
 
 class DropWorkspaceGroupHandler(SQLHandler):
     """
-    DROP WORKSPACE GROUP [ if_exists ] group [ wait_on_terminated ] [ force ];
+    DROP WORKSPACE GROUP [ if_exists ]
+        group
+        [ wait_on_terminated ]
+        [ force ];
 
     # Only run command if the workspace group exists
     if_exists = IF EXISTS
@@ -560,26 +681,32 @@ class DropWorkspaceGroupHandler(SQLHandler):
 
     Description
     -----------
-    Drop a workspace group.
+    Deletes the specified workspace group.
+
+    Arguments
+    ---------
+    * ``<group_id>``: The ID of the workspace group to delete.
+    * ``<group_name>``: The name of the workspace group to delete.
 
     Remarks
     -------
-    * ``IF EXISTS`` indicates that the dropping of the workspace group should
-      only be attempted if a workspace group with the given name exists.
-    * ``WAIT ON TERMINATED`` specifies that execution should be paused
-      until the workspace group reaches the TERMINATED state.
-    * ``FORCE`` specifies that the workspace group should be terminated
-      even if it contains workspaces.
+    * Specify the ``IF EXISTS`` clause to attempt the delete operation
+      only if a workspace group with the specified ID or name exists.
+    * Use the ``WAIT ON TERMINATED`` clause to pause query execution until
+      the workspace group is in the ``TERMINATED`` state.
+    * If the ``FORCE`` clause is specified, the workspace group is
+      terminated even if it contains workspaces.
 
     Example
     -------
-    Drop a workspace group and all workspaces within it::
+    The following command deletes a workspace group named **wsg1** even
+    if it contains workspaces::
 
-        DROP WORKSPACE GROUP 'My Group' FORCE;
+        DROP WORKSPACE GROUP 'wsg1' FORCE;
 
     See Also
     --------
-    * DROP WORKSPACE
+    * ``DROP WORKSPACE``
 
     """
 
@@ -605,7 +732,10 @@ DropWorkspaceGroupHandler.register(overwrite=True)
 
 class DropWorkspaceHandler(SQLHandler):
     """
-    DROP WORKSPACE [ if_exists ] workspace [ in_group ] [ wait_on_terminated ];
+    DROP WORKSPACE [ if_exists ]
+        workspace
+        [ in_group ]
+        [ wait_on_terminated ];
 
     # Only drop workspace if it exists
     if_exists = IF EXISTS
@@ -633,26 +763,38 @@ class DropWorkspaceHandler(SQLHandler):
 
     Description
     -----------
-    Drop a workspace.
+    Deletes a workspace.
+
+    Arguments
+    ---------
+    * ``<workspace-id>``: The ID of the workspace to delete.
+    * ``<workspace-name>``: The name of the workspace to delete.
+    * ``<group_id>``: The ID of the workspace group that contains
+      the workspace.
+    * ``<group_name>``: The name of the workspace group that
+      contains the workspace.
 
     Remarks
     -------
-    * ``IF EXISTS`` indicates that the dropping of the workspace should
-      only be attempted if a workspace with the given name exists.
-    * ``IN GROUP`` indicates the workspace group of the workspace.
-      If an ID is used, ``IN GROUP ID`` should be used.
-    * ``WAIT ON TERMINATED`` specifies that execution should be paused
-      until the workspace reaches the TERMINATED state.
+    * Specify the ``IF EXISTS`` clause to attempt the delete operation
+      only if a workspace with the specified ID or name exists.
+    * Use the ``IN GROUP`` clause to specify the ID or name of the workspace
+      group that contains the workspace to delete.
+    * Use the ``WAIT ON TERMINATED`` clause to pause query execution until
+      the workspace is in the ``TERMINATED`` state.
+    * All databases attached to the workspace are detached when the
+      workspace is deleted (terminated).
 
     Example
     -------
-    Drop a workspace if it exists::
+    The following example deletes a workspace named **examplews** in
+    a workspace group **wsg1**::
 
-        DROP WORKSPACE IF EXISTS 'my-workspace' IN GROUP 'My Group';
+        DROP WORKSPACE IF EXISTS 'examplews' IN GROUP 'wsg1';
 
     See Also
     --------
-    * DROP WORKSPACE GROUP
+    * ``DROP WORKSPACE GROUP``
 
     """
 

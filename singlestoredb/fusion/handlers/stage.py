@@ -12,8 +12,10 @@ from .utils import get_workspace_group
 
 class ShowStageFilesHandler(SQLHandler):
     """
-    SHOW STAGE FILES [ in_group ] [ at_path ] [ <like> ] [ <order-by> ]
-                     [ <limit> ] [ recursive ] [ extended ];
+    SHOW STAGE FILES [ in_group ]
+        [ at_path ] [ <like> ]
+        [ <order-by> ]
+        [ <limit> ] [ recursive ] [ extended ];
 
     # Workspace group
     in_group = IN GROUP { group_id | group_name }
@@ -35,40 +37,54 @@ class ShowStageFilesHandler(SQLHandler):
 
     Description
     -----------
-    Show the files in a workspace group's stage.
+    Displays a list of files in a Stage.
+
+    Refer to `Stage <https://docs.singlestore.com/cloud/developer-resources/stage-storage-service/>`_
+    for more information.
+
+    Arguments
+    ---------
+    * ``<group_id>``: The ID of the workspace group in which
+      the Stage is attached.
+    * ``<group_name>``: The name of the workspace group in which
+      the Stage is attached.
+    * ``<path>``: A path in the Stage.
+    * ``<pattern>``: A pattern similar to SQL LIKE clause.
+      Uses ``%`` as the wildcard character.
 
     Remarks
     -------
-    * ``IN GROUP`` specifies the workspace group or workspace group ID.
-      When using an ID, ``IN GROUP ID`` must be used.
-    * ``AT PATH`` specifies the path to list. If no ``AT PATH`` is specified,
-      the root directory is used.
-    * ``LIKE`` allows you to specify a filename pattern using ``%`` as a wildcard.
-    * ``ORDER BY`` allows you to specify the field to sort by.
-    * ``LIMIT`` allows you to set a limit on the number of entries displayed.
-    * ``RECURSIVE`` indicates that the stage should be listed recursively.
-    * ``EXTENDED`` indicates that more detailed information should be displayed.
+    * Use the ``LIKE`` clause to specify a pattern and return only the
+      files that match the specified pattern.
+    * The ``LIMIT`` clause limits the number of results to the
+      specified number.
+    * Use the ``ORDER BY`` clause to sort the results by the specified
+      key. By default, the results are sorted in the ascending order.
+    * The ``AT PATH`` clause specifies the path in the Stage to list
+      the files from.
+    * The ``IN GROUP`` clause specifies the ID or the name of the
+      workspace group in which the Stage is attached.
+    * Use the ``RECURSIVE`` clause to list the files recursively.
+    * To return more information about the files, use the ``EXTENDED``
+      clause.
 
     Examples
     --------
-    Example 1: Show files at path
+    The following command lists the files at a specific path::
 
-    This example shows how to list files starting at a specific path::
+        SHOW STAGE FILES IN GROUP 'wsg1' AT PATH "/data/";
 
-        SHOW STAGE FILES IN GROUP "My Group" AT PATH "/data/";
+    The following command lists the files recursively with
+    additional information::
 
-    Example 2: Show files recursively
-
-    This example show dow to display files recursively and with extra information::
-
-        SHOW STAGE FILES IN GROUP "My Group" RECURSIVE EXTENDED;
+        SHOW STAGE FILES IN GROUP 'wsg1' RECURSIVE EXTENDED;
 
     See Also
     --------
-    * UPLOAD FILE TO STAGE
-    * DOWNLOAD STAGE FILE
+    * ``UPLOAD FILE TO STAGE``
+    * ``DOWNLOAD STAGE FILE``
 
-    """
+    """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         wg = get_workspace_group(params)
@@ -115,7 +131,9 @@ ShowStageFilesHandler.register(overwrite=True)
 
 class UploadStageFileHandler(SQLHandler):
     """
-    UPLOAD FILE TO STAGE stage_path [ in_group ] FROM local_path [ overwrite ];
+    UPLOAD FILE TO STAGE stage_path
+        [ in_group ]
+        FROM local_path [ overwrite ];
 
     # Path to stage file
     stage_path = '<stage-path>'
@@ -137,29 +155,41 @@ class UploadStageFileHandler(SQLHandler):
 
     Description
     -----------
-    Upload a file to the workspace group's stage.
+    Uploads a file to a Stage.
+
+    Refer to `Stage <https://docs.singlestore.com/cloud/developer-resources/stage-storage-service/>`_
+    for more information.
+
+    Arguments
+    ---------
+    * ``<stage_path>``: The path in the Stage where the file is uploaded.
+    * ``<group_id>``: The ID of the workspace group in which the Stage
+      is attached.
+    * ``<group_name>``: The name of the workspace group in which the
+      Stage is attached.
+    * ``<local-path>``: The path to the file to upload in the local
+      directory.
 
     Remarks
     -------
-    * ``<stage-path>`` is the path in stage to upload the file to.
-    * ``IN GROUP`` specifies the workspace group or workspace group ID. When
-      using an ID ``IN GROUP ID`` should be used.
-    * ``<local-path>`` is the path on the local machine of the file to upload.
-    * ``OVERWRITE`` indicates that an existing stage file at that path
-      should be overwritten if it exists.
+    * The ``IN GROUP`` clause specifies the ID or the name of the workspace
+      group in which the Stage is attached.
+    * If the ``OVERWRITE`` clause is specified, any existing file at the
+      specified path in the Stage is overwritten.
 
     Examples
     --------
-    Example 1: Upload with overwrite::
+    The following command uploads a file to a Stage and overwrites any
+    existing files at the specified path::
 
-        UPLOAD FILE TO STAGE '/data/stats.csv' IN GROUP 'My Group'
-               FROM '/u/user/stats.csv' OVERWRITE;
+        UPLOAD FILE TO STAGE '/data/stats.csv' IN GROUP 'wsg1'
+            FROM '/tmp/user/stats.csv' OVERWRITE;
 
     See Also
     --------
-    * DOWNLOAD STAGE FILE
+    * ``DOWNLOAD STAGE FILE``
 
-    """
+    """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         wg = get_workspace_group(params)
@@ -175,8 +205,11 @@ UploadStageFileHandler.register(overwrite=True)
 
 class DownloadStageFileHandler(SQLHandler):
     """
-    DOWNLOAD STAGE FILE stage_path [ in_group ] [ local_path ]
-                                   [ overwrite ] [ encoding ];
+    DOWNLOAD STAGE FILE stage_path
+        [ in_group ]
+        [ local_path ]
+        [ overwrite ]
+        [ encoding ];
 
     # Path to stage file
     stage_path = '<stage-path>'
@@ -201,37 +234,52 @@ class DownloadStageFileHandler(SQLHandler):
 
     Description
     -----------
-    Download a stage file.
+    Download a file from a Stage.
+
+    Refer to `Stage <https://docs.singlestore.com/cloud/developer-resources/stage-storage-service/>`_
+    for more information.
+
+    Arguments
+    ---------
+    * ``<stage_path>``: The path to the file to download in a Stage.
+    * ``<group_id>``: The ID of the workspace group in which the
+      Stage is attached.
+    * ``<group_name>``: The name of the workspace group in which the
+      Stage is attached.
+    * ``<encoding>``: The encoding to apply to the downloaded file.
+    * ``<local-path>``: Specifies the path in the local directory
+      where the file is downloaded.
 
     Remarks
     -------
-    * ``<stage-path>`` is the path in stage to download.
-    * ``IN GROUP`` specifies the workspace group or workspace group ID. When
-      using an ID ``IN GROUP ID`` should be used.
-    * ``<local-path>`` is the destination path for the file. If not specified,
-      the file is returned in a result set.
-    * ``OVERWRITE`` indicates that an existing local file should be overwritten.
-    * ``ENCODING`` specifies the encoding of the file to apply to the downloaded
-      file. By default, files are downloaded as binary. This only option
-      typically only matters if ``<local-path>`` is not specified and the file
-      is to be printed to the screen.
+    * If the ``OVERWRITE`` clause is specified, any existing file at
+      the download location is overwritten.
+    * The ``IN GROUP`` clause specifies the ID or the name of the
+      workspace group in which the Stage is attached.
+    * By default, files are downloaded in binary encoding. To view
+      the contents of the file on the standard output, use the
+      ``ENCODING`` clause and specify an encoding.
+    * If ``<local-path>`` is not specified, the file is displayed
+      on the standard output.
 
     Examples
     --------
-    Example 1: Print a file to the screen::
+    The following command displays the contents of the file on the
+    standard output::
 
-        DOWNLOAD STAGE FILE '/data/stats.csv' IN GROUP 'My Group';
+        DOWNLOAD STAGE FILE '/data/stats.csv' IN GROUP 'wsgroup1' ENCODING 'utf8';
 
-    Example 2: Download a file to a local path with overwrite set::
+    The following command downloads a file to a specific location and
+    overwrites any existing file with the name ``stats.csv`` on the local storage::
 
-        DONLOAD STAGE FILE '/data/stats.csv' IN GROUP 'My Group'
-                TO '/u/me/data.csv' OVERWRITE;
+        DOWNLOAD STAGE FILE '/data/stats.csv' IN GROUP 'wsgroup1'
+            TO '/tmp/data.csv' OVERWRITE;
 
     See Also
     --------
-    * UPLOAD FILE TO STAGE
+    * ``UPLOAD FILE TO STAGE``
 
-    """
+    """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         wg = get_workspace_group(params)
@@ -260,7 +308,8 @@ DownloadStageFileHandler.register(overwrite=True)
 
 class DropStageFileHandler(SQLHandler):
     """
-    DROP STAGE FILE stage_path [ in_group ];
+    DROP STAGE FILE stage_path
+        [ in_group ];
 
     # Path to stage file
     stage_path = '<stage-path>'
@@ -276,25 +325,36 @@ class DropStageFileHandler(SQLHandler):
 
     Description
     -----------
-    Drop a stage file.
+    Deletes a file from a Stage.
+
+    Refer to `Stage <https://docs.singlestore.com/cloud/developer-resources/stage-storage-service/>`_
+    for more information.
+
+    Arguments
+    ---------
+    * ``<stage_path>``: The path to the file to delete in a Stage.
+    * ``<group_id>``: The ID of the workspace group in which the
+      Stage is attached.
+    * ``<group_name>``: The name of the workspace group in which
+      the Stage is attached.
 
     Remarks
     -------
-    * ``<stage-path>`` is the path in stage to drop.
-    * ``IN GROUP`` specifies the workspace group or workspace group ID. When
-      using an ID ``IN GROUP ID`` should be used.
+    * The ``IN GROUP`` clause specifies the ID or the name of the
+      workspace group in which the Stage is attached.
 
     Example
     --------
-    Drop a specific file from stage::
+    The following command deletes a file from a Stage attached to
+    a workspace group named **wsg1**::
 
-        DROP STAGE FILE '/data/stats.csv' IN GROUP 'My Group';
+        DROP STAGE FILE '/data/stats.csv' IN GROUP 'wsg1';
 
     See Also
     --------
-    * DROP STAGE FOLDER
+    * ``DROP STAGE FOLDER``
 
-    """
+    """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         wg = get_workspace_group(params)
@@ -307,7 +367,9 @@ DropStageFileHandler.register(overwrite=True)
 
 class DropStageFolderHandler(SQLHandler):
     """
-    DROP STAGE FOLDER stage_path [ in_group ] [ recursive ];
+    DROP STAGE FOLDER stage_path
+        [ in_group ]
+        [ recursive ];
 
     # Path to stage folder
     stage_path = '<stage-path>'
@@ -326,26 +388,36 @@ class DropStageFolderHandler(SQLHandler):
 
     Description
     -----------
-    Drop a folder from stage.
+    Deletes a folder from a Stage.
+
+    Refer to `Stage <https://docs.singlestore.com/cloud/developer-resources/stage-storage-service/>`_
+    for more information.
+
+    Arguments
+    ---------
+    * ``<stage_path>``: The path to the folder to delete in a Stage.
+    * ``<group_id>``: The ID of the workspace group in which the
+      Stage is attached.
+    * ``<group_name>``: The name of the workspace group in which the
+      Stage is attached.
 
     Remarks
     -------
-    * ``<stage-path>`` is the path in stage to drop.
-    * ``IN GROUP`` specifies the workspace group or workspace group ID. When
-      using an ID ``IN GROUP ID`` should be used.
-    * ``RECURSIVE`` indicates that folders should be removed recursively.
+    * The ``RECURSIVE`` clause indicates that the specified folder
+      is deleted recursively.
 
     Example
     -------
-    Drop a folder recursively::
+    The following command recursively deletes a folder from a Stage
+    attached to a workspace group named **wsg1**::
 
-        DROP STAGE FOLDER '/data/' IN GROUP 'My Group' RECURSIVE;
+        DROP STAGE FOLDER '/data/' IN GROUP 'wsg1' RECURSIVE;
 
     See Also
     --------
-    * DROP STAGE FILE
+    * ``DROP STAGE FILE``
 
-    """
+    """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         wg = get_workspace_group(params)
@@ -361,7 +433,9 @@ DropStageFolderHandler.register(overwrite=True)
 
 class CreateStageFolderHandler(SQLHandler):
     """
-    CREATE STAGE FOLDER stage_path [ in_group ] [ overwrite ];
+    CREATE STAGE FOLDER stage_path
+        [ in_group ]
+        [ overwrite ];
 
     # Workspace group
     in_group = IN GROUP { group_id | group_name }
@@ -380,21 +454,30 @@ class CreateStageFolderHandler(SQLHandler):
 
     Description
     -----------
-    Create a folder in stage.
+    Creates a new folder at the specified path in a Stage.
+
+    Arguments
+    ---------
+    * ``<stage_path>``: The path in a Stage where the folder
+      is created. The path must end with a trailing slash (/).
+    * ``<group_id>``: The ID of the workspace group in which
+      the Stage is attached.
+    * ``<group_name>``: The name of the workspace group in
+      which the Stage is attached.
 
     Remarks
     -------
-    * ``<stage-path>`` is the path to create in stage.
-    * ``IN GROUP`` specifies the workspace group or workspace group ID. When
-      using an ID ``IN GROUP ID`` should be used.
-    * ``OVERWRITE`` indicates that an existing folder should be overwritten
-      with a new folder.
+    * If the ``OVERWRITE`` clause is specified, any existing
+      folder at the specified path is overwritten.
+    * The ``IN GROUP`` clause specifies the ID or the name of
+      the workspace group in which the Stage is attached.
 
     Example
     -------
-    Create a folder::
+    The following command creates a folder in a Stage attached
+    to a workspace group named **wsg1**::
 
-        CREATE STAGE FOLDER `/data/csv/` IN GROUP 'My Group';
+        CREATE STAGE FOLDER `/data/csv/` IN GROUP 'wsg1';
 
     """
 

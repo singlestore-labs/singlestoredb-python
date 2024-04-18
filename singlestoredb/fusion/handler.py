@@ -220,6 +220,7 @@ def _format_arguments(arg: str) -> str:
 
 def _to_markdown(txt: str) -> str:
     """Convert formatting to markdown."""
+    txt = re.sub(r'`([^`]+)\s+\<([^\>]+)>`_', r'[\1](\2)', txt)
     txt = txt.replace('``', '`')
 
     # Format code blocks
@@ -228,11 +229,12 @@ def _to_markdown(txt: str) -> str:
     while lines:
         line = lines.pop(0)
         if line.endswith('::'):
-            out.append(line[:-2])
+            out.append(line[:-2] + '.')
             code = []
             while lines and (not lines[0].strip() or lines[0].startswith(' ')):
                 code.append(lines.pop(0).rstrip())
-            out.extend(['```sql', '\n'.join(code).rstrip(), '```\n'])
+            code_str = re.sub(r'^\s*\n', r'', '\n'.join(code).rstrip())
+            out.extend([f'```sql\n{code_str}\n```\n'])
         else:
             out.append(line)
 
@@ -241,9 +243,7 @@ def _to_markdown(txt: str) -> str:
 
 def build_help(syntax: str, grammar: str) -> str:
     """Build full help text."""
-    syntax = re.sub(r'\s*\n+\s*', r' ', syntax.strip())
-
-    cmd = re.match(r'([A-Z0-9_ ]+)', syntax)
+    cmd = re.match(r'([A-Z0-9_ ]+)', syntax.strip())
     if not cmd:
         raise ValueError(f'no command found: {syntax}')
 
@@ -264,7 +264,7 @@ def build_help(syntax: str, grammar: str) -> str:
     if 'description' in sections:
         out.extend([sections['description'], '\n\n'])
 
-    out.extend(['## Syntax\n```sql\n', syntax, '\n```\n\n'])
+    out.append(f'## Syntax\n\n```sql{syntax}\n```\n\n')
 
     if 'arguments' in sections:
         out.extend([
@@ -272,9 +272,15 @@ def build_help(syntax: str, grammar: str) -> str:
             _format_arguments(sections['arguments']),
             '\n\n',
         ])
+    if 'argument' in sections:
+        out.extend([
+            '## Argument\n\n',
+            _format_arguments(sections['argument']),
+            '\n\n',
+        ])
 
     if 'remarks' in sections:
-        out.extend(['## Remarks\n', sections['remarks'], '\n\n'])
+        out.extend(['## Remarks\n\n', sections['remarks'], '\n\n'])
 
     if 'examples' in sections:
         out.extend(['## Examples\n\n', _format_examples(sections['examples']), '\n\n'])
@@ -282,7 +288,7 @@ def build_help(syntax: str, grammar: str) -> str:
         out.extend(['## Example\n\n', _format_examples(sections['example']), '\n\n'])
 
     if 'see also' in sections:
-        out.extend(['## See Also\n', sections['see also'], '\n\n'])
+        out.extend(['## See Also\n\n', sections['see also'], '\n\n'])
 
     return ''.join(out).rstrip() + '\n'
 
