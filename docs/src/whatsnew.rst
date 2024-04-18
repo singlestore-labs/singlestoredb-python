@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.1.0 - April, 18 2024
+-----------------------
+* Added new result types: numpy, pandas, polars, arrow
+* Added `SHOW FUSION HELP` command and doc to Fusion SQL handlers
+
 v1.0.4 - April, 3 2024
 ----------------------
 * Management API updates

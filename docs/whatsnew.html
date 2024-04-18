@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" >
+<html class="writer-html5" lang="en" data-content_root="./">
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>What’s New &mdash; SingleStoreDB 1.0.4 documentation</title>
+  <title>What’s New &mdash; SingleStoreDB 1.1.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
-        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
-        <script src="_static/doctools.js"></script>
-        <script src="_static/sphinx_highlight.js"></script>
+        <script src="_static/documentation_options.js?v=fc837d61"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                1.0.4
+                1.1.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -42,6 +42,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">What’s New</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#v1-1-0-april-18-2024">v1.1.0 - April, 18 2024</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#v1-0-4-april-3-2024">v1.0.4 - April, 3 2024</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#v1-0-3-april-2-2024">v1.0.3 - April, 2 2024</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#v1-0-2-march-8-2024">v1.0.2 - March, 8 2024</a></li>
@@ -116,7 +117,7 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
   <section id="what-s-new">
-<h1>What’s New<a class="headerlink" href="#what-s-new" title="Permalink to this heading">¶</a></h1>
+<h1>What’s New<a class="headerlink" href="#what-s-new" title="Link to this heading">¶</a></h1>
 <p>This document outlines features and improvements from each release.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -124,88 +125,95 @@
 are for non-production testing and evaluation, and may include
 changes to the API.</p>
 </div>
+<section id="v1-1-0-april-18-2024">
+<h2>v1.1.0 - April, 18 2024<a class="headerlink" href="#v1-1-0-april-18-2024" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Added new result types: numpy, pandas, polars, arrow</p></li>
+<li><p>Added <cite>SHOW FUSION HELP</cite> command and doc to Fusion SQL handlers</p></li>
+</ul>
+</section>
 <section id="v1-0-4-april-3-2024">
-<h2>v1.0.4 - April, 3 2024<a class="headerlink" href="#v1-0-4-april-3-2024" title="Permalink to this heading">¶</a></h2>
+<h2>v1.0.4 - April, 3 2024<a class="headerlink" href="#v1-0-4-april-3-2024" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Management API updates</p></li>
 </ul>
 </section>
 <section id="v1-0-3-april-2-2024">
-<h2>v1.0.3 - April, 2 2024<a class="headerlink" href="#v1-0-3-april-2-2024" title="Permalink to this heading">¶</a></h2>
+<h2>v1.0.3 - April, 2 2024<a class="headerlink" href="#v1-0-3-april-2-2024" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Updates to external function application API</p></li>
 <li><p>Add configuration parameter for Management API base URL</p></li>
 </ul>
 </section>
 <section id="v1-0-2-march-8-2024">
-<h2>v1.0.2 - March, 8 2024<a class="headerlink" href="#v1-0-2-march-8-2024" title="Permalink to this heading">¶</a></h2>
+<h2>v1.0.2 - March, 8 2024<a class="headerlink" href="#v1-0-2-march-8-2024" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add <code class="docutils literal notranslate"><span class="pre">singlestoredb.management.get_secret</span></code> function</p></li>
 <li><p>Add <code class="docutils literal notranslate"><span class="pre">add_endpoint_to_firewall_ranges=</span></code> parameter to <code class="docutils literal notranslate"><span class="pre">create_workspace</span></code></p></li>
 </ul>
 </section>
 <section id="v1-0-1-february-16-2024">
-<h2>v1.0.1 - February, 16 2024<a class="headerlink" href="#v1-0-1-february-16-2024" title="Permalink to this heading">¶</a></h2>
+<h2>v1.0.1 - February, 16 2024<a class="headerlink" href="#v1-0-1-february-16-2024" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fix issues in Fusion SQL Stage commands</p></li>
 <li><p>Add <code class="docutils literal notranslate"><span class="pre">call</span></code> function to UDF app</p></li>
 </ul>
 </section>
 <section id="v1-0-0-february-12-2024">
-<h2>v1.0.0 - February, 12 2024<a class="headerlink" href="#v1-0-0-february-12-2024" title="Permalink to this heading">¶</a></h2>
+<h2>v1.0.0 - February, 12 2024<a class="headerlink" href="#v1-0-0-february-12-2024" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Update Stage API</p></li>
 <li><p>Fixes for deferred connections</p></li>
 </ul>
 </section>
 <section id="v0-10-7-january-31-2024">
-<h2>v0.10.7 - January 31, 2024<a class="headerlink" href="#v0-10-7-january-31-2024" title="Permalink to this heading">¶</a></h2>
+<h2>v0.10.7 - January 31, 2024<a class="headerlink" href="#v0-10-7-january-31-2024" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add secrets managemnt to Management API</p></li>
 <li><p>Refactor UDF data converters</p></li>
 </ul>
 </section>
 <section id="v0-10-6-january-26-2024">
-<h2>v0.10.6 - January 26, 2024<a class="headerlink" href="#v0-10-6-january-26-2024" title="Permalink to this heading">¶</a></h2>
+<h2>v0.10.6 - January 26, 2024<a class="headerlink" href="#v0-10-6-january-26-2024" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add Fusion SQL handlers for suspend and resume</p></li>
 <li><p>Various Fusion SQL handler fixes</p></li>
 </ul>
 </section>
 <section id="v0-10-5-january-23-2024">
-<h2>v0.10.5 - January 23, 2024<a class="headerlink" href="#v0-10-5-january-23-2024" title="Permalink to this heading">¶</a></h2>
+<h2>v0.10.5 - January 23, 2024<a class="headerlink" href="#v0-10-5-january-23-2024" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add pytest plugin</p></li>
 </ul>
 </section>
 <section id="v0-10-4-january-18-2024">
-<h2>v0.10.4 - January 18, 2024<a class="headerlink" href="#v0-10-4-january-18-2024" title="Permalink to this heading">¶</a></h2>
+<h2>v0.10.4 - January 18, 2024<a class="headerlink" href="#v0-10-4-january-18-2024" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fix deferred connection URL in HTTP</p></li>
 </ul>
 </section>
 <section id="v0-10-3-january-17-2024">
-<h2>v0.10.3 - January 17, 2024<a class="headerlink" href="#v0-10-3-january-17-2024" title="Permalink to this heading">¶</a></h2>
+<h2>v0.10.3 - January 17, 2024<a class="headerlink" href="#v0-10-3-january-17-2024" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Change Stage URLs</p></li>
 <li><p>Fix password encoding in deferred connections</p></li>
 </ul>
 </section>
 <section id="v0-10-2-december-14-2023">
-<h2>v0.10.2 - December 14, 2023<a class="headerlink" href="#v0-10-2-december-14-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.10.2 - December 14, 2023<a class="headerlink" href="#v0-10-2-december-14-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Make workspace group optional in Fusion SQL if it is specified in the environment</p></li>
 </ul>
 </section>
 <section id="v0-10-1-december-13-2023">
-<h2>v0.10.1 - December 13, 2023<a class="headerlink" href="#v0-10-1-december-13-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.10.1 - December 13, 2023<a class="headerlink" href="#v0-10-1-december-13-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Cache regions in Management API</p></li>
 <li><p>Add dummy fields to Region objects if the region ID does not point to an existing region</p></li>
 </ul>
 </section>
 <section id="v0-10-0-december-12-2023">
-<h2>v0.10.0 - December 12, 2023<a class="headerlink" href="#v0-10-0-december-12-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.10.0 - December 12, 2023<a class="headerlink" href="#v0-10-0-december-12-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add JWT authentication support to Fusion</p></li>
 <li><p>Add experimental vector data format support to UDF server</p></li>
@@ -215,91 +223,91 @@ environment variable</p></li>
 </ul>
 </section>
 <section id="v0-9-6-november-2-2023">
-<h2>v0.9.6 - November 2, 2023<a class="headerlink" href="#v0-9-6-november-2-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.9.6 - November 2, 2023<a class="headerlink" href="#v0-9-6-november-2-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fusion fixes and testing</p></li>
 </ul>
 </section>
 <section id="v0-9-5-october-31-2023">
-<h2>v0.9.5 - October 31, 2023<a class="headerlink" href="#v0-9-5-october-31-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.9.5 - October 31, 2023<a class="headerlink" href="#v0-9-5-october-31-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add defaults for builtin Fusion rules</p></li>
 </ul>
 </section>
 <section id="v0-9-4-october-31-2023">
-<h2>v0.9.4 - October 31, 2023<a class="headerlink" href="#v0-9-4-october-31-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.9.4 - October 31, 2023<a class="headerlink" href="#v0-9-4-october-31-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>More Fusion enhancements</p></li>
 </ul>
 </section>
 <section id="v0-9-3-october-25-2023">
-<h2>v0.9.3 - October 25, 2023<a class="headerlink" href="#v0-9-3-october-25-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.9.3 - October 25, 2023<a class="headerlink" href="#v0-9-3-october-25-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fusion fixes</p></li>
 </ul>
 </section>
 <section id="v0-9-2-october-24-2023">
-<h2>v0.9.2 - October 24, 2023<a class="headerlink" href="#v0-9-2-october-24-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.9.2 - October 24, 2023<a class="headerlink" href="#v0-9-2-october-24-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Experimental Fusion SQL interface</p></li>
 </ul>
 </section>
 <section id="v0-9-1-october-17-2023">
-<h2>v0.9.1 - October 17, 2023<a class="headerlink" href="#v0-9-1-october-17-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.9.1 - October 17, 2023<a class="headerlink" href="#v0-9-1-october-17-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add name / ID indexing to workspace groups / workspaces / regions</p></li>
 </ul>
 </section>
 <section id="v0-9-0-october-16-2023">
-<h2>v0.9.0 - October 16, 2023<a class="headerlink" href="#v0-9-0-october-16-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.9.0 - October 16, 2023<a class="headerlink" href="#v0-9-0-october-16-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add Stage to Management API</p></li>
 </ul>
 </section>
 <section id="v0-8-9-october-4-2023">
-<h2>v0.8.9 - October 4, 2023<a class="headerlink" href="#v0-8-9-october-4-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.8.9 - October 4, 2023<a class="headerlink" href="#v0-8-9-october-4-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add debug option for connections</p></li>
 </ul>
 </section>
 <section id="v0-8-8-september-26-2023">
-<h2>v0.8.8 - September 26, 2023<a class="headerlink" href="#v0-8-8-september-26-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.8.8 - September 26, 2023<a class="headerlink" href="#v0-8-8-september-26-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fix error propagation issue in C extension</p></li>
 </ul>
 </section>
 <section id="v0-8-7-september-19-2023">
-<h2>v0.8.7 - September 19, 2023<a class="headerlink" href="#v0-8-7-september-19-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.8.7 - September 19, 2023<a class="headerlink" href="#v0-8-7-september-19-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add <cite>encoding_errors=</cite> parameter to connection</p></li>
 </ul>
 </section>
 <section id="v0-8-6-august-29-2023">
-<h2>v0.8.6 - August 29, 2023<a class="headerlink" href="#v0-8-6-august-29-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.8.6 - August 29, 2023<a class="headerlink" href="#v0-8-6-august-29-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fix <code class="docutils literal notranslate"><span class="pre">WITH</span></code> statements in HTTP</p></li>
 </ul>
 </section>
 <section id="v0-8-5-august-29-2023">
-<h2>v0.8.5 - August 29, 2023<a class="headerlink" href="#v0-8-5-august-29-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.8.5 - August 29, 2023<a class="headerlink" href="#v0-8-5-august-29-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fix <code class="docutils literal notranslate"><span class="pre">DESCRIBE</span></code> statements in HTTP</p></li>
 </ul>
 </section>
 <section id="v0-8-4-august-28-2023">
-<h2>v0.8.4 - August 28, 2023<a class="headerlink" href="#v0-8-4-august-28-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.8.4 - August 28, 2023<a class="headerlink" href="#v0-8-4-august-28-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fix boolean connection options</p></li>
 </ul>
 </section>
 <section id="v0-8-3-august-23-2023">
-<h2>v0.8.3 - August 23, 2023<a class="headerlink" href="#v0-8-3-august-23-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.8.3 - August 23, 2023<a class="headerlink" href="#v0-8-3-august-23-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fix <code class="docutils literal notranslate"><span class="pre">%</span></code> escaping in HTTP queries</p></li>
 </ul>
 </section>
 <section id="v0-8-2-august-10-2023">
-<h2>v0.8.2 - August 10, 2023<a class="headerlink" href="#v0-8-2-august-10-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.8.2 - August 10, 2023<a class="headerlink" href="#v0-8-2-august-10-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add <code class="docutils literal notranslate"><span class="pre">nan_as_null</span></code> and <code class="docutils literal notranslate"><span class="pre">inf_as_null</span></code> options for parameter conversion support</p></li>
 <li><p>Separate <code class="docutils literal notranslate"><span class="pre">structsequences</span></code> and <code class="docutils literal notranslate"><span class="pre">namedtuples</span></code> for <code class="docutils literal notranslate"><span class="pre">results_type</span></code></p></li>
@@ -307,71 +315,71 @@ environment variable</p></li>
 </ul>
 </section>
 <section id="v0-8-1-july-12-2023">
-<h2>v0.8.1 - July 12, 2023<a class="headerlink" href="#v0-8-1-july-12-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.8.1 - July 12, 2023<a class="headerlink" href="#v0-8-1-july-12-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add <code class="docutils literal notranslate"><span class="pre">create_engine</span></code> function to return SQLAlchemy engine while supporting
 environment variable parameter settings and settings in options</p></li>
 </ul>
 </section>
 <section id="v0-8-0-july-12-2023">
-<h2>v0.8.0 - July 12, 2023<a class="headerlink" href="#v0-8-0-july-12-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.8.0 - July 12, 2023<a class="headerlink" href="#v0-8-0-july-12-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>! Python 3.8 is now the minimum required version</p></li>
 <li><p>Add parameter conversion routines to HTTP driver</p></li>
 </ul>
 </section>
 <section id="v0-7-1-june-15-2023">
-<h2>v0.7.1 - June 15, 2023<a class="headerlink" href="#v0-7-1-june-15-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.7.1 - June 15, 2023<a class="headerlink" href="#v0-7-1-june-15-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add <code class="docutils literal notranslate"><span class="pre">connect_timeout</span></code> and <code class="docutils literal notranslate"><span class="pre">multi_statements</span></code> options to connection</p></li>
 </ul>
 </section>
 <section id="v0-7-0-june-9-2023">
-<h2>v0.7.0 - June 9, 2023<a class="headerlink" href="#v0-7-0-june-9-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.7.0 - June 9, 2023<a class="headerlink" href="#v0-7-0-june-9-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add converters for numpy array to vector blobs,
 and pygeos / shapely objects to geography data</p></li>
 </ul>
 </section>
 <section id="v0-6-1-may-18-2023">
-<h2>v0.6.1 - May 18, 2023<a class="headerlink" href="#v0-6-1-may-18-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.6.1 - May 18, 2023<a class="headerlink" href="#v0-6-1-may-18-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fix GSSAPI/Kerberos packet data</p></li>
 </ul>
 </section>
 <section id="v0-6-0-may-17-2023">
-<h2>v0.6.0 - May 17, 2023<a class="headerlink" href="#v0-6-0-may-17-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.6.0 - May 17, 2023<a class="headerlink" href="#v0-6-0-may-17-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Added GSSAPI/Kerberos support</p></li>
 </ul>
 </section>
 <section id="v0-5-4-march-15-2023">
-<h2>v0.5.4 - March 15, 2023<a class="headerlink" href="#v0-5-4-march-15-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.5.4 - March 15, 2023<a class="headerlink" href="#v0-5-4-march-15-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Added expiration to workspaces</p></li>
 </ul>
 </section>
 <section id="v0-5-3-january-9-2023">
-<h2>v0.5.3 - January 9, 2023<a class="headerlink" href="#v0-5-3-january-9-2023" title="Permalink to this heading">¶</a></h2>
+<h2>v0.5.3 - January 9, 2023<a class="headerlink" href="#v0-5-3-january-9-2023" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fixed issue with parsing numeric results</p></li>
 </ul>
 </section>
 <section id="v0-5-2-december-14-2022">
-<h2>v0.5.2 - December 14, 2022<a class="headerlink" href="#v0-5-2-december-14-2022" title="Permalink to this heading">¶</a></h2>
+<h2>v0.5.2 - December 14, 2022<a class="headerlink" href="#v0-5-2-december-14-2022" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fixed issues with unbuffered reads</p></li>
 </ul>
 </section>
 <section id="v0-5-1-december-9-2022">
-<h2>v0.5.1 - December 9, 2022<a class="headerlink" href="#v0-5-1-december-9-2022" title="Permalink to this heading">¶</a></h2>
+<h2>v0.5.1 - December 9, 2022<a class="headerlink" href="#v0-5-1-december-9-2022" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Added 32-bit Windows and aarch64 Linux packages</p></li>
 <li><p>Added option to log queries</p></li>
 </ul>
 </section>
 <section id="v0-5-0-december-8-2022-api-changes">
-<h2>v0.5.0 - December 8, 2022 (<strong>API CHANGES</strong>)<a class="headerlink" href="#v0-5-0-december-8-2022-api-changes" title="Permalink to this heading">¶</a></h2>
+<h2>v0.5.0 - December 8, 2022 (<strong>API CHANGES</strong>)<a class="headerlink" href="#v0-5-0-december-8-2022-api-changes" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>! Query parameter syntax has changed from <code class="docutils literal notranslate"><span class="pre">:1</span></code> for positional
 and <code class="docutils literal notranslate"><span class="pre">:key</span></code> for dictionary keys to <code class="docutils literal notranslate"><span class="pre">%s</span></code> for positional and <code class="docutils literal notranslate"><span class="pre">%(key)s</span></code>
@@ -383,38 +391,38 @@ for dictionary keys</p></li>
 </ul>
 </section>
 <section id="v0-4-0-october-19-2022">
-<h2>v0.4.0 - October 19, 2022<a class="headerlink" href="#v0-4-0-october-19-2022" title="Permalink to this heading">¶</a></h2>
+<h2>v0.4.0 - October 19, 2022<a class="headerlink" href="#v0-4-0-october-19-2022" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add Python 3.6 support</p></li>
 </ul>
 </section>
 <section id="v0-3-3-september-21-2022">
-<h2>v0.3.3 - September 21, 2022<a class="headerlink" href="#v0-3-3-september-21-2022" title="Permalink to this heading">¶</a></h2>
+<h2>v0.3.3 - September 21, 2022<a class="headerlink" href="#v0-3-3-september-21-2022" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Add <code class="docutils literal notranslate"><span class="pre">ssl_cipher</span></code> option to connections</p></li>
 <li><p>Add <code class="docutils literal notranslate"><span class="pre">show</span></code> accessor for database <code class="docutils literal notranslate"><span class="pre">SHOW</span></code> commands</p></li>
 </ul>
 </section>
 <section id="v0-3-2-september-14-2022">
-<h2>v0.3.2 - September 14, 2022<a class="headerlink" href="#v0-3-2-september-14-2022" title="Permalink to this heading">¶</a></h2>
+<h2>v0.3.2 - September 14, 2022<a class="headerlink" href="#v0-3-2-september-14-2022" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Fixes for PyMySQL compatibility</p></li>
 </ul>
 </section>
 <section id="v0-3-1-september-9-2022">
-<h2>v0.3.1 - September 9, 2022<a class="headerlink" href="#v0-3-1-september-9-2022" title="Permalink to this heading">¶</a></h2>
+<h2>v0.3.1 - September 9, 2022<a class="headerlink" href="#v0-3-1-september-9-2022" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Changed cipher in PyMySQL connection for SingleStoreDB Cloud compatibility</p></li>
 </ul>
 </section>
 <section id="v0-3-0-september-9-2022">
-<h2>v0.3.0 - September 9, 2022<a class="headerlink" href="#v0-3-0-september-9-2022" title="Permalink to this heading">¶</a></h2>
+<h2>v0.3.0 - September 9, 2022<a class="headerlink" href="#v0-3-0-september-9-2022" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Changed autocommit=True by default</p></li>
 </ul>
 </section>
 <section id="v0-2-0-august-5-2022">
-<h2>v0.2.0 - August 5, 2022<a class="headerlink" href="#v0-2-0-august-5-2022" title="Permalink to this heading">¶</a></h2>
+<h2>v0.2.0 - August 5, 2022<a class="headerlink" href="#v0-2-0-august-5-2022" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Changed to pure Python driver</p></li>
 <li><p>Add workspace management objects</p></li>
@@ -422,7 +430,7 @@ for dictionary keys</p></li>
 </ul>
 </section>
 <section id="v0-1-0-may-6-2022">
-<h2>v0.1.0 - May 6, 2022<a class="headerlink" href="#v0-1-0-may-6-2022" title="Permalink to this heading">¶</a></h2>
+<h2>v0.1.0 - May 6, 2022<a class="headerlink" href="#v0-1-0-may-6-2022" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>DB-API compliant connections</p></li>
 <li><p>HTTP API support</p></li>
