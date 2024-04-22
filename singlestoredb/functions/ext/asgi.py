@@ -455,9 +455,12 @@ class Application(object):
                         endpoints[name.encode('utf-8')] = func, info
 
                 # Fully qualified function name
-                else:
+                elif '.' in funcs:
                     pkg_path, func_names = funcs.rsplit('.', 1)
                     pkg = importlib.import_module(pkg_path)
+
+                    if pkg is None:
+                        raise RuntimeError(f'Could not locate module: {pkg}')
 
                     # Add endpoint for each exported function
                     for name, alias in get_func_names(func_names):
@@ -465,6 +468,9 @@ class Application(object):
                         external_functions[name] = item
                         func, info = make_func(alias, item)
                         endpoints[alias.encode('utf-8')] = func, info
+
+                else:
+                    raise RuntimeError(f'Could not locate module: {funcs}')
 
             elif isinstance(funcs, ModuleType):
                 for x in vars(funcs).values():
