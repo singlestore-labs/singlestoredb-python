@@ -39,6 +39,26 @@ def get_secret(name: str) -> str:
     return manage_workspaces().organization.get_secret(name).value
 
 
+def get_stage(
+    workspace_group: Optional[Union[WorkspaceGroup, str]] = None,
+) -> Stage:
+    """Get the stage for the workspace group."""
+    if isinstance(workspace_group, WorkspaceGroup):
+        return workspace_group.stage
+    elif workspace_group:
+        return manage_workspaces().workspace_groups[workspace_group].stage
+    elif 'SINGLESTOREDB_WORKSPACE_GROUP' in os.environ:
+        return manage_workspaces().workspace_groups[
+            os.environ['SINGLESTOREDB_WORKSPACE_GROUP']
+        ].stage
+    raise RuntimeError('no workspace group specified')
+
+
+class StageMissing(object):
+    def __getattr__(self, name: str) -> Any:
+        raise RuntimeError('no workspace group found in environment')
+
+
 class StageObject(object):
     """
     Stage file / folder object.
