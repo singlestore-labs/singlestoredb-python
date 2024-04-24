@@ -121,6 +121,10 @@ class Organization(object):
 
     """
 
+    id: str
+    name: str
+    firewall_ranges: List[str]
+
     def __init__(self, id: str, name: str, firewall_ranges: List[str]):
         """Use :attr:`WorkspaceManager.organization` instead."""
         #: Unique ID of the organization

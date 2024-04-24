@@ -294,7 +294,7 @@ def snake_to_camel_dict(
         return None
     out = {}
     for k, v in s.items():
-        if isinstance(s, Mapping):
+        if isinstance(v, Mapping):
             out[str(snake_to_camel(k))] = snake_to_camel_dict(v, cap_first=cap_first)
         else:
             out[str(snake_to_camel(k))] = v
@@ -307,7 +307,7 @@ def camel_to_snake_dict(s: Optional[Mapping[str, Any]]) -> Optional[Dict[str, An
         return None
     out = {}
     for k, v in s.items():
-        if isinstance(s, Mapping):
+        if isinstance(v, Mapping):
             out[str(camel_to_snake(k))] = camel_to_snake_dict(v)
         else:
             out[str(camel_to_snake(k))] = v

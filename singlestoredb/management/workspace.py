@@ -34,29 +34,53 @@ from .utils import ttl_property
 from .utils import vars_to_str
 
 
+def get_organization() -> Organization:
+    """Get the organization."""
+    return manage_workspaces().organization
+
+
 def get_secret(name: str) -> str:
     """Get a secret from the organization."""
-    return manage_workspaces().organization.get_secret(name).value
+    return get_organization().get_secret(name).value
+
+
+def get_workspace_group(
+    workspace_group: Optional[Union[WorkspaceGroup, str]] = None,
+) -> WorkspaceGroup:
+    """Get the stage for the workspace group."""
+    if isinstance(workspace_group, WorkspaceGroup):
+        return workspace_group
+    elif workspace_group:
+        return manage_workspaces().workspace_groups[workspace_group]
+    elif 'SINGLESTOREDB_WORKSPACE_GROUP' in os.environ:
+        return manage_workspaces().workspace_groups[
+            os.environ['SINGLESTOREDB_WORKSPACE_GROUP']
+        ]
+    raise RuntimeError('no workspace group specified')
 
 
 def get_stage(
     workspace_group: Optional[Union[WorkspaceGroup, str]] = None,
 ) -> Stage:
     """Get the stage for the workspace group."""
-    if isinstance(workspace_group, WorkspaceGroup):
-        return workspace_group.stage
-    elif workspace_group:
-        return manage_workspaces().workspace_groups[workspace_group].stage
-    elif 'SINGLESTOREDB_WORKSPACE_GROUP' in os.environ:
-        return manage_workspaces().workspace_groups[
-            os.environ['SINGLESTOREDB_WORKSPACE_GROUP']
-        ].stage
+    return get_workspace_group(workspace_group).stage
+
+
+def get_workspace(
+    workspace_group: Optional[Union[WorkspaceGroup, str]] = None,
+    workspace: Optional[Union[Workspace, str]] = None,
+) -> Workspace:
+    """Get the workspaces for a workspace_group."""
+    if isinstance(workspace, Workspace):
+        return workspace
+    wg = get_workspace_group(workspace_group)
+    if workspace:
+        return wg.workspaces[workspace]
+    elif 'SINGLESTOREDB_WORKSPACE' in os.environ:
+        return wg.workspaces[
+            os.environ['SINGLESTOREDB_WORKSPACE']
+        ]
     raise RuntimeError('no workspace group specified')
-
-
-class StageMissing(object):
-    def __getattr__(self, name: str) -> Any:
-        raise RuntimeError('no workspace group found in environment')
 
 
 class StageObject(object):
@@ -946,6 +970,21 @@ class Workspace(object):
 
     """
 
+    name: str
+    id: str
+    group_id: str
+    size: str
+    state: str
+    created_at: Optional[datetime.datetime]
+    terminated_at: Optional[datetime.datetime]
+    endpoint: Optional[str]
+    auto_suspend: Optional[Dict[str, Any]]
+    cache_config: Optional[int]
+    deployment_type: Optional[str]
+    resume_attachments: Optional[List[Dict[str, Any]]]
+    scaling_progress: Optional[int]
+    last_resumed_at: Optional[datetime.datetime]
+
     def __init__(
         self,
         name: str,
@@ -959,9 +998,9 @@ class Workspace(object):
         auto_suspend: Optional[Dict[str, Any]] = None,
         cache_config: Optional[int] = None,
         deployment_type: Optional[str] = None,
-        resume_attachments: Optional[Dict[str, Any]] = None,
+        resume_attachments: Optional[List[Dict[str, Any]]] = None,
         scaling_progress: Optional[int] = None,
-        last_resumed_at: Optional[str] = None,
+        last_resumed_at: Optional[Union[str, datetime.datetime]] = None,
     ):
         #: Name of the workspace
         self.name = name
@@ -1001,7 +1040,11 @@ class Workspace(object):
         self.deployment_type = deployment_type
 
         #: Database attachments
-        self.resume_attachments = camel_to_snake_dict(resume_attachments)
+        self.resume_attachments = [
+            camel_to_snake_dict(x)  # type: ignore
+            for x in resume_attachments or []
+            if x is not None
+        ]
 
         #: Current progress percentage for scaling the workspace
         self.scaling_progress = scaling_progress
@@ -1268,8 +1311,18 @@ class WorkspaceGroup(object):
 
     """
 
+    name: str
+    id: str
+    created_at: Optional[datetime.datetime]
+    region: Optional[Region]
+    firewall_ranges: List[str]
+    terminated_at: Optional[datetime.datetime]
+    allow_all_traffic: bool
+
     def __init__(
-        self, name: str, id: str,
+        self,
+        name: str,
+        id: str,
         created_at: Union[str, datetime.datetime],
         region: Optional[Region],
         firewall_ranges: List[str],
@@ -1295,7 +1348,7 @@ class WorkspaceGroup(object):
         self.terminated_at = to_datetime(terminated_at)
 
         #: Should all traffic be allowed?
-        self.allow_all_traffic = allow_all_traffic
+        self.allow_all_traffic = allow_all_traffic or False
 
         self._manager: Optional[WorkspaceManager] = None
 
