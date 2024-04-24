@@ -606,4 +606,53 @@ INSERT INTO `badutf8` VALUES ('🥷🧙👻.eth');
 INSERT INTO `badutf8` VALUES ('🥒rick.eth');
 
 
+CREATE TABLE IF NOT EXISTS `f32_vectors` (
+    id INT(11),
+    a VECTOR(3)
+);
+INSERT INTO f32_vectors VALUES(1, '[0.267261237,0.534522474,0.801783681]');
+INSERT INTO f32_vectors VALUES(2, '[0.371390671,0.557085991,0.742781341]');
+INSERT INTO f32_vectors VALUES(3, '[-0.424264073,-0.565685451,0.707106829]');
+
+CREATE TABLE IF NOT EXISTS `f64_vectors` (
+    id INT(11),
+    a VECTOR(3, F64)
+);
+INSERT INTO f64_vectors VALUES(1, '[0.267261237,0.534522474,0.801783681]');
+INSERT INTO f64_vectors VALUES(2, '[0.371390671,0.557085991,0.742781341]');
+INSERT INTO f64_vectors VALUES(3, '[-0.424264073,-0.565685451,0.707106829]');
+
+CREATE TABLE `i8_vectors` (
+    id INT(11),
+    a VECTOR(3, I8)
+);
+INSERT INTO i8_vectors VALUES(1, '[1, 2, 3]');
+INSERT INTO i8_vectors VALUES(2, '[4, 5, 6]');
+INSERT INTO i8_vectors VALUES(3, '[-1, -4, 8]');
+
+CREATE TABLE `i16_vectors` (
+    id INT(11),
+    a VECTOR(3, I16)
+);
+INSERT INTO i16_vectors VALUES(1, '[1, 2, 3]');
+INSERT INTO i16_vectors VALUES(2, '[4, 5, 6]');
+INSERT INTO i16_vectors VALUES(3, '[-1, -4, 8]');
+
+CREATE TABLE `i32_vectors` (
+    id INT(11),
+    a VECTOR(3, I32)
+);
+INSERT INTO i32_vectors VALUES(1, '[1, 2, 3]');
+INSERT INTO i32_vectors VALUES(2, '[4, 5, 6]');
+INSERT INTO i32_vectors VALUES(3, '[-1, -4, 8]');
+
+CREATE TABLE `i64_vectors` (
+    id INT(11),
+    a VECTOR(3, I64)
+);
+INSERT INTO i64_vectors VALUES(1, '[1, 2, 3]');
+INSERT INTO i64_vectors VALUES(2, '[4, 5, 6]');
+INSERT INTO i64_vectors VALUES(3, '[-1, -4, 8]');
+
+
 COMMIT;

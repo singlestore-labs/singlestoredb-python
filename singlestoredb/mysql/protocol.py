@@ -281,29 +281,47 @@ class FieldDescriptorPacket(MysqlPacket):
 
         # Extended types
         if n_bytes > 12:
-            type_code = self.read_uint8()
-            if type_code == EXTENDED_TYPE.NONE:
+            ext_type_code = self.read_uint8()
+            if ext_type_code == EXTENDED_TYPE.NONE:
                 pass
-            elif type_code == EXTENDED_TYPE.BSON:
+            elif ext_type_code == EXTENDED_TYPE.BSON:
                 self.type_code = FIELD_TYPE.BSON
-            elif type_code == EXTENDED_TYPE.VECTOR:
+            elif ext_type_code == EXTENDED_TYPE.VECTOR:
                 (self.length, vec_type) = self.read_struct('<IB')
                 if vec_type == VECTOR_TYPE.FLOAT32:
-                    self.type_code = FIELD_TYPE.FLOAT32_VECTOR
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.FLOAT32_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.FLOAT32_VECTOR_JSON
                 elif vec_type == VECTOR_TYPE.FLOAT64:
-                    self.type_code = FIELD_TYPE.FLOAT64_VECTOR
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.FLOAT64_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.FLOAT64_VECTOR_JSON
                 elif vec_type == VECTOR_TYPE.INT8:
-                    self.type_code = FIELD_TYPE.INT8_VECTOR
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.INT8_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.INT8_VECTOR_JSON
                 elif vec_type == VECTOR_TYPE.INT16:
-                    self.type_code = FIELD_TYPE.INT16_VECTOR
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.INT16_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.INT16_VECTOR_JSON
                 elif vec_type == VECTOR_TYPE.INT32:
-                    self.type_code = FIELD_TYPE.INT32_VECTOR
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.INT32_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.INT32_VECTOR_JSON
                 elif vec_type == VECTOR_TYPE.INT64:
-                    self.type_code = FIELD_TYPE.INT64_VECTOR
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.INT64_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.INT64_VECTOR_JSON
                 else:
                     raise TypeError(f'unrecognized vector data type: {vec_type}')
             else:
-                raise TypeError(f'unrecognized extended data type: {type_code}')
+                raise TypeError(f'unrecognized extended data type: {ext_type_code}')
 
     def description(self):
         """Provides a 7-item tuple compatible with the Python PEP249 DB Spec."""

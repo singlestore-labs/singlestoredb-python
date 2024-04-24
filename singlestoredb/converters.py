@@ -541,15 +541,14 @@ def geometry_or_none(x: Optional[str]) -> Optional[Any]:
     return x
 
 
-def float32_vector_or_none(x: Optional[Union[str, bytes]]) -> Optional[Any]:
+def float32_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     """
     Covert value to float32 array.
 
     Parameters
     ----------
-    x : str or bytes
-        If the value is a str, the content is a JSON array. If it is bytes,
-        it is a little-endian block of bytes.
+    x : str or None
+        JSON array
 
     Returns
     -------
@@ -564,27 +563,48 @@ def float32_vector_or_none(x: Optional[Union[str, bytes]]) -> Optional[Any]:
     if x is None:
         return None
 
-    # JSON string
-    if isinstance(x, str):
-        if has_numpy:
-            return numpy.array(json_loads(x), dtype=numpy.float32)
-        return map(float, json_loads(x))
+    if has_numpy:
+        return numpy.array(json_loads(x), dtype=numpy.float32)
 
-    # Bytes
+    return map(float, json_loads(x))
+
+
+def float32_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
+    """
+    Covert value to float32 array.
+
+    Parameters
+    ----------
+    x : bytes or None
+        Little-endian block of bytes.
+
+    Returns
+    -------
+    float32 numpy array
+        If input value is not None and numpy is installed
+    float Python list
+        If input value is not None and numpy is not installed
+    None
+        If input value is None
+
+    """
+    if x is None:
+        return None
+
     if has_numpy:
         return numpy.frombuffer(x, dtype=numpy.float32)
+
     return struct.unpack(f'<{len(x)/4}f', x)
 
 
-def float64_vector_or_none(x: Optional[Union[str, bytes]]) -> Optional[Any]:
+def float64_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     """
     Covert value to float64 array.
 
     Parameters
     ----------
-    x : str or bytes
-        If the value is a str, the content is a JSON array. If it is bytes,
-        it is a little-endian block of bytes.
+    x : str or None
+        JSON array
 
     Returns
     -------
@@ -599,27 +619,48 @@ def float64_vector_or_none(x: Optional[Union[str, bytes]]) -> Optional[Any]:
     if x is None:
         return None
 
-    # JSON string
-    if isinstance(x, str):
-        if has_numpy:
-            return numpy.array(json_loads(x), dtype=numpy.float64)
-        return map(float, json_loads(x))
+    if has_numpy:
+        return numpy.array(json_loads(x), dtype=numpy.float64)
 
-    # Bytes
+    return map(float, json_loads(x))
+
+
+def float64_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
+    """
+    Covert value to float64 array.
+
+    Parameters
+    ----------
+    x : bytes or None
+        JSON array
+
+    Returns
+    -------
+    float64 numpy array
+        If input value is not None and numpy is installed
+    float Python list
+        If input value is not None and numpy is not installed
+    None
+        If input value is None
+
+    """
+    if x is None:
+        return None
+
     if has_numpy:
         return numpy.frombuffer(x, dtype=numpy.float64)
+
     return struct.unpack(f'<{len(x)/8}d', x)
 
 
-def int8_vector_or_none(x: Optional[Union[str, bytes]]) -> Optional[Any]:
+def int8_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     """
     Covert value to int8 array.
 
     Parameters
     ----------
-    x : str or bytes
-        If the value is a str, the content is a JSON array. If it is bytes,
-        it is a little-endian block of bytes.
+    x : str or None
+        JSON array
 
     Returns
     -------
@@ -634,27 +675,48 @@ def int8_vector_or_none(x: Optional[Union[str, bytes]]) -> Optional[Any]:
     if x is None:
         return None
 
-    # JSON string
-    if isinstance(x, str):
-        if has_numpy:
-            return numpy.array(json_loads(x), dtype=numpy.int8)
-        return map(int, json_loads(x))
+    if has_numpy:
+        return numpy.array(json_loads(x), dtype=numpy.int8)
 
-    # Bytes
+    return map(int, json_loads(x))
+
+
+def int8_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
+    """
+    Covert value to int8 array.
+
+    Parameters
+    ----------
+    x : bytes or None
+        Little-endian block of bytes.
+
+    Returns
+    -------
+    int8 numpy array
+        If input value is not None and numpy is installed
+    int Python list
+        If input value is not None and numpy is not installed
+    None
+        If input value is None
+
+    """
+    if x is None:
+        return None
+
     if has_numpy:
         return numpy.frombuffer(x, dtype=numpy.int8)
+
     return struct.unpack(f'<{len(x)}b', x)
 
 
-def int16_vector_or_none(x: Optional[Union[str, bytes]]) -> Optional[Any]:
+def int16_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     """
     Covert value to int16 array.
 
     Parameters
     ----------
-    x : str or bytes
-        If the value is a str, the content is a JSON array. If it is bytes,
-        it is a little-endian block of bytes.
+    x : str or None
+        JSON array
 
     Returns
     -------
@@ -669,27 +731,48 @@ def int16_vector_or_none(x: Optional[Union[str, bytes]]) -> Optional[Any]:
     if x is None:
         return None
 
-    # JSON string
-    if isinstance(x, str):
-        if has_numpy:
-            return numpy.array(json_loads(x), dtype=numpy.int16)
-        return map(int, json_loads(x))
+    if has_numpy:
+        return numpy.array(json_loads(x), dtype=numpy.int16)
 
-    # Bytes
+    return map(int, json_loads(x))
+
+
+def int16_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
+    """
+    Covert value to int16 array.
+
+    Parameters
+    ----------
+    x : bytes or None
+        Little-endian block of bytes.
+
+    Returns
+    -------
+    int16 numpy array
+        If input value is not None and numpy is installed
+    int Python list
+        If input value is not None and numpy is not installed
+    None
+        If input value is None
+
+    """
+    if x is None:
+        return None
+
     if has_numpy:
         return numpy.frombuffer(x, dtype=numpy.int16)
+
     return struct.unpack(f'<{len(x)/2}h', x)
 
 
-def int32_vector_or_none(x: Optional[Union[str, bytes]]) -> Optional[Any]:
+def int32_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     """
     Covert value to int32 array.
 
     Parameters
     ----------
-    x : str or bytes
-        If the value is a str, the content is a JSON array. If it is bytes,
-        it is a little-endian block of bytes.
+    x : str or None
+        JSON array
 
     Returns
     -------
@@ -704,27 +787,48 @@ def int32_vector_or_none(x: Optional[Union[str, bytes]]) -> Optional[Any]:
     if x is None:
         return None
 
-    # JSON string
-    if isinstance(x, str):
-        if has_numpy:
-            return numpy.array(json_loads(x), dtype=numpy.int32)
-        return map(int, json_loads(x))
+    if has_numpy:
+        return numpy.array(json_loads(x), dtype=numpy.int32)
 
-    # Bytes
+    return map(int, json_loads(x))
+
+
+def int32_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
+    """
+    Covert value to int32 array.
+
+    Parameters
+    ----------
+    x : bytes or None
+        Little-endian block of bytes.
+
+    Returns
+    -------
+    int32 numpy array
+        If input value is not None and numpy is installed
+    int Python list
+        If input value is not None and numpy is not installed
+    None
+        If input value is None
+
+    """
+    if x is None:
+        return None
+
     if has_numpy:
         return numpy.frombuffer(x, dtype=numpy.int32)
+
     return struct.unpack(f'<{len(x)/4}l', x)
 
 
-def int64_vector_or_none(x: Optional[Union[str, bytes]]) -> Optional[Any]:
+def int64_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     """
     Covert value to int64 array.
 
     Parameters
     ----------
-    x : str or bytes or None
-        If the value is a str, the content is a JSON array. If it is bytes,
-        it is a little-endian block of bytes.
+    x : str or None
+        JSON array
 
     Returns
     -------
@@ -739,15 +843,38 @@ def int64_vector_or_none(x: Optional[Union[str, bytes]]) -> Optional[Any]:
     if x is None:
         return None
 
-    # JSON string
-    if isinstance(x, str):
-        if has_numpy:
-            return numpy.array(json_loads(x), dtype=numpy.int64)
-        return map(int, json_loads(x))
+    if has_numpy:
+        return numpy.array(json_loads(x), dtype=numpy.int64)
+
+    return map(int, json_loads(x))
+
+
+def int64_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
+    """
+    Covert value to int64 array.
+
+    Parameters
+    ----------
+    x : bytes or None
+        Little-endian block of bytes.
+
+    Returns
+    -------
+    int64 numpy array
+        If input value is not None and numpy is installed
+    int Python list
+        If input value is not None and numpy is not installed
+    None
+        If input value is None
+
+    """
+    if x is None:
+        return None
 
     # Bytes
     if has_numpy:
         return numpy.frombuffer(x, dtype=numpy.int64)
+
     return struct.unpack(f'<{len(x)/8}l', x)
 
 
@@ -808,10 +935,16 @@ converters: Dict[int, Callable[..., Any]] = {
     #   254: identity,
     255: geometry_or_none,
     1001: bson_or_none,
-    2001: float32_vector_or_none,
-    2002: float64_vector_or_none,
-    2003: int8_vector_or_none,
-    2004: int16_vector_or_none,
-    2005: int32_vector_or_none,
-    2006: int64_vector_or_none,
+    2001: float32_vector_json_or_none,
+    2002: float64_vector_json_or_none,
+    2003: int8_vector_json_or_none,
+    2004: int16_vector_json_or_none,
+    2005: int32_vector_json_or_none,
+    2006: int64_vector_json_or_none,
+    3001: float32_vector_or_none,
+    3002: float64_vector_or_none,
+    3003: int8_vector_or_none,
+    3004: int16_vector_or_none,
+    3005: int32_vector_or_none,
+    3006: int64_vector_or_none,
 }
