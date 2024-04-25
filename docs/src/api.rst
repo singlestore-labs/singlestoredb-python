@@ -291,7 +291,7 @@ Notebook Tools
 --------------
 
 The SDK includes a `notebook` sub-module for tools that are for use in
-the [SingleStore Managed Service Portal Notebooks](https://portal.singlestore.com)
+the `SingleStore Managed Service Portal Notebooks <https://portal.singlestore.com>`_
 environment. The following objects in `sinlgestoredb.notebook` are
 singletons that automatically track the organization, workspace group, workspace,
 stage, and secrets that are selected in the portal.
