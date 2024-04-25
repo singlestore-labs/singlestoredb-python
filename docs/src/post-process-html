@@ -53,7 +53,7 @@ for file in sorted(txt_files):
         )
 
         # Remove singleton representations
-        txt = re.sub(r'Organization\(name=.+?\)', r'<em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;singlestoredb.notebook._objects.Organization</span> <span class="pre">object&gt;</span></em>', txt)
+        txt = re.sub(r'Organization\(name=.+?\)', r'<em class="property"><span class="w"> </span><span class="p"></span><span class="w"> </span><span class="pre">&lt;singlestoredb.notebook._objects.Organization</span> <span class="pre">object&gt;</span></em>', txt)
 
         # Change ShowAccessor to Connection.show
         txt = re.sub(r'>ShowAccessor\.', r'>Connection.show.', txt)
