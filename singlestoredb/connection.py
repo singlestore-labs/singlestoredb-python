@@ -1285,6 +1285,7 @@ def connect(
     inf_as_null: Optional[bool] = None,
     encoding_errors: Optional[str] = None,
     track_env: Optional[bool] = None,
+    enable_extended_data_types: Optional[bool] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1361,6 +1362,8 @@ def connect(
         The error handler name for value decoding errors
     track_env : bool, optional
         Should the connection track the SINGLESTOREDB_URL environment variable?
+    enable_extended_data_types : bool, optional
+        Should extended data types (BSON, vector) be enabled?
 
     Examples
     --------

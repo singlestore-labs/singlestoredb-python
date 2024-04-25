@@ -417,10 +417,11 @@ class Cursor(BaseCursor):
         if self.rowcount == 18446744073709551615:
             self.rowcount = -1
         self._description = result.description
-        self._format_schema = get_schema(
-            self.connection._results_type,
-            result.description,
-        )
+        if self._description:
+            self._format_schema = get_schema(
+                self.connection._results_type,
+                result.description,
+            )
         self.lastrowid = result.insert_id
         self._rows = result.rows
 
