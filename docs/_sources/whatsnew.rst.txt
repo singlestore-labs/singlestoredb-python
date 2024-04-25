@@ -5,10 +5,15 @@ This document outlines features and improvements from each release.
 .. note:: All releases before v1.0.0 are considered pre-release and
    are for non-production testing and evaluation, and may include
    changes to the API.
+v1.2.0 - April 25, 2024
+-----------------------
+* Added support for vector data type conversions in query results
+* Added ``singlestoredb.notebook`` module for interacting with
+  portal objects
 v1.1.0 - April, 18 2024
 -----------------------
 * Added new result types: numpy, pandas, polars, arrow
-* Added `SHOW FUSION HELP` command and doc to Fusion SQL handlers
+* Added ``SHOW FUSION HELP`` command and doc to Fusion SQL handlers
 v1.0.4 - April, 3 2024
 ----------------------
 * Management API updates

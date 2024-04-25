@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStoreDB 1.1.0 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 1.2.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
-        <script src="_static/documentation_options.js?v=fc837d61"></script>
+        <script src="_static/documentation_options.js?v=6efca38a"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                1.1.0
+                1.2.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -181,6 +181,14 @@
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rmdir.html">workspace.StageObject.rmdir</a></li>
 </ul>
 </li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#notebook-tools">Notebook Tools</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.notebook.organization.html">singlestoredb.notebook.organization</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.notebook.secrets.html">singlestoredb.notebook.secrets</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.notebook.workspace_group.html">singlestoredb.notebook.workspace_group</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.notebook.stage.html">singlestoredb.notebook.stage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.notebook.workspace.html">singlestoredb.notebook.workspace</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a><ul>
@@ -660,6 +668,36 @@ methods and attributes.</p>
 </tbody>
 </table>
 </section>
+</section>
+<section id="notebook-tools">
+<h2>Notebook Tools<a class="headerlink" href="#notebook-tools" title="Link to this heading">¶</a></h2>
+<p>The SDK includes a <cite>notebook</cite> sub-module for tools that are for use in
+the [SingleStore Managed Service Portal Notebooks](<a class="reference external" href="https://portal.singlestore.com">https://portal.singlestore.com</a>)
+environment. The following objects in <cite>sinlgestoredb.notebook</cite> are
+singletons that automatically track the organization, workspace group, workspace,
+stage, and secrets that are selected in the portal.</p>
+<p>These objects act just like the corresponding objects discussed in previous
+of this documentation (including attributes and methods), but they proxy all
+calls to the currently selected portal services.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.notebook.organization.html#singlestoredb.notebook.organization" title="singlestoredb.notebook.organization"><code class="xref py py-obj docutils literal notranslate"><span class="pre">organization</span></code></a></p></td>
+<td><p>Organization in SingleStoreDB Cloud portal.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.notebook.secrets.html#singlestoredb.notebook.secrets" title="singlestoredb.notebook.secrets"><code class="xref py py-obj docutils literal notranslate"><span class="pre">secrets</span></code></a></p></td>
+<td><p>Wrapper for accessing secrets as object attributes.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.notebook.workspace_group.html#singlestoredb.notebook.workspace_group" title="singlestoredb.notebook.workspace_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">workspace_group</span></code></a></p></td>
+<td><p>SingleStoreDB workspace group definition.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.notebook.stage.html#singlestoredb.notebook.stage" title="singlestoredb.notebook.stage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">stage</span></code></a></p></td>
+<td><p>Stage manager.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.notebook.workspace.html#singlestoredb.notebook.workspace" title="singlestoredb.notebook.workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">workspace</span></code></a></p></td>
+<td><p>SingleStoreDB workspace definition.</p></td>
+</tr>
+</tbody>
+</table>
 </section>
 <section id="configuration">
 <h2>Configuration<a class="headerlink" href="#configuration" title="Link to this heading">¶</a></h2>

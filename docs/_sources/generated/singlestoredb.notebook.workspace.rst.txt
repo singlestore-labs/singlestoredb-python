@@ -1,0 +1,4 @@
+﻿singlestoredb.notebook.workspace
+================================
+.. currentmodule:: singlestoredb.notebook
+.. autodata:: workspace

@@ -8,6 +8,12 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.2.0 - April 25, 2024
+-----------------------
+* Added support for vector data type conversions in query results
+* Added ``singlestoredb.notebook`` module for interacting with
+  portal objects
+
 v1.1.0 - April, 18 2024
 -----------------------
 * Added new result types: numpy, pandas, polars, arrow

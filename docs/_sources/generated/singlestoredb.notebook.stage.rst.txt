@@ -1,0 +1,4 @@
+﻿singlestoredb.notebook.stage
+============================
+.. currentmodule:: singlestoredb.notebook
+.. autodata:: stage

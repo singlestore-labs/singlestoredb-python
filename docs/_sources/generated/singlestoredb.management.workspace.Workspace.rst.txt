@@ -17,6 +17,7 @@
    .. autosummary::
       ~Workspace.name
       ~Workspace.id
+      ~Workspace.group_id
       ~Workspace.size
       ~Workspace.state
       ~Workspace.created_at

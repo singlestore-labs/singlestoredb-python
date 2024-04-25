@@ -1,0 +1,4 @@
+﻿singlestoredb.notebook.organization
+===================================
+.. currentmodule:: singlestoredb.notebook
+.. autodata:: organization
