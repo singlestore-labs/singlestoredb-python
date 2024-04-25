@@ -2876,6 +2876,180 @@ class TestConnection(unittest.TestCase):
 
         # out = self.conn.show.create_view('vname')
 
+    def test_f32_vectors(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface vector information')
+
+        self.cur.execute('show variables like "enable_extended_types_metadata"')
+        out = list(self.cur)
+        if not out or out[0][1].lower() == 'off':
+            self.skipTest('Database engine does not support extended types metadata')
+
+        self.cur.execute('select a from f32_vectors order by id')
+        out = list(self.cur)
+
+        assert out[0][0].dtype is np.dtype('float32')
+        assert out[1][0].dtype is np.dtype('float32')
+        assert out[2][0].dtype is np.dtype('float32')
+
+        np.testing.assert_array_equal(
+            out[0][0],
+            np.array([0.267261237, 0.534522474, 0.801783681], dtype=np.float32),
+        )
+        np.testing.assert_array_equal(
+            out[1][0],
+            np.array([0.371390671, 0.557085991, 0.742781341], dtype=np.float32),
+        )
+        np.testing.assert_array_equal(
+            out[2][0],
+            np.array([-0.424264073, -0.565685451, 0.707106829], dtype=np.float32),
+        )
+
+    def test_f64_vectors(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface vector information')
+
+        self.cur.execute('show variables like "enable_extended_types_metadata"')
+        out = list(self.cur)
+        if not out or out[0][1].lower() == 'off':
+            self.skipTest('Database engine does not support extended types metadata')
+
+        self.cur.execute('select a from f64_vectors order by id')
+        out = list(self.cur)
+
+        assert out[0][0].dtype is np.dtype('float64')
+        assert out[1][0].dtype is np.dtype('float64')
+        assert out[2][0].dtype is np.dtype('float64')
+
+        np.testing.assert_array_equal(
+            out[0][0],
+            np.array([0.267261237, 0.534522474, 0.801783681], dtype=np.float64),
+        )
+        np.testing.assert_array_equal(
+            out[1][0],
+            np.array([0.371390671, 0.557085991, 0.742781341], dtype=np.float64),
+        )
+        np.testing.assert_array_equal(
+            out[2][0],
+            np.array([-0.424264073, -0.565685451, 0.707106829], dtype=np.float64),
+        )
+
+    def test_i8_vectors(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface vector information')
+
+        self.cur.execute('show variables like "enable_extended_types_metadata"')
+        out = list(self.cur)
+        if not out or out[0][1].lower() == 'off':
+            self.skipTest('Database engine does not support extended types metadata')
+
+        self.cur.execute('select a from i8_vectors order by id')
+        out = list(self.cur)
+
+        assert out[0][0].dtype is np.dtype('int8')
+        assert out[1][0].dtype is np.dtype('int8')
+        assert out[2][0].dtype is np.dtype('int8')
+
+        np.testing.assert_array_equal(
+            out[0][0],
+            np.array([1, 2, 3], dtype=np.int8),
+        )
+        np.testing.assert_array_equal(
+            out[1][0],
+            np.array([4, 5, 6], dtype=np.int8),
+        )
+        np.testing.assert_array_equal(
+            out[2][0],
+            np.array([-1, -4, 8], dtype=np.int8),
+        )
+
+    def test_i16_vectors(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface vector information')
+
+        self.cur.execute('show variables like "enable_extended_types_metadata"')
+        out = list(self.cur)
+        if not out or out[0][1].lower() == 'off':
+            self.skipTest('Database engine does not support extended types metadata')
+
+        self.cur.execute('select a from i16_vectors order by id')
+        out = list(self.cur)
+
+        assert out[0][0].dtype is np.dtype('int16')
+        assert out[1][0].dtype is np.dtype('int16')
+        assert out[2][0].dtype is np.dtype('int16')
+
+        np.testing.assert_array_equal(
+            out[0][0],
+            np.array([1, 2, 3], dtype=np.int16),
+        )
+        np.testing.assert_array_equal(
+            out[1][0],
+            np.array([4, 5, 6], dtype=np.int16),
+        )
+        np.testing.assert_array_equal(
+            out[2][0],
+            np.array([-1, -4, 8], dtype=np.int16),
+        )
+
+    def test_i32_vectors(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface vector information')
+
+        self.cur.execute('show variables like "enable_extended_types_metadata"')
+        out = list(self.cur)
+        if not out or out[0][1].lower() == 'off':
+            self.skipTest('Database engine does not support extended types metadata')
+
+        self.cur.execute('select a from i32_vectors order by id')
+        out = list(self.cur)
+
+        assert out[0][0].dtype is np.dtype('int32')
+        assert out[1][0].dtype is np.dtype('int32')
+        assert out[2][0].dtype is np.dtype('int32')
+
+        np.testing.assert_array_equal(
+            out[0][0],
+            np.array([1, 2, 3], dtype=np.int32),
+        )
+        np.testing.assert_array_equal(
+            out[1][0],
+            np.array([4, 5, 6], dtype=np.int32),
+        )
+        np.testing.assert_array_equal(
+            out[2][0],
+            np.array([-1, -4, 8], dtype=np.int32),
+        )
+
+    def test_i64_vectors(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface vector information')
+
+        self.cur.execute('show variables like "enable_extended_types_metadata"')
+        out = list(self.cur)
+        if not out or out[0][1].lower() == 'off':
+            self.skipTest('Database engine does not support extended types metadata')
+
+        self.cur.execute('select a from i64_vectors order by id')
+        out = list(self.cur)
+
+        assert out[0][0].dtype is np.dtype('int64')
+        assert out[1][0].dtype is np.dtype('int64')
+        assert out[2][0].dtype is np.dtype('int64')
+
+        np.testing.assert_array_equal(
+            out[0][0],
+            np.array([1, 2, 3], dtype=np.int64),
+        )
+        np.testing.assert_array_equal(
+            out[1][0],
+            np.array([4, 5, 6], dtype=np.int64),
+        )
+        np.testing.assert_array_equal(
+            out[2][0],
+            np.array([-1, -4, 8], dtype=np.int64),
+        )
+
 
 if __name__ == '__main__':
     import nose2

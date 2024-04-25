@@ -8,8 +8,10 @@ from . import err
 from ..config import get_option
 from ..utils.results import Description
 from .charset import MBLENGTH
+from .constants import EXTENDED_TYPE
 from .constants import FIELD_TYPE
 from .constants import SERVER_STATUS
+from .constants import VECTOR_TYPE
 
 
 DEBUG = get_option('debug.connection')
@@ -264,15 +266,62 @@ class FieldDescriptorPacket(MysqlPacket):
         self.org_table = self.read_length_coded_string().decode(encoding)
         self.name = self.read_length_coded_string().decode(encoding)
         self.org_name = self.read_length_coded_string().decode(encoding)
+        n_bytes = 0
         (
+            n_bytes,
             self.charsetnr,
             self.length,
             self.type_code,
             self.flags,
             self.scale,
-        ) = self.read_struct('<xHIBHBxx')
+        ) = self.read_struct('<BHIBHBxx')
+
         # 'default' is a length coded binary and is still in the buffer?
         # not used for normal result sets...
+
+        # Extended types
+        if n_bytes > 12:
+            ext_type_code = self.read_uint8()
+            if ext_type_code == EXTENDED_TYPE.NONE:
+                pass
+            elif ext_type_code == EXTENDED_TYPE.BSON:
+                self.type_code = FIELD_TYPE.BSON
+            elif ext_type_code == EXTENDED_TYPE.VECTOR:
+                (self.length, vec_type) = self.read_struct('<IB')
+                if vec_type == VECTOR_TYPE.FLOAT32:
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.FLOAT32_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.FLOAT32_VECTOR_JSON
+                elif vec_type == VECTOR_TYPE.FLOAT64:
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.FLOAT64_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.FLOAT64_VECTOR_JSON
+                elif vec_type == VECTOR_TYPE.INT8:
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.INT8_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.INT8_VECTOR_JSON
+                elif vec_type == VECTOR_TYPE.INT16:
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.INT16_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.INT16_VECTOR_JSON
+                elif vec_type == VECTOR_TYPE.INT32:
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.INT32_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.INT32_VECTOR_JSON
+                elif vec_type == VECTOR_TYPE.INT64:
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.INT64_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.INT64_VECTOR_JSON
+                else:
+                    raise TypeError(f'unrecognized vector data type: {vec_type}')
+            else:
+                raise TypeError(f'unrecognized extended data type: {ext_type_code}')
 
     def description(self):
         """Provides a 7-item tuple compatible with the Python PEP249 DB Spec."""
