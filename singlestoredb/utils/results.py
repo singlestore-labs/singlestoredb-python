@@ -515,6 +515,8 @@ _schema_converters: Dict[
     'namedtuples': _no_schema,
     'dict': _no_schema,
     'dicts': _no_schema,
+    'structsequence': _no_schema,
+    'structsequences': _no_schema,
     'numpy': _description_to_numpy_schema,
     'pandas': _description_to_numpy_schema,
     'polars': _description_to_polars_schema,
@@ -578,4 +580,6 @@ def get_schema(
         for the given format type
 
     """
-    return _schema_converters[format](desc) or {}
+    if format in _schema_converters:
+        return _schema_converters[format](desc) or {}
+    return {}
