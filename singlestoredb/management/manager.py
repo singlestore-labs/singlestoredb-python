@@ -18,6 +18,12 @@ from ..exceptions import ManagementError
 from .utils import get_organization
 from .utils import get_token
 
+try:
+    import comm
+    has_comm = True
+except ImportError:
+    has_comm = False
+
 
 def set_organization(kwargs: Dict[str, Any]) -> None:
     """Set the organization ID in the dictionary."""
@@ -78,6 +84,16 @@ class Manager(object):
         if organization_id:
             self._params['organizationID'] = organization_id
 
+        self._connection_info: Dict[str, Any] = {}
+
+        if has_comm:
+            events = comm.create_comm(target_name='singlestore:events')
+
+            @events.on_msg
+            def _recv(msg: Dict[str, Any]) -> None:
+                data = msg.get('content', {}).get('data', {})
+                self._connection_info.update(data)
+
     def _check(
         self, res: requests.Response, url: str, params: Dict[str, Any],
     ) -> requests.Response:
@@ -109,6 +125,11 @@ class Manager(object):
             raise ManagementError(errno=res.status_code, msg=msg, response=txt)
         return res
 
+    def _get_token(self) -> Optional[str]:
+        if 'password' in self._connection_info:
+            return self._connection_info['password']
+        return get_token()
+
     def _doit(
         self,
         method: str,
@@ -119,7 +140,7 @@ class Manager(object):
         """Perform HTTP request."""
         # Refresh the JWT as needed
         if self._is_jwt:
-            self._sess.headers.update({'Authorization': f'Bearer {get_token()}'})
+            self._sess.headers.update({'Authorization': f'Bearer {self._get_token()}'})
         return getattr(self._sess, method.lower())(
             urljoin(self._base_url, path), *args, **kwargs,
         )
