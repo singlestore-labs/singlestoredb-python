@@ -1339,7 +1339,8 @@ def connect(
     autocommit : bool, optional
         Enable autocommits
     results_type : str, optional
-        The form of the query results: tuples, namedtuples, dicts
+        The form of the query results: tuples, namedtuples, dicts,
+        numpy, polars, pandas, arrow
     results_format : str, optional
         Deprecated. This option has been renamed to results_type.
     program_name : str, optional
