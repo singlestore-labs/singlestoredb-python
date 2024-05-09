@@ -20,7 +20,6 @@ import jwt
 
 from .. import converters
 from ..config import get_option
-from ..notebook import portal
 
 JSON = Union[str, List[str], Dict[str, 'JSON']]
 JSONObj = Dict[str, JSON]
@@ -120,6 +119,8 @@ class NamedList(List[T]):
 
 def get_token() -> Optional[str]:
     """Return the token for the Management API."""
+    from ..notebook import portal
+
     # See if an API key is configured
     tok = get_option('management.token')
     if tok:
@@ -150,6 +151,8 @@ def get_token() -> Optional[str]:
 
 def get_organization() -> Optional[str]:
     """Return the organization for the current token or environment."""
+    from ..notebook import portal
+
     org = portal.organization_id
     if org:
         return org
