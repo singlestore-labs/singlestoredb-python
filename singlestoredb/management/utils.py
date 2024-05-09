@@ -20,6 +20,7 @@ import jwt
 
 from .. import converters
 from ..config import get_option
+from ..notebook import portal
 
 JSON = Union[str, List[str], Dict[str, 'JSON']]
 JSONObj = Dict[str, JSON]
@@ -124,6 +125,10 @@ def get_token() -> Optional[str]:
     if tok:
         return tok
 
+    tok = portal.password
+    if tok:
+        return tok
+
     url = os.environ.get('SINGLESTOREDB_URL')
     if not url:
         # See if the connection URL contains a JWT
@@ -145,11 +150,10 @@ def get_token() -> Optional[str]:
 
 def get_organization() -> Optional[str]:
     """Return the organization for the current token or environment."""
-    org = os.environ.get('SINGLESTOREDB_ORGANIZATION')
+    org = portal.organization_id
     if org:
         return org
-
-    return None
+    return os.environ.get('SINGLESTOREDB_ORGANIZATION') or None
 
 
 def enable_http_tracing() -> None:
