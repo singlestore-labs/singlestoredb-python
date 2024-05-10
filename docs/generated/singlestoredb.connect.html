@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>singlestoredb.connect &mdash; SingleStoreDB 1.2.0 documentation</title>
+  <title>singlestoredb.connect &mdash; SingleStoreDB 1.3.0 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="../_static/js/html5shiv.min.js"></script>
   <![endif]-->
-        <script src="../_static/documentation_options.js?v=6efca38a"></script>
+        <script src="../_static/documentation_options.js?v=1f29e9d3"></script>
         <script src="../_static/doctools.js?v=9a2dae69"></script>
         <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/js/theme.js"></script>
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                1.2.0
+                1.3.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -121,7 +121,8 @@ for HTTP connections, and 443 for HTTPS connections.</p></li>
 <li><p><strong>conv</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.12)"><em>dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>, </em><em>Callable</em><em>]</em><em>, </em><em>optional</em>) – Dictionary of data conversion functions</p></li>
 <li><p><strong>credential_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>optional</em>) – Type of authentication to use: auth.PASSWORD, auth.JWT, or auth.BROWSER_SSO</p></li>
 <li><p><strong>autocommit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>optional</em>) – Enable autocommits</p></li>
-<li><p><strong>results_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>optional</em>) – The form of the query results: tuples, namedtuples, dicts</p></li>
+<li><p><strong>results_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>optional</em>) – The form of the query results: tuples, namedtuples, dicts,
+numpy, polars, pandas, arrow</p></li>
 <li><p><strong>results_format</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>optional</em>) – Deprecated. This option has been renamed to results_type.</p></li>
 <li><p><strong>program_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>optional</em>) – Name of the program</p></li>
 <li><p><strong>conn_attrs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.12)"><em>dict</em></a><em>, </em><em>optional</em>) – Additional connection attributes for telemetry. Example:

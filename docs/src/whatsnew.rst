@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.3.0 - May 10, 2024
+---------------------
+* Add ability to use iterables and queues as the source of ``LOCAL INFILE``
+
 v1.2.0 - April 25, 2024
 -----------------------
 * Added support for vector data type conversions in query results
