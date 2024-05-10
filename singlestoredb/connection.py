@@ -5,6 +5,7 @@ import inspect
 import io
 import queue
 import re
+import sys
 import warnings
 import weakref
 from collections.abc import Mapping
@@ -34,6 +35,11 @@ from . import exceptions
 from .config import get_option
 from .utils.results import Description
 from .utils.results import Result
+
+if sys.version_info < (3, 10):
+    InfileQueue = queue.Queue
+else:
+    InfileQueue = queue.Queue[Union[bytes, str]]
 
 
 # DB-API settings
@@ -498,12 +504,12 @@ class Cursor(metaclass=abc.ABCMeta):
     def execute(
         self, query: str,
         args: Optional[Union[Sequence[Any], Dict[str, Any], Any]] = None,
-        infile_stream: Optional[
+        infile_stream: Optional[  # type: ignore
             Union[
                 io.RawIOBase,
                 io.TextIOBase,
                 Iterator[Union[bytes, str]],
-                queue.Queue[Union[bytes, str]],
+                InfileQueue,
             ]
         ] = None,
     ) -> int:

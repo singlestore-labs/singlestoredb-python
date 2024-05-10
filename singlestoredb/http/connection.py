@@ -7,7 +7,6 @@ import io
 import json
 import math
 import os
-import queue
 import re
 import time
 from base64 import b64decode
@@ -422,12 +421,12 @@ class Cursor(connection.Cursor):
     def execute(
         self, query: str,
         args: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
-        infile_stream: Optional[
+        infile_stream: Optional[  # type: ignore
             Union[
                 io.RawIOBase,
                 io.TextIOBase,
                 Iterable[Union[bytes, str]],
-                queue.Queue[Union[bytes, str]],
+                connection.InfileQueue,
             ]
         ] = None,
     ) -> int:
@@ -506,12 +505,12 @@ class Cursor(connection.Cursor):
         self, oper: str,
         params: Optional[Union[Sequence[Any], Dict[str, Any]]] = None,
         is_callproc: bool = False,
-        infile_stream: Optional[
+        infile_stream: Optional[  # type: ignore
             Union[
                 io.RawIOBase,
                 io.TextIOBase,
                 Iterable[Union[bytes, str]],
-                queue.Queue[Union[bytes, str]],
+                connection.InfileQueue,
             ]
         ] = None,
     ) -> int:
