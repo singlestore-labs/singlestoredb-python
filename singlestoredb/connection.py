@@ -2,6 +2,8 @@
 """SingleStoreDB connections and cursors."""
 import abc
 import inspect
+import io
+import queue
 import re
 import warnings
 import weakref
@@ -496,6 +498,14 @@ class Cursor(metaclass=abc.ABCMeta):
     def execute(
         self, query: str,
         args: Optional[Union[Sequence[Any], Dict[str, Any], Any]] = None,
+        infile_stream: Optional[
+            Union[
+                io.RawIOBase,
+                io.TextIOBase,
+                Iterator[Union[bytes, str]],
+                queue.Queue[Union[bytes, str]],
+            ]
+        ] = None,
     ) -> int:
         """
         Execute a SQL statement.
@@ -510,6 +520,8 @@ class Cursor(metaclass=abc.ABCMeta):
             The SQL statement to execute
         args : Sequence or dict, optional
             Parameters to substitute into the SQL code
+        infile_stream : io.RawIOBase or io.TextIOBase or Iterator[bytes|str], optional
+            Data stream for ``LOCAL INFILE`` statement
 
         Examples
         --------

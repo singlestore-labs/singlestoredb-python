@@ -5,12 +5,15 @@
 # https://dev.mysql.com/doc/refman/5.5/en/error-handling.html
 import errno
 import functools
+import io
 import os
+import queue
 import socket
 import struct
 import sys
 import traceback
 import warnings
+from typing import Iterable
 
 try:
     import _singlestoredb_accel
@@ -353,6 +356,7 @@ class Connection(BaseConnection):
             )
 
         self._local_infile = bool(local_infile)
+        self._local_infile_stream = None
         if self._local_infile:
             client_flag |= CLIENT.LOCAL_FILES
         if multi_statements:
@@ -843,7 +847,7 @@ class Connection(BaseConnection):
         return self.cursorclass(self)
 
     # The following methods are INTERNAL USE ONLY (called from Cursor)
-    def query(self, sql, unbuffered=False):
+    def query(self, sql, unbuffered=False, infile_stream=None):
         """
         Run a query on the server.
 
@@ -859,8 +863,10 @@ class Connection(BaseConnection):
         else:
             if isinstance(sql, str):
                 sql = sql.encode(self.encoding, 'surrogateescape')
+            self._local_infile_stream = infile_stream
             self._execute_command(COMMAND.COM_QUERY, sql)
             self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+            self._local_infile_stream = None
         return self._affected_rows
 
     def next_result(self, unbuffered=False):
@@ -1871,24 +1877,82 @@ class LoadLocalFile:
     def send_data(self):
         """Send data packets from the local file to the server"""
         if not self.connection._sock:
-            raise err.InterfaceError(0, '')
+            raise err.InterfaceError(0, 'Connection is closed')
+
         conn = self.connection
+        infile = conn._local_infile_stream
+
+        # 16KB is efficient enough
+        packet_size = min(conn.max_allowed_packet, 16 * 1024)
 
         try:
-            with open(self.filename, 'rb') as open_file:
-                packet_size = min(
-                    conn.max_allowed_packet, 16 * 1024,
-                )  # 16KB is efficient enough
-                while True:
-                    chunk = open_file.read(packet_size)
-                    if not chunk:
-                        break
-                    conn.write_packet(chunk)
-        except OSError:
-            raise err.OperationalError(
-                ER.FILE_NOT_FOUND,
-                f"Can't find file '{self.filename}'",
-            )
+
+            if self.filename in [':stream:', b':stream:']:
+
+                if infile is None:
+                    raise err.OperationalError(
+                        ER.FILE_NOT_FOUND,
+                        ':stream: specified for LOCAL INFILE, but no stream was supplied',
+                    )
+
+                # Binary IO
+                elif isinstance(infile, io.RawIOBase):
+                    while True:
+                        chunk = infile.read(packet_size)
+                        if not chunk:
+                            break
+                        conn.write_packet(chunk)
+
+                # Text IO
+                elif isinstance(infile, io.TextIOBase):
+                    while True:
+                        chunk = infile.read(packet_size)
+                        if not chunk:
+                            break
+                        conn.write_packet(chunk.encode('utf8'))
+
+                # Iterable of bytes or str
+                elif isinstance(infile, Iterable):
+                    for chunk in infile:
+                        if not chunk:
+                            continue
+                        if isinstance(chunk, str):
+                            conn.write_packet(chunk.encode('utf8'))
+                        else:
+                            conn.write_packet(chunk)
+
+                # Queue (empty value ends the iteration)
+                elif isinstance(infile, queue.Queue):
+                    while True:
+                        chunk = infile.get()
+                        if not chunk:
+                            break
+                        if isinstance(chunk, str):
+                            conn.write_packet(chunk.encode('utf8'))
+                        else:
+                            conn.write_packet(chunk)
+
+                else:
+                    raise err.OperationalError(
+                        ER.FILE_NOT_FOUND,
+                        ':stream: specified for LOCAL INFILE, ' +
+                        f'but stream type is unrecognized: {infile}',
+                    )
+
+            else:
+                try:
+                    with open(self.filename, 'rb') as open_file:
+                        while True:
+                            chunk = open_file.read(packet_size)
+                            if not chunk:
+                                break
+                            conn.write_packet(chunk)
+                except OSError:
+                    raise err.OperationalError(
+                        ER.FILE_NOT_FOUND,
+                        f"Can't find file '{self.filename!s}'",
+                    )
+
         finally:
             if not conn._closed:
                 # send the empty packet to signify we are done sending data

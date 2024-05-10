@@ -178,7 +178,7 @@ class Cursor(BaseCursor):
 
         return query
 
-    def execute(self, query, args=None):
+    def execute(self, query, args=None, infile_stream=None):
         """
         Execute a query.
 
@@ -192,6 +192,8 @@ class Cursor(BaseCursor):
             Query to execute.
         args : Sequence[Any] or Dict[str, Any] or Any, optional
             Parameters used with query. (optional)
+        infile_stream : io.BytesIO or Iterator[bytes], optional
+            Data stream for ``LOCAL INFILE`` statements
 
         Returns
         -------
@@ -205,7 +207,7 @@ class Cursor(BaseCursor):
 
         query = self.mogrify(query, args)
 
-        result = self._query(query)
+        result = self._query(query, infile_stream=infile_stream)
         self._executed = query
         return result
 
@@ -387,10 +389,10 @@ class Cursor(BaseCursor):
             raise IndexError('out of range')
         self._rownumber = r
 
-    def _query(self, q):
+    def _query(self, q, infile_stream=None):
         conn = self._get_db()
         self._clear_result()
-        conn.query(q)
+        conn.query(q, infile_stream=infile_stream)
         self._do_get_result()
         return self.rowcount
 
@@ -680,10 +682,10 @@ class SSCursor(Cursor):
 
     __del__ = close
 
-    def _query(self, q):
+    def _query(self, q, infile_stream=None):
         conn = self._get_db()
         self._clear_result()
-        conn.query(q, unbuffered=True)
+        conn.query(q, unbuffered=True, infile_stream=infile_stream)
         self._do_get_result()
         return self.rowcount
 
