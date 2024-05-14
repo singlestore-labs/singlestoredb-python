@@ -562,7 +562,6 @@ class Application(object):
         elif method == 'GET' and path == self.show_create_function_path:
             host = headers.get(b'host', b'localhost:80')
             reflected_url = f'{scope["scheme"]}://{host.decode("utf-8")}/invoke'
-            data_format = 'json' if b'json' in content_type else 'rowdat_1'
 
             syntax = []
             for key, (endpoint, endpoint_info) in self.endpoints.items():
@@ -571,7 +570,7 @@ class Application(object):
                         signature_to_sql(
                             endpoint_info['signature'],
                             url=self.url or reflected_url,
-                            data_format=data_format,
+                            data_format=self.data_format,
                         ),
                     )
             body = '\n'.join(syntax).encode('utf-8')
