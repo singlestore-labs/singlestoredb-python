@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import json
 import os
 import urllib.parse
 from typing import Any
@@ -7,6 +8,7 @@ from typing import Optional
 
 try:
     from IPython import get_ipython
+    from IPython import display
     has_ipython = True
 except ImportError:
     has_ipython = False
@@ -42,6 +44,19 @@ class Portal(object):
 
     def __repr__(self) -> str:
         return str(self)
+
+    def _post_message(self, command: str, data: Dict[str, Any]) -> None:
+        if not has_ipython:
+            return
+        json_data = json.dumps(data).replace("'", "\\'")
+        display.display(
+            display.Javascript(f'''
+            window.postMessage(
+                '{{"command": "singlestore.portal.{command}", "data": {json_data}}}',
+                window.location.origin
+            );
+        '''),
+        )
 
     def _request(self, stream: Any, ident: Any, msg: Dict[str, Any]) -> None:
         if not isinstance(msg, dict):
@@ -142,6 +157,21 @@ class Portal(object):
             return self._connection_info['defaultDatabase']
         except KeyError:
             return self._parse_url()['defaultDatabase']
+
+    @default_database.setter
+    def default_database(self, name: str) -> None:
+        """Set default database."""
+        self._post_message('update_connection', dict(database=name))
+
+        import time
+        i = 10
+        while True:
+            if self.default_database == name:
+                if i < 0:
+                    raise RuntimeError('timeout waiting for database change')
+                break
+            time.sleep(0.5)
+            i -= 1
 
     @property
     def version(self) -> Optional[str]:
