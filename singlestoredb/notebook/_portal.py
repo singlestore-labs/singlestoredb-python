@@ -6,6 +6,8 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from ..management import workspace as _ws
+
 try:
     from IPython import get_ipython
     from IPython import display
@@ -99,6 +101,25 @@ class Portal(object):
             return os.environ.get('SINGLESTOREDB_WORKSPACE')
 
     @property
+    def workspace(self) -> Optional[_ws.Workspace]:
+        return _ws.get_workspace(self.workspace_id)
+
+    @workspace.setter
+    def workspace(self, name_or_id: str) -> None:
+        w = _ws.get_workspace_group(self.workspace_group_id).workspaces[name_or_id]
+        self._post_message('update_connection', dict(workspace=w.id))
+
+        import time
+        i = 40
+        while True:
+            if self.workspace_id == w.id:
+                if i < 0:
+                    raise RuntimeError('timeout waiting for workspace change')
+                break
+            time.sleep(0.1)
+            i -= 1
+
+    @property
     def cluster_id(self) -> Optional[str]:
         """Cluster ID."""
         try:
@@ -164,13 +185,13 @@ class Portal(object):
         self._post_message('update_connection', dict(database=name))
 
         import time
-        i = 10
+        i = 40
         while True:
             if self.default_database == name:
                 if i < 0:
                     raise RuntimeError('timeout waiting for database change')
                 break
-            time.sleep(0.5)
+            time.sleep(0.1)
             i -= 1
 
     @property
