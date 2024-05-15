@@ -226,7 +226,7 @@ class Portal(object):
         if self._connection_info:
             info = self._connection_info
             host = urllib.parse.quote_plus(info.get('host', ''))
-            port = urllib.parse.quote_plus(info.get('port', ''))
+            port = urllib.parse.quote_plus(str(info.get('port', '')))
             user = urllib.parse.quote_plus(info.get('user', ''))
             password = urllib.parse.quote_plus(info.get('password', ''))
             db = urllib.parse.quote_plus(info.get('default_database', ''))
