@@ -134,7 +134,7 @@ class Portal(object):
         """Set theme."""
         self._post_message(
             'update_theme', dict(theme=name),
-            wait_on_condition=lambda x: self.theme == name,  # type: ignore
+            wait_on_condition=lambda: self.theme == name,  # type: ignore
             timeout_message='timeout waiting for theme update',
         )
 
@@ -196,7 +196,7 @@ class Portal(object):
 
         self._post_message(
             'update_connection', dict(workspace=w.id),
-            wait_on_condition=lambda x: self.workspace_id == id,  # type: ignore
+            wait_on_condition=lambda: self.workspace_id == id,  # type: ignore
             timeout_message='timeout waiting for workspace update',
         )
 
@@ -289,7 +289,7 @@ class Portal(object):
         """Set default database."""
         self._post_message(
             'update_connection', dict(database=name),
-            wait_on_condition=lambda x: self.default_database == name,  # type: ignore
+            wait_on_condition=lambda: self.default_database == name,  # type: ignore
             timeout_message='timeout waiting for database update',
         )
 
