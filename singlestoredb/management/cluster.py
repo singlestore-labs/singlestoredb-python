@@ -8,6 +8,7 @@ from typing import List
 from typing import Optional
 from typing import Union
 
+from .. import config
 from .. import connection
 from ..exceptions import ManagementError
 from .manager import Manager
@@ -329,10 +330,10 @@ class ClusterManager(Manager):
     """
 
     #: Cluster management API version if none is specified.
-    default_version = 'v0beta'
+    default_version = config.get_option('management.version')
 
     #: Base URL if none is specified.
-    default_base_url = 'https://api.singlestore.com'
+    default_base_url = config.get_option('management.base_url')
 
     #: Object type
     obj_type = 'cluster'
@@ -425,8 +426,8 @@ class ClusterManager(Manager):
 
 def manage_cluster(
     access_token: Optional[str] = None,
-    version: str = ClusterManager.default_version,
-    base_url: str = ClusterManager.default_base_url,
+    version: Optional[str] = None,
+    base_url: Optional[str] = None,
     *,
     organization_id: Optional[str] = None,
 ) -> ClusterManager:
