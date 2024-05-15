@@ -93,7 +93,7 @@ class Portal(object):
         if not isinstance(msg, dict):
             return
         content = msg.get('content', {})
-        if content.get('type', '') != 'command':
+        if content.get('type', '') != 'event':
             return
         func = getattr(self, '_handle_' + content.get('name', 'unknown').split('.')[-1])
         if func is not None:
@@ -195,7 +195,7 @@ class Portal(object):
             id = w.id
 
         self._post_message(
-            'update_connection', dict(workspace=w.id),
+            'update_connection', dict(workspace=id),
             wait_on_condition=lambda: self.workspace_id == id,  # type: ignore
             timeout_message='timeout waiting for workspace update',
         )
