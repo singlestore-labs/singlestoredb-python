@@ -92,7 +92,7 @@ class Secret(object):
             created_at=obj['createdAt'],
             last_updated_by=obj['lastUpdatedBy'],
             last_updated_at=obj['lastUpdatedAt'],
-            value=obj['value'] if 'value' in obj else None,
+            value=obj.get('value'),
             deleted_by=obj.get('deletedBy'),
             deleted_at=obj.get('deletedAt'),
         )
