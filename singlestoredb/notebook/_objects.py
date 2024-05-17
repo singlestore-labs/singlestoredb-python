@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import functools
 from typing import Any
+from typing import Optional
 
 from ..management import workspace as _ws
 
@@ -8,12 +9,12 @@ from ..management import workspace as _ws
 class Secrets(object):
     """Wrapper for accessing secrets as object attributes."""
 
-    def __getattr__(self, name: str) -> str:
+    def __getattr__(self, name: str) -> Optional[str]:
         if name.startswith('_ipython') or name.startswith('_repr_'):
             raise AttributeError(name)
         return _ws.get_secret(name)
 
-    def __getitem__(self, name: str) -> str:
+    def __getitem__(self, name: str) -> Optional[str]:
         return _ws.get_secret(name)
 
 

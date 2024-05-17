@@ -35,11 +35,11 @@ class Secret(object):
         self,
         id: str,
         name: str,
-        value: str,
         created_by: str,
         created_at: Union[str, datetime.datetime],
         last_updated_by: str,
         last_updated_at: Union[str, datetime.datetime],
+        value: Optional[str] = None,
         deleted_by: Optional[str] = None,
         deleted_at: Optional[Union[str, datetime.datetime]] = None,
     ):
@@ -88,11 +88,11 @@ class Secret(object):
         out = cls(
             id=obj['secretID'],
             name=obj['name'],
-            value=obj['value'],
             created_by=obj['createdBy'],
             created_at=obj['createdAt'],
             last_updated_by=obj['lastUpdatedBy'],
             last_updated_at=obj['lastUpdatedAt'],
+            value=obj['value'] if 'value' in obj else None,
             deleted_by=obj.get('deletedBy'),
             deleted_at=obj.get('deletedAt'),
         )
