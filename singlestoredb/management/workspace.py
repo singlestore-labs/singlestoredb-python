@@ -39,7 +39,7 @@ def get_organization() -> Organization:
     return manage_workspaces().organization
 
 
-def get_secret(name: str) -> str:
+def get_secret(name: str) -> Optional[str]:
     """Get a secret from the organization."""
     return get_organization().get_secret(name).value
 
