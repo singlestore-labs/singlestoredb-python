@@ -11,9 +11,9 @@ from typing import Optional
 
 from . import _objects as obj
 from ..management import workspace as mgr
+from ..utils import events
 
 try:
-    from IPython import get_ipython
     from IPython import display
     has_ipython = True
 except ImportError:
@@ -26,13 +26,7 @@ class Portal(object):
     def __init__(self) -> None:
         self._connection_info: Dict[str, Any] = {}
         self._theme_info: Dict[str, Any] = {}
-
-        if has_ipython:
-            try:
-                handlers = get_ipython().kernel.control_handlers
-                handlers['singlestore_portal_request'] = self._request
-            except AttributeError:
-                return
+        events.subscribe(self._request)
 
     def __str__(self) -> str:
         attrs = []
@@ -88,16 +82,11 @@ class Portal(object):
                 time.sleep(wait_interval)
                 elapsed += wait_interval
 
-    def _request(self, stream: Any, ident: Any, msg: Dict[str, Any]) -> None:
+    def _request(self, msg: Dict[str, Any]) -> None:
         """Handle request on the control stream."""
-        if not isinstance(msg, dict):
-            return
-        content = msg.get('content', {})
-        if content.get('type', '') != 'event':
-            return
-        func = getattr(self, '_handle_' + content.get('name', 'unknown').split('.')[-1])
+        func = getattr(self, '_handle_' + msg.get('name', 'unknown').split('.')[-1])
         if func is not None:
-            func(content.get('data', {}))
+            func(msg.get('data', {}))
 
     def _handle_connection_updated(self, data: Dict[str, Any]) -> None:
         """Handle connection_updated event."""
@@ -223,26 +212,18 @@ class Portal(object):
     @property
     def connection_url(self) -> Optional[str]:
         """Connection URL."""
-        if self._connection_info:
-            info = self._connection_info
-            host = urllib.parse.quote_plus(info.get('host', ''))
-            port = urllib.parse.quote_plus(str(info.get('port', '')))
-            user = urllib.parse.quote_plus(info.get('user', ''))
-            password = urllib.parse.quote_plus(info.get('password', ''))
-            db = urllib.parse.quote_plus(info.get('default_database', ''))
-
-            scheme = os.environ.get('SINGLESTOREDB_URL', 'https').split(':')[0]
-            creds = f'{user}:{password}@' if user else ''
-            netloc = f'{host}:{port}' if port else host
-
-            return f'{scheme}://{creds}{netloc}/{db}'
-
-        return os.environ.get('SINGLESTOREDB_URL', None)
+        try:
+            return self._connection_info['connection_url']
+        except KeyError:
+            return os.environ.get('SINGLESTOREDB_URL')
 
     @property
-    def mongo_url(self) -> Optional[str]:
-        """Mongo URL."""
-        return self._connection_info.get('kai_url')
+    def connection_url_kai(self) -> Optional[str]:
+        """Kai connectionURL."""
+        try:
+            return self._connection_info.get('connection_url_kai')
+        except KeyError:
+            return os.environ.get('SINGLESTOREDB_URL_KAI')
 
     @property
     def host(self) -> Optional[str]:

@@ -12,6 +12,7 @@ from typing import List
 from typing import Mapping
 from typing import Optional
 from typing import SupportsIndex
+from typing import Tuple
 from typing import TypeVar
 from typing import Union
 from urllib.parse import urlparse
@@ -20,6 +21,7 @@ import jwt
 
 from .. import converters
 from ..config import get_option
+from ..utils import events
 
 JSON = Union[str, List[str], Dict[str, 'JSON']]
 JSONObj = Dict[str, JSON]
@@ -117,46 +119,69 @@ class NamedList(List[T]):
             raise
 
 
+def _setup_connection_info_handler() -> Callable[[], Dict[str, Any]]:
+    """Setup connection info event handler."""
+    connection_info: Dict[str, Any] = {}
+
+    def handle_connection_info(msg: Dict[str, Any]) -> None:
+        """Handle connection info events."""
+        if msg.get('name', '') != 'singlestoredb.portal.connection_updated':
+            return
+        connection_info.update(msg.get('data', {}))
+
+    events.subscribe(handle_connection_info)
+
+    def get_env() -> List[Tuple[str, Any]]:
+        conn = {}
+        url = os.environ.get('SINGLESTOREDB_URL') or get_option('host')
+        if url:
+            urlp = urlparse(url, scheme='singlestoredb', allow_fragments=True)
+            conn = dict(
+                host=urlp.hostname or None,
+                port=urlp.port or None,
+                user=urlp.username or None,
+                password=urlp.password or None,
+                default_database=urlp.path.split('/', 1)[-1] or None,
+                connection_url=url,
+            )
+
+        return [
+            x for x in dict(
+                organization=os.environ.get('SINGLESTOREDB_ORGANIZATION') or None,
+                workspace=os.environ.get('SINGLESTOREDB_WORKSPACE') or None,
+                workspace_group=os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP') or None,
+                cluster=os.environ.get('SINGLESTOREDB_CLUSTER') or None,
+                **conn,
+            ).items() if x[1] is not None
+        ]
+
+    def get_connection_info(include_env: bool = True) -> Dict[str, Any]:
+        """Return connection info from event."""
+        return dict(*(get_env() if include_env else []), *list(connection_info.items()))
+
+    return get_connection_info
+
+
+get_connection_info = _setup_connection_info_handler()
+
+
 def get_token() -> Optional[str]:
     """Return the token for the Management API."""
-    from ..notebook import portal
-
     # See if an API key is configured
     tok = get_option('management.token')
     if tok:
         return tok
 
-    tok = portal.password
+    tok = get_connection_info().get('password')
     if tok:
-        return tok
-
-    url = os.environ.get('SINGLESTOREDB_URL')
-    if not url:
-        # See if the connection URL contains a JWT
-        url = get_option('host')
-        if not url:
-            return None
-
-    urlp = urlparse(url, scheme='singlestoredb', allow_fragments=True)
-    if urlp.password:
         try:
-            jwt.decode(urlp.password, options={'verify_signature': False})
-            return urlp.password
+            jwt.decode(tok, options={'verify_signature': False})
+            return tok
         except jwt.DecodeError:
             pass
 
     # Didn't find a key anywhere
     return None
-
-
-def get_organization() -> Optional[str]:
-    """Return the organization for the current token or environment."""
-    from ..notebook import portal
-
-    org = portal.organization_id
-    if org:
-        return org
-    return os.environ.get('SINGLESTOREDB_ORGANIZATION') or None
 
 
 def enable_http_tracing() -> None:
