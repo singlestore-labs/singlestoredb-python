@@ -117,20 +117,6 @@ class Portal(object):
         return obj.organization
 
     @property
-    def theme(self) -> Optional[str]:
-        """Theme."""
-        return self._theme_info.get('theme')
-
-    @theme.setter
-    def theme(self, name: str) -> None:
-        """Set theme."""
-        self._call_javascript(
-            'changeTheme', [name],
-            wait_on_condition=lambda: self.theme == name,  # type: ignore
-            timeout_message='timeout waiting for theme update',
-        )
-
-    @property
     def stage(self) -> obj.Stage:
         """Stage."""
         return obj.stage
