@@ -2,6 +2,7 @@
 """SingleStoreDB Cluster Management."""
 import datetime
 import functools
+import itertools
 import os
 import re
 import sys
@@ -159,7 +160,7 @@ def _setup_connection_info_handler() -> Callable[[], Dict[str, Any]]:
 
     def get_connection_info(include_env: bool = True) -> Dict[str, Any]:
         """Return connection info from event."""
-        return dict(*(get_env() if include_env else []), *connection_info)
+        return dict(itertools.chain((get_env() if include_env else []), connection_info))
 
     return get_connection_info
 
