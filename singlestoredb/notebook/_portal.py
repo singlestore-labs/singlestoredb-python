@@ -63,7 +63,10 @@ class Portal(object):
             raise ValueError(f'function names is not valid: {func}')
 
         display.display(
-            display.Javascript(f'{func}.apply(window, JSON.parse({json.dumps(args)}))'),
+            display.Javascript(
+                f'window.singlestore.portal.{func}.apply' +
+                f'(window, JSON.parse({json.dumps(args)}))',
+            ),
         )
 
         if wait_on_condition is not None:
@@ -116,7 +119,7 @@ class Portal(object):
     def theme(self, name: str) -> None:
         """Set theme."""
         self._call_javascript(
-            'window.singlestore.portal.changeTheme', [name],
+            'changeTheme', [name],
             wait_on_condition=lambda: self.theme == name,  # type: ignore
             timeout_message='timeout waiting for theme update',
         )
@@ -178,7 +181,7 @@ class Portal(object):
             id = w.id
 
         self._call_javascript(
-            'window.singlestore.portal.changeWorkspace', [id],
+            'changeWorkspace', [id],
             wait_on_condition=lambda: self.workspace_id == id,  # type: ignore
             timeout_message='timeout waiting for workspace update',
         )
@@ -263,7 +266,7 @@ class Portal(object):
     def default_database(self, name: str) -> None:
         """Set default database."""
         self._call_javascript(
-            'window.portal.singlestore.changeDefaultDatabase', [name],
+            'changeDefaultDatabase', [name],
             wait_on_condition=lambda: self.default_database == name,  # type: ignore
             timeout_message='timeout waiting for database update',
         )
