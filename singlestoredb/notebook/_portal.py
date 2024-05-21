@@ -181,10 +181,14 @@ class Portal(object):
             r'[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}',
             name_or_id, flags=re.I,
         ):
-            id = name_or_id
+            w = mgr.get_workspace(name_or_id)
         else:
             w = mgr.get_workspace_group(self.workspace_group_id).workspaces[name_or_id]
-            id = w.id
+
+        if w.state and w.state.lower() not in ['active', 'resumed']:
+            raise RuntimeError('workspace is not active')
+
+        id = w.id
 
         self._call_javascript(
             'changeWorkspace', [id],
