@@ -65,7 +65,7 @@ class Portal(object):
         display.display(
             display.Javascript(
                 f'window.singlestore.portal.{func}.apply' +
-                f'(window, JSON.parse({json.dumps(args)}))',
+                f'(window, JSON.parse({repr(json.dumps(args))}))',
             ),
         )
 
