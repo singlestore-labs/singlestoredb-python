@@ -62,12 +62,10 @@ class Portal(object):
         if not re.match(r'^[A-Z_][\w\._]*$', func, flags=re.I):
             raise ValueError(f'function names is not valid: {func}')
 
-        display.display(
-            display.Javascript(
-                f'window.singlestore.portal.{func}.apply' +
-                f'(window, JSON.parse({repr(json.dumps(args))}))',
-            ),
-        )
+        code = f'window.singlestore.portal.{func}.apply' + \
+               f'(window, JSON.parse({repr(json.dumps(args))}))',
+
+        display.display(display.Javascript(code))
 
         if wait_on_condition is not None:
             elapsed = 0.0
