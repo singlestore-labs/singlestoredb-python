@@ -1359,6 +1359,10 @@ def connect(
     results_type : str, optional
         The form of the query results: tuples, namedtuples, dicts,
         numpy, polars, pandas, arrow
+    buffered : bool, optional
+        Should the entire query result be buffered in memory? This is the default
+        behavior which allows full cursor control of the result, but does consume
+        more memory.
     results_format : str, optional
         Deprecated. This option has been renamed to results_type.
     program_name : str, optional

@@ -7,6 +7,7 @@ import urllib.parse
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import List
 from typing import Optional
 
 from . import _objects as obj
@@ -46,30 +47,23 @@ class Portal(object):
     def __repr__(self) -> str:
         return str(self)
 
-    def _post_message(
+    def _call_javascript(
         self,
-        command: str,
-        data: Dict[str, Any],
+        func: str,
+        args: Optional[List[Any]] = None,
         wait_on_condition: Optional[Callable[[], bool]] = None,
-        timeout_message: str = 'timed out waiting for message',
+        timeout_message: str = 'timed out waiting on condition',
         wait_interval: float = 0.2,
         timeout: float = 5.0,
     ) -> None:
-        if not has_ipython or not data:
+        if not has_ipython or not func:
             return
 
-        msg = repr(
-            json.dumps(
-                dict(
-                    type='command',
-                    name=f'singlestore.portal.{command}',
-                    data=data,
-                ),
-            ),
-        )
+        if not re.match(r'^[A-Z_][\w\._]*$', func, flags=re.I):
+            raise ValueError(f'function names is not valid: {func}')
 
         display.display(
-            display.Javascript(f'window.postMessage({msg}, window.location.origin);'),
+            display.Javascript(f'{func}.apply(window, JSON.parse({json.dumps(args)}))'),
         )
 
         if wait_on_condition is not None:
@@ -121,8 +115,8 @@ class Portal(object):
     @theme.setter
     def theme(self, name: str) -> None:
         """Set theme."""
-        self._post_message(
-            'update_theme', dict(theme=name),
+        self._call_javascript(
+            'window.singlestore.portal.changeTheme', [name],
             wait_on_condition=lambda: self.theme == name,  # type: ignore
             timeout_message='timeout waiting for theme update',
         )
@@ -183,8 +177,8 @@ class Portal(object):
             w = mgr.get_workspace_group(self.workspace_group_id).workspaces[name_or_id]
             id = w.id
 
-        self._post_message(
-            'update_connection', dict(workspace=id),
+        self._call_javascript(
+            'window.singlestore.portal.changeWorkspace', [id],
             wait_on_condition=lambda: self.workspace_id == id,  # type: ignore
             timeout_message='timeout waiting for workspace update',
         )
@@ -268,8 +262,8 @@ class Portal(object):
     @default_database.setter
     def default_database(self, name: str) -> None:
         """Set default database."""
-        self._post_message(
-            'update_connection', dict(database=name),
+        self._call_javascript(
+            'window.portal.singlestore.changeDefaultDatabase', [name],
             wait_on_condition=lambda: self.default_database == name,  # type: ignore
             timeout_message='timeout waiting for database update',
         )
