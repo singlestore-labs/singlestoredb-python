@@ -2,6 +2,7 @@
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import Set
 
 try:
     from IPython import get_ipython
@@ -10,7 +11,7 @@ except ImportError:
     has_ipython = False
 
 
-_subscribers: set[Callable[[Dict[str, Any]], None]] = set()
+_subscribers: Set[Callable[[Dict[str, Any]], None]] = set()
 
 
 def subscribe(func: Callable[[Dict[str, Any]], None]) -> None:
