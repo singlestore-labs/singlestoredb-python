@@ -93,11 +93,11 @@ class Portal(object):
 
     def _handle_connection_updated(self, data: Dict[str, Any]) -> None:
         """Handle connection_updated event."""
-        self._connection_info.update(data)
+        self._connection_info = dict(data)
 
     def _handle_theme_updated(self, data: Dict[str, Any]) -> None:
         """Handle theme_updated event."""
-        self._theme_info.update(data)
+        self._theme_info = dict(data)
 
     def _handle_unknown(self, data: Dict[str, Any]) -> None:
         """Handle unknown events."""

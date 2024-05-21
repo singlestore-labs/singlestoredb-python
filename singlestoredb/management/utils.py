@@ -121,13 +121,15 @@ class NamedList(List[T]):
 
 def _setup_connection_info_handler() -> Callable[[], Dict[str, Any]]:
     """Setup connection info event handler."""
-    connection_info: Dict[str, Any] = {}
+
+    connection_info: List[Tuple[str, Any]] = []
 
     def handle_connection_info(msg: Dict[str, Any]) -> None:
         """Handle connection info events."""
+        nonlocal connection_info
         if msg.get('name', '') != 'singlestoredb.portal.connection_updated':
             return
-        connection_info.update(msg.get('data', {}))
+        connection_info = list(msg.get('data', {}).items())
 
     events.subscribe(handle_connection_info)
 
@@ -157,7 +159,7 @@ def _setup_connection_info_handler() -> Callable[[], Dict[str, Any]]:
 
     def get_connection_info(include_env: bool = True) -> Dict[str, Any]:
         """Return connection info from event."""
-        return dict(*(get_env() if include_env else []), *list(connection_info.items()))
+        return dict(*(get_env() if include_env else []), *connection_info)
 
     return get_connection_info
 
