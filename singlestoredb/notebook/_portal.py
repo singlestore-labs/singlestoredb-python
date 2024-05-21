@@ -63,7 +63,7 @@ class Portal(object):
             raise ValueError(f'function names is not valid: {func}')
 
         code = f'window.singlestore.portal.{func}.apply' + \
-               f'(window, JSON.parse({repr(json.dumps(args))}))',
+               f'(window, JSON.parse({repr(json.dumps(args))}))'
 
         display.display(display.Javascript(code))
 
