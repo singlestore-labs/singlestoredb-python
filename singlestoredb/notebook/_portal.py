@@ -60,10 +60,18 @@ class Portal(object):
             return
 
         if not re.match(r'^[A-Z_][\w\._]*$', func, flags=re.I):
-            raise ValueError(f'function names is not valid: {func}')
+            raise ValueError(f'function name is not valid: {func}')
 
-        code = f'window.singlestore.portal.{func}.apply' + \
-               f'(window, JSON.parse({repr(json.dumps(args))}))'
+        args = args if args else []
+
+        code = f'''
+            if (window.singlestore && window.singlestore.portal) {{
+                window.singlestore.portal.{func}.apply(
+                    window,
+                    JSON.parse({repr(json.dumps(args))})
+                )
+            }}
+        '''
 
         display.display(display.Javascript(code))
 
