@@ -26,7 +26,7 @@ def subscribe(func: Callable[[Dict[str, Any]], None]) -> None:
     _subscribers.add(func)
 
 
-def _event_handler(self: Any, stream: Any, ident: Any, msg: Dict[str, Any]) -> None:
+def _event_handler(stream: Any, ident: Any, msg: Dict[str, Any]) -> None:
     """Handle request on the control stream."""
     if not _subscribers or not isinstance(msg, dict):
         return
