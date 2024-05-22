@@ -13,6 +13,8 @@ import struct
 import sys
 import traceback
 import warnings
+from typing import Any
+from typing import Dict
 from typing import Iterable
 
 try:
@@ -21,6 +23,7 @@ except (ImportError, ModuleNotFoundError):
     _singlestoredb_accel = None
 
 from . import _auth
+from .. import utils
 
 from .charset import charset_by_name, charset_by_id
 from .constants import CLIENT, COMMAND, CR, ER, FIELD_TYPE, SERVER_STATUS
@@ -617,11 +620,17 @@ class Connection(BaseConnection):
         self._in_sync = False
         self._track_env = bool(track_env) or self.host == 'singlestore.com'
         self._enable_extended_data_types = enable_extended_data_types
+        self._connection_info = {}
+        utils.subscribe(self._handle_event)
 
         if defer_connect or self._track_env:
             self._sock = None
         else:
             self.connect()
+
+    def _handle_event(self, data: Dict[str, Any]) -> None:
+        if data.get('name', '') == 'singlestore.portal.connection_updated':
+            self._connection_info = dict(data)
 
     @property
     def messages(self):
@@ -973,9 +982,11 @@ class Connection(BaseConnection):
         if not self._track_env:
             return
 
-        url = os.environ.get('SINGLESTOREDB_URL')
+        url = self._connection_info.get('connection_url')
         if not url:
-            return
+            url = os.environ.get('SINGLESTOREDB_URL')
+            if not url:
+                return
 
         out = {}
         urlp = connection._parse_url(url)
