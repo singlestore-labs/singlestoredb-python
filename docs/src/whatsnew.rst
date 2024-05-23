@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.3.1 - May 23, 2024
+---------------------
+* Fix ``encoding_errors=`` option
+
 v1.3.0 - May 10, 2024
 ---------------------
 * Add ability to use iterables and queues as the source of ``LOCAL INFILE``
