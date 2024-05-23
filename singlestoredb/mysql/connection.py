@@ -1858,6 +1858,7 @@ class MySQLResultSV(MySQLResult):
                 parse_json=connection.parse_json,
                 invalid_values=connection.invalid_values,
                 unbuffered=unbuffered,
+                encoding_errors=connection.encoding_errors,
             ).items() if v is not UNSET
         }
         self._read_rowdata_packet = functools.partial(
