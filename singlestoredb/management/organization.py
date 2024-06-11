@@ -8,6 +8,7 @@ from typing import Union
 
 from ..exceptions import ManagementError
 from .manager import Manager
+from .job import JobsManager
 from .utils import vars_to_str
 
 
@@ -106,8 +107,7 @@ class Secret(object):
     def __repr__(self) -> str:
         """Return string representation."""
         return str(self)
-
-
+    
 class Organization(object):
     """
     Organization in SingleStoreDB Cloud portal.
@@ -190,3 +190,9 @@ class Organization(object):
         )
         out._manager = manager
         return out
+    
+    @property
+    def jobs(self) -> JobsManager:
+        """Manage scheduled notebook jobs."""
+        return JobsManager(self, self._manager)
+
