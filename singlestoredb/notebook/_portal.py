@@ -26,6 +26,7 @@ class Portal(object):
 
     def __init__(self) -> None:
         self._connection_info: Dict[str, Any] = {}
+        self._authentication_info: Dict[str, Any] = {}
         self._theme_info: Dict[str, Any] = {}
         events.subscribe(self._request)
 
@@ -94,6 +95,10 @@ class Portal(object):
     def _handle_connection_updated(self, data: Dict[str, Any]) -> None:
         """Handle connection_updated event."""
         self._connection_info = dict(data)
+
+    def _handle_authentication_updated(self, data: Dict[str, Any]) -> None:
+        """Handle authentication_updated event."""
+        self._authentication_info = dict(data)
 
     def _handle_theme_updated(self, data: Dict[str, Any]) -> None:
         """Handle theme_updated event."""
@@ -238,7 +243,7 @@ class Portal(object):
     def user(self) -> Optional[str]:
         """Username."""
         try:
-            return self._connection_info['user']
+            return self._authentication_info['user']
         except KeyError:
             return self._parse_url()['user']
 
@@ -246,7 +251,7 @@ class Portal(object):
     def password(self) -> Optional[str]:
         """Password."""
         try:
-            return self._connection_info['password']
+            return self._authentication_info['password']
         except KeyError:
             return self._parse_url()['password']
 
