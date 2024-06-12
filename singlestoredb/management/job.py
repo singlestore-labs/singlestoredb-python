@@ -5,20 +5,26 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from enum import Enum
+from enum import StrEnum
 
 from .utils import to_datetime
 from .manager import Manager
 
 
-
-class TargetType(Enum):
+class TargetType(StrEnum):
     WORKSPACE = "Workspace"
     CLUSTER = "Cluster"
     VIRTUAL_WORKSPACE = "VirtualWorkspace"
 
+    @classmethod
+    def from_str(cls, s):
+        try:
+            return cls[s.upper()]
+        except KeyError:
+            return None
 
-class Status(Enum):
+
+class Status(StrEnum):
     UNKNOWN = "Unknown"
     SCHEDULED = "Scheduled"
     RUNNING = "Running"
@@ -26,6 +32,13 @@ class Status(Enum):
     FAILED = "Failed"
     ERROR = "Error"
     CANCELED = "Canceled"
+
+    @classmethod
+    def from_str(cls, s):
+        try:
+            return cls[s.upper()]
+        except KeyError:
+            return cls.UNKNOWN
 
 
 class ExecutionMetadata(object):
@@ -65,7 +78,7 @@ class ExecutionMetadata(object):
         out = cls(
             avg_duration_in_seconds=int(obj['avgDurationInSeconds']),
             max_duration_in_seconds=int(obj['maxDurationInSeconds']),
-            status=obj['status'],
+            status=Status.from_str(obj['status']),
             count=int(obj['count']),
         )
 
@@ -190,7 +203,7 @@ class TargetConfig(object):
                 database_name=obj.get('databaseName'),
                 resume_target=bool(obj.get('resumeTarget')),
                 target_id=obj.get('targetID'),
-                target_type=obj.get('targetType'),
+                target_type=TargetType.from_str(obj.get('targetType')),
             )
 
             return out
@@ -213,9 +226,9 @@ class Job(object):
     completed_executions_count: int
     terminated_at: datetime.datetime
     job_metadata : List[ExecutionMetadata]
-    executionConfig: ExecutionConfig
+    execution_config: ExecutionConfig
     schedule: Schedule
-    targetConfig: Optional[TargetConfig]
+    target_config: Optional[TargetConfig]
 
     def __init__(
         self,
@@ -228,9 +241,9 @@ class Job(object):
         completed_executions_count: int,
         terminated_at: datetime.datetime,
         job_metadata: List[ExecutionMetadata],
-        executionConfig: ExecutionConfig,
+        execution_config: ExecutionConfig,
         schedule: Schedule,
-        targetConfig: Optional[TargetConfig],
+        target_config: Optional[TargetConfig],
     ):
         self.job_id = job_id
         self.name = name
@@ -241,9 +254,9 @@ class Job(object):
         self.completed_executions_count = completed_executions_count
         self.terminated_at = terminated_at
         self.job_metadata = job_metadata
-        self.executionConfig = executionConfig
+        self.execution_config = execution_config
         self.schedule = schedule
-        self.targetConfig = targetConfig
+        self.target_config = target_config
 
     @classmethod
     def from_dict(cls, obj: Dict[str, Any], manager: Manager) -> 'Job':
@@ -271,9 +284,9 @@ class Job(object):
             completed_executions_count=int(obj['completedExecutionsCount']),
             terminated_at=to_datetime(obj['terminatedAt']),
             job_metadata=[ExecutionMetadata.from_dict(x) for x in obj['jobMetadata']],
-            executionConfig=ExecutionConfig.from_dict(obj['executionConfig']),
+            execution_config=ExecutionConfig.from_dict(obj['executionConfig']),
             schedule=Schedule.from_dict(obj['schedule']),
-            targetConfig=TargetConfig.from_dict(obj.get('targetConfig'))
+            target_config=TargetConfig.from_dict(obj.get('targetConfig'))
         )
 
         return out
@@ -308,8 +321,8 @@ class JobsManager(object):
         res = self._post('jobs', json=dict(
             name = name,
             description = description,
-            project_id = project_id,
-            pool_name = pool_name, #still does not exist in the API
+            projectID = project_id,
+            poolName = pool_name, #still does not exist in the API
             executionConfig = dict(
                 createSnapshot = create_snapshot,
                 notebookPath = notebook_path
