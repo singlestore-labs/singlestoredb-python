@@ -120,19 +120,19 @@ class NamedList(List[T]):
             raise
 
 
-def _setup_connection_info_handler() -> Callable[[], Dict[str, Any]]:
-    """Setup connection info event handler."""
+def _setup_authentication_info_handler() -> Callable[..., Dict[str, Any]]:
+    """Setup authentication info event handler."""
 
-    connection_info: List[Tuple[str, Any]] = []
+    authentication_info: List[Tuple[str, Any]] = []
 
-    def handle_connection_info(msg: Dict[str, Any]) -> None:
-        """Handle connection info events."""
-        nonlocal connection_info
-        if msg.get('name', '') != 'singlestoredb.portal.connection_updated':
+    def handle_authentication_info(msg: Dict[str, Any]) -> None:
+        """Handle authentication info events."""
+        nonlocal authentication_info
+        if msg.get('name', '') != 'singlestore.portal.authentication_updated':
             return
-        connection_info = list(msg.get('data', {}).items())
+        authentication_info = list(msg.get('data', {}).items())
 
-    events.subscribe(handle_connection_info)
+    events.subscribe(handle_authentication_info)
 
     def get_env() -> List[Tuple[str, Any]]:
         conn = {}
@@ -140,32 +140,29 @@ def _setup_connection_info_handler() -> Callable[[], Dict[str, Any]]:
         if url:
             urlp = urlparse(url, scheme='singlestoredb', allow_fragments=True)
             conn = dict(
-                host=urlp.hostname or None,
-                port=urlp.port or None,
                 user=urlp.username or None,
                 password=urlp.password or None,
-                default_database=urlp.path.split('/', 1)[-1] or None,
-                connection_url=url,
             )
 
         return [
             x for x in dict(
-                organization=os.environ.get('SINGLESTOREDB_ORGANIZATION') or None,
-                workspace=os.environ.get('SINGLESTOREDB_WORKSPACE') or None,
-                workspace_group=os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP') or None,
-                cluster=os.environ.get('SINGLESTOREDB_CLUSTER') or None,
                 **conn,
             ).items() if x[1] is not None
         ]
 
-    def get_connection_info(include_env: bool = True) -> Dict[str, Any]:
-        """Return connection info from event."""
-        return dict(itertools.chain((get_env() if include_env else []), connection_info))
+    def get_authentication_info(include_env: bool = True) -> Dict[str, Any]:
+        """Return authentication info from event."""
+        return dict(
+            itertools.chain(
+                (get_env() if include_env else []),
+                authentication_info,
+            ),
+        )
 
-    return get_connection_info
+    return get_authentication_info
 
 
-get_connection_info = _setup_connection_info_handler()
+get_authentication_info = _setup_authentication_info_handler()
 
 
 def get_token() -> Optional[str]:
@@ -175,7 +172,7 @@ def get_token() -> Optional[str]:
     if tok:
         return tok
 
-    tok = get_connection_info().get('password')
+    tok = get_authentication_info(include_env=True).get('password')
     if tok:
         try:
             jwt.decode(tok, options={'verify_signature': False})
