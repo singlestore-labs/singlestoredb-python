@@ -134,6 +134,21 @@ def _setup_authentication_info_handler() -> Callable[..., Dict[str, Any]]:
 
     events.subscribe(handle_authentication_info)
 
+    def handle_connection_info(msg: Dict[str, Any]) -> None:
+        """Handle connection info events."""
+        nonlocal authentication_info
+        if msg.get('name', '') != 'singlestore.portal.connection_updated':
+            return
+        data = msg.get('data', {})
+        out = {}
+        if 'user' in data:
+            out['user'] = data['user']
+        if 'password' in data:
+            out['password'] = data['password']
+        authentication_info = list(out.items())
+
+    events.subscribe(handle_authentication_info)
+
     def get_env() -> List[Tuple[str, Any]]:
         conn = {}
         url = os.environ.get('SINGLESTOREDB_URL') or get_option('host')
