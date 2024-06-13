@@ -617,6 +617,7 @@ class Connection(BaseConnection):
                 if k not in self._connect_attrs:
                     self._connect_attrs[k] = v
 
+        self._is_committable = True
         self._in_sync = False
         self._track_env = bool(track_env) or self.host == 'singlestore.com'
         self._enable_extended_data_types = enable_extended_data_types
@@ -775,7 +776,7 @@ class Connection(BaseConnection):
 
         """
         log_query('COMMIT')
-        if self.host == 'singlestore.com':
+        if not self.is_committable or self.host == 'singlestore.com':
             return
         self._execute_command(COMMAND.COM_QUERY, 'COMMIT')
         self._read_ok_packet()
@@ -789,7 +790,7 @@ class Connection(BaseConnection):
 
         """
         log_query('ROLLBACK')
-        if self.host == 'singlestore.com':
+        if not self.is_committable or self.host == 'singlestore.com':
             return
         self._execute_command(COMMAND.COM_QUERY, 'ROLLBACK')
         self._read_ok_packet()
@@ -867,9 +868,11 @@ class Connection(BaseConnection):
         #     print("DEBUG: sending query:", sql)
         handler = fusion.get_handler(sql)
         if handler is not None:
+            self._is_committable = False
             self._result = fusion.execute(self, sql, handler=handler)
             self._affected_rows = self._result.affected_rows
         else:
+            self._is_committable = True
             if isinstance(sql, str):
                 sql = sql.encode(self.encoding, 'surrogateescape')
             self._local_infile_stream = infile_stream
