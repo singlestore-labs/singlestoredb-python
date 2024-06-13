@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.4.0 - June 13, 2024
+----------------------
+* Add `ai` module
+
 v1.3.1 - May 23, 2024
 ---------------------
 * Fix ``encoding_errors=`` option
