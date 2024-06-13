@@ -304,7 +304,7 @@ def snake_to_camel(s: Optional[str], cap_first: bool = False) -> Optional[str]:
     """Convert snake-case to camel-case."""
     if s is None:
         return None
-    out = re.sub(r'_[A-Za-z]', _upper_match, s.lower())
+    out = re.sub(r'_([A-Za-z])', _upper_match, s.lower())
     if cap_first and out:
         return out[0].upper() + out[1:]
     return out
