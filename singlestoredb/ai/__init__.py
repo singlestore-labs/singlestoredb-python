@@ -1,1 +1,1 @@
-from .embeddings import SingleStoreEmbeddings
+from .embeddings import SingleStoreEmbeddings  # noqa: F401
