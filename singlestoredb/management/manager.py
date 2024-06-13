@@ -119,7 +119,6 @@ class Manager(object):
         # Refresh the JWT as needed
         if self._is_jwt:
             self._sess.headers.update({'Authorization': f'Bearer {get_token()}'})
-            print('JWT', get_token())
         return getattr(self._sess, method.lower())(
             urljoin(self._base_url, path), *args, **kwargs,
         )
