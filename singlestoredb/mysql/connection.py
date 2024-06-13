@@ -777,6 +777,7 @@ class Connection(BaseConnection):
         """
         log_query('COMMIT')
         if not self._is_committable or self.host == 'singlestore.com':
+            self._is_committable = True
             return
         self._execute_command(COMMAND.COM_QUERY, 'COMMIT')
         self._read_ok_packet()
@@ -791,6 +792,7 @@ class Connection(BaseConnection):
         """
         log_query('ROLLBACK')
         if not self._is_committable or self.host == 'singlestore.com':
+            self._is_committable = True
             return
         self._execute_command(COMMAND.COM_QUERY, 'ROLLBACK')
         self._read_ok_packet()
