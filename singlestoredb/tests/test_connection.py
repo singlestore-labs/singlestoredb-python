@@ -1849,8 +1849,6 @@ class TestConnection(unittest.TestCase):
 
         bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
-        print(row)
-
         assert row['id'] == 0, row['id']
         assert row['tinyint'] == 80, row['tinyint']
         assert row['unsigned_tinyint'] == 85, row['unsigned_tinyint']
