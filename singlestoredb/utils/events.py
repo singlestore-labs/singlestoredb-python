@@ -36,6 +36,8 @@ def _event_handler(stream: Any, ident: Any, msg: Dict[str, Any]) -> None:
     if content.get('type', '') != 'event':
         return
 
+    print('EVENT', msg)
+
     for func in _subscribers:
         func(content)
 
