@@ -15,6 +15,7 @@ from .utils import get_cluster_id
 from .utils import get_database_name
 from .utils import get_workspace_id
 from .utils import is_virtual_workspace
+from .utils import from_datetime
 
 
 class TargetType(Enum):
@@ -343,7 +344,7 @@ class JobsManager(object):
             ),
             schedule=dict(
                 executionMode='Once',
-                startAt=datetime.datetime.now(),
+                startAt=from_datetime(datetime.datetime.now()),
             ),
             targetConfig=target_config,
         )  # type: Dict[str, Any]
