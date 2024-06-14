@@ -134,13 +134,13 @@ class ExecutionConfig(object):
 
 class Schedule(object):
 
-    execution_interval_in_minutes: int
+    execution_interval_in_minutes: Optional[int]
     start_at: Union[str, datetime.datetime]
     mode: Optional[str]
 
     def __init__(
         self,
-        execution_interval_in_minutes: int,
+        execution_interval_in_minutes: Optional[int],
         start_at: Union[str, datetime.datetime],
         mode: Optional[str],
     ):
@@ -164,7 +164,7 @@ class Schedule(object):
 
         """
         out = cls(
-            execution_interval_in_minutes=int(obj['executionIntervalInMinutes']),
+            execution_interval_in_minutes=int(obj['executionIntervalInMinutes']) if 'executionIntervalInMinutes' in obj else None,
             start_at=obj['startAt'],
             mode=obj.get('mode'),
         )
