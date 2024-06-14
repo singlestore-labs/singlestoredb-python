@@ -343,7 +343,7 @@ class JobsManager(object):
                 notebookPath=notebook_path,
             ),
             schedule=dict(
-                executionMode='Once',
+                mode='Once',
                 startAt=from_datetime(datetime.datetime.now()),
             ),
             targetConfig=target_config,
