@@ -393,8 +393,7 @@ class JobsManager(object):
             target_config['targetType'] = TargetType.CLUSTER.value
 
         database_name = get_database_name()
-        if database_name is not None:
-            print("Db: " + database_name)
+        if database_name is not None and database_name != '':
             target_config['databaseName'] = database_name
 
         job_run_json = dict(
