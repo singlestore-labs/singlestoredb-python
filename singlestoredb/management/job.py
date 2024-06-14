@@ -11,11 +11,12 @@ from typing import Union
 from ..exceptions import ManagementError
 from .manager import Manager
 from .utils import camel_to_snake
+from .utils import from_datetime
 from .utils import get_cluster_id
 from .utils import get_database_name
 from .utils import get_workspace_id
 from .utils import is_virtual_workspace
-from .utils import from_datetime
+from .utils import vars_to_str
 
 
 class TargetType(Enum):
@@ -93,6 +94,14 @@ class ExecutionMetadata(object):
 
         return out
 
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
 
 class ExecutionConfig(object):
 
@@ -133,6 +142,14 @@ class ExecutionConfig(object):
 
         return out
 
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
 
 class Schedule(object):
 
@@ -172,6 +189,14 @@ class Schedule(object):
         )
 
         return out
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
 
 
 class TargetConfig(object):
@@ -216,6 +241,14 @@ class TargetConfig(object):
         )
 
         return out
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
 
 
 class Job(object):
@@ -299,6 +332,14 @@ class Job(object):
         )
 
         return out
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
 
 
 class JobsManager(object):
