@@ -14,7 +14,7 @@ from . import result
 from .result import FusionSQLResult
 
 
-API_URL = 'https://localhost:9001/public'
+API_URL = 'http://localhost:9001/public'
 
 
 def pass_through(x: Any) -> Any:
