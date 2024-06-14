@@ -135,8 +135,8 @@ class ExecutionConfig(object):
 
         """
         out = cls(
-            create_snapshot=obj.get('notebookPath'),
-            max_duration_in_mins=obj.get('notebookPath'),
+            create_snapshot=obj.get('createSnapshot'),
+            max_duration_in_mins=obj.get('maxAllowedExecutionDurationInMinutes'),
             notebook_path=obj.get('notebookPath'),
         )
 
