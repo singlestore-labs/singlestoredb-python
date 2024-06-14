@@ -394,6 +394,7 @@ class JobsManager(object):
 
         database_name = get_database_name()
         if database_name is not None:
+            print(database_name)
             target_config['databaseName'] = database_name
 
         job_run_json = dict(
