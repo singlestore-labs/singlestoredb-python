@@ -24,7 +24,9 @@ class TargetType(Enum):
     VIRTUAL_WORKSPACE = 'VirtualWorkspace'
 
     @classmethod
-    def from_str(cls, s: str) -> Optional['TargetType']:
+    def from_str(cls, s: Optional[str]) -> Optional['TargetType']:
+        if s is None:
+            return None
         try:
             return cls[str(camel_to_snake(s)).upper()]
         except KeyError:
@@ -124,8 +126,8 @@ class ExecutionConfig(object):
 
         """
         out = cls(
-            create_snapshot=bool(obj['createSnapshot']) if 'createSnapshot' in obj else None,
-            max_duration_in_mins=int(obj['maxAllowedExecutionDurationInMinutes']) if 'maxAllowedExecutionDurationInMinutes' in obj else None,
+            create_snapshot=obj.get('notebookPath'),
+            max_duration_in_mins=obj.get('notebookPath'),
             notebook_path=obj.get('notebookPath'),
         )
 
@@ -164,7 +166,7 @@ class Schedule(object):
 
         """
         out = cls(
-            execution_interval_in_minutes=int(obj['executionIntervalInMinutes']) if 'executionIntervalInMinutes' in obj else None,
+            execution_interval_in_minutes=obj.get('executionIntervalInMinutes'),
             start_at=obj['startAt'],
             mode=obj.get('mode'),
         )
@@ -208,9 +210,9 @@ class TargetConfig(object):
         """
         out = cls(
             database_name=obj.get('databaseName'),
-            resume_target=bool(obj['resumeTarget']) if 'resumeTarget' in obj else None,
+            resume_target=obj.get('resumeTarget'),
             target_id=obj.get('targetID'),
-            target_type=TargetType.from_str(obj['targetType']) if 'targetType' in obj else None,
+            target_type=TargetType.from_str(obj.get('targetType')),
         )
 
         return out
