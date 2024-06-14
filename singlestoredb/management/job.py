@@ -353,6 +353,7 @@ class JobsManager(object):
             job_run_json['poolName'] = pool_name
 
         res = self._manager._post('jobs', json=job_run_json).json()
+        print(res)
         return Job.from_dict(res)
 
     def wait(self) -> None:
