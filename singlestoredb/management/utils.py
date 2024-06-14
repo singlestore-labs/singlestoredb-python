@@ -215,6 +215,26 @@ def get_token() -> Optional[str]:
     return None
 
 
+def get_cluster_id() -> Optional[str]:
+    """Return the cluster id for the current token or environment."""
+    return os.environ.get('SINGLESTOREDB_CLUSTER')
+
+
+def is_virtual_workspace() -> bool:
+    """Return True if current workspace is virtual/shared."""
+    return os.environ.get('SINGLESTOREDB_IS_VIRTUAL') == '1'
+
+
+def get_workspace_id() -> Optional[str]:
+    """Return the workspace id for the current token or environment."""
+    return os.environ.get('SINGLESTOREDB_WORKSPACE')
+
+
+def get_database_name() -> Optional[str]:
+    """Return the default database name for the current token or environment."""
+    return os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE')
+
+
 def enable_http_tracing() -> None:
     """Enable tracing of HTTP requests."""
     import logging
