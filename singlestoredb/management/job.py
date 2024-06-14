@@ -32,6 +32,14 @@ class TargetType(Enum):
             return cls[str(camel_to_snake(s)).upper()]
         except KeyError:
             return None
+        
+    def __str__(self) -> str:
+        """Return string representation."""
+        return self.value
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
 
 
 class Status(Enum):
@@ -49,6 +57,14 @@ class Status(Enum):
             return cls[str(camel_to_snake(s)).upper()]
         except KeyError:
             return cls.UNKNOWN
+        
+    def __str__(self) -> str:
+        """Return string representation."""
+        return self.value
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
 
 
 class ExecutionMetadata(object):
