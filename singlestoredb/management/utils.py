@@ -271,6 +271,30 @@ def to_datetime(
     return out
 
 
+def to_datetime_strict(
+    obj: Optional[Union[str, datetime.datetime]],
+) -> datetime.datetime:
+    """Convert string to datetime."""
+    if not obj:
+        raise TypeError('not possible to convert None to datetime')
+    if isinstance(obj, datetime.datetime):
+        return obj
+    if obj == '0001-01-01T00:00:00Z':
+        raise ValueError('not possible to convert 0001-01-01T00:00:00Z to datetime')
+    obj = obj.replace('Z', '')
+    # Fix datetimes with truncated zeros
+    if '.' in obj:
+        obj, micros = obj.split('.', 1)
+        micros = micros + '0' * (6 - len(micros))
+        obj = obj + '.' + micros
+    out = converters.datetime_fromisoformat(obj)
+    if isinstance(out, str):
+        raise ValueError('value cannot be str')
+    if isinstance(out, datetime.date):
+        return datetime.datetime(out.year, out.month, out.day)
+    return out
+
+
 def from_datetime(
     obj: Union[str, datetime.datetime],
 ) -> Optional[str]:
