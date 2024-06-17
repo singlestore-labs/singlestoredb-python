@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """SingleStoreDB Cloud Scheduled Notebook Job."""
 import datetime
+import threading
 from enum import Enum
 from typing import Any
 from typing import Dict
@@ -17,6 +18,7 @@ from .utils import get_database_name
 from .utils import get_workspace_id
 from .utils import is_virtual_workspace
 from .utils import vars_to_str
+from .utils import to_datetime_strict
 
 
 class TargetType(Enum):
@@ -170,13 +172,13 @@ class ExecutionConfig(object):
 class Schedule(object):
 
     execution_interval_in_minutes: Optional[int]
-    start_at: Union[str, datetime.datetime]
+    start_at: datetime.datetime
     mode: Optional[str]
 
     def __init__(
         self,
         execution_interval_in_minutes: Optional[int],
-        start_at: Union[str, datetime.datetime],
+        start_at: datetime.datetime,
         mode: Optional[str],
     ):
         self.execution_interval_in_minutes = execution_interval_in_minutes
@@ -200,7 +202,7 @@ class Schedule(object):
         """
         out = cls(
             execution_interval_in_minutes=obj.get('executionIntervalInMinutes'),
-            start_at=obj['startAt'],
+            start_at=to_datetime_strict(obj['startAt']),
             mode=obj.get('mode'),
         )
 
@@ -267,7 +269,7 @@ class TargetConfig(object):
         return str(self)
 
 
-class Job(object):
+class Job(object): # TODO: Check which fields are optional
     """
     Scheduled Notebook Job definition.
 
@@ -279,10 +281,10 @@ class Job(object):
     name: str
     description: str
     project_id: str
-    created_at: Union[str, datetime.datetime]
+    created_at: datetime.datetime
     enqueued_by: str
     completed_executions_count: int
-    terminated_at: Union[str, datetime.datetime]
+    terminated_at: datetime.datetime
     job_metadata: List[ExecutionMetadata]
     execution_config: ExecutionConfig
     schedule: Schedule
@@ -294,10 +296,10 @@ class Job(object):
         name: str,
         description: str,
         project_id: str,
-        created_at: Union[str, datetime.datetime],
+        created_at: datetime.datetime,
         enqueued_by: str,
         completed_executions_count: int,
-        terminated_at: Union[str, datetime.datetime],
+        terminated_at: datetime.datetime,
         job_metadata: List[ExecutionMetadata],
         execution_config: ExecutionConfig,
         schedule: Schedule,
@@ -337,10 +339,10 @@ class Job(object):
             name=obj['name'],
             description=obj['description'],
             project_id=obj['projectID'],
-            created_at=obj['createdAt'],
+            created_at=to_datetime_strict(obj['createdAt']),
             enqueued_by=obj['enqueuedBy'],
             completed_executions_count=int(obj['completedExecutionsCount']),
-            terminated_at=obj['terminatedAt'],
+            terminated_at=to_datetime_strict(obj['terminatedAt']),
             job_metadata=[ExecutionMetadata.from_dict(x) for x in obj['jobMetadata']],
             execution_config=ExecutionConfig.from_dict(obj['executionConfig']),
             schedule=Schedule.from_dict(obj['schedule']),
@@ -415,6 +417,21 @@ class JobsManager(object):
         print(res)
         return Job.from_dict(res)
 
-    def wait(self) -> None:
-        # TODO: Implement this
-        pass
+    def wait(self, jobs: List[Union[str, Job]]) -> None:
+        for job in jobs:
+            self.wait_for_job(job)
+
+    def wait_for_job(self, job: Union[str, Job]) -> None:
+        if isinstance(job, str):
+            job_id = job
+        else:
+            job_id = job.job_id
+
+        while True:
+            res = self._manager._get(f'jobs/{job_id}').json()
+            job = Job.from_dict(res)
+            if job.schedule.mode == 'Once' and job.completed_executions_count > 0:
+                return
+            if job.schedule.mode == 'Recurring':
+                raise ValueError('Cannot wait for recurring job')
+            threading.sleep(1)
