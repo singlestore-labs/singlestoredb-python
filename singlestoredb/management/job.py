@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """SingleStoreDB Cloud Scheduled Notebook Job."""
 import datetime
-import threading
+import time
 from enum import Enum
 from typing import Any
 from typing import Dict
@@ -446,4 +446,4 @@ class JobsManager(object):
             if job.schedule.mode == 'Recurring':
                 raise ValueError(f'Cannot wait for recurring job {job_id}')
             print(f"sleeping for job {job_id}")
-            threading.sleep(1)
+            time.sleep(1)
