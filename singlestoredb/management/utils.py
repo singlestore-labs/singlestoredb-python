@@ -268,6 +268,7 @@ def to_datetime(
     if isinstance(out, str):
         return None
     if isinstance(out, datetime.date):
+        print("entrei aqui")
         return datetime.datetime(out.year, out.month, out.day)
     return out
 
@@ -293,6 +294,7 @@ def to_datetime_strict(
     if isinstance(out, str):
         raise ValueError('value cannot be str')
     if isinstance(out, datetime.date):
+        print("entrei aqui")
         return datetime.datetime(out.year, out.month, out.day)
     return out
 
