@@ -280,7 +280,6 @@ class Job(object): # TODO: Check which fields are optional
     job_id: str
     name: str
     description: str
-    project_id: str
     created_at: datetime.datetime
     enqueued_by: str
     completed_executions_count: int
@@ -295,7 +294,6 @@ class Job(object): # TODO: Check which fields are optional
         job_id: str,
         name: str,
         description: str,
-        project_id: str,
         created_at: datetime.datetime,
         enqueued_by: str,
         completed_executions_count: int,
@@ -308,7 +306,6 @@ class Job(object): # TODO: Check which fields are optional
         self.job_id = job_id
         self.name = name
         self.description = description
-        self.project_id = project_id
         self.created_at = created_at
         self.enqueued_by = enqueued_by
         self.completed_executions_count = completed_executions_count
@@ -338,7 +335,6 @@ class Job(object): # TODO: Check which fields are optional
             job_id=obj['jobID'],
             name=obj['name'],
             description=obj['description'],
-            project_id=obj['projectID'],
             created_at=to_datetime_strict(obj['createdAt']),
             enqueued_by=obj['enqueuedBy'],
             completed_executions_count=int(obj['completedExecutionsCount']),
