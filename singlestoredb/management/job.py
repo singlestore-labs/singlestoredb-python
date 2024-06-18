@@ -417,7 +417,7 @@ class JobsManager(object):
 
         res = self._manager._post('jobs', json=job_run_json).json()
         print(res)
-        return Job.from_dict(res)
+        return Job.from_dict(res, self)
 
     def wait(self, jobs: List[Union[str, Job]], timeout: Optional[int] = None) -> None:
         if timeout is not None:
