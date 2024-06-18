@@ -447,6 +447,7 @@ class JobsManager(object):
             
             res = self._manager._get(f'jobs/{job_id}').json()
             job = Job.from_dict(res, self)
+            print(job)
             if job.schedule.mode == 'Once' and job.completed_executions_count > 0:
                 print(f"done wait for job {job_id}")
                 return
