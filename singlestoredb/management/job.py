@@ -417,21 +417,38 @@ class JobsManager(object):
         print(res)
         return Job.from_dict(res)
 
-    def wait(self, jobs: List[Union[str, Job]]) -> None:
-        for job in jobs:
-            self.wait_for_job(job)
+    def wait(self, jobs: List[Union[str, Job]], timeout: Optional[int] = None) -> None:
+        if timeout is not None:
+            finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+            print(f"wait {finish_time}")
 
-    def wait_for_job(self, job: Union[str, Job]) -> None:
+
+        for job in jobs:
+            self.wait_for_job(job, (finish_time - datetime.datetime.now()).total_seconds() if timeout is not None else None)
+
+    def wait_for_job(self, job: Union[str, Job], timeout: Optional[int] = None) -> None:
+        if timeout is not None:
+            finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+            print(f"wait for job {finish_time}")
+
+
         if isinstance(job, str):
             job_id = job
         else:
             job_id = job.job_id
 
+        print(f"wait for job {job_id}")
         while True:
+            if timeout is not None and datetime.datetime.now() > finish_time:
+                print(f"timeout waiting for job {job_id}")
+                raise TimeoutError(f'Timeout waiting for job {job_id}')
+            
             res = self._manager._get(f'jobs/{job_id}').json()
             job = Job.from_dict(res)
             if job.schedule.mode == 'Once' and job.completed_executions_count > 0:
+                print(f"done wait for job {job_id}")
                 return
             if job.schedule.mode == 'Recurring':
-                raise ValueError('Cannot wait for recurring job')
+                raise ValueError(f'Cannot wait for recurring job {job_id}')
+            print(f"sleeping for job {job_id}")
             threading.sleep(1)
