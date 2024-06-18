@@ -264,6 +264,7 @@ def to_datetime(
         micros = micros + '0' * (6 - len(micros))
         obj = obj + '.' + micros
     out = converters.datetime_fromisoformat(obj)
+    print(f"out {out} {type(out)}")
     if isinstance(out, str):
         return None
     if isinstance(out, datetime.date):
@@ -288,6 +289,7 @@ def to_datetime_strict(
         micros = micros + '0' * (6 - len(micros))
         obj = obj + '.' + micros
     out = converters.datetime_fromisoformat(obj)
+    print(f"out {out} {type(out)}")
     if isinstance(out, str):
         raise ValueError('value cannot be str')
     if isinstance(out, datetime.date):
