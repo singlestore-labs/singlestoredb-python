@@ -18,6 +18,7 @@ from .utils import get_database_name
 from .utils import get_workspace_id
 from .utils import is_virtual_workspace
 from .utils import vars_to_str
+from .utils import to_datetime
 from .utils import to_datetime_strict
 
 
@@ -27,13 +28,11 @@ class TargetType(Enum):
     VIRTUAL_WORKSPACE = 'VirtualWorkspace'
 
     @classmethod
-    def from_str(cls, s: Optional[str]) -> Optional['TargetType']:
-        if s is None:
-            return None
+    def from_str(cls, s: str) -> 'TargetType':
         try:
             return cls[str(camel_to_snake(s)).upper()]
         except KeyError:
-            return None
+            raise ValueError(f'Unknown TargetType: {s}')
         
     def __str__(self) -> str:
         """Return string representation."""
@@ -71,22 +70,22 @@ class Status(Enum):
 
 class ExecutionMetadata(object):
 
-    avg_duration_in_seconds: int
-    max_duration_in_seconds: int
-    status: Status
+    avg_duration_in_seconds: Optional[float]
     count: int
+    max_duration_in_seconds: Optional[float]
+    status: Status
 
     def __init__(
         self,
-        avg_duration_in_seconds: int,
-        max_duration_in_seconds: int,
-        status: Status,
+        avg_duration_in_seconds: Optional[float],
         count: int,
+        max_duration_in_seconds: Optional[float],
+        status: Status,
     ):
         self.avg_duration_in_seconds = avg_duration_in_seconds
+        self.count = count
         self.max_duration_in_seconds = max_duration_in_seconds
         self.status = status
-        self.count = count
 
     @classmethod
     def from_dict(cls, obj: Dict[str, Any]) -> 'ExecutionMetadata':
@@ -104,10 +103,10 @@ class ExecutionMetadata(object):
 
         """
         out = cls(
-            avg_duration_in_seconds=int(obj['avgDurationInSeconds']),
-            max_duration_in_seconds=int(obj['maxDurationInSeconds']),
+            avg_duration_in_seconds=obj.get('avgDurationInSeconds'),
+            count=obj['count'],
+            max_duration_in_seconds=obj.get('maxDurationInSeconds'),
             status=Status.from_str(obj['status']),
-            count=int(obj['count']),
         )
 
         return out
@@ -123,15 +122,15 @@ class ExecutionMetadata(object):
 
 class ExecutionConfig(object):
 
-    create_snapshot: Optional[bool]
-    max_duration_in_mins: Optional[int]
-    notebook_path: Optional[str]
+    create_snapshot: bool
+    max_duration_in_mins: int
+    notebook_path: str
 
     def __init__(
         self,
-        create_snapshot: Optional[bool],
-        max_duration_in_mins: Optional[int],
-        notebook_path: Optional[str],
+        create_snapshot: bool,
+        max_duration_in_mins: int,
+        notebook_path: str,
     ):
         self.create_snapshot = create_snapshot
         self.max_duration_in_mins = max_duration_in_mins
@@ -153,9 +152,9 @@ class ExecutionConfig(object):
 
         """
         out = cls(
-            create_snapshot=obj.get('createSnapshot'),
-            max_duration_in_mins=obj.get('maxAllowedExecutionDurationInMinutes'),
-            notebook_path=obj.get('notebookPath'),
+            create_snapshot=obj['createSnapshot'],
+            max_duration_in_mins=obj['maxAllowedExecutionDurationInMinutes'],
+            notebook_path=obj['notebookPath'],
         )
 
         return out
@@ -172,18 +171,18 @@ class ExecutionConfig(object):
 class Schedule(object):
 
     execution_interval_in_minutes: Optional[int]
-    start_at: datetime.datetime
-    mode: Optional[str]
+    mode: str
+    start_at: Optional[datetime.datetime]
 
     def __init__(
         self,
         execution_interval_in_minutes: Optional[int],
-        start_at: datetime.datetime,
-        mode: Optional[str],
+        mode: str,
+        start_at: Optional[datetime.datetime],
     ):
         self.execution_interval_in_minutes = execution_interval_in_minutes
-        self.start_at = start_at
         self.mode = mode
+        self.start_at = start_at
 
     @classmethod
     def from_dict(cls, obj: Dict[str, Any]) -> 'Schedule':
@@ -202,8 +201,8 @@ class Schedule(object):
         """
         out = cls(
             execution_interval_in_minutes=obj.get('executionIntervalInMinutes'),
-            start_at=to_datetime_strict(obj['startAt']),
-            mode=obj.get('mode'),
+            mode=obj['mode'],
+            start_at=to_datetime(obj.get('startAt')),
         )
 
         return out
@@ -220,16 +219,16 @@ class Schedule(object):
 class TargetConfig(object):
 
     database_name: Optional[str]
-    resume_target: Optional[bool]
-    target_id: Optional[str]
-    target_type: Optional[TargetType]
+    resume_target: bool
+    target_id: str
+    target_type: TargetType
 
     def __init__(
         self,
         database_name: Optional[str],
-        resume_target: Optional[bool],
-        target_id: Optional[str],
-        target_type: Optional[TargetType],
+        resume_target: bool,
+        target_id: str,
+        target_type: TargetType,
     ):
         self.database_name = database_name
         self.resume_target = resume_target
@@ -253,9 +252,9 @@ class TargetConfig(object):
         """
         out = cls(
             database_name=obj.get('databaseName'),
-            resume_target=obj.get('resumeTarget'),
-            target_id=obj.get('targetID'),
-            target_type=TargetType.from_str(obj.get('targetType')),
+            resume_target=obj['resumeTarget'],
+            target_id=obj['targetID'],
+            target_type=TargetType.from_str(obj['targetType']),
         )
 
         return out
@@ -277,43 +276,43 @@ class Job(object): # TODO: Check which fields are optional
     of API calls on the :class:`JobsManager`. See :meth:`JobsManager.run`.
     """
 
-    job_id: str
-    name: str
-    description: str
-    created_at: datetime.datetime
-    enqueued_by: str
     completed_executions_count: int
-    terminated_at: datetime.datetime
-    job_metadata: List[ExecutionMetadata]
+    created_at: datetime.datetime
+    description: Optional[str]
+    enqueued_by: str
     execution_config: ExecutionConfig
+    job_id: str
+    job_metadata: List[ExecutionMetadata]
+    name: Optional[str]
     schedule: Schedule
     target_config: Optional[TargetConfig]
+    terminated_at: Optional[datetime.datetime]
 
     def __init__(
         self,
-        job_id: str,
-        name: str,
-        description: str,
-        created_at: datetime.datetime,
-        enqueued_by: str,
         completed_executions_count: int,
-        terminated_at: datetime.datetime,
-        job_metadata: List[ExecutionMetadata],
+        created_at: datetime.datetime,
+        description: Optional[str],
+        enqueued_by: str,
         execution_config: ExecutionConfig,
+        job_id: str,
+        job_metadata: List[ExecutionMetadata],
+        name: Optional[str],
         schedule: Schedule,
         target_config: Optional[TargetConfig],
+        terminated_at: Optional[datetime.datetime]
     ):
-        self.job_id = job_id
-        self.name = name
-        self.description = description
-        self.created_at = created_at
-        self.enqueued_by = enqueued_by
         self.completed_executions_count = completed_executions_count
-        self.terminated_at = terminated_at
-        self.job_metadata = job_metadata
+        self.created_at = created_at
+        self.description = description
+        self.enqueued_by = enqueued_by
         self.execution_config = execution_config
+        self.job_id = job_id
+        self.job_metadata = job_metadata
+        self.name = name
         self.schedule = schedule
         self.target_config = target_config
+        self.terminated_at = terminated_at
 
     @classmethod
     def from_dict(cls, obj: Dict[str, Any]) -> 'Job':
@@ -332,17 +331,17 @@ class Job(object): # TODO: Check which fields are optional
         """
 
         out = cls(
-            job_id=obj['jobID'],
-            name=obj['name'],
-            description=obj['description'],
+            completed_executions_count=obj['completedExecutionsCount'],
             created_at=to_datetime_strict(obj['createdAt']),
+            description=obj.get('description'),
             enqueued_by=obj['enqueuedBy'],
-            completed_executions_count=int(obj['completedExecutionsCount']),
-            terminated_at=to_datetime_strict(obj['terminatedAt']),
-            job_metadata=[ExecutionMetadata.from_dict(x) for x in obj['jobMetadata']],
             execution_config=ExecutionConfig.from_dict(obj['executionConfig']),
+            job_id=obj['jobID'],
+            job_metadata=[ExecutionMetadata.from_dict(x) for x in obj['jobMetadata']],
+            name=obj.get('name'),
             schedule=Schedule.from_dict(obj['schedule']),
             target_config=TargetConfig.from_dict(obj['targetConfig']) if 'targetConfig' in obj else None,
+            terminated_at=to_datetime(obj.get('terminatedAt')),
         )
 
         return out
