@@ -222,6 +222,7 @@ def get_cluster_id() -> Optional[str]:
 
 def is_virtual_workspace() -> bool:
     """Return True if current workspace is virtual/shared."""
+    print(f"is virtual {os.environ.get('SINGLESTOREDB_IS_VIRTUAL')}")
     return os.environ.get('SINGLESTOREDB_IS_VIRTUAL') == '1'
 
 
