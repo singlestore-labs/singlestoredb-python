@@ -313,9 +313,10 @@ class Job(object): # TODO: Check which fields are optional
         self.schedule = schedule
         self.target_config = target_config
         self.terminated_at = terminated_at
+        self._manager: Optional[JobsManager] = None
 
     @classmethod
-    def from_dict(cls, obj: Dict[str, Any]) -> 'Job':
+    def from_dict(cls, obj: Dict[str, Any], manager: 'JobsManager') -> 'Job':
         """
         Construct a Job from a dictionary of values.
 
@@ -343,8 +344,14 @@ class Job(object): # TODO: Check which fields are optional
             target_config=TargetConfig.from_dict(obj['targetConfig']) if 'targetConfig' in obj else None,
             terminated_at=to_datetime(obj.get('terminatedAt')),
         )
-
+        out._manager = manager
         return out
+    
+    def wait(self, timeout: Optional[int] = None) -> None:
+        """Wait for the job to complete."""
+        if self._manager is None:
+            raise ManagementError(msg='Job not initialized with JobsManager')
+        self._manager.__wait_for_job__(self, timeout)
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -419,9 +426,9 @@ class JobsManager(object):
 
 
         for job in jobs:
-            self.wait_for_job(job, (finish_time - datetime.datetime.now()).total_seconds() if timeout is not None else None)
+            self.__wait_for_job__(job, (finish_time - datetime.datetime.now()).total_seconds() if timeout is not None else None)
 
-    def wait_for_job(self, job: Union[str, Job], timeout: Optional[int] = None) -> None:
+    def __wait_for_job__(self, job: Union[str, Job], timeout: Optional[int] = None) -> None:
         if timeout is not None:
             finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
             print(f"wait for job {finish_time}")
