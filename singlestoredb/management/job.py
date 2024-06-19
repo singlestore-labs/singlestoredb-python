@@ -17,9 +17,9 @@ from .utils import get_cluster_id
 from .utils import get_database_name
 from .utils import get_workspace_id
 from .utils import is_virtual_workspace
-from .utils import vars_to_str
 from .utils import to_datetime
 from .utils import to_datetime_strict
+from .utils import vars_to_str
 
 
 class TargetType(Enum):
@@ -33,7 +33,7 @@ class TargetType(Enum):
             return cls[str(camel_to_snake(s)).upper()]
         except KeyError:
             raise ValueError(f'Unknown TargetType: {s}')
-        
+
     def __str__(self) -> str:
         """Return string representation."""
         return self.value
@@ -58,7 +58,7 @@ class Status(Enum):
             return cls[str(camel_to_snake(s)).upper()]
         except KeyError:
             return cls.UNKNOWN
-        
+
     def __str__(self) -> str:
         """Return string representation."""
         return self.value
@@ -300,7 +300,7 @@ class Job(object): # TODO: Check which fields are optional
         name: Optional[str],
         schedule: Schedule,
         target_config: Optional[TargetConfig],
-        terminated_at: Optional[datetime.datetime]
+        terminated_at: Optional[datetime.datetime],
     ):
         self.completed_executions_count = completed_executions_count
         self.created_at = created_at
@@ -346,7 +346,7 @@ class Job(object): # TODO: Check which fields are optional
         )
         out._manager = manager
         return out
-    
+
     def wait(self, timeout: Optional[int] = None) -> None:
         """Wait for the job to complete."""
         if self._manager is None:
@@ -402,7 +402,7 @@ class JobsManager(object):
                     target_config['targetType'] = TargetType.VIRTUAL_WORKSPACE.value
                 else:
                     target_config['targetType'] = TargetType.CLUSTER.value
-                
+
 
         job_run_json = dict(
             executionConfig=dict(
@@ -427,9 +427,12 @@ class JobsManager(object):
             finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
 
         for job in jobs:
-            self.__wait_for_job__(job, (finish_time - datetime.datetime.now()).total_seconds() if timeout is not None else None)
+            self.__wait_for_job__(job, int((finish_time - datetime.datetime.now()).total_seconds()) if timeout is not None else None)
 
     def __wait_for_job__(self, job: Union[str, Job], timeout: Optional[int] = None) -> None:
+        if self._manager is None:
+            raise ManagementError(msg='JobsManager not initialized')
+
         if timeout is not None:
             finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
 
@@ -441,7 +444,7 @@ class JobsManager(object):
         while True:
             if timeout is not None and datetime.datetime.now() > finish_time:
                 raise TimeoutError(f'Timeout waiting for job {job_id}')
-            
+
             res = self._manager._get(f'jobs/{job_id}').json()
             job = Job.from_dict(res, self)
             if job.schedule.mode == 'Once' and job.completed_executions_count > 0:
@@ -452,11 +455,15 @@ class JobsManager(object):
 
     def get(self, job_id: str) -> Job:
         """Get a job by its ID."""
+        if self._manager is None:
+            raise ManagementError(msg='JobsManager not initialized')
+
         res = self._manager._get(f'jobs/{job_id}').json()
         return Job.from_dict(res, self)
-    
+
     def delete(self, job_id: str) -> bool:
         """Delete a job by its ID."""
-        res = self._manager._delete(f'jobs/{job_id}').json()
-        print(res)
-        return True
+        if self._manager is None:
+            raise ManagementError(msg='JobsManager not initialized')
+
+        return self._manager._delete(f'jobs/{job_id}').json()
