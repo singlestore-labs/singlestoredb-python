@@ -351,7 +351,13 @@ class Job(object): # TODO: Check which fields are optional
         """Wait for the job to complete."""
         if self._manager is None:
             raise ManagementError(msg='Job not initialized with JobsManager')
-        self._manager.__wait_for_job__(self, timeout)
+        self._manager._wait_for_job(self, timeout)
+
+    def delete(self) -> bool:
+        """Delete the job."""
+        if self._manager is None:
+            raise ManagementError(msg='Job not initialized with JobsManager')
+        return self._manager.delete(self.job_id)
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -363,19 +369,26 @@ class Job(object): # TODO: Check which fields are optional
 
 
 class JobsManager(object):
-    """
-    TODO: Add more details about the job manager
+    """Manager for scheduled notebook jobs.
+    
+    TODO add more info
     """
 
     def __init__(self, manager: Optional[Manager]):
         self._manager = manager
 
+    def schedule(
+        self,
+        notebook_path: str,) -> Job:
+        """Creates and returns a scheduled notebook job."""
+        pass
+
     def run(
         self,
         notebook_path: str,
-        pool_name: Optional[str] = None,
+        runtime: Optional[str] = None,
     ) -> Job:
-        """Creates and returns the created scheduled notebook job."""
+        """Creates and returns a scheduled notebook job that only runs once immediately."""
         if self._manager is None:
             raise ManagementError(msg='JobsManager not initialized')
 
@@ -417,10 +430,8 @@ class JobsManager(object):
         if target_config is not None:
             job_run_json['targetConfig'] = target_config
 
-        if pool_name is not None:
-            job_run_json['poolName'] = pool_name
-
-        print(job_run_json)
+        if runtime is not None:
+            job_run_json['poolName'] = runtime
 
         res = self._manager._post('jobs', json=job_run_json).json()
         return Job.from_dict(res, self)
@@ -430,9 +441,9 @@ class JobsManager(object):
             finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
 
         for job in jobs:
-            self.__wait_for_job__(job, int((finish_time - datetime.datetime.now()).total_seconds()) if timeout is not None else None)
+            self._wait_for_job(job, int((finish_time - datetime.datetime.now()).total_seconds()) if timeout is not None else None)
 
-    def __wait_for_job__(self, job: Union[str, Job], timeout: Optional[int] = None) -> None:
+    def _wait_for_job(self, job: Union[str, Job], timeout: Optional[int] = None) -> None:
         if self._manager is None:
             raise ManagementError(msg='JobsManager not initialized')
 
