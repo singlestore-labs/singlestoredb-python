@@ -386,7 +386,7 @@ class JobsManager(object):
         database_name = get_database_name()
         if database_name is not None and database_name != '':
             target_config['databaseName'] = database_name
-            
+
             workspace_id = get_workspace_id()
             cluster_id = get_cluster_id()
             if workspace_id is not None:
@@ -398,7 +398,11 @@ class JobsManager(object):
 
             elif cluster_id is not None:
                 target_config['targetID'] = cluster_id
-                target_config['targetType'] = TargetType.CLUSTER.value
+                if is_virtual_workspace():
+                    target_config['targetType'] = TargetType.VIRTUAL_WORKSPACE.value
+                else:
+                    target_config['targetType'] = TargetType.CLUSTER.value
+                
 
         job_run_json = dict(
             executionConfig=dict(
