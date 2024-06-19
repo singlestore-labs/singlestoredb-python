@@ -379,13 +379,12 @@ class JobsManager(object):
         if self._manager is None:
             raise ManagementError(msg='JobsManager not initialized')
 
-        target_config = dict(
-            resumeTarget=False,
-        ) # type: Dict[str, Any]
-
         database_name = get_database_name()
         if database_name is not None and database_name != '':
-            target_config['databaseName'] = database_name
+            target_config = dict(
+                resumeTarget=False,
+                databaseName=database_name,
+            ) # type: Dict[str, Any]
 
             workspace_id = get_workspace_id()
             cluster_id = get_cluster_id()
@@ -418,6 +417,8 @@ class JobsManager(object):
 
         if pool_name is not None:
             job_run_json['poolName'] = pool_name
+
+        print(job_run_json)
 
         res = self._manager._post('jobs', json=job_run_json).json()
         return Job.from_dict(res, self)
