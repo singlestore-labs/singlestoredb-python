@@ -379,12 +379,24 @@ class JobsManager(object):
         if self._manager is None:
             raise ManagementError(msg='JobsManager not initialized')
 
+        job_run_json = dict(
+            executionConfig=dict(
+                createSnapshot=False,
+                notebookPath=notebook_path,
+            ),
+            schedule=dict(
+                mode='Once',
+                startAt=from_datetime(datetime.datetime.now()),
+            )
+        )  # type: Dict[str, Any]
+
+        target_config = None # type: Optional[Dict[str, Any]]
         database_name = get_database_name()
         if database_name is not None and database_name != '':
             target_config = dict(
                 resumeTarget=False,
                 databaseName=database_name,
-            ) # type: Dict[str, Any]
+            )
 
             workspace_id = get_workspace_id()
             cluster_id = get_cluster_id()
@@ -401,17 +413,6 @@ class JobsManager(object):
                     target_config['targetType'] = TargetType.VIRTUAL_WORKSPACE.value
                 else:
                     target_config['targetType'] = TargetType.CLUSTER.value
-
-        job_run_json = dict(
-            executionConfig=dict(
-                createSnapshot=False,
-                notebookPath=notebook_path,
-            ),
-            schedule=dict(
-                mode='Once',
-                startAt=from_datetime(datetime.datetime.now()),
-            ),
-        )  # type: Dict[str, Any]
 
         if target_config is not None:
             job_run_json['targetConfig'] = target_config
