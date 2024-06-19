@@ -341,7 +341,7 @@ class Job(object): # TODO: Check which fields are optional
             job_metadata=[ExecutionMetadata.from_dict(x) for x in obj['jobMetadata']],
             name=obj.get('name'),
             schedule=Schedule.from_dict(obj['schedule']),
-            target_config=TargetConfig.from_dict(obj['targetConfig']) if 'targetConfig' in obj else None,
+            target_config=TargetConfig.from_dict(obj['targetConfig']) if obj.get('targetConfig') is not None else None,
             terminated_at=to_datetime(obj.get('terminatedAt')),
         )
         out._manager = manager
