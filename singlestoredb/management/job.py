@@ -402,7 +402,6 @@ class JobsManager(object):
                 else:
                     target_config['targetType'] = TargetType.CLUSTER.value
 
-
         job_run_json = dict(
             executionConfig=dict(
                 createSnapshot=False,
@@ -412,8 +411,10 @@ class JobsManager(object):
                 mode='Once',
                 startAt=from_datetime(datetime.datetime.now()),
             ),
-            targetConfig=target_config,
         )  # type: Dict[str, Any]
+
+        if target_config is not None:
+            job_run_json['targetConfig'] = target_config
 
         if pool_name is not None:
             job_run_json['poolName'] = pool_name
