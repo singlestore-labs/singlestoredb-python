@@ -420,14 +420,11 @@ class JobsManager(object):
             job_run_json['poolName'] = pool_name
 
         res = self._manager._post('jobs', json=job_run_json).json()
-        print(res)
         return Job.from_dict(res, self)
 
     def wait(self, jobs: List[Union[str, Job]], timeout: Optional[int] = None) -> None:
         if timeout is not None:
             finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
-            print(f"wait {finish_time}")
-
 
         for job in jobs:
             self.__wait_for_job__(job, (finish_time - datetime.datetime.now()).total_seconds() if timeout is not None else None)
@@ -435,27 +432,31 @@ class JobsManager(object):
     def __wait_for_job__(self, job: Union[str, Job], timeout: Optional[int] = None) -> None:
         if timeout is not None:
             finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
-            print(f"wait for job {finish_time}")
-
 
         if isinstance(job, str):
             job_id = job
         else:
             job_id = job.job_id
 
-        print(f"wait for job {job_id}")
         while True:
             if timeout is not None and datetime.datetime.now() > finish_time:
-                print(f"timeout waiting for job {job_id}")
                 raise TimeoutError(f'Timeout waiting for job {job_id}')
             
             res = self._manager._get(f'jobs/{job_id}').json()
-            print(res)
             job = Job.from_dict(res, self)
             if job.schedule.mode == 'Once' and job.completed_executions_count > 0:
-                print(f"done wait for job {job_id}")
                 return
             if job.schedule.mode == 'Recurring':
                 raise ValueError(f'Cannot wait for recurring job {job_id}')
-            print(f"sleeping for job {job_id}")
             time.sleep(1)
+
+    def get(self, job_id: str) -> Job:
+        """Get a job by its ID."""
+        res = self._manager._get(f'jobs/{job_id}').json()
+        return Job.from_dict(res, self)
+    
+    def delete(self, job_id: str) -> bool:
+        """Delete a job by its ID."""
+        res = self._manager._delete(f'jobs/{job_id}').json()
+        print(res)
+        return True
