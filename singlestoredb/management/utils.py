@@ -288,6 +288,8 @@ def to_datetime_strict(
         micros = micros + '0' * (6 - len(micros))
         obj = obj + '.' + micros
     out = converters.datetime_fromisoformat(obj)
+    if not out:
+        raise TypeError('not possible to convert None to datetime')
     if isinstance(out, str):
         raise ValueError('value cannot be str')
     if isinstance(out, datetime.date) and not isinstance(out, datetime.datetime):
