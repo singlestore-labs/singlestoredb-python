@@ -267,7 +267,7 @@ def to_datetime(
     out = converters.datetime_fromisoformat(obj)
     if isinstance(out, str):
         return None
-    if isinstance(out, datetime.date):
+    if isinstance(out, datetime.date) and not isinstance(out, datetime.datetime):
         return datetime.datetime(out.year, out.month, out.day)
     return out
 
@@ -291,7 +291,7 @@ def to_datetime_strict(
     out = converters.datetime_fromisoformat(obj)
     if isinstance(out, str):
         raise ValueError('value cannot be str')
-    if isinstance(out, datetime.date):
+    if isinstance(out, datetime.date) and not isinstance(out, datetime.datetime):
         return datetime.datetime(out.year, out.month, out.day)
     return out
 
