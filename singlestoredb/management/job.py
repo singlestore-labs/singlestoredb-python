@@ -507,9 +507,9 @@ class JobsManager(object):
 
             res = self._manager._get(f'jobs/{job_id}').json()
             job = Job.from_dict(res, self)
-            if job.schedule.mode == 'Once' and job.completed_executions_count > 0:
+            if job.schedule.mode == Mode.ONCE and job.completed_executions_count > 0:
                 return
-            if job.schedule.mode == 'Recurring':
+            if job.schedule.mode == Mode.RECURRING:
                 raise ValueError(f'Cannot wait for recurring job {job_id}')
             time.sleep(1)
 

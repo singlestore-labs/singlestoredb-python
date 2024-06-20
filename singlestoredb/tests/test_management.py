@@ -876,3 +876,74 @@ class TestSecrets(unittest.TestCase):
 
         assert secret.name == 'secret_name'
         assert secret.value == 'secret_value'
+
+@pytest.mark.management
+class TestJobs(unittest.TestCase):
+
+    manager = None
+    workspace_group = None
+    workspace = None
+    password = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = s2.manage_workspaces()
+
+        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
+        cls.password = secrets.token_urlsafe(20)
+
+        name = clean_name(secrets.token_urlsafe(20)[:20])
+
+        cls.workspace_group = cls.manager.create_workspace_group(
+            f'wg-test-{name}',
+            region=random.choice(us_regions).id,
+            admin_password=cls.password,
+            firewall_ranges=['0.0.0.0/0'],
+        )
+
+        try:
+            cls.workspace = cls.workspace_group.create_workspace(
+                f'ws-test-{name}-x',
+                wait_on_active=True,
+            )
+        except Exception:
+            cls.workspace_group.terminate(force=True)
+            raise
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.workspace_group is not None:
+            cls.workspace_group.terminate(force=True)
+        cls.workspace_group = None
+        cls.workspace = None
+        cls.manager = None
+        cls.password = None
+
+    def test_job(self):
+        # create job, wait for it to finish and then get job
+        # delete the job
+        try:
+            job_manager = self.manager.organizations.current.jobs
+
+            job_manager.run()
+
+            secret_id = secret.id
+
+            self.manager._delete(f'secrets/{secret_id}')
+        except s2.ManagementError:
+            pass
+
+        self.manager._post(
+            'secrets',
+            json=dict(
+                name='secret_name',
+                value='secret_value',
+            ),
+        )
+
+        secret = self.manager.organizations.current.get_secret('secret_name')
+
+        assert secret.name == 'secret_name'
+        assert secret.value == 'secret_value'
+
+
