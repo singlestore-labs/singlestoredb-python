@@ -435,9 +435,11 @@ class JobsManager(object):
         database_name = get_database_name()
         if database_name is not None and database_name != '':
             target_config = dict(
-                resumeTarget=False,
                 databaseName=database_name,
             )
+
+            if resume_target is not None:
+                target_config['resumeTarget'] = resume_target
 
             workspace_id = get_workspace_id()
             cluster_id = get_cluster_id()
