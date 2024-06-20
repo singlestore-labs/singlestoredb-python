@@ -22,6 +22,26 @@ from .utils import to_datetime_strict
 from .utils import vars_to_str
 
 
+class Mode(Enum):
+    ONCE = 'Once'
+    RECURRING = 'Recurring'
+
+    @classmethod
+    def from_str(cls, s: str) -> 'Mode':
+        try:
+            return cls[str(camel_to_snake(s)).upper()]
+        except KeyError:
+            raise ValueError(f'Unknown Mode: {s}')
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return self.value
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
+
 class TargetType(Enum):
     WORKSPACE = 'Workspace'
     CLUSTER = 'Cluster'
@@ -171,13 +191,13 @@ class ExecutionConfig(object):
 class Schedule(object):
 
     execution_interval_in_minutes: Optional[int]
-    mode: str
+    mode: Mode
     start_at: Optional[datetime.datetime]
 
     def __init__(
         self,
         execution_interval_in_minutes: Optional[int],
-        mode: str,
+        mode: Mode,
         start_at: Optional[datetime.datetime],
     ):
         self.execution_interval_in_minutes = execution_interval_in_minutes
@@ -201,7 +221,7 @@ class Schedule(object):
         """
         out = cls(
             execution_interval_in_minutes=obj.get('executionIntervalInMinutes'),
-            mode=obj['mode'],
+            mode=Mode.from_str(obj['mode']),
             start_at=to_datetime(obj.get('startAt')),
         )
 
@@ -377,11 +397,38 @@ class JobsManager(object):
     def __init__(self, manager: Optional[Manager]):
         self._manager = manager
 
+    """
+    Name                       *string                      `json:"name,omitempty"`
+	Description                *string                      `json:"description,omitempty"`
+	ExecutionIntervalInMinutes *int                         `json:"executionIntervalInMinutes,omitempty"`
+	NotebookPath               string                       `json:"notebookPath"`
+	CreateNotebookSnapshot     *bool                        `json:"createNotebookSnapshot,omitempty"`
+	TargetID                   *uuid.ObjectID               `json:"targetID,omitempty"`
+	TargetType                 *ScheduledNotebookTargetType `json:"targetType,omitempty"`
+	ProjectID                  *uuid.Project                `json:"projectID,omitempty"`
+	DatabaseName               *string                      `json:"databaseName,omitempty"`
+	CreateSnapshot             bool                         `json:"createSnapshot"`
+	ResumeTarget               bool                         `json:"resumeTarget"`
+	StartAt                    *time.Time                   `json:"startAt,omitempty"`
+	PoolName                   *string                      `json:"poolName,omitempty"`"""
+
     def schedule(
         self,
-        notebook_path: str,) -> Job:
+        notebook_path: str,
+        mode: str,
+        createSnapshot: bool,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        executionIntervalInMinutes: Optional[int] = None,
+        startAt: Optional[datetime.datetime] = None,
+        poolName: Optional[str] = None,
+        resumeTarget: Optional[bool] = None,
+        ) -> Job:
         """Creates and returns a scheduled notebook job."""
+        if self._manager is None:
+            raise ManagementError(msg='JobsManager not initialized')
         pass
+
 
     def run(
         self,
@@ -393,15 +440,21 @@ class JobsManager(object):
             raise ManagementError(msg='JobsManager not initialized')
 
         job_run_json = dict(
-            executionConfig=dict(
-                createSnapshot=False,
-                notebookPath=notebook_path,
-            ),
             schedule=dict(
-                mode='Once',
+                mode=Mode.ONCE.value,
                 startAt=from_datetime(datetime.datetime.now()),
             )
         )  # type: Dict[str, Any]
+
+        execution_config = dict(
+            createSnapshot=False,
+            notebookPath=notebook_path,
+        ) # type: Dict[str, Any]
+
+        if runtime is not None:
+            execution_config['poolName'] = runtime
+
+        job_run_json['executionConfig'] = execution_config
 
         target_config = None # type: Optional[Dict[str, Any]]
         database_name = get_database_name()
@@ -429,9 +482,6 @@ class JobsManager(object):
 
         if target_config is not None:
             job_run_json['targetConfig'] = target_config
-
-        if runtime is not None:
-            job_run_json['poolName'] = runtime
 
         res = self._manager._post('jobs', json=job_run_json).json()
         return Job.from_dict(res, self)
