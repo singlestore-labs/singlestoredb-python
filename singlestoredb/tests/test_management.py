@@ -11,6 +11,7 @@ import unittest
 import pytest
 
 import singlestoredb as s2
+from singlestoredb.management.job import Status
 
 
 TEST_DIR = pathlib.Path(os.path.dirname(__file__))
@@ -922,28 +923,32 @@ class TestJobs(unittest.TestCase):
     def test_job(self):
         # create job, wait for it to finish and then get job
         # delete the job
-        try:
-            job_manager = self.manager.organizations.current.jobs
-
-            job_manager.run()
-
-            secret_id = secret.id
-
-            self.manager._delete(f'secrets/{secret_id}')
-        except s2.ManagementError:
-            pass
-
-        self.manager._post(
-            'secrets',
-            json=dict(
-                name='secret_name',
-                value='secret_value',
-            ),
-        )
-
-        secret = self.manager.organizations.current.get_secret('secret_name')
-
-        assert secret.name == 'secret_name'
-        assert secret.value == 'secret_value'
-
-
+        job_manager = self.manager.organizations.current.jobs
+        job = job_manager.run('Scheduling Test.ipynb', runtime='notebooks-cpu-medium')
+        assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
+        assert job.schedule == job_manager.modes().ONCE
+        assert job.execution_config.create_snapshot == False
+        assert job.completed_executions_count == 0
+        assert job.name == None
+        assert job.description == None
+        assert job.job_metadata == None
+        assert job.terminated_at == None
+        assert job.target_config == None
+        job.wait()
+        job = job_manager.get(job.job_id)
+        assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
+        assert job.schedule == job_manager.modes().ONCE
+        assert job.execution_config.create_snapshot == False
+        assert job.completed_executions_count == 1
+        assert job.name == None
+        assert job.description == None
+        assert job.job_metadata != None
+        assert len(job.job_metadata) == 1
+        assert job.job_metadata[0].count == 1
+        assert job.job_metadata[0].status == Status.COMPLETED
+        assert job.terminated_at == None
+        assert job.target_config == None
+        deleted = job.delete()
+        assert deleted == True
+        job = job_manager.get(job.job_id)
+        assert job.terminated_at != None
