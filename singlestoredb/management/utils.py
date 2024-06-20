@@ -230,6 +230,11 @@ def get_workspace_id() -> Optional[str]:
     return os.environ.get('SINGLESTOREDB_WORKSPACE')
 
 
+def get_virtual_workspace_id() -> Optional[str]:
+    """Return the virtual workspace id for the current token or environment."""
+    return os.environ.get('SINGLESTOREDB_VIRTUAL_WORKSPACE')
+
+
 def get_database_name() -> Optional[str]:
     """Return the default database name for the current token or environment."""
     return os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE')

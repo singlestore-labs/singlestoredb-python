@@ -16,6 +16,7 @@ from .utils import from_datetime
 from .utils import get_cluster_id
 from .utils import get_database_name
 from .utils import get_workspace_id
+from .utils import get_virtual_workspace_id
 from .utils import is_virtual_workspace
 from .utils import to_datetime
 from .utils import to_datetime_strict
@@ -442,20 +443,19 @@ class JobsManager(object):
                 target_config['resumeTarget'] = resume_target
 
             workspace_id = get_workspace_id()
+            virtual_workspace_id = get_virtual_workspace_id()
             cluster_id = get_cluster_id()
-            if workspace_id is not None:
+            if virtual_workspace_id is not None:
+                target_config['targetID'] = virtual_workspace_id
+                target_config['targetType'] = TargetType.VIRTUAL_WORKSPACE.value
+
+            elif workspace_id is not None:
                 target_config['targetID'] = workspace_id
-                if is_virtual_workspace():
-                    target_config['targetType'] = TargetType.VIRTUAL_WORKSPACE.value
-                else:
-                    target_config['targetType'] = TargetType.WORKSPACE.value
+                target_config['targetType'] = TargetType.WORKSPACE.value
 
             elif cluster_id is not None:
                 target_config['targetID'] = cluster_id
-                if is_virtual_workspace():
-                    target_config['targetType'] = TargetType.VIRTUAL_WORKSPACE.value
-                else:
-                    target_config['targetType'] = TargetType.CLUSTER.value
+                target_config['targetType'] = TargetType.CLUSTER.value
 
         job_run_json = dict(
             schedule=schedule,
