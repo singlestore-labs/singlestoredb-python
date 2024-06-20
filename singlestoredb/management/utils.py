@@ -220,11 +220,6 @@ def get_cluster_id() -> Optional[str]:
     return os.environ.get('SINGLESTOREDB_CLUSTER')
 
 
-def is_virtual_workspace() -> bool:
-    """Return True if current workspace is virtual/shared."""
-    return os.environ.get('SINGLESTOREDB_VERSION') == 'shared'
-
-
 def get_workspace_id() -> Optional[str]:
     """Return the workspace id for the current token or environment."""
     return os.environ.get('SINGLESTOREDB_WORKSPACE')

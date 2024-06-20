@@ -878,6 +878,7 @@ class TestSecrets(unittest.TestCase):
         assert secret.name == 'secret_name'
         assert secret.value == 'secret_value'
 
+
 @pytest.mark.management
 class TestJobs(unittest.TestCase):
 
@@ -927,28 +928,28 @@ class TestJobs(unittest.TestCase):
         job = job_manager.run('Scheduling Test.ipynb', runtime='notebooks-cpu-medium')
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
         assert job.schedule == job_manager.modes().ONCE
-        assert job.execution_config.create_snapshot == False
+        assert not job.execution_config.create_snapshot
         assert job.completed_executions_count == 0
-        assert job.name == None
-        assert job.description == None
-        assert job.job_metadata == None
-        assert job.terminated_at == None
-        assert job.target_config == None
+        assert job.name is None
+        assert job.description is None
+        assert job.job_metadata is None
+        assert job.terminated_at is None
+        assert job.target_config is None
         job.wait()
         job = job_manager.get(job.job_id)
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
         assert job.schedule == job_manager.modes().ONCE
-        assert job.execution_config.create_snapshot == False
+        assert not job.execution_config.create_snapshot
         assert job.completed_executions_count == 1
-        assert job.name == None
-        assert job.description == None
-        assert job.job_metadata != None
+        assert job.name is None
+        assert job.description is None
+        assert job.job_metadata is not None
         assert len(job.job_metadata) == 1
         assert job.job_metadata[0].count == 1
         assert job.job_metadata[0].status == Status.COMPLETED
-        assert job.terminated_at == None
-        assert job.target_config == None
+        assert job.terminated_at is None
+        assert job.target_config is None
         deleted = job.delete()
-        assert deleted == True
+        assert deleted
         job = job_manager.get(job.job_id)
-        assert job.terminated_at != None
+        assert job.terminated_at is not None

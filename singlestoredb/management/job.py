@@ -15,9 +15,8 @@ from .utils import camel_to_snake
 from .utils import from_datetime
 from .utils import get_cluster_id
 from .utils import get_database_name
-from .utils import get_workspace_id
 from .utils import get_virtual_workspace_id
-from .utils import is_virtual_workspace
+from .utils import get_workspace_id
 from .utils import to_datetime
 from .utils import to_datetime_strict
 from .utils import vars_to_str
