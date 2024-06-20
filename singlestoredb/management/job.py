@@ -288,7 +288,7 @@ class TargetConfig(object):
         return str(self)
 
 
-class Job(object): # TODO: Check which fields are optional
+class Job(object):
     """
     Scheduled Notebook Job definition.
 
@@ -390,73 +390,48 @@ class Job(object): # TODO: Check which fields are optional
 
 class JobsManager(object):
     """Manager for scheduled notebook jobs.
-    
+
     TODO add more info
     """
 
     def __init__(self, manager: Optional[Manager]):
         self._manager = manager
 
-    """
-    Name                       *string                      `json:"name,omitempty"`
-	Description                *string                      `json:"description,omitempty"`
-	ExecutionIntervalInMinutes *int                         `json:"executionIntervalInMinutes,omitempty"`
-	NotebookPath               string                       `json:"notebookPath"`
-	CreateNotebookSnapshot     *bool                        `json:"createNotebookSnapshot,omitempty"`
-	TargetID                   *uuid.ObjectID               `json:"targetID,omitempty"`
-	TargetType                 *ScheduledNotebookTargetType `json:"targetType,omitempty"`
-	ProjectID                  *uuid.Project                `json:"projectID,omitempty"`
-	DatabaseName               *string                      `json:"databaseName,omitempty"`
-	CreateSnapshot             bool                         `json:"createSnapshot"`
-	ResumeTarget               bool                         `json:"resumeTarget"`
-	StartAt                    *time.Time                   `json:"startAt,omitempty"`
-	PoolName                   *string                      `json:"poolName,omitempty"`"""
-
     def schedule(
         self,
         notebook_path: str,
-        mode: str,
-        createSnapshot: bool,
+        mode: Mode,
+        create_snapshot: bool,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        executionIntervalInMinutes: Optional[int] = None,
-        startAt: Optional[datetime.datetime] = None,
-        poolName: Optional[str] = None,
-        resumeTarget: Optional[bool] = None,
-        ) -> Job:
+        execution_interval_in_minutes: Optional[int] = None,
+        start_at: Optional[datetime.datetime] = None,
+        runtime: Optional[str] = None,
+        resume_target: Optional[bool] = None,
+    ) -> Job:
         """Creates and returns a scheduled notebook job."""
         if self._manager is None:
             raise ManagementError(msg='JobsManager not initialized')
-        pass
 
-
-    def run(
-        self,
-        notebook_path: str,
-        runtime: Optional[str] = None,
-    ) -> Job:
-        """Creates and returns a scheduled notebook job that only runs once immediately."""
-        if self._manager is None:
-            raise ManagementError(msg='JobsManager not initialized')
-
-        job_run_json = dict(
-            schedule=dict(
-                mode=Mode.ONCE.value,
-                startAt=from_datetime(datetime.datetime.now()),
-            )
+        schedule = dict(
+            mode=mode.value,
         )  # type: Dict[str, Any]
 
+        if start_at is not None:
+            schedule['startAt'] = from_datetime(start_at)
+
+        if execution_interval_in_minutes is not None:
+            schedule['executionIntervalInMinutes'] = execution_interval_in_minutes
+
         execution_config = dict(
-            createSnapshot=False,
+            createSnapshot=create_snapshot,
             notebookPath=notebook_path,
-        ) # type: Dict[str, Any]
+        )  # type: Dict[str, Any]
 
         if runtime is not None:
             execution_config['poolName'] = runtime
 
-        job_run_json['executionConfig'] = execution_config
-
-        target_config = None # type: Optional[Dict[str, Any]]
+        target_config = None  # type: Optional[Dict[str, Any]]
         database_name = get_database_name()
         if database_name is not None and database_name != '':
             target_config = dict(
@@ -480,11 +455,30 @@ class JobsManager(object):
                 else:
                     target_config['targetType'] = TargetType.CLUSTER.value
 
+        job_run_json = dict(
+            schedule=schedule,
+            executionConfig=execution_config,
+        )  # type: Dict[str, Any]
+
         if target_config is not None:
             job_run_json['targetConfig'] = target_config
 
+        if name is not None:
+            job_run_json['name'] = name
+
+        if description is not None:
+            job_run_json['description'] = description
+
         res = self._manager._post('jobs', json=job_run_json).json()
         return Job.from_dict(res, self)
+
+    def run(
+        self,
+        notebook_path: str,
+        runtime: Optional[str] = None,
+    ) -> Job:
+        """Creates and returns a scheduled notebook job that runs once immediately on a specific runtime."""
+        return self.schedule(notebook_path, Mode.ONCE, False, start_at=datetime.datetime.now(), runtime=runtime)
 
     def wait(self, jobs: List[Union[str, Job]], timeout: Optional[int] = None) -> None:
         if timeout is not None:
