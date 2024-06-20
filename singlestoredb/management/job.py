@@ -8,6 +8,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Union
+from typing import Type
 
 from ..exceptions import ManagementError
 from .manager import Manager
@@ -527,6 +528,6 @@ class JobsManager(object):
 
         return self._manager._delete(f'jobs/{job_id}').json()
 
-    def modes(self) -> type[Mode]:
+    def modes(self) -> Type[Mode]:
         """Get all possible job scheduling modes."""
         return Mode
