@@ -526,6 +526,6 @@ class JobsManager(object):
 
         return self._manager._delete(f'jobs/{job_id}').json()
     
-    def modes(self) -> List[Mode]:
-        """Get a list of all possible job scheduling modes."""
-        return list(Mode)
+    def modes(self) -> Mode:
+        """Get all possible job scheduling modes."""
+        return Mode
