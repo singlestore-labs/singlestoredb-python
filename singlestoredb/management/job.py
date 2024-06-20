@@ -525,3 +525,7 @@ class JobsManager(object):
             raise ManagementError(msg='JobsManager not initialized')
 
         return self._manager._delete(f'jobs/{job_id}').json()
+    
+    def modes(self) -> List[Mode]:
+        """Get a list of all possible job scheduling modes."""
+        return list(Mode)
