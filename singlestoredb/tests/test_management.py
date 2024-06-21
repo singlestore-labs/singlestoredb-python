@@ -908,6 +908,10 @@ class TestJobs(unittest.TestCase):
                 f'ws-test-{name}-x',
                 wait_on_active=True,
             )
+
+            os.environ['SINGLESTOREDB_WORKSPACE'] = cls.workspace.id
+            os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] = "information_schema"
+
         except Exception:
             cls.workspace_group.terminate(force=True)
             raise
