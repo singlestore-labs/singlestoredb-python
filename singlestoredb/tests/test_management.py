@@ -941,7 +941,7 @@ class TestJob(unittest.TestCase):
         assert job.completed_executions_count == 0
         assert job.name is None
         assert job.description is None
-        assert job.job_metadata is None
+        assert job.job_metadata == []
         assert job.terminated_at is None
         assert job.target_config is None
         job.wait()
@@ -952,7 +952,7 @@ class TestJob(unittest.TestCase):
         assert job.completed_executions_count == 1
         assert job.name is None
         assert job.description is None
-        assert job.job_metadata is not None
+        assert job.job_metadata != []
         assert len(job.job_metadata) == 1
         assert job.job_metadata[0].count == 1
         assert job.job_metadata[0].status == Status.COMPLETED
@@ -980,7 +980,7 @@ class TestJob(unittest.TestCase):
         assert job.completed_executions_count == 0
         assert job.name is None
         assert job.description is None
-        assert job.job_metadata is None
+        assert job.job_metadata == []
         assert job.terminated_at is None
         assert job.target_config is not None
         assert job.target_config.database_name == 'information_schema'
@@ -995,7 +995,7 @@ class TestJob(unittest.TestCase):
         assert job.completed_executions_count == 1
         assert job.name is None
         assert job.description is None
-        assert job.job_metadata is not None
+        assert job.job_metadata != []
         assert len(job.job_metadata) == 1
         assert job.job_metadata[0].count == 1
         assert job.job_metadata[0].status == Status.COMPLETED
