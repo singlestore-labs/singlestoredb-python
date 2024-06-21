@@ -44,7 +44,7 @@ jobs:
 
       - name: Run MySQL protocol tests
         run: |
-          pytest -v -m 'management' --cov=singlestoredb --pyargs singlestoredb.tests
+          pytest -v -m 'test_job' --cov=singlestoredb --pyargs singlestoredb.tests
         env:
           COVERAGE_FILE: "coverage-mysql.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3307"
