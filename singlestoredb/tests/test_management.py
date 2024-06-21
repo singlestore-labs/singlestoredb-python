@@ -936,7 +936,7 @@ class TestJob(unittest.TestCase):
         job_manager = self.manager.organizations.current.jobs
         job = job_manager.run('Scheduling Test.ipynb')
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
-        assert job.schedule == job_manager.modes().ONCE
+        assert job.schedule.mode == job_manager.modes().ONCE
         assert not job.execution_config.create_snapshot
         assert job.completed_executions_count == 0
         assert job.name is None
@@ -947,7 +947,7 @@ class TestJob(unittest.TestCase):
         job.wait()
         job = job_manager.get(job.job_id)
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
-        assert job.schedule == job_manager.modes().ONCE
+        assert job.schedule.mode == job_manager.modes().ONCE
         assert not job.execution_config.create_snapshot
         assert job.completed_executions_count == 1
         assert job.name is None
@@ -975,7 +975,7 @@ class TestJob(unittest.TestCase):
         job_manager = self.manager.organizations.current.jobs
         job = job_manager.run('Scheduling Test.ipynb')
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
-        assert job.schedule == job_manager.modes().ONCE
+        assert job.schedule.mode == job_manager.modes().ONCE
         assert not job.execution_config.create_snapshot
         assert job.completed_executions_count == 0
         assert job.name is None
@@ -990,7 +990,7 @@ class TestJob(unittest.TestCase):
         job.wait()
         job = job_manager.get(job.job_id)
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
-        assert job.schedule == job_manager.modes().ONCE
+        assert job.schedule.mode == job_manager.modes().ONCE
         assert not job.execution_config.create_snapshot
         assert job.completed_executions_count == 1
         assert job.name is None
