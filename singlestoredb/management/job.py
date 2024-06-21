@@ -351,6 +351,9 @@ class Job(object):
         :class:`Job`
 
         """
+        target_config = obj.get('targetConfig')
+        if target_config is not None:
+            target_config = TargetConfig.from_dict(target_config)
 
         out = cls(
             completed_executions_count=obj['completedExecutionsCount'],
@@ -362,7 +365,7 @@ class Job(object):
             job_metadata=[ExecutionMetadata.from_dict(x) for x in obj['jobMetadata']],
             name=obj.get('name'),
             schedule=Schedule.from_dict(obj['schedule']),
-            target_config=TargetConfig.from_dict(obj['targetConfig']) if obj.get('targetConfig') is not None else None,
+            target_config=target_config,
             terminated_at=to_datetime(obj.get('terminatedAt')),
         )
         out._manager = manager
@@ -479,15 +482,29 @@ class JobsManager(object):
         notebook_path: str,
         runtime: Optional[str] = None,
     ) -> Job:
-        """Creates and returns a scheduled notebook job that runs once immediately on a specific runtime."""
-        return self.schedule(notebook_path, Mode.ONCE, False, start_at=datetime.datetime.now(), runtime=runtime)
+        """
+        Creates and returns a scheduled notebook job that
+        runs once immediately on a specific runtime.
+        """
+        return self.schedule(
+            notebook_path,
+            Mode.ONCE,
+            False,
+            start_at=datetime.datetime.now(),
+            runtime=runtime,
+        )
 
     def wait(self, jobs: List[Union[str, Job]], timeout: Optional[int] = None) -> None:
         if timeout is not None:
             finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
 
         for job in jobs:
-            self._wait_for_job(job, int((finish_time - datetime.datetime.now()).total_seconds()) if timeout is not None else None)
+            if timeout is not None:
+                job_timeout = int((finish_time - datetime.datetime.now()).total_seconds())
+            else:
+                job_timeout = None
+
+            self._wait_for_job(job, job_timeout)
 
     def _wait_for_job(self, job: Union[str, Job], timeout: Optional[int] = None) -> None:
         if self._manager is None:
