@@ -924,25 +924,25 @@ class TestJob(unittest.TestCase):
         cls.workspace = None
         cls.manager = None
         cls.password = None
-        if os.environ['SINGLESTOREDB_WORKSPACE'] is not None:
+        if os.environ.get('SINGLESTOREDB_WORKSPACE', None) is not None:
             del os.environ['SINGLESTOREDB_WORKSPACE']
-        if os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] is not None:
+        if os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE', None) is not None:
             del os.environ['SINGLESTOREDB_DEFAULT_DATABASE']
 
     def test_job_without_database_target(self):
         """
-        Creates job without target database
+        Creates job without target database on a specific runtime
         Waits for job to finish
         Gets the job
         Deletes the job
         """
-        if os.environ['SINGLESTOREDB_WORKSPACE'] is not None:
+        if os.environ.get('SINGLESTOREDB_WORKSPACE', None) is not None:
             del os.environ['SINGLESTOREDB_WORKSPACE']
-        if os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] is not None:
+        if os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE', None) is not None:
             del os.environ['SINGLESTOREDB_DEFAULT_DATABASE']
 
         job_manager = self.manager.organizations.current.jobs
-        job = job_manager.run('Scheduling Test.ipynb')
+        job = job_manager.run('Scheduling Test.ipynb', runtime_name='notebooks-cpu-small')
         self.job_ids.append(job.job_id)
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
         assert job.schedule.mode == job_manager.modes().ONCE
@@ -974,7 +974,7 @@ class TestJob(unittest.TestCase):
 
     def test_job_with_database_target(self):
         """
-        Creates job with target database
+        Creates job with target database on a specific runtime
         Waits for job to finish
         Gets the job
         Deletes the job
@@ -983,7 +983,7 @@ class TestJob(unittest.TestCase):
         os.environ['SINGLESTOREDB_WORKSPACE'] = self.workspace.id
 
         job_manager = self.manager.organizations.current.jobs
-        job = job_manager.run('Scheduling Test.ipynb')
+        job = job_manager.run('Scheduling Test.ipynb', runtime_name='notebooks-cpu-small')
         self.job_ids.append(job.job_id)
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
         assert job.schedule.mode == job_manager.modes().ONCE
