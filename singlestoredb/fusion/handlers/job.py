@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import singlestoredb as s2
+
 from typing import Any
 from typing import Dict
 from typing import Optional
@@ -48,7 +50,7 @@ class RunJobHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('JobID', result.STRING)
 
-        jobs_manager = get_workspace_manager().organizations.current.jobs
+        jobs_manager = s2.manage_workspaces(base_url="http://10.42.0.40:8080").organizations.current.jobs
 
         job = jobs_manager.run(
             params['notebook_path'],
