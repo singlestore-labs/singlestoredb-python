@@ -57,3 +57,5 @@ class RunJobHandler(SQLHandler):
         res.set_rows([(job.job_id,)])
 
         return res
+    
+RunJobHandler.register(overwrite=True)
