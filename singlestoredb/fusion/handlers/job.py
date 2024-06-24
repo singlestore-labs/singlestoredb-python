@@ -54,7 +54,7 @@ class RunJobHandler(SQLHandler):
 
         job = jobs_manager.run(
             params['notebook_path'],
-            runtime_name=params['runtime_name'] or None,
+            runtime_name=params.get('runtime_name'),
         )
         res.set_rows([(job.job_id,)])
 
