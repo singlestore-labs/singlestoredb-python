@@ -942,7 +942,7 @@ class TestJob(unittest.TestCase):
             del os.environ['SINGLESTOREDB_DEFAULT_DATABASE']
 
         job_manager = self.manager.organizations.current.jobs
-        job = job_manager.run('Scheduling Test.ipynb', runtime_name='notebooks-cpu-small')
+        job = job_manager.run('Scheduling Test.ipynb')
         self.job_ids.append(job.job_id)
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
         assert job.schedule.mode == job_manager.modes().ONCE
@@ -983,7 +983,7 @@ class TestJob(unittest.TestCase):
         os.environ['SINGLESTOREDB_WORKSPACE'] = self.workspace.id
 
         job_manager = self.manager.organizations.current.jobs
-        job = job_manager.run('Scheduling Test.ipynb', runtime_name='notebooks-cpu-small')
+        job = job_manager.run('Scheduling Test.ipynb')
         self.job_ids.append(job.job_id)
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
         assert job.schedule.mode == job_manager.modes().ONCE
