@@ -194,5 +194,16 @@ class Organization(object):
 
     @property
     def jobs(self) -> JobsManager:
-        """Manage scheduled notebook jobs."""
+        """
+        Retrieve a SingleStoreDB scheduled job manager.
+
+        Parameters
+        ----------
+        manager : WorkspaceManager, optional
+            The WorkspaceManager the JobsManager belongs to
+
+        Returns
+        -------
+        :class:`JobsManager`
+        """
         return JobsManager(self._manager)

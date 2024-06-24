@@ -393,9 +393,19 @@ class Job(object):
 
 
 class JobsManager(object):
-    """Manager for scheduled notebook jobs.
+    """
+    SingleStoreDB scheduled notebook jobs manager.
 
-    TODO add more info
+    This class should be instantiated using :attr:`Organization.jobs`.
+
+    Parameters
+    ----------
+    manager : WorkspaceManager, optional
+        The WorkspaceManager the JobsManager belongs to
+
+    See Also
+    --------
+    :attr:`Organization.jobs`
     """
 
     def __init__(self, manager: Optional[Manager]):
@@ -410,7 +420,7 @@ class JobsManager(object):
         description: Optional[str] = None,
         execution_interval_in_minutes: Optional[int] = None,
         start_at: Optional[datetime.datetime] = None,
-        runtime: Optional[str] = None,
+        runtime_name: Optional[str] = None,
         resume_target: Optional[bool] = None,
     ) -> Job:
         """Creates and returns a scheduled notebook job."""
@@ -432,8 +442,8 @@ class JobsManager(object):
             notebookPath=notebook_path,
         )  # type: Dict[str, Any]
 
-        if runtime is not None:
-            execution_config['poolName'] = runtime
+        if runtime_name is not None:
+            execution_config['runtimeName'] = runtime_name
 
         target_config = None  # type: Optional[Dict[str, Any]]
         database_name = get_database_name()
@@ -480,7 +490,7 @@ class JobsManager(object):
     def run(
         self,
         notebook_path: str,
-        runtime: Optional[str] = None,
+        runtime_name: Optional[str] = None,
     ) -> Job:
         """
         Creates and returns a scheduled notebook job that
@@ -491,7 +501,7 @@ class JobsManager(object):
             Mode.ONCE,
             False,
             start_at=datetime.datetime.now(),
-            runtime=runtime,
+            runtime_name=runtime_name,
         )
 
     def wait(self, jobs: List[Union[str, Job]], timeout: Optional[int] = None) -> None:
