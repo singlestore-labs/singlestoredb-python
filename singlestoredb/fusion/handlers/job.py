@@ -50,7 +50,7 @@ class RunJobHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('JobID', result.STRING)
 
-        jobs_manager = s2.manage_workspaces(base_url="http://10.42.0.40:8080").organizations.current.jobs
+        jobs_manager = s2.manage_workspaces(base_url="http://apisvc.default.svc.cluster.local:8080").organizations.current.jobs
 
         job = jobs_manager.run(
             params['notebook_path'],
@@ -61,3 +61,39 @@ class RunJobHandler(SQLHandler):
         return res
     
 RunJobHandler.register(overwrite=True)
+
+class WaitOnJobsHandler(SQLHandler):
+    """
+    WAIT ON JOBS job_ids;
+
+    # Job IDs to wait on
+    job_ids = '<job-id>',...
+
+    Description
+    -----------
+    Waits for the jobs with the specified IDs to complete.
+
+    Arguments
+    ---------
+    * ``<job-id>``: A list of the IDs of the job to wait on.
+
+    Example
+    -------
+    The following command waits for the jobs with IDs **job1** and **job2** to complete::
+
+        WAIT ON JOBS 'job1', 'job2';
+
+    """
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        res = FusionSQLResult()
+        res.add_field('JobID', result.STRING)
+        res.add_field('Status', result.STRING)
+
+        jobs_manager = s2.manage_workspaces(base_url="http://apisvc.default.svc.cluster.local:8080").organizations.current.jobs
+
+        jobs_manager.wait(params['job_ids'])
+
+        return None
+                                            
+WaitOnJobsHandler.register(overwrite=True)
