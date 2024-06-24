@@ -887,6 +887,7 @@ class TestJob(unittest.TestCase):
     workspace_group = None
     workspace = None
     password = None
+    job_ids = []
 
     @classmethod
     def setUpClass(cls):
@@ -915,6 +916,8 @@ class TestJob(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        for job_id in cls.job_ids:
+            cls.manager.organizations.current.jobs.delete(job_id)
         if cls.workspace_group is not None:
             cls.workspace_group.terminate(force=True)
         cls.workspace_group = None
@@ -933,8 +936,14 @@ class TestJob(unittest.TestCase):
         Gets the job
         Deletes the job
         """
+        if os.environ['SINGLESTOREDB_WORKSPACE'] is not None:
+            del os.environ['SINGLESTOREDB_WORKSPACE']
+        if os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] is not None:
+            del os.environ['SINGLESTOREDB_DEFAULT_DATABASE']
+
         job_manager = self.manager.organizations.current.jobs
         job = job_manager.run('Scheduling Test.ipynb')
+        self.job_ids.append(job.job_id)
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
         assert job.schedule.mode == job_manager.modes().ONCE
         assert not job.execution_config.create_snapshot
@@ -972,8 +981,10 @@ class TestJob(unittest.TestCase):
         """
         os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] = 'information_schema'
         os.environ['SINGLESTOREDB_WORKSPACE'] = self.workspace.id
+
         job_manager = self.manager.organizations.current.jobs
         job = job_manager.run('Scheduling Test.ipynb')
+        self.job_ids.append(job.job_id)
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
         assert job.schedule.mode == job_manager.modes().ONCE
         assert not job.execution_config.create_snapshot
