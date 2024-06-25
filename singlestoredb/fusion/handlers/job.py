@@ -231,7 +231,7 @@ WaitOnJobsHandler.register(overwrite=True)
 class ShowJobsHandler(SQLHandler):
     """
     SHOW JOBS job_ids;
-    
+
     # Job IDs to show
     job_ids = '<job-id>',...
 
@@ -276,26 +276,37 @@ class ShowJobsHandler(SQLHandler):
         rows = []
         for job_id in params['job_ids']:
             job = jobs_manager.get(job_id)
-            rows.append((
-                job.job_id,
-                job.name,
-                job.description,
-                job.created_at,
-                job.terminated_at,
-                job.enqueued_by,
-                job.completed_executions_count,
-                job.execution_config.create_snapshot,
-                job.execution_config.max_duration_in_mins,
-                job.execution_config.notebook_path,
-                job.schedule.execution_interval_in_minutes,
-                job.schedule.mode.value,
-                job.schedule.start_at,
-                job.target_config.database_name,
-                job.target_config.resume_target,
-                job.target_config.target_id,
-                job.target_config.target_type.value,
-            ))
+            if job.target_config is not None:
+                database_name = job.target_config.database_name
+                resume_target = job.target_config.resume_target
+                target_id = job.target_config.target_id
+                target_type = job.target_config.target_type.value
+
+            row = []
+            row.append(
+                (
+                  job.job_id,
+                  job.name,
+                  job.description,
+                  job.created_at,
+                  job.terminated_at,
+                  job.enqueued_by,
+                  job.completed_executions_count,
+                  job.execution_config.create_snapshot,
+                  job.execution_config.max_duration_in_mins,
+                  job.execution_config.notebook_path,
+                  job.schedule.execution_interval_in_minutes,
+                  job.schedule.mode.value,
+                  job.schedule.start_at,
+                  database_name,
+                  resume_target,
+                  target_id,
+                  target_type,
+                ),
+            )
+            rows.append(tuple(row))
         res.set_rows(rows)
         return res
-    
+
+
 ShowJobsHandler.register(overwrite=True)
