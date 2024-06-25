@@ -211,14 +211,18 @@ class WaitOnJobsHandler(SQLHandler):
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        res = FusionSQLResult()
+        res.add_field('Success', result.BOOL)
+
         jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
 
         print(params['with_timeout'])
 
-        jobs_manager.wait(
+        success = jobs_manager.wait(
             params['job_ids'],
             timeout=params['with_timeout'],
         )
+        res.set_rows([(success,)])
 
         return None
 
