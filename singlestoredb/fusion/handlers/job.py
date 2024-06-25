@@ -73,13 +73,13 @@ class ScheduleJobHandler(SQLHandler):
     -------
     * The ``WITH MODE`` clause specifies the mode of the job and is either
       **Once** or **Recurring**.
+    * The ``EXECUTE EVERY`` clause specifies the interval in minutes at which the
+      job will be executed and is required if the mode is **Recurring**.
     * The ``CREATE SNAPSHOT`` clause creates a snapshot of the notebook executed by
       the job.
     * The ``WITH RUNTIME`` clause specifies the name of the runtime that
       the job will be run with.
-    * The ``EXECUTE EVERY`` clause specifies the interval in minutes at which the
-      job will be executed.
-    * The ``RESUME TARGET`` clause resumes the job's target if it is suspended.    
+    * The ``RESUME TARGET`` clause resumes the job's target if it is suspended.
 
     Example
     -------
@@ -179,31 +179,45 @@ RunJobHandler.register(overwrite=True)
 
 class WaitOnJobsHandler(SQLHandler):
     """
-    WAIT ON JOBS job_ids;
+    WAIT ON JOBS job_ids
+        [ with_timeout ]
+    ;
 
     # Job IDs to wait on
     job_ids = '<job-id>',...
 
+    # Timeout in seconds
+    with_timeout = WITH TIMEOUT <integer>
+
     Description
     -----------
-    Waits for the jobs with the specified IDs to complete.
+    Waits for the jobs with the specified IDs to complete. If a timeout is specified,
+    the command will return after the specified number of seconds, even if the jobs
+    have not completed.
 
     Arguments
     ---------
     * ``<job-id>``: A list of the IDs of the job to wait on.
+    * ``<integer>``: The number of seconds to wait for the jobs to complete.
 
     Example
     -------
-    The following command waits for the jobs with IDs **job1** and **job2** to complete::
+    The following command waits for the jobs with IDs **job1** and **job2** to complete 
+    with a timeout of 60 seconds::
 
-        WAIT ON JOBS 'job1', 'job2';
+        WAIT ON JOBS 'job1', 'job2' WITH TIMEOUT 60;
 
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         jobs_manager = s2.manage_workspaces(base_url="http://apisvc.default.svc.cluster.local:8080").organizations.current.jobs
 
-        jobs_manager.wait(params['job_ids'])
+        print(params['with_timeout'])
+
+        jobs_manager.wait(
+            params['job_ids'],
+            timeout=params['with_timeout'],
+        )
 
         return None
                                             
