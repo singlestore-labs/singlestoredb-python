@@ -262,9 +262,12 @@ class ShowJobsHandler(SQLHandler):
 
     Example
     -------
-    The following command shows the jobs with IDs **job1** and **job2**::
+    The following command shows extended information on the jobs with IDs
+    **job1** and **job2** and that match the pattern **example_job_name**::
 
-        SHOW JOBS 'job1', 'job2';
+        SHOW JOBS 'job1', 'job2'
+          EXTENDED
+          LIKE 'example_job_name';
 
     """
 
