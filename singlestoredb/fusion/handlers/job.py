@@ -273,10 +273,11 @@ class ShowJobsHandler(SQLHandler):
 
         jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
 
-        rows = []
+        jobs = []
         for job_id in params['job_ids']:
-            job = jobs_manager.get(job_id)
+            jobs.append(jobs_manager.get(job_id))
 
+        def fields(job: Any) -> Any:
             database_name = None
             resume_target = None
             target_id = None
@@ -286,31 +287,28 @@ class ShowJobsHandler(SQLHandler):
                 resume_target = job.target_config.resume_target
                 target_id = job.target_config.target_id
                 target_type = job.target_config.target_type.value
-
-            row = []
-            row.append(
-                (
-                  job.job_id,
-                  job.name,
-                  job.description,
-                  job.created_at,
-                  job.terminated_at,
-                  job.enqueued_by,
-                  job.completed_executions_count,
-                  job.execution_config.create_snapshot,
-                  job.execution_config.max_duration_in_mins,
-                  job.execution_config.notebook_path,
-                  job.schedule.execution_interval_in_minutes,
-                  job.schedule.mode.value,
-                  job.schedule.start_at,
-                  database_name,
-                  resume_target,
-                  target_id,
-                  target_type,
-                ),
+            return (
+                job.job_id,
+                job.name,
+                job.description,
+                job.created_at,
+                job.terminated_at,
+                job.enqueued_by,
+                job.completed_executions_count,
+                job.execution_config.create_snapshot,
+                job.execution_config.max_duration_in_mins,
+                job.execution_config.notebook_path,
+                job.schedule.execution_interval_in_minutes,
+                job.schedule.mode.value,
+                job.schedule.start_at,
+                database_name,
+                resume_target,
+                target_id,
+                target_type,
             )
-            rows.append(tuple(row))
-        res.set_rows(rows)
+
+        res.set_rows([fields(job) for job in jobs])
+
         return res
 
 
