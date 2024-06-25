@@ -236,7 +236,7 @@ WaitOnJobsHandler.register(overwrite=True)
 class ShowJobsHandler(SQLHandler):
     """
     SHOW JOBS job_ids
-        [ extended ]
+        [ <extended> ]
         [ <like> ]
     ;
 
