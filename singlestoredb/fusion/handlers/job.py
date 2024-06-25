@@ -104,6 +104,7 @@ class ScheduleJobHandler(SQLHandler):
 
         jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
 
+        print(params['execute_every'])
         job = jobs_manager.schedule(
             notebook_path=params['notebook_path'],
             mode=Mode.from_str(params['with_mode']),
@@ -111,7 +112,7 @@ class ScheduleJobHandler(SQLHandler):
             create_snapshot=params['create_snapshot'],
             name=params['with_name'],
             description=params['with_description'],
-            execution_interval_in_minutes=int(params['execute_every']) if params.get('execute_every') is not None else None,
+            execution_interval_in_minutes=params['execute_every'],
             start_at=to_datetime(params.get('start_at')),
             resume_target=params['resume_target'],
         )
