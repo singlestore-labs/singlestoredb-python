@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import singlestoredb as s2
 
+from singlestoredb.management.job import Mode
+
 from typing import Any
 from typing import Dict
 from typing import Optional
@@ -8,13 +10,125 @@ from typing import Optional
 from .. import result
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
-from .utils import get_workspace_manager
+from ...management.utils import to_datetime
+
+
+class ScheduleJobHandler(SQLHandler):
+    """
+    SCHEDULE JOB USING NOTEBOOK notebook_path
+        with_mode
+        [ create_snapshot ]
+        [ with_runtime ]
+        [ with_name ]
+        [ with_description ]
+        [ execute_every ]
+        [ start_at ]
+        [ resume_target ]
+    ;
+
+    # Path to notebook file
+    notebook_path = '<notebook-path>'
+
+    # Mode to use (either Once or Recurring)
+    with_mode = WITH MODE '<mode>'
+
+    # Create snapshot
+    create_snapshot = CREATE SNAPSHOT
+
+    # Runtime to use
+    with_runtime = WITH RUNTIME '<runtime-name>'
+
+    # Name of the job
+    with_name = WITH NAME '<job-name>'
+
+    # Description of the job
+    with_description = WITH DESCRIPTION '<job-description>'
+
+    # Execute interval in minutes
+    execute_every = EXECUTE EVERY '<interval>'
+
+    # Start time
+    start_at = START AT '<year>-<month>-<day> <hour>:<min>:<sec>'
+
+    # Resume target if suspended
+    resume_target = RESUME TARGET
+
+    Description
+    -----------
+    Creates a scheduled notebook job.
+
+    Arguments
+    ---------
+    * ``<notebook-path>``: The path in the Stage where the notebook file is
+      stored.
+    * ``<mode>``: The mode of the job. Either **Once** or **Recurring**.
+    * ``<runtime-name>``: The name of the runtime the job will be run with.
+    * ``<job-name>``: The name of the job.
+    * ``<job-description>``: The description of the job.
+    * ``<interval>``: The interval in minutes at which the job will be executed.
+    * ``<year>-<month>-<day> <hour>:<min>:<sec>``: The start date and time of the
+      job. The format is **yyyy-MM-dd HH:mm:ss**. The hour is in 24-hour format.
+
+    Remarks
+    -------
+    * The ``WITH MODE`` clause specifies the mode of the job and is either
+      **Once** or **Recurring**.
+    * The ``CREATE SNAPSHOT`` clause creates a snapshot of the notebook executed by
+      the job.
+    * The ``WITH RUNTIME`` clause specifies the name of the runtime that
+      the job will be run with.
+    * The ``EXECUTE EVERY`` clause specifies the interval in minutes at which the
+      job will be executed.
+    * The ``RESUME TARGET`` clause resumes the job's target if it is suspended.    
+
+    Example
+    -------
+    The following command creates a job that will run the content of notebook
+    **example_notebook.ipynb** every 5 minutes starting at **2024-06-25 21:35:06**
+    using the runtime **notebooks-cpu-small**. The job's target will be resumed if it
+    is suspended, a snapshot of the notebook will be created and the job is named
+    **example_job** with the description **This is an example job**::
+
+        SCHEDULE JOB USING NOTEBOOK 'example_notebook.ipynb'
+            WITH MODE 'Recurring'
+            CREATE SNAPSHOT
+            WITH RUNTIME 'notebooks-cpu-small'
+            WITH NAME 'example_job'
+            WITH DESCRIPTION 'This is an example job'
+            EXECUTE EVERY '5'
+            START AT '2024-06-25 21:35:06'
+            RESUME TARGET;
+    """
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        res = FusionSQLResult()
+        res.add_field('JobID', result.STRING)
+
+        jobs_manager = s2.manage_workspaces(base_url="http://apisvc.default.svc.cluster.local:8080").organizations.current.jobs
+        
+        job = jobs_manager.schedule(
+            notebook_path=params['notebook_path'],
+            mode=Mode.from_str(params['mode']),
+            runtime_name=params.get('runtime_name'),
+            create_snapshot=True if 'create_snapshot' in params else False,
+            name=params.get('name'),
+            description=params.get('description'),
+            execution_interval_in_minutes=int(params['execute_every']) if 'execute_every' in params else None,
+            start_at=to_datetime(params.get('start_at')),
+            resume_target=True if 'resume_target' in params else False,
+        )
+        res.set_rows([(job.job_id,)])
+
+        return res
+    
+ScheduleJobHandler.register(overwrite=True)
 
 
 class RunJobHandler(SQLHandler):
     """
     RUN JOB USING NOTEBOOK notebook_path
-        [ with_runtime ];
+        [ with_runtime ]
+    ;
 
     # Path to notebook file
     notebook_path = '<notebook-path>'
@@ -61,6 +175,7 @@ class RunJobHandler(SQLHandler):
         return res
     
 RunJobHandler.register(overwrite=True)
+
 
 class WaitOnJobsHandler(SQLHandler):
     """
