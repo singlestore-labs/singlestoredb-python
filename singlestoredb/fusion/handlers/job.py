@@ -276,6 +276,11 @@ class ShowJobsHandler(SQLHandler):
         rows = []
         for job_id in params['job_ids']:
             job = jobs_manager.get(job_id)
+
+            database_name = None
+            resume_target = None
+            target_id = None
+            target_type = None
             if job.target_config is not None:
                 database_name = job.target_config.database_name
                 resume_target = job.target_config.resume_target
