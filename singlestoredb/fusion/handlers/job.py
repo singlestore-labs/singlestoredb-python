@@ -8,6 +8,7 @@ from .. import result
 from ...management.utils import to_datetime
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
+from .utils import dt_isoformat
 from singlestoredb.management.job import Mode
 
 
@@ -291,8 +292,8 @@ class ShowJobsHandler(SQLHandler):
                 job.job_id,
                 job.name,
                 job.description,
-                job.created_at,
-                job.terminated_at,
+                dt_isoformat(job.created_at),
+                dt_isoformat(job.terminated_at),
                 job.enqueued_by,
                 job.completed_executions_count,
                 job.execution_config.create_snapshot,
@@ -300,7 +301,7 @@ class ShowJobsHandler(SQLHandler):
                 job.execution_config.notebook_path,
                 job.schedule.execution_interval_in_minutes,
                 job.schedule.mode.value,
-                job.schedule.start_at,
+                dt_isoformat(job.schedule.start_at),
                 database_name,
                 resume_target,
                 target_id,
