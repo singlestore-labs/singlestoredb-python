@@ -224,7 +224,7 @@ class WaitOnJobsHandler(SQLHandler):
         )
         res.set_rows([(success,)])
 
-        return None
+        return res
 
 
 WaitOnJobsHandler.register(overwrite=True)
