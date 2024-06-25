@@ -318,11 +318,11 @@ class ShowJobsHandler(SQLHandler):
                     target_type,
                     job.description,
                     dt_isoformat(job.terminated_at),
-                    job.create_snapshot,
-                    job.max_duration_in_minutes,
-                    job.execution_interval_in_minutes,
-                    job.mode.value,
-                    dt_isoformat(job.start_at),
+                    job.execution_config.create_snapshot,
+                    job.execution_config.max_duration_in_mins,
+                    job.schedule.execution_interval_in_minutes,
+                    job.schedule.mode.value,
+                    dt_isoformat(job.schedule.start_at),
                     resume_target,
                 )
         else:
