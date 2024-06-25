@@ -193,14 +193,18 @@ class WaitOnJobsHandler(SQLHandler):
 
     Description
     -----------
-    Waits for the jobs with the specified IDs to complete. If a timeout is specified,
-    the command will return after the specified number of seconds, even if the jobs
-    have not completed.
+    Waits for the jobs with the specified IDs to complete.
 
     Arguments
     ---------
     * ``<job-id>``: A list of the IDs of the job to wait on.
     * ``<integer>``: The number of seconds to wait for the jobs to complete.
+
+    Remarks
+    -------
+    * The ``WITH TIMEOUT`` clause specifies the number of seconds to wait for the jobs
+      to complete. If the jobs have not completed after the specified number of seconds,
+      the command will return.
 
     Example
     -------
@@ -231,7 +235,10 @@ WaitOnJobsHandler.register(overwrite=True)
 
 class ShowJobsHandler(SQLHandler):
     """
-    SHOW JOBS job_ids;
+    SHOW JOBS job_ids
+        [ extended ]
+        [ <like> ]
+    ;
 
     # Job IDs to show
     job_ids = '<job-id>',...
@@ -243,6 +250,15 @@ class ShowJobsHandler(SQLHandler):
     Arguments
     ---------
     * ``<job-id>``: A list of the IDs of the jobs to show.
+    * ``<pattern>``: A pattern similar to SQL LIKE clause.
+      Uses ``%`` as the wildcard character.
+
+    Remarks
+    -------
+    * Use the ``LIKE`` clause to specify a pattern and return only
+      the jobs that match the specified pattern.
+    * To return more information about the jobs, use the
+      ``EXTENDED`` clause.
 
     Example
     -------
@@ -256,19 +272,11 @@ class ShowJobsHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('JobID', result.STRING)
         res.add_field('Name', result.STRING)
-        res.add_field('Description', result.STRING)
         res.add_field('CreatedAt', result.DATETIME)
-        res.add_field('TerminatedAt', result.DATETIME)
         res.add_field('EnqueuedBy', result.STRING)
         res.add_field('CompletedExecutions', result.INTEGER)
-        res.add_field('CreateSnapshot', result.BOOL)
-        res.add_field('MaxDurationInMins', result.INTEGER)
         res.add_field('NotebookPath', result.STRING)
-        res.add_field('ExecutionIntervalInMins', result.INTEGER)
-        res.add_field('Mode', result.STRING)
-        res.add_field('StartAt', result.DATETIME)
         res.add_field('DatabaseName', result.STRING)
-        res.add_field('ResumeTarget', result.BOOL)
         res.add_field('TargetID', result.STRING)
         res.add_field('TargetType', result.STRING)
 
@@ -278,37 +286,70 @@ class ShowJobsHandler(SQLHandler):
         for job_id in params['job_ids']:
             jobs.append(jobs_manager.get(job_id))
 
-        def fields(job: Any) -> Any:
-            database_name = None
-            resume_target = None
-            target_id = None
-            target_type = None
-            if job.target_config is not None:
-                database_name = job.target_config.database_name
-                resume_target = job.target_config.resume_target
-                target_id = job.target_config.target_id
-                target_type = job.target_config.target_type.value
-            return (
-                job.job_id,
-                job.name,
-                job.description,
-                dt_isoformat(job.created_at),
-                dt_isoformat(job.terminated_at),
-                job.enqueued_by,
-                job.completed_executions_count,
-                job.execution_config.create_snapshot,
-                job.execution_config.max_duration_in_mins,
-                job.execution_config.notebook_path,
-                job.schedule.execution_interval_in_minutes,
-                job.schedule.mode.value,
-                dt_isoformat(job.schedule.start_at),
-                database_name,
-                resume_target,
-                target_id,
-                target_type,
-            )
+        if params['extended']:
+            res.add_field('Description', result.STRING)
+            res.add_field('TerminatedAt', result.DATETIME)
+            res.add_field('CreateSnapshot', result.BOOL)
+            res.add_field('MaxDurationInMins', result.INTEGER)
+            res.add_field('ExecutionIntervalInMins', result.INTEGER)
+            res.add_field('Mode', result.STRING)
+            res.add_field('StartAt', result.DATETIME)
+            res.add_field('ResumeTarget', result.BOOL)
+
+            def fields(job: Any) -> Any:
+                database_name = None
+                resume_target = None
+                target_id = None
+                target_type = None
+                if job.target_config is not None:
+                    database_name = job.target_config.database_name
+                    resume_target = job.target_config.resume_target
+                    target_id = job.target_config.target_id
+                    target_type = job.target_config.target_type.value
+                return (
+                    job.job_id,
+                    job.name,
+                    job.description,
+                    dt_isoformat(job.created_at),
+                    dt_isoformat(job.terminated_at),
+                    job.enqueued_by,
+                    job.completed_executions_count,
+                    job.execution_config.create_snapshot,
+                    job.execution_config.max_duration_in_mins,
+                    job.execution_config.notebook_path,
+                    job.schedule.execution_interval_in_minutes,
+                    job.schedule.mode.value,
+                    dt_isoformat(job.schedule.start_at),
+                    database_name,
+                    resume_target,
+                    target_id,
+                    target_type,
+                )
+        else:
+            def fields(job: Any) -> Any:
+                database_name = None
+                target_id = None
+                target_type = None
+                if job.target_config is not None:
+                    database_name = job.target_config.database_name
+                    target_id = job.target_config.target_id
+                    target_type = job.target_config.target_type.value
+                return (
+                    job.job_id,
+                    job.name,
+                    dt_isoformat(job.created_at),
+                    job.enqueued_by,
+                    job.completed_executions_count,
+                    job.execution_config.notebook_path,
+                    database_name,
+                    target_id,
+                    target_type,
+                )
 
         res.set_rows([fields(job) for job in jobs])
+
+        if params['like']:
+            res = res.like(Name=params['like'])
 
         return res
 
