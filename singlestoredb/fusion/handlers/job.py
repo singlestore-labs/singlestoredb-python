@@ -13,7 +13,7 @@ from .utils import get_workspace_manager
 
 class RunJobHandler(SQLHandler):
     """
-    RUN JOB USING notebook_path
+    RUN JOB USING NOTEBOOK notebook_path
         [ with_runtime ];
 
     # Path to notebook file
@@ -42,7 +42,7 @@ class RunJobHandler(SQLHandler):
     The following command creates a job that will run the content of notebook
     **example_notebook.ipynb** using the runtime **notebooks-cpu-small** immediately::
 
-        RUN JOB USING 'example_notebook.ipynb' WITH RUNTIME 'notebooks-cpu-small';
+        RUN JOB USING NOTEBOOK 'example_notebook.ipynb' WITH RUNTIME 'notebooks-cpu-small';
 
     """
 
@@ -86,10 +86,6 @@ class WaitOnJobsHandler(SQLHandler):
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        res = FusionSQLResult()
-        res.add_field('JobID', result.STRING)
-        res.add_field('Status', result.STRING)
-
         jobs_manager = s2.manage_workspaces(base_url="http://apisvc.default.svc.cluster.local:8080").organizations.current.jobs
 
         jobs_manager.wait(params['job_ids'])
