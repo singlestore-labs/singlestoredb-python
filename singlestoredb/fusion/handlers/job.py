@@ -105,18 +105,17 @@ class ScheduleJobHandler(SQLHandler):
         res.add_field('JobID', result.STRING)
 
         jobs_manager = s2.manage_workspaces(base_url="http://apisvc.default.svc.cluster.local:8080").organizations.current.jobs
-        print(params.get('resume_target'))
 
         job = jobs_manager.schedule(
             notebook_path=params['notebook_path'],
             mode=Mode.from_str(params['with_mode']),
             runtime_name=params['with_runtime'],
-            create_snapshot=True if params.get('create_snapshot') is not None else False,
+            create_snapshot=params['create_snapshot'],
             name=params['with_name'],
             description=params['with_description'],
             execution_interval_in_minutes=int(params['execute_every']) if params.get('execute_every') is not None else None,
             start_at=to_datetime(params.get('start_at')),
-            resume_target=True if params.get('resume_target') is not None else False,
+            resume_target=params['resume_target'],
         )
         res.set_rows([(job.job_id,)])
 
