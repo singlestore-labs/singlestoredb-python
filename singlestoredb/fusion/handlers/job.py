@@ -108,11 +108,11 @@ class ScheduleJobHandler(SQLHandler):
         
         job = jobs_manager.schedule(
             notebook_path=params['notebook_path'],
-            mode=Mode.from_str(params['mode']),
-            runtime_name=params.get('runtime_name'),
+            mode=Mode.from_str(params['with_mode']),
+            runtime_name=params['with_runtime'],
             create_snapshot=True if 'create_snapshot' in params else False,
-            name=params.get('name'),
-            description=params.get('description'),
+            name=params['with_name'],
+            description=params['with_description'],
             execution_interval_in_minutes=int(params['execute_every']) if 'execute_every' in params else None,
             start_at=to_datetime(params.get('start_at')),
             resume_target=True if 'resume_target' in params else False,
@@ -168,7 +168,7 @@ class RunJobHandler(SQLHandler):
 
         job = jobs_manager.run(
             params['notebook_path'],
-            runtime_name=params.get('runtime_name'),
+            runtime_name=params['with_runtime'],
         )
         res.set_rows([(job.job_id,)])
 
