@@ -105,7 +105,8 @@ class ScheduleJobHandler(SQLHandler):
         res.add_field('JobID', result.STRING)
 
         jobs_manager = s2.manage_workspaces(base_url="http://apisvc.default.svc.cluster.local:8080").organizations.current.jobs
-        
+        print(params.get('resume_target'))
+
         job = jobs_manager.schedule(
             notebook_path=params['notebook_path'],
             mode=Mode.from_str(params['with_mode']),
