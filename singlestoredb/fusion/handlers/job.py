@@ -67,7 +67,7 @@ class ScheduleJobHandler(SQLHandler):
     * ``<job-description>``: The description of the job.
     * ``<interval>``: The interval in minutes at which the job will be executed.
     * ``<year>-<month>-<day> <hour>:<min>:<sec>``: The start date and time of the
-      job. The format is **yyyy-MM-dd HH:mm:ss**. The hour is in 24-hour format.
+      job in UTC. The format is **yyyy-MM-dd HH:mm:ss**. The hour is in 24-hour format.
 
     Remarks
     -------
@@ -110,12 +110,12 @@ class ScheduleJobHandler(SQLHandler):
             notebook_path=params['notebook_path'],
             mode=Mode.from_str(params['with_mode']),
             runtime_name=params['with_runtime'],
-            create_snapshot=True if 'create_snapshot' in params else False,
+            create_snapshot=True if params.get('create_snapshot') is not None else False,
             name=params['with_name'],
             description=params['with_description'],
-            execution_interval_in_minutes=int(params['execute_every']) if 'execute_every' in params else None,
+            execution_interval_in_minutes=int(params['execute_every']) if params.get('execute_every') is not None else None,
             start_at=to_datetime(params.get('start_at')),
-            resume_target=True if 'resume_target' in params else False,
+            resume_target=True if params.get('resume_target') is not None else False,
         )
         res.set_rows([(job.job_id,)])
 
