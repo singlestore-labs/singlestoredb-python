@@ -504,7 +504,7 @@ class JobsManager(object):
             runtime_name=runtime_name,
         )
 
-    def wait(self, jobs: List[Union[str, Job]], timeout: Optional[int] = None) -> None:
+    def wait(self, jobs: List[Union[str, Job]], timeout: Optional[int] = None) -> bool:
         if timeout is not None:
             finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
 
@@ -514,9 +514,13 @@ class JobsManager(object):
             else:
                 job_timeout = None
 
-            self._wait_for_job(job, job_timeout)
+            res = self._wait_for_job(job, job_timeout)
+            if not res:
+                return False
 
-    def _wait_for_job(self, job: Union[str, Job], timeout: Optional[int] = None) -> None:
+        return True
+
+    def _wait_for_job(self, job: Union[str, Job], timeout: Optional[int] = None) -> bool:
         if self._manager is None:
             raise ManagementError(msg='JobsManager not initialized')
 
@@ -530,12 +534,12 @@ class JobsManager(object):
 
         while True:
             if timeout is not None and datetime.datetime.now() > finish_time:
-                raise TimeoutError(f'Timeout waiting for job {job_id}')
+                return False
 
             res = self._manager._get(f'jobs/{job_id}').json()
             job = Job.from_dict(res, self)
             if job.schedule.mode == Mode.ONCE and job.completed_executions_count > 0:
-                return
+                return True
             if job.schedule.mode == Mode.RECURRING:
                 raise ValueError(f'Cannot wait for recurring job {job_id}')
             time.sleep(1)
