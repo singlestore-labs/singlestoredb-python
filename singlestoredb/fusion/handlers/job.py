@@ -226,3 +226,76 @@ class WaitOnJobsHandler(SQLHandler):
 
 
 WaitOnJobsHandler.register(overwrite=True)
+
+
+class ShowJobsHandler(SQLHandler):
+    """
+    SHOW JOBS job_ids;
+    
+    # Job IDs to show
+    job_ids = '<job-id>',...
+
+    Description
+    -----------
+    Shows the jobs with the specified IDs.
+
+    Arguments
+    ---------
+    * ``<job-id>``: A list of the IDs of the jobs to show.
+
+    Example
+    -------
+    The following command shows the jobs with IDs **job1** and **job2**::
+
+        SHOW JOBS 'job1', 'job2';
+
+    """
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        res = FusionSQLResult()
+        res.add_field('JobID', result.STRING)
+        res.add_field('Name', result.STRING)
+        res.add_field('Description', result.STRING)
+        res.add_field('CreatedAt', result.DATETIME)
+        res.add_field('TerminatedAt', result.DATETIME)
+        res.add_field('EnqueuedBy', result.STRING)
+        res.add_field('CompletedExecutions', result.INTEGER)
+        res.add_field('CreateSnapshot', result.BOOL)
+        res.add_field('MaxDurationInMins', result.INTEGER)
+        res.add_field('NotebookPath', result.STRING)
+        res.add_field('ExecutionIntervalInMins', result.INTEGER)
+        res.add_field('Mode', result.STRING)
+        res.add_field('StartAt', result.DATETIME)
+        res.add_field('DatabaseName', result.STRING)
+        res.add_field('ResumeTarget', result.BOOL)
+        res.add_field('TargetID', result.STRING)
+        res.add_field('TargetType', result.STRING)
+
+        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
+
+        rows = []
+        for job_id in params['job_ids']:
+            job = jobs_manager.get(job_id)
+            rows.append((
+                job.job_id,
+                job.name,
+                job.description,
+                job.created_at,
+                job.terminated_at,
+                job.enqueued_by,
+                job.completed_executions_count,
+                job.execution_config.create_snapshot,
+                job.execution_config.max_duration_in_mins,
+                job.execution_config.notebook_path,
+                job.schedule.execution_interval_in_minutes,
+                job.schedule.mode.value,
+                job.schedule.start_at,
+                job.target_config.database_name,
+                job.target_config.resume_target,
+                job.target_config.target_id,
+                job.target_config.target_type.value,
+            ))
+        res.set_rows(rows)
+        return res
+    
+ShowJobsHandler.register(overwrite=True)
