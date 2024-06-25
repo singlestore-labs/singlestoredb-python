@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-import singlestoredb as s2
-
-from singlestoredb.management.job import Mode
-
 from typing import Any
 from typing import Dict
 from typing import Optional
 
+import singlestoredb as s2
 from .. import result
+from ...management.utils import to_datetime
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
-from ...management.utils import to_datetime
+from singlestoredb.management.job import Mode
 
 
 class ScheduleJobHandler(SQLHandler):
@@ -104,7 +102,7 @@ class ScheduleJobHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('JobID', result.STRING)
 
-        jobs_manager = s2.manage_workspaces(base_url="http://apisvc.default.svc.cluster.local:8080").organizations.current.jobs
+        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
 
         job = jobs_manager.schedule(
             notebook_path=params['notebook_path'],
@@ -120,7 +118,8 @@ class ScheduleJobHandler(SQLHandler):
         res.set_rows([(job.job_id,)])
 
         return res
-    
+
+
 ScheduleJobHandler.register(overwrite=True)
 
 
@@ -156,7 +155,8 @@ class RunJobHandler(SQLHandler):
     The following command creates a job that will run the content of notebook
     **example_notebook.ipynb** using the runtime **notebooks-cpu-small** immediately::
 
-        RUN JOB USING NOTEBOOK 'example_notebook.ipynb' WITH RUNTIME 'notebooks-cpu-small';
+        RUN JOB USING NOTEBOOK 'example_notebook.ipynb'
+           WITH RUNTIME 'notebooks-cpu-small';
 
     """
 
@@ -164,7 +164,7 @@ class RunJobHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('JobID', result.STRING)
 
-        jobs_manager = s2.manage_workspaces(base_url="http://apisvc.default.svc.cluster.local:8080").organizations.current.jobs
+        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
 
         job = jobs_manager.run(
             params['notebook_path'],
@@ -173,7 +173,8 @@ class RunJobHandler(SQLHandler):
         res.set_rows([(job.job_id,)])
 
         return res
-    
+
+
 RunJobHandler.register(overwrite=True)
 
 
@@ -202,7 +203,7 @@ class WaitOnJobsHandler(SQLHandler):
 
     Example
     -------
-    The following command waits for the jobs with IDs **job1** and **job2** to complete 
+    The following command waits for the jobs with IDs **job1** and **job2** to complete
     with a timeout of 60 seconds::
 
         WAIT ON JOBS 'job1', 'job2' WITH TIMEOUT 60;
@@ -210,7 +211,7 @@ class WaitOnJobsHandler(SQLHandler):
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        jobs_manager = s2.manage_workspaces(base_url="http://apisvc.default.svc.cluster.local:8080").organizations.current.jobs
+        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
 
         print(params['with_timeout'])
 
@@ -220,5 +221,6 @@ class WaitOnJobsHandler(SQLHandler):
         )
 
         return None
-                                            
+
+
 WaitOnJobsHandler.register(overwrite=True)
