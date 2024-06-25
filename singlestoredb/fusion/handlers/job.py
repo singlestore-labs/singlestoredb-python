@@ -42,8 +42,8 @@ class ScheduleJobHandler(SQLHandler):
     # Description of the job
     with_description = WITH DESCRIPTION '<job-description>'
 
-    # Execute interval in minutes
-    execute_every = EXECUTE EVERY '<interval>'
+    # Execution interval in minutes
+    execute_every = EXECUTE EVERY <integer>
 
     # Start time
     start_at = START AT '<year>-<month>-<day> <hour>:<min>:<sec>'
@@ -63,7 +63,7 @@ class ScheduleJobHandler(SQLHandler):
     * ``<runtime-name>``: The name of the runtime the job will be run with.
     * ``<job-name>``: The name of the job.
     * ``<job-description>``: The description of the job.
-    * ``<interval>``: The interval in minutes at which the job will be executed.
+    * ``<integer>``: The interval in minutes at which the job will be executed.
     * ``<year>-<month>-<day> <hour>:<min>:<sec>``: The start date and time of the
       job in UTC. The format is **yyyy-MM-dd HH:mm:ss**. The hour is in 24-hour format.
 
@@ -93,7 +93,7 @@ class ScheduleJobHandler(SQLHandler):
             WITH RUNTIME 'notebooks-cpu-small'
             WITH NAME 'example_job'
             WITH DESCRIPTION 'This is an example job'
-            EXECUTE EVERY '5'
+            EXECUTE EVERY 5
             START AT '2024-06-25 21:35:06'
             RESUME TARGET;
     """
