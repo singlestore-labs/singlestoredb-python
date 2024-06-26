@@ -358,3 +358,76 @@ class ShowJobsHandler(SQLHandler):
 
 
 ShowJobsHandler.register(overwrite=True)
+
+
+class ShowJobExecutionsHandler(SQLHandler):
+    """
+    SHOW JOB EXECUTIONS job_id
+        from_start
+        to_end;
+
+    # Job ID to show executions for
+    job_id = '<job-id>'
+
+    # From start execution number
+    from_start = FROM <integer>
+
+    # To end execution number
+    to_end = TO <integer>
+
+    Description
+    -----------
+    Shows the executions for the job with the specified ID within the specified range.
+
+    Arguments
+    ---------
+    * ``<job-id>``: The ID of the job to show executions for.
+    * ``<integer>``: The execution number to start from or end at.
+
+    Example
+    -------
+    The following command shows information on the executions for the job
+    with ID **job1**, from execution number **1** to **10**::
+
+        SHOW JOB EXECUTIONS 'job1'
+          FROM 1 TO 10;
+
+    """
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        res = FusionSQLResult()
+        res.add_field('ExecutionID', result.STRING)
+        res.add_field('ExecutionNumber', result.INTEGER)
+        res.add_field('JobID', result.STRING)
+        res.add_field('Status', result.STRING)
+        res.add_field('SnapshotNotebookPath', result.STRING)
+        res.add_field('ScheduledStartTime', result.DATETIME)
+        res.add_field('StartedAt', result.DATETIME)
+        res.add_field('FinishedAt', result.DATETIME)
+
+        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
+
+        executionsData = jobs_manager.get_executions(
+              params['job_id'],
+              params['from_start'],
+              params['to_end'],
+        )
+
+        def fields(execution: Any) -> Any:
+            return (
+              execution.execution_id,
+              execution.execution_number,
+              execution.job_id,
+              execution.status.value,
+              execution.snapshot_notebook_path,
+              dt_isoformat(execution.scheduled_start_time),
+              dt_isoformat(execution.started_at),
+              dt_isoformat(execution.finished_at),
+            )
+
+        res.set_rows([fields(execution) for execution in executionsData.executions])
+
+        return res
+
+
+ShowJobExecutionsHandler.register(overwrite=True)
