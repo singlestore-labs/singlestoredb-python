@@ -683,8 +683,13 @@ class JobsManager(object):
 
         res = self._manager._get(f'jobs/{job_id}').json()
         return Job.from_dict(res, self)
-    
-    def get_executions(self, job_id: str, start_execution_number, end_execution_number: int) -> ExecutionsData:
+
+    def get_executions(
+            self,
+            job_id: str,
+            start_execution_number: int,
+            end_execution_number: int,
+    ) -> ExecutionsData:
         """Get executions for a job by its ID."""
         if self._manager is None:
             raise ManagementError(msg='JobsManager not initialized')
