@@ -415,36 +415,36 @@ class ShowJobExecutionsHandler(SQLHandler):
         jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
 
         executionsData = jobs_manager.get_executions(
-              params['job_id'],
-              params['from_start'],
-              params['to_end'],
+            params['job_id'],
+            params['from_start'],
+            params['to_end'],
         )
 
         if params['extended']:
-          res.add_field('SnapshotNotebookPath', result.STRING)
+            res.add_field('SnapshotNotebookPath', result.STRING)
 
-          def fields(execution: Any) -> Any:
-              return (
-                  execution.execution_id,
-                  execution.execution_number,
-                  execution.job_id,
-                  execution.status.value,
-                  dt_isoformat(execution.scheduled_start_time),
-                  dt_isoformat(execution.started_at),
-                  dt_isoformat(execution.finished_at),
-                  execution.snapshot_notebook_path,
-              )
+            def fields(execution: Any) -> Any:
+                return (
+                    execution.execution_id,
+                    execution.execution_number,
+                    execution.job_id,
+                    execution.status.value,
+                    dt_isoformat(execution.scheduled_start_time),
+                    dt_isoformat(execution.started_at),
+                    dt_isoformat(execution.finished_at),
+                    execution.snapshot_notebook_path,
+                )
         else:
-          def fields(execution: Any) -> Any:
-              return (
-                  execution.execution_id,
-                  execution.execution_number,
-                  execution.job_id,
-                  execution.status.value,
-                  dt_isoformat(execution.scheduled_start_time),
-                  dt_isoformat(execution.started_at),
-                  dt_isoformat(execution.finished_at),
-              )
+            def fields(execution: Any) -> Any:
+                return (
+                    execution.execution_id,
+                    execution.execution_number,
+                    execution.job_id,
+                    execution.status.value,
+                    dt_isoformat(execution.scheduled_start_time),
+                    dt_isoformat(execution.started_at),
+                    dt_isoformat(execution.finished_at),
+                )
 
         res.set_rows([fields(execution) for execution in executionsData.executions])
 
