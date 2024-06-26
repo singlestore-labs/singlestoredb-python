@@ -731,8 +731,11 @@ class JobsManager(object):
         """Get executions for a job by its ID."""
         if self._manager is None:
             raise ManagementError(msg='JobsManager not initialized')
-        path = f'jobs/{job_id}/executions' \
-            f'?start={start_execution_number}&end={end_execution_number}'
+        path = (
+            f'jobs/{job_id}/executions'
+            f'?start={start_execution_number}'
+            f'&end={end_execution_number}'
+        )
         res = self._manager._get(path).json()
         return ExecutionsData.from_dict(res)
 
