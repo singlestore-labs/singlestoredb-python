@@ -73,7 +73,8 @@ class ScheduleJobHandler(SQLHandler):
     * ``<year>-<month>-<day> <hour>:<min>:<sec>``: The start date and time of the
       job in UTC. The format is **yyyy-MM-dd HH:mm:ss**. The hour is in 24-hour format.
     * ``<parameters>``: The parameters to pass to the job. A JSON string with
-      the following format: ``{{"param1": "value1"}, {"param2": "value2"}}``.
+      the following format:
+      ``{"parameters": [{"name": "<name>", "value": "<value>"}, ...]}``.
 
     Remarks
     -------
@@ -108,10 +109,22 @@ class ScheduleJobHandler(SQLHandler):
             RESUME TARGET
             WITH PARAMETERS '{
                                 "parameters": [
-                                  {"strParam": "string"},
-                                  {"intParam": 1},
-                                  {"floatParam": 1.0},
-                                  {"boolParam": true},
+                                  {
+                                    "name": "strParam",
+                                    "value": "string"
+                                  },
+                                  {
+                                    "name": "intParam",
+                                    "value": 1
+                                  },
+                                  {
+                                    "name": "floatParam",
+                                    "value" : 1.0
+                                  },
+                                  {
+                                    "name": "boolParam",
+                                    "value" : true
+                                  },
                                 ]
                             }'
         ;
