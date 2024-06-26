@@ -96,7 +96,10 @@ class ScheduleJobHandler(SQLHandler):
     **example_notebook.ipynb** every 5 minutes starting at **2024-06-25 21:35:06**
     using the runtime **notebooks-cpu-small**. The job's target will be resumed if it
     is suspended, a snapshot of the notebook will be created and the job is named
-    **example_job** with the description **This is an example job**::
+    **example_job** with the description **This is an example job**. The job will
+    have the following parameters: **strParam** with value **"string"**, **intParam**
+    with value **1**, **floatParam** with value **1.0**, and **boolParam** with value
+    **true**::
 
         SCHEDULE JOB USING NOTEBOOK 'example_notebook.ipynb'
             WITH MODE 'Recurring'
@@ -167,6 +170,7 @@ class RunJobHandler(SQLHandler):
     """
     RUN JOB USING NOTEBOOK notebook_path
         [ with_runtime ]
+        [ with_parameters ]
     ;
 
     # Path to notebook file
@@ -174,6 +178,9 @@ class RunJobHandler(SQLHandler):
 
     # Runtime to use
     with_runtime = WITH RUNTIME '<runtime-name>'
+
+    # Parameters to pass to the job
+    with_parameters = WITH PARAMETERS '<parameters>'
 
     Description
     -----------
@@ -183,20 +190,49 @@ class RunJobHandler(SQLHandler):
     ---------
     * ``<notebook-path>``: The path in the Stage where the notebook file is stored.
     * ``<runtime-name>``: The name of the runtime the job will be run with.
+    * ``<parameters>``: The parameters to pass to the job. A JSON string with
+      the following format:
+      ``{"parameters": [{"name": "<name>", "value": "<value>"}, ...]}``.
 
     Remarks
     -------
     * The job is run immediately after the command is executed.
     * The ``WITH RUNTIME`` clause specifies the name of the runtime that
       the job will be run with.
+    * The ``WITH PARAMETERS`` clause specifies the parameters to pass to the job. The
+    only supported parameter value types are strings, integers, floats, and booleans.
 
     Example
     -------
     The following command creates a job that will run the content of notebook
-    **example_notebook.ipynb** using the runtime **notebooks-cpu-small** immediately::
+    **example_notebook.ipynb** using the runtime **notebooks-cpu-small** immediately.
+    The job will have the following parameters: **strParam** with value **"string"**,
+    **intParam** with value **1**, **floatParam** with value **1.0**, and **boolParam**
+    with value **true**::
 
         RUN JOB USING NOTEBOOK 'example_notebook.ipynb'
-           WITH RUNTIME 'notebooks-cpu-small';
+           WITH RUNTIME 'notebooks-cpu-small'
+           WITH PARAMETERS '{
+                                "parameters": [
+                                  {
+                                    "name": "strParam",
+                                    "value": "string"
+                                  },
+                                  {
+                                    "name": "intParam",
+                                    "value": 1
+                                  },
+                                  {
+                                    "name": "floatParam",
+                                    "value" : 1.0
+                                  },
+                                  {
+                                    "name": "boolParam",
+                                    "value" : true
+                                  },
+                                ]
+                            }'
+        ;
 
     """
 
@@ -206,9 +242,17 @@ class RunJobHandler(SQLHandler):
 
         jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
 
+        parameters = None
+        if params.get('with_parameters'):
+            parameters = []
+            json_params = json.loads(params['with_parameters'])
+            for param in json_params['parameters']:
+                parameters.append((param['name'], param['value']))
+
         job = jobs_manager.run(
             params['notebook_path'],
             runtime_name=params['with_runtime'],
+            parameters=parameters,
         )
         res.set_rows([(job.job_id,)])
 
