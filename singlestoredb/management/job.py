@@ -35,7 +35,7 @@ class ParameterType(Enum):
         try:
             return cls[s.upper()]
         except KeyError:
-            raise ValueError(f'Unknown ParameterType: {s}')
+            raise ValueError(f'Unsupported ParameterType: {s}')
 
     def __str__(self) -> str:
         """Return string representation."""
