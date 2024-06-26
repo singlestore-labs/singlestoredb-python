@@ -127,8 +127,8 @@ class ScheduleJobHandler(SQLHandler):
         if params.get('with_parameters'):
             parameters = []
             json_params = json.loads(params['with_parameters'])
-            for name, value in json_params['parameters']:
-                parameters.append((name, value))
+            for param in json_params['parameters']:
+                parameters.append((param['name'], param['value']))
 
         job = jobs_manager.schedule(
             notebook_path=params['notebook_path'],
