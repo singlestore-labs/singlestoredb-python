@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 from typing import Any
 from typing import Dict
 from typing import Optional
@@ -23,6 +24,7 @@ class ScheduleJobHandler(SQLHandler):
         [ execute_every ]
         [ start_at ]
         [ resume_target ]
+        [ with_parameters ]
     ;
 
     # Path to notebook file
@@ -52,6 +54,9 @@ class ScheduleJobHandler(SQLHandler):
     # Resume target if suspended
     resume_target = RESUME TARGET
 
+    # Parameters to pass to the job
+    with_parameters = WITH PARAMETERS '<parameters>'
+
     Description
     -----------
     Creates a scheduled notebook job.
@@ -67,6 +72,8 @@ class ScheduleJobHandler(SQLHandler):
     * ``<integer>``: The interval in minutes at which the job will be executed.
     * ``<year>-<month>-<day> <hour>:<min>:<sec>``: The start date and time of the
       job in UTC. The format is **yyyy-MM-dd HH:mm:ss**. The hour is in 24-hour format.
+    * ``<parameters>``: The parameters to pass to the job. A JSON string with
+      the following format: ``{{"param1": "value1"}, {"param2": "value2"}}``.
 
     Remarks
     -------
@@ -79,6 +86,8 @@ class ScheduleJobHandler(SQLHandler):
     * The ``WITH RUNTIME`` clause specifies the name of the runtime that
       the job will be run with.
     * The ``RESUME TARGET`` clause resumes the job's target if it is suspended.
+    * The ``WITH PARAMETERS`` clause specifies the parameters to pass to the job. The
+    only supported parameter value types are strings, integers, floats, and booleans.
 
     Example
     -------
@@ -96,7 +105,14 @@ class ScheduleJobHandler(SQLHandler):
             WITH DESCRIPTION 'This is an example job'
             EXECUTE EVERY 5
             START AT '2024-06-25 21:35:06'
-            RESUME TARGET;
+            RESUME TARGET
+            WITH PARAMETERS '{
+                                {"strParam": "string"},
+                                {"intParam": 1},
+                                {"floatParam": 1.0},
+                                {"boolParam": true}
+                            }'
+        ;
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
@@ -104,6 +120,13 @@ class ScheduleJobHandler(SQLHandler):
         res.add_field('JobID', result.STRING)
 
         jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
+
+        parameters = None
+        if params.get('with_parameters'):
+            parameters = []
+            json_params = json.loads(params['with_parameters'])
+            for name, value in json_params.items():
+                parameters.append((name, value))
 
         job = jobs_manager.schedule(
             notebook_path=params['notebook_path'],
@@ -115,6 +138,7 @@ class ScheduleJobHandler(SQLHandler):
             execution_interval_in_minutes=params['execute_every'],
             start_at=to_datetime(params.get('start_at')),
             resume_target=params['resume_target'],
+            parameters=parameters,
         )
         res.set_rows([(job.job_id,)])
 
