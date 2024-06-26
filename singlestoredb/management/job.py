@@ -7,6 +7,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 from typing import Type
 from typing import Union
 
@@ -614,7 +615,7 @@ class JobsManager(object):
         start_at: Optional[datetime.datetime] = None,
         runtime_name: Optional[str] = None,
         resume_target: Optional[bool] = None,
-        parameters: Optional[List[(str, Any)]] = None,
+        parameters: Optional[List[Tuple[str, Any]]] = None,
     ) -> Job:
         """Creates and returns a scheduled notebook job."""
         if self._manager is None:
@@ -694,7 +695,7 @@ class JobsManager(object):
         self,
         notebook_path: str,
         runtime_name: Optional[str] = None,
-        parameters: Optional[List[(str, Any)]] = None,
+        parameters: Optional[List[Tuple[str, Any]]] = None,
     ) -> Job:
         """
         Creates and returns a scheduled notebook job that
