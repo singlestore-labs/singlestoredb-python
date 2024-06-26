@@ -364,7 +364,8 @@ class ShowJobExecutionsHandler(SQLHandler):
     """
     SHOW JOB EXECUTIONS job_id
         from_start
-        to_end;
+        to_end
+        [ <extended> ];
 
     # Job ID to show executions for
     job_id = '<job-id>'
@@ -384,14 +385,21 @@ class ShowJobExecutionsHandler(SQLHandler):
     * ``<job-id>``: The ID of the job to show executions for.
     * ``<integer>``: The execution number to start from or end at.
 
+    Remarks
+    -------
+    * Use the ``FROM`` clause to specify the execution number to start from.
+    * Use the ``TO`` clause to specify the execution number to end at.
+    * To return more information about the executions, use the
+      ``EXTENDED`` clause.
+
     Example
     -------
-    The following command shows information on the executions for the job
+    The following command shows extended information on the executions for the job
     with ID **job1**, from execution number **1** to **10**::
 
         SHOW JOB EXECUTIONS 'job1'
-          FROM 1 TO 10;
-
+          FROM 1 TO 10
+          EXTENDED;
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
@@ -400,7 +408,6 @@ class ShowJobExecutionsHandler(SQLHandler):
         res.add_field('ExecutionNumber', result.INTEGER)
         res.add_field('JobID', result.STRING)
         res.add_field('Status', result.STRING)
-        res.add_field('SnapshotNotebookPath', result.STRING)
         res.add_field('ScheduledStartTime', result.DATETIME)
         res.add_field('StartedAt', result.DATETIME)
         res.add_field('FinishedAt', result.DATETIME)
@@ -413,17 +420,31 @@ class ShowJobExecutionsHandler(SQLHandler):
               params['to_end'],
         )
 
-        def fields(execution: Any) -> Any:
-            return (
-              execution.execution_id,
-              execution.execution_number,
-              execution.job_id,
-              execution.status.value,
-              execution.snapshot_notebook_path,
-              dt_isoformat(execution.scheduled_start_time),
-              dt_isoformat(execution.started_at),
-              dt_isoformat(execution.finished_at),
-            )
+        if params['extended']:
+          res.add_field('SnapshotNotebookPath', result.STRING)
+
+          def fields(execution: Any) -> Any:
+              return (
+                  execution.execution_id,
+                  execution.execution_number,
+                  execution.job_id,
+                  execution.status.value,
+                  dt_isoformat(execution.scheduled_start_time),
+                  dt_isoformat(execution.started_at),
+                  dt_isoformat(execution.finished_at),
+                  execution.snapshot_notebook_path,
+              )
+        else:
+          def fields(execution: Any) -> Any:
+              return (
+                  execution.execution_id,
+                  execution.execution_number,
+                  execution.job_id,
+                  execution.status.value,
+                  dt_isoformat(execution.scheduled_start_time),
+                  dt_isoformat(execution.started_at),
+                  dt_isoformat(execution.finished_at),
+              )
 
         res.set_rows([fields(execution) for execution in executionsData.executions])
 
