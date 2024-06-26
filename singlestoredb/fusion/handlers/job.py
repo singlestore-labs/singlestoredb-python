@@ -107,10 +107,12 @@ class ScheduleJobHandler(SQLHandler):
             START AT '2024-06-25 21:35:06'
             RESUME TARGET
             WITH PARAMETERS '{
-                                {"strParam": "string"},
-                                {"intParam": 1},
-                                {"floatParam": 1.0},
-                                {"boolParam": true}
+                                "parameters": [
+                                  {"strParam": "string"},
+                                  {"intParam": 1},
+                                  {"floatParam": 1.0},
+                                  {"boolParam": true},
+                                ]
                             }'
         ;
     """
@@ -125,7 +127,7 @@ class ScheduleJobHandler(SQLHandler):
         if params.get('with_parameters'):
             parameters = []
             json_params = json.loads(params['with_parameters'])
-            for name, value in json_params.items():
+            for name, value in json_params['parameters'].items():
                 parameters.append((name, value))
 
         job = jobs_manager.schedule(
