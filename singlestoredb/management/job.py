@@ -175,6 +175,14 @@ class ExecutionMetadata(object):
         )
 
         return out
+    
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+    
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
 
 
 class Execution(object):
@@ -235,6 +243,14 @@ class Execution(object):
         )
 
         return out
+    
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+    
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
 
 
 class ExecutionsData(object):
@@ -271,6 +287,14 @@ class ExecutionsData(object):
         )
 
         return out
+    
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+    
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
 
 
 class ExecutionConfig(object):

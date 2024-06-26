@@ -103,7 +103,7 @@ class ScheduleJobHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('JobID', result.STRING)
 
-        jobs_manager = s2.manage_workspaces().organizations.current.jobs
+        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
 
         job = jobs_manager.schedule(
             notebook_path=params['notebook_path'],
@@ -165,7 +165,7 @@ class RunJobHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('JobID', result.STRING)
 
-        jobs_manager = s2.manage_workspaces().organizations.current.jobs
+        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
 
         job = jobs_manager.run(
             params['notebook_path'],
@@ -219,7 +219,7 @@ class WaitOnJobsHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('Success', result.BOOL)
 
-        jobs_manager = s2.manage_workspaces().organizations.current.jobs
+        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
 
         success = jobs_manager.wait(
             params['job_ids'],
@@ -283,7 +283,7 @@ class ShowJobsHandler(SQLHandler):
         res.add_field('TargetID', result.STRING)
         res.add_field('TargetType', result.STRING)
 
-        jobs_manager = s2.manage_workspaces().organizations.current.jobs
+        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
 
         jobs = []
         for job_id in params['job_ids']:
