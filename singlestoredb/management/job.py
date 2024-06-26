@@ -683,6 +683,14 @@ class JobsManager(object):
 
         res = self._manager._get(f'jobs/{job_id}').json()
         return Job.from_dict(res, self)
+    
+    def get_executions(self, job_id: str, start_execution_number, end_execution_number: int) -> ExecutionsData:
+        """Get executions for a job by its ID."""
+        if self._manager is None:
+            raise ManagementError(msg='JobsManager not initialized')
+
+        res = self._manager._get(f'jobs/{job_id}/executions?start={start_execution_number}&end={end_execution_number}').json()
+        return ExecutionsData.from_dict(res)
 
     def delete(self, job_id: str) -> bool:
         """Delete a job by its ID."""
