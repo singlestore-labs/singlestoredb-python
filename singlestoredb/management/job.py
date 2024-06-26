@@ -175,11 +175,11 @@ class ExecutionMetadata(object):
         )
 
         return out
-    
+
     def __str__(self) -> str:
         """Return string representation."""
         return vars_to_str(self)
-    
+
     def __repr__(self) -> str:
         """Return string representation."""
         return str(self)
@@ -243,11 +243,11 @@ class Execution(object):
         )
 
         return out
-    
+
     def __str__(self) -> str:
         """Return string representation."""
         return vars_to_str(self)
-    
+
     def __repr__(self) -> str:
         """Return string representation."""
         return str(self)
@@ -287,11 +287,11 @@ class ExecutionsData(object):
         )
 
         return out
-    
+
     def __str__(self) -> str:
         """Return string representation."""
         return vars_to_str(self)
-    
+
     def __repr__(self) -> str:
         """Return string representation."""
         return str(self)
@@ -533,6 +533,20 @@ class Job(object):
             raise ManagementError(msg='Job not initialized with JobsManager')
         self._manager._wait_for_job(self, timeout)
 
+    def get_executions(
+            self,
+            start_execution_number: int,
+            end_execution_number: int,
+    ) -> ExecutionsData:
+        """Get executions for the job."""
+        if self._manager is None:
+            raise ManagementError(msg='Job not initialized with JobsManager')
+        return self._manager.get_executions(
+            self.job_id,
+            start_execution_number,
+            end_execution_number,
+        )
+
     def delete(self) -> bool:
         """Delete the job."""
         if self._manager is None:
@@ -717,8 +731,9 @@ class JobsManager(object):
         """Get executions for a job by its ID."""
         if self._manager is None:
             raise ManagementError(msg='JobsManager not initialized')
-
-        res = self._manager._get(f'jobs/{job_id}/executions?start={start_execution_number}&end={end_execution_number}').json()
+        path = f'jobs/{job_id}/executions' \
+            f'?start={start_execution_number}&end={end_execution_number}'
+        res = self._manager._get(path).json()
         return ExecutionsData.from_dict(res)
 
     def delete(self, job_id: str) -> bool:
