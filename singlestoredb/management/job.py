@@ -89,7 +89,7 @@ class Status(Enum):
         return str(self)
 
 
-class ExecutionMetadata(object):
+class JobMetadata(object):
 
     avg_duration_in_seconds: Optional[float]
     count: int
@@ -109,9 +109,9 @@ class ExecutionMetadata(object):
         self.status = status
 
     @classmethod
-    def from_dict(cls, obj: Dict[str, Any]) -> 'ExecutionMetadata':
+    def from_dict(cls, obj: Dict[str, Any]) -> 'JobMetadata':
         """
-        Construct an ExecutionMetadata from a dictionary of values.
+        Construct a JobMetadata from a dictionary of values.
 
         Parameters
         ----------
@@ -120,7 +120,7 @@ class ExecutionMetadata(object):
 
         Returns
         -------
-        :class:`ExecutionMetadata`
+        :class:`JobMetadata`
 
         """
         out = cls(
@@ -139,6 +139,138 @@ class ExecutionMetadata(object):
     def __repr__(self) -> str:
         """Return string representation."""
         return str(self)
+
+
+class ExecutionMetadata(object):
+
+    startExecutionNumber: int
+    endExecutionNumber: int
+
+    def __init__(
+        self,
+        startExecutionNumber: int,
+        endExecutionNumber: int,
+    ):
+        self.startExecutionNumber = startExecutionNumber
+        self.endExecutionNumber = endExecutionNumber
+
+    @classmethod
+    def from_dict(cls, obj: Dict[str, Any]) -> 'ExecutionMetadata':
+        """
+        Construct an ExecutionMetadata from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+
+        Returns
+        -------
+        :class:`ExecutionMetadata`
+
+        """
+        out = cls(
+            startExecutionNumber=obj['startExecutionNumber'],
+            endExecutionNumber=obj['endExecutionNumber'],
+        )
+
+        return out
+
+
+class Execution(object):
+
+    execution_id: str
+    job_id: str
+    status: Status
+    snapshot_notebook_path: Optional[str]
+    scheduled_start_time: datetime.datetime
+    started_at: Optional[datetime.datetime]
+    finished_at: Optional[datetime.datetime]
+    execution_number: int
+
+    def __init__(
+        self,
+        execution_id: str,
+        job_id: str,
+        status: Status,
+        scheduled_start_time: datetime.datetime,
+        started_at: Optional[datetime.datetime],
+        finished_at: Optional[datetime.datetime],
+        execution_number: int,
+        snapshot_notebook_path: Optional[str],
+    ):
+        self.execution_id = execution_id
+        self.job_id = job_id
+        self.status = status
+        self.scheduled_start_time = scheduled_start_time
+        self.started_at = started_at
+        self.finished_at = finished_at
+        self.execution_number = execution_number
+        self.snapshot_notebook_path = snapshot_notebook_path
+
+    @classmethod
+    def from_dict(cls, obj: Dict[str, Any]) -> 'Execution':
+        """
+        Construct an Execution from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+
+        Returns
+        -------
+        :class:`Execution`
+
+        """
+        out = cls(
+            execution_id=obj['executionID'],
+            job_id=obj['jobID'],
+            status=Status.from_str(obj['status']),
+            snapshot_notebook_path=obj.get('snapshotNotebookPath'),
+            scheduled_start_time=to_datetime_strict(obj['scheduledStartTime']),
+            started_at=to_datetime(obj.get('startedAt')),
+            finished_at=to_datetime(obj.get('finishedAt')),
+            execution_number=obj['executionNumber'],
+        )
+
+        return out
+
+
+class ExecutionsData(object):
+
+    executions: List[Execution]
+    metadata: ExecutionMetadata
+
+    def __init__(
+        self,
+        executions: List[Execution],
+        metadata: ExecutionMetadata,
+    ):
+        self.executions = executions
+        self.metadata = metadata
+
+    @classmethod
+    def from_dict(cls, obj: Dict[str, Any]) -> 'ExecutionsData':
+        """
+        Construct an ExecutionsData from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+
+        Returns
+        -------
+        :class:`ExecutionsData`
+
+        """
+        out = cls(
+            executions=[Execution.from_dict(x) for x in obj['executions']],
+            metadata=ExecutionMetadata.from_dict(obj['executionsMetadata']),
+        )
+
+        return out
 
 
 class ExecutionConfig(object):
@@ -303,7 +435,7 @@ class Job(object):
     enqueued_by: str
     execution_config: ExecutionConfig
     job_id: str
-    job_metadata: List[ExecutionMetadata]
+    job_metadata: List[JobMetadata]
     name: Optional[str]
     schedule: Schedule
     target_config: Optional[TargetConfig]
@@ -317,7 +449,7 @@ class Job(object):
         enqueued_by: str,
         execution_config: ExecutionConfig,
         job_id: str,
-        job_metadata: List[ExecutionMetadata],
+        job_metadata: List[JobMetadata],
         name: Optional[str],
         schedule: Schedule,
         target_config: Optional[TargetConfig],
@@ -362,7 +494,7 @@ class Job(object):
             enqueued_by=obj['enqueuedBy'],
             execution_config=ExecutionConfig.from_dict(obj['executionConfig']),
             job_id=obj['jobID'],
-            job_metadata=[ExecutionMetadata.from_dict(x) for x in obj['jobMetadata']],
+            job_metadata=[JobMetadata.from_dict(x) for x in obj['jobMetadata']],
             name=obj.get('name'),
             schedule=Schedule.from_dict(obj['schedule']),
             target_config=target_config,
