@@ -23,6 +23,28 @@ from .utils import to_datetime_strict
 from .utils import vars_to_str
 
 
+class ParameterType(Enum):
+    STR = 'string'
+    INT = 'integer'
+    FLOAT = 'float'
+    BOOL = 'boolean'
+
+    @classmethod
+    def from_str(cls, s: str) -> 'ParameterType':
+        try:
+            return cls[s.upper()]
+        except KeyError:
+            raise ValueError(f'Unknown ParameterType: {s}')
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return self.value
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
+
 class Mode(Enum):
     ONCE = 'Once'
     RECURRING = 'Recurring'
@@ -592,6 +614,7 @@ class JobsManager(object):
         start_at: Optional[datetime.datetime] = None,
         runtime_name: Optional[str] = None,
         resume_target: Optional[bool] = None,
+        parameters: Optional[List[(str, Any)]] = None,
     ) -> Job:
         """Creates and returns a scheduled notebook job."""
         if self._manager is None:
@@ -614,6 +637,16 @@ class JobsManager(object):
 
         if runtime_name is not None:
             execution_config['runtimeName'] = runtime_name
+
+        if parameters is not None:
+            execution_config['parameters'] = [
+                dict(
+                    name=p[0],
+                    value=p[1],
+                    type=ParameterType.from_str(type(p[1]).__name__),
+                ) for p in parameters
+            ]
+            print(execution_config['parameters'])
 
         target_config = None  # type: Optional[Dict[str, Any]]
         database_name = get_database_name()
@@ -661,10 +694,12 @@ class JobsManager(object):
         self,
         notebook_path: str,
         runtime_name: Optional[str] = None,
+        parameters: Optional[List[(str, Any)]] = None,
     ) -> Job:
         """
         Creates and returns a scheduled notebook job that
-        runs once immediately on a specific runtime.
+        runs once immediately on a specific runtime
+        With
         """
         return self.schedule(
             notebook_path,
@@ -672,6 +707,7 @@ class JobsManager(object):
             False,
             start_at=datetime.datetime.now(),
             runtime_name=runtime_name,
+            parameters=parameters,
         )
 
     def wait(self, jobs: List[Union[str, Job]], timeout: Optional[int] = None) -> bool:
