@@ -537,53 +537,48 @@ class TestJobsFusion(unittest.TestCase):
         self.cur.execute(
                 f'schedule job using notebook "{self.notebook_name}" '
                 'with mode "recurring" '
-                'execute every 1 '
+                'execute every 5 '
                 'with name "recurring-job" '
                 'create snapshot '
                 'resume target',
         )
-
+        out = list(self.cur)
+        job_id = out[0][0]
+        self.job_ids.append(job_id)
         desc = self.cur.description
         assert len(desc) == 1
         assert desc[0][0] == 'JobID'
-        out = list(self.cur)
         assert len(out) == 1
-        job_id = out[0][0]
-        self.job_ids.append(job_id)
 
         self.cur.execute(f'drop job {job_id}')
+        out = list(self.cur)
         desc = self.cur.description
         assert len(desc) == 1
         assert desc[0][0] == 'Success'
-        out = list(self.cur)
         assert out[0][0] == 1
 
     def test_run_wait_drop_job(self):
-        self.cur.execute(
-                f'run job using notebook "{self.notebook_name}" '
-                'with name "once-job"',
-        )
-
+        self.cur.execute(f'run job using notebook "{self.notebook_name}"')
+        out = list(self.cur)
+        job_id = out[0][0]
+        self.job_ids.append(job_id)
         desc = self.cur.description
         assert len(desc) == 1
         assert desc[0][0] == 'JobID'
-        out = list(self.cur)
         assert len(out) == 1
-        job_id = out[0][0]
-        self.job_ids.append(job_id)
 
         self.cur.execute(f'wait on jobs {job_id}')
+        out = list(self.cur)
         desc = self.cur.description
         assert len(desc) == 1
         assert desc[0][0] == 'Success'
-        out = list(self.cur)
         assert out[0][0] == 1
 
         self.cur.execute(f'drop job {job_id}')
+        out = list(self.cur)
         desc = self.cur.description
         assert len(desc) == 1
         assert desc[0][0] == 'Success'
-        out = list(self.cur)
         assert out[0][0] == 1
 
     def test_show_jobs(self):
