@@ -536,15 +536,16 @@ class TestJobsFusion(unittest.TestCase):
     def test_schedule_drop_job(self):
         self.cur.execute(
                 f'schedule job using notebook "{self.notebook_name}" '
-                'with mode "recurring" ',
-                'execute every 1 ',
-                'create snapshot ',
+                'with mode "recurring" '
+                'execute every 1 '
+                'with name "recurring-job" '
+                'create snapshot '
                 'resume target',
         )
 
         desc = self.cur.description
         assert len(desc) == 1
-        assert desc[0][0] == ['JobID']
+        assert desc[0][0] == 'JobID'
         out = list(self.cur)
         assert len(out) == 1
         job_id = out[0][0]
@@ -553,16 +554,19 @@ class TestJobsFusion(unittest.TestCase):
         self.cur.execute(f'drop job {job_id}')
         desc = self.cur.description
         assert len(desc) == 1
-        assert desc[0][0] == ['Success']
+        assert desc[0][0] == 'Success'
         out = list(self.cur)
         assert out[0][0] == 1
 
     def test_run_wait_drop_job(self):
-        self.cur.execute(f'run job using notebook "{self.notebook_name}"')
+        self.cur.execute(
+                f'run job using notebook "{self.notebook_name}" '
+                'with name "once-job"',
+        )
 
         desc = self.cur.description
         assert len(desc) == 1
-        assert desc[0][0] == ['JobID']
+        assert desc[0][0] == 'JobID'
         out = list(self.cur)
         assert len(out) == 1
         job_id = out[0][0]
@@ -571,14 +575,14 @@ class TestJobsFusion(unittest.TestCase):
         self.cur.execute(f'wait on jobs {job_id}')
         desc = self.cur.description
         assert len(desc) == 1
-        assert desc[0][0] == ['Success']
+        assert desc[0][0] == 'Success'
         out = list(self.cur)
         assert out[0][0] == 1
 
         self.cur.execute(f'drop job {job_id}')
         desc = self.cur.description
         assert len(desc) == 1
-        assert desc[0][0] == ['Success']
+        assert desc[0][0] == 'Success'
         out = list(self.cur)
         assert out[0][0] == 1
 

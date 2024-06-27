@@ -4,7 +4,6 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
-import singlestoredb as s2
 from .. import result
 from ...management.utils import to_datetime
 from ..handler import SQLHandler
