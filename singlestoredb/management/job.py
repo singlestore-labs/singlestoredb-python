@@ -24,26 +24,12 @@ from .utils import to_datetime_strict
 from .utils import vars_to_str
 
 
-class ParameterType(Enum):
-    STR = 'string'
-    INT = 'integer'
-    FLOAT = 'float'
-    BOOL = 'boolean'
-
-    @classmethod
-    def from_str(cls, s: str) -> 'ParameterType':
-        try:
-            return cls[s.upper()]
-        except KeyError:
-            raise ValueError(f'Unsupported ParameterType: {s}')
-
-    def __str__(self) -> str:
-        """Return string representation."""
-        return self.value
-
-    def __repr__(self) -> str:
-        """Return string representation."""
-        return str(self)
+type_to_parameter_conversion_map = {
+    str: 'string',
+    int: 'integer',
+    float: 'float',
+    bool: 'boolean',
+}
 
 
 class Mode(Enum):
@@ -112,6 +98,98 @@ class Status(Enum):
         return str(self)
 
 
+class Parameter(object):
+
+    name: str
+    value: str
+    type: str
+
+    def __init__(
+        self,
+        name: str,
+        value: str,
+        type: str,
+    ):
+        self.name = name
+        self.value = value
+        self.type = type
+
+    @classmethod
+    def from_dict(cls, obj: Dict[str, Any]) -> 'Parameter':
+        """
+        Construct a Parameter from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+
+        Returns
+        -------
+        :class:`Parameter`
+
+        """
+        out = cls(
+            name=obj['name'],
+            value=obj['value'],
+            type=obj['type'],
+        )
+
+        return out
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
+
+class Runtime(object):
+
+    name: str
+    description: str
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+    ):
+        self.name = name
+        self.description = description
+
+    @classmethod
+    def from_dict(cls, obj: Dict[str, Any]) -> 'Runtime':
+        """
+        Construct a Runtime from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+
+        Returns
+        -------
+        :class:`Runtime`
+
+        """
+        out = cls(
+            name=obj['name'],
+            description=obj['description'],
+        )
+
+        return out
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
+
 class JobMetadata(object):
 
     avg_duration_in_seconds: Optional[float]
@@ -166,16 +244,16 @@ class JobMetadata(object):
 
 class ExecutionMetadata(object):
 
-    startExecutionNumber: int
-    endExecutionNumber: int
+    start_execution_number: int
+    end_execution_number: int
 
     def __init__(
         self,
-        startExecutionNumber: int,
-        endExecutionNumber: int,
+        start_execution_number: int,
+        end_execution_number: int,
     ):
-        self.startExecutionNumber = startExecutionNumber
-        self.endExecutionNumber = endExecutionNumber
+        self.start_execution_number = start_execution_number
+        self.end_execution_number = end_execution_number
 
     @classmethod
     def from_dict(cls, obj: Dict[str, Any]) -> 'ExecutionMetadata':
@@ -193,8 +271,8 @@ class ExecutionMetadata(object):
 
         """
         out = cls(
-            startExecutionNumber=obj['startExecutionNumber'],
-            endExecutionNumber=obj['endExecutionNumber'],
+            start_execution_number=obj['startExecutionNumber'],
+            end_execution_number=obj['endExecutionNumber'],
         )
 
         return out
@@ -550,11 +628,11 @@ class Job(object):
         out._manager = manager
         return out
 
-    def wait(self, timeout: Optional[int] = None) -> None:
+    def wait(self, timeout: Optional[int] = None) -> bool:
         """Wait for the job to complete."""
         if self._manager is None:
             raise ManagementError(msg='Job not initialized with JobsManager')
-        self._manager._wait_for_job(self, timeout)
+        return self._manager._wait_for_job(self, timeout)
 
     def get_executions(
             self,
@@ -569,6 +647,12 @@ class Job(object):
             start_execution_number,
             end_execution_number,
         )
+
+    def get_parameters(self) -> List[Parameter]:
+        """Get parameters for the job."""
+        if self._manager is None:
+            raise ManagementError(msg='Job not initialized with JobsManager')
+        return self._manager.get_parameters(self.job_id)
 
     def delete(self) -> bool:
         """Delete the job."""
@@ -639,19 +723,9 @@ class JobsManager(object):
         if runtime_name is not None:
             execution_config['runtimeName'] = runtime_name
 
-        if parameters is not None:
-            execution_config['parameters'] = [
-                dict(
-                    name=p[0],
-                    value=p[1],
-                    type=ParameterType.from_str(type(p[1]).__name__),
-                ) for p in parameters
-            ]
-            print(execution_config['parameters'])
-
         target_config = None  # type: Optional[Dict[str, Any]]
         database_name = get_database_name()
-        if database_name is not None and database_name != '':
+        if database_name is not None:
             target_config = dict(
                 databaseName=database_name,
             )
@@ -688,6 +762,15 @@ class JobsManager(object):
         if description is not None:
             job_run_json['description'] = description
 
+        if parameters is not None:
+            job_run_json['parameters'] = [
+                dict(
+                    name=p[0],
+                    value=str(p[1]),
+                    type=type_to_parameter_conversion_map[type(p[1])],
+                ) for p in parameters
+            ]
+
         res = self._manager._post('jobs', json=job_run_json).json()
         return Job.from_dict(res, self)
 
@@ -697,11 +780,7 @@ class JobsManager(object):
         runtime_name: Optional[str] = None,
         parameters: Optional[List[Tuple[str, Any]]] = None,
     ) -> Job:
-        """
-        Creates and returns a scheduled notebook job that
-        runs once immediately on a specific runtime
-        With
-        """
+        """Creates and returns a scheduled notebook job that runs once immediately."""
         return self.schedule(
             notebook_path,
             Mode.ONCE,
@@ -712,7 +791,10 @@ class JobsManager(object):
         )
 
     def wait(self, jobs: List[Union[str, Job]], timeout: Optional[int] = None) -> bool:
+        """Wait for jobs to finish executing."""
         if timeout is not None:
+            if timeout <= 0:
+                return False
             finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
 
         for job in jobs:
@@ -732,6 +814,8 @@ class JobsManager(object):
             raise ManagementError(msg='JobsManager not initialized')
 
         if timeout is not None:
+            if timeout <= 0:
+                return False
             finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
 
         if isinstance(job, str):
@@ -740,7 +824,7 @@ class JobsManager(object):
             job_id = job.job_id
 
         while True:
-            if timeout is not None and datetime.datetime.now() > finish_time:
+            if timeout is not None and datetime.datetime.now() >= finish_time:
                 return False
 
             res = self._manager._get(f'jobs/{job_id}').json()
@@ -749,7 +833,7 @@ class JobsManager(object):
                 return True
             if job.schedule.mode == Mode.RECURRING:
                 raise ValueError(f'Cannot wait for recurring job {job_id}')
-            time.sleep(1)
+            time.sleep(5)
 
     def get(self, job_id: str) -> Job:
         """Get a job by its ID."""
@@ -776,6 +860,14 @@ class JobsManager(object):
         res = self._manager._get(path).json()
         return ExecutionsData.from_dict(res)
 
+    def get_parameters(self, job_id: str) -> List[Parameter]:
+        """Get parameters for a job by its ID."""
+        if self._manager is None:
+            raise ManagementError(msg='JobsManager not initialized')
+
+        res = self._manager._get(f'jobs/{job_id}/parameters').json()
+        return [Parameter.from_dict(p) for p in res]
+
     def delete(self, job_id: str) -> bool:
         """Delete a job by its ID."""
         if self._manager is None:
@@ -786,3 +878,11 @@ class JobsManager(object):
     def modes(self) -> Type[Mode]:
         """Get all possible job scheduling modes."""
         return Mode
+
+    def runtimes(self) -> List[Runtime]:
+        """Get all available job runtimes."""
+        if self._manager is None:
+            raise ManagementError(msg='JobsManager not initialized')
+
+        res = self._manager._get('jobs/runtimes').json()
+        return [Runtime.from_dict(r) for r in res]

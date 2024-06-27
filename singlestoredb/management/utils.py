@@ -217,22 +217,22 @@ def get_token() -> Optional[str]:
 
 def get_cluster_id() -> Optional[str]:
     """Return the cluster id for the current token or environment."""
-    return os.environ.get('SINGLESTOREDB_CLUSTER')
+    return os.environ.get('SINGLESTOREDB_CLUSTER') or None
 
 
 def get_workspace_id() -> Optional[str]:
     """Return the workspace id for the current token or environment."""
-    return os.environ.get('SINGLESTOREDB_WORKSPACE')
+    return os.environ.get('SINGLESTOREDB_WORKSPACE') or None
 
 
 def get_virtual_workspace_id() -> Optional[str]:
     """Return the virtual workspace id for the current token or environment."""
-    return os.environ.get('SINGLESTOREDB_VIRTUAL_WORKSPACE')
+    return os.environ.get('SINGLESTOREDB_VIRTUAL_WORKSPACE') or None
 
 
 def get_database_name() -> Optional[str]:
     """Return the default database name for the current token or environment."""
-    return os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE')
+    return os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE') or None
 
 
 def enable_http_tracing() -> None:
