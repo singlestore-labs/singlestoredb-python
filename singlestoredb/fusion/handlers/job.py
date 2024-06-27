@@ -535,3 +535,40 @@ class ShowJobExecutionsHandler(SQLHandler):
 
 
 ShowJobExecutionsHandler.register(overwrite=True)
+
+
+class DropJobHandler(SQLHandler):
+    """
+    DROP JOB job_id;
+
+    # ID of the job to drop
+    job_id = '<job-id>'
+
+    Description
+    -----------
+    Drops the job with the specified ID.
+
+    Arguments
+    ---------
+    * ``<job-id>``: The ID of the job to drop.
+
+    Example
+    -------
+    The following command drops the job with ID **job1**::
+
+        DROP JOB 'job1';
+    """
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        res = FusionSQLResult()
+        res.add_field('Success', result.BOOL)
+
+        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
+
+        success = jobs_manager.delete(params['job_id'])
+        res.set_rows([(success,)])
+
+        return res
+
+
+DropJobHandler.register(overwrite=True)
