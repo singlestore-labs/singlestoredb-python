@@ -536,6 +536,7 @@ class TestJobsFusion(unittest.TestCase):
             pass
 
     def test_schedule_drop_job(self):
+        # schedule recurring job
         self.cur.execute(
                 f'schedule job using notebook "{self.notebook_name}" '
                 'with mode "recurring" '
@@ -551,7 +552,9 @@ class TestJobsFusion(unittest.TestCase):
         assert len(desc) == 1
         assert desc[0][0] == 'JobID'
         assert len(out) == 1
+        assert out[0][0] == job_id
 
+        # drop job
         self.cur.execute(f'drop job {job_id}')
         out = list(self.cur)
         desc = self.cur.description
@@ -560,6 +563,7 @@ class TestJobsFusion(unittest.TestCase):
         assert out[0][0] == 1
 
     def test_run_wait_drop_job(self):
+        # run job
         self.cur.execute(f'run job using notebook "{self.notebook_name}"')
         out = list(self.cur)
         job_id = out[0][0]
@@ -568,7 +572,9 @@ class TestJobsFusion(unittest.TestCase):
         assert len(desc) == 1
         assert desc[0][0] == 'JobID'
         assert len(out) == 1
+        assert out[0][0] == job_id
 
+        # wait on job
         self.cur.execute(f'wait on jobs {job_id}')
         out = list(self.cur)
         desc = self.cur.description
@@ -576,6 +582,7 @@ class TestJobsFusion(unittest.TestCase):
         assert desc[0][0] == 'Success'
         assert out[0][0] == 1
 
+        # drop job
         self.cur.execute(f'drop job {job_id}')
         out = list(self.cur)
         desc = self.cur.description
@@ -583,8 +590,96 @@ class TestJobsFusion(unittest.TestCase):
         assert desc[0][0] == 'Success'
         assert out[0][0] == 1
 
-    def test_show_jobs(self):
-        pass
+    def test_show_jobs_and_executions(self):
+        # schedule recurring job
+        self.cur.execute(
+                f'schedule job using notebook "{self.notebook_name}" '
+                'with mode "recurring" '
+                'execute every 5 '
+                'with name "show-job"',
+        )
+        out = list(self.cur)
+        job_id = out[0][0]
+        self.job_ids.append(job_id)
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0][0] == 'JobID'
+        assert len(out) == 1
+        assert out[0][0] == job_id
 
-    def test_show_job_executions(self):
-        pass
+        # show jobs with name like "show-job"
+        self.cur.execute(f'show jobs {job_id} like "show-job"')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 9
+        assert desc[0][0] == [
+            'JobID', 'Name', 'CreatedAt', 'EnqueuedBy',
+            'CompletedExecutionsCount', 'NotebookPath', 'DatabaseName', 'TargetID',
+            'TargetType',
+        ]
+        assert len(out) == 1
+        job = out[0]
+        assert job[0] == job_id
+        assert job[1] == 'show-job'
+        assert job[5] == self.notebook_name
+        assert job[6] == self.dbname
+        assert job[7] == self.workspace.id
+        assert job[8] == 'Workspace'
+
+        # show jobs with name like "show-job" extended
+        self.cur.execute(f'show jobs {job_id} like "show-job" extended')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 17
+        assert desc[0][0] == [
+            'JobID', 'Name', 'CreatedAt', 'EnqueuedBy',
+            'CompletedExecutionsCount', 'NotebookPath', 'DatabaseName', 'TargetID',
+            'TargetType', 'Description', 'TerminatedAt', 'CreateSnapshot',
+            'MaxDurationInMins', 'ExecutionIntervalInMins', 'Mode', 'StartAt',
+            'ResumeTarget',
+        ]
+        assert len(out) == 1
+        job = out[0]
+        assert job[0] == job_id
+        assert job[1] == 'show-job'
+        assert job[5] == self.notebook_name
+        assert job[6] == self.dbname
+        assert job[7] == self.workspace.id
+        assert job[8] == 'Workspace'
+        assert not job[11]
+        assert job[13] == 5
+        assert job[14] == 'Recurring'
+        assert not job[16]
+
+        # show executions for job with id job_id from 1 to 5
+        self.cur.execute(f'show job executions {job_id} from 1 to 5')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 7
+        assert [x[0] for x in desc] == [
+            'ExecutionID', 'ExecutionNumber', 'JobID',
+            'Status', 'ScheduledStartTime', 'StartedAt', 'FinishedAt',
+        ]
+        exec_job_ids = [x[2] for x in out]
+        assert [x for x in exec_job_ids] == job_id
+
+        # show executions for job with id job_id from 1 to 5 extended
+        self.cur.execute(f'show job executions {job_id} from 1 to 5 extended')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 8
+        assert [x[0] for x in desc] == [
+            'ExecutionID', 'ExecutionNumber', 'JobID',
+            'Status', 'ScheduledStartTime', 'StartedAt', 'FinishedAt',
+            'SnapshotNotebookPath',
+        ]
+        exec_job_ids = [x[2] for x in out]
+        assert [x for x in exec_job_ids] == job_id
+
+        # drop job
+        self.cur.execute(f'drop job {job_id}')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0][0] == 'Success'
+        assert out[0][0] == 1
