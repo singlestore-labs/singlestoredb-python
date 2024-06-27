@@ -10,6 +10,7 @@ from ...management.utils import to_datetime
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
 from .utils import dt_isoformat
+from .utils import get_workspace_manager
 from singlestoredb.management.job import Mode
 
 
@@ -137,7 +138,7 @@ class ScheduleJobHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('JobID', result.STRING)
 
-        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
+        jobs_manager = get_workspace_manager().organizations.current.jobs
 
         parameters = None
         if params.get('with_parameters'):
@@ -240,7 +241,7 @@ class RunJobHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('JobID', result.STRING)
 
-        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
+        jobs_manager = get_workspace_manager().organizations.current.jobs
 
         parameters = None
         if params.get('with_parameters'):
@@ -302,7 +303,7 @@ class WaitOnJobsHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('Success', result.BOOL)
 
-        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
+        jobs_manager = get_workspace_manager().organizations.current.jobs
 
         success = jobs_manager.wait(
             params['job_ids'],
@@ -366,7 +367,7 @@ class ShowJobsHandler(SQLHandler):
         res.add_field('TargetID', result.STRING)
         res.add_field('TargetType', result.STRING)
 
-        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
+        jobs_manager = get_workspace_manager().organizations.current.jobs
 
         jobs = []
         for job_id in params['job_ids']:
@@ -495,7 +496,7 @@ class ShowJobExecutionsHandler(SQLHandler):
         res.add_field('StartedAt', result.DATETIME)
         res.add_field('FinishedAt', result.DATETIME)
 
-        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
+        jobs_manager = get_workspace_manager().organizations.current.jobs
 
         executionsData = jobs_manager.get_executions(
             params['job_id'],
@@ -563,7 +564,7 @@ class DropJobHandler(SQLHandler):
         res = FusionSQLResult()
         res.add_field('Success', result.BOOL)
 
-        jobs_manager = s2.manage_workspaces(base_url='http://apisvc.default.svc.cluster.local:8080').organizations.current.jobs
+        jobs_manager = get_workspace_manager().organizations.current.jobs
 
         success = jobs_manager.delete(params['job_id'])
         res.set_rows([(success,)])
