@@ -631,7 +631,7 @@ class TestJobsFusion(unittest.TestCase):
         out = list(self.cur)
         desc = self.cur.description
         assert len(desc) == 17
-        assert desc[0][0] == [
+        assert [x[0] for x in desc] == [
             'JobID', 'Name', 'CreatedAt', 'EnqueuedBy',
             'CompletedExecutionsCount', 'NotebookPath', 'DatabaseName', 'TargetID',
             'TargetType', 'Description', 'TerminatedAt', 'CreateSnapshot',
