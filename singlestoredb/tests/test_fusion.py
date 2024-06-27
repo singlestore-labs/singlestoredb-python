@@ -91,7 +91,7 @@ class TestFusion(unittest.TestCase):
 
 
 @pytest.mark.management
-class TestManagementAPIFusion(unittest.TestCase):
+class TestWorkspaceFusion(unittest.TestCase):
 
     id: str = secrets.token_hex(8)
     dbname: str = ''
@@ -463,3 +463,127 @@ class TestManagementAPIFusion(unittest.TestCase):
                 mgr.workspace_groups[wg_name].terminate(force=True)
             except Exception:
                 pass
+
+
+@pytest.mark.management
+class TestJobsFusion(unittest.TestCase):
+
+    id: str = secrets.token_hex(8)
+    notebook_name: str = 'Scheduling Test.ipynb'
+    dbname: str = ''
+    dbexisted: bool = False
+    workspace_group: None
+    workspace: None
+    job_ids = []
+
+    @classmethod
+    def setUpClass(cls):
+        sql_file = os.path.join(os.path.dirname(__file__), 'test.sql')
+        cls.dbname, cls.dbexisted = utils.load_sql(sql_file)
+        mgr = s2.manage_workspaces()
+        us_regions = [x for x in mgr.regions if x.name.startswith('US')]
+        cls.workspace_group = mgr.create_workspace_group(
+            f'Jobs Fusion Testing {cls.id}',
+            region=random.choice(us_regions),
+            firewall_ranges=[],
+        )
+        cls.workspace = cls.workspace_group.create_workspace(
+                f'jobs-test-{cls.id}',
+                wait_on_active=True,
+        )
+        os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] = cls.dbname
+        os.environ['SINGLESTOREDB_WORKSPACE'] = cls.workspace.id
+
+    @classmethod
+    def tearDownClass(cls):
+        for job_id in cls.job_ids:
+            cls.manager.organizations.current.jobs.delete(job_id)
+        if cls.workspace_group is not None:
+            cls.workspace_group.terminate(force=True)
+        cls.workspace_group = None
+        cls.workspace = None
+        if os.environ.get('SINGLESTOREDB_WORKSPACE', None) is not None:
+            del os.environ['SINGLESTOREDB_WORKSPACE']
+        if os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE', None) is not None:
+            del os.environ['SINGLESTOREDB_DEFAULT_DATABASE']
+
+    def setUp(self):
+        self.enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLED')
+        os.environ['SINGLESTOREDB_FUSION_ENABLED'] = '1'
+        self.conn = s2.connect(database=type(self).dbname, local_infile=True)
+        self.cur = self.conn.cursor()
+
+    def tearDown(self):
+        if self.enabled:
+            os.environ['SINGLESTOREDB_FUSION_ENABLED'] = self.enabled
+        else:
+            del os.environ['SINGLESTOREDB_FUSION_ENABLED']
+
+        try:
+            if self.cur is not None:
+                self.cur.close()
+        except Exception:
+            # traceback.print_exc()
+            pass
+
+        try:
+            if self.conn is not None:
+                self.conn.close()
+        except Exception:
+            # traceback.print_exc()
+            pass
+
+    def test_schedule_drop_job(self):
+        self.cur.execute(
+                f'schedule job using notebook "{self.notebook_name}" '
+                'with mode "recurring" ',
+                'execute every 1 ',
+                'create snapshot ',
+                'resume target',
+        )
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0][0] == ['JobID']
+        out = list(self.cur)
+        assert len(out) == 1
+        job_id = out[0][0]
+        self.job_ids.append(job_id)
+
+        self.cur.execute(f'drop job {job_id}')
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0][0] == ['Success']
+        out = list(self.cur)
+        assert out[0][0] == 1
+
+    def test_run_wait_drop_job(self):
+        self.cur.execute(f'run job using notebook "{self.notebook_name}"')
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0][0] == ['JobID']
+        out = list(self.cur)
+        assert len(out) == 1
+        job_id = out[0][0]
+        self.job_ids.append(job_id)
+
+        self.cur.execute(f'wait on jobs {job_id}')
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0][0] == ['Success']
+        out = list(self.cur)
+        assert out[0][0] == 1
+
+        self.cur.execute(f'drop job {job_id}')
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0][0] == ['Success']
+        out = list(self.cur)
+        assert out[0][0] == 1
+
+    def test_show_jobs(self):
+        pass
+
+    def test_show_job_executions(self):
+        pass
