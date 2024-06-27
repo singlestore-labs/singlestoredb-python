@@ -472,6 +472,7 @@ class TestJobsFusion(unittest.TestCase):
     notebook_name: str = 'Scheduling Test.ipynb'
     dbname: str = ''
     dbexisted: bool = False
+    manager: None
     workspace_group: None
     workspace: None
     job_ids = []
@@ -480,9 +481,9 @@ class TestJobsFusion(unittest.TestCase):
     def setUpClass(cls):
         sql_file = os.path.join(os.path.dirname(__file__), 'test.sql')
         cls.dbname, cls.dbexisted = utils.load_sql(sql_file)
-        mgr = s2.manage_workspaces()
-        us_regions = [x for x in mgr.regions if x.name.startswith('US')]
-        cls.workspace_group = mgr.create_workspace_group(
+        cls.manager = s2.manage_workspaces()
+        us_regions = [x for x in cls.manager.regions if x.name.startswith('US')]
+        cls.workspace_group = cls.manager.create_workspace_group(
             f'Jobs Fusion Testing {cls.id}',
             region=random.choice(us_regions),
             firewall_ranges=[],
@@ -500,6 +501,7 @@ class TestJobsFusion(unittest.TestCase):
             cls.manager.organizations.current.jobs.delete(job_id)
         if cls.workspace_group is not None:
             cls.workspace_group.terminate(force=True)
+        cls.manager = None
         cls.workspace_group = None
         cls.workspace = None
         if os.environ.get('SINGLESTOREDB_WORKSPACE', None) is not None:
