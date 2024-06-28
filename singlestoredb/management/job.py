@@ -713,6 +713,8 @@ class JobsManager(object):
 
     def wait(self, jobs: List[Union[str, Job]], timeout: Optional[int] = None) -> bool:
         if timeout is not None:
+            if timeout <= 0:
+                return False
             finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
 
         for job in jobs:
@@ -732,6 +734,8 @@ class JobsManager(object):
             raise ManagementError(msg='JobsManager not initialized')
 
         if timeout is not None:
+            if timeout <= 0:
+                return False
             finish_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
 
         if isinstance(job, str):
@@ -740,7 +744,7 @@ class JobsManager(object):
             job_id = job.job_id
 
         while True:
-            if timeout is not None and datetime.datetime.now() > finish_time:
+            if timeout is not None and datetime.datetime.now() >= finish_time:
                 return False
 
             res = self._manager._get(f'jobs/{job_id}').json()
