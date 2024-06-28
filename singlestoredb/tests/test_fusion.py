@@ -614,7 +614,7 @@ class TestJobsFusion(unittest.TestCase):
         assert len(desc) == 9
         assert [x[0] for x in desc] == [
             'JobID', 'Name', 'CreatedAt', 'EnqueuedBy',
-            'CompletedExecutionsCount', 'NotebookPath', 'DatabaseName', 'TargetID',
+            'CompletedExecutions', 'NotebookPath', 'DatabaseName', 'TargetID',
             'TargetType',
         ]
         assert len(out) == 1
@@ -633,7 +633,7 @@ class TestJobsFusion(unittest.TestCase):
         assert len(desc) == 17
         assert [x[0] for x in desc] == [
             'JobID', 'Name', 'CreatedAt', 'EnqueuedBy',
-            'CompletedExecutionsCount', 'NotebookPath', 'DatabaseName', 'TargetID',
+            'CompletedExecutions', 'NotebookPath', 'DatabaseName', 'TargetID',
             'TargetType', 'Description', 'TerminatedAt', 'CreateSnapshot',
             'MaxDurationInMins', 'ExecutionIntervalInMins', 'Mode', 'StartAt',
             'ResumeTarget',
