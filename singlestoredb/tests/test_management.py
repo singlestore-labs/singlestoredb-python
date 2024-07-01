@@ -22,6 +22,171 @@ def clean_name(s):
 
 
 @pytest.mark.management
+class TestCluster(unittest.TestCase):
+
+    manager = None
+    cluster = None
+    password = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = s2.manage_cluster()
+
+        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
+        cls.password = secrets.token_urlsafe(20) + '-x&'
+
+        cls.cluster = cls.manager.create_cluster(
+            clean_name('cm-test-{}'.format(secrets.token_urlsafe(20)[:20])),
+            region=random.choice(us_regions).id,
+            admin_password=cls.password,
+            firewall_ranges=['0.0.0.0/0'],
+            expires_at='1h',
+            size='S-00',
+            wait_on_active=True,
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.cluster is not None:
+            cls.cluster.terminate()
+        cls.cluster = None
+        cls.manager = None
+        cls.password = None
+
+    def test_str(self):
+        assert self.cluster.name in str(self.cluster.name)
+
+    def test_repr(self):
+        assert repr(self.cluster) == str(self.cluster)
+
+    def test_region_str(self):
+        s = str(self.cluster.region)
+        assert 'Azure' in s or 'GCP' in s or 'AWS' in s, s
+
+    def test_region_repr(self):
+        assert repr(self.cluster.region) == str(self.cluster.region)
+
+    def test_regions(self):
+        out = self.manager.regions
+        providers = {x.provider for x in out}
+        names = [x.name for x in out]
+        assert 'Azure' in providers, providers
+        assert 'GCP' in providers, providers
+        assert 'AWS' in providers, providers
+
+        objs = {}
+        ids = []
+        for item in out:
+            ids.append(item.id)
+            objs[item.id] = item
+            if item.name not in objs:
+                objs[item.name] = item
+
+        name = random.choice(names)
+        assert out[name] == objs[name]
+        id = random.choice(ids)
+        assert out[id] == objs[id]
+
+    def test_clusters(self):
+        clusters = self.manager.clusters
+        ids = [x.id for x in clusters]
+        assert self.cluster.id in ids, ids
+
+    def test_get_cluster(self):
+        clus = self.manager.get_cluster(self.cluster.id)
+        assert clus.id == self.cluster.id, clus.id
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            clus = self.manager.get_cluster('bad id')
+
+        assert 'UUID' in cm.exception.msg, cm.exception.msg
+
+    def test_update(self):
+        assert self.cluster.name.startswith('cm-test-')
+
+        name = self.cluster.name.replace('cm-test-', 'cm-foo-')
+        self.cluster.update(name=name)
+
+        clus = self.manager.get_cluster(self.cluster.id)
+        assert clus.name == name, clus.name
+
+    def test_suspend_resume(self):
+        trues = ['1', 'on', 'true']
+        do_test = os.environ.get('SINGLESTOREDB_TEST_SUSPEND', '0').lower() in trues
+
+        if not do_test:
+            self.skipTest(
+                'Suspend / resume tests skipped by default due to '
+                'being time consuming; set SINGLESTOREDB_TEST_SUSPEND=1 '
+                'to enable',
+            )
+
+        assert self.cluster.state != 'Suspended', self.cluster.state
+
+        self.cluster.suspend(wait_on_suspended=True)
+        assert self.cluster.state == 'Suspended', self.cluster.state
+
+        self.cluster.resume(wait_on_resumed=True)
+        assert self.cluster.state == 'Active', self.cluster.state
+
+    def test_no_manager(self):
+        clus = self.manager.get_cluster(self.cluster.id)
+        clus._manager = None
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            clus.refresh()
+
+        assert 'No cluster manager' in cm.exception.msg, cm.exception.msg
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            clus.update()
+
+        assert 'No cluster manager' in cm.exception.msg, cm.exception.msg
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            clus.suspend()
+
+        assert 'No cluster manager' in cm.exception.msg, cm.exception.msg
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            clus.resume()
+
+        assert 'No cluster manager' in cm.exception.msg, cm.exception.msg
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            clus.terminate()
+
+        assert 'No cluster manager' in cm.exception.msg, cm.exception.msg
+
+    def test_connect(self):
+        trues = ['1', 'on', 'true']
+        pure_python = os.environ.get('SINGLESTOREDB_PURE_PYTHON', '0').lower() in trues
+
+        self.skipTest('Connection test is disable due to flakey server')
+
+        if pure_python:
+            self.skipTest('Connections through managed service are disabled')
+
+        try:
+            with self.cluster.connect(user='admin', password=self.password) as conn:
+                with conn.cursor() as cur:
+                    cur.execute('show databases')
+                    assert 'cluster' in [x[0] for x in list(cur)]
+        except s2.ManagementError as exc:
+            if 'endpoint has not been set' not in str(exc):
+                self.skipTest('No endpoint in response. Skipping connection test.')
+
+        # Test missing endpoint
+        clus = self.manager.get_cluster(self.cluster.id)
+        clus.endpoint = None
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            clus.connect(user='admin', password=self.password)
+
+        assert 'endpoint' in cm.exception.msg, cm.exception.msg
+
+
+@pytest.mark.management
 class TestWorkspace(unittest.TestCase):
 
     manager = None

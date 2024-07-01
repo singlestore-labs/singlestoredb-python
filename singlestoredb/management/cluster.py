@@ -330,7 +330,7 @@ class ClusterManager(Manager):
     """
 
     #: Cluster management API version if none is specified.
-    default_version = config.get_option('management.version')
+    default_version = 'v0beta'
 
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url')
