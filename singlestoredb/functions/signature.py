@@ -45,15 +45,17 @@ if has_numpy:
         np.uint8: 'uint8',
         np.longlong: 'uint64',
         np.ulonglong: 'uint64',
-        np.unicode_: 'str',
         np.str_: 'str',
         np.bytes_: 'bytes',
-        np.float_: 'float64',
         np.float64: 'float64',
         np.float32: 'float32',
         np.float16: 'float16',
         np.double: 'float64',
     }
+    if hasattr(np, 'unicode_'):
+        numpy_type_map[np.unicode_] = 'str'
+    if hasattr(np, 'float_'):
+        numpy_type_map[np.float_] = 'float64'
 else:
     array_types = (Sequence,)
     numpy_type_map = {}
