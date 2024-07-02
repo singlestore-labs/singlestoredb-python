@@ -136,15 +136,14 @@ class ScheduleJobHandler(SQLHandler):
 
         execution_interval_in_mins = params['execute_every'][0]['interval']
         time_unit = params['execute_every'][-1]['time_unit'].upper()
-        match time_unit:
-            case 'MINUTES':
-                pass
-            case 'HOURS':
-                execution_interval_in_mins *= 60
-            case 'DAYS':
-                execution_interval_in_mins *= 60 * 24
-            case _:
-                raise ValueError(f'Invalid time unit: {time_unit}')
+        if time_unit == 'MINUTES':
+            pass
+        elif time_unit == 'HOURS':
+            execution_interval_in_mins *= 60
+        elif time_unit == 'DAYS':
+            execution_interval_in_mins *= 60 * 24
+        else:
+            raise ValueError(f'Invalid time unit: {time_unit}')
 
         job = jobs_manager.schedule(
             notebook_path=params['notebook_path'],
