@@ -45,10 +45,8 @@ class ScheduleJobHandler(SQLHandler):
     # Description of the job
     with_description = WITH DESCRIPTION '<job-description>'
 
-    # Execution interval in minutes
+    # Execution interval
     execute_every = EXECUTE EVERY <integer> time_unit
-
-    # Time unit for execution interval
     time_unit = { MINUTES | HOURS | DAYS }
 
     # Start time
@@ -72,7 +70,7 @@ class ScheduleJobHandler(SQLHandler):
     * ``<runtime-name>``: The name of the runtime the job will be run with.
     * ``<job-name>``: The name of the job.
     * ``<job-description>``: The description of the job.
-    * ``<integer>``: The interval in minutes at which the job will be executed.
+    * ``<integer>``: The interval at which the job will be executed.
     * ``<year>-<month>-<day> <hour>:<min>:<sec>``: The start date and time of the
       job in UTC. The format is **yyyy-MM-dd HH:mm:ss**. The hour is in 24-hour format.
     * ``<parameters>``: The parameters to pass to the job. A JSON string with
@@ -83,7 +81,8 @@ class ScheduleJobHandler(SQLHandler):
     * The ``WITH MODE`` clause specifies the mode of the job and is either
       **Once** or **Recurring**.
     * The ``EXECUTE EVERY`` clause specifies the interval at which the job will be
-      executed. The interval can be in minutes, hours, or days.
+      executed. The interval can be in minutes, hours, or days. It is mandatory to
+      specify the interval if the mode is **Recurring**.
     * The ``CREATE SNAPSHOT`` clause creates a snapshot of the notebook executed by
       the job.
     * The ``WITH RUNTIME`` clause specifies the name of the runtime that
