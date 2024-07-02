@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.4.1 - July 2, 2024
+---------------------
+* Fix binary vector conversions
+* Add async events for JWT updates
+
 v1.4.0 - June 13, 2024
 ----------------------
 * Add `ai` module
