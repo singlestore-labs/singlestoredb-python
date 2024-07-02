@@ -46,7 +46,8 @@ class ScheduleJobHandler(SQLHandler):
     with_description = WITH DESCRIPTION '<job-description>'
 
     # Execution interval
-    execute_every = EXECUTE EVERY <integer> time_unit
+    execute_every = EXECUTE EVERY interval time_unit
+    interval = <integer>
     time_unit = { MINUTES | HOURS | DAYS }
 
     # Start time
@@ -133,7 +134,7 @@ class ScheduleJobHandler(SQLHandler):
             for name, value in json_params.items():
                 parameters.append((name, value))
 
-        execution_interval_in_mins = params['execute_every'][0]
+        execution_interval_in_mins = params['execute_every'][0]['interval']
         time_unit = params['execute_every'][-1]['time_unit'].upper()
         match time_unit:
             case 'MINUTES':
