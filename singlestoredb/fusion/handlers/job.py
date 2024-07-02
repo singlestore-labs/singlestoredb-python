@@ -113,7 +113,7 @@ class ScheduleJobHandler(SQLHandler):
                               "strParam": "string",
                               "intParam": 1,
                               "floatParam": 1.0,
-                              "boolParam": true,
+                              "boolParam": true
                             }'
         ;
     """
@@ -200,7 +200,7 @@ class RunJobHandler(SQLHandler):
                               "strParam": "string",
                               "intParam": 1,
                               "floatParam": 1.0,
-                              "boolParam": true,
+                              "boolParam": true
                             }'
         ;
 

@@ -643,7 +643,7 @@ class JobsManager(object):
             execution_config['parameters'] = [
                 dict(
                     name=p[0],
-                    value=p[1],
+                    value=str(p[1]),
                     type=ParameterType.from_str(type(p[1]).__name__),
                 ) for p in parameters
             ]
