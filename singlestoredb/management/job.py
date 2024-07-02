@@ -753,7 +753,7 @@ class JobsManager(object):
                 return True
             if job.schedule.mode == Mode.RECURRING:
                 raise ValueError(f'Cannot wait for recurring job {job_id}')
-            time.sleep(1)
+            time.sleep(5)
 
     def get(self, job_id: str) -> Job:
         """Get a job by its ID."""
