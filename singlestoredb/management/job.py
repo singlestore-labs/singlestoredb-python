@@ -166,16 +166,16 @@ class JobMetadata(object):
 
 class ExecutionMetadata(object):
 
-    startExecutionNumber: int
-    endExecutionNumber: int
+    start_execution_number: int
+    end_execution_number: int
 
     def __init__(
         self,
-        startExecutionNumber: int,
-        endExecutionNumber: int,
+        start_execution_number: int,
+        end_execution_number: int,
     ):
-        self.startExecutionNumber = startExecutionNumber
-        self.endExecutionNumber = endExecutionNumber
+        self.start_execution_number = start_execution_number
+        self.end_execution_number = end_execution_number
 
     @classmethod
     def from_dict(cls, obj: Dict[str, Any]) -> 'ExecutionMetadata':
@@ -193,8 +193,8 @@ class ExecutionMetadata(object):
 
         """
         out = cls(
-            startExecutionNumber=obj['startExecutionNumber'],
-            endExecutionNumber=obj['endExecutionNumber'],
+            start_execution_number=obj['startExecutionNumber'],
+            end_execution_number=obj['endExecutionNumber'],
         )
 
         return out
@@ -651,7 +651,7 @@ class JobsManager(object):
 
         target_config = None  # type: Optional[Dict[str, Any]]
         database_name = get_database_name()
-        if database_name is not None and database_name != '':
+        if database_name is not None:
             target_config = dict(
                 databaseName=database_name,
             )

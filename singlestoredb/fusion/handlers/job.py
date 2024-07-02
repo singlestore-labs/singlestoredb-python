@@ -73,8 +73,7 @@ class ScheduleJobHandler(SQLHandler):
     * ``<year>-<month>-<day> <hour>:<min>:<sec>``: The start date and time of the
       job in UTC. The format is **yyyy-MM-dd HH:mm:ss**. The hour is in 24-hour format.
     * ``<parameters>``: The parameters to pass to the job. A JSON string with
-      the following format:
-      ``{"parameters": [{"name": "<name>", "value": "<value>"}, ...]}``.
+      the following format: ``{"<paramName>": "<paramValue>", ...}``.
 
     Remarks
     -------
@@ -111,24 +110,10 @@ class ScheduleJobHandler(SQLHandler):
             START AT '2024-06-25 21:35:06'
             RESUME TARGET
             WITH PARAMETERS '{
-                                "parameters": [
-                                  {
-                                    "name": "strParam",
-                                    "value": "string"
-                                  },
-                                  {
-                                    "name": "intParam",
-                                    "value": 1
-                                  },
-                                  {
-                                    "name": "floatParam",
-                                    "value" : 1.0
-                                  },
-                                  {
-                                    "name": "boolParam",
-                                    "value" : true
-                                  },
-                                ]
+                              "strParam": "string",
+                              "intParam": 1,
+                              "floatParam": 1.0,
+                              "boolParam": true,
                             }'
         ;
     """
@@ -143,8 +128,8 @@ class ScheduleJobHandler(SQLHandler):
         if params.get('with_parameters'):
             parameters = []
             json_params = json.loads(params['with_parameters'])
-            for param in json_params['parameters']:
-                parameters.append((param['name'], param['value']))
+            for name, value in json_params.items():
+                parameters.append((name, value))
 
         job = jobs_manager.schedule(
             notebook_path=params['notebook_path'],
@@ -191,8 +176,7 @@ class RunJobHandler(SQLHandler):
     * ``<notebook-path>``: The path in the Stage where the notebook file is stored.
     * ``<runtime-name>``: The name of the runtime the job will be run with.
     * ``<parameters>``: The parameters to pass to the job. A JSON string with
-      the following format:
-      ``{"parameters": [{"name": "<name>", "value": "<value>"}, ...]}``.
+      the following format: ``{"<paramName>": "<paramValue>", ...}``.
 
     Remarks
     -------
@@ -213,24 +197,10 @@ class RunJobHandler(SQLHandler):
         RUN JOB USING NOTEBOOK 'example_notebook.ipynb'
            WITH RUNTIME 'notebooks-cpu-small'
            WITH PARAMETERS '{
-                                "parameters": [
-                                  {
-                                    "name": "strParam",
-                                    "value": "string"
-                                  },
-                                  {
-                                    "name": "intParam",
-                                    "value": 1
-                                  },
-                                  {
-                                    "name": "floatParam",
-                                    "value" : 1.0
-                                  },
-                                  {
-                                    "name": "boolParam",
-                                    "value" : true
-                                  },
-                                ]
+                              "strParam": "string",
+                              "intParam": 1,
+                              "floatParam": 1.0,
+                              "boolParam": true,
                             }'
         ;
 
