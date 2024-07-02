@@ -421,6 +421,7 @@ typedef struct {
     PyObject *float64;
     PyObject *unpack;
     PyObject *decode;
+    PyObject *frombuffer;
 } PyStrings;
 
 static PyStrings PyStr = {0};
@@ -437,6 +438,7 @@ typedef struct {
     PyObject *datetime_datetime;
     PyObject *collections_namedtuple;
     PyObject *numpy_array;
+    PyObject *numpy_frombuffer;
     PyObject *numpy_vectorize;
     PyObject *pandas_DataFrame;
     PyObject *polars_DataFrame;
@@ -520,6 +522,9 @@ int ensure_numpy() {
 
     PyFunc.numpy_array = PyObject_GetAttr(numpy_mod, PyStr.array);
     if (!PyFunc.numpy_array) goto error;
+
+    PyFunc.numpy_frombuffer = PyObject_GetAttr(numpy_mod, PyStr.frombuffer);
+    if (!PyFunc.numpy_frombuffer) goto error;
 
     PyFunc.numpy_vectorize = PyObject_GetAttr(numpy_mod, PyStr.vectorize);
     if (!PyFunc.numpy_vectorize) goto error;
@@ -1476,7 +1481,7 @@ static PyObject *read_row_from_packet(
     PyObject *py_str = NULL;
     PyObject *py_memview = NULL;
     char end = '\0';
-    char *cast_type_codes[] = {"", "f", "d", "b", "h", "l", "q"};
+    char *cast_type_codes[] = {"", "f", "d", "b", "h", "i", "q"};
     int item_type_lengths[] = {0, 4, 8, 1, 2, 4, 8};
 
     int sign = 1;
@@ -1773,17 +1778,20 @@ static PyObject *read_row_from_packet(
                 case MYSQL_TYPE_INT16_VECTOR:
                 case MYSQL_TYPE_INT32_VECTOR:
                 case MYSQL_TYPE_INT64_VECTOR:
+                {
+                    int type_idx = py_state->type_codes[i] % 1000;
+
                     if (ensure_numpy() == 0) {
-                        py_memview = PyMemoryView_FromMemory(out, out_l, PyBUF_WRITE);
+                        py_memview = PyBytes_FromStringAndSize(out, out_l);
                         if (!py_memview) goto error;
 
-                        py_item = create_numpy_array(
-                            py_memview,
-                            cast_type_codes[py_state->type_codes[i] % 1000],
-                            py_state->type_codes[i],
-                            NULL
+                        CHECKRC(PyTuple_SetItem(PyObj.create_numpy_array_args, 0, py_memview));
+
+                        py_item = PyObject_Call(
+                            PyFunc.numpy_frombuffer,
+                            PyObj.create_numpy_array_args,
+                            PyObj.create_numpy_array_kwargs_vector[type_idx]
                         );
-                        Py_CLEAR(py_memview);
                         if (!py_item) goto error;
 
                     } else {
@@ -1791,7 +1799,7 @@ static PyObject *read_row_from_packet(
                         if (!py_memview) goto error;
 
                         CHECKRC(PyTuple_SetItem(PyObj.struct_unpack_args, 0,
-                                                PyUnicode_FromFormat("<%l%s", out_l / item_type_lengths[i], cast_type_codes[i])));
+                                                PyUnicode_FromFormat("<%ld%s", out_l / item_type_lengths[type_idx], cast_type_codes[type_idx])));
                         CHECKRC(PyTuple_SetItem(PyObj.struct_unpack_args, 1, py_memview));
 
                         py_item = PyObject_Call(
@@ -1803,6 +1811,7 @@ static PyObject *read_row_from_packet(
                     }
 
                     break;
+                }
 
                 case MYSQL_TYPE_BSON:
                     py_item = PyBytes_FromStringAndSize(out, out_l);
@@ -4614,6 +4623,7 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     PyStr.float64 = PyUnicode_FromString("float64");
     PyStr.unpack = PyUnicode_FromString("unpack");
     PyStr.decode = PyUnicode_FromString("decode");
+    PyStr.frombuffer = PyUnicode_FromString("frombuffer");
 
     PyObject *decimal_mod = PyImport_ImportModule("decimal");
     if (!decimal_mod) goto error;

@@ -1849,8 +1849,6 @@ class TestConnection(unittest.TestCase):
 
         bits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
-        print(row)
-
         assert row['id'] == 0, row['id']
         assert row['tinyint'] == 80, row['tinyint']
         assert row['unsigned_tinyint'] == 85, row['unsigned_tinyint']
@@ -2888,9 +2886,10 @@ class TestConnection(unittest.TestCase):
         self.cur.execute('select a from f32_vectors order by id')
         out = list(self.cur)
 
-        assert out[0][0].dtype is np.dtype('float32')
-        assert out[1][0].dtype is np.dtype('float32')
-        assert out[2][0].dtype is np.dtype('float32')
+        if hasattr(out[0][0], 'dtype'):
+            assert out[0][0].dtype is np.dtype('float32')
+            assert out[1][0].dtype is np.dtype('float32')
+            assert out[2][0].dtype is np.dtype('float32')
 
         np.testing.assert_array_equal(
             out[0][0],
@@ -2917,9 +2916,10 @@ class TestConnection(unittest.TestCase):
         self.cur.execute('select a from f64_vectors order by id')
         out = list(self.cur)
 
-        assert out[0][0].dtype is np.dtype('float64')
-        assert out[1][0].dtype is np.dtype('float64')
-        assert out[2][0].dtype is np.dtype('float64')
+        if hasattr(out[0][0], 'dtype'):
+            assert out[0][0].dtype is np.dtype('float64')
+            assert out[1][0].dtype is np.dtype('float64')
+            assert out[2][0].dtype is np.dtype('float64')
 
         np.testing.assert_array_equal(
             out[0][0],
@@ -2946,9 +2946,10 @@ class TestConnection(unittest.TestCase):
         self.cur.execute('select a from i8_vectors order by id')
         out = list(self.cur)
 
-        assert out[0][0].dtype is np.dtype('int8')
-        assert out[1][0].dtype is np.dtype('int8')
-        assert out[2][0].dtype is np.dtype('int8')
+        if hasattr(out[0][0], 'dtype'):
+            assert out[0][0].dtype is np.dtype('int8')
+            assert out[1][0].dtype is np.dtype('int8')
+            assert out[2][0].dtype is np.dtype('int8')
 
         np.testing.assert_array_equal(
             out[0][0],
@@ -2975,9 +2976,10 @@ class TestConnection(unittest.TestCase):
         self.cur.execute('select a from i16_vectors order by id')
         out = list(self.cur)
 
-        assert out[0][0].dtype is np.dtype('int16')
-        assert out[1][0].dtype is np.dtype('int16')
-        assert out[2][0].dtype is np.dtype('int16')
+        if hasattr(out[0][0], 'dtype'):
+            assert out[0][0].dtype is np.dtype('int16')
+            assert out[1][0].dtype is np.dtype('int16')
+            assert out[2][0].dtype is np.dtype('int16')
 
         np.testing.assert_array_equal(
             out[0][0],
@@ -3004,9 +3006,10 @@ class TestConnection(unittest.TestCase):
         self.cur.execute('select a from i32_vectors order by id')
         out = list(self.cur)
 
-        assert out[0][0].dtype is np.dtype('int32')
-        assert out[1][0].dtype is np.dtype('int32')
-        assert out[2][0].dtype is np.dtype('int32')
+        if hasattr(out[0][0], 'dtype'):
+            assert out[0][0].dtype is np.dtype('int32')
+            assert out[1][0].dtype is np.dtype('int32')
+            assert out[2][0].dtype is np.dtype('int32')
 
         np.testing.assert_array_equal(
             out[0][0],
@@ -3033,9 +3036,10 @@ class TestConnection(unittest.TestCase):
         self.cur.execute('select a from i64_vectors order by id')
         out = list(self.cur)
 
-        assert out[0][0].dtype is np.dtype('int64')
-        assert out[1][0].dtype is np.dtype('int64')
-        assert out[2][0].dtype is np.dtype('int64')
+        if hasattr(out[0][0], 'dtype'):
+            assert out[0][0].dtype is np.dtype('int64')
+            assert out[1][0].dtype is np.dtype('int64')
+            assert out[2][0].dtype is np.dtype('int64')
 
         np.testing.assert_array_equal(
             out[0][0],

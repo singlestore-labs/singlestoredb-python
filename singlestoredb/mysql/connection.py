@@ -13,6 +13,8 @@ import struct
 import sys
 import traceback
 import warnings
+from typing import Any
+from typing import Dict
 from typing import Iterable
 
 try:
@@ -21,6 +23,7 @@ except (ImportError, ModuleNotFoundError):
     _singlestoredb_accel = None
 
 from . import _auth
+from ..utils import events
 
 from .charset import charset_by_name, charset_by_id
 from .constants import CLIENT, COMMAND, CR, ER, FIELD_TYPE, SERVER_STATUS
@@ -100,6 +103,19 @@ TEXT_TYPES = {
     FIELD_TYPE.VAR_STRING,
     FIELD_TYPE.VARCHAR,
     FIELD_TYPE.GEOMETRY,
+    FIELD_TYPE.BSON,
+    FIELD_TYPE.FLOAT32_VECTOR_JSON,
+    FIELD_TYPE.FLOAT64_VECTOR_JSON,
+    FIELD_TYPE.INT8_VECTOR_JSON,
+    FIELD_TYPE.INT16_VECTOR_JSON,
+    FIELD_TYPE.INT32_VECTOR_JSON,
+    FIELD_TYPE.INT64_VECTOR_JSON,
+    FIELD_TYPE.FLOAT32_VECTOR,
+    FIELD_TYPE.FLOAT64_VECTOR,
+    FIELD_TYPE.INT8_VECTOR,
+    FIELD_TYPE.INT16_VECTOR,
+    FIELD_TYPE.INT32_VECTOR,
+    FIELD_TYPE.INT64_VECTOR,
 }
 
 UNSET = 'unset'
@@ -614,14 +630,21 @@ class Connection(BaseConnection):
                 if k not in self._connect_attrs:
                     self._connect_attrs[k] = v
 
+        self._is_committable = True
         self._in_sync = False
         self._track_env = bool(track_env) or self.host == 'singlestore.com'
         self._enable_extended_data_types = enable_extended_data_types
+        self._connection_info = {}
+        events.subscribe(self._handle_event)
 
         if defer_connect or self._track_env:
             self._sock = None
         else:
             self.connect()
+
+    def _handle_event(self, data: Dict[str, Any]) -> None:
+        if data.get('name', '') == 'singlestore.portal.connection_updated':
+            self._connection_info = dict(data)
 
     @property
     def messages(self):
@@ -766,7 +789,8 @@ class Connection(BaseConnection):
 
         """
         log_query('COMMIT')
-        if self.host == 'singlestore.com':
+        if not self._is_committable or self.host == 'singlestore.com':
+            self._is_committable = True
             return
         self._execute_command(COMMAND.COM_QUERY, 'COMMIT')
         self._read_ok_packet()
@@ -780,7 +804,8 @@ class Connection(BaseConnection):
 
         """
         log_query('ROLLBACK')
-        if self.host == 'singlestore.com':
+        if not self._is_committable or self.host == 'singlestore.com':
+            self._is_committable = True
             return
         self._execute_command(COMMAND.COM_QUERY, 'ROLLBACK')
         self._read_ok_packet()
@@ -858,9 +883,11 @@ class Connection(BaseConnection):
         #     print("DEBUG: sending query:", sql)
         handler = fusion.get_handler(sql)
         if handler is not None:
+            self._is_committable = False
             self._result = fusion.execute(self, sql, handler=handler)
             self._affected_rows = self._result.affected_rows
         else:
+            self._is_committable = True
             if isinstance(sql, str):
                 sql = sql.encode(self.encoding, 'surrogateescape')
             self._local_infile_stream = infile_stream
@@ -973,9 +1000,11 @@ class Connection(BaseConnection):
         if not self._track_env:
             return
 
-        url = os.environ.get('SINGLESTOREDB_URL')
+        url = self._connection_info.get('connection_url')
         if not url:
-            return
+            url = os.environ.get('SINGLESTOREDB_URL')
+            if not url:
+                return
 
         out = {}
         urlp = connection._parse_url(url)

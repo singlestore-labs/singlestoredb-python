@@ -15,7 +15,6 @@ import requests
 
 from .. import config
 from ..exceptions import ManagementError
-from .utils import get_organization
 from .utils import get_token
 
 
@@ -24,7 +23,7 @@ def set_organization(kwargs: Dict[str, Any]) -> None:
     if kwargs.get('params', {}).get('organizationID', None):
         return
 
-    org = get_organization()
+    org = os.environ.get('SINGLESTOREDB_ORGANIZATION')
     if org:
         if 'params' not in kwargs:
             kwargs['params'] = {}

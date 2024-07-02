@@ -2,6 +2,7 @@
 """SingleStoreDB Cluster Management."""
 import datetime
 import functools
+import itertools
 import os
 import re
 import sys
@@ -12,6 +13,7 @@ from typing import List
 from typing import Mapping
 from typing import Optional
 from typing import SupportsIndex
+from typing import Tuple
 from typing import TypeVar
 from typing import Union
 from urllib.parse import urlparse
@@ -20,6 +22,7 @@ import jwt
 
 from .. import converters
 from ..config import get_option
+from ..utils import events
 
 JSON = Union[str, List[str], Dict[str, 'JSON']]
 JSONObj = Dict[str, JSON]
@@ -117,6 +120,66 @@ class NamedList(List[T]):
             raise
 
 
+def _setup_authentication_info_handler() -> Callable[..., Dict[str, Any]]:
+    """Setup authentication info event handler."""
+
+    authentication_info: List[Tuple[str, Any]] = []
+
+    def handle_authentication_info(msg: Dict[str, Any]) -> None:
+        """Handle authentication info events."""
+        nonlocal authentication_info
+        if msg.get('name', '') != 'singlestore.portal.authentication_updated':
+            return
+        authentication_info = list(msg.get('data', {}).items())
+
+    events.subscribe(handle_authentication_info)
+
+    def handle_connection_info(msg: Dict[str, Any]) -> None:
+        """Handle connection info events."""
+        nonlocal authentication_info
+        if msg.get('name', '') != 'singlestore.portal.connection_updated':
+            return
+        data = msg.get('data', {})
+        out = {}
+        if 'user' in data:
+            out['user'] = data['user']
+        if 'password' in data:
+            out['password'] = data['password']
+        authentication_info = list(out.items())
+
+    events.subscribe(handle_authentication_info)
+
+    def get_env() -> List[Tuple[str, Any]]:
+        conn = {}
+        url = os.environ.get('SINGLESTOREDB_URL') or get_option('host')
+        if url:
+            urlp = urlparse(url, scheme='singlestoredb', allow_fragments=True)
+            conn = dict(
+                user=urlp.username or None,
+                password=urlp.password or None,
+            )
+
+        return [
+            x for x in dict(
+                **conn,
+            ).items() if x[1] is not None
+        ]
+
+    def get_authentication_info(include_env: bool = True) -> Dict[str, Any]:
+        """Return authentication info from event."""
+        return dict(
+            itertools.chain(
+                (get_env() if include_env else []),
+                authentication_info,
+            ),
+        )
+
+    return get_authentication_info
+
+
+get_authentication_info = _setup_authentication_info_handler()
+
+
 def get_token() -> Optional[str]:
     """Return the token for the Management API."""
     # See if an API key is configured
@@ -124,31 +187,15 @@ def get_token() -> Optional[str]:
     if tok:
         return tok
 
-    url = os.environ.get('SINGLESTOREDB_URL')
-    if not url:
-        # See if the connection URL contains a JWT
-        url = get_option('host')
-        if not url:
-            return None
-
-    urlp = urlparse(url, scheme='singlestoredb', allow_fragments=True)
-    if urlp.password:
+    tok = get_authentication_info(include_env=True).get('password')
+    if tok:
         try:
-            jwt.decode(urlp.password, options={'verify_signature': False})
-            return urlp.password
+            jwt.decode(tok, options={'verify_signature': False})
+            return tok
         except jwt.DecodeError:
             pass
 
     # Didn't find a key anywhere
-    return None
-
-
-def get_organization() -> Optional[str]:
-    """Return the organization for the current token or environment."""
-    org = os.environ.get('SINGLESTOREDB_ORGANIZATION')
-    if org:
-        return org
-
     return None
 
 
@@ -269,7 +316,7 @@ def snake_to_camel(s: Optional[str], cap_first: bool = False) -> Optional[str]:
     """Convert snake-case to camel-case."""
     if s is None:
         return None
-    out = re.sub(r'_[A-Za-z]', _upper_match, s.lower())
+    out = re.sub(r'_([A-Za-z])', _upper_match, s.lower())
     if cap_first and out:
         return out[0].upper() + out[1:]
     return out
