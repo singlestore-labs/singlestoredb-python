@@ -46,7 +46,7 @@ class ScheduleJobHandler(SQLHandler):
     with_description = WITH DESCRIPTION '<job-description>'
 
     # Execution interval in minutes
-    execute_every = EXECUTE EVERY <integer>
+    execute_every = EXECUTE EVERY <integer> { MINUTES | HOURS | DAYS }
 
     # Start time
     start_at = START AT '<year>-<month>-<day> <hour>:<min>:<sec>'
@@ -79,8 +79,8 @@ class ScheduleJobHandler(SQLHandler):
     -------
     * The ``WITH MODE`` clause specifies the mode of the job and is either
       **Once** or **Recurring**.
-    * The ``EXECUTE EVERY`` clause specifies the interval in minutes at which the
-      job will be executed and is required if the mode is **Recurring**.
+    * The ``EXECUTE EVERY`` clause specifies the interval at which the job will be
+      executed. The interval can be in minutes, hours, or days.
     * The ``CREATE SNAPSHOT`` clause creates a snapshot of the notebook executed by
       the job.
     * The ``WITH RUNTIME`` clause specifies the name of the runtime that
@@ -106,7 +106,7 @@ class ScheduleJobHandler(SQLHandler):
             WITH RUNTIME 'notebooks-cpu-small'
             WITH NAME 'example_job'
             WITH DESCRIPTION 'This is an example job'
-            EXECUTE EVERY 5
+            EXECUTE EVERY 5 MINUTES
             START AT '2024-06-25 21:35:06'
             RESUME TARGET
             WITH PARAMETERS '{
@@ -131,6 +131,18 @@ class ScheduleJobHandler(SQLHandler):
             for name, value in json_params.items():
                 parameters.append((name, value))
 
+        execution_interval_in_mins = params['execute_every'][0]
+        time_unit = params['execute_every'][-1].upper()
+        match time_unit:
+            case 'MINUTES':
+                pass
+            case 'HOURS':
+                execution_interval_in_mins *= 60
+            case 'DAYS':
+                execution_interval_in_mins *= 60 * 24
+            case _:
+                raise ValueError(f'Invalid time unit: {time_unit}')
+
         job = jobs_manager.schedule(
             notebook_path=params['notebook_path'],
             mode=Mode.from_str(params['with_mode']),
@@ -138,7 +150,7 @@ class ScheduleJobHandler(SQLHandler):
             create_snapshot=params['create_snapshot'],
             name=params['with_name'],
             description=params['with_description'],
-            execution_interval_in_minutes=params['execute_every'],
+            execution_interval_in_minutes=execution_interval_in_mins,
             start_at=to_datetime(params.get('start_at')),
             resume_target=params['resume_target'],
             parameters=parameters,

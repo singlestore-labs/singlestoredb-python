@@ -540,7 +540,7 @@ class TestJobsFusion(unittest.TestCase):
         self.cur.execute(
                 f'schedule job using notebook "{self.notebook_name}" '
                 'with mode "recurring" '
-                'execute every 5 '
+                'execute every 5 minutes '
                 'with name "recurring-job" '
                 'create snapshot '
                 'resume target',
@@ -595,7 +595,7 @@ class TestJobsFusion(unittest.TestCase):
         self.cur.execute(
                 f'schedule job using notebook "{self.notebook_name}" '
                 'with mode "recurring" '
-                'execute every 5 '
+                'execute every 5 minutes '
                 'with name "show-job"',
         )
         out = list(self.cur)
