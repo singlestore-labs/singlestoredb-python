@@ -28,6 +28,8 @@ CORE_GRAMMAR = r'''
     eq = ws* "=" ws*
     open_paren = ws* "(" ws*
     close_paren = ws* ")" ws*
+    open_repeats = ws* ~r"[\(\[\{]" ws*
+    close_repeats = ws* ~r"[\)\]\}]" ws*
     select = ~r"SELECT"i ws+ ~r".+" ws*
 '''
 
@@ -89,7 +91,7 @@ def process_alternates(m: Any) -> str:
 def process_repeats(m: Any) -> str:
     """Add repeated patterns."""
     sql = m.group(1).strip()
-    return f'open_paren? {sql} ws* ( comma {sql} ws* )* close_paren?'
+    return f'open_repeats? {sql} ws* ( comma {sql} ws* )* close_repeats?'
 
 
 def lower_and_regex(m: Any) -> str:
@@ -637,6 +639,14 @@ class SQLHandler(NodeVisitor):
 
     def visit_close_paren(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Close parenthesis."""
+        return
+
+    def visit_open_repeats(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Open repeat grouping."""
+        return
+
+    def visit_close_repeats(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Close repeat grouping."""
         return
 
     def visit_init(self, node: Node, visited_children: Iterable[Any]) -> Any:
