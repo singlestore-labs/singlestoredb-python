@@ -31,7 +31,20 @@ CORE_GRAMMAR = r'''
     open_repeats = ws* ~r"[\(\[\{]" ws*
     close_repeats = ws* ~r"[\)\]\}]" ws*
     select = ~r"SELECT"i ws+ ~r".+" ws*
-'''
+
+    json = ws* json_object ws*
+    json_object = ~r"{\s*" json_members? ~r"\s*}"
+    json_members = json_mapping (~r"\s*,\s*" json_mapping)*
+    json_mapping = json_string ~r"\s*:\s*" json_value
+    json_array = ~r"\[\s*" json_items? ~r"\s*\]"
+    json_items = json_value (~r"\s*,\s*" json_value)*
+    json_value = json_object / json_array / json_string / json_true_val / json_false_val / json_null_val / json_number
+    json_true_val = "true"
+    json_false_val = "false"
+    json_null_val = "null"
+    json_string = ~r"\"[ !#-\[\]-\U0010ffff]*(?:\\(?:[\"\\/bfnrt]|u[0-9A-Fa-f]{4})[ !#-\[\]-\U0010ffff]*)*\""
+    json_number = ~r"-?(0|[1-9][0-9]*)(\.\d*)?([eE][-+]?\d+)?"
+'''  # noqa: E501
 
 BUILTINS = {
     '<order-by>': r'''
@@ -49,6 +62,7 @@ BUILTINS = {
     ''',
     '<integer>': '',
     '<number>': '',
+    '<json>': '',
 }
 
 BUILTIN_DEFAULTS = {  # type: ignore
@@ -56,7 +70,34 @@ BUILTIN_DEFAULTS = {  # type: ignore
     'like': None,
     'extended': False,
     'limit': None,
+    'json': {},
 }
+
+_json_unesc_re = re.compile(r'\\(["/\\bfnrt]|u[0-9A-Fa-f])')
+_json_unesc_map = {
+    '"': '"',
+    '/': '/',
+    '\\': '\\',
+    'b': '\b',
+    'f': '\f',
+    'n': '\n',
+    'r': '\r',
+    't': '\t',
+}
+
+
+def _json_unescape(m: Any) -> str:
+    c = m.group(1)
+    if c[0] == 'u':
+        return chr(int(c[1:], 16))
+    c2 = _json_unesc_map.get(c)
+    if not c2:
+        raise ValueError(f'invalid escape sequence: {m.group(0)}')
+    return c2
+
+
+def json_unescape(s: str) -> str:
+    return _json_unesc_re.sub(_json_unescape, s[1:-1])
 
 
 def get_keywords(grammar: str) -> Tuple[str, ...]:
@@ -672,6 +713,57 @@ class SQLHandler(NodeVisitor):
             ascending.append(value[1].upper().startswith('A'))
         return {'order_by': {'by': by, 'ascending': ascending}}
 
+    def _delimited(self, node: Node, children: Iterable[Any]) -> Any:
+        children = list(children)
+        items = [children[0]]
+        items.extend(item for _, item in children[1])
+        return items
+
+    def _atomic(self, node: Node, children: Iterable[Any]) -> Any:
+        return list(children)[0]
+
+    # visitors
+    visit_json_value = _atomic
+    visit_json_members = visit_json_items = _delimited
+
+    def visit_json_object(self, node: Node, children: Iterable[Any]) -> Any:
+        _, members, _ = children
+        if isinstance(members, list):
+            members = members[0]
+        else:
+            members = []
+        members = [x for x in members if x != '']
+        return dict(members)
+
+    def visit_json_array(self, node: Node, children: Iterable[Any]) -> Any:
+        _, values, _ = children
+        if isinstance(values, list):
+            values = values[0]
+        else:
+            values = []
+        return values
+
+    def visit_json_mapping(self, node: Node, children: Iterable[Any]) -> Any:
+        key, _, value = children
+        return key, value
+
+    def visit_json_string(self, node: Node, children: Iterable[Any]) -> Any:
+        return json_unescape(node.text)
+
+    def visit_json_number(self, node: Node, children: Iterable[Any]) -> Any:
+        if '.' in node.text:
+            return float(node.text)
+        return int(node.text)
+
+    def visit_json_true_val(self, node: Node, children: Iterable[Any]) -> Any:
+        return True
+
+    def visit_json_false_val(self, node: Node, children: Iterable[Any]) -> Any:
+        return False
+
+    def visit_json_null_val(self, node: Node, children: Iterable[Any]) -> Any:
+        return None
+
     def generic_visit(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """
         Handle all undefined rules.
@@ -685,6 +777,9 @@ class SQLHandler(NodeVisitor):
         rule can have repeated values, a list of values is returned.
 
         """
+        if node.expr_name.startswith('json'):
+            return visited_children or node.text
+
         # Call a grammar rule
         if node.expr_name in type(self).rule_info:
             n_keywords = type(self).rule_info[node.expr_name]['n_keywords']
