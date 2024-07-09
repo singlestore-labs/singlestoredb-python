@@ -182,7 +182,7 @@ class Portal(object):
         id = w.id
 
         self._call_javascript(
-            'changeWorkspace', [id],
+            'changeDeployment', [id],
             wait_on_condition=lambda: self.workspace_id == id,  # type: ignore
             timeout_message='timeout waiting for workspace update',
         )
