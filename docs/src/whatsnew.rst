@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.4.2 - July 9, 2024
+---------------------
+* Fix Javascript function name in portal object
+
 v1.4.1 - July 2, 2024
 ---------------------
 * Fix binary vector conversions
