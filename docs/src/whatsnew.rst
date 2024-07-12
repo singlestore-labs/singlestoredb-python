@@ -8,9 +8,13 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.4.4 - July 12, 2024
+----------------------
+* Add ``USE WORKSPACE`` Fusion command
+
 v1.4.3 - July 10, 2024
 ----------------------
-* Purge expired JWTs from `get_token` as needed
+* Purge expired JWTs from ``get_token`` as needed
 
 v1.4.2 - July 9, 2024
 ---------------------
