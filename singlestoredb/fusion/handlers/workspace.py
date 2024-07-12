@@ -13,6 +13,59 @@ from .utils import get_workspace_group
 from .utils import get_workspace_manager
 
 
+class UseWorkspaceHandler(SQLHandler):
+    """
+    USE WORKSPACE workspace [ with_database ];
+
+    # Workspace
+    workspace = { workspace_id | workspace_name }
+
+    # ID of workspace
+    workspace_id = ID '<workspace-id>'
+
+    # Name of workspace
+    workspace_name = '<workspace-name>'
+
+    # Name of database
+    with_database = WITH DATABASE 'database-name'
+
+    Description
+    -----------
+    Change the workspace and database in the notebook.
+
+    Arguments
+    ---------
+    * ``<workspace-id>``: The ID of the workspace to delete.
+    * ``<workspace-name>``: The name of the workspace to delete.
+
+    Remarks
+    -------
+    * Specify the ``WITH DATABASE`` clause to select a default
+      database for the session.
+    * This command only works in a notebook session in the
+      Managed Service.
+
+    Example
+    -------
+    The following command sets the workspace to ``examplews`` and
+    select 'dbname' as the default database::
+
+        USE WORKSPACE 'examplews' WITH DATABASE 'dbname';
+
+    """
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        from singlestoredb.notebook import portal
+        if params.get('with_database'):
+            portal.connection = params['workspace']['workspace_name'], \
+                                params['with_database']
+        else:
+            portal.workspace = params['workspace']['workspace_name']
+        return None
+
+
+UseWorkspaceHandler.register(overwrite=True)
+
+
 class ShowRegionsHandler(SQLHandler):
     """
     SHOW REGIONS [ <like> ]
