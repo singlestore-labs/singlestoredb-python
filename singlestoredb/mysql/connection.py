@@ -280,6 +280,8 @@ class Connection(BaseConnection):
         Should the connection track the SINGLESTOREDB_URL environment variable?
     enable_extended_data_types : bool, optional
         Should extended data types (BSON, vector) be enabled?
+    vector_data_format : str, optional
+        Specify the data type of vector values: json or binary
 
     See `Connection <https://www.python.org/dev/peps/pep-0249/#connection-objects>`_
     in the specification.
@@ -350,6 +352,7 @@ class Connection(BaseConnection):
         encoding_errors='strict',
         track_env=False,
         enable_extended_data_types=True,
+        vector_data_format='binary',
     ):
         BaseConnection.__init__(**dict(locals()))
 
@@ -634,6 +637,13 @@ class Connection(BaseConnection):
         self._in_sync = False
         self._track_env = bool(track_env) or self.host == 'singlestore.com'
         self._enable_extended_data_types = enable_extended_data_types
+        if vector_data_format.lower() in ['json', 'binary']:
+            self._vector_data_format = vector_data_format
+        else:
+            raise ValueError(
+                'unknown value for vector_data_format, '
+                f'expecting "json" or "binary": {vector_data_format}',
+            )
         self._connection_info = {}
         events.subscribe(self._handle_event)
 
@@ -1113,6 +1123,15 @@ class Connection(BaseConnection):
                 c = self.cursor()
                 try:
                     c.execute('SET @@SESSION.enable_extended_types_metadata=on')
+                except self.OperationalError:
+                    pass
+                c.close()
+
+            if self._vector_data_format:
+                c = self.cursor()
+                try:
+                    val = self._vector_data_format
+                    c.execute(f'SET @@SESSION.vector_type_project_format={val}')
                 except self.OperationalError:
                     pass
                 c.close()

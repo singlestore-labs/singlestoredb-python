@@ -1243,5 +1243,7 @@ def connect(
     inf_as_null: Optional[bool] = None,
     encoding_errors: Optional[str] = None,
     track_env: Optional[bool] = None,
+    enable_extended_data_types: Optional[bool] = None,
+    vector_data_format: Optional[str] = None,
 ) -> Connection:
     return Connection(**dict(locals()))

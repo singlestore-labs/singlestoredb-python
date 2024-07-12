@@ -9,6 +9,7 @@ from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 
 from . import _objects as obj
 from ..management import workspace as mgr
@@ -184,6 +185,37 @@ class Portal(object):
         self._call_javascript(
             'changeDeployment', [id],
             wait_on_condition=lambda: self.workspace_id == id,  # type: ignore
+            timeout_message='timeout waiting for workspace update',
+        )
+
+    deployment = workspace
+
+    @property
+    def connection(self) -> Tuple[obj.Workspace, Optional[str]]:
+        """Workspace and default database name."""
+        return self.workspace, self.default_database
+
+    @connection.setter
+    def connection(self, workspace_and_default_database: Tuple[str, str]) -> None:
+        """Set workspace and default database name."""
+        name_or_id, default_database = workspace_and_default_database
+        if re.match(
+            r'[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}',
+            name_or_id, flags=re.I,
+        ):
+            w = mgr.get_workspace(name_or_id)
+        else:
+            w = mgr.get_workspace_group(self.workspace_group_id).workspaces[name_or_id]
+
+        if w.state and w.state.lower() not in ['active', 'resumed']:
+            raise RuntimeError('workspace is not active')
+
+        id = w.id
+
+        self._call_javascript(
+            'changeConnection', [id, default_database],
+            wait_on_condition=lambda: self.workspace_id == id and
+            self.default_database == default_database,  # type: ignore
             timeout_message='timeout waiting for workspace update',
         )
 

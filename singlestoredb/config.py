@@ -222,6 +222,17 @@ register_option(
 )
 
 register_option(
+    'vector_data_format', 'string',
+    functools.partial(
+        check_str,
+        valid_values=['json', 'binary'],
+    ),
+    'binary',
+    'Format for vector data values',
+    environ='SINGLESTOREDB_VECTOR_DATA_FORMAT',
+)
+
+register_option(
     'fusion.enabled', 'bool', check_bool, False,
     'Should Fusion SQL queries be enabled?',
     environ='SINGLESTOREDB_FUSION_ENABLED',
