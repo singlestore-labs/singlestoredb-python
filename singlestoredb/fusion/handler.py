@@ -2,6 +2,7 @@
 import abc
 import functools
 import re
+import sys
 import textwrap
 from typing import Any
 from typing import Callable
@@ -102,7 +103,7 @@ def json_unescape(s: str) -> str:
 
 def get_keywords(grammar: str) -> Tuple[str, ...]:
     """Return all all-caps words from the beginning of the line."""
-    m = re.match(r'^\s*((?:[A-Z0-9_]+)(\s+|$|;))+', grammar)
+    m = re.match(r'^\s*((?:[@A-Z0-9_]+)(\s+|$|;))+', grammar)
     if not m:
         return tuple()
     return tuple(re.split(r'\s+', m.group(0).replace(';', '').strip()))
@@ -110,7 +111,7 @@ def get_keywords(grammar: str) -> Tuple[str, ...]:
 
 def is_bool(grammar: str) -> bool:
     """Determine if the rule is a boolean."""
-    return bool(re.match(r'^[A-Z0-9_\s*]+$', grammar))
+    return bool(re.match(r'^[@A-Z0-9_\s*]+$', grammar))
 
 
 def process_optional(m: Any) -> str:
@@ -137,8 +138,9 @@ def process_repeats(m: Any) -> str:
 
 def lower_and_regex(m: Any) -> str:
     """Lowercase and convert literal to regex."""
-    sql = m.group(1)
-    return f'~"{sql.lower()}"i'
+    start = m.group(1) or ''
+    sql = m.group(2)
+    return f'~"{start}{sql.lower()}"i'
 
 
 def split_unions(grammar: str) -> str:
@@ -415,7 +417,7 @@ def process_grammar(
         sql = re.sub(r'\]\s+\[', r' | ', sql)
 
         # Lower-case keywords and make them case-insensitive
-        sql = re.sub(r'\b([A-Z0-9]+)\b', lower_and_regex, sql)
+        sql = re.sub(r'(\b|@+)([A-Z0-9]+)\b', lower_and_regex, sql)
 
         # Convert literal strings to 'qs'
         sql = re.sub(r"'[^']+'", r'qs', sql)
@@ -479,10 +481,16 @@ def process_grammar(
     cmds = ' / '.join(x for x in rules if x.endswith('_cmd'))
     cmds = f'init = ws* ( {cmds} ) ws* ";"? ws*\n'
 
-    return (
-        Grammar(cmds + CORE_GRAMMAR + '\n'.join(out)), command_key,
-        rule_info, syntax_txt, help_txt,
-    )
+    grammar = cmds + CORE_GRAMMAR + '\n'.join(out)
+
+    try:
+        return (
+            Grammar(grammar), command_key,
+            rule_info, syntax_txt, help_txt,
+        )
+    except ParseError:
+        print(grammar, file=sys.stderr)
+        raise
 
 
 def flatten(items: Iterable[Any]) -> List[Any]:

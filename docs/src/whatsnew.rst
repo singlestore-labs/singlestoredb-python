@@ -11,6 +11,7 @@ This document outlines features and improvements from each release.
 v1.4.4 - July 12, 2024
 ----------------------
 * Add ``USE WORKSPACE`` Fusion command
+* Add ``vector_data_format=`` to connection options to specify JSON or BINARY for vector data
 
 v1.4.3 - July 10, 2024
 ----------------------

@@ -15,16 +15,19 @@ from .utils import get_workspace_manager
 
 class UseWorkspaceHandler(SQLHandler):
     """
-    USE WORKSPACE workspace [ with_database ];
+    USE WORKSPACE [ workspace ] [ with_database ];
 
     # Workspace
-    workspace = { workspace_id | workspace_name }
+    workspace = { workspace_id | workspace_name | current_workspace }
 
     # ID of workspace
     workspace_id = ID '<workspace-id>'
 
     # Name of workspace
     workspace_name = '<workspace-name>'
+
+    # Current workspace
+    current_workspace = @CURRENT
 
     # Name of database
     with_database = WITH DATABASE 'database-name'
@@ -40,6 +43,8 @@ class UseWorkspaceHandler(SQLHandler):
 
     Remarks
     -------
+    * If you want to specify a database in the current workspace,
+      the workspace name can be specified as @CURRENT.
     * Specify the ``WITH DATABASE`` clause to select a default
       database for the session.
     * This command only works in a notebook session in the
@@ -55,11 +60,13 @@ class UseWorkspaceHandler(SQLHandler):
     """
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         from singlestoredb.notebook import portal
-        if params.get('with_database'):
+        if params.get('workspace') and params.get('with_database'):
             portal.connection = params['workspace']['workspace_name'], \
                                 params['with_database']
-        else:
+        elif params.get('workspace'):
             portal.workspace = params['workspace']['workspace_name']
+        else:
+            portal.default_database = params['workspace']['with_database']
         return None
 
 
