@@ -15,7 +15,7 @@ from .utils import get_workspace_manager
 
 class UseWorkspaceHandler(SQLHandler):
     """
-    USE WORKSPACE [ workspace ] [ with_database ];
+    USE WORKSPACE workspace [ with_database ];
 
     # Workspace
     workspace = { workspace_id | workspace_name | current_workspace }
@@ -60,13 +60,20 @@ class UseWorkspaceHandler(SQLHandler):
     """
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         from singlestoredb.notebook import portal
-        if params.get('workspace') and params.get('with_database'):
-            portal.connection = params['workspace']['workspace_name'], \
-                                params['with_database']
-        elif params.get('workspace'):
+        if params['workspace'].get('current_workspace'):
+            if params.get('with_database'):
+                portal.default_database = params['workspace']['with_database']
+        elif params.get('with_database'):
+            if params['workspace'].get('workspace_name'):
+                portal.connection = params['workspace']['workspace_name'], \
+                                    params['with_database']
+            else:
+                portal.connection = params['workspace']['workspace_id'], \
+                                    params['with_database']
+        elif params['workspace'].get('workspace_name'):
             portal.workspace = params['workspace']['workspace_name']
         else:
-            portal.default_database = params['workspace']['with_database']
+            portal.workspace = params['workspace']['workspace_id']
         return None
 
 
