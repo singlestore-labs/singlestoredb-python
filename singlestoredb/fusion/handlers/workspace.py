@@ -62,7 +62,7 @@ class UseWorkspaceHandler(SQLHandler):
         from singlestoredb.notebook import portal
         if params['workspace'].get('current_workspace'):
             if params.get('with_database'):
-                portal.default_database = params['workspace']['with_database']
+                portal.default_database = params['with_database']
         elif params.get('with_database'):
             if params['workspace'].get('workspace_name'):
                 portal.connection = params['workspace']['workspace_name'], \
