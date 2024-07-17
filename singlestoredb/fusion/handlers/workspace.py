@@ -27,7 +27,7 @@ class UseWorkspaceHandler(SQLHandler):
     workspace_name = '<workspace-name>'
 
     # Current workspace
-    current_workspace = @CURRENT
+    current_workspace = @@CURRENT
 
     # Name of database
     with_database = WITH DATABASE 'database-name'
@@ -44,7 +44,7 @@ class UseWorkspaceHandler(SQLHandler):
     Remarks
     -------
     * If you want to specify a database in the current workspace,
-      the workspace name can be specified as @CURRENT.
+      the workspace name can be specified as @@CURRENT.
     * Specify the ``WITH DATABASE`` clause to select a default
       database for the session.
     * This command only works in a notebook session in the
