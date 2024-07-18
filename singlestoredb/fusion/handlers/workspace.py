@@ -44,7 +44,7 @@ class UseWorkspaceHandler(SQLHandler):
     Remarks
     -------
     * If you want to specify a database in the current workspace,
-      the workspace name can be specified as @@CURRENT.
+      the workspace name can be specified as ``@@CURRENT``.
     * Specify the ``WITH DATABASE`` clause to select a default
       database for the session.
     * This command only works in a notebook session in the
@@ -483,8 +483,9 @@ class CreateWorkspaceHandler(SQLHandler):
     size = '<size>'
 
     # Auto-suspend
-    auto_suspend = AUTO SUSPEND suspend_after_seconds SECONDS suspend_type
-    suspend_after_seconds = AFTER <integer>
+    auto_suspend = AUTO SUSPEND AFTER suspend_after_value suspend_after_units suspend_type
+    suspend_after_value = <integer>
+    suspend_after_units = { SECONDS | MINUTES | HOURS | DAYS }
     suspend_type = WITH TYPE { IDLE | SCHEDULED | DISABLED }
 
     # Enable Kai
@@ -509,7 +510,7 @@ class CreateWorkspaceHandler(SQLHandler):
       in which the workspace is created.
     * ``<workspace_size>``: The size of the workspace in workspace size notation,
       for example "S-1".
-    * ``<suspend_time>``: The time (in seconds) after which the workspace is
+    * ``<suspend_time>``: The time (in given units) after which the workspace is
       suspended, according to the specified auto-suspend type.
     * ``<multiplier>``: The multiplier for the persistent cache associated with
       the workspace.
@@ -553,9 +554,17 @@ class CreateWorkspaceHandler(SQLHandler):
 
         auto_suspend = None
         if params['auto_suspend']:
+            mult = dict(
+                SECONDS=1,
+                MINUTES=60,
+                HOURS=60*60,
+                DAYS=60*60*24,
+            )
+            val = params['auto_suspend'][0]['suspend_after_value']
+            val = val * mult[params['auto_suspend'][1]['suspend_after_units'].upper()]
             auto_suspend = dict(
-                suspend_after_seconds=params['auto_suspend'][0]['suspend_after_seconds'],
-                suspend_type=params['auto_suspend'][-1]['suspend_type'].upper(),
+                suspend_after_seconds=val,
+                suspend_type=params['auto_suspend'][2]['suspend_type'].upper(),
             )
 
         workspace_group.create_workspace(
