@@ -73,6 +73,10 @@ def load_sql(sql_file: str) -> str:
     with open(sql_file, 'r') as infile:
         with s2.connect(**args) as conn:
             with conn.cursor() as cur:
+                cur.execute('SET GLOBAL default_partitions_per_leaf=2')
+                cur.execute('SET GLOBAL log_file_size_partitions=1048576')
+                cur.execute('SET GLOBAL log_file_size_ref_dbs=1048576')
+
                 if not dbname:
                     dbname = 'TEST_{}'.format(uuid.uuid4()).replace('-', '_')
                     cur.execute(f'CREATE DATABASE {dbname};')
