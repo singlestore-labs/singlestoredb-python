@@ -67,6 +67,9 @@ while True:
             user=options.user, password=options.password,
         ) as conn:
             with conn.cursor() as cur:
+                cur.execute('SET GLOBAL default_partitions_per_leaf=2')
+                cur.execute('SET GLOBAL log_file_size_partitions=1048576')
+                cur.execute('SET GLOBAL log_file_size_ref_dbs=1048576')
                 cur.execute(f'CREATE DATABASE IF NOT EXISTS {database};')
                 cur.execute(f'USE {database};')
                 if options.http_port:
