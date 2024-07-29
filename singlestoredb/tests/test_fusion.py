@@ -545,7 +545,9 @@ class TestJobsFusion(unittest.TestCase):
                 'create snapshot '
                 'resume target '
                 'with runtime "notebooks-cpu-small" '
-                'with parameters {"strParam": "string", "intParam": 1, "floatParam": 1.0, "boolParam": true}',
+                'with parameters '
+                '{"strParam": "string", "intParam": 1, '
+                '"floatParam": 1.0, "boolParam": true}',
         )
         out = list(self.cur)
         job_id = out[0][0]
@@ -574,7 +576,9 @@ class TestJobsFusion(unittest.TestCase):
         self.cur.execute(
             f'run job using notebook "{self.notebook_name}" '
             'with runtime "notebooks-cpu-small" '
-            'with parameters {"strParam": "string", "intParam": 1, "floatParam": 1.0, "boolParam": true}',
+            'with parameters '
+            '{"strParam": "string", "intParam": 1, '
+            '"floatParam": 1.0, "boolParam": true}',
         )
         out = list(self.cur)
         job_id = out[0][0]
@@ -614,7 +618,9 @@ class TestJobsFusion(unittest.TestCase):
                 'execute every 5 minutes '
                 'with name "show-job" '
                 'with runtime "notebooks-cpu-small" '
-                'with parameters {"strParam": "string", "intParam": 1, "floatParam": 1.0, "boolParam": true}',
+                'with parameters '
+                '{"strParam": "string", "intParam": 1, '
+                '"floatParam": 1.0, "boolParam": true}',
         )
         out = list(self.cur)
         job_id = out[0][0]

@@ -945,7 +945,7 @@ class TestJob(unittest.TestCase):
         job = job_manager.run(
             'Scheduling Test.ipynb',
             'notebooks-cpu-small',
-            {"strParam": "string", "intParam": 1, "floatParam": 1.0, "boolParam": True}
+            {'strParam': 'string', 'intParam': 1, 'floatParam': 1.0, 'boolParam': True},
         )
         self.job_ids.append(job.job_id)
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
@@ -990,7 +990,7 @@ class TestJob(unittest.TestCase):
         job = job_manager.run(
             'Scheduling Test.ipynb',
             'notebooks-cpu-small',
-            {"strParam": "string", "intParam": 1, "floatParam": 1.0, "boolParam": True}
+            {'strParam': 'string', 'intParam': 1, 'floatParam': 1.0, 'boolParam': True},
         )
         self.job_ids.append(job.job_id)
         assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
