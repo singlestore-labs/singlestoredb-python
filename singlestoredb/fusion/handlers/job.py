@@ -254,8 +254,10 @@ class WaitOnJobsHandler(SQLHandler):
     # Job IDs to wait on
     job_ids = '<job-id>',...
 
-    # Timeout in seconds
-    with_timeout = WITH TIMEOUT <integer>
+    # Timeout
+    with_timeout = WITH TIMEOUT time time_unit
+    time = <integer>
+    time_unit = { SECONDS | MINUTES | HOURS }
 
     Description
     -----------
@@ -268,9 +270,8 @@ class WaitOnJobsHandler(SQLHandler):
 
     Remarks
     -------
-    * The ``WITH TIMEOUT`` clause specifies the number of seconds to wait for the jobs
-      to complete. If the jobs have not completed after the specified number of seconds,
-      the command will return.
+    * The ``WITH TIMEOUT`` clause specifies the time to wait for the jobs to complete.
+      The time can be in seconds, minutes, or hours.
 
     Example
     -------
@@ -287,9 +288,20 @@ class WaitOnJobsHandler(SQLHandler):
 
         jobs_manager = get_workspace_manager().organizations.current.jobs
 
+        timeout_in_secs = params['with_timeout'][0]['time']
+        time_unit = params['with_timeout'][-1]['time_unit'].upper()
+        if time_unit == 'SECONDS':
+            pass
+        elif time_unit == 'MINUTES':
+            timeout_in_secs *= 60
+        elif time_unit == 'HOURS':
+            timeout_in_secs *= 60 * 60
+        else:
+            raise ValueError(f'Invalid time unit: {time_unit}')
+
         success = jobs_manager.wait(
             params['job_ids'],
-            timeout=params['with_timeout'],
+            timeout=timeout_in_secs,
         )
         res.set_rows([(success,)])
 
@@ -428,7 +440,7 @@ ShowJobsHandler.register(overwrite=True)
 
 class ShowJobExecutionsHandler(SQLHandler):
     """
-    SHOW JOB EXECUTIONS job_id
+    SHOW JOB EXECUTIONS FOR job_id
         from_start
         to_end
         [ <extended> ];
@@ -463,7 +475,7 @@ class ShowJobExecutionsHandler(SQLHandler):
     The following command shows extended information on the executions for the job
     with ID **job1**, from execution number **1** to **10**::
 
-        SHOW JOB EXECUTIONS 'job1'
+        SHOW JOB EXECUTIONS FOR 'job1'
           FROM 1 TO 10
           EXTENDED;
     """
@@ -522,7 +534,7 @@ ShowJobExecutionsHandler.register(overwrite=True)
 
 class ShowJobParametersHandler(SQLHandler):
     """
-    SHOW JOB PARAMETERS job_id;
+    SHOW JOB PARAMETERS FOR job_id;
 
     # ID of the job to show parameters for
     job_id = '<job-id>'
@@ -535,7 +547,7 @@ class ShowJobParametersHandler(SQLHandler):
     -------
     The following command shows the parameters for the job with ID **job1**::
 
-        SHOW JOB PARAMETERS 'job1';
+        SHOW JOB PARAMETERS FOR 'job1';
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:

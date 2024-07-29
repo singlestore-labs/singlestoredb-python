@@ -676,7 +676,7 @@ class TestJobsFusion(unittest.TestCase):
         assert not job[16]
 
         # show executions for job with id job_id from 1 to 5
-        self.cur.execute(f'show job executions {job_id} from 1 to 5')
+        self.cur.execute(f'show job executions for {job_id} from 1 to 5')
         out = list(self.cur)
         desc = self.cur.description
         assert len(desc) == 7
@@ -688,7 +688,7 @@ class TestJobsFusion(unittest.TestCase):
         assert [x for x in exec_job_ids] == [job_id]
 
         # show executions for job with id job_id from 1 to 5 extended
-        self.cur.execute(f'show job executions {job_id} from 1 to 5 extended')
+        self.cur.execute(f'show job executions for {job_id} from 1 to 5 extended')
         out = list(self.cur)
         desc = self.cur.description
         assert len(desc) == 8
