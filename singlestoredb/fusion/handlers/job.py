@@ -134,16 +134,18 @@ class ScheduleJobHandler(SQLHandler):
             for name, value in params['with_parameters'].items():
                 parameters[name] = value
 
-        execution_interval_in_mins = params['execute_every'][0]['interval']
-        time_unit = params['execute_every'][-1]['time_unit'].upper()
-        if time_unit == 'MINUTES':
-            pass
-        elif time_unit == 'HOURS':
-            execution_interval_in_mins *= 60
-        elif time_unit == 'DAYS':
-            execution_interval_in_mins *= 60 * 24
-        else:
-            raise ValueError(f'Invalid time unit: {time_unit}')
+        execution_interval_in_mins = None
+        if params.get('execute_every'):
+            execution_interval_in_mins = params['execute_every'][0]['interval']
+            time_unit = params['execute_every'][-1]['time_unit'].upper()
+            if time_unit == 'MINUTES':
+                pass
+            elif time_unit == 'HOURS':
+                execution_interval_in_mins *= 60
+            elif time_unit == 'DAYS':
+                execution_interval_in_mins *= 60 * 24
+            else:
+                raise ValueError(f'Invalid time unit: {time_unit}')
 
         job = jobs_manager.schedule(
             notebook_path=params['notebook_path'],
@@ -288,16 +290,18 @@ class WaitOnJobsHandler(SQLHandler):
 
         jobs_manager = get_workspace_manager().organizations.current.jobs
 
-        timeout_in_secs = params['with_timeout'][0]['time']
-        time_unit = params['with_timeout'][-1]['time_unit'].upper()
-        if time_unit == 'SECONDS':
-            pass
-        elif time_unit == 'MINUTES':
-            timeout_in_secs *= 60
-        elif time_unit == 'HOURS':
-            timeout_in_secs *= 60 * 60
-        else:
-            raise ValueError(f'Invalid time unit: {time_unit}')
+        timeout_in_secs = None
+        if params.get('with_timeout'):
+            timeout_in_secs = params['with_timeout'][0]['time']
+            time_unit = params['with_timeout'][-1]['time_unit'].upper()
+            if time_unit == 'SECONDS':
+                pass
+            elif time_unit == 'MINUTES':
+                timeout_in_secs *= 60
+            elif time_unit == 'HOURS':
+                timeout_in_secs *= 60 * 60
+            else:
+                raise ValueError(f'Invalid time unit: {time_unit}')
 
         success = jobs_manager.wait(
             params['job_ids'],
