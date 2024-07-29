@@ -768,9 +768,9 @@ class JobsManager(object):
             job_run_json['parameters'] = [
                 dict(
                     name=k,
-                    value=str(v),
-                    type=type_to_parameter_conversion_map[type(v)],
-                ) for k, v in parameters
+                    value=str(parameters[k]),
+                    type=type_to_parameter_conversion_map[type(parameters[k])],
+                ) for k in parameters
             ]
             print(job_run_json['parameters'])
 
