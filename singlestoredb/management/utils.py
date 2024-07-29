@@ -215,6 +215,26 @@ def get_token() -> Optional[str]:
     return None
 
 
+def get_cluster_id() -> Optional[str]:
+    """Return the cluster id for the current token or environment."""
+    return os.environ.get('SINGLESTOREDB_CLUSTER') or None
+
+
+def get_workspace_id() -> Optional[str]:
+    """Return the workspace id for the current token or environment."""
+    return os.environ.get('SINGLESTOREDB_WORKSPACE') or None
+
+
+def get_virtual_workspace_id() -> Optional[str]:
+    """Return the virtual workspace id for the current token or environment."""
+    return os.environ.get('SINGLESTOREDB_VIRTUAL_WORKSPACE') or None
+
+
+def get_database_name() -> Optional[str]:
+    """Return the default database name for the current token or environment."""
+    return os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE') or None
+
+
 def enable_http_tracing() -> None:
     """Enable tracing of HTTP requests."""
     import logging
@@ -246,7 +266,33 @@ def to_datetime(
     out = converters.datetime_fromisoformat(obj)
     if isinstance(out, str):
         return None
-    if isinstance(out, datetime.date):
+    if isinstance(out, datetime.date) and not isinstance(out, datetime.datetime):
+        return datetime.datetime(out.year, out.month, out.day)
+    return out
+
+
+def to_datetime_strict(
+    obj: Optional[Union[str, datetime.datetime]],
+) -> datetime.datetime:
+    """Convert string to datetime."""
+    if not obj:
+        raise TypeError('not possible to convert None to datetime')
+    if isinstance(obj, datetime.datetime):
+        return obj
+    if obj == '0001-01-01T00:00:00Z':
+        raise ValueError('not possible to convert 0001-01-01T00:00:00Z to datetime')
+    obj = obj.replace('Z', '')
+    # Fix datetimes with truncated zeros
+    if '.' in obj:
+        obj, micros = obj.split('.', 1)
+        micros = micros + '0' * (6 - len(micros))
+        obj = obj + '.' + micros
+    out = converters.datetime_fromisoformat(obj)
+    if not out:
+        raise TypeError('not possible to convert None to datetime')
+    if isinstance(out, str):
+        raise ValueError('value cannot be str')
+    if isinstance(out, datetime.date) and not isinstance(out, datetime.datetime):
         return datetime.datetime(out.year, out.month, out.day)
     return out
 

@@ -91,7 +91,7 @@ class TestFusion(unittest.TestCase):
 
 
 @pytest.mark.management
-class TestManagementAPIFusion(unittest.TestCase):
+class TestWorkspaceFusion(unittest.TestCase):
 
     id: str = secrets.token_hex(8)
     dbname: str = ''
@@ -463,3 +463,252 @@ class TestManagementAPIFusion(unittest.TestCase):
                 mgr.workspace_groups[wg_name].terminate(force=True)
             except Exception:
                 pass
+
+
+@pytest.mark.management
+class TestJobsFusion(unittest.TestCase):
+
+    id: str = secrets.token_hex(8)
+    notebook_name: str = 'Scheduling Test.ipynb'
+    dbname: str = ''
+    dbexisted: bool = False
+    manager: None
+    workspace_group: None
+    workspace: None
+    job_ids = []
+
+    @classmethod
+    def setUpClass(cls):
+        sql_file = os.path.join(os.path.dirname(__file__), 'test.sql')
+        cls.dbname, cls.dbexisted = utils.load_sql(sql_file)
+        cls.manager = s2.manage_workspaces()
+        us_regions = [x for x in cls.manager.regions if x.name.startswith('US')]
+        cls.workspace_group = cls.manager.create_workspace_group(
+            f'Jobs Fusion Testing {cls.id}',
+            region=random.choice(us_regions),
+            firewall_ranges=[],
+        )
+        cls.workspace = cls.workspace_group.create_workspace(
+                f'jobs-test-{cls.id}',
+                wait_on_active=True,
+        )
+        os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] = cls.dbname
+        os.environ['SINGLESTOREDB_WORKSPACE'] = cls.workspace.id
+
+    @classmethod
+    def tearDownClass(cls):
+        for job_id in cls.job_ids:
+            cls.manager.organizations.current.jobs.delete(job_id)
+        if cls.workspace_group is not None:
+            cls.workspace_group.terminate(force=True)
+        cls.manager = None
+        cls.workspace_group = None
+        cls.workspace = None
+        if os.environ.get('SINGLESTOREDB_WORKSPACE', None) is not None:
+            del os.environ['SINGLESTOREDB_WORKSPACE']
+        if os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE', None) is not None:
+            del os.environ['SINGLESTOREDB_DEFAULT_DATABASE']
+
+    def setUp(self):
+        self.enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLED')
+        os.environ['SINGLESTOREDB_FUSION_ENABLED'] = '1'
+        self.conn = s2.connect(database=type(self).dbname, local_infile=True)
+        self.cur = self.conn.cursor()
+
+    def tearDown(self):
+        if self.enabled:
+            os.environ['SINGLESTOREDB_FUSION_ENABLED'] = self.enabled
+        else:
+            del os.environ['SINGLESTOREDB_FUSION_ENABLED']
+
+        try:
+            if self.cur is not None:
+                self.cur.close()
+        except Exception:
+            # traceback.print_exc()
+            pass
+
+        try:
+            if self.conn is not None:
+                self.conn.close()
+        except Exception:
+            # traceback.print_exc()
+            pass
+
+    def test_schedule_drop_job(self):
+        # schedule recurring job
+        self.cur.execute(
+                f'schedule job using notebook "{self.notebook_name}" '
+                'with mode "recurring" '
+                'execute every 5 minutes '
+                'with name "recurring-job" '
+                'create snapshot '
+                'resume target '
+                'with runtime "notebooks-cpu-small" '
+                'with parameters '
+                '{"strParam": "string", "intParam": 1, '
+                '"floatParam": 1.0, "boolParam": true}',
+        )
+        out = list(self.cur)
+        job_id = out[0][0]
+        self.job_ids.append(job_id)
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0][0] == 'JobID'
+        assert len(out) == 1
+        assert out[0][0] == job_id
+
+        # drop job
+        self.cur.execute(f'drop jobs {job_id}')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 2
+        assert [x[0] for x in desc] == [
+            'JobID', 'Success',
+        ]
+        assert len(out) == 1
+        res = out[0]
+        assert res[0] == job_id
+        assert res[1] == 1
+
+    def test_run_wait_drop_job(self):
+        # run job
+        self.cur.execute(
+            f'run job using notebook "{self.notebook_name}" '
+            'with runtime "notebooks-cpu-small" '
+            'with parameters '
+            '{"strParam": "string", "intParam": 1, '
+            '"floatParam": 1.0, "boolParam": true}',
+        )
+        out = list(self.cur)
+        job_id = out[0][0]
+        self.job_ids.append(job_id)
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0][0] == 'JobID'
+        assert len(out) == 1
+        assert out[0][0] == job_id
+
+        # wait on job
+        self.cur.execute(f'wait on jobs {job_id}')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0][0] == 'Success'
+        assert out[0][0] == 1
+
+        # drop job
+        self.cur.execute(f'drop jobs {job_id}')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 2
+        assert [x[0] for x in desc] == [
+            'JobID', 'Success',
+        ]
+        assert len(out) == 1
+        res = out[0]
+        assert res[0] == job_id
+        assert res[1] == 1
+
+    def test_show_jobs_and_executions(self):
+        # schedule recurring job
+        self.cur.execute(
+                f'schedule job using notebook "{self.notebook_name}" '
+                'with mode "recurring" '
+                'execute every 5 minutes '
+                'with name "show-job" '
+                'with runtime "notebooks-cpu-small" '
+                'with parameters '
+                '{"strParam": "string", "intParam": 1, '
+                '"floatParam": 1.0, "boolParam": true}',
+        )
+        out = list(self.cur)
+        job_id = out[0][0]
+        self.job_ids.append(job_id)
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0][0] == 'JobID'
+        assert len(out) == 1
+        assert out[0][0] == job_id
+
+        # show jobs with name like "show-job"
+        self.cur.execute(f'show jobs {job_id} like "show-job"')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 9
+        assert [x[0] for x in desc] == [
+            'JobID', 'Name', 'CreatedAt', 'EnqueuedBy',
+            'CompletedExecutions', 'NotebookPath', 'DatabaseName', 'TargetID',
+            'TargetType',
+        ]
+        assert len(out) == 1
+        job = out[0]
+        assert job[0] == job_id
+        assert job[1] == 'show-job'
+        assert job[5] == self.notebook_name
+        assert job[6] == self.dbname
+        assert job[7] == self.workspace.id
+        assert job[8] == 'Workspace'
+
+        # show jobs with name like "show-job" extended
+        self.cur.execute(f'show jobs {job_id} like "show-job" extended')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 17
+        assert [x[0] for x in desc] == [
+            'JobID', 'Name', 'CreatedAt', 'EnqueuedBy',
+            'CompletedExecutions', 'NotebookPath', 'DatabaseName', 'TargetID',
+            'TargetType', 'Description', 'TerminatedAt', 'CreateSnapshot',
+            'MaxDurationInMins', 'ExecutionIntervalInMins', 'Mode', 'StartAt',
+            'ResumeTarget',
+        ]
+        assert len(out) == 1
+        job = out[0]
+        assert job[0] == job_id
+        assert job[1] == 'show-job'
+        assert job[5] == self.notebook_name
+        assert job[6] == self.dbname
+        assert job[7] == self.workspace.id
+        assert job[8] == 'Workspace'
+        assert not job[11]
+        assert job[13] == 5
+        assert job[14] == 'Recurring'
+        assert not job[16]
+
+        # show executions for job with id job_id from 1 to 5
+        self.cur.execute(f'show job executions for {job_id} from 1 to 5')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 7
+        assert [x[0] for x in desc] == [
+            'ExecutionID', 'ExecutionNumber', 'JobID',
+            'Status', 'ScheduledStartTime', 'StartedAt', 'FinishedAt',
+        ]
+        exec_job_ids = [x[2] for x in out]
+        assert [x for x in exec_job_ids] == [job_id]
+
+        # show executions for job with id job_id from 1 to 5 extended
+        self.cur.execute(f'show job executions for {job_id} from 1 to 5 extended')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 8
+        assert [x[0] for x in desc] == [
+            'ExecutionID', 'ExecutionNumber', 'JobID',
+            'Status', 'ScheduledStartTime', 'StartedAt', 'FinishedAt',
+            'SnapshotNotebookPath',
+        ]
+        exec_job_ids = [x[2] for x in out]
+        assert [x for x in exec_job_ids] == [job_id]
+
+        # drop job
+        self.cur.execute(f'drop jobs {job_id}')
+        out = list(self.cur)
+        desc = self.cur.description
+        assert len(desc) == 2
+        assert [x[0] for x in desc] == [
+            'JobID', 'Success',
+        ]
+        assert len(out) == 1
+        res = out[0]
+        assert res[0] == job_id
+        assert res[1] == 1

@@ -7,6 +7,7 @@ from typing import Optional
 from typing import Union
 
 from ..exceptions import ManagementError
+from .job import JobsManager
 from .manager import Manager
 from .utils import vars_to_str
 
@@ -190,3 +191,19 @@ class Organization(object):
         )
         out._manager = manager
         return out
+
+    @property
+    def jobs(self) -> JobsManager:
+        """
+        Retrieve a SingleStoreDB scheduled job manager.
+
+        Parameters
+        ----------
+        manager : WorkspaceManager, optional
+            The WorkspaceManager the JobsManager belongs to
+
+        Returns
+        -------
+        :class:`JobsManager`
+        """
+        return JobsManager(self._manager)

@@ -11,6 +11,8 @@ import unittest
 import pytest
 
 import singlestoredb as s2
+from singlestoredb.management.job import Status
+from singlestoredb.management.job import TargetType
 
 
 TEST_DIR = pathlib.Path(os.path.dirname(__file__))
@@ -876,3 +878,153 @@ class TestSecrets(unittest.TestCase):
 
         assert secret.name == 'secret_name'
         assert secret.value == 'secret_value'
+
+
+@pytest.mark.management
+class TestJob(unittest.TestCase):
+
+    manager = None
+    workspace_group = None
+    workspace = None
+    password = None
+    job_ids = []
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = s2.manage_workspaces()
+
+        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
+        cls.password = secrets.token_urlsafe(20)
+
+        name = clean_name(secrets.token_urlsafe(20)[:20])
+
+        cls.workspace_group = cls.manager.create_workspace_group(
+            f'wg-test-{name}',
+            region=random.choice(us_regions).id,
+            admin_password=cls.password,
+            firewall_ranges=['0.0.0.0/0'],
+        )
+
+        try:
+            cls.workspace = cls.workspace_group.create_workspace(
+                f'ws-test-{name}-x',
+                wait_on_active=True,
+            )
+        except Exception:
+            cls.workspace_group.terminate(force=True)
+            raise
+
+    @classmethod
+    def tearDownClass(cls):
+        for job_id in cls.job_ids:
+            cls.manager.organizations.current.jobs.delete(job_id)
+        if cls.workspace_group is not None:
+            cls.workspace_group.terminate(force=True)
+        cls.workspace_group = None
+        cls.workspace = None
+        cls.manager = None
+        cls.password = None
+        if os.environ.get('SINGLESTOREDB_WORKSPACE', None) is not None:
+            del os.environ['SINGLESTOREDB_WORKSPACE']
+        if os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE', None) is not None:
+            del os.environ['SINGLESTOREDB_DEFAULT_DATABASE']
+
+    def test_job_without_database_target(self):
+        """
+        Creates job without target database on a specific runtime
+        Waits for job to finish
+        Gets the job
+        Deletes the job
+        """
+        if os.environ.get('SINGLESTOREDB_WORKSPACE', None) is not None:
+            del os.environ['SINGLESTOREDB_WORKSPACE']
+        if os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE', None) is not None:
+            del os.environ['SINGLESTOREDB_DEFAULT_DATABASE']
+
+        job_manager = self.manager.organizations.current.jobs
+        job = job_manager.run(
+            'Scheduling Test.ipynb',
+            'notebooks-cpu-small',
+            {'strParam': 'string', 'intParam': 1, 'floatParam': 1.0, 'boolParam': True},
+        )
+        self.job_ids.append(job.job_id)
+        assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
+        assert job.schedule.mode == job_manager.modes().ONCE
+        assert not job.execution_config.create_snapshot
+        assert job.completed_executions_count == 0
+        assert job.name is None
+        assert job.description is None
+        assert job.job_metadata == []
+        assert job.terminated_at is None
+        assert job.target_config is None
+        job.wait()
+        job = job_manager.get(job.job_id)
+        assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
+        assert job.schedule.mode == job_manager.modes().ONCE
+        assert not job.execution_config.create_snapshot
+        assert job.completed_executions_count == 1
+        assert job.name is None
+        assert job.description is None
+        assert job.job_metadata != []
+        assert len(job.job_metadata) == 1
+        assert job.job_metadata[0].count == 1
+        assert job.job_metadata[0].status == Status.COMPLETED
+        assert job.terminated_at is None
+        assert job.target_config is None
+        deleted = job.delete()
+        assert deleted
+        job = job_manager.get(job.job_id)
+        assert job.terminated_at is not None
+
+    def test_job_with_database_target(self):
+        """
+        Creates job with target database on a specific runtime
+        Waits for job to finish
+        Gets the job
+        Deletes the job
+        """
+        os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] = 'information_schema'
+        os.environ['SINGLESTOREDB_WORKSPACE'] = self.workspace.id
+
+        job_manager = self.manager.organizations.current.jobs
+        job = job_manager.run(
+            'Scheduling Test.ipynb',
+            'notebooks-cpu-small',
+            {'strParam': 'string', 'intParam': 1, 'floatParam': 1.0, 'boolParam': True},
+        )
+        self.job_ids.append(job.job_id)
+        assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
+        assert job.schedule.mode == job_manager.modes().ONCE
+        assert not job.execution_config.create_snapshot
+        assert job.completed_executions_count == 0
+        assert job.name is None
+        assert job.description is None
+        assert job.job_metadata == []
+        assert job.terminated_at is None
+        assert job.target_config is not None
+        assert job.target_config.database_name == 'information_schema'
+        assert job.target_config.target_id == self.workspace.id
+        assert job.target_config.target_type == TargetType.WORKSPACE
+        assert not job.target_config.resume_target
+        job.wait()
+        job = job_manager.get(job.job_id)
+        assert job.execution_config.notebook_path == 'Scheduling Test.ipynb'
+        assert job.schedule.mode == job_manager.modes().ONCE
+        assert not job.execution_config.create_snapshot
+        assert job.completed_executions_count == 1
+        assert job.name is None
+        assert job.description is None
+        assert job.job_metadata != []
+        assert len(job.job_metadata) == 1
+        assert job.job_metadata[0].count == 1
+        assert job.job_metadata[0].status == Status.COMPLETED
+        assert job.terminated_at is None
+        assert job.target_config is not None
+        assert job.target_config.database_name == 'information_schema'
+        assert job.target_config.target_id == self.workspace.id
+        assert job.target_config.target_type == TargetType.WORKSPACE
+        assert not job.target_config.resume_target
+        deleted = job.delete()
+        assert deleted
+        job = job_manager.get(job.job_id)
+        assert job.terminated_at is not None
