@@ -770,6 +770,7 @@ class JobsManager(object):
                     type=type_to_parameter_conversion_map[type(p[1])],
                 ) for p in parameters
             ]
+            print(job_run_json['parameters'])
 
         res = self._manager._post('jobs', json=job_run_json).json()
         return Job.from_dict(res, self)
