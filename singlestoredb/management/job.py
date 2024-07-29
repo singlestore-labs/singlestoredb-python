@@ -763,6 +763,8 @@ class JobsManager(object):
             job_run_json['description'] = description
 
         if parameters is not None:
+            print(parameters)
+
             job_run_json['parameters'] = [
                 dict(
                     name=p[0],
