@@ -767,10 +767,10 @@ class JobsManager(object):
 
             job_run_json['parameters'] = [
                 dict(
-                    name=p[0],
-                    value=str(p[1]),
-                    type=type_to_parameter_conversion_map[type(p[1])],
-                ) for p in parameters
+                    name=k,
+                    value=str(v),
+                    type=type_to_parameter_conversion_map[type(v)],
+                ) for k, v in parameters
             ]
             print(job_run_json['parameters'])
 
