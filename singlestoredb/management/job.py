@@ -7,7 +7,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Tuple
 from typing import Type
 from typing import Union
 
@@ -763,8 +762,6 @@ class JobsManager(object):
             job_run_json['description'] = description
 
         if parameters is not None:
-            print(parameters)
-
             job_run_json['parameters'] = [
                 dict(
                     name=k,
@@ -772,7 +769,6 @@ class JobsManager(object):
                     type=type_to_parameter_conversion_map[type(parameters[k])],
                 ) for k in parameters
             ]
-            print(job_run_json['parameters'])
 
         res = self._manager._post('jobs', json=job_run_json).json()
         return Job.from_dict(res, self)

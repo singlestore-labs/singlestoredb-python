@@ -543,7 +543,9 @@ class TestJobsFusion(unittest.TestCase):
                 'execute every 5 minutes '
                 'with name "recurring-job" '
                 'create snapshot '
-                'resume target',
+                'resume target '
+                'with runtime "notebooks-cpu-small" '
+                'with parameters {"strParam": "string", "intParam": 1, "floatParam": 1.0, "boolParam": true}',
         )
         out = list(self.cur)
         job_id = out[0][0]
@@ -569,7 +571,11 @@ class TestJobsFusion(unittest.TestCase):
 
     def test_run_wait_drop_job(self):
         # run job
-        self.cur.execute(f'run job using notebook "{self.notebook_name}"')
+        self.cur.execute(
+            f'run job using notebook "{self.notebook_name}" '
+            'with runtime "notebooks-cpu-small" '
+            'with parameters {"strParam": "string", "intParam": 1, "floatParam": 1.0, "boolParam": true}',
+        )
         out = list(self.cur)
         job_id = out[0][0]
         self.job_ids.append(job_id)
@@ -606,7 +612,9 @@ class TestJobsFusion(unittest.TestCase):
                 f'schedule job using notebook "{self.notebook_name}" '
                 'with mode "recurring" '
                 'execute every 5 minutes '
-                'with name "show-job"',
+                'with name "show-job" '
+                'with runtime "notebooks-cpu-small" '
+                'with parameters {"strParam": "string", "intParam": 1, "floatParam": 1.0, "boolParam": true}',
         )
         out = list(self.cur)
         job_id = out[0][0]
