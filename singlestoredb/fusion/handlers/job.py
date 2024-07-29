@@ -130,9 +130,9 @@ class ScheduleJobHandler(SQLHandler):
 
         parameters = None
         if params.get('with_parameters'):
-            parameters = []
+            parameters = {}
             for name, value in params['with_parameters'].items():
-                parameters.append((name, value))
+                parameters[name] = value
 
         execution_interval_in_mins = params['execute_every'][0]['interval']
         time_unit = params['execute_every'][-1]['time_unit'].upper()
@@ -228,9 +228,9 @@ class RunJobHandler(SQLHandler):
 
         parameters = None
         if params.get('with_parameters'):
-            parameters = []
+            parameters = {}
             for name, value in params['with_parameters'].items():
-                parameters.append((name, value))
+                parameters[name] = value
 
         job = jobs_manager.run(
             params['notebook_path'],
