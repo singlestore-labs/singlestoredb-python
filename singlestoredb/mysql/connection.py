@@ -716,6 +716,7 @@ class Connection(BaseConnection):
         Error : If the connection is already closed.
 
         """
+        self._result = None
         if self.host == 'singlestore.com':
             return
         if self._closed:
@@ -1909,12 +1910,12 @@ class MySQLResultSV(MySQLResult):
                 encoding_errors=connection.encoding_errors,
             ).items() if v is not UNSET
         }
-        self._read_rowdata_packet = functools.partial(
-            _singlestoredb_accel.read_rowdata_packet, self, False,
-        )
-        self._read_rowdata_packet_unbuffered = functools.partial(
-            _singlestoredb_accel.read_rowdata_packet, self, True,
-        )
+
+    def _read_rowdata_packet(self, *args, **kwargs):
+        return _singlestoredb_accel.read_rowdata_packet(self, False, *args, **kwargs)
+
+    def _read_rowdata_packet_unbuffered(self, *args, **kwargs):
+        return _singlestoredb_accel.read_rowdata_packet(self, True, *args, **kwargs)
 
 
 class LoadLocalFile:
