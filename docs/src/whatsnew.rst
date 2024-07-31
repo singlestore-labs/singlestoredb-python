@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.6.1 - July 31, 2024
+----------------------
+* Fix memory leak in connections
+
 v1.6.0 - July 29, 2024
 ----------------------
 * Add job service Fusion commands
