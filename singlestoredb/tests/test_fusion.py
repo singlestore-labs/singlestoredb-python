@@ -685,7 +685,8 @@ class TestJobsFusion(unittest.TestCase):
             'Status', 'ScheduledStartTime', 'StartedAt', 'FinishedAt',
         ]
         exec_job_ids = [x[2] for x in out]
-        assert [x for x in exec_job_ids] == [job_id]
+        for x in exec_job_ids:
+            assert x == job_id
 
         # show executions for job with id job_id from 1 to 5 extended
         self.cur.execute(f'show job executions for {job_id} from 1 to 5 extended')
@@ -698,7 +699,8 @@ class TestJobsFusion(unittest.TestCase):
             'SnapshotNotebookPath',
         ]
         exec_job_ids = [x[2] for x in out]
-        assert [x for x in exec_job_ids] == [job_id]
+        for x in exec_job_ids:
+            assert x == job_id
 
         # drop job
         self.cur.execute(f'drop jobs {job_id}')
