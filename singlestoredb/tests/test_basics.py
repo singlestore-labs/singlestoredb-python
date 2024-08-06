@@ -1199,6 +1199,9 @@ class TestBasics(unittest.TestCase):
                 list(cur)
 
     def test_character_lengths(self):
+        if 'http' in self.conn.driver:
+            self.skipTest('Character lengths too long for HTTP interface')
+
         self.cur.execute('DROP TABLE IF EXISTS test_character_lengths')
         self.cur.execute(r'''
             CREATE TABLE `test_character_lengths` (
