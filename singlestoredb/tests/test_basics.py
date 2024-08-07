@@ -5,7 +5,6 @@ import datetime
 import decimal
 import math
 import os
-import string
 import unittest
 
 from requests.exceptions import InvalidJSONError
@@ -1202,9 +1201,11 @@ class TestBasics(unittest.TestCase):
         if 'http' in self.conn.driver:
             self.skipTest('Character lengths too long for HTTP interface')
 
+        tbl_id = str(id(self))
+
         self.cur.execute('DROP TABLE IF EXISTS test_character_lengths')
-        self.cur.execute(r'''
-            CREATE TABLE `test_character_lengths` (
+        self.cur.execute(rf'''
+            CREATE TABLE `test_character_lengths_{tbl_id}` (
                 `id` text CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
                 `char_col` longtext CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
                 `int_col` INT,
@@ -1216,46 +1217,43 @@ class TestBasics(unittest.TestCase):
               SQL_MODE='STRICT_ALL_TABLES'
         ''')
 
-        CHAR_STR = string.ascii_letters * 1
-        SHORT_STR = string.ascii_letters * 10
-        INT24_STR = string.ascii_letters * 1500
-        INT64_STR = string.ascii_letters * 1500000
+        CHAR_STR_SHORT = 'a'
+        CHAR_STR_LONG = 'a' * (2**8-1)
+        SHORT_STR_SHORT = 'a' * ((2**8-1) + 1)
+        SHORT_STR_LONG = 'a' * (2**16-1)
+        INT24_STR_SHORT = 'a' * ((2**16-1) + 1)
+        INT24_STR_LONG = 'a' * (2**24-1)
+        INT64_STR_SHORT = 'a' * ((2**24-1) + 1)
+        INT64_STR_LONG = 'a' * ((2**24-1) + 100000)
 
         data = [
-            ['CHAR', CHAR_STR, 123456],
-            ['SHORT', SHORT_STR, 123456],
-            ['INT24', INT24_STR, 123456],
-            ['INT64', INT64_STR, 123456],
+            ['CHAR_SHORT', CHAR_STR_SHORT, 123456],
+            ['CHAR_LONG', CHAR_STR_LONG, 123456],
+            ['SHORT_SHORT', SHORT_STR_SHORT, 123456],
+            ['SHORT_LONG', SHORT_STR_LONG, 123456],
+            ['INT24_SHORT', INT24_STR_SHORT, 123456],
+            ['INT24_LONG', INT24_STR_LONG, 123456],
+            ['INT64_SHORT', INT64_STR_SHORT, 123456],
+            ['INT64_LONG', INT64_STR_LONG, 123456],
         ]
 
         self.cur.executemany(
-            'INSERT INTO test_character_lengths(id, char_col, int_col) '
+            f'INSERT INTO test_character_lengths_{tbl_id}(id, char_col, int_col) '
             'VALUES (%s, %s, %s)', data,
         )
 
-        self.cur.execute(
-            'SELECT id, char_col, int_col FROM test_character_lengths '
-            'WHERE id = "CHAR"',
-        )
-        assert data[0] == list(list(self.cur)[0])
+        for i, row in enumerate(data):
+            self.cur.execute(
+                f'SELECT id, char_col, int_col FROM test_character_lengths_{tbl_id} '
+                'WHERE id = %s',
+                [row[0]],
+            )
+            assert data[i] == list(list(self.cur)[0])
 
-        self.cur.execute(
-            'SELECT id, char_col, int_col FROM test_character_lengths '
-            'WHERE id = "SHORT"',
-        )
-        assert data[1] == list(list(self.cur)[0])
-
-        self.cur.execute(
-            'SELECT id, char_col, int_col FROM test_character_lengths '
-            'WHERE id = "INT24"',
-        )
-        assert data[2] == list(list(self.cur)[0])
-
-        self.cur.execute(
-            'SELECT id, char_col, int_col FROM test_character_lengths '
-            'WHERE id = "INT64"',
-        )
-        assert data[3] == list(list(self.cur)[0])
+        try:
+            self.cur.execute(f'DROP TABLE test_character_lengths_{tbl_id}')
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':
