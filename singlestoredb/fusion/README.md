@@ -10,7 +10,7 @@ time.
 By default, Fusion SQL commands are not processed by the client. They
 must be enabled by setting an environment variable.
 ```
-SINGLESTOREDB_ENABLE_FUSION=1
+SINGLESTOREDB_FUSION_ENABLED=1
 ```
 
 ## Writing Fusion SQL handler classes
