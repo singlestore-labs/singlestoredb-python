@@ -1298,6 +1298,7 @@ def connect(
     program_name: Optional[str] = None,
     conn_attrs: Optional[Dict[str, str]] = None,
     multi_statements: Optional[bool] = None,
+    client_found_rows: Optional[bool] = None,
     connect_timeout: Optional[int] = None,
     nan_as_null: Optional[bool] = None,
     inf_as_null: Optional[bool] = None,

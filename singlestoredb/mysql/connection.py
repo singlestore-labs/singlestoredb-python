@@ -347,6 +347,7 @@ class Connection(BaseConnection):
         driver=None,  # internal use
         conn_attrs=None,
         multi_statements=None,
+        client_found_rows=None,
         nan_as_null=None,
         inf_as_null=None,
         encoding_errors='strict',
@@ -380,6 +381,8 @@ class Connection(BaseConnection):
             client_flag |= CLIENT.LOCAL_FILES
         if multi_statements:
             client_flag |= CLIENT.MULTI_STATEMENTS
+        if client_found_rows:
+            client_flag |= CLIENT.FOUND_ROWS
 
         if read_default_group and not read_default_file:
             if sys.platform.startswith('win'):
