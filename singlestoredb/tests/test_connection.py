@@ -2780,7 +2780,8 @@ class TestConnection(unittest.TestCase):
         if self.conn.driver not in ['http', 'https']:
             with s2.connect(database=type(self).dbname, client_found_rows=False) as conn:
                 with conn.cursor() as cur:
-                    table_name = f'test_client_found_rows_{uuid.uuid4()}'.replace('-', '_')
+                    tag = uuid.uuid4().replace('-', '_')
+                    table_name = f'test_client_found_rows_{tag}'
                     cur.execute(f"CREATE TABLE {table_name} (id BIGINT \
                                 PRIMARY KEY, s TEXT DEFAULT 'def');")
                     cur.execute(f'INSERT INTO {table_name} (id) \
