@@ -104,6 +104,13 @@ register_option(
 )
 
 register_option(
+    'client_found_rows', 'bool', check_bool, False,
+    'Should affected_rows in OK_PACKET indicate the '
+    'number of matched rows instead of changed?',
+    environ='SINGLESTOREDB_CLIENT_FOUND_ROWS',
+)
+
+register_option(
     'ssl_key', 'str', check_str, None,
     'File containing SSL key',
     environ='SINGLESTOREDB_SSL_KEY',

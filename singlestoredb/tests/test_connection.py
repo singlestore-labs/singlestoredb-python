@@ -2776,6 +2776,39 @@ class TestConnection(unittest.TestCase):
                     self.assertEqual([(2,)], list(cur))
                     self.assertIsNone(cur.nextset())
 
+    def test_client_found_rows(self):
+        if self.conn.driver not in ['http', 'https']:
+            with s2.connect(database=type(self).dbname, client_found_rows=False) as conn:
+                with conn.cursor() as cur:
+                    tag = str(uuid.uuid4()).replace('-', '_')
+                    table_name = f'test_client_found_rows_{tag}'
+                    cur.execute(f"CREATE TABLE {table_name} (id BIGINT \
+                                PRIMARY KEY, s TEXT DEFAULT 'def');")
+                    cur.execute(f'INSERT INTO {table_name} (id) \
+                        VALUES (1), (2), (3);')
+                    cur.execute(f"UPDATE {table_name} SET s = 'def' \
+                                WHERE id = 1;")
+                    # UPDATE statement above is not changing any rows,
+                    # so affected_rows is 0 if client_found_rows is False (default)
+                    self.assertEqual(0, conn.affected_rows())
+                    cur.execute(f'DROP TABLE {table_name};')
+
+            with s2.connect(database=type(self).dbname, client_found_rows=True) as conn:
+                with conn.cursor() as cur:
+                    tag = str(uuid.uuid4()).replace('-', '_')
+                    table_name = f'test_client_found_rows_{tag}'
+                    cur.execute(f"CREATE TABLE {table_name} (id BIGINT \
+                                PRIMARY KEY, s TEXT DEFAULT 'def');")
+                    cur.execute(f'INSERT INTO {table_name} (id) \
+                        VALUES (1), (2), (3);')
+                    cur.execute(f"UPDATE {table_name} SET s = 'def' \
+                                WHERE id = 1;")
+                    # UPDATE statement above is not changing any rows,
+                    # but affected_rows is 1 as 1 row is subject to update, and
+                    # this is what affected_rows return when client_found_rows is True
+                    self.assertEqual(1, conn.affected_rows())
+                    cur.execute(f'DROP TABLE {table_name};')
+
     def test_connect_timeout(self):
         with s2.connect(database=type(self).dbname, connect_timeout=8) as conn:
             with conn.cursor() as cur:
