@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import abc
 import functools
+import os
 import re
 import sys
 import textwrap
@@ -543,6 +544,7 @@ class SQLHandler(NodeVisitor):
 
     _grammar: str = CORE_GRAMMAR
     _is_compiled: bool = False
+    _enabled: bool = True
 
     def __init__(self, connection: Connection):
         self.connection = connection
@@ -581,6 +583,11 @@ class SQLHandler(NodeVisitor):
             Overwrite an existing command with the same name?
 
         """
+        if not cls._enabled and \
+                os.environ.get('SINGLESTOREDB_FUSION_ENABLE_HIDDEN', '0').lower() not in \
+                ['1', 't', 'true', 'y', 'yes']:
+            return
+
         from . import registry
         cls.compile()
         registry.register_handler(cls, overwrite=overwrite)

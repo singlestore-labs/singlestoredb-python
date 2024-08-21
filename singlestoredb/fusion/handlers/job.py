@@ -122,6 +122,8 @@ class ScheduleJobHandler(SQLHandler):
         ;
     """
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         res = FusionSQLResult()
         res.add_field('JobID', result.STRING)
@@ -222,6 +224,8 @@ class RunJobHandler(SQLHandler):
 
     """
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         res = FusionSQLResult()
         res.add_field('JobID', result.STRING)
@@ -283,6 +287,8 @@ class WaitOnJobsHandler(SQLHandler):
         WAIT ON JOBS 'job1', 'job2' WITH TIMEOUT 60;
 
     """
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         res = FusionSQLResult()
@@ -352,6 +358,8 @@ class ShowJobsHandler(SQLHandler):
           LIKE 'example_job_name';
 
     """
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         res = FusionSQLResult()
@@ -484,6 +492,8 @@ class ShowJobExecutionsHandler(SQLHandler):
           EXTENDED;
     """
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         res = FusionSQLResult()
         res.add_field('ExecutionID', result.STRING)
@@ -554,6 +564,8 @@ class ShowJobParametersHandler(SQLHandler):
         SHOW JOB PARAMETERS FOR 'job1';
     """
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         res = FusionSQLResult()
         res.add_field('Name', result.STRING)
@@ -593,6 +605,8 @@ class ShowJobRuntimesHandler(SQLHandler):
 
         SHOW JOB RUNTIMES;
     """
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         res = FusionSQLResult()
@@ -638,6 +652,8 @@ class DropJobHandler(SQLHandler):
 
         DROP JOBS 'job1', 'job2';
     """
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         res = FusionSQLResult()
