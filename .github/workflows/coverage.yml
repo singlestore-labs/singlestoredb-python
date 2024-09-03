@@ -51,6 +51,7 @@ jobs:
           SINGLESTOREDB_PURE_PYTHON: 0
           SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
           SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
+          SINGLESTOREDB_FUSION_ENABLE_HIDDEN: "1"
 
       - name: Run MySQL protocol tests (pure Python)
         run: |
@@ -61,6 +62,7 @@ jobs:
           SINGLESTOREDB_PURE_PYTHON: 1
           SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
           SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
+          SINGLESTOREDB_FUSION_ENABLE_HIDDEN: "1"
 
       - name: Run HTTP protocol tests
         run: |
@@ -74,6 +76,7 @@ jobs:
           # used to create the database and the generated database name will
           # be applied to the above URL.
           SINGLESTOREDB_INIT_DB_URL: "root:root@127.0.0.1:3307"
+          SINGLESTOREDB_FUSION_ENABLE_HIDDEN: "1"
 
       - name: Generate report
         run: |

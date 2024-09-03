@@ -33,8 +33,6 @@ class TestFusion(unittest.TestCase):
     def setUp(self):
         self.enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLED')
         os.environ['SINGLESTOREDB_FUSION_ENABLED'] = '1'
-        self.hidden_enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLE_HIDDEN')
-        os.environ['SINGLESTOREDB_FUSION_ENABLE_HIDDEN'] = '1'
         self.conn = s2.connect(database=type(self).dbname, local_infile=True)
         self.cur = self.conn.cursor()
 
@@ -43,11 +41,6 @@ class TestFusion(unittest.TestCase):
             os.environ['SINGLESTOREDB_FUSION_ENABLED'] = self.enabled
         else:
             del os.environ['SINGLESTOREDB_FUSION_ENABLED']
-
-        if self.hidden_enabled:
-            os.environ['SINGLESTOREDB_FUSION_ENABLE_HIDDEN'] = self.hidden_enabled
-        else:
-            del os.environ['SINGLESTOREDB_FUSION_ENABLE_HIDDEN']
 
         try:
             if self.cur is not None:
@@ -141,8 +134,6 @@ class TestWorkspaceFusion(unittest.TestCase):
     def setUp(self):
         self.enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLED')
         os.environ['SINGLESTOREDB_FUSION_ENABLED'] = '1'
-        self.hidden_enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLE_HIDDEN')
-        os.environ['SINGLESTOREDB_FUSION_ENABLE_HIDDEN'] = '1'
         self.conn = s2.connect(database=type(self).dbname, local_infile=True)
         self.cur = self.conn.cursor()
 
@@ -151,11 +142,6 @@ class TestWorkspaceFusion(unittest.TestCase):
             os.environ['SINGLESTOREDB_FUSION_ENABLED'] = self.enabled
         else:
             del os.environ['SINGLESTOREDB_FUSION_ENABLED']
-
-        if self.hidden_enabled:
-            os.environ['SINGLESTOREDB_FUSION_ENABLE_HIDDEN'] = self.hidden_enabled
-        else:
-            del os.environ['SINGLESTOREDB_FUSION_ENABLE_HIDDEN']
 
         try:
             if self.cur is not None:
@@ -479,6 +465,10 @@ class TestWorkspaceFusion(unittest.TestCase):
                 pass
 
 
+@unittest.skipIf(
+    os.environ.get('SINGLESTOREDB_FUSION_ENABLE_HIDDEN', '0') == '0',
+    'Hidden Fusion commands are not enabled.',
+)
 @pytest.mark.management
 class TestJobsFusion(unittest.TestCase):
 
@@ -526,8 +516,6 @@ class TestJobsFusion(unittest.TestCase):
     def setUp(self):
         self.enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLED')
         os.environ['SINGLESTOREDB_FUSION_ENABLED'] = '1'
-        self.hidden_enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLE_HIDDEN')
-        os.environ['SINGLESTOREDB_FUSION_ENABLE_HIDDEN'] = '1'
         self.conn = s2.connect(database=type(self).dbname, local_infile=True)
         self.cur = self.conn.cursor()
 
@@ -536,11 +524,6 @@ class TestJobsFusion(unittest.TestCase):
             os.environ['SINGLESTOREDB_FUSION_ENABLED'] = self.enabled
         else:
             del os.environ['SINGLESTOREDB_FUSION_ENABLED']
-
-        if self.hidden_enabled:
-            os.environ['SINGLESTOREDB_FUSION_ENABLE_HIDDEN'] = self.hidden_enabled
-        else:
-            del os.environ['SINGLESTOREDB_FUSION_ENABLE_HIDDEN']
 
         try:
             if self.cur is not None:
