@@ -226,6 +226,8 @@ class Connection(BaseConnection):
         Set to true to check the server certificate's validity.
     ssl_verify_identity : bool, optional
         Set to true to check the server's identity.
+    tls_sni_servername: str, optional
+        Set server host name for TLS connection
     read_default_group : str, optional
         Group to read from in the configuration file.
     autocommit : bool, optional
@@ -295,6 +297,7 @@ class Connection(BaseConnection):
     _auth_plugin_name = ''
     _closed = False
     _secure = False
+    _tls_sni_servername = None
 
     def __init__(  # noqa: C901
         self,
@@ -335,6 +338,7 @@ class Connection(BaseConnection):
         ssl_key=None,
         ssl_verify_cert=None,
         ssl_verify_identity=None,
+        tls_sni_servername=None,
         parse_json=True,
         invalid_values=None,
         pure_python=None,
@@ -638,6 +642,7 @@ class Connection(BaseConnection):
 
         self._is_committable = True
         self._in_sync = False
+        self._tls_sni_servername = tls_sni_servername
         self._track_env = bool(track_env) or self.host == 'singlestore.com'
         self._enable_extended_data_types = enable_extended_data_types
         if vector_data_format.lower() in ['json', 'binary']:
@@ -1364,7 +1369,10 @@ class Connection(BaseConnection):
         if self.ssl and self.server_capabilities & CLIENT.SSL:
             self.write_packet(data_init)
 
-            self._sock = self.ctx.wrap_socket(self._sock, server_hostname=self.host)
+            hostname = self.host
+            if self._tls_sni_servername:
+                hostname = self._tls_sni_servername
+            self._sock = self.ctx.wrap_socket(self._sock, server_hostname=hostname)
             self._rfile = self._sock.makefile('rb')
             self._secure = True
 

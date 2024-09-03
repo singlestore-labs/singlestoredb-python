@@ -135,6 +135,12 @@ register_option(
 )
 
 register_option(
+    'tls_sni_servername', 'str', check_str, None,
+    'Sets TLS SNI servername',
+    environ='SINGLESTOREDB_TLS_SNI_SERVERNAME',
+)
+
+register_option(
     'ssl_disabled', 'bool', check_bool, False,
     'Disable SSL usage',
     environ='SINGLESTOREDB_SSL_DISABLED',

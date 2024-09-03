@@ -1298,6 +1298,7 @@ def connect(
     ssl_key: Optional[str] = None, ssl_cert: Optional[str] = None,
     ssl_ca: Optional[str] = None, ssl_disabled: Optional[bool] = None,
     ssl_cipher: Optional[str] = None, ssl_verify_cert: Optional[bool] = None,
+    tls_sni_servername: Optional[str] = None,
     ssl_verify_identity: Optional[bool] = None,
     conv: Optional[Dict[int, Callable[..., Any]]] = None,
     credential_type: Optional[str] = None,
