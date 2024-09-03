@@ -386,6 +386,8 @@ class Cursor(connection.Cursor):
         """
         if self._connection is None:
             raise ProgrammingError(errno=2048, msg='Connection is closed.')
+        if 'timeout' not in kwargs:
+            kwargs['timeout'] = self._connection.connection_params['connect_timeout']
         return self._connection._post(path, *args, **kwargs)
 
     def callproc(
@@ -1125,9 +1127,6 @@ class Connection(connection.Connection):
             raise InterfaceError(errno=2048, msg='Connection is closed.')
 
         self._sync_connection(kwargs)
-
-        if 'timeout' not in kwargs:
-            kwargs['timeout'] = get_option('connect_timeout')
 
         return self._sess.post(urljoin(self._url, path), *args, **kwargs)
 
