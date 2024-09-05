@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.6.3 - September 5, 2024
+--------------------------
+* Fix HTTP (Data API) driver timeout
+* Add ``client_found_rows`` option to connection
+
 v1.6.2 - August 6, 2024
 -----------------------
 * Fix string length calculation
