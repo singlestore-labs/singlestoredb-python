@@ -198,8 +198,8 @@ def show_egress(name: str, extended: bool = False) -> None:
 
     cur.execute(
         f'SELECT {columns} FROM egresses LEFT JOIN egress_run '
-        'WHERE egresses.name = ? and egresses.name = egress_run.name or '
-        'egress_run.name IS NULL', (name,),
+        'WHERE egresses.name = ? and (egresses.name = egress_run.name or '
+        'egress_run.name IS NULL)', (name,),
     )
 
     return cur.fetchall()
@@ -218,8 +218,8 @@ def show_egresses(like: Optional[str] = None, extended: bool = False) -> Tuple[A
 
     cur.execute(
         f'SELECT {columns} FROM egresses LEFT JOIN egress_run '
-        'WHERE egresses.name LIKE ? and egresses.name = egress_run.name or '
-        'egress_run.name IS NULL', (like,),
+        'WHERE egresses.name LIKE ? and (egresses.name = egress_run.name or '
+        'egress_run.name IS NULL)', (like,),
     )
 
     return cur.fetchall()
@@ -609,7 +609,7 @@ class CreateEgress(SQLHandler):
     catalog configuration named "dev-cat" and data storage URL "s3://bucket-name/iceberg".
     The source table to egress is named "customer_data"::
 
-        CREATE EGRESS dev-egress FROM customer-data
+        CREATE EGRESS dev-egress FROM customer_data
             USING CATALOG dev-cat
             WITH STORAGE BASE URL "s3://bucket-name/iceberg";
 
