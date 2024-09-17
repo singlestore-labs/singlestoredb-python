@@ -501,7 +501,15 @@ class CreateEgress(SQLHandler):
 
     # Parquet options
     _parquet = PARQUET [ ( __parquet_options,... ) ]
-    __parquet_options = { __row_group_size | __page_size | __page_row_limit | __dict_page_size | __compression_codec | __compression_level | __target_file_size }
+    __parquet_options = {
+    &&    __row_group_size |
+    &&    __page_size |
+    &&    __page_row_limit |
+    &&    __dict_page_size |
+    &&    __compression_codec |
+    &&    __compression_level |
+    &&    __target_file_size
+    & }
     __row_group_size = ROW_GROUP_SIZE = <integer> { KB | MB }
     __page_size = PAGE_SIZE = <integer> { KB | MB }
     __page_row_limit = PAGE_ROW_LIMIT = <integer>
@@ -511,13 +519,22 @@ class CreateEgress(SQLHandler):
     __target_file_size = TARGET_FILE_SIZE = <integer> { KB | MB }
 
     # Catolog config
-    using_catalog = USING CATALOG '<config-name>'
+    using_catalog = USING CATALOG '<catalog-config>'
 
     # Update mode
     with_update_mode = WITH UPDATE MODE { COPY_ON_WRITE | MERGE_ON_READ }
 
     # Transforms
-    __transform = { __identity_func | __bucket_func | __truncate_func | __year_func | __month_func | __day_func | __hour_func | __void_func }
+    __transform = {
+    &&&    __identity_func |
+    &&&    __bucket_func |
+    &&&    __truncate_func |
+    &&&    __year_func |
+    &&&    __month_func |
+    &&&    __day_func |
+    &&&    __hour_func |
+    &&&    __void_func
+    && }
     __identity_func = IDENTITY( __col_param )
     __bucket_func = BUCKET( __col_param comma __bucket_n )
     __truncate_func = TRUNCATE( __col_param comma __truncate_n )
@@ -534,14 +551,20 @@ class CreateEgress(SQLHandler):
     ordered_by = ORDER BY _order_specs
 
     _order_specs = _order_spec,...
-    _order_spec = { __transform | __order_col } [ __order_direction ] [ __order_nulls ]
+    _order_spec = {
+    &&    __transform |  __order_col
+    & }
+    & [ __order_direction ]
+    & [ __order_nulls ]
     __order_direction = { ASC | DESC }
     __order_nulls = NULLS { FIRST | LAST }
     __order_col = <column>
 
     # Partitioning
     partitioned_by = PARTITION BY _partition_spec,...
-    _partition_spec = { __transform | __partition_col }
+    _partition_spec = {
+    &&    __transform | __partition_col
+    & }
     __partition_col = <column>
 
     # Storage URL
@@ -557,6 +580,28 @@ class CreateEgress(SQLHandler):
     ---------
     * ``<egress-name>``: The name to give the egress configuration.
     * ``<column>``: Name of a column in the source table.
+    * ``<catalog-config>``: Name of a catalog configuration.
+    * ``<url>``: URL pointing to the data storage location.
+    * ``<region-name>``: Name of region for storage location.
+
+    Remarks
+    -------
+    * ``IF NOT EXISTS`` indicates that the egress configuration should only be
+      created if there isn't one with the given name.
+    * ``FROM <table>`` specifies the SingleStore table to egress. The same name will
+      be used for the egressed table.
+    * ``USING CATALOG`` specifies the name of a catalog configuration.
+    * ``WITH STORAGE BASE URL`` indicates the location where output data files
+      will be stored. ``IN REGION`` can be used to specify a region for cloud
+      storage locations.
+    * ``WITH FILE FORMAT`` specifies the format and parameters for the output
+      data files.
+    * ``WITH UPDATE MODE`` specifies the method in which deleted rows are handled.
+    * ``ORDER BY`` indicates the sort order for the rows in the data files.
+      ``ASC`` and ``DESC`` can be used to indicate ascending or descending order.
+      ``NULLS FIRST`` and ``NULLS LAST`` can be used to indicate where nulls
+      should occur in the sort order.
+    * ``PARTITION BY`` indicates how the data files should be partitioned.
 
     Examples
     --------
