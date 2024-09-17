@@ -11,6 +11,7 @@ from typing import Dict
 from typing import Iterable
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import Tuple
 
 from parsimonious import Grammar
@@ -23,9 +24,9 @@ from ..connection import Connection
 
 CORE_GRAMMAR = r'''
     ws = ~r"(\s+|(\s*/\*.*\*/\s*)+)"
-    qs = ~r"\"([^\"]*)\"|'([^\']*)'|`([^\`]*)`|([A-Za-z0-9_\-\.]+)"
-    number = ~r"[-+]?(\d*\.)?\d+(e[-+]?\d+)?"i
-    integer = ~r"-?\d+"
+    qs = ~r"\"([^\"]*)\"|'([^\']*)'|([A-Za-z0-9_\-\.]+)|`([^\`]+)`" ws*
+    number = ~r"[-+]?(\d*\.)?\d+(e[-+]?\d+)?"i ws*
+    integer = ~r"-?\d+" ws*
     comma = ws* "," ws*
     eq = ws* "=" ws*
     open_paren = ws* "(" ws*
@@ -33,6 +34,8 @@ CORE_GRAMMAR = r'''
     open_repeats = ws* ~r"[\(\[\{]" ws*
     close_repeats = ws* ~r"[\)\]\}]" ws*
     select = ~r"SELECT"i ws+ ~r".+" ws*
+    table = ~r"(?:([A-Za-z0-9_\-]+)|`([^\`]+)`)(?:\.(?:([A-Za-z0-9_\-]+)|`([^\`]+)`))?" ws*
+    column = ~r"(?:([A-Za-z0-9_\-]+)|`([^\`]+)`)(?:\.(?:([A-Za-z0-9_\-]+)|`([^\`]+)`))?" ws*
 
     json = ws* json_object ws*
     json_object = ~r"{\s*" json_members? ~r"\s*}"
@@ -65,6 +68,8 @@ BUILTINS = {
     '<integer>': '',
     '<number>': '',
     '<json>': '',
+    '<table>': '',
+    '<column>': '',
 }
 
 BUILTIN_DEFAULTS = {  # type: ignore
@@ -402,6 +407,9 @@ def process_grammar(
     # Make sure grouping characters all have whitespace around them
     grammar = re.sub(r' *(\[|\{|\||\}|\]) *', r' \1 ', grammar)
 
+    grammar = re.sub(r'\(', r' open_paren ', grammar)
+    grammar = re.sub(r'\)', r' close_paren ', grammar)
+
     for line in grammar.split('\n'):
         if not line.strip():
             continue
@@ -418,7 +426,7 @@ def process_grammar(
         sql = re.sub(r'\]\s+\[', r' | ', sql)
 
         # Lower-case keywords and make them case-insensitive
-        sql = re.sub(r'(\b|@+)([A-Z0-9]+)\b', lower_and_regex, sql)
+        sql = re.sub(r'(\b|@+)([A-Z0-9_]+)\b', lower_and_regex, sql)
 
         # Convert literal strings to 'qs'
         sql = re.sub(r"'[^']+'", r'qs', sql)
@@ -461,11 +469,17 @@ def process_grammar(
         sql = re.sub(r'\s+ws$', r' ws*', sql)
         sql = re.sub(r'\s+ws\s+\(', r' ws* (', sql)
         sql = re.sub(r'\)\s+ws\s+', r') ws* ', sql)
-        sql = re.sub(r'\s+ws\s+', r' ws+ ', sql)
+        sql = re.sub(r'\s+ws\s+', r' ws* ', sql)
         sql = re.sub(r'\?\s+ws\+', r'? ws*', sql)
 
         # Remove extra ws around eq
         sql = re.sub(r'ws\+\s*eq\b', r'eq', sql)
+
+        # Remove optional groupings when mandatory groupings are specified
+        sql = re.sub(r'open_paren\s+ws\*\s+open_repeats\?', r'open_paren', sql)
+        sql = re.sub(r'close_repeats\?\s+ws\*\s+close_paren', r'close_paren', sql)
+        sql = re.sub(r'open_paren\s+open_repeats\?', r'open_paren', sql)
+        sql = re.sub(r'close_repeats\?\s+close_paren', r'close_paren', sql)
 
         out.append(f'{op} = {sql}')
 
@@ -548,6 +562,7 @@ class SQLHandler(NodeVisitor):
 
     def __init__(self, connection: Connection):
         self.connection = connection
+        self._handled: Set[str] = set()
 
     @classmethod
     def compile(cls, grammar: str = '') -> None:
@@ -614,12 +629,16 @@ class SQLHandler(NodeVisitor):
         )
 
         type(self).compile()
+        self._handled = set()
         try:
             params = self.visit(type(self).grammar.parse(sql))
             for k, v in params.items():
                 params[k] = self.validate_rule(k, v)
 
             res = self.run(params)
+
+            self._handled = set()
+
             if res is not None:
                 res.format_results(self.connection)
                 return res
@@ -666,16 +685,20 @@ class SQLHandler(NodeVisitor):
         """Quoted strings."""
         if node is None:
             return None
-        return node.match.group(1) or node.match.group(2) or \
-            node.match.group(3) or node.match.group(4)
+        return flatten(visited_children)[0]
+
+    def visit_compound(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        """Compound name."""
+        print(visited_children)
+        return flatten(visited_children)[0]
 
     def visit_number(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Numeric value."""
-        return float(node.match.group(0))
+        return float(flatten(visited_children)[0])
 
     def visit_integer(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Integer value."""
-        return int(node.match.group(0))
+        return int(flatten(visited_children)[0])
 
     def visit_ws(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Whitespace and comments."""
@@ -804,19 +827,29 @@ class SQLHandler(NodeVisitor):
             if node.expr_name.endswith('_cmd'):
                 final = merge_dicts(flatten(visited_children)[n_keywords:])
                 for k, v in type(self).rule_info.items():
-                    if k.endswith('_cmd') or k.endswith('_'):
+                    if k.endswith('_cmd') or k.endswith('_') or k.startswith('_'):
                         continue
-                    if k not in final:
+                    if k not in final and k not in self._handled:
                         final[k] = BUILTIN_DEFAULTS.get(k, v['default'])
                 return final
 
             # Filter out stray empty strings
             out = [x for x in flatten(visited_children)[n_keywords:] if x]
 
-            if repeats or len(out) > 1:
-                return {node.expr_name: out}
+            # Remove underscore prefixes from rule name
+            key_name = re.sub(r'^_+', r'', node.expr_name)
 
-            return {node.expr_name: out[0] if out else True}
+            if repeats or len(out) > 1:
+                self._handled.add(node.expr_name)
+                # If all outputs are dicts, merge them
+                if len(out) > 1 and not repeats:
+                    is_dicts = [x for x in out if isinstance(x, dict)]
+                    if len(is_dicts) == len(out):
+                        return {key_name: merge_dicts(out)}
+                return {key_name: out}
+
+            self._handled.add(node.expr_name)
+            return {key_name: out[0] if out else True}
 
         if hasattr(node, 'match'):
             if not visited_children and not node.match.groups():
