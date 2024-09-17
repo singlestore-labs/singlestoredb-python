@@ -231,9 +231,13 @@ def build_syntax(grammar: str) -> str:
     # Split on ';' on a line by itself
     cmd, end = grammar.split(';', 1)
 
-    rules = {}
+    name = ''
+    rules: Dict[str, Any] = {}
     for line in end.split('\n'):
         line = line.strip()
+        if line.startswith('&'):
+            rules[name] += '\n' + line
+            continue
         if not line:
             continue
         name, value = line.split('=', 1)
@@ -244,10 +248,15 @@ def build_syntax(grammar: str) -> str:
     while re.search(r' [a-z0-9_]+\b', cmd):
         cmd = re.sub(r' ([a-z0-9_]+)\b', functools.partial(expand_rules, rules), cmd)
 
+    def add_indent(m: Any) -> str:
+        return '    ' + (len(m.group(1)) * '    ')
+
+    # Indent line-continuations
+    cmd = re.sub(r'^(\&+)\s*', add_indent, cmd, flags=re.M)
+
     cmd = textwrap.dedent(cmd).rstrip() + ';'
-    cmd = re.sub(r'  +', ' ', cmd)
-    cmd = re.sub(r'^ ', '    ', cmd, flags=re.M)
-    cmd = re.sub(r'\s+,\.\.\.', ',...', cmd)
+    cmd = re.sub(r'(\S)  +', r'\1 ', cmd)
+    cmd = re.sub(r'\s+,\s*\.\.\.', ',...', cmd)
 
     return cmd
 
@@ -403,6 +412,9 @@ def process_grammar(
     syntax_txt = build_syntax(grammar)
     help_txt = build_help(syntax_txt, full_grammar)
     grammar = build_cmd(grammar)
+
+    # Remove line-continuations
+    grammar = re.sub(r'\n\s*&+', r'', grammar)
 
     # Make sure grouping characters all have whitespace around them
     grammar = re.sub(r' *(\[|\{|\||\}|\]) *', r' \1 ', grammar)
