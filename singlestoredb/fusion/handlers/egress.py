@@ -648,7 +648,7 @@ class CreateClusterIdentity(SQLHandler):
     CREATE CLUSTER IDENTITY using_catalog with_storage;
 
     # Using catalog
-    using_catalog = USING CATALOG '<config-name>'
+    using_catalog = USING CATALOG '<catalog-name>'
 
     # Storage URL
     with_storage = WITH STORAGE '<storage-name>'
