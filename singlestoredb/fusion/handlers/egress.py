@@ -76,6 +76,7 @@ def use_db(func: Any) -> Any:
                 CREATE TABLE IF NOT EXISTS egress_run(
                     name UNIQUE,
                     start_time,
+                    tags,
                     status
                 )
             ''')
@@ -294,7 +295,7 @@ def show_egresses(like: Optional[str] = None, extended: bool = False) -> Tuple[A
     columns = 'egresses.name, database, table_name, columns, catalog, storage'
     if extended:
         columns += ', file_format, file_format_parameters, ' + \
-                   'update_mode, order_by, partition_by'
+                   'update_mode, order_by, partition_by, tags'
     columns += ', egress_run.status'
 
     cur.execute(
@@ -307,7 +308,11 @@ def show_egresses(like: Optional[str] = None, extended: bool = False) -> Tuple[A
 
 
 @use_db
-def start_egress(name: str, if_not_running: bool = False) -> None:
+def start_egress(
+    name: str,
+    tags: List[str],
+    if_not_running: bool = False,
+) -> None:
     """Start an egress process."""
     cur.execute('SELECT count(*) FROM egresses WHERE name = ?', (name,))
     if cur.fetchall()[0][0] == 0:
@@ -322,8 +327,8 @@ def start_egress(name: str, if_not_running: bool = False) -> None:
             return
 
     cur.execute(
-        'INSERT INTO egress_run VALUES (?, ?, ?)',
-        (name, datetime.datetime.now(), 'running'),
+        'INSERT INTO egress_run VALUES (?, ?, ?, ?)',
+        (name, datetime.datetime.now(), json.dumps(tags), 'running'),
     )
     conn.commit()
 
@@ -968,6 +973,7 @@ class ShowEgresses(SQLHandler):
             res.add_field('UpdateMode', result.STRING)
             res.add_field('OrderBy', result.JSON)
             res.add_field('PartitionBy', result.JSON)
+            res.add_field('Tags', result.JSON)
 
         res.add_field('Status', result.STRING)
 
@@ -1020,6 +1026,7 @@ class ShowEgress(SQLHandler):
             res.add_field('UpdateMode', result.STRING)
             res.add_field('OrderBy', result.JSON)
             res.add_field('PartitionBy', result.JSON)
+            res.add_field('Tags', result.JSON)
 
         res.add_field('Status', result.STRING)
 
@@ -1067,13 +1074,16 @@ StopEgress.register(overwrite=True)
 
 class StartEgress(SQLHandler):
     """
-    START EGRESS name [ if_not_running ];
+    START EGRESS name [ if_not_running ] [ with_tag ];
 
     # Egress config name
     name = '<egress-name>'
 
     # Do not return error if already running
     if_not_running = IF NOT RUNNING
+
+    # Iceberg tags
+    with_tag = WITH TAG '<tag>',...
 
     Description
     -----------
@@ -1092,6 +1102,7 @@ class StartEgress(SQLHandler):
 
     """
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        params['tags'] = params.pop('with_tag') or []
         start_egress(**params)
         return None
 
