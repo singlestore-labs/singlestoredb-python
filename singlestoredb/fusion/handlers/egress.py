@@ -660,7 +660,7 @@ class CreateClusterIdentity(SQLHandler):
 
     Example
     -------
-    * ``<config-name>``: Name of the catalog profile to use.
+    * ``<catalog-name>``: Name of the catalog profile to use.
     * ``<storage-name>``: Name of the storage profile to use.
 
     Example
