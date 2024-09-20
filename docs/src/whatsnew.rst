@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.7.0 - September 20, 2024
+---------------------------
+* Add dashboard and code as a service functions
+
 v1.6.3 - September 5, 2024
 --------------------------
 * Fix HTTP (Data API) driver timeout
