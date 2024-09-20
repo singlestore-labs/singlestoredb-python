@@ -36,6 +36,8 @@ CORE_GRAMMAR = r'''
     select = ~r"SELECT"i ws+ ~r".+" ws*
     table = ~r"(?:([A-Za-z0-9_\-]+)|`([^\`]+)`)(?:\.(?:([A-Za-z0-9_\-]+)|`([^\`]+)`))?" ws*
     column = ~r"(?:([A-Za-z0-9_\-]+)|`([^\`]+)`)(?:\.(?:([A-Za-z0-9_\-]+)|`([^\`]+)`))?" ws*
+    link_name = ~r"(?:([A-Za-z0-9_\-]+)|`([^\`]+)`)(?:\.(?:([A-Za-z0-9_\-]+)|`([^\`]+)`))?" ws*
+    catalog_name = ~r"(?:([A-Za-z0-9_\-]+)|`([^\`]+)`)(?:\.(?:([A-Za-z0-9_\-]+)|`([^\`]+)`))?" ws*
 
     json = ws* json_object ws*
     json_object = ~r"{\s*" json_members? ~r"\s*}"
@@ -70,6 +72,8 @@ BUILTINS = {
     '<json>': '',
     '<table>': '',
     '<column>': '',
+    '<catalog-name>': '',
+    '<link-name>': '',
 }
 
 BUILTIN_DEFAULTS = {  # type: ignore
@@ -256,6 +260,7 @@ def build_syntax(grammar: str) -> str:
 
     cmd = textwrap.dedent(cmd).rstrip() + ';'
     cmd = re.sub(r'(\S)  +', r'\1 ', cmd)
+    cmd = re.sub(r'<comma>', ',', cmd)
     cmd = re.sub(r'\s+,\s*\.\.\.', ',...', cmd)
 
     return cmd

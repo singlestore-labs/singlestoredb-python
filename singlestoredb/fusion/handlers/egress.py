@@ -8,9 +8,15 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from singlestoredb.fusion import result
-from singlestoredb.fusion.handler import SQLHandler
-from singlestoredb.fusion.result import FusionSQLResult
+from .. import result
+from ...management.egress import Catalog
+from ...management.egress import EgressService
+from ...management.egress import Link
+from ...management.egress import S3Link
+from ...management.region import Region
+from ..handler import SQLHandler
+from ..result import FusionSQLResult
+from .utils import get_workspace_group
 
 
 # Placeholders overridden by use_db decorator
@@ -39,20 +45,13 @@ def use_db(func: Any) -> Any:
             cur.row_factory = None
 
             cur.execute(r'''
-                CREATE TABLE IF NOT EXISTS catalog_profiles(
+                CREATE TABLE IF NOT EXISTS catalogs(
                     name UNIQUE,
                     type,
-                    parameters,
-                    table_format,
-                    table_format_parameters
-                )
-            ''')
-
-            cur.execute(r'''
-                CREATE TABLE IF NOT EXISTS storage_profiles(
-                    name UNIQUE,
-                    base_url,
-                    parameters
+                    protocol,
+                    credentials,
+                    config,
+                    description
                 )
             ''')
 
@@ -63,12 +62,14 @@ def use_db(func: Any) -> Any:
                     table_name,
                     columns,
                     catalog,
-                    storage,
+                    storage_link,
+                    storage_url,
                     file_format,
                     file_format_parameters,
                     update_mode,
                     order_by,
-                    partition_by
+                    partition_by,
+                    description
                 )
             ''')
 
@@ -97,126 +98,130 @@ def use_db(func: Any) -> Any:
 
 
 @use_db
-def create_catalog_profile(
+def create_external_catalog(
     name: str,
     catalog_type: str,
-    catalog_params: Dict[str, Any],
-    table_format: str,
-    table_format_parameters: Dict[str, Any],
+    protocol: str,
+    credentials: Dict[str, Any],
+    config: Dict[str, Any],
+    description: str,
     if_not_exists: bool = False,
 ) -> None:
-    """Create catalog profile."""
+    """Create catalog."""
     try:
         cur.execute(
-            'INSERT INTO catalog_profiles VALUES (?, ?, ?, ?, ?)',
+            'INSERT INTO catalogs VALUES (?, ?, ?, ?, ?, ?)',
             (
-                name, catalog_type, json.dumps(catalog_params),
-                table_format, json.dumps(table_format_parameters),
+                name,
+                catalog_type,
+                protocol,
+                json.dumps(credentials),
+                json.dumps(config),
+                description,
             ),
         )
         conn.commit()
 
     except sqlite3.IntegrityError:
-        error(f'Catalog profile with name "{name}" already exists')
+        error(f'Catalog with name "{name}" already exists')
 
 
 @use_db
-def show_catalog_profiles(
-    like: Optional[str] = None,
-    extended: bool = False,
-) -> Tuple[Any, ...]:
-    """Show catalog profiles."""
-    if extended:
-        query = 'SELECT * FROM catalog_profiles'
-    else:
-        query = 'SELECT name, type, table_format FROM catalog_profiles'
-
+def show_catalogs(like: Optional[str] = None) -> Tuple[Any, ...]:
+    """Show catalogs."""
+    query = 'SELECT name FROM catalogs'
     if like:
         cur.execute(query + ' WHERE name LIKE ?', (like,))
     else:
         cur.execute(query)
-
     return cur.fetchall()
 
 
 @use_db
-def drop_catalog_profile(name: str, if_exists: bool = False) -> None:
-    """Delete catalog profile."""
-    if not if_exists:
-        cur.execute('SELECT count(*) FROM catalog_profiles WHERE name=?', (name,))
-        if cur.fetchone()[0] == 0:
-            error(f'No catalog profile with name "{name}" found')
-            return
-
-    cur.execute('DELETE FROM catalog_profiles WHERE name=?', (name,))
-    conn.commit()
-
-
-@use_db
-def create_storage_profile(
-    name: str,
-    base_url: str,
-    parameters: Dict[str, Any],
-    if_not_exists: bool = False,
-) -> None:
-    """Create storage profile."""
-    try:
-        cur.execute(
-            'INSERT INTO storage_profiles VALUES (?, ?, ?)',
-            (
-                name, base_url, json.dumps(parameters),
-            ),
-        )
-        conn.commit()
-
-    except sqlite3.IntegrityError:
-        error(f'Storage profile with name "{name}" already exists')
-
-
-@use_db
-def show_storage_profiles(
-    like: Optional[str] = None,
-    extended: bool = False,
-) -> Tuple[Any, ...]:
-    """Show storage profiles."""
-    if extended:
-        query = 'SELECT * FROM storage_profiles'
-    else:
-        query = 'SELECT name, base_url FROM storage_profiles'
-
-    if like:
-        cur.execute(query + ' WHERE name LIKE ?', (like,))
-    else:
-        cur.execute(query)
-
+def describe_catalog(name: str) -> Tuple[Any, ...]:
+    """Show catalogs."""
+    query = 'SELECT name, type, protocol, config, description ' + \
+            'FROM catalogs WHERE name = ?'
+    cur.execute(query, (name,))
     return cur.fetchall()
 
 
 @use_db
-def drop_storage_profile(name: str, if_exists: bool = False) -> None:
-    """Delete storage profile."""
+def drop_catalog(name: str, if_exists: bool = False) -> None:
+    """Delete catalog."""
     if not if_exists:
-        cur.execute('SELECT count(*) FROM storage_profiles WHERE name=?', (name,))
+        cur.execute('SELECT count(*) FROM catalogs WHERE name=?', (name,))
         if cur.fetchone()[0] == 0:
-            error(f'No storage profile with name "{name}" found')
+            error(f'No catalog with name "{name}" found')
             return
 
-    cur.execute('DELETE FROM storage_profiles WHERE name=?', (name,))
+    cur.execute('DELETE FROM catalogs WHERE name = ?', (name,))
     conn.commit()
 
 
+def _get_catalog(catalog: str) -> Catalog:
+    cur.execute(
+        'SELECT type, config FROM catalogs WHERE name=?',
+        (catalog,),
+    )
+    catalogs = cur.fetchall()
+    if len(catalogs) == 0:
+        error(f'No catalog with name "{catalog}" found')
+
+    # Catalog
+    type, _config = catalogs[0][0]
+    config = json.loads(_config or '{}')
+
+    manager = get_workspace_group({})._manager
+    if manager is None:
+        raise ValueError('No workspace manager is available.')
+
+    out = Catalog.from_dict(
+        dict(
+            catalogSource=type.upper(),
+            tableFormat='ICEBERG',
+            glueRegion=config.get('region'),
+            glueCatalogID=config.get('catalog_id'),
+        ),
+        manager,
+    )
+
+    return out
+
+
+def _get_link(link: str) -> Link:
+    # TODO
+    return S3Link(region=Region(id='xxx', name='us-east-1', provider='aws'))
+
+
+def _get_egress_service(
+    database: str,
+    table: str,
+    catalog: str,
+    storage_link: str,
+    storage_url: str,
+) -> EgressService:
+    """Return an egress service object for given parameters."""
+    return EgressService(
+        get_workspace_group({}),
+        database,
+        table,
+        _get_catalog(catalog),
+        _get_link(storage_link),
+        storage_url,
+        columns=None,
+    )
+
+
 @use_db
-def create_cluster_identity(catalog: str, storage: str) -> Dict[str, Any]:
+def create_cluster_identity(
+    catalog: str,
+    storage_url: str,
+) -> Dict[str, Any]:
     """Create cluster identity."""
-    cur.execute('SELECT count(*) FROM catalog_profiles WHERE name=?', (catalog,))
-    if cur.fetchone()[0] == 0:
-        error(f'No catalog profile with name "{catalog}" found')
-
-    cur.execute('SELECT count(*) FROM storage_profiles WHERE name=?', (storage,))
-    if cur.fetchone()[0] == 0:
-        error(f'No storage profile with name "{storage}" found')
-
-    return {}
+    return _get_egress_service(
+        'dummy', 'dummy', catalog, 'dummy', storage_url,
+    ).create_cluster_identity()
 
 
 @use_db
@@ -226,12 +231,14 @@ def create_egress(
     table: str,
     columns: List[str],
     catalog: str,
-    storage: str,
+    storage_link: str,
+    storage_url: str,
     file_format: str,
     file_format_params: Dict[str, Any],
     update_mode: str,
     order_by: List[Dict[str, Any]],
     partition_by: List[Dict[str, Any]],
+    description: str,
     if_not_exists: bool = False,
 ) -> None:
     """Create egress configuration."""
@@ -242,40 +249,38 @@ def create_egress(
             return
 
     # Make sure catalog profile exists
-    cur.execute('SELECT count(*) FROM catalog_profiles where name = ?', (catalog,))
+    cur.execute('SELECT count(*) FROM catalogs where name = ?', (catalog,))
     if cur.fetchall()[0][0] == 0:
         error(f'No catalog profile found with the name "{catalog}"')
         return
 
-    # Make sure storage profile exists
-    cur.execute('SELECT count(*) FROM storage_profiles where name = ?', (storage,))
-    if cur.fetchall()[0][0] == 0:
-        error(f'No storage profile found with the name "{storage}"')
-        return
+    # TODO: Look up link name
 
     cur.execute(
         r'''
             INSERT INTO egresses VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
         ''',
         (
             name, database, table, json.dumps(columns), catalog,
-            storage, file_format, json.dumps(file_format_params),
+            storage_link, storage_url, file_format, json.dumps(file_format_params),
             update_mode, json.dumps(order_by), json.dumps(partition_by),
+            description,
         ),
     )
     conn.commit()
 
 
 @use_db
-def show_egress(name: str, extended: bool = False) -> None:
+def describe_egress(name: str, extended: bool = False) -> Tuple[Any, ...]:
     """Show egress configurations."""
-    columns = 'egresses.name, database, table_name, columns, catalog, storage'
+    columns = 'egresses.name, database, table_name, columns, ' + \
+              'catalog, storage_link, storage_url'
     if extended:
         columns += ', file_format, file_format_parameters, ' + \
                    'update_mode, order_by, partition_by'
-    columns += ', egress_run.status'
+    columns += ', description, egress_run.status'
 
     cur.execute(
         f'SELECT {columns} FROM egresses LEFT JOIN egress_run '
@@ -287,23 +292,11 @@ def show_egress(name: str, extended: bool = False) -> None:
 
 
 @use_db
-def show_egresses(like: Optional[str] = None, extended: bool = False) -> Tuple[Any, ...]:
+def show_egresses(like: Optional[str] = None) -> Tuple[Any, ...]:
     """Show egress configurations."""
-    if like is None:
-        like = '%'
-
-    columns = 'egresses.name, database, table_name, columns, catalog, storage'
-    if extended:
-        columns += ', file_format, file_format_parameters, ' + \
-                   'update_mode, order_by, partition_by, tags'
-    columns += ', egress_run.status'
-
     cur.execute(
-        f'SELECT {columns} FROM egresses LEFT JOIN egress_run '
-        'WHERE egresses.name LIKE ? and (egresses.name = egress_run.name or '
-        'egress_run.name IS NULL)', (like,),
+        'SELECT name FROM egresses WHERE name LIKE ?', (like or '%',),
     )
-
     return cur.fetchall()
 
 
@@ -314,23 +307,36 @@ def start_egress(
     if_not_running: bool = False,
 ) -> None:
     """Start an egress process."""
-    cur.execute('SELECT count(*) FROM egresses WHERE name = ?', (name,))
-    if cur.fetchall()[0][0] == 0:
+    cur.execute(
+        'SELECT database, table_name, catalog, storage_link, storage_url ' +
+        'FROM egresses WHERE name = ?',
+        (name,),
+    )
+    out = cur.fetchall()
+    if len(out) == 0:
         error(f'No egress found with name "{name}"')
         return
+
+    database, table, catalog, storage_link, storage_url = out[0]
 
     if not if_not_running:
         cur.execute('SELECT status FROM egress_run WHERE name = ?', (name,))
         out = cur.fetchall()
-        if out and out[0][0].lower() in ['running', 'pending']:
+        if out and out[0][0].lower() in ['Running', 'Stopped']:
             error(f'Egress with name "{name}" is already running')
             return
 
     cur.execute(
         'INSERT INTO egress_run VALUES (?, ?, ?, ?)',
-        (name, datetime.datetime.now(), json.dumps(tags), 'running'),
+        (name, datetime.datetime.now(), json.dumps(tags), 'Running'),
     )
     conn.commit()
+
+    egress = _get_egress_service(database, table, catalog, storage_link, storage_url)
+
+    egress.start(tags=tags)
+
+    return None
 
 
 @use_db
@@ -339,7 +345,7 @@ def stop_egress(name: str, if_running: bool = False) -> None:
     if not if_running:
         cur.execute('SELECT status FROM egress_run WHERE name = ?', (name,))
         out = cur.fetchall()
-        if out and out[0][0].lower() not in ['running', 'pending']:
+        if out and out[0][0].lower() not in ['Running', 'Stopped']:
             error(f'Egress with name "{name}" is not running')
             return
 
@@ -348,7 +354,7 @@ def stop_egress(name: str, if_running: bool = False) -> None:
         error(f'No egress run found with name "{name}"')
         return
 
-    cur.execute('UPDATE egress_run SET status = "aborted" WHERE name = ?', (name,))
+    cur.execute('UPDATE egress_run SET status = "Aborted" WHERE name = ?', (name,))
     conn.commit()
 
 
@@ -365,30 +371,32 @@ def drop_egress(name: str, if_exists: bool = False) -> None:
     conn.commit()
 
 
-class CreateCatalogProfile(SQLHandler):
+class CreateExternalCatalog(SQLHandler):
     """
-    CREATE CATALOG PROFILE [ if_not_exists ] name
-        using_catalog_type
-        [ with_table_format ]
+    CREATE EXTERNAL CATALOG [ if_not_exists ] name
+        as_catalog_type
+        [ credentials ]
+        [ config ]
+        [ description ]
     ;
-
-    # Catalog name
-    name = '<profile-name>'
 
     # If not exists
     if_not_exists = IF NOT EXISTS
 
-    # Table format
-    with_table_format = WITH TABLE FORMAT ICEBERG [ _iceberg_version ]
-    _iceberg_version = VERSION '<version>'
+    # Catalog name
+    name = <catalog-name>
 
     # Catalog type
-    using_catalog_type = USING { glue | HIVE | POLARIS | REST }
+    as_catalog_type = AS { GLUE | HIVE | POLARIS | REST | SNOWFLAKE }
 
-    # Glue parameters
-    glue = GLUE _in_glue_region _with_glue_catalog_id
-    _in_glue_region = IN REGION '<glue-region-name>'
-    _with_glue_catalog_id = WITH CATALOG ID '<glue-catalog-id>'
+    # Credentials
+    credentials = CREDENTIALS '<credentials-json>'
+
+    # Config
+    config = CONFIG '<config-json>'
+
+    # Description
+    description = DESCRIPTION '<description>'
 
     Description
     -----------
@@ -396,60 +404,40 @@ class CreateCatalogProfile(SQLHandler):
 
     Arguments
     ---------
-    * ``<profile-name>``: The name of the catalog profile.
-    * ``<glue-region-name>``: Name of the region the AWS Glue catalog lives in.
-    * ``<glue-catalog-id>``: ID of the AWS Glue catalog.
+    * ``<catalog-name>``: Name of the catalog profile.
+    * ``<credentials-json>``: JSON object containing credentials
+    * ``<config-json>``: JSON object containing parameters for the
+      given catalog type
+    * ``<description>``: Description of catalog.
 
     Example
     -------
     The following command creates an Iceberg v2 catalog profile using AWS Glue
     named 'example-iceberg'::
 
-        CREATE CATALOG PROFILE 'example-iceberg' USING GLUE
-            IN REGION 'us-east-1' WITH CATALOG ID 'a1239823693'
-            WITH TABLE FORMAT ICEBERG VERSION 2;
+        CREATE EXTERNAL CATALOG 'example-iceberg' AS GLUE
+            CONFIG '{ "region": "us-east-1", "catalog_id": "a12347382" }';
 
     """
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        using_catalog_type = params['using_catalog_type']
-        if isinstance(using_catalog_type, dict):
-            catalog_type = list(using_catalog_type.keys())[0].lower()
-            c_params = list(using_catalog_type.values())[0]
-            catalog_params = dict(
-                region=c_params['in_glue_region'],
-                catalog_id=c_params['with_glue_catalog_id'],
-            )
-        else:
-            catalog_type = using_catalog_type
-            catalog_params = {}
-
-        with_table_format = params['with_table_format']
-        if isinstance(with_table_format, dict):
-            table_format = 'iceberg'
-            table_format_parameters = dict(version=with_table_format['iceberg_version'])
-        else:
-            table_format = 'iceberg'
-            table_format_parameters = {}
-
-        create_catalog_profile(
+        create_external_catalog(
             params['name'],
-            catalog_type,
-            catalog_params,
-            table_format,
-            table_format_parameters,
+            'ICEBERG',
+            params['as_catalog_type'].upper(),
+            params['credentials'],
+            params['config'],
+            params['description'],
+            if_not_exists=params['if_not_exists'],
         )
-
         return None
 
 
-CreateCatalogProfile.register(overwrite=True)
+CreateExternalCatalog.register(overwrite=True)
 
 
-class ShowCatalogProfiles(SQLHandler):
+class ShowCatalogs(SQLHandler):
     """
-    SHOW CATALOG PROFILES [ extended ] [ <like> ];
-
-    extended = EXTENDED
+    SHOW CATALOGS [ <like> ];
 
     Description
     -----------
@@ -460,40 +448,58 @@ class ShowCatalogProfiles(SQLHandler):
     The following statement shows all catalog profiles with names beginning
     with "dev"::
 
-        SHOW CATALOG PROFILES LIKE "dev%";
+        SHOW CATALOGS LIKE "dev%";
 
     """
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         res = FusionSQLResult()
-
-        if params['extended']:
-            res.add_field('Name', result.STRING)
-            res.add_field('Type', result.STRING)
-            res.add_field('Params', result.JSON)
-            res.add_field('TableFormat', result.STRING)
-            res.add_field('TableFormatParams', result.JSON)
-        else:
-            res.add_field('Name', result.STRING)
-            res.add_field('Type', result.STRING)
-            res.add_field('TableFormat', result.STRING)
-
-        res.set_rows(show_catalog_profiles(**params))
-
+        res.add_field('Name', result.STRING)
+        res.set_rows(show_catalogs(**params))
         return res
 
 
-ShowCatalogProfiles.register(overwrite=True)
+ShowCatalogs.register(overwrite=True)
 
 
-class DropCatalogProfile(SQLHandler):
+class DescribeCatalog(SQLHandler):
     """
-    DROP CATALOG PROFILE [ if_exists ] name;
+    DESCRIBE CATALOG name;
+
+    name = <catalog-name>
+
+    Description
+    -----------
+    Show information about catalog profile.
+
+    Example
+    -------
+    The following command shows information about the catalog named "dev-cat"::
+
+        DESCRIBE CATALOG dev-cat;
+
+    """
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        res = FusionSQLResult()
+        res.add_field('Name', result.STRING)
+        res.add_field('Type', result.STRING)
+        res.add_field('Protocol', result.STRING)
+        res.add_field('Config', result.JSON)
+        res.set_rows(describe_catalog(**params))
+        return res
+
+
+DescribeCatalog.register(overwrite=True)
+
+
+class DropCatalog(SQLHandler):
+    """
+    DROP CATALOG [ if_exists ] name;
 
     # If catalog exists
     if_exists = IF EXISTS
 
     # Catalog name
-    name = '<profile-name>'
+    name = <catalog-name>
 
     Description
     -----------
@@ -501,157 +507,32 @@ class DropCatalogProfile(SQLHandler):
 
     Arguments
     ---------
-    * ``<profile-name>``: Name of the catalog profile to delete.
+    * ``<catalog-name>``: Name of the catalog profile to delete.
 
     Example
     -------
     The following statement deletes a catalog profile with the name "dev-cat"::
 
-        DROP CATALOG PROFILE dev-cat;
+        DROP CATALOG dev-cat;
 
     """
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        drop_catalog_profile(**params)
+        drop_catalog(**params)
         return None
 
 
-DropCatalogProfile.register(overwrite=True)
-
-
-class CreateStorageProfile(SQLHandler):
-    """
-    CREATE STORAGE PROFILE [ if_not_exists ] name
-        with_base_url
-        [ in_region ]
-    ;
-
-    # Storage profile name
-    name = '<profile-name>'
-
-    # If not exists
-    if_not_exists = IF NOT EXISTS
-
-    # Base URL
-    with_base_url = WITH BASE URL '<url>'
-
-    # Region
-    in_region = IN REGION '<region>'
-
-    Description
-    -----------
-    Create a storage profile.
-
-    Arguments
-    ---------
-    * ``<profile-name>``: The name of the storage profile.
-    * ``<url>``: URL of the storage location.
-    * ``<region>``: Region of the storage location.
-
-    Example
-    -------
-    The following command creates a storage profile in S3 in region us-east-1
-    named 'dev-store'::
-
-        CREATE CATALOG PROFILE 'dev-store'
-            WITH BASE URL 's3://bucket-name/iceberg-data'
-            IN REGION 'us-east-1';
-
-    """
-    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        s_params = dict()
-
-        if params['in_region']:
-            s_params['region'] = params['in_region']
-
-        create_storage_profile(
-            params['name'],
-            params['with_base_url'],
-            s_params,
-        )
-
-        return None
-
-
-CreateStorageProfile.register(overwrite=True)
-
-
-class ShowStorageProfile(SQLHandler):
-    """
-    SHOW STORAGE PROFILES [ extended ] [ <like> ];
-
-    extended = EXTENDED
-
-    Description
-    -----------
-    Show all storage profiles.
-
-    Example
-    -------
-    The following statement shows all storage profiles with names beginning
-    with "dev"::
-
-        SHOW STORAGE PROFILES LIKE "dev%";
-
-    """
-    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        res = FusionSQLResult()
-
-        res.add_field('Name', result.STRING)
-        res.add_field('BaseURL', result.STRING)
-
-        if params['extended']:
-            res.add_field('Parameters', result.STRING)
-
-        res.set_rows(show_storage_profiles(**params))
-
-        return res
-
-
-ShowStorageProfile.register(overwrite=True)
-
-
-class DropStorageProfile(SQLHandler):
-    """
-    DROP STORAGE PROFILE [ if_exists ] name;
-
-    # If storage exists
-    if_exists = IF EXISTS
-
-    # Storage profile name
-    name = '<profile-name>'
-
-    Description
-    -----------
-    Delete a storage profile.
-
-    Arguments
-    ---------
-    * ``<profile-name>``: Name of the storage profile to delete.
-
-    Example
-    -------
-    The following statement deletes a storage profile with the name "dev-store"::
-
-        DROP STORAGE PROFILE dev-store;
-
-    """
-    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        drop_storage_profile(**params)
-        return None
-
-
-DropStorageProfile.register(overwrite=True)
+DropCatalog.register(overwrite=True)
 
 
 class CreateClusterIdentity(SQLHandler):
     """
-    CREATE CLUSTER IDENTITY using_catalog with_storage;
+    CREATE CLUSTER IDENTITY using_catalog with_storage_base_url;
 
     # Using catalog
-    using_catalog = USING CATALOG '<catalog-name>'
+    using_catalog = USING CATALOG <catalog-name>
 
     # Storage URL
-    with_storage = WITH STORAGE '<storage-name>'
+    with_storage_base_url = WITH STORAGE BASE URL '<storage-url>'
 
     Description
     -----------
@@ -661,23 +542,23 @@ class CreateClusterIdentity(SQLHandler):
     Example
     -------
     * ``<catalog-name>``: Name of the catalog profile to use.
-    * ``<storage-name>``: Name of the storage profile to use.
+    * ``<storage-url>``: URL of the data storage.
 
     Example
     -------
     The following statement creates a cluster identity for the catalog
-    profile name "dev-cat" and storage profile name "dev-store"::
+    profile name "dev-cat" and data storage URL "s3://bucket-name/data"::
 
         CREATE CLUSTER IDENTITY
             USING CATALOG dev-cat
-            WITH STORAGE dev-store;
+            WITH STORAGE BASE URL 's3://bucket-name/data';
 
     """
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         print(
             create_cluster_identity(
                 params['using_catalog'],
-                params['with_storage'],
+                params['with_storage_base_url'],
             ),
         )
         return None
@@ -690,12 +571,13 @@ class CreateEgress(SQLHandler):
     """
     CREATE EGRESS [ if_not_exists ] name
         from_table [ colnames ]
-        using_catalog
-        with_storage
+        catalog
+        storage
         [ with_file_format ]
         [ with_update_mode ]
         [ ordered_by ]
         [ partitioned_by ]
+        [ description ]
     ;
 
     # If not exists
@@ -733,10 +615,12 @@ class CreateEgress(SQLHandler):
     __target_file_size = TARGET_FILE_SIZE = <integer> { KB | MB }
 
     # Catolog profile
-    using_catalog = USING CATALOG '<catalog-profile>'
+    catalog = CATALOG <catalog-name>
 
     # Storage profile
-    with_storage = WITH STORAGE '<storage-profile>'
+    storage = _storage_link _storage_base_url
+    _storage_link = LINK <link-name>
+    _storage_base_url = '<storage-base-url>'
 
     # Update mode
     with_update_mode = WITH UPDATE MODE { COPY_ON_WRITE | MERGE_ON_READ }
@@ -784,6 +668,8 @@ class CreateEgress(SQLHandler):
     & }
     __partition_col = <column>
 
+    description = DESCRIPTION '<description>'
+
     Description
     -----------
     Create an egress configuration.
@@ -792,9 +678,11 @@ class CreateEgress(SQLHandler):
     ---------
     * ``<egress-name>``: The name to give the egress configuration.
     * ``<column>``: Name of a column in the source table.
-    * ``<catalog-profile>``: Name of a catalog profile.
-    * ``<storage-profile>``: Name of a storage profile.
+    * ``<catalog-name>``: Name of a catalog profile.
+    * ``<link-name>``: Name of the link for accessing data storage.
+    * ``<storage-base-url>``: Base URL of data storage.
     * ``<region-name>``: Name of region for storage location.
+    * ``<description>``: Description of egress.
 
     Remarks
     -------
@@ -802,8 +690,8 @@ class CreateEgress(SQLHandler):
       created if there isn't one with the given name.
     * ``FROM <table>`` specifies the SingleStore table to egress. The same name will
       be used for the egressed table.
-    * ``USING CATALOG`` specifies the name of a catalog profile.
-    * ``WITH STORAGE`` indicates the name of a storage profile.
+    * ``CATALOG`` specifies the name of a catalog profile.
+    * ``LINK`` indicates the name of a link for accessing storage.
     * ``WITH FILE FORMAT`` specifies the format and parameters for the output
       data files.
     * ``WITH UPDATE MODE`` specifies the method in which deleted rows are handled.
@@ -816,18 +704,19 @@ class CreateEgress(SQLHandler):
     Examples
     --------
     The following statement creates an egress configuration named "dev-egress" using
-    catalog profile named "dev-cat" and data storage profile named "dev-store".
+    catalog profile named "dev-cat" and link named "dev-link" with storage base URL
+    of "s3://bucket-name/data".
     The source table to egress is named "customer_data"::
 
         CREATE EGRESS dev-egress FROM customer_data
-            USING CATALOG dev-cat
-            WITH STORAGE dev-store;
+            CATALOG dev-cat
+            LINK dev-link "s3://bucket-name/data";
 
     The following statement adds ordering and partitioning to the above configuration::
 
         CREATE EGRESS dev-egress FROM customer_data
-            USING CATALOG dev-cat
-            WITH STORAGE dev-store
+            CATALOG dev-cat
+            LINK dev-link "s3://bucket-name/data"
             ORDER BY customer_id
             PARTITION BY last_name, country;
 
@@ -861,10 +750,11 @@ class CreateEgress(SQLHandler):
         columns = params['colnames']
 
         # Catalog
-        catalog = params['using_catalog']
+        catalog = params['catalog']
 
         # Storage
-        storage = params['with_storage']
+        link = params['storage']['storage_link']
+        base_url = params['storage']['storage_base_url']
 
         # File format
         file_format = list(params['with_file_format'].keys())[0]
@@ -924,12 +814,14 @@ class CreateEgress(SQLHandler):
             table,
             columns,
             catalog,
-            storage,
+            link,
+            base_url,
             file_format,
             file_format_params,
             update_mode,
             order_by,
             partition_by,
+            params['description'],
             if_not_exists=if_not_exists,
         )
 
@@ -941,10 +833,7 @@ CreateEgress.register(overwrite=True)
 
 class ShowEgresses(SQLHandler):
     """
-    SHOW EGRESSES [ extended ] [ <like> ];
-
-    # Show more details
-    extended = EXTENDED
+    SHOW EGRESSES [ <like> ];
 
     Description
     -----------
@@ -959,35 +848,17 @@ class ShowEgresses(SQLHandler):
     """
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         res = FusionSQLResult()
-
         res.add_field('Name', result.STRING)
-        res.add_field('Database', result.STRING)
-        res.add_field('Table', result.STRING)
-        res.add_field('Columns', result.JSON)
-        res.add_field('Catalog', result.STRING)
-        res.add_field('Storage', result.STRING)
-
-        if params['extended']:
-            res.add_field('FileFormat', result.STRING)
-            res.add_field('FileFormatParams', result.JSON)
-            res.add_field('UpdateMode', result.STRING)
-            res.add_field('OrderBy', result.JSON)
-            res.add_field('PartitionBy', result.JSON)
-            res.add_field('Tags', result.JSON)
-
-        res.add_field('Status', result.STRING)
-
         res.set_rows(show_egresses(**params))
-
         return res
 
 
 ShowEgresses.register(overwrite=True)
 
 
-class ShowEgress(SQLHandler):
+class DescribeEgress(SQLHandler):
     """
-    SHOW EGRESS name [ extended ];
+    DESCRIBE EGRESS name [ extended ];
 
     # Egress config name
     name = '<egress-name>'
@@ -1007,7 +878,7 @@ class ShowEgress(SQLHandler):
     --------
     The following statement shows the egress configuration named "dev-egress"::
 
-        SHOW EGRESS dev-egress;
+        DESCRIBE EGRESS dev-egress;
 
     """
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
@@ -1018,7 +889,8 @@ class ShowEgress(SQLHandler):
         res.add_field('Table', result.STRING)
         res.add_field('Columns', result.JSON)
         res.add_field('Catalog', result.STRING)
-        res.add_field('Storage', result.STRING)
+        res.add_field('StorageLink', result.STRING)
+        res.add_field('StorageBaseURL', result.STRING)
 
         if params['extended']:
             res.add_field('FileFormat', result.STRING)
@@ -1026,16 +898,16 @@ class ShowEgress(SQLHandler):
             res.add_field('UpdateMode', result.STRING)
             res.add_field('OrderBy', result.JSON)
             res.add_field('PartitionBy', result.JSON)
-            res.add_field('Tags', result.JSON)
 
+        res.add_field('Description', result.STRING)
         res.add_field('Status', result.STRING)
 
-        res.set_rows(show_egress(**params))
+        res.set_rows(describe_egress(**params))
 
         return res
 
 
-ShowEgress.register(overwrite=True)
+DescribeEgress.register(overwrite=True)
 
 
 class StopEgress(SQLHandler):

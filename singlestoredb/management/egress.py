@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+import re
 from typing import Any
 from typing import Dict
 from typing import List
@@ -11,11 +12,13 @@ from typing import Optional
 from .. import ManagementError
 from .region import Region
 from .utils import vars_to_str
+from .workspace import get_workspace_group
+from .workspace import WorkspaceGroup
 from .workspace import WorkspaceManager
 
 
-class StorageProfile(object):
-    """Generic storage profile base class."""
+class Link(object):
+    """Generic storage base class."""
     scheme: str = 'unknown'
 
     def __str__(self) -> str:
@@ -26,68 +29,30 @@ class StorageProfile(object):
         """Return string representation."""
         return str(self)
 
-    @classmethod
-    def from_dict(
-        cls,
-        obj: Dict[str, Any],
-        manager: 'WorkspaceManager',
-    ) -> 'StorageProfile':
-        """Convert response to profile."""
-        scheme = obj['storageBaseURL'].split(':', 1)[0].lower()
-
-        out_cls = None
-        for c in cls.__subclasses__():
-            if c.scheme == scheme:
-                out_cls = c
-                break
-
-        if out_cls is None:
-            raise TypeError(f'No storage class found for given information: {obj}')
-
-        return out_cls.from_dict(obj, manager)
-
     @abc.abstractmethod
-    def to_storage_location(self) -> Dict[str, Any]:
-        """Return a storage location dictionary."""
+    def to_storage_location(self, base_url: str) -> Dict[str, Any]:
         raise NotImplementedError
 
 
-class S3StorageProfile(StorageProfile):
-    """S3 storage profile."""
+class S3Link(Link):
+    """S3 link."""
 
     scheme: str = 's3'
-    base_url: str
     region: Region
 
-    def __init__(self, base_url: str, region: Region):
-        self.base_url = base_url
+    def __init__(self, region: Region):
         self.region = region
         self._manager: Optional[WorkspaceManager] = None
 
-    @classmethod
-    def from_dict(
-        cls,
-        obj: Dict[str, Any],
-        manager: 'WorkspaceManager',
-    ) -> 'S3StorageProfile':
-        """Convert response to profile."""
-        out = cls(
-            base_url=obj['storageBaseURL'],
-            region=obj['storageRegion'],
-        )
-        out._manager = manager
-        return out
-
-    def to_storage_location(self) -> Dict[str, Any]:
-        """Return a storage location dictionary."""
+    def to_storage_location(self, base_url: str) -> Dict[str, Any]:
         return dict(
-            storageBaseURL=self.base_url,
-            storageRegion=self.region.name,
+            storageBaseURL=base_url,
+            storageRegion=self.region,
         )
 
 
-class CatalogProfile(object):
-    """Generic catalog profile base class."""
+class Catalog(object):
+    """Generic catalog base class."""
 
     catalog_type: str = 'unknown'
     table_format: str = 'unknown'
@@ -105,7 +70,7 @@ class CatalogProfile(object):
         cls,
         obj: Dict[str, Any],
         manager: 'WorkspaceManager',
-    ) -> 'CatalogProfile':
+    ) -> 'Catalog':
         """Convert response to profile."""
         catalog_type = obj['catalogSource'].lower()
         table_format = obj['tableFormat'].lower()
@@ -127,8 +92,8 @@ class CatalogProfile(object):
         raise NotImplementedError
 
 
-class IcebergGlueCatalogProfile(CatalogProfile):
-    """Iceberg glue catalog profile."""
+class IcebergGlueCatalog(Catalog):
+    """Iceberg glue catalog."""
 
     table_format = 'iceberg'
     catalog_type = 'glue'
@@ -143,7 +108,7 @@ class IcebergGlueCatalogProfile(CatalogProfile):
         cls,
         obj: Dict[str, Any],
         manager: 'WorkspaceManager',
-    ) -> 'IcebergGlueCatalogProfile':
+    ) -> 'IcebergGlueCatalog':
         """Convert response to profile."""
         out = cls(
             region=obj['glueRegion'],
@@ -167,18 +132,24 @@ class EgressService(object):
 
     database: str
     table: str
-    catalog: CatalogProfile
-    storage: StorageProfile
+    catalog: Catalog
+    storage_link: Link
+    storage_base_url: str
     columns: Optional[List[str]]
 
     def __init__(
         self,
+        workspace_group: WorkspaceGroup,
         database: str,
         table: str,
-        catalog: CatalogProfile,
-        storage: StorageProfile,
+        catalog: Catalog,
+        storage_link: Link,
+        storage_base_url: str,
         columns: Optional[List[str]],
     ):
+        #: Workspace group
+        self.workspace_group = workspace_group
+
         #: Name of SingleStoreDB database
         self.database = database
 
@@ -188,11 +159,12 @@ class EgressService(object):
         #: List of columns to egress
         self.columns = columns
 
-        #: Catalog definition
+        #: Catalog
         self.catalog = catalog
 
-        #: Storage definition
-        self.storage = storage
+        #: Storage
+        self.storage_link = storage_link
+        self.storage_base_url = storage_base_url
 
         self._manager: Optional[WorkspaceManager] = None
 
@@ -225,32 +197,66 @@ class EgressService(object):
         :class:`EgressService`
 
         """
+        storage = obj['storageLocation']
+        storage_link = S3Link(storage['region'])
+        storage_base_url = storage['storageBaseURL']
+
         out = cls(
+            get_workspace_group(),
             database=obj['databaseName'],
             table=obj['tableName'],
-            storage=StorageProfile.from_dict(obj['storageLocation'], manager),
-            catalog=CatalogProfile.from_dict(obj['catalogInfo'], manager),
+            storage_link=storage_link,
+            storage_base_url=storage_base_url,
+            catalog=Catalog.from_dict(obj['catalogInfo'], manager),
             columns=obj.get('columnNames'),
         )
         out._manager = manager
         return out
 
-    def start(self) -> None:
+    def create_cluster_identity(self) -> Dict[str, Any]:
+        """Create a cluster identity."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        if not isinstance(self.catalog, IcebergGlueCatalog):
+            raise TypeError('Only Iceberg Glue catalog is supported at this time.')
+
+        out = self._manager._post(
+            'workspaceGroups/{self.workspace_group.id}/egress/createClusterIdentity',
+            json=dict(
+                storageBucketName=re.split(r'/+', self.storage_base_url)[1],
+                glueRegion=self.catalog.region,
+                glueCatalog=self.catalog.catalog_id,
+            ),
+        )
+
+        return out.json()
+
+    def start(self, tags: Optional[List[str]] = None) -> Dict[str, Any]:
         """Start the egress process."""
         if self._manager is None:
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
 
-        self._manager._post(
-            'workspaceGroups/{self.id}/egress/startTableEgress',
+        if not isinstance(self.storage_link, S3Link):
+            raise TypeError('Only S3 links are supported at this time.')
+
+        out = self._manager._post(
+            'workspaceGroups/{self.workspace_group.id}/egress/startTableEgress',
             json=dict(
                 databaseName=self.database,
                 tableName=self.table,
-                storageLocation=self.storage.to_storage_location(),
+                storageLocation=self.storage_link.to_storage_location(
+                    self.storage_base_url,
+                ),
                 catalogInfo=self.catalog.to_catalog_info(),
             ),
         )
+
+        return out.json()
 
     def stop(self) -> None:
         """Stop a running egress process."""
