@@ -1,4 +1,6 @@
 coverage
+dash
+fastapi
 pandas
 parameterized
 polars
