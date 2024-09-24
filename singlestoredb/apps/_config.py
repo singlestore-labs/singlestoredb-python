@@ -1,33 +1,63 @@
 import os
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
 class AppConfig:
     listen_port: int
-    url: str
+    base_url: str
+    app_token: Optional[str]
+    user_token: Optional[str]
     running_interactively: bool
+    is_gateway_enabled: bool
+
+    @staticmethod
+    def _read_variable(name: str) -> str:
+        value = os.environ.get(name)
+        if value is None:
+            raise RuntimeError(
+                f'Missing {name} environment variable. '
+                'Is the code running outside SingleStoreDB notebook environment?',
+            )
+        return value
 
     @classmethod
     def from_env(cls) -> 'AppConfig':
-        port = os.environ.get('SINGLESTOREDB_APP_LISTEN_PORT')
-        if port is None:
-            raise RuntimeError(
-                'Missing SINGLESTOREDB_APP_LISTEN_PORT environment variable. '
-                'Is the code running outside SingleStoreDB notebook environment?',
-            )
-        url = os.environ.get('SINGLESTOREDB_APP_URL')
-        if url is None:
-            raise RuntimeError(
-                'Missing SINGLESTOREDB_APP_URL environment variable. '
-                'Is the code running outside SingleStoreDB notebook environment?',
-            )
+        port = cls._read_variable('SINGLESTOREDB_APP_LISTEN_PORT')
+        base_url = cls._read_variable('SINGLESTOREDB_APP_BASE_URL')
 
         workload_type = os.environ.get('SINGLESTOREDB_WORKLOAD_TYPE')
         running_interactively = workload_type == 'InteractiveNotebook'
 
+        is_gateway_enabled = 'SINGLESTOREDB_NOVA_GATEWAY_ENDPOINT' in os.environ
+
+        app_token = os.environ.get('SINGLESTOREDB_APP_TOKEN')
+        user_token = os.environ.get('SINGLESTOREDB_USER_TOKEN')
+
+        if is_gateway_enabled:
+            # Make sure the required variables are present
+            # and present useful error message if not
+            app_token = cls._read_variable('SINGLESTOREDB_APP_TOKEN')
+        else:
+            user_token = cls._read_variable('SINGLESTOREDB_USER_TOKEN')
+
         return cls(
             listen_port=int(port),
-            url=url,
+            base_url=base_url,
+            app_token=app_token,
+            user_token=user_token,
             running_interactively=running_interactively,
+            is_gateway_enabled=is_gateway_enabled,
         )
+
+    @property
+    def token(self) -> str:
+        if self.is_gateway_enabled:
+            # We make sure this is not null while constructing the object
+            assert self.app_token is not None
+            return self.app_token
+        else:
+            # We make sure this is not null while constructing the object
+            assert self.user_token is not None
+            return self.user_token
