@@ -1,8 +1,10 @@
 import asyncio
+import textwrap
 import typing
 import urllib.parse
 
 from ._config import AppConfig
+from ._connection_info import ConnectionInfo
 from ._process import kill_process_by_port
 
 if typing.TYPE_CHECKING:
@@ -17,8 +19,7 @@ async def run_function_app(
     app: 'FastAPI',
     log_level: str = 'error',
     kill_existing_app_server: bool = True,
-) -> None:
-
+) -> ConnectionInfo:
     global _running_server
     from ._uvicorn_util import AwaitableUvicornServer
 
@@ -52,7 +53,7 @@ async def run_function_app(
     def ping() -> str:
         return 'Success!'
 
-    base_path = urllib.parse.urlparse(app_config.url).path
+    base_path = urllib.parse.urlparse(app_config.base_url).path
     app.root_path = base_path
 
     config = uvicorn.Config(
@@ -66,5 +67,26 @@ async def run_function_app(
     asyncio.create_task(_running_server.serve())
     await _running_server.wait_for_startup()
 
+    connection_info = ConnectionInfo(app_config.base_url, app_config.token)
+
     if app_config.running_interactively:
-        print(f'Cloud function available at {app_config.url}')
+        if app_config.is_gateway_enabled:
+            print(
+                'Cloud function available at'
+                f'{app_config.base_url}docs?authToken={app_config.token}',
+            )
+        else:
+            curl_header = f'-H "Authorization: Bearer {app_config.token}"'
+            curl_example = f'curl "{app_config.base_url}" {curl_header}'
+            print(
+                textwrap.dedent(f"""
+                  Cloud function available at {app_config.base_url}
+
+                  Auth Token: {app_config.token}
+
+                  Curl example: {curl_example}
+
+              """).strip(),
+            )
+
+    return connection_info

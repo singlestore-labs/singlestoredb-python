@@ -3,16 +3,18 @@ import urllib.parse
 
 from ._config import AppConfig
 from ._process import kill_process_by_port
+from ._stdout_supress import StdoutSuppressor
+from singlestoredb.apps._connection_info import ConnectionInfo
 
 if typing.TYPE_CHECKING:
     from plotly.graph_objs import Figure
 
 
-def run_dashboard_app(
+async def run_dashboard_app(
     figure: 'Figure',
     debug: bool = False,
     kill_existing_app_server: bool = True,
-) -> None:
+) -> ConnectionInfo:
     try:
         import dash
     except ImportError:
@@ -31,7 +33,7 @@ def run_dashboard_app(
     if kill_existing_app_server:
         kill_process_by_port(app_config.listen_port)
 
-    base_path = urllib.parse.urlparse(app_config.url).path
+    base_path = urllib.parse.urlparse(app_config.base_url).path
 
     app = dash.Dash(requests_pathname_prefix=base_path)
     app.layout = dash.html.Div(
@@ -40,12 +42,14 @@ def run_dashboard_app(
         ],
     )
 
-    app.run(
-        host='0.0.0.0',
-        debug=debug,
-        port=str(app_config.listen_port),
-        jupyter_mode='external',
-    )
+    with StdoutSuppressor():
+        app.run(
+            host='0.0.0.0',
+            debug=debug,
+            port=str(app_config.listen_port),
+            jupyter_mode='external',
+        )
 
     if app_config.running_interactively:
-        print(f'Dash app available at {app_config.url}')
+        print(f'Dash app available at {app_config.base_url}?authToken={app_config.token}')
+    return ConnectionInfo(app_config.base_url, app_config.token)
