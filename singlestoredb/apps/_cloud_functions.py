@@ -72,7 +72,7 @@ async def run_function_app(
     if app_config.running_interactively:
         if app_config.is_gateway_enabled:
             print(
-                'Cloud function available at'
+                'Cloud function available at '
                 f'{app_config.base_url}docs?authToken={app_config.token}',
             )
         else:
