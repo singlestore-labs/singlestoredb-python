@@ -35,12 +35,13 @@ class AppConfig:
         app_token = os.environ.get('SINGLESTOREDB_APP_TOKEN')
         user_token = os.environ.get('SINGLESTOREDB_USER_TOKEN')
 
-        if is_gateway_enabled:
-            # Make sure the required variables are present
-            # and present useful error message if not
-            app_token = cls._read_variable('SINGLESTOREDB_APP_TOKEN')
-        else:
-            user_token = cls._read_variable('SINGLESTOREDB_USER_TOKEN')
+        if running_interactively:
+            if is_gateway_enabled:
+                # Make sure the required variables are present
+                # and display useful error message if not
+                app_token = cls._read_variable('SINGLESTOREDB_APP_TOKEN')
+            else:
+                user_token = cls._read_variable('SINGLESTOREDB_USER_TOKEN')
 
         return cls(
             listen_port=int(port),
