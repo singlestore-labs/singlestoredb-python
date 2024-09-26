@@ -35,6 +35,9 @@ async def run_dashboard_app(
 
     base_path = urllib.parse.urlparse(app_config.base_url).path
     app.requests_pathname_prefix = base_path
+    
+    # Layout needs to refreshed after setting the requests_pathname_prefix
+    app.layout = app.layout
 
     with StdoutSuppressor():
         app.run_server(
