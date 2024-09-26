@@ -35,10 +35,10 @@ class AppConfig:
         app_token = os.environ.get('SINGLESTOREDB_APP_TOKEN')
         user_token = os.environ.get('SINGLESTOREDB_USER_TOKEN')
 
+        # Make sure the required variables are present
+        # and present useful error message if not
         if running_interactively:
             if is_gateway_enabled:
-                # Make sure the required variables are present
-                # and display useful error message if not
                 app_token = cls._read_variable('SINGLESTOREDB_APP_TOKEN')
             else:
                 user_token = cls._read_variable('SINGLESTOREDB_USER_TOKEN')
@@ -53,12 +53,11 @@ class AppConfig:
         )
 
     @property
-    def token(self) -> str:
+    def token(self) -> Optional[str]:
+        """
+        Returns None if running non-interactively
+        """
         if self.is_gateway_enabled:
-            # We make sure this is not null while constructing the object
-            assert self.app_token is not None
             return self.app_token
         else:
-            # We make sure this is not null while constructing the object
-            assert self.user_token is not None
             return self.user_token

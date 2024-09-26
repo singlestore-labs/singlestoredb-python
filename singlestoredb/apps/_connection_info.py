@@ -1,7 +1,10 @@
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
 class ConnectionInfo:
     url: str
-    token: str
+
+    # Only present in interactive mode
+    token: Optional[str]
