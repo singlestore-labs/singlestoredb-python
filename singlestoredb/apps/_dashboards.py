@@ -33,10 +33,10 @@ async def run_dashboard_app(
     if kill_existing_app_server:
         kill_process_by_port(app_config.listen_port)
 
-    if app.requests_pathname_prefix != app_config.base_path:
+    if app.config.requests_pathname_prefix is None or app.config.requests_pathname_prefix != app_config.base_path:
         raise RuntimeError('''
 requests_pathname_prefix of the Dash App is invalid. Please set 
-requests_pathname_prefix=os.environ[SINGLESTOREDB_APP_BASE_PATH] 
+requests_pathname_prefix=os.environ['SINGLESTOREDB_APP_BASE_PATH'] 
 and retry''')
 
     with StdoutSuppressor():
