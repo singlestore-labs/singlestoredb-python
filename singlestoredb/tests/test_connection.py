@@ -1432,8 +1432,6 @@ class TestConnection(unittest.TestCase):
         conn.close()
 
     def test_alltypes_polars(self):
-        self.skipTest('Polars API needs to be fixed')
-
         if self.conn.driver in ['http', 'https']:
             self.skipTest('Data API does not surface unsigned int information')
 
@@ -1576,8 +1574,6 @@ class TestConnection(unittest.TestCase):
         conn.close()
 
     def test_alltypes_no_nulls_polars(self):
-        self.skipTest('Polars API needs to be fixed')
-
         if self.conn.driver in ['http', 'https']:
             self.skipTest('Data API does not surface unsigned int information')
 
