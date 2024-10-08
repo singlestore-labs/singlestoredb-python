@@ -7,6 +7,7 @@ from typing import Optional
 class AppConfig:
     listen_port: int
     base_url: str
+    base_path: str
     app_token: Optional[str]
     user_token: Optional[str]
     running_interactively: bool
@@ -26,6 +27,7 @@ class AppConfig:
     def from_env(cls) -> 'AppConfig':
         port = cls._read_variable('SINGLESTOREDB_APP_LISTEN_PORT')
         base_url = cls._read_variable('SINGLESTOREDB_APP_BASE_URL')
+        base_path = cls._read_variable('SINGLESTOREDB_APP_BASE_PATH')
 
         workload_type = os.environ.get('SINGLESTOREDB_WORKLOAD_TYPE')
         running_interactively = workload_type == 'InteractiveNotebook'
@@ -46,6 +48,7 @@ class AppConfig:
         return cls(
             listen_port=int(port),
             base_url=base_url,
+            base_path=base_path,
             app_token=app_token,
             user_token=user_token,
             running_interactively=running_interactively,
