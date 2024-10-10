@@ -58,15 +58,15 @@ def use_db(func: Any) -> Any:
             cur.execute(r'''
                 CREATE TABLE IF NOT EXISTS egresses(
                     name UNIQUE,
-                    database,
-                    table_name,
+                    from_database,
+                    from_table,
+                    into_database,
+                    into_table,
                     columns,
                     catalog,
                     storage_link,
                     storage_url,
-                    file_format,
-                    file_format_parameters,
-                    update_mode,
+                    properties,
                     order_by,
                     partition_by,
                     description
@@ -227,15 +227,15 @@ def create_cluster_identity(
 @use_db
 def create_egress(
     name: str,
-    database: str,
-    table: str,
+    from_database: str,
+    from_table: str,
+    into_database: str,
+    into_table: str,
     columns: List[str],
     catalog: str,
     storage_link: str,
     storage_url: str,
-    file_format: str,
-    file_format_params: Dict[str, Any],
-    update_mode: str,
+    properties: Dict[str, Any],
     order_by: List[Dict[str, Any]],
     partition_by: List[Dict[str, Any]],
     description: str,
@@ -263,10 +263,10 @@ def create_egress(
             )
         ''',
         (
-            name, database, table, json.dumps(columns), catalog,
-            storage_link, storage_url, file_format, json.dumps(file_format_params),
-            update_mode, json.dumps(order_by), json.dumps(partition_by),
-            description,
+            name, from_database, from_table, into_database, into_table,
+            json.dumps(columns), catalog, storage_link, storage_url,
+            json.dumps(properties), json.dumps(order_by),
+            json.dumps(partition_by), description,
         ),
     )
     conn.commit()
@@ -275,11 +275,12 @@ def create_egress(
 @use_db
 def describe_egress(name: str, extended: bool = False) -> Tuple[Any, ...]:
     """Show egress configurations."""
-    columns = 'egresses.name, database, table_name, columns, ' + \
-              'catalog, storage_link, storage_url'
+    columns = 'egresses.name, from_database, from_table'
     if extended:
-        columns += ', file_format, file_format_parameters, ' + \
-                   'update_mode, order_by, partition_by'
+        columns += ', into_database, into_table'
+    columns += ', columns, catalog, storage_link, storage_url'
+    if extended:
+        columns += ', properties, order_by, partition_by'
     columns += ', description, egress_run.status'
 
     cur.execute(
@@ -308,7 +309,7 @@ def start_egress(
 ) -> None:
     """Start an egress process."""
     cur.execute(
-        'SELECT database, table_name, catalog, storage_link, storage_url ' +
+        'SELECT from_database, from_table, catalog, storage_link, storage_url ' +
         'FROM egresses WHERE name = ?',
         (name,),
     )
@@ -571,10 +572,10 @@ class CreateEgress(SQLHandler):
     """
     CREATE EGRESS [ if_not_exists ] name
         from_table [ colnames ]
+        [ into_table ]
         catalog
         storage
-        [ with_file_format ]
-        [ with_update_mode ]
+        [ properties ]
         [ ordered_by ]
         [ partitioned_by ]
         [ description ]
@@ -589,30 +590,14 @@ class CreateEgress(SQLHandler):
     # From table
     from_table = FROM <table>
 
+    # Into table
+    into_table = INTO <table>
+
     # Column names
     colnames = ( <column>,... )
 
-    # With file format
-    with_file_format = WITH FILE FORMAT _parquet
-
-    # Parquet options
-    _parquet = PARQUET [ ( __parquet_options,... ) ]
-    __parquet_options = {
-    &&    __row_group_size |
-    &&    __page_size |
-    &&    __page_row_limit |
-    &&    __dict_page_size |
-    &&    __compression_codec |
-    &&    __compression_level |
-    &&    __target_file_size
-    & }
-    __row_group_size = ROW_GROUP_SIZE = <integer> { KB | MB }
-    __page_size = PAGE_SIZE = <integer> { KB | MB }
-    __page_row_limit = PAGE_ROW_LIMIT = <integer>
-    __dict_page_size = DICT_PAGE_SIZE = <integer> { KB | MB }
-    __compression_codec = COMPRESSION_CODEC = { ZSTD | BROTLI | LZ4 | GZIP | SNAPPY | NONE }
-    __compression_level = COMPRESSION_LEVEL = <integer>
-    __target_file_size = TARGET_FILE_SIZE = <integer> { KB | MB }
+    # Properties
+    properties = PROPERTIES '<table-properties>'
 
     # Catolog profile
     catalog = CATALOG <catalog-name>
@@ -621,9 +606,6 @@ class CreateEgress(SQLHandler):
     storage = _storage_link _storage_base_url
     _storage_link = LINK <link-name>
     _storage_base_url = '<storage-base-url>'
-
-    # Update mode
-    with_update_mode = WITH UPDATE MODE { COPY_ON_WRITE | MERGE_ON_READ }
 
     # Transforms
     __transform = {
@@ -680,6 +662,7 @@ class CreateEgress(SQLHandler):
     * ``<column>``: Name of a column in the source table.
     * ``<catalog-name>``: Name of a catalog profile.
     * ``<link-name>``: Name of the link for accessing data storage.
+    * ``<table-properties>``: Table properties as a JSON object.
     * ``<storage-base-url>``: Base URL of data storage.
     * ``<region-name>``: Name of region for storage location.
     * ``<description>``: Description of egress.
@@ -690,11 +673,10 @@ class CreateEgress(SQLHandler):
       created if there isn't one with the given name.
     * ``FROM <table>`` specifies the SingleStore table to egress. The same name will
       be used for the egressed table.
+    * ``INTO <table>`` specifies the external table to write to. If this is not
+      specified, the source database and table name are used.
     * ``CATALOG`` specifies the name of a catalog profile.
     * ``LINK`` indicates the name of a link for accessing storage.
-    * ``WITH FILE FORMAT`` specifies the format and parameters for the output
-      data files.
-    * ``WITH UPDATE MODE`` specifies the method in which deleted rows are handled.
     * ``ORDER BY`` indicates the sort order for the rows in the data files.
       ``ASC`` and ``DESC`` can be used to indicate ascending or descending order.
       ``NULLS FIRST`` and ``NULLS LAST`` can be used to indicate where nulls
@@ -710,13 +692,25 @@ class CreateEgress(SQLHandler):
 
         CREATE EGRESS dev-egress FROM customer_data
             CATALOG dev-cat
-            LINK dev-link "s3://bucket-name/data";
+            LINK dev-link "s3://bucket-name/data"
+            PROPERTIES '{
+                "write.update.mode": "copy-on-write",
+                "write.format.default": "parquet",
+                "write.parquet.row-group-size-bytes": 50000000,
+                "write.target-file-size-bytes": 100000000
+            }';
 
     The following statement adds ordering and partitioning to the above configuration::
 
         CREATE EGRESS dev-egress FROM customer_data
             CATALOG dev-cat
             LINK dev-link "s3://bucket-name/data"
+            PROPERTIES '{
+                "write.update.mode": "copy-on-write",
+                "write.format.default": "parquet",
+                "write.parquet.row-group-size-bytes": 50000000,
+                "write.target-file-size-bytes": 100000000
+            }'
             ORDER BY customer_id
             PARTITION BY last_name, country;
 
@@ -741,10 +735,20 @@ class CreateEgress(SQLHandler):
 
         # From table
         if len(params['from_table']) > 1:
-            database, table = params['from_table']
+            from_database, from_table = params['from_table']
         else:
-            database = None
-            table = params['from_table']
+            from_database = None
+            from_table = params['from_table']
+
+        # Into table
+        if params['into_table'] is None:
+            into_database = None
+            into_table = None
+        elif len(params['into_table']) > 1:
+            into_database, into_table = params['into_table']
+        else:
+            into_database = None
+            into_table = params['into_table']
 
         # Columns
         columns = params['colnames']
@@ -756,20 +760,8 @@ class CreateEgress(SQLHandler):
         link = params['storage']['storage_link']
         base_url = params['storage']['storage_base_url']
 
-        # File format
-        file_format = list(params['with_file_format'].keys())[0]
-
-        option_processor = getattr(self, f'_process_{file_format}_options', lambda x: x)
-
-        # File format params
-        file_format_params = {}
-        for formats in params['with_file_format'].values():
-            for opts in formats:
-                for opt in opts.values():
-                    file_format_params.update(option_processor(opt))
-
-        # Update mode
-        update_mode = params['with_update_mode'].lower()
+        # Properties
+        properties = json.loads(params['properties'] or '{}')
 
         # Order by
         order_by = []
@@ -810,15 +802,15 @@ class CreateEgress(SQLHandler):
 
         create_egress(
             name,
-            database,
-            table,
+            from_database,
+            from_table,
+            into_database,
+            into_table,
             columns,
             catalog,
             link,
             base_url,
-            file_format,
-            file_format_params,
-            update_mode,
+            properties,
             order_by,
             partition_by,
             params['description'],
@@ -885,17 +877,20 @@ class DescribeEgress(SQLHandler):
         res = FusionSQLResult()
 
         res.add_field('Name', result.STRING)
-        res.add_field('Database', result.STRING)
-        res.add_field('Table', result.STRING)
+        res.add_field('FromDatabase', result.STRING)
+        res.add_field('FromTable', result.STRING)
+
+        if params['extended']:
+            res.add_field('IntoDatabase', result.STRING)
+            res.add_field('IntoTable', result.STRING)
+
         res.add_field('Columns', result.JSON)
         res.add_field('Catalog', result.STRING)
         res.add_field('StorageLink', result.STRING)
         res.add_field('StorageBaseURL', result.STRING)
 
         if params['extended']:
-            res.add_field('FileFormat', result.STRING)
-            res.add_field('FileFormatParams', result.JSON)
-            res.add_field('UpdateMode', result.STRING)
+            res.add_field('Properties', result.JSON)
             res.add_field('OrderBy', result.JSON)
             res.add_field('PartitionBy', result.JSON)
 
