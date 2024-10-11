@@ -213,7 +213,7 @@ class EgressService(object):
         #: Storage
         self.storage_link = storage_link
 
-        self._manager: Optional[WorkspaceManager] = None
+        self._manager: Optional[WorkspaceManager] = workspace_group._manager
 
     def __str__(self) -> str:
         """Return string representation."""
