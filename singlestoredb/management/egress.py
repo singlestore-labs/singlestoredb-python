@@ -237,7 +237,7 @@ class EgressService(object):
             raise TypeError('Only S3 links are supported at this time.')
 
         out = self._manager._post(
-            'workspaceGroups/{self.workspace_group.id}/egress/createClusterIdentity',
+            f'workspaceGroups/{self.workspace_group.id}/egress/createClusterIdentity',
             json=dict(
                 storageBucketName=re.split(
                     r'/+', self.storage_link.storage_base_url,
@@ -260,7 +260,7 @@ class EgressService(object):
             raise TypeError('Only S3 links are supported at this time.')
 
         out = self._manager._post(
-            'workspaceGroups/{self.workspace_group.id}/egress/startTableEgress',
+            f'workspaceGroups/{self.workspace_group.id}/egress/startTableEgress',
             json=dict(
                 databaseName=self.database,
                 tableName=self.table,
