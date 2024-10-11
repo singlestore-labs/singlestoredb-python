@@ -67,7 +67,7 @@ class S3Link(Link):
     def to_storage_location(self) -> Dict[str, Any]:
         return dict(
             storageBaseURL=self.storage_base_url,
-            storageRegion=self.region.name,
+            storageRegion=self.region.id,
         )
 
     @classmethod
@@ -172,7 +172,7 @@ class IcebergGlueCatalog(Catalog):
         return dict(
             catalogSource=self.catalog_type,
             tableFormat=self.table_format,
-            glueRegion=self.region.name,
+            glueRegion=self.region.id,
             glueCatalogID=self.catalog_id,
         )
 
@@ -242,7 +242,7 @@ class EgressService(object):
                 storageBucketName=re.split(
                     r'/+', self.storage_link.storage_base_url,
                 )[1],
-                glueRegion=self.catalog.region.name,
+                glueRegion=self.catalog.region.id,
                 glueCatalog=self.catalog.catalog_id,
             ),
         )
