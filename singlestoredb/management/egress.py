@@ -42,7 +42,7 @@ class Link(object):
     ) -> 'Link':
         out_cls = None
         for c in cls.__subclasses__():
-            if c.scheme == scheme.lower():
+            if c.scheme == scheme.upper():
                 out_cls = c
                 break
 
@@ -78,7 +78,7 @@ class S3Link(Link):
         credentials: Dict[str, Any],
         manager: 'WorkspaceManager',
     ) -> 'S3Link':
-        assert scheme.lower() == cls.scheme
+        assert scheme.upper() == cls.scheme
 
         params: Dict[str, Any] = {}
         params.update(config)
