@@ -10,7 +10,6 @@ from typing import List
 from typing import Optional
 
 from .. import ManagementError
-from .region import Region
 from .utils import vars_to_str
 from .workspace import WorkspaceGroup
 from .workspace import WorkspaceManager
@@ -56,10 +55,10 @@ class S3Link(Link):
     """S3 link."""
 
     scheme: str = 'S3'
-    region: Region
+    region: str
     storage_base_url: str
 
-    def __init__(self, region: Region, storage_base_url: str):
+    def __init__(self, region: str, storage_base_url: str):
         self.region = region
         self.storage_base_url = storage_base_url
         self._manager: Optional[WorkspaceManager] = None
@@ -67,7 +66,7 @@ class S3Link(Link):
     def to_storage_location(self) -> Dict[str, Any]:
         return dict(
             storageBaseURL=self.storage_base_url,
-            storageRegion=self.region.code,
+            storageRegion=self.region,
         )
 
     @classmethod
@@ -87,9 +86,7 @@ class S3Link(Link):
         assert params.get('region'), 'region is required'
         assert params.get('endpoint_url'), 'endpoint_url is required'
 
-        region = manager.regions[params['region']]
-
-        out = cls(region, params['endpoint_url'])
+        out = cls(params['region'], params['endpoint_url'])
         out._manager = manager
         return out
 
@@ -141,10 +138,10 @@ class IcebergGlueCatalog(Catalog):
     table_format = 'ICEBERG'
     catalog_type = 'GLUE'
 
-    region: Region
+    region: str
     catalog_id: str
 
-    def __init__(self, region: Region, catalog_id: str):
+    def __init__(self, region: str, catalog_id: str):
         self.region = region
         self.catalog_id = catalog_id
         self._manager: Optional[WorkspaceManager] = None
@@ -161,7 +158,7 @@ class IcebergGlueCatalog(Catalog):
         params.update(credentials)
 
         out = cls(
-            region=manager.regions[params['region']],
+            region=params['region'],
             catalog_id=params['id'],
         )
         out._manager = manager
@@ -172,7 +169,7 @@ class IcebergGlueCatalog(Catalog):
         return dict(
             catalogSource=self.catalog_type,
             tableFormat=self.table_format,
-            glueRegion=self.region.code,
+            glueRegion=self.region,
             glueCatalogID=self.catalog_id,
         )
 
@@ -242,7 +239,7 @@ class EgressService(object):
                 storageBucketName=re.split(
                     r'/+', self.storage_link.storage_base_url,
                 )[1],
-                glueRegion=self.catalog.region.code,
+                glueRegion=self.catalog.region,
                 glueCatalog=self.catalog.catalog_id,
             ),
         )
