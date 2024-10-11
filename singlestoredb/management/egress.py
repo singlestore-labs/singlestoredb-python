@@ -55,7 +55,7 @@ class Link(object):
 class S3Link(Link):
     """S3 link."""
 
-    scheme: str = 's3'
+    scheme: str = 'S3'
     region: Region
     storage_base_url: str
 
@@ -97,8 +97,8 @@ class S3Link(Link):
 class Catalog(object):
     """Generic catalog base class."""
 
-    catalog_type: str = 'unknown'
-    table_format: str = 'unknown'
+    catalog_type: str = 'UNKNOWN'
+    table_format: str = 'UNKNOWN'
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -115,8 +115,8 @@ class Catalog(object):
         credentials: Dict[str, Any],
         manager: 'WorkspaceManager',
     ) -> 'Catalog':
-        catalog_type = config['type'].lower()
-        table_format = config['table_format'].lower()
+        catalog_type = config['type'].upper()
+        table_format = config['table_format'].upper()
 
         out_cls = None
         for c in cls.__subclasses__():
@@ -138,8 +138,8 @@ class Catalog(object):
 class IcebergGlueCatalog(Catalog):
     """Iceberg glue catalog."""
 
-    table_format = 'iceberg'
-    catalog_type = 'glue'
+    table_format = 'ICEBERG'
+    catalog_type = 'GLUE'
 
     region: Region
     catalog_id: str
