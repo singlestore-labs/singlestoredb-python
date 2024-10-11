@@ -4,7 +4,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
-from ...management import manage_workspaces
+from .. import result
 from ...management.egress import Catalog
 from ...management.egress import EgressService
 from ...management.egress import Link
@@ -63,27 +63,33 @@ class CreateClusterIdentity(SQLHandler):
 
     """
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        wsm = manage_workspaces()
-        wsg = get_workspace_group({})
-
         # Catalog
-        catalog_config = json.loads(params['catalog']['catalog_config'] or '{}')
-        catalog_creds = json.loads(params['catalog']['catalog_creds'] or '{}')
+        catalog_config = json.loads(params['catalog'].get('catalog_config', '{}') or '{}')
+        catalog_creds = json.loads(params['catalog'].get('catalog_creds', '{}') or '{}')
 
         # Storage
-        storage_config = json.loads(params['storage']['link_config'] or '{}')
-        storage_creds = json.loads(params['storage']['link_creds'] or '{}')
+        storage_config = json.loads(params['storage'].get('link_config', '{}') or '{}')
+        storage_creds = json.loads(params['storage'].get('link_creds', '{}') or '{}')
 
-        EgressService(
+        wsg = get_workspace_group({})
+
+        if wsg._manager is None:
+            raise TypeError('no workspace manager is associated with workspace group')
+
+        out = EgressService(
             wsg,
-            'dummy',
-            'dummy',
-            Catalog.from_config_and_creds(catalog_config, catalog_creds, wsm),
-            Link.from_config_and_creds('S3', storage_config, storage_creds, wsm),
+            'none',
+            'none',
+            Catalog.from_config_and_creds(catalog_config, catalog_creds, wsg._manager),
+            Link.from_config_and_creds('S3', storage_config, storage_creds, wsg._manager),
             columns=None,
         ).create_cluster_identity()
 
-        return None
+        res = FusionSQLResult()
+        res.add_field('RoleARN', result.STRING)
+        res.set_rows([(out['roleARN'],)])
+
+        return res
 
 
 CreateClusterIdentity.register(overwrite=True)
@@ -112,16 +118,14 @@ class CreateEgress(SQLHandler):
     properties = PROPERTIES '<table-properties>'
 
     # Catolog
-    catalog = CATALOG { _catalog_config | _catalog_creds | _catalog_name }
+    catalog = CATALOG [ _catalog_config ] [ _catalog_creds ]
     _catalog_config = CONFIG '<catalog-config>'
     _catalog_creds = CREDENTIALS '<catalog-creds>'
-    _catalog_name = <catalog-name>
 
     # Storage
-    storage = LINK { _link_config | _link_creds | _link_name }
+    storage = LINK [ _link_config ] [ _link_creds ]
     _link_config = S3 CONFIG '<link-config>'
     _link_creds = CREDENTIALS '<link-creds>'
-    _link_name = <link-name>
 
     # Description
     description = DESCRIPTION '<description>'
@@ -133,8 +137,8 @@ class CreateEgress(SQLHandler):
     Arguments
     ---------
     * ``<egress-name>``: The name to give the egress configuration.
-    * ``<catalog-name>``: Name of a catalog profile.
-    * ``<link-name>``: Name of the link for accessing data storage.
+    * ``<catalog-config>`` and ``<catalog-creds>``: The catalog configuration.
+    * ``<link-config>`` and ``<link-creds>``: The storage link configuration.
     * ``<table-properties>``: Table properties as a JSON object.
     * ``<description>``: Description of egress.
 
@@ -170,44 +174,50 @@ class CreateEgress(SQLHandler):
     """  # noqa
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        print(params)
-        return None
-
         # Name
         # if_not_exists = params['if_not_exists']
         # name = params['name']
 
         # From table
-        if len(params['from_table']) > 1:
-            from_database, from_table = params['from_table']
-        else:
+        if isinstance(params['from_table'], str):
             from_database = None
             from_table = params['from_table']
+        else:
+            from_database, from_table = params['from_table']
 
         # Catalog
-        catalog_config = json.loads(params['catalog']['catalog_config'] or '{}')
-        catalog_creds = json.loads(params['catalog']['catalog_creds'] or '{}')
+        catalog_config = json.loads(params['catalog'].get('catalog_config', '{}') or '{}')
+        catalog_creds = json.loads(params['catalog'].get('catalog_creds', '{}') or '{}')
 
         # Storage
-        storage_config = json.loads(params['storage']['link_config'] or '{}')
-        storage_creds = json.loads(params['storage']['link_creds'] or '{}')
+        storage_config = json.loads(params['storage'].get('link_config', '{}') or '{}')
+        storage_creds = json.loads(params['storage'].get('link_creds', '{}') or '{}')
 
         # Properties
         # properties = json.loads(params['properties'] or '{}')
 
-        wsm = manage_workspaces()
         wsg = get_workspace_group({})
 
-        EgressService(
+        if from_database is None:
+            raise ValueError('database name must be specified for source table')
+
+        if wsg._manager is None:
+            raise TypeError('no workspace manager is associated with workspace group')
+
+        out = EgressService(
             wsg,
             from_database,
             from_table,
-            Catalog.from_config_and_creds(catalog_config, catalog_creds, wsm),
-            Link.from_config_and_creds('S3', storage_config, storage_creds, wsm),
+            Catalog.from_config_and_creds(catalog_config, catalog_creds, wsg._manager),
+            Link.from_config_and_creds('S3', storage_config, storage_creds, wsg._manager),
             columns=None,
-        ).create_cluster_identity()
+        ).start()
 
-        return None
+        res = FusionSQLResult()
+        res.add_field('EgressID', result.STRING)
+        res.set_rows([(out['egressID'],)])
+
+        return res
 
 
 CreateEgress.register(overwrite=True)
