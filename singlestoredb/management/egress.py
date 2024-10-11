@@ -242,7 +242,7 @@ class EgressService(object):
                 storageBucketName=re.split(
                     r'/+', self.storage_link.storage_base_url,
                 )[1],
-                glueRegion=self.catalog.region,
+                glueRegion=self.catalog.region.name,
                 glueCatalog=self.catalog.catalog_id,
             ),
         )
