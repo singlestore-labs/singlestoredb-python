@@ -97,19 +97,13 @@ CreateClusterIdentity.register(overwrite=True)
 
 class CreateEgress(SQLHandler):
     """
-    CREATE EGRESS [ if_not_exists ] name
+    START EGRESS
         from_table
         catalog
         storage
         [ properties ]
         [ description ]
     ;
-
-    # If not exists
-    if_not_exists = IF NOT EXISTS
-
-    # Egress name
-    name = '<egress-name>'
 
     # From table
     from_table = FROM <table>
@@ -136,7 +130,6 @@ class CreateEgress(SQLHandler):
 
     Arguments
     ---------
-    * ``<egress-name>``: The name to give the egress configuration.
     * ``<catalog-config>`` and ``<catalog-creds>``: The catalog configuration.
     * ``<link-config>`` and ``<link-creds>``: The storage link configuration.
     * ``<table-properties>``: Table properties as a JSON object.
@@ -144,8 +137,6 @@ class CreateEgress(SQLHandler):
 
     Remarks
     -------
-    * ``IF NOT EXISTS`` indicates that the egress configuration should only be
-      created if there isn't one with the given name.
     * ``FROM <table>`` specifies the SingleStore table to egress. The same name will
       be used for the egressed table.
     * ``CATALOG`` specifies the name of a catalog profile.
@@ -153,11 +144,11 @@ class CreateEgress(SQLHandler):
 
     Examples
     --------
-    The following statement creates an egress configuration named "dev-egress" using
+    The following statement starts an egress operation with the given
     catalog and link configurations.  The source table to egress is
     named "customer_data"::
 
-        CREATE EGRESS dev-egress FROM customer_data
+        START EGRESS FROM customer_data
             CATALOG CONFIG '{
 
             }'
@@ -174,10 +165,6 @@ class CreateEgress(SQLHandler):
     """  # noqa
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        # Name
-        # if_not_exists = params['if_not_exists']
-        # name = params['name']
-
         # From table
         if isinstance(params['from_table'], str):
             from_database = None
