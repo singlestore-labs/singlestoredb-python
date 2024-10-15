@@ -246,7 +246,7 @@ class EgressService(object):
 
         return out.json()
 
-    def start(self, tags: Optional[List[str]] = None) -> Dict[str, Any]:
+    def start(self, tags: Optional[List[str]] = None) -> 'EgressStatus':
         """Start the egress process."""
         if self._manager is None:
             raise ManagementError(
@@ -266,4 +266,35 @@ class EgressService(object):
             ),
         )
 
-        return out.json()
+        return EgressStatus(out.json()['egressID'], self.workspace_group)
+
+
+class EgressStatus(object):
+
+    egress_id: str
+
+    def __init__(self, egress_id: str, workspace_group: WorkspaceGroup):
+        self.egress_id = egress_id
+        self.workspace_group = workspace_group
+        self._manager: Optional[WorkspaceManager] = workspace_group._manager
+
+    @property
+    def status(self) -> str:
+        """Return egress status."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        out = self._manager._post(
+            f'workspaceGroups/{self.workspace_group.id}/egress/tableEgressStatus',
+            json=dict(egressID=self.egress_id),
+        )
+
+        return list(out.json().values())[0]
+
+    def __str__(self) -> str:
+        return self.status
+
+    def __repr__(self) -> str:
+        return self.status
