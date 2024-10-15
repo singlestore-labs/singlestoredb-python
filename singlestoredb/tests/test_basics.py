@@ -4,6 +4,7 @@
 import datetime
 import decimal
 import os
+import string
 import unittest
 
 try:
@@ -1104,6 +1105,55 @@ class TestBasics(unittest.TestCase):
         string = 'a' * 49
         self.cur.execute(f"SELECT 1999 :> YEAR, '{string}'")
         self.assertEqual((1999, string), self.cur.fetchone())
+
+    def test_character_lengths(self):
+        self.cur.execute('DROP TABLE IF EXISTS test_character_lengths')
+        self.cur.execute(r'''
+            CREATE TABLE `test_character_lengths` (
+                `id` text CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
+                `char_col` longtext CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
+                `int_col` INT,
+                PRIMARY KEY (`id`),
+                SORT KEY `id` (`id`)
+            ) AUTOSTATS_CARDINALITY_MODE=INCREMENTAL
+              AUTOSTATS_HISTOGRAM_MODE=CREATE
+              AUTOSTATS_SAMPLING=ON
+              SQL_MODE='STRICT_ALL_TABLES'
+        ''')
+        CHAR_STR = string.ascii_letters * 1
+        SHORT_STR = string.ascii_letters * 10
+        INT24_STR = string.ascii_letters * 1500
+        INT64_STR = string.ascii_letters * 1500000
+        data = [
+            ['CHAR', CHAR_STR, 123456],
+            ['SHORT', SHORT_STR, 123456],
+            ['INT24', INT24_STR, 123456],
+            ['INT64', INT64_STR, 123456],
+        ]
+        self.cur.executemany(
+            'INSERT INTO test_character_lengths(id, char_col, int_col) '
+            'VALUES (%s, %s, %s)', data,
+        )
+        self.cur.execute(
+            'SELECT id, char_col, int_col FROM test_character_lengths '
+            'WHERE id = "CHAR"',
+        )
+        assert data[0] == list(list(self.cur)[0])
+        self.cur.execute(
+            'SELECT id, char_col, int_col FROM test_character_lengths '
+            'WHERE id = "SHORT"',
+        )
+        assert data[1] == list(list(self.cur)[0])
+        self.cur.execute(
+            'SELECT id, char_col, int_col FROM test_character_lengths '
+            'WHERE id = "INT24"',
+        )
+        assert data[2] == list(list(self.cur)[0])
+        self.cur.execute(
+            'SELECT id, char_col, int_col FROM test_character_lengths '
+            'WHERE id = "INT64"',
+        )
+        assert data[3] == list(list(self.cur)[0])
 
 
 if __name__ == '__main__':

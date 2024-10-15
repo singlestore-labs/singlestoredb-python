@@ -1031,10 +1031,10 @@ static unsigned long long read_length_encoded_integer(
             if (is_null) *is_null = 1;
             return 0;
         }
-        uint16_t low = **(uint8_t**)data;
-        *data += 1; *data_l -= 1;
-        uint16_t high = **(uint16_t**)data;
+        uint16_t low = **(uint16_t**)data;
         *data += 2; *data_l -= 2;
+        uint8_t high = **(uint8_t**)data;
+        *data += 1; *data_l -= 1;
         return low + (high << 16);
     }
 
