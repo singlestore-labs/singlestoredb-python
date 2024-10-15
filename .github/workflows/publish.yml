@@ -176,6 +176,7 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
         run: |
+          rm ./dist/singlestoredb-*-cp36-abi3-linux_x86_64.whl
           ls ./dist/*
           twine upload ./dist/*
 
