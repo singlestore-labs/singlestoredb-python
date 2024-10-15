@@ -1107,9 +1107,9 @@ class TestBasics(unittest.TestCase):
         self.assertEqual((1999, string), self.cur.fetchone())
 
     def test_character_lengths(self):
-        self.cur.execute('DROP TABLE IF EXISTS test_character_lengths')
-        self.cur.execute(r'''
-            CREATE TABLE `test_character_lengths` (
+        test_id = id(self)
+        self.cur.execute(rf'''
+            CREATE TABLE `test_character_lengths_{test_id}` (
                 `id` text CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
                 `char_col` longtext CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
                 `int_col` INT,
@@ -1131,29 +1131,30 @@ class TestBasics(unittest.TestCase):
             ['INT64', INT64_STR, 123456],
         ]
         self.cur.executemany(
-            'INSERT INTO test_character_lengths(id, char_col, int_col) '
+            f'INSERT INTO test_character_lengths_{test_id}(id, char_col, int_col) '
             'VALUES (%s, %s, %s)', data,
         )
         self.cur.execute(
-            'SELECT id, char_col, int_col FROM test_character_lengths '
+            f'SELECT id, char_col, int_col FROM test_character_lengths_{test_id} '
             'WHERE id = "CHAR"',
         )
         assert data[0] == list(list(self.cur)[0])
         self.cur.execute(
-            'SELECT id, char_col, int_col FROM test_character_lengths '
+            f'SELECT id, char_col, int_col FROM test_character_lengths_{test_id} '
             'WHERE id = "SHORT"',
         )
         assert data[1] == list(list(self.cur)[0])
         self.cur.execute(
-            'SELECT id, char_col, int_col FROM test_character_lengths '
+            f'SELECT id, char_col, int_col FROM test_character_lengths_{test_id} '
             'WHERE id = "INT24"',
         )
         assert data[2] == list(list(self.cur)[0])
         self.cur.execute(
-            'SELECT id, char_col, int_col FROM test_character_lengths '
+            f'SELECT id, char_col, int_col FROM test_character_lengths_{test_id} '
             'WHERE id = "INT64"',
         )
         assert data[3] == list(list(self.cur)[0])
+        self.cur.execute(rf'DROP TABLE `test_character_lengths_{test_id}`')
 
 
 if __name__ == '__main__':
