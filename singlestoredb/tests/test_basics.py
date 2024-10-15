@@ -1107,6 +1107,9 @@ class TestBasics(unittest.TestCase):
         self.assertEqual((1999, string), self.cur.fetchone())
 
     def test_character_lengths(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Response size too big for http')
+
         test_id = id(self)
         self.cur.execute(rf'''
             CREATE TABLE `test_character_lengths_{test_id}` (
