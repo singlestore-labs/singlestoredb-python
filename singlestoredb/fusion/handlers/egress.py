@@ -7,6 +7,7 @@ from typing import Optional
 from .. import result
 from ...management.egress import Catalog
 from ...management.egress import EgressService
+from ...management.egress import EgressStatus
 from ...management.egress import Link
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
@@ -202,9 +203,32 @@ class CreateEgress(SQLHandler):
 
         res = FusionSQLResult()
         res.add_field('EgressID', result.STRING)
-        res.set_rows([(out['egressID'],)])
+        res.set_rows([(out.egress_id,)])
 
         return res
 
 
 CreateEgress.register(overwrite=True)
+
+
+class ShowEgress(SQLHandler):
+    """
+    SHOW EGRESS egress_id;
+
+    # ID of egress
+    egress_id = '<egress-id>'
+
+    """
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        wsg = get_workspace_group({})
+        out = EgressStatus(params['egress_id'], wsg)
+
+        res = FusionSQLResult()
+        res.add_field('EgressID', result.STRING)
+        res.add_field('Status', result.STRING)
+        res.set_rows([(params['egress_id'], out.status)])
+
+        return res
+
+
+ShowEgress.register(overwrite=True)
