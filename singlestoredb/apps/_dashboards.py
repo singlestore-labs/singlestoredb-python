@@ -32,7 +32,7 @@ async def run_dashboard_app(
         raise RuntimeError('''
 requests_pathname_prefix of the Dash App is invalid. Please set
 requests_pathname_prefix=os.environ['SINGLESTOREDB_APP_BASE_PATH']
-and retry''')
+while initializing the Dash App and retry''')
 
     with StdoutSuppressor():
         app.run(
