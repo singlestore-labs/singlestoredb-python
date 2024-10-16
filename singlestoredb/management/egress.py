@@ -241,7 +241,7 @@ class EgressService(object):
                     r'/+', self.storage_link.storage_base_url,
                 )[1],
                 glueRegion=self.catalog.region,
-                glueCatalog=self.catalog.catalog_id,
+                glueCatalogID=self.catalog.catalog_id,
             ),
         )
 
