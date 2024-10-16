@@ -23,16 +23,14 @@ class CreateClusterIdentity(SQLHandler):
     ;
 
     # Catolog
-    catalog = CATALOG { _catalog_config | _catalog_creds | _catalog_name }
+    catalog = CATALOG { _catalog_config | _catalog_creds }
     _catalog_config = CONFIG '<catalog-config>'
     _catalog_creds = CREDENTIALS '<catalog-creds>'
-    _catalog_name = <catalog-name>
 
     # Storage
-    storage = LINK { _link_config | _link_creds | _link_name }
+    storage = LINK { _link_config | _link_creds }
     _link_config = S3 CONFIG '<link-config>'
     _link_creds = CREDENTIALS '<link-creds>'
-    _link_name = <link-name>
 
     # Description
     description = DESCRIPTION '<description>'
@@ -44,8 +42,10 @@ class CreateClusterIdentity(SQLHandler):
 
     Arguments
     ---------
-    * ``<catalog-name>``: Name of the catalog profile to use.
-    * ``<link-name>``: Name of the link profile to use.
+    * ``<catalog-config>`` and ``<catalog-creds>``: Catalog configuration
+      and credentials in JSON format.
+    * ``<link-config>`` and ``<link-creds>``: Storage link configuration
+      and credentials in JSON format.
 
     Remarks
     -------
