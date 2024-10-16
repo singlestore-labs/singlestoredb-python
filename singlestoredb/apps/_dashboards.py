@@ -1,5 +1,4 @@
 import typing
-import urllib.parse
 
 from ._config import AppConfig
 from ._process import kill_process_by_port
@@ -7,40 +6,33 @@ from ._stdout_supress import StdoutSuppressor
 from singlestoredb.apps._connection_info import ConnectionInfo
 
 if typing.TYPE_CHECKING:
-    from plotly.graph_objs import Figure
+    from dash import Dash
 
 
 async def run_dashboard_app(
-    figure: 'Figure',
+    app: 'Dash',
     debug: bool = False,
     kill_existing_app_server: bool = True,
 ) -> ConnectionInfo:
     try:
-        import dash
+        from dash import Dash
     except ImportError:
         raise ImportError('package dash is required to run dashboards')
 
-    try:
-        from plotly.graph_objs import Figure
-    except ImportError:
-        raise ImportError('package dash is required to run dashboards')
-
-    if not isinstance(figure, Figure):
-        raise TypeError('figure is not an instance of plotly Figure')
+    if not isinstance(app, Dash):
+        raise TypeError('app is not an instance of Dash App')
 
     app_config = AppConfig.from_env()
 
     if kill_existing_app_server:
         kill_process_by_port(app_config.listen_port)
 
-    base_path = urllib.parse.urlparse(app_config.base_url).path
-
-    app = dash.Dash(requests_pathname_prefix=base_path)
-    app.layout = dash.html.Div(
-        [
-            dash.dcc.Graph(figure=figure),
-        ],
-    )
+    if app.config.requests_pathname_prefix is None or \
+            app.config.requests_pathname_prefix != app_config.base_path:
+        raise RuntimeError('''
+requests_pathname_prefix of the Dash App is invalid. Please set
+requests_pathname_prefix=os.environ['SINGLESTOREDB_APP_BASE_PATH']
+while initializing the Dash App and retry''')
 
     with StdoutSuppressor():
         app.run(
