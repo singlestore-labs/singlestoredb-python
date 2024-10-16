@@ -53,8 +53,7 @@ async def run_function_app(
     def ping() -> str:
         return 'Success!'
 
-    base_path = urllib.parse.urlparse(app_config.base_url).path
-    app.root_path = base_path
+    app.root_path = app_config.base_path
 
     config = uvicorn.Config(
         app,
