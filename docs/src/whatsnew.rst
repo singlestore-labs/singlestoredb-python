@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.7.2 - October 16, 2024
+-------------------------
+* Fixes for apps
+
 v1.7.1 - September 20, 2024
 ---------------------------
 * Fixes for apps
