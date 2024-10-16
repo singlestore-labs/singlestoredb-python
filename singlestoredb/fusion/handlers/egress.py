@@ -151,9 +151,14 @@ class CreateEgress(SQLHandler):
 
         START EGRESS FROM customer_data
             CATALOG CONFIG '{
-
+                "type": "GLUE",
+                "table_format": "ICEBERG",
+                "id": "13983498723498",
+                "region": "us-east-1"
             }'
             LINK S3 CONFIG '{
+                "region": "us-east-1",
+                "endpoint_url": "s3:/bucket-name"
 
             }'
             PROPERTIES '{
