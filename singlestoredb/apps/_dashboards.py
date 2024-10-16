@@ -40,7 +40,7 @@ requests_pathname_prefix=os.environ['SINGLESTOREDB_APP_BASE_PATH']
 and retry''')
 
     with StdoutSuppressor():
-        app.run_server(
+        app.run(
             host='0.0.0.0',
             debug=debug,
             port=str(app_config.listen_port),
