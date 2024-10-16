@@ -1,5 +1,4 @@
 import typing
-import urllib.parse
 
 from ._config import AppConfig
 from ._process import kill_process_by_port
@@ -11,7 +10,7 @@ if typing.TYPE_CHECKING:
 
 
 async def run_dashboard_app(
-    app: 'App',
+    app: 'Dash',
     debug: bool = False,
     kill_existing_app_server: bool = True,
 ) -> ConnectionInfo:

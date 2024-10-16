@@ -1,7 +1,6 @@
 import asyncio
 import textwrap
 import typing
-import urllib.parse
 
 from ._config import AppConfig
 from ._connection_info import ConnectionInfo
