@@ -5,10 +5,10 @@ from typing import Dict
 from typing import Optional
 
 from .. import result
-from ...management.egress import Catalog
-from ...management.egress import EgressService
-from ...management.egress import EgressStatus
-from ...management.egress import Link
+from ...management.export import Catalog
+from ...management.export import ExportService
+from ...management.export import ExportStatus
+from ...management.export import Link
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
 from .utils import get_workspace_group
@@ -37,7 +37,7 @@ class CreateClusterIdentity(SQLHandler):
 
     Description
     -----------
-    Create a cluster identity for allowing the egress service to access
+    Create a cluster identity for allowing the export service to access
     external cloud resources.
 
     Arguments
@@ -77,7 +77,7 @@ class CreateClusterIdentity(SQLHandler):
         if wsg._manager is None:
             raise TypeError('no workspace manager is associated with workspace group')
 
-        out = EgressService(
+        out = ExportService(
             wsg,
             'none',
             'none',
@@ -96,9 +96,9 @@ class CreateClusterIdentity(SQLHandler):
 CreateClusterIdentity.register(overwrite=True)
 
 
-class CreateEgress(SQLHandler):
+class CreateExport(SQLHandler):
     """
-    START EGRESS
+    START EXPORT
         from_table
         catalog
         storage
@@ -127,29 +127,29 @@ class CreateEgress(SQLHandler):
 
     Description
     -----------
-    Create an egress configuration.
+    Create an export configuration.
 
     Arguments
     ---------
     * ``<catalog-config>`` and ``<catalog-creds>``: The catalog configuration.
     * ``<link-config>`` and ``<link-creds>``: The storage link configuration.
     * ``<table-properties>``: Table properties as a JSON object.
-    * ``<description>``: Description of egress.
+    * ``<description>``: Description of export.
 
     Remarks
     -------
-    * ``FROM <table>`` specifies the SingleStore table to egress. The same name will
-      be used for the egressed table.
+    * ``FROM <table>`` specifies the SingleStore table to export. The same name will
+      be used for the exported table.
     * ``CATALOG`` specifies the name of a catalog profile.
     * ``LINK`` indicates the name of a link for accessing storage.
 
     Examples
     --------
-    The following statement starts an egress operation with the given
-    catalog and link configurations.  The source table to egress is
+    The following statement starts an export operation with the given
+    catalog and link configurations. The source table to export is
     named "customer_data"::
 
-        START EGRESS FROM customer_data
+        START EXPORT FROM customer_data
             CATALOG CONFIG '{
                 "type": "GLUE",
                 "table_format": "ICEBERG",
@@ -197,7 +197,7 @@ class CreateEgress(SQLHandler):
         if wsg._manager is None:
             raise TypeError('no workspace manager is associated with workspace group')
 
-        out = EgressService(
+        out = ExportService(
             wsg,
             from_database,
             from_table,
@@ -207,33 +207,33 @@ class CreateEgress(SQLHandler):
         ).start()
 
         res = FusionSQLResult()
-        res.add_field('EgressID', result.STRING)
-        res.set_rows([(out.egress_id,)])
+        res.add_field('ExportID', result.STRING)
+        res.set_rows([(out.export_id,)])
 
         return res
 
 
-CreateEgress.register(overwrite=True)
+CreateExport.register(overwrite=True)
 
 
-class ShowEgress(SQLHandler):
+class ShowExport(SQLHandler):
     """
-    SHOW EGRESS egress_id;
+    SHOW EXPORT export_id;
 
-    # ID of egress
-    egress_id = '<egress-id>'
+    # ID of export
+    export_id = '<export-id>'
 
     """
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         wsg = get_workspace_group({})
-        out = EgressStatus(params['egress_id'], wsg)
+        out = ExportStatus(params['export_id'], wsg)
 
         res = FusionSQLResult()
-        res.add_field('EgressID', result.STRING)
+        res.add_field('ExportID', result.STRING)
         res.add_field('Status', result.STRING)
-        res.set_rows([(params['egress_id'], out.status)])
+        res.set_rows([(params['export_id'], out.status)])
 
         return res
 
 
-ShowEgress.register(overwrite=True)
+ShowExport.register(overwrite=True)
