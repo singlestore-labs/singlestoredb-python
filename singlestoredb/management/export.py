@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""SingleStoreDB Egress service."""
+"""SingleStoreDB export service."""
 from __future__ import annotations
 
 import abc
@@ -174,8 +174,8 @@ class IcebergGlueCatalog(Catalog):
         )
 
 
-class EgressService(object):
-    """Egress service."""
+class ExportService(object):
+    """Export service."""
 
     database: str
     table: str
@@ -201,7 +201,7 @@ class EgressService(object):
         #: Name of SingleStoreDB table
         self.table = table
 
-        #: List of columns to egress
+        #: List of columns to export
         self.columns = columns
 
         #: Catalog
@@ -247,8 +247,8 @@ class EgressService(object):
 
         return out.json()
 
-    def start(self, tags: Optional[List[str]] = None) -> 'EgressStatus':
-        """Start the egress process."""
+    def start(self, tags: Optional[List[str]] = None) -> 'ExportStatus':
+        """Start the export process."""
         if self._manager is None:
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
@@ -267,21 +267,21 @@ class EgressService(object):
             ),
         )
 
-        return EgressStatus(out.json()['egressID'], self.workspace_group)
+        return ExportStatus(out.json()['egressID'], self.workspace_group)
 
 
-class EgressStatus(object):
+class ExportStatus(object):
 
-    egress_id: str
+    export_id: str
 
-    def __init__(self, egress_id: str, workspace_group: WorkspaceGroup):
-        self.egress_id = egress_id
+    def __init__(self, export_id: str, workspace_group: WorkspaceGroup):
+        self.export_id = export_id
         self.workspace_group = workspace_group
         self._manager: Optional[WorkspaceManager] = workspace_group._manager
 
     @property
     def status(self) -> str:
-        """Return egress status."""
+        """Return export status."""
         if self._manager is None:
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
@@ -289,7 +289,7 @@ class EgressStatus(object):
 
         out = self._manager._post(
             f'workspaceGroups/{self.workspace_group.id}/egress/tableEgressStatus',
-            json=dict(egressID=self.egress_id),
+            json=dict(egressID=self.export_id),
         )
 
         return list(out.json().values())[0]
