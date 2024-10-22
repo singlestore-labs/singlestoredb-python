@@ -158,7 +158,7 @@ class CreateExport(SQLHandler):
             }'
             LINK S3 CONFIG '{
                 "region": "us-east-1",
-                "endpoint_url": "s3:/bucket-name"
+                "endpoint_url": "s3://bucket-name"
 
             }'
             PROPERTIES '{
