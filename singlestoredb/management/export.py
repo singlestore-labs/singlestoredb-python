@@ -279,8 +279,7 @@ class ExportStatus(object):
         self.workspace_group = workspace_group
         self._manager: Optional[WorkspaceManager] = workspace_group._manager
 
-    @property
-    def status(self) -> str:
+    def _info(self) -> Dict[str, Any]:
         """Return export status."""
         if self._manager is None:
             raise ManagementError(
@@ -292,9 +291,17 @@ class ExportStatus(object):
             json=dict(egressID=self.export_id),
         )
 
-        print(out.json())
+        return out.json()
 
-        return list(out.json().values())[0]
+    @property
+    def status(self) -> str:
+        """Return export status."""
+        return self._info().get('status', 'Unknown')
+
+    @property
+    def message(self) -> str:
+        """Return export status message."""
+        return self._info().get('statusMsg', '')
 
     def __str__(self) -> str:
         return self.status

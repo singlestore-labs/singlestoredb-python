@@ -217,10 +217,19 @@ class ShowExport(SQLHandler):
         wsg = get_workspace_group({})
         out = ExportStatus(params['export_id'], wsg)
 
+        status = out._info()
+
         res = FusionSQLResult()
         res.add_field('ExportID', result.STRING)
         res.add_field('Status', result.STRING)
-        res.set_rows([(params['export_id'], out.status)])
+        res.add_field('Message', result.STRING)
+        res.set_rows([
+            (
+                params['export_id'],
+                status.get('status', 'Unknown'),
+                status.get('statusMsg', ''),
+            ),
+        ])
 
         return res
 
