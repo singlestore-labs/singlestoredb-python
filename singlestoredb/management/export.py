@@ -292,6 +292,8 @@ class ExportStatus(object):
             json=dict(egressID=self.export_id),
         )
 
+        print(out.json())
+
         return list(out.json().values())[0]
 
     def __str__(self) -> str:
