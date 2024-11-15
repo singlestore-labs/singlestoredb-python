@@ -19,7 +19,6 @@ class CreateClusterIdentity(SQLHandler):
     CREATE CLUSTER IDENTITY
         catalog
         storage
-        [ description ]
     ;
 
     # Catolog
@@ -31,9 +30,6 @@ class CreateClusterIdentity(SQLHandler):
     storage = LINK { _link_config | _link_creds }
     _link_config = S3 CONFIG '<link-config>'
     _link_creds = CREDENTIALS '<link-creds>'
-
-    # Description
-    description = DESCRIPTION '<description>'
 
     Description
     -----------
@@ -49,8 +45,10 @@ class CreateClusterIdentity(SQLHandler):
 
     Remarks
     -------
-    * ``CATALOG`` specifies the name of a catalog profile.
-    * ``LINK`` indicates the name of a link for accessing storage.
+    * ``FROM <table>`` specifies the SingleStore table to export. The same name will
+      be used for the exported table.
+    * ``CATALOG`` specifies the details of the catalog to connect to.
+    * ``LINK`` specifies the details of the data storage to connect to.
 
     Example
     -------
@@ -58,8 +56,17 @@ class CreateClusterIdentity(SQLHandler):
     and link::
 
         CREATE CLUSTER IDENTITY
-            CATALOG ...
-            LINK ...
+            CATALOG CONFIG '{
+                "type": "GLUE",
+                "table_format": "ICEBERG",
+                "id": "13983498723498",
+                "region": "us-east-1"
+            }'
+            LINK S3 CONFIG '{
+                "region": "us-east-1",
+                "endpoint_url": "s3://bucket-name"
+
+            }'
         ;
 
     """
@@ -102,15 +109,10 @@ class CreateExport(SQLHandler):
         from_table
         catalog
         storage
-        [ properties ]
-        [ description ]
     ;
 
     # From table
     from_table = FROM <table>
-
-    # Properties
-    properties = PROPERTIES '<table-properties>'
 
     # Catolog
     catalog = CATALOG [ _catalog_config ] [ _catalog_creds ]
@@ -122,9 +124,6 @@ class CreateExport(SQLHandler):
     _link_config = S3 CONFIG '<link-config>'
     _link_creds = CREDENTIALS '<link-creds>'
 
-    # Description
-    description = DESCRIPTION '<description>'
-
     Description
     -----------
     Create an export configuration.
@@ -133,15 +132,13 @@ class CreateExport(SQLHandler):
     ---------
     * ``<catalog-config>`` and ``<catalog-creds>``: The catalog configuration.
     * ``<link-config>`` and ``<link-creds>``: The storage link configuration.
-    * ``<table-properties>``: Table properties as a JSON object.
-    * ``<description>``: Description of export.
 
     Remarks
     -------
     * ``FROM <table>`` specifies the SingleStore table to export. The same name will
       be used for the exported table.
-    * ``CATALOG`` specifies the name of a catalog profile.
-    * ``LINK`` indicates the name of a link for accessing storage.
+    * ``CATALOG`` specifies the details of the catalog to connect to.
+    * ``LINK`` specifies the details of the data storage to connect to.
 
     Examples
     --------
@@ -161,12 +158,7 @@ class CreateExport(SQLHandler):
                 "endpoint_url": "s3://bucket-name"
 
             }'
-            PROPERTIES '{
-                "write.update.mode": "copy-on-write",
-                "write.format.default": "parquet",
-                "write.parquet.row-group-size-bytes": 50000000,
-                "write.target-file-size-bytes": 100000000
-            }';
+        ;
 
     """  # noqa
 
@@ -185,9 +177,6 @@ class CreateExport(SQLHandler):
         # Storage
         storage_config = json.loads(params['storage'].get('link_config', '{}') or '{}')
         storage_creds = json.loads(params['storage'].get('link_creds', '{}') or '{}')
-
-        # Properties
-        # properties = json.loads(params['properties'] or '{}')
 
         wsg = get_workspace_group({})
 
