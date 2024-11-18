@@ -136,8 +136,8 @@ class ScheduleJobHandler(SQLHandler):
 
         execution_interval_in_mins = None
         if params.get('execute_every'):
-            execution_interval_in_mins = params['execute_every'][0]['interval']
-            time_unit = params['execute_every'][-1]['time_unit'].upper()
+            execution_interval_in_mins = params['execute_every']['interval']
+            time_unit = params['execute_every']['time_unit'].upper()
             if time_unit == 'MINUTES':
                 pass
             elif time_unit == 'HOURS':
@@ -292,8 +292,8 @@ class WaitOnJobsHandler(SQLHandler):
 
         timeout_in_secs = None
         if params.get('with_timeout'):
-            timeout_in_secs = params['with_timeout'][0]['time']
-            time_unit = params['with_timeout'][-1]['time_unit'].upper()
+            timeout_in_secs = params['with_timeout']['time']
+            time_unit = params['with_timeout']['time_unit'].upper()
             if time_unit == 'SECONDS':
                 pass
             elif time_unit == 'MINUTES':

@@ -465,10 +465,6 @@ class TestWorkspaceFusion(unittest.TestCase):
                 pass
 
 
-@unittest.skipIf(
-    os.environ.get('SINGLESTOREDB_FUSION_ENABLE_HIDDEN', '0') == '0',
-    'Hidden Fusion commands are not enabled.',
-)
 @pytest.mark.management
 class TestJobsFusion(unittest.TestCase):
 
