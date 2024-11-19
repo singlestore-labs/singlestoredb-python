@@ -71,8 +71,6 @@ class CreateClusterIdentity(SQLHandler):
 
     """
 
-    _enabled = False
-
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         # Catalog
         catalog_config = json.loads(params['catalog'].get('catalog_config', '{}') or '{}')
@@ -165,8 +163,6 @@ class CreateExport(SQLHandler):
 
     """  # noqa
 
-    _enabled = False
-
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         # From table
         if isinstance(params['from_table'], str):
@@ -218,8 +214,6 @@ class ShowExport(SQLHandler):
     export_id = '<export-id>'
 
     """
-
-    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         wsg = get_workspace_group({})
