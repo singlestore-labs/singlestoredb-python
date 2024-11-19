@@ -20,6 +20,7 @@ from typing import Sequence
 from typing import Tuple
 from typing import Union
 from urllib.parse import parse_qs
+from urllib.parse import unquote_plus
 from urllib.parse import urlparse
 
 import sqlparams
@@ -283,6 +284,15 @@ def _parse_url(url: str) -> Dict[str, Any]:
 
     if parts.scheme != 'singlestoredb':
         out['driver'] = parts.scheme.lower()
+
+    if out.get('user'):
+        out['user'] = unquote_plus(out['user'])
+
+    if out.get('password'):
+        out['password'] = unquote_plus(out['password'])
+
+    if out.get('database'):
+        out['database'] = unquote_plus(out['database'])
 
     # Convert query string to parameters
     out.update({k.lower(): v[-1] for k, v in parse_qs(parts.query).items()})
