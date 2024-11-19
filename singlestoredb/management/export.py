@@ -28,7 +28,7 @@ class Link(object):
         return str(self)
 
     @abc.abstractmethod
-    def to_storage_location(self) -> Dict[str, Any]:
+    def to_storage_info(self) -> Dict[str, Any]:
         raise NotImplementedError
 
     @classmethod
@@ -63,7 +63,7 @@ class S3Link(Link):
         self.storage_base_url = storage_base_url
         self._manager: Optional[WorkspaceManager] = None
 
-    def to_storage_location(self) -> Dict[str, Any]:
+    def to_storage_info(self) -> Dict[str, Any]:
         return dict(
             storageBaseURL=self.storage_base_url,
             storageRegion=self.region,
@@ -167,7 +167,7 @@ class IcebergGlueCatalog(Catalog):
     def to_catalog_info(self) -> Dict[str, Any]:
         """Return a catalog info dictionary."""
         return dict(
-            catalogSource=self.catalog_type,
+            catalogType=self.catalog_type,
             tableFormat=self.table_format,
             glueRegion=self.region,
             glueCatalogID=self.catalog_id,
@@ -262,7 +262,7 @@ class ExportService(object):
             json=dict(
                 databaseName=self.database,
                 tableName=self.table,
-                storageLocation=self.storage_link.to_storage_location(),
+                storageInfo=self.storage_link.to_storage_info(),
                 catalogInfo=self.catalog.to_catalog_info(),
             ),
         )
