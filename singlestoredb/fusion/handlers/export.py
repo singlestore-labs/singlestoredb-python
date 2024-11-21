@@ -5,10 +5,8 @@ from typing import Dict
 from typing import Optional
 
 from .. import result
-from ...management.export import Catalog
 from ...management.export import ExportService
 from ...management.export import ExportStatus
-from ...management.export import Link
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
 from .utils import get_workspace_group
@@ -89,8 +87,8 @@ class CreateClusterIdentity(SQLHandler):
             wsg,
             'none',
             'none',
-            Catalog.from_config_and_creds(catalog_config, catalog_creds, wsg._manager),
-            Link.from_config_and_creds('S3', storage_config, storage_creds, wsg._manager),
+            dict(**catalog_config, **catalog_creds),
+            dict(**storage_config, **storage_creds),
             columns=None,
         ).create_cluster_identity()
 
@@ -191,8 +189,8 @@ class CreateExport(SQLHandler):
             wsg,
             from_database,
             from_table,
-            Catalog.from_config_and_creds(catalog_config, catalog_creds, wsg._manager),
-            Link.from_config_and_creds('S3', storage_config, storage_creds, wsg._manager),
+            dict(**catalog_config, **catalog_creds),
+            dict(**storage_config, **storage_creds),
             columns=None,
         ).start()
 
