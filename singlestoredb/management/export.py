@@ -286,7 +286,7 @@ class ExportStatus(object):
                 msg='No workspace manager is associated with this object.',
             )
 
-        out = self._manager._post(
+        out = self._manager._get(
             f'workspaceGroups/{self.workspace_group.id}/egress/tableEgressStatus',
             json=dict(egressID=self.export_id),
         )
