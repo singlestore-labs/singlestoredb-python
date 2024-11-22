@@ -7,24 +7,26 @@ from .. import result
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
 from .utils import dt_isoformat
-from .utils import get_workspace_group
+from .utils import get_deployment
 
 
 class ShowStageFilesHandler(SQLHandler):
     """
-    SHOW STAGE FILES [ in_group ]
+    SHOW STAGE FILES [ in ]
         [ at_path ] [ <like> ]
         [ <order-by> ]
         [ <limit> ] [ recursive ] [ extended ];
 
-    # Workspace group
-    in_group = IN GROUP { group_id | group_name }
+    # Deployment
+    in = { in_group | in_deployment }
+    in_group = IN GROUP { deployment_id | deployment_name }
+    in_deployment = IN { deployment_id | deployment_name }
 
-    # ID of group
-    group_id = ID '<group-id>'
+    # ID of deployment
+    deployment_id = ID '<deployment-id>'
 
-    # Name of group
-    group_name = '<group-name>'
+    # Name of deployment
+    deployment_name = '<deployment-name>'
 
     # Stage path to list
     at_path = AT '<path>'
@@ -44,10 +46,10 @@ class ShowStageFilesHandler(SQLHandler):
 
     Arguments
     ---------
-    * ``<group_id>``: The ID of the workspace group in which
+    * ``<deployment-id>``: The ID of the deployment in which
       the Stage is attached.
-    * ``<group_name>``: The name of the workspace group in which
-      the Stage is attached.
+    * ``<deployment-name>``: The name of the deployment in which
+      which the Stage is attached.
     * ``<path>``: A path in the Stage.
     * ``<pattern>``: A pattern similar to SQL LIKE clause.
       Uses ``%`` as the wildcard character.
@@ -62,8 +64,8 @@ class ShowStageFilesHandler(SQLHandler):
       key. By default, the results are sorted in the ascending order.
     * The ``AT PATH`` clause specifies the path in the Stage to list
       the files from.
-    * The ``IN GROUP`` clause specifies the ID or the name of the
-      workspace group in which the Stage is attached.
+    * The ``IN`` clause specifies the ID or the name of the
+      deployment in which the Stage is attached.
     * Use the ``RECURSIVE`` clause to list the files recursively.
     * To return more information about the files, use the ``EXTENDED``
       clause.
@@ -72,12 +74,12 @@ class ShowStageFilesHandler(SQLHandler):
     --------
     The following command lists the files at a specific path::
 
-        SHOW STAGE FILES IN GROUP 'wsg1' AT PATH "/data/";
+        SHOW STAGE FILES IN 'wsg1' AT PATH "/data/";
 
     The following command lists the files recursively with
     additional information::
 
-        SHOW STAGE FILES IN GROUP 'wsg1' RECURSIVE EXTENDED;
+        SHOW STAGE FILES IN 'wsg1' RECURSIVE EXTENDED;
 
     See Also
     --------
@@ -87,7 +89,7 @@ class ShowStageFilesHandler(SQLHandler):
     """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        wg = get_workspace_group(params)
+        wg = get_deployment(params)
 
         res = FusionSQLResult()
         res.add_field('Name', result.STRING)
@@ -132,20 +134,22 @@ ShowStageFilesHandler.register(overwrite=True)
 class UploadStageFileHandler(SQLHandler):
     """
     UPLOAD FILE TO STAGE stage_path
-        [ in_group ]
+        [ in ]
         FROM local_path [ overwrite ];
 
     # Path to stage file
     stage_path = '<stage-path>'
 
-    # Workspace group
-    in_group = IN GROUP { group_id | group_name }
+    # Deployment
+    in = { in_group | in_deployment }
+    in_group = IN GROUP { deployment_id | deployment_name }
+    in_deployment = IN { deployment_id | deployment_name }
 
-    # ID of group
-    group_id = ID '<group-id>'
+    # ID of deployment
+    deployment_id = ID '<deployment-id>'
 
-    # Name of group
-    group_name = '<group-name>'
+    # Name of deployment
+    deployment_name = '<deployment-name>'
 
     # Path to local file
     local_path = '<local-path>'
@@ -162,17 +166,17 @@ class UploadStageFileHandler(SQLHandler):
 
     Arguments
     ---------
-    * ``<stage_path>``: The path in the Stage where the file is uploaded.
-    * ``<group_id>``: The ID of the workspace group in which the Stage
+    * ``<stage-path>``: The path in the Stage where the file is uploaded.
+    * ``<deployment-id>``: The ID of the deployment in which the Stage
       is attached.
-    * ``<group_name>``: The name of the workspace group in which the
-      Stage is attached.
+    * ``<deployment-name>``: The name of the deployment in which
+      which the Stage is attached.
     * ``<local-path>``: The path to the file to upload in the local
       directory.
 
     Remarks
     -------
-    * The ``IN GROUP`` clause specifies the ID or the name of the workspace
+    * The ``IN`` clause specifies the ID or the name of the workspace
       group in which the Stage is attached.
     * If the ``OVERWRITE`` clause is specified, any existing file at the
       specified path in the Stage is overwritten.
@@ -182,7 +186,7 @@ class UploadStageFileHandler(SQLHandler):
     The following command uploads a file to a Stage and overwrites any
     existing files at the specified path::
 
-        UPLOAD FILE TO STAGE '/data/stats.csv' IN GROUP 'wsg1'
+        UPLOAD FILE TO STAGE '/data/stats.csv' IN 'wsg1'
             FROM '/tmp/user/stats.csv' OVERWRITE;
 
     See Also
@@ -192,7 +196,7 @@ class UploadStageFileHandler(SQLHandler):
     """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        wg = get_workspace_group(params)
+        wg = get_deployment(params)
         wg.stage.upload_file(
             params['local_path'], params['stage_path'],
             overwrite=params['overwrite'],
@@ -206,7 +210,7 @@ UploadStageFileHandler.register(overwrite=True)
 class DownloadStageFileHandler(SQLHandler):
     """
     DOWNLOAD STAGE FILE stage_path
-        [ in_group ]
+        [ in ]
         [ local_path ]
         [ overwrite ]
         [ encoding ];
@@ -214,14 +218,16 @@ class DownloadStageFileHandler(SQLHandler):
     # Path to stage file
     stage_path = '<stage-path>'
 
-    # Workspace group
-    in_group = IN GROUP { group_id | group_name }
+    # Deployment
+    in = { in_group | in_deployment }
+    in_group = IN GROUP { deployment_id | deployment_name }
+    in_deployment = IN { deployment_id | deployment_name }
 
-    # ID of group
-    group_id = ID '<group-id>'
+    # ID of deployment
+    deployment_id = ID '<deployment-id>'
 
-    # Name of group
-    group_name = '<group-name>'
+    # Name of deployment
+    deployment_name = '<deployment-name>'
 
     # Path to local file
     local_path = TO '<local-path>'
@@ -241,11 +247,11 @@ class DownloadStageFileHandler(SQLHandler):
 
     Arguments
     ---------
-    * ``<stage_path>``: The path to the file to download in a Stage.
-    * ``<group_id>``: The ID of the workspace group in which the
+    * ``<stage-path>``: The path to the file to download in a Stage.
+    * ``<deployment-id>``: The ID of the deployment in which the
       Stage is attached.
-    * ``<group_name>``: The name of the workspace group in which the
-      Stage is attached.
+    * ``<deployment-name>``: The name of the deployment in which
+      which the Stage is attached.
     * ``<encoding>``: The encoding to apply to the downloaded file.
     * ``<local-path>``: Specifies the path in the local directory
       where the file is downloaded.
@@ -254,8 +260,8 @@ class DownloadStageFileHandler(SQLHandler):
     -------
     * If the ``OVERWRITE`` clause is specified, any existing file at
       the download location is overwritten.
-    * The ``IN GROUP`` clause specifies the ID or the name of the
-      workspace group in which the Stage is attached.
+    * The ``IN`` clause specifies the ID or the name of the
+      deployment in which the Stage is attached.
     * By default, files are downloaded in binary encoding. To view
       the contents of the file on the standard output, use the
       ``ENCODING`` clause and specify an encoding.
@@ -267,12 +273,12 @@ class DownloadStageFileHandler(SQLHandler):
     The following command displays the contents of the file on the
     standard output::
 
-        DOWNLOAD STAGE FILE '/data/stats.csv' IN GROUP 'wsgroup1' ENCODING 'utf8';
+        DOWNLOAD STAGE FILE '/data/stats.csv' IN 'wsgroup1' ENCODING 'utf8';
 
     The following command downloads a file to a specific location and
     overwrites any existing file with the name ``stats.csv`` on the local storage::
 
-        DOWNLOAD STAGE FILE '/data/stats.csv' IN GROUP 'wsgroup1'
+        DOWNLOAD STAGE FILE '/data/stats.csv' IN 'wsgroup1'
             TO '/tmp/data.csv' OVERWRITE;
 
     See Also
@@ -282,7 +288,7 @@ class DownloadStageFileHandler(SQLHandler):
     """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        wg = get_workspace_group(params)
+        wg = get_deployment(params)
 
         out = wg.stage.download_file(
             params['stage_path'],
@@ -309,19 +315,21 @@ DownloadStageFileHandler.register(overwrite=True)
 class DropStageFileHandler(SQLHandler):
     """
     DROP STAGE FILE stage_path
-        [ in_group ];
+        [ in ];
 
     # Path to stage file
     stage_path = '<stage-path>'
 
-    # Workspace group
-    in_group = IN GROUP { group_id | group_name }
+    # Deployment
+    in = { in_group | in_deployment }
+    in_group = IN GROUP { deployment_id | deployment_name }
+    in_deployment = IN { deployment_id | deployment_name }
 
-    # ID of group
-    group_id = ID '<group-id>'
+    # ID of deployment
+    deployment_id = ID '<deployment-id>'
 
-    # Name of group
-    group_name = '<group-name>'
+    # Name of deployment
+    deployment_name = '<deployment-name>'
 
     Description
     -----------
@@ -332,23 +340,23 @@ class DropStageFileHandler(SQLHandler):
 
     Arguments
     ---------
-    * ``<stage_path>``: The path to the file to delete in a Stage.
-    * ``<group_id>``: The ID of the workspace group in which the
+    * ``<stage-path>``: The path to the file to delete in a Stage.
+    * ``<deployment-id>``: The ID of the deployment in which the
       Stage is attached.
-    * ``<group_name>``: The name of the workspace group in which
-      the Stage is attached.
+    * ``<deployment-name>``: The name of the deployment in which
+      which the Stage is attached.
 
     Remarks
     -------
-    * The ``IN GROUP`` clause specifies the ID or the name of the
-      workspace group in which the Stage is attached.
+    * The ``IN`` clause specifies the ID or the name of the
+      deployment in which the Stage is attached.
 
     Example
     --------
     The following command deletes a file from a Stage attached to
-    a workspace group named **wsg1**::
+    a deployment named **wsg1**::
 
-        DROP STAGE FILE '/data/stats.csv' IN GROUP 'wsg1';
+        DROP STAGE FILE '/data/stats.csv' IN 'wsg1';
 
     See Also
     --------
@@ -357,7 +365,7 @@ class DropStageFileHandler(SQLHandler):
     """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        wg = get_workspace_group(params)
+        wg = get_deployment(params)
         wg.stage.remove(params['stage_path'])
         return None
 
@@ -368,20 +376,22 @@ DropStageFileHandler.register(overwrite=True)
 class DropStageFolderHandler(SQLHandler):
     """
     DROP STAGE FOLDER stage_path
-        [ in_group ]
+        [ in ]
         [ recursive ];
 
     # Path to stage folder
     stage_path = '<stage-path>'
 
-    # Workspace group
-    in_group = IN GROUP { group_id | group_name }
+    # Deployment
+    in = { in_group | in_deployment }
+    in_group = IN GROUP { deployment_id | deployment_name }
+    in_deployment = IN { deployment_id | deployment_name }
 
-    # ID of group
-    group_id = ID '<group-id>'
+    # ID of deployment
+    deployment_id = ID '<deployment-id>'
 
-    # Name of group
-    group_name = '<group-name>'
+    # Name of deployment
+    deployment_name = '<deployment-name>'
 
     # Should folers be deleted recursively?
     recursive = RECURSIVE
@@ -395,11 +405,11 @@ class DropStageFolderHandler(SQLHandler):
 
     Arguments
     ---------
-    * ``<stage_path>``: The path to the folder to delete in a Stage.
-    * ``<group_id>``: The ID of the workspace group in which the
+    * ``<stage-path>``: The path to the folder to delete in a Stage.
+    * ``<deployment-id>``: The ID of the deployment in which the
       Stage is attached.
-    * ``<group_name>``: The name of the workspace group in which the
-      Stage is attached.
+    * ``<deployment-name>``: The name of the deployment in which
+      which the Stage is attached.
 
     Remarks
     -------
@@ -409,9 +419,9 @@ class DropStageFolderHandler(SQLHandler):
     Example
     -------
     The following command recursively deletes a folder from a Stage
-    attached to a workspace group named **wsg1**::
+    attached to a deployment named **wsg1**::
 
-        DROP STAGE FOLDER '/data/' IN GROUP 'wsg1' RECURSIVE;
+        DROP STAGE FOLDER '/data/' IN 'wsg1' RECURSIVE;
 
     See Also
     --------
@@ -420,7 +430,7 @@ class DropStageFolderHandler(SQLHandler):
     """  # noqa: E501
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        wg = get_workspace_group(params)
+        wg = get_deployment(params)
         if params['recursive']:
             wg.stage.removedirs(params['stage_path'])
         else:
@@ -434,17 +444,19 @@ DropStageFolderHandler.register(overwrite=True)
 class CreateStageFolderHandler(SQLHandler):
     """
     CREATE STAGE FOLDER stage_path
-        [ in_group ]
+        [ in ]
         [ overwrite ];
 
-    # Workspace group
-    in_group = IN GROUP { group_id | group_name }
+    # Deployment
+    in = { in_group | in_deployment }
+    in_group = IN GROUP { deployment_id | deployment_name }
+    in_deployment = IN { deployment_id | deployment_name }
 
-    # ID of group
-    group_id = ID '<group-id>'
+    # ID of deployment
+    deployment_id = ID '<deployment-id>'
 
-    # Name of group
-    group_name = '<group-name>'
+    # Name of deployment
+    deployment_name = '<deployment-name>'
 
     # Path to stage folder
     stage_path = '<stage-path>'
@@ -458,31 +470,31 @@ class CreateStageFolderHandler(SQLHandler):
 
     Arguments
     ---------
-    * ``<stage_path>``: The path in a Stage where the folder
+    * ``<stage-path>``: The path in a Stage where the folder
       is created. The path must end with a trailing slash (/).
-    * ``<group_id>``: The ID of the workspace group in which
+    * ``<deployment-id>``: The ID of the deployment in which
       the Stage is attached.
-    * ``<group_name>``: The name of the workspace group in
+    * ``<deployment-name>``: The name of the deployment in which
       which the Stage is attached.
 
     Remarks
     -------
     * If the ``OVERWRITE`` clause is specified, any existing
       folder at the specified path is overwritten.
-    * The ``IN GROUP`` clause specifies the ID or the name of
-      the workspace group in which the Stage is attached.
+    * The ``IN`` clause specifies the ID or the name of
+      the deployment in which the Stage is attached.
 
     Example
     -------
     The following command creates a folder in a Stage attached
-    to a workspace group named **wsg1**::
+    to a deployment named **wsg1**::
 
-        CREATE STAGE FOLDER `/data/csv/` IN GROUP 'wsg1';
+        CREATE STAGE FOLDER `/data/csv/` IN 'wsg1';
 
     """
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        wg = get_workspace_group(params)
+        wg = get_deployment(params)
         wg.stage.mkdir(params['stage_path'], overwrite=params['overwrite'])
         return None
 

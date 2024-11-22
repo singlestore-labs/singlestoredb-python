@@ -406,12 +406,12 @@ class Stage(object):
     Stage manager.
 
     This object is not instantiated directly.
-    It is returned by ``WorkspaceGroup.stage``.
+    It is returned by ``WorkspaceGroup.stage`` or ``StarterWorkspace.stage``.
 
     """
 
-    def __init__(self, workspace_group: WorkspaceGroup, manager: WorkspaceManager):
-        self._workspace_group = workspace_group
+    def __init__(self, deployment_id: str, manager: WorkspaceManager):
+        self._deployment_id = deployment_id
         self._manager = manager
 
     def open(
@@ -593,7 +593,7 @@ class Stage(object):
             self.remove(stage_path)
 
         self._manager._put(
-            f'stage/{self._workspace_group.id}/fs/{stage_path}',
+            f'stage/{self._deployment_id}/fs/{stage_path}',
             files={'file': content},
             headers={'Content-Type': None},
         )
@@ -625,7 +625,7 @@ class Stage(object):
             self.remove(stage_path)
 
         self._manager._put(
-            f'stage/{self._workspace_group.id}/fs/{stage_path}?isFile=false',
+            f'stage/{self._deployment_id}/fs/{stage_path}?isFile=false',
         )
 
         return self.info(stage_path)
@@ -668,7 +668,7 @@ class Stage(object):
                 self.remove(new_path)
 
         self._manager._patch(
-            f'stage/{self._workspace_group.id}/fs/{old_path}',
+            f'stage/{self._deployment_id}/fs/{old_path}',
             json=dict(newPath=new_path),
         )
 
@@ -689,7 +689,7 @@ class Stage(object):
 
         """
         res = self._manager._get(
-            re.sub(r'/+$', r'/', f'stage/{self._workspace_group.id}/fs/{stage_path}'),
+            re.sub(r'/+$', r'/', f'stage/{self._deployment_id}/fs/{stage_path}'),
             params=dict(metadata=1),
         ).json()
 
@@ -772,7 +772,7 @@ class Stage(object):
 
         """
         res = self._manager._get(
-            f'stage/{self._workspace_group.id}/fs/{stage_path}',
+            f'stage/{self._deployment_id}/fs/{stage_path}',
         ).json()
         if recursive:
             out = []
@@ -848,7 +848,7 @@ class Stage(object):
             raise IsADirectoryError(f'stage path is a directory: {stage_path}')
 
         out = self._manager._get(
-            f'stage/{self._workspace_group.id}/fs/{stage_path}',
+            f'stage/{self._deployment_id}/fs/{stage_path}',
         ).content
 
         if local_path is not None:
@@ -912,7 +912,7 @@ class Stage(object):
                 f'use rmdir or removedirs: {stage_path}',
             )
 
-        self._manager._delete(f'stage/{self._workspace_group.id}/fs/{stage_path}')
+        self._manager._delete(f'stage/{self._deployment_id}/fs/{stage_path}')
 
     def removedirs(self, stage_path: PathLike) -> None:
         """
@@ -925,7 +925,7 @@ class Stage(object):
 
         """
         stage_path = re.sub(r'/*$', r'', str(stage_path)) + '/'
-        self._manager._delete(f'stage/{self._workspace_group.id}/fs/{stage_path}')
+        self._manager._delete(f'stage/{self._deployment_id}/fs/{stage_path}')
 
     def rmdir(self, stage_path: PathLike) -> None:
         """
@@ -942,7 +942,7 @@ class Stage(object):
         if self.listdir(stage_path):
             raise OSError(f'stage folder is not empty, use removedirs: {stage_path}')
 
-        self._manager._delete(f'stage/{self._workspace_group.id}/fs/{stage_path}')
+        self._manager._delete(f'stage/{self._deployment_id}/fs/{stage_path}')
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -1411,7 +1411,7 @@ class WorkspaceGroup(object):
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
-        return Stage(self, self._manager)
+        return Stage(self.id, self._manager)
 
     stages = stage
 
@@ -1598,6 +1598,104 @@ class WorkspaceGroup(object):
         )
 
 
+class StarterWorkspace(object):
+    """
+    SingleStoreDB starter workspace definition.
+
+    This object is not instantiated directly. It is used in the results
+    of API calls on the :class:`WorkspaceManager`. Existing starter workspaces are
+    accessed by either :attr:`WorkspaceManager.starter_workspaces` or by calling
+    :meth:`WorkspaceManager.get_starter_workspace`.
+
+    See Also
+    --------
+    :meth:`WorkspaceManager.get_starter_workspace`
+    :attr:`WorkspaceManager.starter_workspaces`
+
+    """
+
+    name: str
+    id: str
+
+    def __init__(
+        self,
+        name: str,
+        id: str,
+    ):
+        #: Name of the starter workspace
+        self.name = name
+
+        #: Unique ID of the starter workspace
+        self.id = id
+
+        self._manager: Optional[WorkspaceManager] = None
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
+    @classmethod
+    def from_dict(
+        cls, obj: Dict[str, Any], manager: 'WorkspaceManager',
+    ) -> 'StarterWorkspace':
+        """
+        Construct a StarterWorkspace from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+        manager : WorkspaceManager, optional
+            The WorkspaceManager the StarterWorkspace belongs to
+
+        Returns
+        -------
+        :class:`StarterWorkspace`
+
+        """
+        out = cls(
+            name=obj['name'],
+            id=obj['virtualWorkspaceID'],
+        )
+        out._manager = manager
+        return out
+
+    @property
+    def organization(self) -> Organization:
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        return self._manager.organization
+
+    @property
+    def stage(self) -> Stage:
+        """Stage manager."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        return Stage(self.id, self._manager)
+
+    stages = stage
+
+    @property
+    def starter_workspaces(self) -> NamedList[StarterWorkspace]:
+        """Return a list of available starter workspaces."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get('sharedtier/virtualWorkspaces')
+        return NamedList(
+            [StarterWorkspace.from_dict(item, self._manager) for item in res.json()],
+        )
+
+
 class Billing(object):
     """Billing information."""
 
@@ -1704,6 +1802,12 @@ class WorkspaceManager(Manager):
         """Return a list of available workspace groups."""
         res = self._get('workspaceGroups')
         return NamedList([WorkspaceGroup.from_dict(item, self) for item in res.json()])
+
+    @property
+    def starter_workspaces(self) -> NamedList[StarterWorkspace]:
+        """Return a list of available starter workspaces."""
+        res = self._get('sharedtier/virtualWorkspaces')
+        return NamedList([StarterWorkspace.from_dict(item, self) for item in res.json()])
 
     @property
     def organizations(self) -> Organizations:
@@ -1903,6 +2007,23 @@ class WorkspaceManager(Manager):
         """
         res = self._get(f'workspaces/{id}')
         return Workspace.from_dict(res.json(), manager=self)
+
+    def get_starter_workspace(self, id: str) -> StarterWorkspace:
+        """
+        Retrieve a starter workspace definition.
+
+        Parameters
+        ----------
+        id : str
+            ID of the starter workspace
+
+        Returns
+        -------
+        :class:`StarterWorkspace`
+
+        """
+        res = self._get(f'sharedtier/virtualWorkspaces/{id}')
+        return StarterWorkspace.from_dict(res.json(), manager=self)
 
 
 def manage_workspaces(

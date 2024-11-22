@@ -4,9 +4,11 @@ import os
 from typing import Any
 from typing import Dict
 from typing import Optional
+from typing import Union
 
 from ...exceptions import ManagementError
 from ...management import manage_workspaces
+from ...management.workspace import StarterWorkspace
 from ...management.workspace import Workspace
 from ...management.workspace import WorkspaceGroup
 from ...management.workspace import WorkspaceManager
@@ -160,3 +162,111 @@ def get_workspace(params: Dict[str, Any]) -> Workspace:
         raise ValueError('clusters and shared workspaces are not currently supported')
 
     raise KeyError('no workspace was specified')
+
+
+def get_deployment(
+        params: Dict[str, Any],
+) -> Union[WorkspaceGroup, StarterWorkspace]:
+    """
+    Find a starter workspace matching deployment_id or deployment_name.
+
+    This function will get a starter workspace or ID from the
+    following parameters:
+
+        * params['deployment_name']
+        * params['deployment_id']
+        * params['group']['deployment_name']
+        * params['group']['deployment_id']
+        * params['in_deployment']['deployment_name']
+        * params['in_deployment']['deployment_id']
+
+    Or, from the SINGLESTOREDB_WORKSPACE_GROUP
+    or SINGLESTOREDB_CLUSTER environment variables.
+
+    """
+    manager = get_workspace_manager()
+
+    deployment_name = params.get('deployment_name') or \
+        (params.get('in_deployment') or {}).get('deployment_name') or \
+        (params.get('group') or {}).get('deployment_name')
+    if deployment_name:
+        workspace_groups = [
+            x for x in manager.workspace_groups
+            if x.name == deployment_name
+        ]
+
+        starter_workspaces = []
+        if not workspace_groups:
+            filtered_starter_workspaces = [
+                x for x in manager.starter_workspaces
+                if x.name == deployment_name
+            ]
+
+            if not filtered_starter_workspaces:
+                raise KeyError(
+                    f'no deployment found with name: {deployment_name}',
+                )
+
+            starter_workspaces = filtered_starter_workspaces
+
+        if len(workspace_groups) > 1:
+            ids = ', '.join(x.id for x in workspace_groups)
+            raise ValueError(
+                f'more than one workspace group with given name was found: {ids}',
+            )
+
+        if len(starter_workspaces) > 1:
+            ids = ', '.join(x.id for x in starter_workspaces)
+            raise ValueError(
+                f'more than one starter workspace with given name was found: {ids}',
+            )
+
+        if workspace_groups:
+            return workspace_groups[0]
+        else:
+            return starter_workspaces[0]
+
+    deployment_id = params.get('deployment_id') or \
+        (params.get('in_deployment') or {}).get('deployment_id') or \
+        (params.get('group') or {}).get('deployment_id')
+    if deployment_id:
+        try:
+            return manager.get_workspace_group(deployment_id)
+        except ManagementError as exc:
+            if exc.errno == 404:
+                try:
+                    return manager.get_starter_workspace(deployment_id)
+                except ManagementError as exc:
+                    if exc.errno == 404:
+                        raise KeyError(f'no deployment found with ID: {deployment_id}')
+                    raise
+            else:
+                raise
+
+    if os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP'):
+        try:
+            return manager.get_workspace_group(
+                os.environ['SINGLESTOREDB_WORKSPACE_GROUP'],
+            )
+        except ManagementError as exc:
+            if exc.errno == 404:
+                raise KeyError(
+                    'no workspace found with ID: '
+                    f'{os.environ["SINGLESTOREDB_WORKSPACE_GROUP"]}',
+                )
+            raise
+
+    if os.environ.get('SINGLESTOREDB_CLUSTER'):
+        try:
+            return manager.get_starter_workspace(
+                os.environ['SINGLESTOREDB_CLUSTER'],
+            )
+        except ManagementError as exc:
+            if exc.errno == 404:
+                raise KeyError(
+                    'no starter workspace found with ID: '
+                    f'{os.environ["SINGLESTOREDB_CLUSTER"]}',
+                )
+            raise
+
+    raise KeyError('no deployment was specified')
