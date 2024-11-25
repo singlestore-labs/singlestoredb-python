@@ -8,6 +8,11 @@ from typing import Union
 
 from ...exceptions import ManagementError
 from ...management import manage_workspaces
+from ...management.files import FilesManager
+from ...management.files import FileSpace
+from ...management.files import manage_files
+from ...management.files import PERSONAL_SPACE
+from ...management.files import SHARED_SPACE
 from ...management.workspace import StarterWorkspace
 from ...management.workspace import Workspace
 from ...management.workspace import WorkspaceGroup
@@ -17,6 +22,11 @@ from ...management.workspace import WorkspaceManager
 def get_workspace_manager() -> WorkspaceManager:
     """Return a new workspace manager."""
     return manage_workspaces()
+
+
+def get_files_manager() -> FilesManager:
+    """Return a new files manager."""
+    return manage_files()
 
 
 def dt_isoformat(dt: Optional[datetime.datetime]) -> Optional[str]:
@@ -270,3 +280,31 @@ def get_deployment(
             raise
 
     raise KeyError('no deployment was specified')
+
+
+def get_file_space(params: Dict[str, Any]) -> FileSpace:
+    """
+    Retrieve the specified file space.
+
+    This function will get a file space from the
+    following parameters:
+
+        * params['file_location']
+    """
+    manager = get_files_manager()
+
+    file_location = params.get('file_location')
+    if file_location:
+        file_location_lower_case = file_location.lower()
+        if (
+            file_location_lower_case != PERSONAL_SPACE and
+            file_location_lower_case != SHARED_SPACE
+        ):
+            raise ValueError(f'invalid file location: {file_location}')
+
+        if file_location_lower_case == PERSONAL_SPACE:
+            return manager.personal_space
+        elif file_location_lower_case == SHARED_SPACE:
+            return manager.shared_space
+
+    raise KeyError('no file space was specified')
