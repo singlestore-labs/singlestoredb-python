@@ -79,8 +79,8 @@ class ExportService(object):
             f'workspaceGroups/{self.workspace_group.id}/'
             'egress/createEgressClusterIdentity',
             json=dict(
-                catalogInfo=json.dumps(self.catalog_info),
-                storageInfo=json.dumps(self.storage_info),
+                catalogInfo=self.catalog_info,
+                storageInfo=self.storage_info,
             ),
         )
 
@@ -98,8 +98,8 @@ class ExportService(object):
             json=dict(
                 databaseName=self.database,
                 tableName=self.table,
-                storageInfo=json.dumps(self.storage_info),
-                catalogInfo=json.dumps(self.catalog_info),
+                storageInfo=self.storage_info,
+                catalogInfo=self.catalog_info,
             ),
         )
 
