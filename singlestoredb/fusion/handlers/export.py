@@ -93,8 +93,8 @@ class CreateClusterIdentity(SQLHandler):
         ).create_cluster_identity()
 
         res = FusionSQLResult()
-        res.add_field('RoleARN', result.STRING)
-        res.set_rows([(out['roleARN'],)])
+        res.add_field('Identity', result.STRING)
+        res.set_rows([(out['identity'],)])
 
         return res
 
