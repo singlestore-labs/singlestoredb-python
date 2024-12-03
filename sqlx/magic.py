@@ -35,8 +35,8 @@ class SqlxMagic(Magics):
         Runs SQL statement against a database, specified by
         SQLAlchemy connect string present in DATABASE_URL environment variable.
 
-        The magic can be used both as a cell magic `%%sql` and
-        line magic `%sql` (see examples below).
+        The magic can be used both as a cell magic `%%sqlx` and
+        line magic `%sqlx` (see examples below).
 
         This is a thin wrapper around the [jupysql](https://jupysql.ploomber.io/) magic,
         allowing multi-threaded execution.
@@ -53,10 +53,10 @@ class SqlxMagic(Magics):
 
           # Cell usage
 
-          %%sql
+          %%sqlx
           DELETE FROM mytable
 
-          %%sql
+          %%sqlx
           DROP TABLE mytable
 
         """
