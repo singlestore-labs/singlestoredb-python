@@ -653,7 +653,6 @@ class FileSpace(FileLocation):
             return self._upload(local_path, path, overwrite=overwrite)
         return self._upload(open(local_path, 'rb'), path, overwrite=overwrite)
 
-    # TODO: remove from FileLocation?
     def upload_folder(
         self,
         local_path: PathLike,
@@ -725,7 +724,6 @@ class FileSpace(FileLocation):
 
         return self.info(path)
 
-    # TODO: remove from FileLocation?
     def mkdir(self, path: PathLike, overwrite: bool = False) -> FilesObject:
         """
         Make a directory in the file space.
@@ -834,7 +832,6 @@ class FileSpace(FileLocation):
                 return False
             raise
 
-    # TODO: remove from FileLocation?
     def is_dir(self, path: PathLike) -> bool:
         """
         Is the given file path a directory?
@@ -856,7 +853,6 @@ class FileSpace(FileLocation):
                 return False
             raise
 
-    # TODO: remove from FileLocation?
     def is_file(self, path: PathLike) -> bool:
         """
         Is the given file path a file?
@@ -889,7 +885,6 @@ class FileSpace(FileLocation):
         ).json()
         return [x['path'] for x in res['content'] or []]
 
-    # TODO: remove from FileLocation?
     def listdir(
         self,
         path: PathLike = '/',
@@ -964,7 +959,6 @@ class FileSpace(FileLocation):
 
         return out
 
-    # TODO: remove from FileLocation?
     def download_folder(
         self,
         path: PathLike,
@@ -1005,7 +999,6 @@ class FileSpace(FileLocation):
 
         self._manager._delete(f'files/fs/{self._location}/{path}')
 
-    # TODO: remove from FileLocation?
     def removedirs(self, path: PathLike) -> None:
         """
         Delete a folder recursively.
@@ -1021,7 +1014,6 @@ class FileSpace(FileLocation):
                 'in Files API',
         )
 
-    # TODO: remove from FileLocation?
     def rmdir(self, path: PathLike) -> None:
         """
         Delete a folder.

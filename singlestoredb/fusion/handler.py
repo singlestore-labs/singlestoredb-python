@@ -74,6 +74,9 @@ BUILTINS = {
     '<column>': '',
     '<catalog-name>': '',
     '<link-name>': '',
+    '<file-type>': r'''
+    file_type = { FILE | FOLDER }
+    ''',
 }
 
 BUILTIN_DEFAULTS = {  # type: ignore
