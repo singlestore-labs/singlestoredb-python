@@ -1,6 +1,8 @@
 coverage
 dash
 fastapi
+ipython
+jupysql
 pandas
 parameterized
 polars
