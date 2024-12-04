@@ -12,7 +12,7 @@ v1.9.0 - December 4, 2024
 -------------------------
 * Add Fusion SQL commands for personal and shared files
 * Add Fusion SQL commands for Iceberg egress service
-* Add `tls_sni_servername` to connection
+* Add ``tls_sni_servername`` to connection
 * Fix special character parsing in connection URLs
 
 v1.8.0 - November 19, 2024
