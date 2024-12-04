@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>singlestoredb.management.workspace.Stage &mdash; SingleStoreDB 1.8.0 documentation</title>
+  <title>singlestoredb.management.workspace.Stage &mdash; SingleStoreDB 1.9.0 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="../_static/js/html5shiv.min.js"></script>
   <![endif]-->
-        <script src="../_static/documentation_options.js?v=b51e6972"></script>
+        <script src="../_static/documentation_options.js?v=c4cb232b"></script>
         <script src="../_static/doctools.js?v=9a2dae69"></script>
         <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/js/theme.js"></script>
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                1.8.0
+                1.9.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -106,18 +106,18 @@
 <h1>singlestoredb.management.workspace.Stage<a class="headerlink" href="#singlestoredb-management-workspace-stage" title="Link to this heading">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="singlestoredb.management.workspace.Stage">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">singlestoredb.management.workspace.</span></span><span class="sig-name descname"><span class="pre">Stage</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">workspace_group</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.html#singlestoredb.management.workspace.WorkspaceGroup" title="singlestoredb.management.workspace.WorkspaceGroup"><span class="pre">WorkspaceGroup</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">manager</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.html#singlestoredb.management.workspace.WorkspaceManager" title="singlestoredb.management.workspace.WorkspaceManager"><span class="pre">WorkspaceManager</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.workspace.Stage" title="Link to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">singlestoredb.management.workspace.</span></span><span class="sig-name descname"><span class="pre">Stage</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">deployment_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">manager</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.html#singlestoredb.management.workspace.WorkspaceManager" title="singlestoredb.management.workspace.WorkspaceManager"><span class="pre">WorkspaceManager</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.workspace.Stage" title="Link to this definition">¶</a></dt>
 <dd><p>Stage manager.</p>
 <p>This object is not instantiated directly.
-It is returned by<a href="singlestoredb.management.workspace.WorkspaceGroup.stage.html"> <code class="docutils literal notranslate"><span class="pre">WorkspaceGroup.stage</span></code></a>.</p>
+It is returned by<a href="singlestoredb.management.workspace.WorkspaceGroup.stage.html"> <code class="docutils literal notranslate"><span class="pre">WorkspaceGroup.stage</span></code></a> or <code class="docutils literal notranslate"><span class="pre">StarterWorkspace.stage</span></code>.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="singlestoredb.management.workspace.Stage.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">workspace_group</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceGroup.html#singlestoredb.management.workspace.WorkspaceGroup" title="singlestoredb.management.workspace.WorkspaceGroup"><span class="pre">WorkspaceGroup</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">manager</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.html#singlestoredb.management.workspace.WorkspaceManager" title="singlestoredb.management.workspace.WorkspaceManager"><span class="pre">WorkspaceManager</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.workspace.Stage.__init__" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">deployment_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">manager</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="singlestoredb.management.workspace.WorkspaceManager.html#singlestoredb.management.workspace.WorkspaceManager" title="singlestoredb.management.workspace.WorkspaceManager"><span class="pre">WorkspaceManager</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#singlestoredb.management.workspace.Stage.__init__" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 <p class="rubric">Methods</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#singlestoredb.management.workspace.Stage.__init__" title="singlestoredb.management.workspace.Stage.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(workspace_group, manager)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#singlestoredb.management.workspace.Stage.__init__" title="singlestoredb.management.workspace.Stage.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(deployment_id, manager)</p></td>
 <td><p></p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="singlestoredb.management.workspace.Stage.download_file.html#singlestoredb.management.workspace.Stage.download_file" title="singlestoredb.management.workspace.Stage.download_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">download_file</span></code></a>(stage_path[, local_path, ...])</p></td>

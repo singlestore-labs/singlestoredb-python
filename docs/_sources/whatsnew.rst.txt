@@ -5,6 +5,12 @@ This document outlines features and improvements from each release.
 .. note:: All releases before v1.0.0 are considered pre-release and
    are for non-production testing and evaluation, and may include
    changes to the API.
+v1.9.0 - December 4, 2024
+-------------------------
+* Add Fusion SQL commands for personal and shared files
+* Add Fusion SQL commands for Iceberg egress service
+* Add `tls_sni_servername` to connection
+* Fix special character parsing in connection URLs
 v1.8.0 - November 19, 2024
 --------------------------
 * Add Fusion SQL commands for scheduled notebooks

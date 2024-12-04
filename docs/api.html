@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStoreDB 1.8.0 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 1.9.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
-        <script src="_static/documentation_options.js?v=b51e6972"></script>
+        <script src="_static/documentation_options.js?v=c4cb232b"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                1.8.0
+                1.9.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -562,7 +562,7 @@ It will return a<a href="singlestoredb.management.workspace.Stage.html"> <code c
 methods and attributes.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.html#singlestoredb.management.workspace.Stage" title="singlestoredb.management.workspace.Stage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage</span></code></a>(workspace_group, manager)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.html#singlestoredb.management.workspace.Stage" title="singlestoredb.management.workspace.Stage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage</span></code></a>(deployment_id, manager)</p></td>
 <td><p>Stage manager.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.open.html#singlestoredb.management.workspace.Stage.open" title="singlestoredb.management.workspace.Stage.open"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.open</span></code></a>(stage_path[, mode, encoding])</p></td>
@@ -620,23 +620,23 @@ methods and attributes.</p>
 <a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rename.html#singlestoredb.management.workspace.StageObject.rename" title="singlestoredb.management.workspace.StageObject.rename"><code class="xref py py-meth docutils literal notranslate"><span class="pre">StageObject.rename()</span></code></a>, and <code class="xref py py-meth docutils literal notranslate"><span class="pre">StageObject.info()</span></code> methods.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.html#singlestoredb.management.workspace.StageObject" title="singlestoredb.management.workspace.StageObject"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject</span></code></a>(name, path, size, type, format, ...)</p></td>
-<td><p>Stage file / folder object.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.html#singlestoredb.management.workspace.StageObject" title="singlestoredb.management.workspace.StageObject"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject</span></code></a></p></td>
+<td><p>alias of <code class="xref py py-class docutils literal notranslate"><span class="pre">FilesObject</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.open.html#singlestoredb.management.workspace.StageObject.open" title="singlestoredb.management.workspace.StageObject.open"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.open</span></code></a>([mode, encoding])</p></td>
-<td><p>Open a Stage path for reading or writing.</p></td>
+<td><p>Open a file path for reading or writing.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.download.html#singlestoredb.management.workspace.StageObject.download" title="singlestoredb.management.workspace.StageObject.download"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.download</span></code></a>([local_path, ...])</p></td>
-<td><p>Download the content of a stage path.</p></td>
+<td><p>Download the content of a file path.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.exists.html#singlestoredb.management.workspace.StageObject.exists" title="singlestoredb.management.workspace.StageObject.exists"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.exists</span></code></a>()</p></td>
 <td><p>Does the file / folder exist?</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.is_dir.html#singlestoredb.management.workspace.StageObject.is_dir" title="singlestoredb.management.workspace.StageObject.is_dir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.is_dir</span></code></a>()</p></td>
-<td><p>Is the stage object a directory?</p></td>
+<td><p>Is the object a directory?</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.is_file.html#singlestoredb.management.workspace.StageObject.is_file" title="singlestoredb.management.workspace.StageObject.is_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.is_file</span></code></a>()</p></td>
-<td><p>Is the stage object a file?</p></td>
+<td><p>Is the object a file?</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.abspath.html#singlestoredb.management.workspace.StageObject.abspath" title="singlestoredb.management.workspace.StageObject.abspath"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.abspath</span></code></a>()</p></td>
 <td><p>Return the full path of the object.</p></td>
@@ -654,16 +654,16 @@ methods and attributes.</p>
 <td><p>Return the creation datetime as a UNIX timestamp.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rename.html#singlestoredb.management.workspace.StageObject.rename" title="singlestoredb.management.workspace.StageObject.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.rename</span></code></a>(new_path, *[, overwrite])</p></td>
-<td><p>Move the stage file to a new location.</p></td>
+<td><p>Move the file to a new location.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.remove.html#singlestoredb.management.workspace.StageObject.remove" title="singlestoredb.management.workspace.StageObject.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.remove</span></code></a>()</p></td>
-<td><p>Delete the stage file.</p></td>
+<td><p>Delete the file.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.removedirs.html#singlestoredb.management.workspace.StageObject.removedirs" title="singlestoredb.management.workspace.StageObject.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.removedirs</span></code></a>()</p></td>
-<td><p>Delete the stage directory recursively.</p></td>
+<td><p>Delete the directory recursively.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rmdir.html#singlestoredb.management.workspace.StageObject.rmdir" title="singlestoredb.management.workspace.StageObject.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.rmdir</span></code></a>()</p></td>
-<td><p>Delete the empty stage directory.</p></td>
+<td><p>Delete the empty directory.</p></td>
 </tr>
 </tbody>
 </table>
