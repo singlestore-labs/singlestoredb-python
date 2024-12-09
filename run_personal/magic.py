@@ -8,6 +8,7 @@ from IPython.core.magic import Magics
 from IPython.core.magic import magics_class
 from IPython.core.magic import needs_local_scope
 from IPython.core.magic import no_var_expand
+from jinja2 import Template
 
 
 @magics_class
@@ -28,11 +29,15 @@ class RunPersonalMagic(Magics):
 
           %run_personal personal_file.ipynb
 
+          %run_personal {{ sample_notebook_name }}
+
         """
-        personal_file = line.strip()
+        template = Template(line.strip())
+        personal_file = template.render(local_ns)
         if not personal_file:
             raise ValueError('No personal file specified.')
-        if personal_file.startswith("'") and personal_file.endswith("'"):
+        if (personal_file.startswith("'") and personal_file.endswith("'")) or \
+           (personal_file.startswith('"') and personal_file.endswith('"')):
             personal_file = personal_file[1:-1]
             if not personal_file:
                 raise ValueError('No personal file specified.')

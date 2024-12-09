@@ -8,6 +8,7 @@ from IPython.core.magic import Magics
 from IPython.core.magic import magics_class
 from IPython.core.magic import needs_local_scope
 from IPython.core.magic import no_var_expand
+from jinja2 import Template
 
 
 @magics_class
@@ -28,11 +29,15 @@ class RunSharedMagic(Magics):
 
           %run_shared shared_file.ipynb
 
+          %run_shared {{ sample_notebook_name }}
+
         """
-        shared_file = line.strip()
+        template = Template(line.strip())
+        shared_file = template.render(local_ns)
         if not shared_file:
             raise ValueError('No shared file specified.')
-        if shared_file.startswith("'") and shared_file.endswith("'"):
+        if (shared_file.startswith("'") and shared_file.endswith("'")) or \
+           (shared_file.startswith('"') and shared_file.endswith('"')):
             shared_file = shared_file[1:-1]
             if not shared_file:
                 raise ValueError('No personal file specified.')
