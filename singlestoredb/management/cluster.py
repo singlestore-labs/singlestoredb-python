@@ -333,7 +333,8 @@ class ClusterManager(Manager):
     default_version = 'v0beta'
 
     #: Base URL if none is specified.
-    default_base_url = config.get_option('management.base_url')
+    default_base_url = config.get_option('management.base_url') \
+        or 'https://api.singlestore.com'
 
     #: Object type
     obj_type = 'cluster'

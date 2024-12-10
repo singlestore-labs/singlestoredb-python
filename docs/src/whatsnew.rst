@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.10.0 - December 10, 2024
+---------------------------
+* Add ``%run_shared`` and ``%run_personal`` magics
+* Update doc for Export service Fusion SQL commands
+
 v1.9.0 - December 4, 2024
 -------------------------
 * Add Fusion SQL commands for personal and shared files

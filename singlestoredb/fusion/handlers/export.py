@@ -55,10 +55,10 @@ class CreateClusterIdentity(SQLHandler):
 
         CREATE CLUSTER IDENTITY
             CATALOG CONFIG '{
-                "type": "GLUE",
+                "catalog_type": "GLUE",
                 "table_format": "ICEBERG",
-                "id": "13983498723498",
-                "region": "us-east-1"
+                "catalog_id": "13983498723498",
+                "catalog_region": "us-east-1"
             }'
             LINK S3 CONFIG '{
                 "region": "us-east-1",
@@ -77,6 +77,8 @@ class CreateClusterIdentity(SQLHandler):
         # Storage
         storage_config = json.loads(params['storage'].get('link_config', '{}') or '{}')
         storage_creds = json.loads(params['storage'].get('link_creds', '{}') or '{}')
+
+        storage_config['provider'] = 'S3'
 
         wsg = get_workspace_group({})
 
@@ -145,12 +147,12 @@ class CreateExport(SQLHandler):
     catalog and link configurations. The source table to export is
     named "customer_data"::
 
-        START EXPORT FROM customer_data
+        START EXPORT FROM my_db.customer_data
             CATALOG CONFIG '{
-                "type": "GLUE",
+                "catalog_type": "GLUE",
                 "table_format": "ICEBERG",
-                "id": "13983498723498",
-                "region": "us-east-1"
+                "catalog_id": "13983498723498",
+                "catalog_region": "us-east-1"
             }'
             LINK S3 CONFIG '{
                 "region": "us-east-1",
@@ -176,6 +178,8 @@ class CreateExport(SQLHandler):
         # Storage
         storage_config = json.loads(params['storage'].get('link_config', '{}') or '{}')
         storage_creds = json.loads(params['storage'].get('link_creds', '{}') or '{}')
+
+        storage_config['provider'] = 'S3'
 
         wsg = get_workspace_group({})
 

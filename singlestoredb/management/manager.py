@@ -43,10 +43,11 @@ class Manager(object):
     """SingleStoreDB manager base class."""
 
     #: Management API version if none is specified.
-    default_version = config.get_option('management.version')
+    default_version = config.get_option('management.version') or 'v1'
 
     #: Base URL if none is specified.
-    default_base_url = config.get_option('management.base_url')
+    default_base_url = config.get_option('management.base_url') \
+        or 'https://api.singlestore.com'
 
     #: Object type
     obj_type = ''
