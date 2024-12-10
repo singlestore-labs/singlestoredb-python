@@ -62,7 +62,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-20.04
+          - ubuntu-24.04
           - macos-13
           - windows-2019
 
@@ -139,14 +139,14 @@ jobs:
           mv ./wheelhouse/*.whl ./dist/.
 
       - name: Archive source dist and wheel
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: artifacts
           path: dist
           retention-days: 2
 
 #    - name: Archive conda
-#       uses: actions/upload-artifact@v3
+#       uses: actions/upload-artifact@v4
 #       with:
 #         name: conda-${{ matrix.os }}
 #         path: ./conda-bld
@@ -164,7 +164,7 @@ jobs:
           pip install twine
 
       - name: Download wheels and sdist
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: artifacts
           path: dist

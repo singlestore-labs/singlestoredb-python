@@ -9,7 +9,7 @@ on:
 jobs:
 
   setup-database:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +47,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-20.04
+          - ubuntu-24.04
         python-version:
           - "3.8"
           - "3.9"
@@ -63,17 +63,17 @@ jobs:
           - 1
         # Manually include a few runs of specific configurations
         include:
-          - os: ubuntu-20.04
+          - os: ubuntu-24.04
             python-version: "3.11"
             driver: mysql
             pure-python: 1
             buffered: 1
-#         - os: ubuntu-20.04
+#         - os: ubuntu-24.04
 #           python-version: "3.11"
 #           driver: mysql
 #           pure-python: 1
 #           buffered: 0
-#         - os: ubuntu-20.04
+#         - os: ubuntu-24.04
 #           python-version: "3.11"
 #           driver: mysql
 #           pure-python: 0
@@ -136,7 +136,7 @@ jobs:
   shutdown-database:
     needs: [setup-database, smoke-test]
     if: ${{ always() }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
