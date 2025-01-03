@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import glob
 import io
 import os
 import re
@@ -23,9 +24,9 @@ from .utils import PathLike
 from .utils import to_datetime
 from .utils import vars_to_str
 
-
 PERSONAL_SPACE = 'personal'
 SHARED_SPACE = 'shared'
+MODELS_SPACE = 'models'
 
 
 class FilesObject(object):
@@ -35,8 +36,8 @@ class FilesObject(object):
     It can belong to either a workspace stage or personal/shared space.
 
     This object is not instantiated directly. It is used in the results
-    of various operations in ``WorkspaceGroup.stage``, ``FilesManager.personal_space``
-    and ``FilesManager.shared_space`` methods.
+    of various operations in ``WorkspaceGroup.stage``, ``FilesManager.personal_space``,
+    ``FilesManager.shared_space`` and ``FilesManager.models_space`` methods.
 
     """
 
@@ -513,6 +514,11 @@ class FilesManager(Manager):
         """Return the shared file space."""
         return FileSpace(SHARED_SPACE, self)
 
+    @property
+    def models_space(self) -> FileSpace:
+        """Return the models file space."""
+        return FileSpace(MODELS_SPACE, self)
+
 
 def manage_files(
     access_token: Optional[str] = None,
@@ -551,7 +557,8 @@ class FileSpace(FileLocation):
     FileSpace manager.
 
     This object is not instantiated directly.
-    It is returned by ``FilesManager.personal_space`` or ``FilesManager.shared_space``.
+    It is returned by ``FilesManager.personal_space``, ``FilesManager.shared_space``
+    or ``FileManger.models_space``.
 
     """
 
@@ -687,10 +694,36 @@ class FileSpace(FileLocation):
             ignore all '*.pyc' files in the directory tree
 
         """
-        raise ManagementError(
-            msg='Operation not supported: directories are currently not allowed '
-                'in Files API',
-        )
+        if not os.path.isdir(local_path):
+            raise NotADirectoryError(f'local path is not a directory: {local_path}')
+
+        if not path:
+            path = local_path
+
+        ignore_files = set()
+        if ignore:
+            if isinstance(ignore, list):
+                for item in ignore:
+                    ignore_files.update(glob.glob(str(item), recursive=recursive))
+            else:
+                ignore_files.update(glob.glob(str(ignore), recursive=recursive))
+
+        for dir_path, _, files in os.walk(str(local_path)):
+            for fname in files:
+                if ignore_files and fname in ignore_files:
+                    continue
+
+                local_file_path = os.path.join(dir_path, fname)
+                remote_path = os.path.join(
+                    path,
+                    local_file_path.lstrip(str(local_path)),
+                )
+                self.upload_file(
+                    local_path=local_file_path,
+                    path=remote_path,
+                    overwrite=overwrite,
+                )
+        return self.info(path)
 
     def _upload(
         self,
@@ -875,15 +908,30 @@ class FileSpace(FileLocation):
                 return False
             raise
 
-    def _list_root_dir(self) -> List[str]:
+    def _listdir(self, path: PathLike, *, recursive: bool = False) -> List[str]:
         """
-        Return the names of files in the root directory.
+        Return the names of files in a directory.
+
         Parameters
         ----------
+        path : Path or str
+            Path to the folder
+        recursive : bool, optional
+            Should folders be listed recursively?
+
         """
         res = self._manager._get(
-            f'files/fs/{self._location}',
+            f'files/fs/{self._location}/{path}',
         ).json()
+
+        if recursive:
+            out = []
+            for item in res['content'] or []:
+                out.append(item['path'])
+                if item['type'] == 'directory':
+                    out.extend(self._listdir(item['path'], recursive=recursive))
+            return out
+
         return [x['path'] for x in res['content'] or []]
 
     def listdir(
@@ -905,13 +953,17 @@ class FileSpace(FileLocation):
         List[str]
 
         """
-        if path == '' or path == '/':
-            return self._list_root_dir()
+        path = re.sub(r'^(\./|/)+', r'', str(path))
+        path = re.sub(r'/+$', r'', path) + '/'
 
-        raise ManagementError(
-            msg='Operation not supported: directories are currently not allowed '
-                'in Files API',
-        )
+        if not self.is_dir(path):
+            raise NotADirectoryError(f'path is not a directory: {path}')
+
+        out = self._listdir(path, recursive=recursive)
+        if path != '/':
+            path_n = len(path.split('/')) - 1
+            out = ['/'.join(x.split('/')[path_n:]) for x in out]
+        return out
 
     def download_file(
         self,
@@ -973,17 +1025,28 @@ class FileSpace(FileLocation):
         Parameters
         ----------
         path : Path or str
-            Path to the file
+            Directory path
         local_path : Path or str
             Path to local directory target location
         overwrite : bool, optional
             Should an existing directory / files be overwritten if they exist?
 
         """
-        raise ManagementError(
-            msg='Operation not supported: directories are currently not allowed '
-                'in Files API',
-        )
+
+        if local_path is not None and not overwrite and os.path.exists(local_path):
+            raise OSError('target path already exists; use overwrite=True to replace')
+
+        if not self.is_dir(path):
+            raise NotADirectoryError(f'path is not a directory: {path}')
+
+        files = self.listdir(path, recursive=True)
+        for f in files:
+            remote_path = os.path.join(path, f)
+            if self.is_dir(remote_path):
+                continue
+            target = os.path.normpath(os.path.join(local_path, f))
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            self.download_file(remote_path, target, overwrite=overwrite)
 
     def remove(self, path: PathLike) -> None:
         """
@@ -1010,10 +1073,10 @@ class FileSpace(FileLocation):
             Path to the file location
 
         """
-        raise ManagementError(
-            msg='Operation not supported: directories are currently not allowed '
-                'in Files API',
-        )
+        if not self.is_dir(path):
+            raise NotADirectoryError('path is not a directory')
+
+        self._manager._delete(f'files/fs/{self._location}/{path}')
 
     def rmdir(self, path: PathLike) -> None:
         """
