@@ -27,6 +27,22 @@ def subscribe(func: Callable[[Dict[str, Any]], None]) -> None:
     _subscribers.add(func)
 
 
+def unsubscribe(func: Callable[[Dict[str, Any]], None]) -> None:
+    """
+    Unsubscribe from SingleStore portal events.
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call when an event is received
+
+    """
+    try:
+        _subscribers.remove(func)
+    except KeyError:
+        pass
+
+
 def _event_handler(stream: Any, ident: Any, msg: Dict[str, Any]) -> None:
     """Handle request on the control stream."""
     if not _subscribers or not isinstance(msg, dict):

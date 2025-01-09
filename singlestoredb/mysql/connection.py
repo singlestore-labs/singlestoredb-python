@@ -729,6 +729,7 @@ class Connection(BaseConnection):
             return
         if self._closed:
             raise err.Error('Already closed')
+        events.unsubscribe(self._handle_event)
         self._closed = True
         if self._sock is None:
             return
