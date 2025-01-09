@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.11.0 - January 9, 2025
+-------------------------
+* Fix connection memory leak
+* Add Fusion SQL commands for managing models
+
 v1.10.0 - December 10, 2024
 ---------------------------
 * Add ``%run_shared`` and ``%run_personal`` magics
