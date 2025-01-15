@@ -428,6 +428,7 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
     args: List[Dict[str, Any]] = []
     attrs = getattr(func, '_singlestoredb_attrs', {})
     name = attrs.get('name', name if name else func.__name__)
+    function_type = attrs.get('function_type', 'udf')
     out: Dict[str, Any] = dict(name=name, args=args)
 
     arg_names = [x for x in signature.parameters]
@@ -488,7 +489,7 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
             arg_type = collapse_dtypes([
                 classify_dtype(x) for x in simplify_dtype(annotations[arg])
             ])
-            sql = dtype_to_sql(arg_type)
+            sql = dtype_to_sql(arg_type, function_type=function_type)
         args.append(dict(name=arg, dtype=arg_type, sql=sql, default=defaults[i]))
 
     if returns_overrides is None \
@@ -504,7 +505,7 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
         out_type = collapse_dtypes([
             classify_dtype(x) for x in simplify_dtype(signature.return_annotation)
         ])
-        sql = dtype_to_sql(out_type)
+        sql = dtype_to_sql(out_type, function_type=function_type)
     out['returns'] = dict(dtype=out_type, sql=sql, default=None)
 
     copied_keys = ['database', 'environment', 'packages', 'resources', 'replace']
@@ -559,7 +560,7 @@ def sql_to_dtype(sql: str) -> str:
     return dtype
 
 
-def dtype_to_sql(dtype: str, default: Any = None) -> str:
+def dtype_to_sql(dtype: str, default: Any = None, function_type: str = 'udf') -> str:
     """
     Convert a collapsed dtype string to a SQL type.
 
@@ -592,7 +593,7 @@ def dtype_to_sql(dtype: str, default: Any = None) -> str:
     if dtype.startswith('array['):
         _, dtypes = dtype.split('[', 1)
         dtypes = dtypes[:-1]
-        item_dtype = dtype_to_sql(dtypes)
+        item_dtype = dtype_to_sql(dtypes, function_type=function_type)
         return f'ARRAY({item_dtype}){nullable}{default_clause}'
 
     if dtype.startswith('tuple['):
@@ -603,8 +604,14 @@ def dtype_to_sql(dtype: str, default: Any = None) -> str:
             name = string.ascii_letters[i]
             if '=' in item:
                 name, item = item.split('=', 1)
-            item_dtypes.append(name + ' ' + dtype_to_sql(item))
-        return f'RECORD({", ".join(item_dtypes)}){nullable}{default_clause}'
+            item_dtypes.append(
+                name + ' ' + dtype_to_sql(item, function_type=function_type),
+            )
+        if function_type == 'udf':
+            return f'RECORD({", ".join(item_dtypes)}){nullable}{default_clause}'
+        else:
+            return f'TABLE({", ".join(item_dtypes)}){nullable}{default_clause}'\
+                .replace(' NOT NULL', '')
 
     return f'{sql_type_map[dtype]}{nullable}{default_clause}'
 

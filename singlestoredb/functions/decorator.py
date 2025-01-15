@@ -18,7 +18,7 @@ def listify(x: Any) -> List[Any]:
     return [x]
 
 
-def udf(
+def _func(
     func: Optional[Callable[..., Any]] = None,
     *,
     name: Optional[str] = None,
@@ -26,44 +26,9 @@ def udf(
     returns: Optional[str] = None,
     data_format: Optional[str] = None,
     include_masks: bool = False,
+    function_type: str = 'udf',
 ) -> Callable[..., Any]:
-    """
-    Apply attributes to a UDF.
-
-    Parameters
-    ----------
-    func : callable, optional
-        The UDF to apply parameters to
-    name : str, optional
-        The name to use for the UDF in the database
-    args : str | Callable | List[str | Callable] | Dict[str, str | Callable], optional
-        Specifies the data types of the function arguments. Typically,
-        the function data types are derived from the function parameter
-        annotations. These annotations can be overridden. If the function
-        takes a single type for all parameters, `args` can be set to a
-        SQL string describing all parameters. If the function takes more
-        than one parameter and all of the parameters are being manually
-        defined, a list of SQL strings may be used (one for each parameter).
-        A dictionary of SQL strings may be used to specify a parameter type
-        for a subset of parameters; the keys are the names of the
-        function parameters. Callables may also be used for datatypes. This
-        is primarily for using the functions in the ``dtypes`` module that
-        are associated with SQL types with all default options (e.g., ``dt.FLOAT``).
-    returns : str, optional
-        Specifies the return data type of the function. If not specified,
-        the type annotation from the function is used.
-    data_format : str, optional
-        The data format of each parameter: python, pandas, arrow, polars
-    include_masks : bool, optional
-        Should boolean masks be included with each input parameter to indicate
-        which elements are NULL? This is only used when a input parameters are
-        configured to a vector type (numpy, pandas, polars, arrow).
-
-    Returns
-    -------
-    Callable
-
-    """
+    """Generic wrapper for UDF and TVF decorators."""
     if args is None:
         pass
     elif isinstance(args, (list, tuple)):
@@ -114,6 +79,7 @@ def udf(
             returns=returns,
             data_format=data_format,
             include_masks=include_masks,
+            function_type=function_type,
         ).items() if v is not None
     }
 
@@ -136,7 +102,127 @@ def udf(
     return functools.wraps(func)(wrapper)
 
 
+def udf(
+    func: Optional[Callable[..., Any]] = None,
+    *,
+    name: Optional[str] = None,
+    args: Optional[Union[DataType, List[DataType], Dict[str, DataType]]] = None,
+    returns: Optional[str] = None,
+    data_format: Optional[str] = None,
+    include_masks: bool = False,
+) -> Callable[..., Any]:
+    """
+    Apply attributes to a UDF.
+
+    Parameters
+    ----------
+    func : callable, optional
+        The UDF to apply parameters to
+    name : str, optional
+        The name to use for the UDF in the database
+    args : str | Callable | List[str | Callable] | Dict[str, str | Callable], optional
+        Specifies the data types of the function arguments. Typically,
+        the function data types are derived from the function parameter
+        annotations. These annotations can be overridden. If the function
+        takes a single type for all parameters, `args` can be set to a
+        SQL string describing all parameters. If the function takes more
+        than one parameter and all of the parameters are being manually
+        defined, a list of SQL strings may be used (one for each parameter).
+        A dictionary of SQL strings may be used to specify a parameter type
+        for a subset of parameters; the keys are the names of the
+        function parameters. Callables may also be used for datatypes. This
+        is primarily for using the functions in the ``dtypes`` module that
+        are associated with SQL types with all default options (e.g., ``dt.FLOAT``).
+    returns : str, optional
+        Specifies the return data type of the function. If not specified,
+        the type annotation from the function is used.
+    data_format : str, optional
+        The data format of each parameter: python, pandas, arrow, polars
+    include_masks : bool, optional
+        Should boolean masks be included with each input parameter to indicate
+        which elements are NULL? This is only used when a input parameters are
+        configured to a vector type (numpy, pandas, polars, arrow).
+
+    Returns
+    -------
+    Callable
+
+    """
+    return _func(
+        func=func,
+        name=name,
+        args=args,
+        returns=returns,
+        data_format=data_format,
+        include_masks=include_masks,
+        function_type='udf',
+    )
+
+
 udf.pandas = functools.partial(udf, data_format='pandas')  # type: ignore
 udf.polars = functools.partial(udf, data_format='polars')  # type: ignore
 udf.arrow = functools.partial(udf, data_format='arrow')  # type: ignore
 udf.numpy = functools.partial(udf, data_format='numpy')  # type: ignore
+
+
+def tvf(
+    func: Optional[Callable[..., Any]] = None,
+    *,
+    name: Optional[str] = None,
+    args: Optional[Union[DataType, List[DataType], Dict[str, DataType]]] = None,
+    returns: Optional[str] = None,
+    data_format: Optional[str] = None,
+    include_masks: bool = False,
+) -> Callable[..., Any]:
+    """
+    Apply attributes to a TVF.
+
+    Parameters
+    ----------
+    func : callable, optional
+        The TVF to apply parameters to
+    name : str, optional
+        The name to use for the TVF in the database
+    args : str | Callable | List[str | Callable] | Dict[str, str | Callable], optional
+        Specifies the data types of the function arguments. Typically,
+        the function data types are derived from the function parameter
+        annotations. These annotations can be overridden. If the function
+        takes a single type for all parameters, `args` can be set to a
+        SQL string describing all parameters. If the function takes more
+        than one parameter and all of the parameters are being manually
+        defined, a list of SQL strings may be used (one for each parameter).
+        A dictionary of SQL strings may be used to specify a parameter type
+        for a subset of parameters; the keys are the names of the
+        function parameters. Callables may also be used for datatypes. This
+        is primarily for using the functions in the ``dtypes`` module that
+        are associated with SQL types with all default options (e.g., ``dt.FLOAT``).
+    returns : str, optional
+        Specifies the return data type of the function. If not specified,
+        the type annotation from the function is used.
+    data_format : str, optional
+        The data format of each parameter: python, pandas, arrow, polars
+    include_masks : bool, optional
+        Should boolean masks be included with each input parameter to indicate
+        which elements are NULL? This is only used when a input parameters are
+        configured to a vector type (numpy, pandas, polars, arrow).
+
+    Returns
+    -------
+    Callable
+
+    """
+    return _func(
+        func=func,
+        name=name,
+        args=args,
+        returns=returns,
+        data_format=data_format,
+        include_masks=include_masks,
+        function_type='tvf',
+    )
+
+
+tvf.pandas = functools.partial(tvf, data_format='pandas')  # type: ignore
+tvf.polars = functools.partial(tvf, data_format='polars')  # type: ignore
+tvf.arrow = functools.partial(tvf, data_format='arrow')  # type: ignore
+tvf.numpy = functools.partial(tvf, data_format='numpy')  # type: ignore

@@ -158,32 +158,91 @@ def make_func(
     attrs = getattr(func, '_singlestoredb_attrs', {})
     data_format = attrs.get('data_format') or 'python'
     include_masks = attrs.get('include_masks', False)
+    function_type = attrs.get('function_type', 'udf').lower()
     info: Dict[str, Any] = {}
 
-    if data_format == 'python':
-        async def do_func(
-            row_ids: Sequence[int],
-            rows: Sequence[Sequence[Any]],
-        ) -> Tuple[
-            Sequence[int],
-            List[Tuple[Any]],
-        ]:
-            '''Call function on given rows of data.'''
-            return row_ids, list(zip(func_map(func, rows)))
+    if function_type == 'tvf':
+        if data_format == 'python':
+            async def do_func(
+                row_ids: Sequence[int],
+                rows: Sequence[Sequence[Any]],
+            ) -> Tuple[
+                Sequence[int],
+                List[Tuple[Any]],
+            ]:
+                '''Call function on given rows of data.'''
+                out_ids: List[int] = []
+                out = []
+                for i, res in zip(row_ids, func_map(func, rows)):
+                    out.extend(res)
+                    out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
+                return out_ids, out
+
+        else:
+            # Vector formats use the same function wrapper
+            async def do_func(  # type: ignore
+                row_ids: Sequence[int],
+                cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
+            ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
+                '''Call function on given cols of data.'''
+                if include_masks:
+                    out = func(*cols)
+                    assert isinstance(out, tuple)
+                    return row_ids, [out]
+
+                out_ids, out = [], []
+                res = func(*[x[0] for x in cols])
+                for vec in res:
+                    # C extension only supports Python objects as strings
+                    if data_format == 'numpy' and str(vec.dtype)[:2] in ['<U', '<S']:
+                        vec = vec.astype(object)
+                    out.append((vec, None))
+
+                # NOTE: There is no way to determine which row ID belongs to
+                #        each result row, so we just have to use the same
+                #        row ID for all rows in the result.
+                if data_format == 'numpy':
+                    import numpy as np
+                    out_ids = np.array([row_ids[0]] * len(out[0][0]))
+                elif data_format == 'polars':
+                    import polars as pl
+                    out_ids = pl.Series([row_ids[0]] * len(out[0][0]))
+                elif data_format == 'arrow':
+                    import pyarrow as pa
+                    out_ids = pa.array([row_ids[0]] * len(out[0][0]))
+                elif data_format == 'pandas':
+                    import pandas as pd
+                    out_ids = pd.Series([row_ids[0]] * len(out[0][0]))
+
+                return out_ids, out
 
     else:
-        # Vector formats use the same function wrapper
-        async def do_func(  # type: ignore
-            row_ids: Sequence[int],
-            cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-        ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
-            '''Call function on given cols of data.'''
-            # TODO: only supports a single return value
-            if include_masks:
-                out = func(*cols)
-                assert isinstance(out, tuple)
-                return row_ids, [out]
-            return row_ids, [(func(*[x[0] for x in cols]), None)]
+        if data_format == 'python':
+            async def do_func(
+                row_ids: Sequence[int],
+                rows: Sequence[Sequence[Any]],
+            ) -> Tuple[
+                Sequence[int],
+                List[Tuple[Any]],
+            ]:
+                '''Call function on given rows of data.'''
+                return row_ids, list(zip(func_map(func, rows)))
+
+        else:
+            # Vector formats use the same function wrapper
+            async def do_func(  # type: ignore
+                row_ids: Sequence[int],
+                cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
+            ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
+                '''Call function on given cols of data.'''
+                if include_masks:
+                    out = func(*cols)
+                    assert isinstance(out, tuple)
+                    return row_ids, [out]
+                out = func(*[x[0] for x in cols])
+                if isinstance(out, tuple):
+                    return row_ids, [(x, None) for x in out]
+                return row_ids, [(out, None)]
 
     do_func.__name__ = name
     do_func.__doc__ = func.__doc__
@@ -196,6 +255,9 @@ def make_func(
     # Set data format
     info['data_format'] = data_format
 
+    # Set function type
+    info['function_type'] = function_type
+
     # Setup argument types for rowdat_1 parser
     colspec = []
     for x in sig['args']:
@@ -205,11 +267,21 @@ def make_func(
         colspec.append((x['name'], rowdat_1_type_map[dtype]))
     info['colspec'] = colspec
 
+    def parse_return_type(s: str) -> List[str]:
+        if s.startswith('tuple['):
+            return s[6:-1].split(',')
+        if s.startswith('array[tuple['):
+            return s[12:-2].split(',')
+        return [s]
+
     # Setup return type
-    dtype = sig['returns']['dtype'].replace('?', '')
-    if dtype not in rowdat_1_type_map:
-        raise TypeError(f'no data type mapping for {dtype}')
-    info['returns'] = [rowdat_1_type_map[dtype]]
+    returns = []
+    for x in parse_return_type(sig['returns']['dtype']):
+        dtype = x.replace('?', '')
+        if dtype not in rowdat_1_type_map:
+            raise TypeError(f'no data type mapping for {dtype}')
+        returns.append(rowdat_1_type_map[dtype])
+    info['returns'] = returns
 
     return do_func, info
 
@@ -233,7 +305,7 @@ class Application(object):
             * Function aliases : <pkg1>.[<func1@alias1,func2@alias2,...]
             * Multiple packages : <pkg1>.<func1>:<pkg2>.<func2>
     app_mode : str, optional
-        The mode of operation for the application: remote or collocated
+        The mode of operation for the application: remote, managed, or collocated
     url : str, optional
         The URL of the function API
     data_format : str, optional
