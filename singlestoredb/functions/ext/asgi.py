@@ -192,6 +192,14 @@ def make_func(
 
                 out_ids, out = [], []
                 res = func(*[x[0] for x in cols])
+                rtype = str(type(res)).lower()
+
+                # Map tables / dataframes to a list of columns
+                if 'dataframe' in rtype:
+                    res = [res[x] for x in res.columns]
+                elif 'table' in rtype:
+                    res = res.columns
+
                 for vec in res:
                     # C extension only supports Python objects as strings
                     if data_format == 'numpy' and str(vec.dtype)[:2] in ['<U', '<S']:
@@ -239,9 +247,14 @@ def make_func(
                     out = func(*cols)
                     assert isinstance(out, tuple)
                     return row_ids, [out]
+
                 out = func(*[x[0] for x in cols])
+
+                # Multiple return values
                 if isinstance(out, tuple):
                     return row_ids, [(x, None) for x in out]
+
+                # Single return value
                 return row_ids, [(out, None)]
 
     do_func.__name__ = name
