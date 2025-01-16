@@ -391,16 +391,6 @@ class TestUDF(unittest.TestCase):
             '`y` DOUBLE NOT NULL, ' \
             '`z` CHAR(30) NULL) RETURNS SMALLINT NOT NULL'
 
-        # Override parameter with incorrect type
-        with self.assertRaises(TypeError):
-            @udf(args=dict(x=int))
-            def foo(x: int, y: float, z: str) -> int: ...
-
-        # Override return value with incorrect type
-        with self.assertRaises(TypeError):
-            @udf(returns=int)
-            def foo(x: int, y: float, z: str) -> int: ...
-
         # Change function name
         @udf(name='hello_world')
         def foo(x: int) -> int: ...

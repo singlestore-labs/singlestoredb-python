@@ -190,7 +190,7 @@ def make_func(
                     assert isinstance(out, tuple)
                     return row_ids, [out]
 
-                out_ids, out = [], []
+                out = []
                 res = func(*[x[0] for x in cols])
                 rtype = str(type(res)).lower()
 
@@ -209,20 +209,20 @@ def make_func(
                 # NOTE: There is no way to determine which row ID belongs to
                 #        each result row, so we just have to use the same
                 #        row ID for all rows in the result.
-                if data_format == 'numpy':
-                    import numpy as np
-                    out_ids = np.array([row_ids[0]] * len(out[0][0]))
-                elif data_format == 'polars':
+                if data_format == 'polars':
                     import polars as pl
-                    out_ids = pl.Series([row_ids[0]] * len(out[0][0]))
+                    array_cls = pl.Series
                 elif data_format == 'arrow':
                     import pyarrow as pa
-                    out_ids = pa.array([row_ids[0]] * len(out[0][0]))
+                    array_cls = pa.array
                 elif data_format == 'pandas':
                     import pandas as pd
-                    out_ids = pd.Series([row_ids[0]] * len(out[0][0]))
+                    array_cls = pd.Series
+                else:
+                    import numpy as np
+                    array_cls = np.array
 
-                return out_ids, out
+                return array_cls([row_ids[0]] * len(out[0][0])), out
 
     else:
         if data_format == 'python':

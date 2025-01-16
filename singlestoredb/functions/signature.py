@@ -312,7 +312,10 @@ def classify_dtype(dtype: Any) -> str:
     if is_int:
         return int_type_map.get(name, 'int64')
 
-    raise TypeError(f'unsupported type annotation: {dtype}')
+    raise TypeError(
+        f'unsupported type annotation: {dtype}; '
+        'use `args`/`returns` on the @udf/@tvf decotator to specify the data type',
+    )
 
 
 def collapse_dtypes(dtypes: Union[str, List[str]]) -> str:
@@ -449,6 +452,7 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
 
     args_overrides = attrs.get('args', None)
     returns_overrides = attrs.get('returns', None)
+    output_fields = attrs.get('output_fields', None)
 
     spec_diff = set(arg_names).difference(set(annotations.keys()))
 
@@ -499,6 +503,22 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
     if isinstance(returns_overrides, str):
         sql = returns_overrides
         out_type = sql_to_dtype(sql)
+    elif isinstance(returns_overrides, list):
+        sqls = []
+        out_types = []
+        for i, item in enumerate(returns_overrides):
+            if not isinstance(item, str):
+                raise TypeError(f'unrecognized type for return value: {item}')
+            if output_fields:
+                sqls.append(f'`{output_fields[i]}` {item}')
+            else:
+                sqls.append(f'{string.ascii_letters[i]} {item}')
+            out_types.append(sql_to_dtype(item))
+        if function_type == 'tvf':
+            sql = 'TABLE({})'.format(', '.join(sqls))
+        else:
+            sql = 'RECORD({})'.format(', '.join(sqls))
+        out_type = 'tuple[{}]'.format(','.join(out_types))
     elif returns_overrides is not None and not isinstance(returns_overrides, str):
         raise TypeError(f'unrecognized type for return value: {returns_overrides}')
     else:
