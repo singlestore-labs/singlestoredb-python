@@ -202,6 +202,12 @@ register_option(
 )
 
 register_option(
+    'parse_json', 'bool', check_bool, True,
+    'Parse JSON values into Python objects?',
+    environ='SINGLESTOREDB_PARSE_JSON',
+)
+
+register_option(
     'connect_timeout', 'int', check_int, 10,
     'The timeout for connecting to the database in seconds. '
     '(default: 10, min: 1, max: 31536000)',
