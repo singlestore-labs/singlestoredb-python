@@ -1317,6 +1317,7 @@ def connect(
     track_env: Optional[bool] = None,
     enable_extended_data_types: Optional[bool] = None,
     vector_data_format: Optional[str] = None,
+    parse_json: Optional[bool] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
