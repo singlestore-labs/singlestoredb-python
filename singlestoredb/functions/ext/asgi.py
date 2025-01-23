@@ -24,6 +24,7 @@ Example
 """
 import argparse
 import asyncio
+import dataclasses
 import importlib.util
 import io
 import itertools
@@ -136,6 +137,14 @@ def get_func_names(funcs: str) -> List[Tuple[str, str]]:
     return out
 
 
+def as_tuple(x: Any) -> Any:
+    if hasattr(x, 'model_fields'):
+        return tuple(x.model_fields.values())
+    if dataclasses.is_dataclass(x):
+        return dataclasses.astuple(x)
+    return x
+
+
 def make_func(
     name: str,
     func: Callable[..., Any],
@@ -174,7 +183,7 @@ def make_func(
                 out_ids: List[int] = []
                 out = []
                 for i, res in zip(row_ids, func_map(func, rows)):
-                    out.extend(res)
+                    out.extend(as_tuple(res))
                     out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
                 return out_ids, out
 
@@ -234,7 +243,7 @@ def make_func(
                 List[Tuple[Any]],
             ]:
                 '''Call function on given rows of data.'''
-                return row_ids, list(zip(func_map(func, rows)))
+                return row_ids, [as_tuple(x) for x in zip(func_map(func, rows))]
 
         else:
             # Vector formats use the same function wrapper

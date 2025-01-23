@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # type: ignore
 """SingleStoreDB UDF testing."""
+import dataclasses
 import datetime
 import re
 import unittest
@@ -11,9 +12,11 @@ from typing import TypeVar
 from typing import Union
 
 import numpy as np
+import pydantic
 
 from ..functions import dtypes as dt
 from ..functions import signature as sig
+from ..functions import tvf
 from ..functions import udf
 
 
@@ -28,7 +31,7 @@ def to_sql(x):
     out = sig.signature_to_sql(sig.get_signature(x))
     out = re.sub(r'^CREATE EXTERNAL FUNCTION ', r'', out)
     out = re.sub(r' AS REMOTE SERVICE.+$', r'', out)
-    return out
+    return out.strip()
 
 
 class TestUDF(unittest.TestCase):
@@ -99,27 +102,27 @@ class TestUDF(unittest.TestCase):
 
         # Tuple
         def foo() -> Tuple[int, float, str]: ...
-        assert to_sql(foo) == '`foo`() RETURNS RECORD(a BIGINT NOT NULL, ' \
-            'b DOUBLE NOT NULL, ' \
-            'c TEXT NOT NULL) NOT NULL'
+        assert to_sql(foo) == '`foo`() RETURNS RECORD(`a` BIGINT NOT NULL, ' \
+            '`b` DOUBLE NOT NULL, ' \
+            '`c` TEXT NOT NULL) NOT NULL'
 
         # Optional tuple
         def foo() -> Optional[Tuple[int, float, str]]: ...
-        assert to_sql(foo) == '`foo`() RETURNS RECORD(a BIGINT NOT NULL, ' \
-            'b DOUBLE NOT NULL, ' \
-            'c TEXT NOT NULL) NULL'
+        assert to_sql(foo) == '`foo`() RETURNS RECORD(`a` BIGINT NOT NULL, ' \
+            '`b` DOUBLE NOT NULL, ' \
+            '`c` TEXT NOT NULL) NULL'
 
         # Optional tuple with optional element
         def foo() -> Optional[Tuple[int, float, Optional[str]]]: ...
-        assert to_sql(foo) == '`foo`() RETURNS RECORD(a BIGINT NOT NULL, ' \
-            'b DOUBLE NOT NULL, ' \
-            'c TEXT NULL) NULL'
+        assert to_sql(foo) == '`foo`() RETURNS RECORD(`a` BIGINT NOT NULL, ' \
+            '`b` DOUBLE NOT NULL, ' \
+            '`c` TEXT NULL) NULL'
 
         # Optional tuple with optional union element
         def foo() -> Optional[Tuple[int, Optional[Union[float, int]], str]]: ...
-        assert to_sql(foo) == '`foo`() RETURNS RECORD(a BIGINT NOT NULL, ' \
-            'b DOUBLE NULL, ' \
-            'c TEXT NOT NULL) NULL'
+        assert to_sql(foo) == '`foo`() RETURNS RECORD(`a` BIGINT NOT NULL, ' \
+            '`b` DOUBLE NULL, ' \
+            '`c` TEXT NOT NULL) NULL'
 
         # Unknown type
         def foo() -> set: ...
@@ -182,21 +185,21 @@ class TestUDF(unittest.TestCase):
 
         # Tuple
         def foo(x: Tuple[int, float, str]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` RECORD(a BIGINT NOT NULL, ' \
-            'b DOUBLE NOT NULL, ' \
-            'c TEXT NOT NULL) NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` RECORD(`a` BIGINT NOT NULL, ' \
+            '`b` DOUBLE NOT NULL, ' \
+            '`c` TEXT NOT NULL) NOT NULL) RETURNS NULL'
 
         # Optional tuple with optional element
         def foo(x: Optional[Tuple[int, float, Optional[str]]]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` RECORD(a BIGINT NOT NULL, ' \
-            'b DOUBLE NOT NULL, ' \
-            'c TEXT NULL) NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` RECORD(`a` BIGINT NOT NULL, ' \
+            '`b` DOUBLE NOT NULL, ' \
+            '`c` TEXT NULL) NULL) RETURNS NULL'
 
         # Optional tuple with optional union element
         def foo(x: Optional[Tuple[int, Optional[Union[float, int]], str]]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` RECORD(a BIGINT NOT NULL, ' \
-            'b DOUBLE NULL, ' \
-            'c TEXT NOT NULL) NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` RECORD(`a` BIGINT NOT NULL, ' \
+            '`b` DOUBLE NULL, ' \
+            '`c` TEXT NOT NULL) NULL) RETURNS NULL'
 
         # Unknown type
         def foo(x: set) -> None: ...
@@ -401,6 +404,65 @@ class TestUDF(unittest.TestCase):
         def foo(x: int) -> int: ...
         assert to_sql(foo) == '`hello``_``world`(`x` BIGINT NOT NULL) ' \
                               'RETURNS BIGINT NOT NULL'
+
+        @dataclasses.dataclass
+        class MyData:
+            one: Optional[int]
+            two: str
+            three: float
+
+        @udf
+        def foo(x: int) -> MyData: ...
+        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
+            'RETURNS RECORD(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
+            '`three` DOUBLE NOT NULL) NOT NULL'
+
+        @udf(returns=MyData)
+        def foo(x: int) -> Tuple[int, int, int]: ...
+        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
+            'RETURNS RECORD(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
+            '`three` DOUBLE NOT NULL) NOT NULL'
+
+        @tvf
+        def foo(x: int) -> MyData: ...
+        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
+            'RETURNS TABLE(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
+            '`three` DOUBLE NOT NULL)'
+
+        @tvf(returns=MyData)
+        def foo(x: int) -> Tuple[int, int, int]: ...
+        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
+            'RETURNS TABLE(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
+            '`three` DOUBLE NOT NULL)'
+
+        class MyData(pydantic.BaseModel):
+            one: Optional[int]
+            two: str
+            three: float
+
+        @udf
+        def foo(x: int) -> MyData: ...
+        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
+            'RETURNS RECORD(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
+            '`three` DOUBLE NOT NULL) NOT NULL'
+
+        @udf(returns=MyData)
+        def foo(x: int) -> Tuple[int, int, int]: ...
+        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
+            'RETURNS RECORD(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
+            '`three` DOUBLE NOT NULL) NOT NULL'
+
+        @tvf
+        def foo(x: int) -> MyData: ...
+        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
+            'RETURNS TABLE(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
+            '`three` DOUBLE NOT NULL)'
+
+        @tvf(returns=MyData)
+        def foo(x: int) -> Tuple[int, int, int]: ...
+        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
+            'RETURNS TABLE(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
+            '`three` DOUBLE NOT NULL)'
 
     def test_dtypes(self):
         assert dt.BOOL() == 'BOOL NULL'

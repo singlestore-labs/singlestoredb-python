@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import dataclasses
 import datetime
 import inspect
 import numbers
@@ -21,6 +22,12 @@ try:
     has_numpy = True
 except ImportError:
     has_numpy = False
+
+try:
+    import pydantic
+    has_pydantic = True
+except ImportError:
+    has_pydantic = False
 
 from . import dtypes as dt
 from ..mysql.converters import escape_item  # type: ignore
@@ -243,6 +250,9 @@ def classify_dtype(dtype: Any) -> str:
     if isinstance(dtype, list):
         return '|'.join(classify_dtype(x) for x in dtype)
 
+    if isinstance(dtype, str):
+        return sql_to_dtype(dtype)
+
     # Specific types
     if dtype is None or dtype is type(None):  # noqa: E721
         return 'null'
@@ -253,6 +263,21 @@ def classify_dtype(dtype: Any) -> str:
     if dtype is bool:
         return 'bool'
 
+    if dataclasses.is_dataclass(dtype):
+        fields = dataclasses.fields(dtype)
+        item_dtypes = ','.join(
+            f'{classify_dtype(simplify_dtype(x.type))}' for x in fields
+        )
+        return f'tuple[{item_dtypes}]'
+
+    if has_pydantic and inspect.isclass(dtype) and issubclass(dtype, pydantic.BaseModel):
+        fields = dtype.model_fields.values()
+        item_dtypes = ','.join(
+            f'{classify_dtype(simplify_dtype(x.annotation))}'  # type: ignore
+            for x in fields
+        )
+        return f'tuple[{item_dtypes}]'
+
     if not inspect.isclass(dtype):
         # Check for compound types
         origin = typing.get_origin(dtype)
@@ -261,7 +286,7 @@ def classify_dtype(dtype: Any) -> str:
             if origin is Tuple:
                 args = typing.get_args(dtype)
                 item_dtypes = ','.join(classify_dtype(x) for x in args)
-                return f'tuple:{item_dtypes}'
+                return f'tuple[{item_dtypes}]'
 
             # Array types
             elif issubclass(origin, array_types):
@@ -504,28 +529,55 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
         sql = returns_overrides
         out_type = sql_to_dtype(sql)
     elif isinstance(returns_overrides, list):
-        sqls = []
-        out_types = []
-        for i, item in enumerate(returns_overrides):
-            if not isinstance(item, str):
-                raise TypeError(f'unrecognized type for return value: {item}')
-            if output_fields:
-                sqls.append(f'`{output_fields[i]}` {item}')
-            else:
-                sqls.append(f'{string.ascii_letters[i]} {item}')
-            out_types.append(sql_to_dtype(item))
-        if function_type == 'tvf':
-            sql = 'TABLE({})'.format(', '.join(sqls))
-        else:
-            sql = 'RECORD({})'.format(', '.join(sqls))
-        out_type = 'tuple[{}]'.format(','.join(out_types))
+        if not output_fields:
+            output_fields = [
+                string.ascii_letters[i] for i in range(len(returns_overrides))
+            ]
+        out_type = 'tuple[' + collapse_dtypes([
+            classify_dtype(x)
+            for x in simplify_dtype(returns_overrides)
+        ]).replace('|', ',') + ']'
+        sql = dtype_to_sql(
+            out_type, function_type=function_type, field_names=output_fields,
+        )
+    elif dataclasses.is_dataclass(returns_overrides):
+        out_type = collapse_dtypes([
+            classify_dtype(x)
+            for x in simplify_dtype([x.type for x in returns_overrides.fields])
+        ])
+        sql = dtype_to_sql(
+            out_type,
+            function_type=function_type,
+            field_names=[x.name for x in returns_overrides.fields],
+        )
+    elif has_pydantic and inspect.isclass(returns_overrides) \
+            and issubclass(returns_overrides, pydantic.BaseModel):
+        out_type = collapse_dtypes([
+            classify_dtype(x)
+            for x in simplify_dtype([x for x in returns_overrides.model_fields.values()])
+        ])
+        sql = dtype_to_sql(
+            out_type,
+            function_type=function_type,
+            field_names=[x for x in returns_overrides.model_fields.keys()],
+        )
     elif returns_overrides is not None and not isinstance(returns_overrides, str):
         raise TypeError(f'unrecognized type for return value: {returns_overrides}')
     else:
+        if not output_fields:
+            if dataclasses.is_dataclass(signature.return_annotation):
+                output_fields = [
+                    x.name for x in dataclasses.fields(signature.return_annotation)
+                ]
+            elif has_pydantic and inspect.isclass(signature.return_annotation) \
+                    and issubclass(signature.return_annotation, pydantic.BaseModel):
+                output_fields = list(signature.return_annotation.model_fields.keys())
         out_type = collapse_dtypes([
             classify_dtype(x) for x in simplify_dtype(signature.return_annotation)
         ])
-        sql = dtype_to_sql(out_type, function_type=function_type)
+        sql = dtype_to_sql(
+            out_type, function_type=function_type, field_names=output_fields,
+        )
     out['returns'] = dict(dtype=out_type, sql=sql, default=None)
 
     copied_keys = ['database', 'environment', 'packages', 'resources', 'replace']
@@ -580,7 +632,12 @@ def sql_to_dtype(sql: str) -> str:
     return dtype
 
 
-def dtype_to_sql(dtype: str, default: Any = None, function_type: str = 'udf') -> str:
+def dtype_to_sql(
+    dtype: str,
+    default: Any = None,
+    field_names: Optional[List[str]] = None,
+    function_type: str = 'udf',
+) -> str:
     """
     Convert a collapsed dtype string to a SQL type.
 
@@ -590,6 +647,8 @@ def dtype_to_sql(dtype: str, default: Any = None, function_type: str = 'udf') ->
         Simplified data type string
     default : Any, optional
         Default value
+    field_names : List[str], optional
+        Field names for tuple types
 
     Returns
     -------
@@ -621,17 +680,22 @@ def dtype_to_sql(dtype: str, default: Any = None, function_type: str = 'udf') ->
         dtypes = dtypes[:-1]
         item_dtypes = []
         for i, item in enumerate(dtypes.split(',')):
-            name = string.ascii_letters[i]
+            if field_names:
+                name = field_names[i]
+            else:
+                name = string.ascii_letters[i]
             if '=' in item:
                 name, item = item.split('=', 1)
             item_dtypes.append(
-                name + ' ' + dtype_to_sql(item, function_type=function_type),
+                f'`{name}` ' + dtype_to_sql(item, function_type=function_type),
             )
         if function_type == 'udf':
             return f'RECORD({", ".join(item_dtypes)}){nullable}{default_clause}'
         else:
-            return f'TABLE({", ".join(item_dtypes)}){nullable}{default_clause}'\
-                .replace(' NOT NULL', '')
+            return re.sub(
+                r' NOT NULL\s*$', r'',
+                f'TABLE({", ".join(item_dtypes)}){nullable}{default_clause}',
+            )
 
     return f'{sql_type_map[dtype]}{nullable}{default_clause}'
 
