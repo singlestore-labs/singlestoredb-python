@@ -1533,6 +1533,15 @@ static PyObject *read_row_from_packet(
                     if (!py_str) goto error;
                 } else {
                     py_str = PyUnicode_Decode(out, out_l, py_state->encodings[i], py_state->encoding_errors);
+                    if (PyErr_Occurred()) {
+                        PyErr_Clear();
+                        PyErr_Format(
+                            PyExc_UnicodeDecodeError,
+                            "failed to decode string value in column '%S' using encoding '%s'; "
+                            "use the 'encoding_errors' option on the connection to specify how to handle this error",
+                            py_state->py_names[i], py_state->encodings[i]
+                        );
+                    }
                     if (!py_str) goto error;
                 }
                 if (py_state->py_converters[i] == Py_None) {
@@ -1740,6 +1749,15 @@ static PyObject *read_row_from_packet(
                     }
 
                     py_item = PyUnicode_Decode(out, out_l, py_state->encodings[i], py_state->encoding_errors);
+                    if (PyErr_Occurred()) {
+                        PyErr_Clear();
+                        PyErr_Format(
+                            PyExc_UnicodeDecodeError,
+                            "failed to decode string value in column '%S' using encoding '%s'; "
+                            "use the 'encoding_errors' option on the connection to specify how to handle this error",
+                            py_state->py_names[i], py_state->encodings[i]
+                        );
+                    }
                     if (!py_item) goto error;
 
                     // Parse JSON string.

@@ -1841,7 +1841,7 @@ class MySQLResult:
 
     def _read_row_from_packet(self, packet):
         row = []
-        for encoding, converter in self.converters:
+        for i, (encoding, converter) in enumerate(self.converters):
             try:
                 data = packet.read_length_coded_string()
             except IndexError:
@@ -1850,7 +1850,15 @@ class MySQLResult:
                 break
             if data is not None:
                 if encoding is not None:
-                    data = data.decode(encoding, errors=self.encoding_errors)
+                    try:
+                        data = data.decode(encoding, errors=self.encoding_errors)
+                    except UnicodeDecodeError:
+                        raise UnicodeDecodeError(
+                            'failed to decode string value in column '
+                            f"'{self.fields[i].name}' using encoding '{encoding}'; " +
+                            "use the 'encoding_errors' option on the connection " +
+                            'to specify how to handle this error',
+                        )
                 if DEBUG:
                     print('DEBUG: DATA = ', data)
                 if converter is not None:
