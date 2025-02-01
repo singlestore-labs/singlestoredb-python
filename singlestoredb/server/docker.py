@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 """Utilities for running singlestoredb-dev-image."""
+from __future__ import annotations
+
 import atexit
 import os
 import platform
 import secrets
+import time
 import urllib.parse
 from types import TracebackType
 from typing import Any
@@ -14,8 +17,8 @@ from typing import Type
 
 import docker
 
-from . import connect
-from .connection import Connection
+from .. import connect
+from ..connection import Connection
 
 try:
     import pymongo
@@ -132,20 +135,38 @@ class SingleStoreDB:
         for k, v in self.global_vars.items():
             env['SINGLESTORE_SET_GLOBAL_' + k.upper()] = str(v)
 
+        self._saved_server_urls: Dict[str, Optional[str]] = {}
+
         docker_client = docker.from_env()
-
-        self.container = docker_client.containers.run(
-            image,
-            environmen=env,
-            ports=ports,
-            detach=True,
-            **kwargs,
-        )
-
+        self.container = docker_client.containers.run(image, **kwargs)
         atexit.register(self.stop)
 
+        if not self._wait_on_ready():
+            raise RuntimeError('server did not come up properly')
+
+        self._set_server_urls()
+
+    def _set_server_urls(self) -> None:
+        self._saved_server_urls['DATABASE_URL'] = os.environ.get('DATABASE_URL')
+        os.environ['DATABASE_URL'] = self.connection_url
+
+    def _restore_server_urls(self) -> None:
+        for k, v in self._saved_server_urls.items():
+            if v is None:
+                del os.environ[k]
+            else:
+                os.environ[k] = v
+
+    def _wait_on_ready(self) -> bool:
+        for i in range(20):
+            for line in self.logs():
+                if 'INFO: ' in line:
+                    return True
+            time.sleep(3)
+        return False
+
     def logs(self) -> List[str]:
-        return self.container.logs().encode('utf8').split('\n')
+        return self.container.logs().decode('utf8').split('\n')
 
     @property
     def connection_url(self) -> str:
@@ -176,7 +197,7 @@ class SingleStoreDB:
         return f'mongodb://root:{root_password}@' + \
                f'localhost:{self.kai_port}/?authMechanism=PLAIN&loadBalanced=true'
 
-    def connect_kai(self) -> pymongo.MongoClient:
+    def connect_kai(self) -> 'pymongo.MongoClient':
         if not self.kai_enabled:
             raise RuntimeError('kai is not enabled')
         if not has_pymongo:
@@ -192,8 +213,8 @@ class SingleStoreDB:
         import webbrowser
         webbrowser.open(self.studio_url)
 
-    def __enter__(self) -> None:
-        pass
+    def __enter__(self) -> SingleStoreDB:
+        return self
 
     def __exit__(
         self,
@@ -206,5 +227,42 @@ class SingleStoreDB:
 
     def stop(self) -> None:
         if self.container is not None:
+            self._restore_server_urls()
             self.container.stop()
             self.container = None
+
+
+def start(
+    name: Optional[str] = None,
+    root_password: Optional[str] = None,
+    license: Optional[str] = None,
+    enable_kai: bool = False,
+    server_port: int = 3306,
+    studio_port: int = 8080,
+    data_api_port: int = 9000,
+    kai_port: int = 27017,
+    hostname: Optional[str] = None,
+    data_dir: Optional[str] = None,
+    logs_dir: Optional[str] = None,
+    server_dir: Optional[str] = None,
+    global_vars: Optional[Dict[str, Any]] = None,
+    init_sql: Optional[str] = None,
+    image: str = 'ghcr.io/singlestore-labs/singlestoredb-dev:latest',
+) -> SingleStoreDB:
+    return SingleStoreDB(
+        name=name,
+        root_password=root_password,
+        license=license,
+        enable_kai=enable_kai,
+        server_port=server_port,
+        studio_port=studio_port,
+        data_api_port=data_api_port,
+        kai_port=kai_port,
+        hostname=hostname,
+        data_dir=data_dir,
+        logs_dir=logs_dir,
+        server_dir=server_dir,
+        global_vars=global_vars,
+        init_sql=init_sql,
+        image=image,
+    )
