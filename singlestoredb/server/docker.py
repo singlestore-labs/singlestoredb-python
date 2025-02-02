@@ -6,8 +6,10 @@ import atexit
 import os
 import platform
 import secrets
+import socket
 import time
 import urllib.parse
+from contextlib import closing
 from types import TracebackType
 from typing import Any
 from typing import Dict
@@ -26,22 +28,20 @@ try:
 except ImportError:
     has_pymongo = False
 
+DEFAULT_IMAGE = 'ghcr.io/singlestore-labs/singlestoredb-dev:latest'
+
 
 class SingleStoreDB:
 
-    name: Optional[str]
-    hostname: Optional[str]
     root_password: str
-    license: str
     kai_enabled: bool
     server_port: int
     studio_port: int
     data_api_port: int
-    kai_port: int
+    kai_port: Optional[int]
     data_dir: Optional[str]
     logs_dir: Optional[str]
     server_dir: Optional[str]
-    global_vars: Dict[str, Any]
 
     def __init__(
         self,
@@ -49,37 +49,37 @@ class SingleStoreDB:
         root_password: Optional[str] = None,
         license: Optional[str] = None,
         enable_kai: bool = False,
-        server_port: int = 3306,
-        studio_port: int = 8080,
-        data_api_port: int = 9000,
-        kai_port: int = 27017,
+        server_port: Optional[int] = None,
+        studio_port: Optional[int] = None,
+        data_api_port: Optional[int] = None,
+        kai_port: Optional[int] = None,
         hostname: Optional[str] = None,
         data_dir: Optional[str] = None,
         logs_dir: Optional[str] = None,
         server_dir: Optional[str] = None,
         global_vars: Optional[Dict[str, Any]] = None,
         init_sql: Optional[str] = None,
-        image: str = 'ghcr.io/singlestore-labs/singlestoredb-dev:latest',
+        image: str = DEFAULT_IMAGE,
     ):
         self.kai_enabled = enable_kai
-        self.server_port = server_port
-        self.studio_port = studio_port
-        self.data_api_port = data_api_port
-        self.kai_port = kai_port
+        self.kai_port = None
+        self.server_port = server_port or self._get_available_port()
+        self.studio_port = studio_port or self._get_available_port()
+        self.data_api_port = data_api_port or self._get_available_port()
         self.data_dir = data_dir
         self.logs_dir = logs_dir
         self.server_dir = server_dir
-        self.hostname = hostname
 
         # Setup container ports
         ports = {
-            '3306/tcp': server_port,
-            '8080/tcp': studio_port,
-            '9000/tcp': data_api_port,
+            '3306/tcp': self.server_port,
+            '8080/tcp': self.studio_port,
+            '9000/tcp': self.data_api_port,
         }
 
         if enable_kai:
-            ports['27017/tcp'] = kai_port
+            self.kai_port = kai_port or self._get_available_port()
+            ports['27017/tcp'] = self.kai_port
 
         # Setup root password
         self.root_password = root_password or secrets.token_urlsafe(10)
@@ -87,15 +87,13 @@ class SingleStoreDB:
         # Setup license value
         if license is None:
             try:
-                self.license = os.environ['SINGLESTORE_LICENSE']
+                license = os.environ['SINGLESTORE_LICENSE']
             except KeyError:
                 raise ValueError('a SingleStore license must be supplied')
-        else:
-            self.license = license
 
         env = {
             'ROOT_PASSWORD': self.root_password,
-            'SINGLESTORE_LICENSE': self.license,
+            'SINGLESTORE_LICENSE': license,
         }
 
         if enable_kai:
@@ -131,8 +129,7 @@ class SingleStoreDB:
             kwargs['volumes'] = volumes
 
         # Setup global vars
-        self.global_vars = global_vars or {}
-        for k, v in self.global_vars.items():
+        for k, v in (global_vars or {}).items():
             env['SINGLESTORE_SET_GLOBAL_' + k.upper()] = str(v)
 
         self._saved_server_urls: Dict[str, Optional[str]] = {}
@@ -145,6 +142,12 @@ class SingleStoreDB:
             raise RuntimeError('server did not come up properly')
 
         self._set_server_urls()
+
+    def _get_available_port(self) -> int:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+            s.bind(('', 0))
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            return s.getsockname()[1]
 
     def _set_server_urls(self) -> None:
         self._saved_server_urls['DATABASE_URL'] = os.environ.get('DATABASE_URL')
@@ -206,12 +209,16 @@ class SingleStoreDB:
 
     @property
     def studio_url(self) -> str:
-        root_password = urllib.parse.quote_plus(self.root_password)
-        return f'http://root:{root_password}@localhost:{self.studio_port}'
+        return f'http://localhost:{self.studio_port}'
 
     def connect_studio(self) -> None:
         import webbrowser
-        webbrowser.open(self.studio_url)
+
+        if platform.platform().lower().startswith('macos'):
+            chrome_path = r'open -a /Applications/Google\ Chrome.app %s'
+            webbrowser.get(chrome_path).open(self.studio_url, new=2)
+        else:
+            webbrowser.open(self.studio_url, new=2)
 
     def __enter__(self) -> SingleStoreDB:
         return self
@@ -237,18 +244,19 @@ def start(
     root_password: Optional[str] = None,
     license: Optional[str] = None,
     enable_kai: bool = False,
-    server_port: int = 3306,
-    studio_port: int = 8080,
-    data_api_port: int = 9000,
-    kai_port: int = 27017,
+    server_port: Optional[int] = None,
+    studio_port: Optional[int] = None,
+    data_api_port: Optional[int] = None,
+    kai_port: Optional[int] = None,
     hostname: Optional[str] = None,
     data_dir: Optional[str] = None,
     logs_dir: Optional[str] = None,
     server_dir: Optional[str] = None,
     global_vars: Optional[Dict[str, Any]] = None,
     init_sql: Optional[str] = None,
-    image: str = 'ghcr.io/singlestore-labs/singlestoredb-dev:latest',
+    image: str = DEFAULT_IMAGE,
 ) -> SingleStoreDB:
+    """Start a SingleStoreDB server using Docker."""
     return SingleStoreDB(
         name=name,
         root_password=root_password,
