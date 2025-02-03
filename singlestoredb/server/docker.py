@@ -46,6 +46,7 @@ class SingleStoreDB:
     def __init__(
         self,
         name: Optional[str] = None,
+        *,
         root_password: Optional[str] = None,
         license: Optional[str] = None,
         enable_kai: bool = False,
@@ -60,6 +61,7 @@ class SingleStoreDB:
         global_vars: Optional[Dict[str, Any]] = None,
         init_sql: Optional[str] = None,
         image: str = DEFAULT_IMAGE,
+        database: Optional[str] = None,
     ):
         self.kai_enabled = enable_kai
         self.kai_port = None
@@ -118,13 +120,13 @@ class SingleStoreDB:
         # Setup volumes
         volumes: Dict[str, Dict[str, str]] = {}
         if data_dir:
-            {data_dir: {'bind': '/data', 'mode': 'rw'}}
+            volumes[data_dir] = {'bind': '/data', 'mode': 'rw'}
         if logs_dir:
-            {logs_dir: {'bind': '/logs', 'mode': 'ro'}}
+            volumes[logs_dir] = {'bind': '/logs', 'mode': 'ro'}
         if server_dir:
-            {server_dir: {'bind': '/server', 'mode': 'ro'}}
+            volumes[server_dir] = {'bind': '/server', 'mode': 'ro'}
         if init_sql:
-            {init_sql: {'bind': '/init.sql', 'mode': 'ro'}}
+            volumes[os.path.abspath(init_sql)] = {'bind': '/init.sql', 'mode': 'ro'}
         if volumes:
             kwargs['volumes'] = volumes
 
@@ -141,7 +143,14 @@ class SingleStoreDB:
         if not self._wait_on_ready():
             raise RuntimeError('server did not come up properly')
 
+        self._database = database
         self._set_server_urls()
+
+    def __str__(self) -> str:
+        return f"SingleStoreDB('{self.connection_url}')"
+
+    def __repr__(self) -> str:
+        return str(self)
 
     def _get_available_port(self) -> int:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
@@ -152,6 +161,8 @@ class SingleStoreDB:
     def _set_server_urls(self) -> None:
         self._saved_server_urls['DATABASE_URL'] = os.environ.get('DATABASE_URL')
         os.environ['DATABASE_URL'] = self.connection_url
+        self._saved_server_urls['SINGLESTOREDB_URL'] = os.environ.get('SINGLESTOREDB_URL')
+        os.environ['SINGLESTOREDB_URL'] = self.connection_url
 
     def _restore_server_urls(self) -> None:
         for k, v in self._saved_server_urls.items():
@@ -173,15 +184,17 @@ class SingleStoreDB:
 
     @property
     def connection_url(self) -> str:
+        dbname = f'/{self._database}' if self._database else ''
         root_password = urllib.parse.quote_plus(self.root_password)
         return f'singlestoredb://root:{root_password}@' + \
-               f'localhost:{self.server_port}'
+               f'localhost:{self.server_port}{dbname}'
 
     @property
     def http_connection_url(self) -> str:
+        dbname = f'/{self._database}' if self._database else ''
         root_password = urllib.parse.quote_plus(self.root_password)
         return f'singlestoredb+http://root:{root_password}@' + \
-               f'localhost:{self.data_api_port}'
+               f'localhost:{self.data_api_port}{dbname}'
 
     def connect(
         self,
@@ -213,7 +226,6 @@ class SingleStoreDB:
 
     def connect_studio(self) -> None:
         import webbrowser
-
         if platform.platform().lower().startswith('macos'):
             chrome_path = r'open -a /Applications/Google\ Chrome.app %s'
             webbrowser.get(chrome_path).open(self.studio_url, new=2)
@@ -255,6 +267,7 @@ def start(
     global_vars: Optional[Dict[str, Any]] = None,
     init_sql: Optional[str] = None,
     image: str = DEFAULT_IMAGE,
+    database: Optional[str] = None,
 ) -> SingleStoreDB:
     """Start a SingleStoreDB server using Docker."""
     return SingleStoreDB(
@@ -273,4 +286,5 @@ def start(
         global_vars=global_vars,
         init_sql=init_sql,
         image=image,
+        database=database,
     )
