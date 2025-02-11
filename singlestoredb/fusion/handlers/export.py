@@ -43,8 +43,6 @@ class CreateClusterIdentity(SQLHandler):
 
     Remarks
     -------
-    * ``FROM <table>`` specifies the SingleStore table to export. The same name will
-      be used for the exported table.
     * ``CATALOG`` specifies the details of the catalog to connect to.
     * ``LINK`` specifies the details of the data storage to connect to.
 
@@ -68,6 +66,8 @@ class CreateClusterIdentity(SQLHandler):
         ;
 
     """
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         # Catalog
@@ -163,6 +163,8 @@ class CreateExport(SQLHandler):
 
     """  # noqa
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         # From table
         if isinstance(params['from_table'], str):
@@ -216,6 +218,8 @@ class ShowExport(SQLHandler):
     export_id = '<export-id>'
 
     """
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         wsg = get_workspace_group({})

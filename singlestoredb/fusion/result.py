@@ -241,7 +241,7 @@ class FusionSQLResult(object):
         for row in self.rows:
             found = True
             for i, liker in likers:
-                if not liker.match(row[i]):
+                if row[i] is None or not liker.match(row[i]):
                     found = False
                     break
             if found:
