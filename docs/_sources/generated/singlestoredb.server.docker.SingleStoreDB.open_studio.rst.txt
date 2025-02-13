@@ -1,0 +1,4 @@
+﻿singlestoredb.server.docker.SingleStoreDB.open\_studio
+======================================================
+.. currentmodule:: singlestoredb.server.docker
+.. automethod:: SingleStoreDB.open_studio

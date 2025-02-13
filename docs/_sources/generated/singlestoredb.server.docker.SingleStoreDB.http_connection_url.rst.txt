@@ -1,0 +1,4 @@
+﻿singlestoredb.server.docker.SingleStoreDB.http\_connection\_url
+===============================================================
+.. currentmodule:: singlestoredb.server.docker
+.. autoproperty:: SingleStoreDB.http_connection_url

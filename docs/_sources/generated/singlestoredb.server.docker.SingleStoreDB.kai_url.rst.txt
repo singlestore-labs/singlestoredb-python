@@ -1,0 +1,4 @@
+﻿singlestoredb.server.docker.SingleStoreDB.kai\_url
+==================================================
+.. currentmodule:: singlestoredb.server.docker
+.. autoproperty:: SingleStoreDB.kai_url

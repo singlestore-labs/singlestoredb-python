@@ -1,0 +1,4 @@
+﻿singlestoredb.server.docker.start
+=================================
+.. currentmodule:: singlestoredb.server.docker
+.. autofunction:: start

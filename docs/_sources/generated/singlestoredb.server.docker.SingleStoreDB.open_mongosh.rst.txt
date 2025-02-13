@@ -1,0 +1,4 @@
+﻿singlestoredb.server.docker.SingleStoreDB.open\_mongosh
+=======================================================
+.. currentmodule:: singlestoredb.server.docker
+.. automethod:: SingleStoreDB.open_mongosh

@@ -1,0 +1,4 @@
+﻿singlestoredb.server.docker.SingleStoreDB.stop
+==============================================
+.. currentmodule:: singlestoredb.server.docker
+.. automethod:: SingleStoreDB.stop

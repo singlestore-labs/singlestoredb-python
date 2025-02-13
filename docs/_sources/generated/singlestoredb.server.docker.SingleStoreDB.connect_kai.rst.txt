@@ -1,0 +1,4 @@
+﻿singlestoredb.server.docker.SingleStoreDB.connect\_kai
+======================================================
+.. currentmodule:: singlestoredb.server.docker
+.. automethod:: SingleStoreDB.connect_kai
