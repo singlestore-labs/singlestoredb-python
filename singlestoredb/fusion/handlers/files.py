@@ -209,7 +209,7 @@ class UploadPersonalFileHandler(UploadFileHandler):
         FROM local_path [ overwrite ];
 
     # Path to file
-    path = '<path>'
+    path = '<filename>'
 
     # Path to local file
     local_path = '<local-path>'
@@ -223,7 +223,7 @@ class UploadPersonalFileHandler(UploadFileHandler):
 
     Arguments
     ---------
-    * ``<path>``: The path in the personal/shared space where the file is uploaded.
+    * ``<filename>``: The filename in the personal/shared space where the file is uploaded.
     * ``<local-path>``: The path to the file to upload in the local
       directory.
 
@@ -237,7 +237,7 @@ class UploadPersonalFileHandler(UploadFileHandler):
     The following command uploads a file to a personal/shared space and overwrite any
     existing files at the specified path::
 
-        UPLOAD PERSONAL FILE TO '/data/stats.csv'
+        UPLOAD PERSONAL FILE TO 'stats.csv'
             FROM '/tmp/user/stats.csv' OVERWRITE;
 
     See Also
@@ -259,7 +259,7 @@ class UploadSharedFileHandler(UploadFileHandler):
         FROM local_path [ overwrite ];
 
     # Path to file
-    path = '<path>'
+    path = '<filename>'
 
     # Path to local file
     local_path = '<local-path>'
@@ -273,7 +273,7 @@ class UploadSharedFileHandler(UploadFileHandler):
 
     Arguments
     ---------
-    * ``<path>``: The path in the personal/shared space where the file is uploaded.
+    * ``<filename>``: The filename in the personal/shared space where the file is uploaded.
     * ``<local-path>``: The path to the file to upload in the local
       directory.
 
@@ -287,7 +287,7 @@ class UploadSharedFileHandler(UploadFileHandler):
     The following command uploads a file to a personal/shared space and overwrite any
     existing files at the specified path::
 
-        UPLOAD SHARED FILE TO '/data/stats.csv'
+        UPLOAD SHARED FILE TO 'stats.csv'
             FROM '/tmp/user/stats.csv' OVERWRITE;
 
     See Also
