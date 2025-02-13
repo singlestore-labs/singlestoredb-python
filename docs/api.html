@@ -191,6 +191,21 @@
 <li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.notebook.workspace.html">singlestoredb.notebook.workspace</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#server-tools">Server Tools</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.server.docker.start.html">singlestoredb.server.docker.start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.logs.html">singlestoredb.server.docker.SingleStoreDB.logs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.connect.html">singlestoredb.server.docker.SingleStoreDB.connect</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.connect_kai.html">singlestoredb.server.docker.SingleStoreDB.connect_kai</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.connection_url.html">singlestoredb.server.docker.SingleStoreDB.connection_url</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.http_connection_url.html">singlestoredb.server.docker.SingleStoreDB.http_connection_url</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.kai_url.html">singlestoredb.server.docker.SingleStoreDB.kai_url</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.studio_url.html">singlestoredb.server.docker.SingleStoreDB.studio_url</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.open_studio.html">singlestoredb.server.docker.SingleStoreDB.open_studio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.open_shell.html">singlestoredb.server.docker.SingleStoreDB.open_shell</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.open_mongosh.html">singlestoredb.server.docker.SingleStoreDB.open_mongosh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.stop.html">singlestoredb.server.docker.SingleStoreDB.stop</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.get_option.html">singlestoredb.get_option</a></li>
 <li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.set_option.html">singlestoredb.set_option</a></li>
@@ -695,6 +710,78 @@ calls to the currently selected portal services.</p>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.notebook.workspace.html#singlestoredb.notebook.workspace" title="singlestoredb.notebook.workspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">workspace</span></code></a></p></td>
 <td><p>SingleStoreDB workspace definition.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="server-tools">
+<h2>Server Tools<a class="headerlink" href="#server-tools" title="Link to this heading">¶</a></h2>
+<p>If you have Docker installed on your machine, you can use the Docker interface
+included with the Python SDK to start a SingleStoreDB server in Docker. This
+allows you to open interactive shells, SQL Studio, and also use the <cite>%sql</cite>
+magic commands from Jupysql with a SingleStoreDB server running in a container.</p>
+<p>An example of starting SingleStoreDB in Docker is shown below.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">singlestoredb.server</span> <span class="kn">import</span> <span class="n">docker</span>
+<span class="n">s2db</span> <span class="o">=</span> <span class="n">docker</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">s2db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;SHOW DATABASES&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+<span class="n">s2db</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>It is possible to use the server instance as a context manager as well.
+This will automatically shut down the container after exiting the <code class="docutils literal notranslate"><span class="pre">with</span></code>
+block.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">singlestoredb.server</span> <span class="kn">import</span> <span class="n">docker</span>
+<span class="k">with</span> <span class="n">docker</span><span class="o">.</span><span class="n">start</span><span class="p">()</span> <span class="k">as</span> <span class="n">s2db</span><span class="p">:</span>
+    <span class="k">with</span> <span class="n">s2db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;SHOW DATABASES&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">cur</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>If you do not explicitly shut down the container, it will get shut
+down when the Python process exits.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.server.docker.start.html#singlestoredb.server.docker.start" title="singlestoredb.server.docker.start"><code class="xref py py-obj docutils literal notranslate"><span class="pre">start</span></code></a>([name, root_password, license, ...])</p></td>
+<td><p>Manager for SingleStoreDB server running in Docker.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.logs.html#singlestoredb.server.docker.SingleStoreDB.logs" title="singlestoredb.server.docker.SingleStoreDB.logs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SingleStoreDB.logs</span></code></a>()</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.connect.html#singlestoredb.server.docker.SingleStoreDB.connect" title="singlestoredb.server.docker.SingleStoreDB.connect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SingleStoreDB.connect</span></code></a>([use_data_api])</p></td>
+<td><p>Connect to the SingleStoreDB server.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.connect_kai.html#singlestoredb.server.docker.SingleStoreDB.connect_kai" title="singlestoredb.server.docker.SingleStoreDB.connect_kai"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SingleStoreDB.connect_kai</span></code></a>()</p></td>
+<td><p>Connect to the Kai (MongoDB) server.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.connection_url.html#singlestoredb.server.docker.SingleStoreDB.connection_url" title="singlestoredb.server.docker.SingleStoreDB.connection_url"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SingleStoreDB.connection_url</span></code></a></p></td>
+<td><p>Connection URL for the SingleStoreDB server.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.http_connection_url.html#singlestoredb.server.docker.SingleStoreDB.http_connection_url" title="singlestoredb.server.docker.SingleStoreDB.http_connection_url"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SingleStoreDB.http_connection_url</span></code></a></p></td>
+<td><p>HTTP Connection URL for the SingleStoreDB server.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.kai_url.html#singlestoredb.server.docker.SingleStoreDB.kai_url" title="singlestoredb.server.docker.SingleStoreDB.kai_url"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SingleStoreDB.kai_url</span></code></a></p></td>
+<td><p>Connection URL for the Kai (MongoDB) server.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.studio_url.html#singlestoredb.server.docker.SingleStoreDB.studio_url" title="singlestoredb.server.docker.SingleStoreDB.studio_url"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SingleStoreDB.studio_url</span></code></a></p></td>
+<td><p>URL for the SingleStoreDB Studio.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.open_studio.html#singlestoredb.server.docker.SingleStoreDB.open_studio" title="singlestoredb.server.docker.SingleStoreDB.open_studio"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SingleStoreDB.open_studio</span></code></a>()</p></td>
+<td><p>Open the SingleStoreDB Studio in a web browser.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.open_shell.html#singlestoredb.server.docker.SingleStoreDB.open_shell" title="singlestoredb.server.docker.SingleStoreDB.open_shell"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SingleStoreDB.open_shell</span></code></a>()</p></td>
+<td><p>Open a shell in the SingleStoreDB server.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.open_mongosh.html#singlestoredb.server.docker.SingleStoreDB.open_mongosh" title="singlestoredb.server.docker.SingleStoreDB.open_mongosh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SingleStoreDB.open_mongosh</span></code></a>()</p></td>
+<td><p>Open a mongosh in the SingleStoreDB server.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.server.docker.SingleStoreDB.stop.html#singlestoredb.server.docker.SingleStoreDB.stop" title="singlestoredb.server.docker.SingleStoreDB.stop"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SingleStoreDB.stop</span></code></a>()</p></td>
+<td><p>Stop the SingleStoreDB server.</p></td>
 </tr>
 </tbody>
 </table>

@@ -7,6 +7,7 @@ import os
 import platform
 import secrets
 import socket
+import subprocess
 import time
 import urllib.parse
 from contextlib import closing
@@ -17,7 +18,12 @@ from typing import List
 from typing import Optional
 from typing import Type
 
-import docker
+try:
+    import docker
+    has_docker = True
+except ImportError:
+    has_docker = False
+    raise RuntimeError('docker python package is not installed')
 
 from .. import connect
 from ..connection import Connection
@@ -32,6 +38,45 @@ DEFAULT_IMAGE = 'ghcr.io/singlestore-labs/singlestoredb-dev:latest'
 
 
 class SingleStoreDB:
+    """
+    Manager for SingleStoreDB server running in Docker.
+
+    Parameters
+    -----------
+    name : str, optional
+        Name of the container.
+    root_password : str, optional
+        Root password for the SingleStoreDB server.
+    license : str, optional
+        License key for SingleStoreDB.
+    enable_kai : bool, optional
+        Enable Kai (MongoDB) server.
+    server_port : int, optional
+        Port for the SingleStoreDB server.
+    studio_port : int, optional
+        Port for the SingleStoreDB Studio.
+    data_api_port : int, optional
+        Port for the SingleStoreDB Data API.
+    kai_port : int, optional
+        Port for the Kai server.
+    hostname : str, optional
+        Hostname for the container.
+    data_dir : str, optional
+        Path to the data directory.
+    logs_dir : str, optional
+        Path to the logs directory.
+    server_dir : str, optional
+        Path to the server directory.
+    global_vars : dict, optional
+        Global variables to set in the SingleStoreDB server.
+    init_sql : str, optional
+        Path to an SQL file to run on startup.
+    image : str, optional
+        Docker image to use.
+    database : str, optional
+        Default database to connect to.
+
+    """
 
     root_password: str
     kai_enabled: bool
@@ -93,10 +138,11 @@ class SingleStoreDB:
             except KeyError:
                 raise ValueError('a SingleStore license must be supplied')
 
-        env = {
-            'ROOT_PASSWORD': self.root_password,
-            'SINGLESTORE_LICENSE': license,
-        }
+        # Setup environment variables for the container
+        env = {'ROOT_PASSWORD': self.root_password}
+
+        if license:
+            env['SINGLESTORE_LICENSE'] = license
 
         if enable_kai:
             env['ENABLE_KAI'] = '1'
@@ -113,7 +159,10 @@ class SingleStoreDB:
         if 'macOS' in platform.platform():
             kwargs['platform'] = 'linux/amd64'
 
-        for pname, pvalue in [('name', name), ('hostname', hostname)]:
+        for pname, pvalue in [
+            ('name', name or 'singlestoredb-dev'),
+            ('hostname', hostname),
+        ]:
             if pvalue is not None:
                 kwargs[pname] = pvalue
 
@@ -172,11 +221,11 @@ class SingleStoreDB:
                 os.environ[k] = v
 
     def _wait_on_ready(self) -> bool:
-        for i in range(20):
+        for i in range(60):
             for line in self.logs():
                 if 'INFO: ' in line:
                     return True
-            time.sleep(3)
+            time.sleep(5)
         return False
 
     def logs(self) -> List[str]:
@@ -184,6 +233,7 @@ class SingleStoreDB:
 
     @property
     def connection_url(self) -> str:
+        """Connection URL for the SingleStoreDB server."""
         dbname = f'/{self._database}' if self._database else ''
         root_password = urllib.parse.quote_plus(self.root_password)
         return f'singlestoredb://root:{root_password}@' + \
@@ -191,6 +241,7 @@ class SingleStoreDB:
 
     @property
     def http_connection_url(self) -> str:
+        """HTTP Connection URL for the SingleStoreDB server."""
         dbname = f'/{self._database}' if self._database else ''
         root_password = urllib.parse.quote_plus(self.root_password)
         return f'singlestoredb+http://root:{root_password}@' + \
@@ -201,12 +252,28 @@ class SingleStoreDB:
         use_data_api: bool = False,
         **kwargs: Any,
     ) -> Connection:
+        """
+        Connect to the SingleStoreDB server.
+
+        Parameters
+        -----------
+        use_data_api : bool, optional
+            Use the Data API for the connection.
+        **kwargs : Any, optional
+            Additional keyword arguments to pass to the connection.
+
+        Returns
+        --------
+        Connection : Connection to the SingleStoreDB server.
+
+        """
         if use_data_api:
             return connect(self.http_connection_url, **kwargs)
         return connect(self.connection_url, **kwargs)
 
     @property
     def kai_url(self) -> Optional[str]:
+        """Connection URL for the Kai (MongoDB) server."""
         if not self.kai_enabled:
             return None
         root_password = urllib.parse.quote_plus(self.root_password)
@@ -214,6 +281,7 @@ class SingleStoreDB:
                f'localhost:{self.kai_port}/?authMechanism=PLAIN&loadBalanced=true'
 
     def connect_kai(self) -> 'pymongo.MongoClient':
+        """Connect to the Kai (MongoDB) server."""
         if not self.kai_enabled:
             raise RuntimeError('kai is not enabled')
         if not has_pymongo:
@@ -222,15 +290,73 @@ class SingleStoreDB:
 
     @property
     def studio_url(self) -> str:
+        """URL for the SingleStoreDB Studio."""
         return f'http://localhost:{self.studio_port}'
 
-    def connect_studio(self) -> None:
+    def open_studio(self) -> None:
+        """Open the SingleStoreDB Studio in a web browser."""
         import webbrowser
         if platform.platform().lower().startswith('macos'):
             chrome_path = r'open -a /Applications/Google\ Chrome.app %s'
             webbrowser.get(chrome_path).open(self.studio_url, new=2)
         else:
             webbrowser.open(self.studio_url, new=2)
+
+    def open_shell(self) -> None:
+        """Open a shell in the SingleStoreDB server."""
+        env_token = '_SINGLESTOREDB_TOKEN_' + self.container.id
+        try:
+            os.environ[env_token] = self.root_password
+            if platform.platform().lower().startswith('macos'):
+                subprocess.call(
+                    f'open -a Terminal --args docker exec -it {self.container.id} '
+                    f'singlestore -p"${env_token}"',
+                    shell=True,
+                )
+            elif platform.platform().lower().startswith('linux'):
+                subprocess.call(
+                    f'gnome-terminal -- docker exec -it {self.container.id} '
+                    f'singlestore -p"${env_token}"',
+                    shell=True,
+                )
+            elif platform.platform().lower().startswith('windows'):
+                subprocess.call(
+                    f'start cmd /k docker exec -it {self.container.id} '
+                    f'singlestore -p"%{env_token}%"',
+                    shell=True,
+                )
+            else:
+                raise RuntimeError('unsupported platform')
+        finally:
+            del os.environ[env_token]
+
+    def open_mongosh(self) -> None:
+        """Open a mongosh in the SingleStoreDB server."""
+        if not self.kai_enabled:
+            raise RuntimeError('kai interface is not enabled')
+        env_token = '_SINGLESTOREDB_TOKEN_' + self.container.id
+        try:
+            os.environ[env_token] = self.root_password
+            if platform.platform().lower().startswith('macos'):
+                subprocess.call(
+                    'open -a Terminal --args '
+                    f'docker exec -it {self.container.id} mongosh',
+                    shell=True,
+                )
+            elif platform.platform().lower().startswith('linux'):
+                subprocess.call(
+                    f'gnome-terminal -- docker exec -it {self.container.id} mongosh',
+                    shell=True,
+                )
+            elif platform.platform().lower().startswith('windows'):
+                subprocess.call(
+                    f'start cmd /k docker exec -it {self.container.id} mongosh',
+                    shell=True,
+                )
+            else:
+                raise RuntimeError('unsupported platform')
+        finally:
+            del os.environ[env_token]
 
     def __enter__(self) -> SingleStoreDB:
         return self
@@ -245,10 +371,13 @@ class SingleStoreDB:
         return None
 
     def stop(self) -> None:
+        """Stop the SingleStoreDB server."""
         if self.container is not None:
-            self._restore_server_urls()
-            self.container.stop()
-            self.container = None
+            try:
+                self._restore_server_urls()
+                self.container.stop()
+            finally:
+                self.container = None
 
 
 def start(
@@ -269,7 +398,45 @@ def start(
     image: str = DEFAULT_IMAGE,
     database: Optional[str] = None,
 ) -> SingleStoreDB:
-    """Start a SingleStoreDB server using Docker."""
+    """
+    Manager for SingleStoreDB server running in Docker.
+
+    Parameters
+    -----------
+    name : str, optional
+        Name of the container.
+    root_password : str, optional
+        Root password for the SingleStoreDB server.
+    license : str, optional
+        License key for SingleStoreDB.
+    enable_kai : bool, optional
+        Enable Kai (MongoDB) server.
+    server_port : int, optional
+        Port for the SingleStoreDB server.
+    studio_port : int, optional
+        Port for the SingleStoreDB Studio.
+    data_api_port : int, optional
+        Port for the SingleStoreDB Data API.
+    kai_port : int, optional
+        Port for the Kai server.
+    hostname : str, optional
+        Hostname for the container.
+    data_dir : str, optional
+        Path to the data directory.
+    logs_dir : str, optional
+        Path to the logs directory.
+    server_dir : str, optional
+        Path to the server directory.
+    global_vars : dict, optional
+        Global variables to set in the SingleStoreDB server.
+    init_sql : str, optional
+        Path to an SQL file to run on startup.
+    image : str, optional
+        Docker image to use.
+    database : str, optional
+        Default database to connect to.
+
+    """
     return SingleStoreDB(
         name=name,
         root_password=root_password,

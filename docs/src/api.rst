@@ -312,6 +312,69 @@ calls to the currently selected portal services.
    workspace
 
 
+Server Tools
+------------
+
+If you have Docker installed on your machine, you can use the Docker interface
+included with the Python SDK to start a SingleStoreDB server in Docker. This
+allows you to open interactive shells, SQL Studio, and also use the `%sql`
+magic commands from Jupysql with a SingleStoreDB server running in a container.
+
+An example of starting SingleStoreDB in Docker is shown below.
+
+.. sourcecode:: python
+
+
+   from singlestoredb.server import docker
+
+   s2db = docker.start()
+
+   with s2db.connect() as conn:
+       with conn.cursor() as cur:
+           cur.execute('SHOW DATABASES')
+           for line in cur:
+               print(line)
+
+   s2db.stop()
+
+It is possible to use the server instance as a context manager as well.
+This will automatically shut down the container after exiting the ``with``
+block.
+
+.. sourcecode:: python
+
+   from singlestoredb.server import docker
+
+   with docker.start() as s2db:
+       with s2db.connect() as conn:
+           with conn.cursor() as cur:
+               cur.execute('SHOW DATABASES')
+               for line in cur:
+                   print(line)
+
+If you do not explicitly shut down the container, it will get shut
+down when the Python process exits.
+
+.. currentmodule:: singlestoredb.server.docker
+
+.. autosummary::
+   :toctree: generated/
+
+   start
+   SingleStoreDB.logs
+   SingleStoreDB.connect
+   SingleStoreDB.connect_kai
+   SingleStoreDB.connection_url
+   SingleStoreDB.http_connection_url
+   SingleStoreDB.kai_url
+   SingleStoreDB.studio_url
+   SingleStoreDB.open_studio
+   SingleStoreDB.open_shell
+   SingleStoreDB.open_mongosh
+   SingleStoreDB.stop
+
+
+
 Configuration
 -------------
 
