@@ -46,8 +46,8 @@ class SingleStoreDB:
     -----------
     name : str, optional
         Name of the container.
-    root_password : str, optional
-        Root password for the SingleStoreDB server.
+    password : str, optional
+        Password for the SingleStoreDB server.
     license : str, optional
         License key for SingleStoreDB.
     enable_kai : bool, optional
@@ -79,7 +79,8 @@ class SingleStoreDB:
 
     """
 
-    root_password: str
+    user: str
+    password: str
     kai_enabled: bool
     server_port: int
     studio_port: int
@@ -93,7 +94,7 @@ class SingleStoreDB:
         self,
         name: Optional[str] = None,
         *,
-        root_password: Optional[str] = None,
+        password: Optional[str] = None,
         license: Optional[str] = None,
         enable_kai: bool = False,
         server_port: Optional[int] = None,
@@ -117,6 +118,7 @@ class SingleStoreDB:
         self.data_dir = data_dir
         self.logs_dir = logs_dir
         self.server_dir = server_dir
+        self.user = 'root'
 
         # Setup container ports
         ports = {
@@ -129,8 +131,8 @@ class SingleStoreDB:
             self.kai_port = kai_port or self._get_available_port()
             ports['27017/tcp'] = self.kai_port
 
-        # Setup root password
-        self.root_password = root_password or secrets.token_urlsafe(10)
+        # Setup password
+        self.password = password or secrets.token_urlsafe(10)
 
         # Setup license value
         if license is None:
@@ -140,7 +142,7 @@ class SingleStoreDB:
                 raise ValueError('a SingleStore license must be supplied')
 
         # Setup environment variables for the container
-        env = {'ROOT_PASSWORD': self.root_password}
+        env = {'ROOT_PASSWORD': self.password}
 
         if license:
             env['SINGLESTORE_LICENSE'] = license
@@ -243,16 +245,16 @@ class SingleStoreDB:
     def connection_url(self) -> str:
         """Connection URL for the SingleStoreDB server."""
         dbname = f'/{self._database}' if self._database else ''
-        root_password = urllib.parse.quote_plus(self.root_password)
-        return f'singlestoredb://root:{root_password}@' + \
+        password = urllib.parse.quote_plus(self.password)
+        return f'singlestoredb://{self.user}:{password}@' + \
                f'localhost:{self.server_port}{dbname}'
 
     @property
     def http_connection_url(self) -> str:
         """HTTP Connection URL for the SingleStoreDB server."""
         dbname = f'/{self._database}' if self._database else ''
-        root_password = urllib.parse.quote_plus(self.root_password)
-        return f'singlestoredb+http://root:{root_password}@' + \
+        password = urllib.parse.quote_plus(self.password)
+        return f'singlestoredb+http://{self.user}:{password}@' + \
                f'localhost:{self.data_api_port}{dbname}'
 
     def connect(
@@ -284,8 +286,8 @@ class SingleStoreDB:
         """Connection URL for the Kai (MongoDB) server."""
         if not self.kai_enabled:
             return None
-        root_password = urllib.parse.quote_plus(self.root_password)
-        return f'mongodb://root:{root_password}@' + \
+        password = urllib.parse.quote_plus(self.password)
+        return f'mongodb://{self.user}:{password}@' + \
                f'localhost:{self.kai_port}/?authMechanism=PLAIN&loadBalanced=true'
 
     def connect_kai(self) -> 'pymongo.MongoClient':
@@ -378,7 +380,7 @@ class SingleStoreDB:
 
 def start(
     name: Optional[str] = None,
-    root_password: Optional[str] = None,
+    password: Optional[str] = None,
     license: Optional[str] = None,
     enable_kai: bool = False,
     server_port: Optional[int] = None,
@@ -401,8 +403,8 @@ def start(
     -----------
     name : str, optional
         Name of the container.
-    root_password : str, optional
-        Root password for the SingleStoreDB server.
+    password : str, optional
+        Password for the SingleStoreDB server.
     license : str, optional
         License key for SingleStoreDB.
     enable_kai : bool, optional
@@ -435,7 +437,7 @@ def start(
     """
     return SingleStoreDB(
         name=name,
-        root_password=root_password,
+        password=password,
         license=license,
         enable_kai=enable_kai,
         server_port=server_port,
