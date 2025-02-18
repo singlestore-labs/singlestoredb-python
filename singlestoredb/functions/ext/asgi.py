@@ -485,7 +485,7 @@ class Application(object):
     # Valid URL paths
     invoke_path = ('invoke',)
     show_create_function_path = ('show', 'create_function')
-    show_function_info = ('show', 'function_info')
+    show_function_info_path = ('show', 'function_info')
 
     def __init__(
         self,
@@ -690,27 +690,9 @@ class Application(object):
             await send(self.text_response_dict)
 
         # Return function info
-        elif method == 'GET' and path == self.show_function_info:
-            functions = {}
-
-            for key, (_, info) in self.endpoints.items():
-                if not func_name or key == func_name:
-                    sig = info['signature']
-                    args = []
-                    for a in sig.get('args', []):
-                        args.append(
-                            dict(
-                                name=a['name'],
-                                dtype=a['dtype'],
-                            ),
-                        )
-                    returns = dict(
-                        dtype=sig['returns'].get('dtype'),
-                    )
-                    functions[sig['name']] = dict(args=args, returns=returns)
-
+        elif method == 'GET' and path == self.show_function_info_path:
+            functions = self.get_function_info()
             body = json.dumps(functions).encode('utf-8')
-
             await send(self.text_response_dict)
 
         # Path not found
@@ -757,14 +739,49 @@ class Application(object):
             # See if function URL matches url
             cur.execute(f'SHOW CREATE FUNCTION `{name}`')
             for fname, _, code, *_ in list(cur):
-                m = re.search(r" (?:\w+) SERVICE '([^']+)'", code)
+                m = re.search(r" (?:\w+) (?:SERVICE|MANAGED) '([^']+)'", code)
                 if m and m.group(1) == self.url:
                     funcs.add(fname)
                     if link and re.match(r'^py_ext_func_link_\S{14}$', link):
                         links.add(link)
         return funcs, links
 
-    def show_create_functions(
+    def get_function_info(
+        self,
+        func_name: Optional[str] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Return the functions and function signature information.
+
+        Returns
+        -------
+        Dict[str, Dict[str, Any]]
+
+        """
+        functions = {}
+
+        for key, (_, info) in self.endpoints.items():
+            if not func_name or key == func_name:
+                sig = info['signature']
+                args = []
+                for a in sig.get('args', []):
+                    dtype = a['dtype']
+                    nullable = '?' in dtype
+                    args.append(
+                        dict(
+                            name=a['name'],
+                            dtype=dtype,
+                            nullable=nullable,
+                        ),
+                    )
+                returns = dict(
+                    dtype=sig['returns'].get('dtype'),
+                )
+                functions[sig['name']] = dict(args=args, returns=returns)
+
+        return functions
+
+    def get_create_functions(
         self,
         replace: bool = False,
     ) -> List[str]:
@@ -832,7 +849,7 @@ class Application(object):
                         cur.execute(f'DROP FUNCTION IF EXISTS `{fname}`')
                     for link in links:
                         cur.execute(f'DROP LINK {link}')
-                for func in self.show_create_functions(replace=replace):
+                for func in self.get_create_functions(replace=replace):
                     cur.execute(func)
 
     def drop_functions(
@@ -858,11 +875,6 @@ class Application(object):
                     cur.execute(f'DROP FUNCTION IF EXISTS `{fname}`')
                 for link in links:
                     cur.execute(f'DROP LINK {link}')
-
-    @property
-    def function_info(self) -> None:
-        for k, v in self.endpoints.items():
-            print(k, v)
 
     async def call(
         self,
@@ -1259,7 +1271,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         app_mode='remote',
     )
 
-    funcs = app.show_create_functions(replace=args.replace_existing)
+    funcs = app.get_create_functions(replace=args.replace_existing)
     if not funcs:
         raise RuntimeError('no functions specified')
 
