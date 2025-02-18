@@ -219,8 +219,8 @@ class CreateExport(SQLHandler):
             for key in params['partition_by']:
                 transform = key['partition_key']['transform']['col_transform']
                 part = {}
-                part['name'] = transform[0].lower()
-                part['transform'] = transform[-1]['transform_col']
+                part['transform'] = transform[0].lower()
+                part['name'] = transform[-1]['transform_col']
                 partition_by.append(part)
 
         order_by = []
@@ -228,8 +228,8 @@ class CreateExport(SQLHandler):
             for key in params['order_by']['by']:
                 transform = key['transform']['col_transform']
                 order = {}
-                order['name'] = transform[0].lower()
-                order['transform'] = transform[-1]['transform_col']
+                order['transform'] = transform[0].lower()
+                order['name'] = transform[-1]['transform_col']
                 order['direction'] = 'ascending'
                 order['null_order'] = 'nulls_first'
                 if key.get('direction'):
@@ -240,8 +240,6 @@ class CreateExport(SQLHandler):
                         order['null_order'] = 'nulls_last'
                 order_by.append(order)
 
-        print(partition_by)
-        print(order_by)
         out = ExportService(
             wsg,
             from_database,
