@@ -110,10 +110,33 @@ class CreateExport(SQLHandler):
         from_table
         catalog
         storage
+        [ partition_by ]
+        [ order_by ]
+        [ properties ]
     ;
 
     # From table
     from_table = FROM <table>
+
+    # Transforms
+    _col_transform = { VOID | IDENTITY | YEAR | MONTH | DAY | HOUR } ( _transform_col )
+    _transform_col = <column>
+    _arg_transform = { BUCKET | TRUNCATE } ( _transform_col <comma> _transform_arg )
+    _transform_arg = <integer>
+    transform = { _col_transform | _arg_transform }
+
+    # Partitions
+    partition_by = PARTITION BY partition_key,...
+    partition_key = transform
+
+    # Sort order
+    order_by = ORDER BY sort_key,...
+    sort_key = transform [ direction ] [ null_order ]
+    direction = { ASC | DESC | ASCENDING | DESCENDING }
+    null_order = { NULLS_FIRST | NULLS_LAST }
+
+    # Properties
+    properties = PROPERTIES '<json>'
 
     # Catolog
     catalog = CATALOG [ _catalog_config ] [ _catalog_creds ]
@@ -191,6 +214,34 @@ class CreateExport(SQLHandler):
         if wsg._manager is None:
             raise TypeError('no workspace manager is associated with workspace group')
 
+        partition_by = []
+        if params['partition_by']:
+            for key in params['partition_by']:
+                transform = key['partition_key']['transform']['col_transform']
+                part = {}
+                part['name'] = transform[0].lower()
+                part['transform'] = transform[-1]['transform_col']
+                partition_by.append(part)
+
+        order_by = []
+        if params['order_by'] and params['order_by']['by']:
+            for key in params['order_by']['by']:
+                transform = key['transform']['col_transform']
+                order = {}
+                order['name'] = transform[0].lower()
+                order['transform'] = transform[-1]['transform_col']
+                order['direction'] = 'ascending'
+                order['null_order'] = 'nulls_first'
+                if key.get('direction'):
+                    if 'desc' in key['direction'].lower():
+                        order['direction'] = 'descending'
+                if key.get('null_order'):
+                    if 'last' in key['null_order'].lower():
+                        order['null_order'] = 'nulls_last'
+                order_by.append(order)
+
+        print(partition_by)
+        print(order_by)
         out = ExportService(
             wsg,
             from_database,
@@ -198,6 +249,9 @@ class CreateExport(SQLHandler):
             dict(**catalog_config, **catalog_creds),
             dict(**storage_config, **storage_creds),
             columns=None,
+            partition_by=partition_by or None,
+            order_by=order_by or None,
+            properties=json.loads(params['properties']) if params['properties'] else None,
         ).start()
 
         res = FusionSQLResult()

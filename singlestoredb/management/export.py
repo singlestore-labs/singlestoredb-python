@@ -24,6 +24,9 @@ class ExportService(object):
     catalog_info: Dict[str, Any]
     storage_info: Dict[str, Any]
     columns: Optional[List[str]]
+    partition_by: Optional[List[Dict[str, str]]]
+    order_by: Optional[List[Dict[str, Dict[str, str]]]]
+    properties: Optional[Dict[str, Any]]
 
     def __init__(
         self,
@@ -32,7 +35,10 @@ class ExportService(object):
         table: str,
         catalog_info: Union[str, Dict[str, Any]],
         storage_info: Union[str, Dict[str, Any]],
-        columns: Optional[List[str]],
+        columns: Optional[List[str]] = None,
+        partition_by: Optional[List[Dict[str, str]]] = None,
+        order_by: Optional[List[Dict[str, Dict[str, str]]]] = None,
+        properties: Optional[Dict[str, Any]] = None,
     ):
         #: Workspace group
         self.workspace_group = workspace_group
@@ -57,6 +63,10 @@ class ExportService(object):
             self.storage_info = json.loads(storage_info)
         else:
             self.storage_info = copy.copy(storage_info)
+
+        self.partition_by = partition_by or None
+        self.order_by = order_by or None
+        self.properties = properties or None
 
         self._manager: Optional[WorkspaceManager] = workspace_group._manager
 
@@ -93,14 +103,27 @@ class ExportService(object):
                 msg='No workspace manager is associated with this object.',
             )
 
+        partition_spec = None
+        if self.partition_by:
+            partition_spec = dict(partitions=self.partition_by)
+
+        sort_order_spec = None
+        if self.order_by:
+            sort_order_spec = dict(keys=self.order_by)
+
         out = self._manager._post(
             f'workspaceGroups/{self.workspace_group.id}/egress/startTableEgress',
-            json=dict(
-                databaseName=self.database,
-                tableName=self.table,
-                storageInfo=self.storage_info,
-                catalogInfo=self.catalog_info,
-            ),
+            json={
+                k: v for k, v in dict(
+                    databaseName=self.database,
+                    tableName=self.table,
+                    storageInfo=self.storage_info,
+                    catalogInfo=self.catalog_info,
+                    partitionSpec=partition_spec,
+                    sortOrderSpec=sort_order_spec,
+                    properties=self.properties,
+                ).items() if v is not None
+            },
         )
 
         return ExportStatus(out.json()['egressID'], self.workspace_group)
