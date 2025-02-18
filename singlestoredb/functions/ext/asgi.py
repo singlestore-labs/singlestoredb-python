@@ -468,6 +468,7 @@ class Application(object):
     # Valid URL paths
     invoke_path = ('invoke',)
     show_create_function_path = ('show', 'create_function')
+    show_function_info = ('show', 'function_info')
 
     def __init__(
         self,
@@ -671,6 +672,30 @@ class Application(object):
 
             await send(self.text_response_dict)
 
+        # Return function info
+        elif method == 'GET' and path == self.show_function_info:
+            functions = {}
+
+            for key, (_, info) in self.endpoints.items():
+                if not func_name or key == func_name:
+                    sig = info['signature']
+                    args = []
+                    for a in sig.get('args', []):
+                        args.append(
+                            dict(
+                                name=a['name'],
+                                dtype=a['dtype'],
+                            ),
+                        )
+                    returns = dict(
+                        dtype=sig['returns'].get('dtype'),
+                    )
+                    functions[sig['name']] = dict(args=args, returns=returns)
+
+            body = json.dumps(functions).encode('utf-8')
+
+            await send(self.text_response_dict)
+
         # Path not found
         else:
             body = b''
@@ -816,6 +841,11 @@ class Application(object):
                     cur.execute(f'DROP FUNCTION IF EXISTS `{fname}`')
                 for link in links:
                     cur.execute(f'DROP LINK {link}')
+
+    @property
+    def function_info(self) -> None:
+        for k, v in self.endpoints.items():
+            print(k, v)
 
     async def call(
         self,
