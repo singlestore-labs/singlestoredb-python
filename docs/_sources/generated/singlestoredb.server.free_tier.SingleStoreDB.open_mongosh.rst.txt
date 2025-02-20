@@ -1,0 +1,4 @@
+﻿singlestoredb.server.free\_tier.SingleStoreDB.open\_mongosh
+===========================================================
+.. currentmodule:: singlestoredb.server.free_tier
+.. automethod:: SingleStoreDB.open_mongosh

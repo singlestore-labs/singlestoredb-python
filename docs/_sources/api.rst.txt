@@ -228,6 +228,11 @@ calls to the currently selected portal services.
    workspace
 Server Tools
 ------------
+It is possible to start a SingleStoreDB server from the Python SDK in a
+couple of ways: Docker or Cloud Free Tier. Both of these methods are
+described below.
+Docker
+......
 If you have Docker installed on your machine, you can use the Docker interface
 included with the Python SDK to start a SingleStoreDB server in Docker. This
 allows you to open interactive shells, SQL Studio, and also use the `%sql`
@@ -267,6 +272,33 @@ down when the Python process exits.
    SingleStoreDB.kai_url
    SingleStoreDB.studio_url
    SingleStoreDB.open_studio
+   SingleStoreDB.open_shell
+   SingleStoreDB.open_mongosh
+   SingleStoreDB.stop
+Cloud Free Tier
+...............
+The Cloud Free Tier interface works much in the same way as the Docker
+interface, although it doesn't support as many features. To start a
+server in the Cloud Free Tier, you use the following:
+.. sourcecode:: python
+   from singlestoredb.server import free_tier
+   s2db = free_tier.start()
+   with s2db.connect() as conn:
+       with conn.cursor() as cur:
+           cur.execute('SHOW DATABASES')
+           for line in cur:
+               print(line)
+   s2db.stop()
+Just as with the Docker interface, you can also use a Python
+context manager to automatically shut down your connection.
+.. currentmodule:: singlestoredb.server.free_tier
+.. autosummary::
+   :toctree: generated/
+   start
+   SingleStoreDB.connect
+   SingleStoreDB.connection_url
+   SingleStoreDB.http_connection_url
+   SingleStoreDB.kai_url
    SingleStoreDB.open_shell
    SingleStoreDB.open_mongosh
    SingleStoreDB.stop

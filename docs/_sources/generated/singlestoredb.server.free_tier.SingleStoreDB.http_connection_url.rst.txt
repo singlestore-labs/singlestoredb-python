@@ -1,0 +1,4 @@
+﻿singlestoredb.server.free\_tier.SingleStoreDB.http\_connection\_url
+===================================================================
+.. currentmodule:: singlestoredb.server.free_tier
+.. autoproperty:: SingleStoreDB.http_connection_url

@@ -1,11 +1,12 @@
 #!/usr/bin/env python
-"""Utilities for running singlestoredb-dev-image."""
+"""Utilities for running singlestoredb-dev Docker image."""
 from __future__ import annotations
 
 import atexit
 import os
 import platform
 import secrets
+import signal
 import socket
 import subprocess
 import time
@@ -45,8 +46,8 @@ class SingleStoreDB:
     -----------
     name : str, optional
         Name of the container.
-    root_password : str, optional
-        Root password for the SingleStoreDB server.
+    password : str, optional
+        Password for the SingleStoreDB server.
     license : str, optional
         License key for SingleStoreDB.
     enable_kai : bool, optional
@@ -78,7 +79,8 @@ class SingleStoreDB:
 
     """
 
-    root_password: str
+    user: str
+    password: str
     kai_enabled: bool
     server_port: int
     studio_port: int
@@ -92,7 +94,7 @@ class SingleStoreDB:
         self,
         name: Optional[str] = None,
         *,
-        root_password: Optional[str] = None,
+        password: Optional[str] = None,
         license: Optional[str] = None,
         enable_kai: bool = False,
         server_port: Optional[int] = None,
@@ -116,6 +118,7 @@ class SingleStoreDB:
         self.data_dir = data_dir
         self.logs_dir = logs_dir
         self.server_dir = server_dir
+        self.user = 'root'
 
         # Setup container ports
         ports = {
@@ -128,8 +131,8 @@ class SingleStoreDB:
             self.kai_port = kai_port or self._get_available_port()
             ports['27017/tcp'] = self.kai_port
 
-        # Setup root password
-        self.root_password = root_password or secrets.token_urlsafe(10)
+        # Setup password
+        self.password = password or secrets.token_urlsafe(10)
 
         # Setup license value
         if license is None:
@@ -139,7 +142,7 @@ class SingleStoreDB:
                 raise ValueError('a SingleStore license must be supplied')
 
         # Setup environment variables for the container
-        env = {'ROOT_PASSWORD': self.root_password}
+        env = {'ROOT_PASSWORD': self.password}
 
         if license:
             env['SINGLESTORE_LICENSE'] = license
@@ -160,7 +163,7 @@ class SingleStoreDB:
             kwargs['platform'] = 'linux/amd64'
 
         for pname, pvalue in [
-            ('name', name or 'singlestoredb-dev'),
+            ('name', name),
             ('hostname', hostname),
         ]:
             if pvalue is not None:
@@ -187,7 +190,11 @@ class SingleStoreDB:
 
         docker_client = docker.from_env()
         self.container = docker_client.containers.run(image, **kwargs)
+
+        # Make sure container gets cleaned up at exit
         atexit.register(self.stop)
+        signal.signal(signal.SIGINT, self.stop)
+        signal.signal(signal.SIGTERM, self.stop)
 
         if not self._wait_on_ready():
             raise RuntimeError('server did not come up properly')
@@ -214,18 +221,21 @@ class SingleStoreDB:
         os.environ['SINGLESTOREDB_URL'] = self.connection_url
 
     def _restore_server_urls(self) -> None:
-        for k, v in self._saved_server_urls.items():
-            if v is None:
-                del os.environ[k]
-            else:
-                os.environ[k] = v
+        try:
+            for k, v in self._saved_server_urls.items():
+                if v is None:
+                    del os.environ[k]
+                else:
+                    os.environ[k] = v
+        except KeyError:
+            pass
 
     def _wait_on_ready(self) -> bool:
-        for i in range(60):
+        for i in range(80):
             for line in self.logs():
                 if 'INFO: ' in line:
                     return True
-            time.sleep(5)
+            time.sleep(3)
         return False
 
     def logs(self) -> List[str]:
@@ -235,16 +245,16 @@ class SingleStoreDB:
     def connection_url(self) -> str:
         """Connection URL for the SingleStoreDB server."""
         dbname = f'/{self._database}' if self._database else ''
-        root_password = urllib.parse.quote_plus(self.root_password)
-        return f'singlestoredb://root:{root_password}@' + \
+        password = urllib.parse.quote_plus(self.password)
+        return f'singlestoredb://{self.user}:{password}@' + \
                f'localhost:{self.server_port}{dbname}'
 
     @property
     def http_connection_url(self) -> str:
         """HTTP Connection URL for the SingleStoreDB server."""
         dbname = f'/{self._database}' if self._database else ''
-        root_password = urllib.parse.quote_plus(self.root_password)
-        return f'singlestoredb+http://root:{root_password}@' + \
+        password = urllib.parse.quote_plus(self.password)
+        return f'singlestoredb+http://{self.user}:{password}@' + \
                f'localhost:{self.data_api_port}{dbname}'
 
     def connect(
@@ -276,8 +286,8 @@ class SingleStoreDB:
         """Connection URL for the Kai (MongoDB) server."""
         if not self.kai_enabled:
             return None
-        root_password = urllib.parse.quote_plus(self.root_password)
-        return f'mongodb://root:{root_password}@' + \
+        password = urllib.parse.quote_plus(self.password)
+        return f'mongodb://{self.user}:{password}@' + \
                f'localhost:{self.kai_port}/?authMechanism=PLAIN&loadBalanced=true'
 
     def connect_kai(self) -> 'pymongo.MongoClient':
@@ -304,59 +314,47 @@ class SingleStoreDB:
 
     def open_shell(self) -> None:
         """Open a shell in the SingleStoreDB server."""
-        env_token = '_SINGLESTOREDB_TOKEN_' + self.container.id
-        try:
-            os.environ[env_token] = self.root_password
-            if platform.platform().lower().startswith('macos'):
-                subprocess.call(
-                    f'open -a Terminal --args docker exec -it {self.container.id} '
-                    f'singlestore -p"${env_token}"',
-                    shell=True,
-                )
-            elif platform.platform().lower().startswith('linux'):
-                subprocess.call(
-                    f'gnome-terminal -- docker exec -it {self.container.id} '
-                    f'singlestore -p"${env_token}"',
-                    shell=True,
-                )
-            elif platform.platform().lower().startswith('windows'):
-                subprocess.call(
-                    f'start cmd /k docker exec -it {self.container.id} '
-                    f'singlestore -p"%{env_token}%"',
-                    shell=True,
-                )
-            else:
-                raise RuntimeError('unsupported platform')
-        finally:
-            del os.environ[env_token]
+        if platform.platform().lower().startswith('macos'):
+            subprocess.call([
+                'osascript', '-e',
+                'tell app "Terminal" to do script '
+                f'"docker exec -it {self.container.id} singlestore-auth"',
+            ])
+        elif platform.platform().lower().startswith('linux'):
+            subprocess.call([
+                'gnome-terminal', '--',
+                'docker', 'exec', '-it', self.container.id, 'singlestore-auth',
+            ])
+        elif platform.platform().lower().startswith('windows'):
+            subprocess.call([
+                'start', 'cmd', '/k'
+                'docker', 'exec', '-it', self.container.id, 'singlestore-auth',
+            ])
+        else:
+            raise RuntimeError('unsupported platform')
 
     def open_mongosh(self) -> None:
         """Open a mongosh in the SingleStoreDB server."""
         if not self.kai_enabled:
             raise RuntimeError('kai interface is not enabled')
-        env_token = '_SINGLESTOREDB_TOKEN_' + self.container.id
-        try:
-            os.environ[env_token] = self.root_password
-            if platform.platform().lower().startswith('macos'):
-                subprocess.call(
-                    'open -a Terminal --args '
-                    f'docker exec -it {self.container.id} mongosh',
-                    shell=True,
-                )
-            elif platform.platform().lower().startswith('linux'):
-                subprocess.call(
-                    f'gnome-terminal -- docker exec -it {self.container.id} mongosh',
-                    shell=True,
-                )
-            elif platform.platform().lower().startswith('windows'):
-                subprocess.call(
-                    f'start cmd /k docker exec -it {self.container.id} mongosh',
-                    shell=True,
-                )
-            else:
-                raise RuntimeError('unsupported platform')
-        finally:
-            del os.environ[env_token]
+        if platform.platform().lower().startswith('macos'):
+            subprocess.call([
+                'osascript', '-e',
+                'tell app "Terminal" to do script '
+                f'"docker exec -it {self.container.id} mongosh-auth"',
+            ])
+        elif platform.platform().lower().startswith('linux'):
+            subprocess.call([
+                'gnome-terminal', '--',
+                'docker', 'exec', '-it', self.container.id, 'mongosh-auth',
+            ])
+        elif platform.platform().lower().startswith('windows'):
+            subprocess.call([
+                'start', 'cmd', '/k'
+                'docker', 'exec', '-it', self.container.id, 'mongosh-auth',
+            ])
+        else:
+            raise RuntimeError('unsupported platform')
 
     def __enter__(self) -> SingleStoreDB:
         return self
@@ -370,11 +368,11 @@ class SingleStoreDB:
         self.stop()
         return None
 
-    def stop(self) -> None:
+    def stop(self, *args: Any) -> None:
         """Stop the SingleStoreDB server."""
         if self.container is not None:
+            self._restore_server_urls()
             try:
-                self._restore_server_urls()
                 self.container.stop()
             finally:
                 self.container = None
@@ -382,7 +380,7 @@ class SingleStoreDB:
 
 def start(
     name: Optional[str] = None,
-    root_password: Optional[str] = None,
+    password: Optional[str] = None,
     license: Optional[str] = None,
     enable_kai: bool = False,
     server_port: Optional[int] = None,
@@ -405,8 +403,8 @@ def start(
     -----------
     name : str, optional
         Name of the container.
-    root_password : str, optional
-        Root password for the SingleStoreDB server.
+    password : str, optional
+        Password for the SingleStoreDB server.
     license : str, optional
         License key for SingleStoreDB.
     enable_kai : bool, optional
@@ -439,7 +437,7 @@ def start(
     """
     return SingleStoreDB(
         name=name,
-        root_password=root_password,
+        password=password,
         license=license,
         enable_kai=enable_kai,
         server_port=server_port,

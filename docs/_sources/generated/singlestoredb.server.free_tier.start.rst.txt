@@ -1,0 +1,4 @@
+﻿singlestoredb.server.free\_tier.start
+=====================================
+.. currentmodule:: singlestoredb.server.free_tier
+.. autofunction:: start

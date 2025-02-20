@@ -1,0 +1,4 @@
+﻿singlestoredb.server.free\_tier.SingleStoreDB.connect
+=====================================================
+.. currentmodule:: singlestoredb.server.free_tier
+.. automethod:: SingleStoreDB.connect
