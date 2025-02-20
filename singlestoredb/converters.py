@@ -594,7 +594,7 @@ def float32_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
     if has_numpy:
         return numpy.frombuffer(x, dtype=numpy.float32)
 
-    return struct.unpack(f'<{len(x)/4}f', x)
+    return struct.unpack(f'<{len(x)//4}f', x)
 
 
 def float64_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
@@ -650,7 +650,7 @@ def float64_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
     if has_numpy:
         return numpy.frombuffer(x, dtype=numpy.float64)
 
-    return struct.unpack(f'<{len(x)/8}d', x)
+    return struct.unpack(f'<{len(x)//8}d', x)
 
 
 def int8_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
@@ -762,7 +762,7 @@ def int16_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
     if has_numpy:
         return numpy.frombuffer(x, dtype=numpy.int16)
 
-    return struct.unpack(f'<{len(x)/2}h', x)
+    return struct.unpack(f'<{len(x)//2}h', x)
 
 
 def int32_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
@@ -818,7 +818,7 @@ def int32_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
     if has_numpy:
         return numpy.frombuffer(x, dtype=numpy.int32)
 
-    return struct.unpack(f'<{len(x)/4}l', x)
+    return struct.unpack(f'<{len(x)//4}l', x)
 
 
 def int64_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
@@ -875,7 +875,7 @@ def int64_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
     if has_numpy:
         return numpy.frombuffer(x, dtype=numpy.int64)
 
-    return struct.unpack(f'<{len(x)/8}l', x)
+    return struct.unpack(f'<{len(x)//8}l', x)
 
 
 def bson_or_none(x: Optional[bytes]) -> Optional[Any]:
