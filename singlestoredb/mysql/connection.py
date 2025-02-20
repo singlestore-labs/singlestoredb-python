@@ -625,6 +625,9 @@ class Connection(BaseConnection):
 
         from .. import __version__ as VERSION_STRING
 
+        if 'SINGLESTOREDB_WORKLOAD_TYPE' in os.environ:
+            VERSION_STRING += '+' + os.environ['SINGLESTOREDB_WORKLOAD_TYPE']
+
         self._connect_attrs = {
             '_os': str(sys.platform),
             '_pid': str(os.getpid()),

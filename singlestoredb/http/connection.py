@@ -972,6 +972,10 @@ class Connection(connection.Connection):
 
     def __init__(self, **kwargs: Any):
         from .. import __version__ as client_version
+
+        if 'SINGLESTOREDB_WORKLOAD_TYPE' in os.environ:
+            client_version += '+' + os.environ['SINGLESTOREDB_WORKLOAD_TYPE']
+
         connection.Connection.__init__(self, **kwargs)
 
         host = kwargs.get('host', get_option('host'))
