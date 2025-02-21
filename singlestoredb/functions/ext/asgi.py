@@ -692,7 +692,7 @@ class Application(object):
         # Return function info
         elif method == 'GET' and path == self.show_function_info_path:
             functions = self.get_function_info()
-            body = json.dumps(functions).encode('utf-8')
+            body = json.dumps(dict(functions=functions)).encode('utf-8')
             await send(self.text_response_dict)
 
         # Path not found
@@ -749,34 +749,62 @@ class Application(object):
     def get_function_info(
         self,
         func_name: Optional[str] = None,
-    ) -> Dict[str, Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """
         Return the functions and function signature information.
 
         Returns
         -------
-        Dict[str, Dict[str, Any]]
+        Dict[str, Any]
 
         """
+        returns: Dict[str, Any] = {}
         functions = {}
 
         for key, (_, info) in self.endpoints.items():
             if not func_name or key == func_name:
                 sig = info['signature']
                 args = []
+
+                # Function arguments
                 for a in sig.get('args', []):
                     dtype = a['dtype']
                     nullable = '?' in dtype
                     args.append(
                         dict(
                             name=a['name'],
-                            dtype=dtype,
+                            dtype=dtype.replace('?', ''),
                             nullable=nullable,
                         ),
                     )
-                returns = dict(
-                    dtype=sig['returns'].get('dtype'),
-                )
+
+                # Record / table return types
+                if sig['returns']['dtype'].startswith('tuple['):
+                    fields = []
+                    dtypes = sig['returns']['dtype'][6:-1].split(',')
+                    field_names = sig['returns']['field_names']
+                    for i, dtype in enumerate(dtypes):
+                        nullable = '?' in dtype
+                        dtype = dtype.replace('?', '')
+                        fields.append(
+                            dict(
+                                name=field_names[i],
+                                dtype=dtype,
+                                nullable=nullable,
+                            ),
+                        )
+                    returns = dict(
+                        dtype='table' if info['function_type'] == 'tvf' else 'struct',
+                        fields=fields,
+                    )
+
+                # Atomic return types
+                else:
+                    returns = dict(
+                        dtype=sig['returns'].get('dtype').replace('?', ''),
+                        nullable='?' in sig['returns'].get('dtype', ''),
+                    )
+
                 functions[sig['name']] = dict(args=args, returns=returns)
 
         return functions

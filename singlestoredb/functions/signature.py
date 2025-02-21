@@ -494,6 +494,7 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
             'missing annotations for {} in {}'
             .format(', '.join(spec_diff), name),
         )
+
     elif isinstance(args_overrides, dict):
         for s in spec_diff:
             if s not in args_overrides:
@@ -501,6 +502,7 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
                     'missing annotations for {} in {}'
                     .format(', '.join(spec_diff), name),
                 )
+
     elif isinstance(args_overrides, list):
         if len(arg_names) != len(args_overrides):
             raise TypeError(
@@ -509,6 +511,7 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
             )
 
     for i, arg in enumerate(arg_names):
+
         if isinstance(args_overrides, list):
             sql = args_overrides[i]
             arg_type = sql_to_dtype(sql)
@@ -535,6 +538,7 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
     if isinstance(returns_overrides, str):
         sql = returns_overrides
         out_type = sql_to_dtype(sql)
+
     elif isinstance(returns_overrides, list):
         if not output_fields:
             output_fields = [
@@ -547,29 +551,35 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
         sql = dtype_to_sql(
             out_type, function_type=function_type, field_names=output_fields,
         )
+
     elif dataclasses.is_dataclass(returns_overrides):
         out_type = collapse_dtypes([
             classify_dtype(x)
             for x in simplify_dtype([x.type for x in returns_overrides.fields])
         ])
+        output_fields = [x.name for x in returns_overrides.fields]
         sql = dtype_to_sql(
             out_type,
             function_type=function_type,
-            field_names=[x.name for x in returns_overrides.fields],
+            field_names=output_fields,
         )
+
     elif has_pydantic and inspect.isclass(returns_overrides) \
             and issubclass(returns_overrides, pydantic.BaseModel):
         out_type = collapse_dtypes([
             classify_dtype(x)
             for x in simplify_dtype([x for x in returns_overrides.model_fields.values()])
         ])
+        output_fields = [x for x in returns_overrides.model_fields.keys()]
         sql = dtype_to_sql(
             out_type,
             function_type=function_type,
-            field_names=[x for x in returns_overrides.model_fields.keys()],
+            field_names=output_fields,
         )
+
     elif returns_overrides is not None and not isinstance(returns_overrides, str):
         raise TypeError(f'unrecognized type for return value: {returns_overrides}')
+
     else:
         if not output_fields:
             if dataclasses.is_dataclass(signature.return_annotation):
@@ -579,13 +589,26 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
             elif has_pydantic and inspect.isclass(signature.return_annotation) \
                     and issubclass(signature.return_annotation, pydantic.BaseModel):
                 output_fields = list(signature.return_annotation.model_fields.keys())
+
         out_type = collapse_dtypes([
             classify_dtype(x) for x in simplify_dtype(signature.return_annotation)
         ])
+
+        if not output_fields:
+            output_fields = [
+                string.ascii_letters[i] for i in range(out_type.count(',')+1)
+            ]
+
         sql = dtype_to_sql(
             out_type, function_type=function_type, field_names=output_fields,
         )
-    out['returns'] = dict(dtype=out_type, sql=sql, default=None)
+
+    out['returns'] = dict(
+                         dtype=out_type,
+                         sql=sql,
+                         default=None,
+                         field_names=output_fields,
+    )
 
     copied_keys = ['database', 'environment', 'packages', 'resources', 'replace']
     for key in copied_keys:
