@@ -506,6 +506,8 @@ class Application(object):
         link_name: Optional[str] = get_option('external_function.link_name'),
         link_config: Optional[Dict[str, Any]] = None,
         link_credentials: Optional[Dict[str, Any]] = None,
+        name_prefix: str = get_option('external_function.name_prefix'),
+        name_suffix: str = get_option('external_function.name_suffix'),
     ) -> None:
         if link_name and (link_config or link_credentials):
             raise ValueError(
@@ -562,6 +564,7 @@ class Application(object):
                         if not hasattr(x, '_singlestoredb_attrs'):
                             continue
                         name = x._singlestoredb_attrs.get('name', x.__name__)
+                        name = f'{name_prefix}{name}{name_suffix}'
                         external_functions[x.__name__] = x
                         func, info = make_func(name, x)
                         endpoints[name.encode('utf-8')] = func, info
@@ -577,6 +580,7 @@ class Application(object):
                     # Add endpoint for each exported function
                     for name, alias in get_func_names(func_names):
                         item = getattr(pkg, name)
+                        alias = f'{name_prefix}{name}{name_suffix}'
                         external_functions[name] = item
                         func, info = make_func(alias, item)
                         endpoints[alias.encode('utf-8')] = func, info
@@ -589,12 +593,14 @@ class Application(object):
                     if not hasattr(x, '_singlestoredb_attrs'):
                         continue
                     name = x._singlestoredb_attrs.get('name', x.__name__)
+                    name = f'{name_prefix}{name}{name_suffix}'
                     external_functions[x.__name__] = x
                     func, info = make_func(name, x)
                     endpoints[name.encode('utf-8')] = func, info
 
             else:
                 alias = funcs.__name__
+                alias = f'{name_prefix}{alias}{name_suffix}'
                 external_functions[funcs.__name__] = funcs
                 func, info = make_func(alias, funcs)
                 endpoints[alias.encode('utf-8')] = func, info
@@ -1206,6 +1212,22 @@ def main(argv: Optional[List[str]] = None) -> None:
             help='logging level',
         )
         parser.add_argument(
+            '--name-prefix', metavar='name_prefix',
+            default=defaults.get(
+                'name_prefix',
+                get_option('external_function.name_prefix'),
+            ),
+            help='Prefix to add to function names',
+        )
+        parser.add_argument(
+            '--name-suffix', metavar='name_suffix',
+            default=defaults.get(
+                'name_suffix',
+                get_option('external_function.name_suffix'),
+            ),
+            help='Suffix to add to function names',
+        )
+        parser.add_argument(
             'functions', metavar='module.or.func.path', nargs='*',
             help='functions or modules to export in UDF server',
         )
@@ -1297,6 +1319,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         link_config=json.loads(args.link_config) or None,
         link_credentials=json.loads(args.link_credentials) or None,
         app_mode='remote',
+        name_prefix=args.name_prefix,
+        name_suffix=args.name_suffix,
     )
 
     funcs = app.get_create_functions(replace=args.replace_existing)
