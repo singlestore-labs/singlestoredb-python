@@ -115,6 +115,10 @@ Uploading data using a generator function
        yield '1,2,3\n'
        yield '4,5,6\n'
        yield '7,8,9\n'
+       # Note that the data returned does not have to
+       # correspond to a single row. Any length of
+       # data can be returned.
+       yield '10,11,12\n13,14,15\n'
    cur.execute('CREATE TABLE generator (a INT, b INT, c INT)')
    cur.execute(
        '''
@@ -146,6 +150,11 @@ Uploading data using a queue and threads
    data_feeder.put('1,2,3\n')
    data_feeder.put('4,5,6\n')
    data_feeder.put('7,8,9\n')
+   # Note that the data sent does not have to
+   # correspond to a single row. Any length of
+   # data can be sent.
+   data_feeder.put('10,11,12\n13,14,15\n')
+   # Send an empty string to end the data loader.
    data_feeder.put('')
    t.join()
 Utilities

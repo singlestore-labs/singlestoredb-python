@@ -477,6 +477,10 @@ option on the <code class="docutils literal notranslate"><span class="pre">curso
     <span class="k">yield</span> <span class="s1">&#39;1,2,3</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="k">yield</span> <span class="s1">&#39;4,5,6</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="k">yield</span> <span class="s1">&#39;7,8,9</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="c1"># Note that the data returned does not have to</span>
+    <span class="c1"># correspond to a single row. Any length of</span>
+    <span class="c1"># data can be returned.</span>
+    <span class="k">yield</span> <span class="s1">&#39;10,11,12</span><span class="se">\n</span><span class="s1">13,14,15</span><span class="se">\n</span><span class="s1">&#39;</span>
 <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;CREATE TABLE generator (a INT, b INT, c INT)&#39;</span><span class="p">)</span>
 <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
 <span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
@@ -510,6 +514,11 @@ option on the <code class="docutils literal notranslate"><span class="pre">curso
 <span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;1,2,3</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
 <span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;4,5,6</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
 <span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;7,8,9</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="c1"># Note that the data sent does not have to</span>
+<span class="c1"># correspond to a single row. Any length of</span>
+<span class="c1"># data can be sent.</span>
+<span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;10,11,12</span><span class="se">\n</span><span class="s1">13,14,15</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="c1"># Send an empty string to end the data loader.</span>
 <span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
 <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
 </pre></div>
