@@ -101,6 +101,7 @@
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.scroll.html">Cursor.scroll</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.next.html">Cursor.next</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.is_connected.html">Cursor.is_connected</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#uploading-from-streaming-sources">Uploading from streaming sources</a></li>
 </ul>
 </li>
 </ul>
@@ -459,6 +460,62 @@ created using the <a class="reference internal" href="generated/singlestoredb.co
 </tr>
 </tbody>
 </table>
+<section id="uploading-from-streaming-sources">
+<h4>Uploading from streaming sources<a class="headerlink" href="#uploading-from-streaming-sources" title="Link to this heading">¶</a></h4>
+<p>While the standard way of loading a local file using <code class="docutils literal notranslate"><span class="pre">LOAD</span> <span class="pre">DATA</span> <span class="pre">LOCAL</span> <span class="pre">INFILE</span></code>
+is well-known, it is possible to load data from programmatic sources
+as well. This means that you can generate data with a Python function
+and load that data into the database without writing it to a file
+first. Below are two methods of doing this. Both of them use the
+<code class="docutils literal notranslate"><span class="pre">local_infile=true</span></code> parameter on the connection and the <code class="docutils literal notranslate"><span class="pre">infile_stream=</span></code>
+option on the <code class="docutils literal notranslate"><span class="pre">cursor.execute</span></code> method.</p>
+<section id="uploading-data-using-a-generator-function">
+<h5>Uploading data using a generator function<a class="headerlink" href="#uploading-data-using-a-generator-function" title="Link to this heading">¶</a></h5>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;s2-host.com/my_db?local_infile=true&#39;</span><span class="p">)</span>
+<span class="n">cur</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+<span class="k">def</span> <span class="nf">upload_csv</span><span class="p">():</span>
+    <span class="k">yield</span> <span class="s1">&#39;1,2,3</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="k">yield</span> <span class="s1">&#39;4,5,6</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="k">yield</span> <span class="s1">&#39;7,8,9</span><span class="se">\n</span><span class="s1">&#39;</span>
+<span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;CREATE TABLE generator (a INT, b INT, c INT)&#39;</span><span class="p">)</span>
+<span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    LOAD DATA LOCAL INFILE &#39;:stream:&#39; INTO TABLE generator</span>
+<span class="sd">        FIELDS TERMINATED BY &#39;,&#39; ENCLOSED BY &#39;&quot;&#39;</span>
+<span class="sd">    &#39;&#39;&#39;</span><span class="p">,</span>
+    <span class="n">infile_stream</span><span class="o">=</span><span class="n">upload_csv</span><span class="p">(),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="uploading-data-using-a-queue-and-threads">
+<h5>Uploading data using a queue and threads<a class="headerlink" href="#uploading-data-using-a-queue-and-threads" title="Link to this heading">¶</a></h5>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">queue</span> <span class="kn">import</span> <span class="n">Queue</span>
+<span class="kn">from</span> <span class="nn">threading</span> <span class="kn">import</span> <span class="n">Thread</span>
+<span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;s2-host.com/my_db?local_infile=true&#39;</span><span class="p">)</span>
+<span class="n">cur</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+<span class="n">data_feeder</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">()</span>
+<span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;CREATE TABLE queue (a INT, b INT, c INT)&#39;</span><span class="p">)</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">Thread</span><span class="p">(</span>
+    <span class="n">target</span><span class="o">=</span><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">,</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">(</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        LOAD DATA LOCAL INFILE &#39;:stream:&#39; INTO TABLE queue</span>
+<span class="sd">            FIELDS TERMINATED BY &#39;,&#39; ENCLOSED BY &#39;&quot;&#39;</span>
+<span class="sd">        &#39;&#39;&#39;</span><span class="p">,</span>
+    <span class="p">),</span>
+    <span class="n">kwargs</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">infile_stream</span><span class="o">=</span><span class="n">data_feeder</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+<span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;1,2,3</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;4,5,6</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;7,8,9</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
+<span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
 </section>
 </section>
 <section id="utilities">

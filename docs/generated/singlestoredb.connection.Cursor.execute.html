@@ -63,6 +63,7 @@
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.scroll.html">Cursor.scroll</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.next.html">Cursor.next</a></li>
 <li class="toctree-l4"><a class="reference internal" href="singlestoredb.connection.Cursor.is_connected.html">Cursor.is_connected</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../api.html#uploading-from-streaming-sources">Uploading from streaming sources</a></li>
 </ul>
 </li>
 </ul>
@@ -117,12 +118,15 @@ when using a dictionary of parameters.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
+<p>Query with no parameters</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;select * from mytable&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>Query with positional parameters</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;select * from mytable where id &lt; </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="p">[</span><span class="mi">100</span><span class="p">])</span>
 </pre></div>
 </div>
+<p>Query with named parameters</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;select * from mytable where id &lt; </span><span class="si">%(max)s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">max</span><span class="o">=</span><span class="mi">100</span><span class="p">))</span>
 </pre></div>
 </div>

@@ -541,9 +541,15 @@ class Cursor(metaclass=abc.ABCMeta):
 
         Examples
         --------
+        Query with no parameters
+
         >>> cur.execute('select * from mytable')
 
+        Query with positional parameters
+
         >>> cur.execute('select * from mytable where id < %s', [100])
+
+        Query with named parameters
 
         >>> cur.execute('select * from mytable where id < %(max)s', dict(max=100))
 

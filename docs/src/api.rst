@@ -130,6 +130,75 @@ created using the :meth:`Connection.cursor` method.
    Cursor.is_connected
 
 
+Uploading from streaming sources
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+While the standard way of loading a local file using ``LOAD DATA LOCAL INFILE``
+is well-known, it is possible to load data from programmatic sources
+as well. This means that you can generate data with a Python function
+and load that data into the database without writing it to a file
+first. Below are two methods of doing this. Both of them use the
+``local_infile=true`` parameter on the connection and the ``infile_stream=``
+option on the ``cursor.execute`` method.
+
+Uploading data using a generator function
+:::::::::::::::::::::::::::::::::::::::::
+
+.. sourcecode:: python
+
+   conn = s2.connect('s2-host.com/my_db?local_infile=true')
+   cur = conn.cursor()
+
+   def upload_csv():
+       yield '1,2,3\n'
+       yield '4,5,6\n'
+       yield '7,8,9\n'
+
+   cur.execute('CREATE TABLE generator (a INT, b INT, c INT)')
+
+   cur.execute(
+       '''
+       LOAD DATA LOCAL INFILE ':stream:' INTO TABLE generator
+           FIELDS TERMINATED BY ',' ENCLOSED BY '"'
+       ''',
+       infile_stream=upload_csv(),
+   )
+
+Uploading data using a queue and threads
+::::::::::::::::::::::::::::::::::::::::
+
+.. sourcecode:: python
+
+   from queue import Queue
+   from threading import Thread
+
+   conn = s2.connect('s2-host.com/my_db?local_infile=true')
+   cur = conn.cursor()
+
+   data_feeder = Queue()
+
+   cur.execute('CREATE TABLE queue (a INT, b INT, c INT)')
+
+   t = Thread(
+       target=cur.execute,
+       args=(
+           '''
+           LOAD DATA LOCAL INFILE ':stream:' INTO TABLE queue
+               FIELDS TERMINATED BY ',' ENCLOSED BY '"'
+           ''',
+       ),
+       kwargs=dict(infile_stream=data_feeder),
+   )
+   t.start()
+
+   data_feeder.put('1,2,3\n')
+   data_feeder.put('4,5,6\n')
+   data_feeder.put('7,8,9\n')
+   data_feeder.put('')
+
+   t.join()
+
+
 Utilities
 ---------
 
