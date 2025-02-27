@@ -5,6 +5,14 @@ This document outlines features and improvements from each release.
 .. note:: All releases before v1.0.0 are considered pre-release and
    are for non-production testing and evaluation, and may include
    changes to the API.
+v1.12.0 - February 27, 2025
+---------------------------
+* Add support for external TVFs
+* Add support for pyarrow Table and pandas / polars DataFrames return values in external functions
+* Add support for return value field names
+* Add support for dataclasses and Pydantic external function parameter and return value definitions
+* Add ``singlestoredb.server.docker`` and ``singlestoredb.server.free_tier`` server interfaces
+* Fix vector result conversions when numpy is not installed
 v1.11.0 - January 9, 2025
 -------------------------
 * Fix connection memory leak
