@@ -448,7 +448,7 @@ class Stage(FileLocation):
                 return False
             raise
 
-    def _listdir(self, stage_path: PathLike, *, recursive: bool = False) -> List[str]:
+    def _listdir(self, stage_path: PathLike, *, recursive: bool = False) -> List[FilesObject]:
         """
         Return the names of files in a directory.
 
@@ -466,11 +466,11 @@ class Stage(FileLocation):
         if recursive:
             out = []
             for item in res['content'] or []:
-                out.append(item['path'])
+                out.append(FilesObject.from_dict(item, self))
                 if item['type'] == 'directory':
                     out.extend(self._listdir(item['path'], recursive=recursive))
             return out
-        return [x['path'] for x in res['content'] or []]
+        return [FilesObject.from_dict(x, self) for x in res['content'] or []]
 
     def listdir(
         self,

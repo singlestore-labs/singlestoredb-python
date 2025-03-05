@@ -35,12 +35,6 @@ except ImportError:
 else:
     faulthandler.enable()
 
-def daemonize() -> None:
-    devnull = os.open(os.devnull, os.O_RDWR)
-    os.dup2(devnull, sys.stdin.fileno())
-    os.dup2(devnull, sys.stdout.fileno())
-    os.dup2(devnull, sys.stderr.fileno())
-
 def parse_args():
     '''Parse command line'''
 
@@ -55,39 +49,20 @@ def main():
 
     access_token = os.getenv("API_KEY")
     base_url = os.getenv("API_BASEURL")
+    workspaceGroupID = os.getenv("WORKSPACEGROUP_ID")
     if not access_token:
         print("API_KEY not set")
         sys.exit(1)
     if not base_url:
         print("API_BASEURL not set")
         sys.exit(1)
-
-    fileManager = s2.manage_files(access_token, base_url=base_url)
-
-    # Mount personal notebooks
-    os.makedirs(f"{options.mountpoint}/personal", exist_ok=True)
-    print("Mounting personal")
-    if os.fork() == 0:
-        fileManager.personal_space.mount(f"{options.mountpoint}/personal")
-        os._exit(0)
-    
-    # Mount shared notebooks
-    os.makedirs(f"{options.mountpoint}/shared", exist_ok=True)
-    print("Mounting shared")
-    if os.fork() == 0:
-        fileManager.shared_space.mount(f"{options.mountpoint}/shared")
-        os._exit(0)
+    if not workspaceGroupID:
+        print("WORKSPACEGROUP_ID not set")
+        sys.exit(1)
 
     # Mount stage for each workspace group
-    workspaceManager = s2.manage_workspaces(access_token, base_url=base_url)
-    for workspaceGroupID in [wg.id for wg in workspaceManager.workspace_groups]:
-        os.makedirs(f"{options.mountpoint}/stage/{workspaceGroupID}", exist_ok=True)
-        print(f"Mounting stage/{workspaceGroupID}")
-        if os.fork() == 0:
-            wg = s2.manage_workspaces(access_token, base_url=base_url).get_workspace_group(workspaceGroupID)
-            wg.stage.mount(f"{options.mountpoint}/stage/{wg.id}")
-            os._exit(0)
+    wg = s2.manage_workspaces(access_token, base_url=base_url).get_workspace_group(workspaceGroupID)
+    wg.stage.mount(options.mountpoint)
 
 if __name__ == '__main__':
     main()
-

@@ -357,7 +357,7 @@ class FilesObjectBytesReader(io.BytesIO):
 
 
 class Inode:
-    def __init__(self, fs, parent, name, id=None):
+    def __init__(self, fs, parent: int, name: str, type:str, id=None):
         self.fs = fs
 
         if id is None:
@@ -367,6 +367,7 @@ class Inode:
         self.name = name
         self.parent = parent
         self.id = id
+        self.type = type
         self._children = None
 
     def __repr__(self):
@@ -375,31 +376,38 @@ class Inode:
     def getNameWithoutTrailingSlash(self):
         if self.name == "":
             return self.name
-        if self.isDir():
+        if self.name.endswith("/"):
             return self.name[:-1]
         return self.name
 
     def getStagePath(self):
         if self.parent is None:
             return self.name
-        return self.parent.getStagePath() + self.name
+        stagepath = self.parent.getStagePath() + self.name
+        if self.type == 'directory':
+            stagepath += "/"
+        return stagepath
     
     def isDir(self):
-        return self.name == "" or self.name.endswith("/")
+        return self.name == "" or self.getStagePath().endswith("/")
     
     def isFile(self):
         return not self.isDir()
     
-    def children(self):
+    @property
+    def children(self) -> List[int]:
         if self._children is None:
             self._children = []
-            childrenNames = self.fs.stage.listdir(self.getStagePath())
-            for childName in childrenNames:
-                childInode = Inode(self.fs, self, childName)
+            children = self.fs.stage.listdir(self.getStagePath())
+            for child in children:
+                childInode = Inode(self.fs, self, child.name, child.type)
                 self.fs.inodes[childInode.id] = childInode
                 self._children.append(childInode.id)
-
         return self._children
+    
+    def unlink(self, id):
+        assert self._children is not None
+        self._children.remove(id)
 
 class SinglestoreFS(pyfuse3.Operations):
     def __init__(self, fileLocation: FileLocation):
@@ -416,7 +424,7 @@ class SinglestoreFS(pyfuse3.Operations):
         self.stage = fileLocation
 
         self.inodes = {
-            pyfuse3.ROOT_INODE: Inode(self, None, "", pyfuse3.ROOT_INODE),
+            pyfuse3.ROOT_INODE: Inode(self, None, "", 'directory', pyfuse3.ROOT_INODE),
         }
 
     async def getattr(self, id, ctx=None):
@@ -453,7 +461,7 @@ class SinglestoreFS(pyfuse3.Operations):
 
         assert parent_inode.isDir()
 
-        for child_id in parent_inode.children():
+        for child_id in parent_inode.children:
             child_inode = self.inodes[child_id]
             if child_inode.getNameWithoutTrailingSlash() == name.decode():
                 return await self.getattr(child_id)
@@ -472,7 +480,7 @@ class SinglestoreFS(pyfuse3.Operations):
 
         assert inode.isDir()
 
-        children = {child: self.inodes[child] for child in inode.children() if child > start_id}
+        children = {child: self.inodes[child] for child in inode.children if child > start_id}
 
         for child in children.values():
             pyfuse3.readdir_reply(
@@ -497,7 +505,7 @@ class SinglestoreFS(pyfuse3.Operations):
         assert parent_inode.isDir()
         stagePath = parent_inode.getStagePath() + name.decode()
         self.stage.open(stagePath, "w").close()
-        inode = Inode(self, parent_inode, name.decode())
+        inode = Inode(self, parent_inode, name.decode(), 'file')
         self.inodes[inode.id] = inode
         self.inodes[parent_id]._children.append(inode.id)
         return pyfuse3.FileInfo(fh=inode.id), await self.getattr(inode.id)
@@ -519,7 +527,7 @@ class SinglestoreFS(pyfuse3.Operations):
         inode = self.inodes[attr.st_ino]
         assert inode.isFile()
         self.stage.remove(inode.getStagePath())
-        parent_inode._children.remove(inode.id)
+        parent_inode.unlink(inode.id)
         del self.inodes[inode.id]
         return
     
@@ -528,7 +536,7 @@ class SinglestoreFS(pyfuse3.Operations):
         assert parent_inode.isDir()
         stagePath = parent_inode.getStagePath() + name.decode() + "/"
         self.stage.mkdir(stagePath)
-        inode = Inode(self, parent_inode, name.decode() + "/")
+        inode = Inode(self, parent_inode, name.decode() + "/", 'directory')
         self.inodes[inode.id] = inode
         parent_inode._children.append(inode.id)
         return await self.getattr(inode.id)
@@ -544,7 +552,7 @@ class SinglestoreFS(pyfuse3.Operations):
         inode.parent = newparent_inode
         inode.name = newname.decode()
         newparent_inode._children.append(inode.id)
-        parent_inode._children.remove(inode.id)
+        parent_inode.unlink(inode.id)
         return
     
     async def rmdir(self, parent_id, name, ctx):
@@ -554,7 +562,7 @@ class SinglestoreFS(pyfuse3.Operations):
         inode = self.inodes[attr.st_ino]
         assert inode.isDir()
         self.stage.rmdir(inode.getStagePath())
-        parent_inode._children.remove(inode.id)
+        parent_inode.unlink(inode.id)
         del self.inodes[inode.id]
         return
 
@@ -637,7 +645,7 @@ class FileLocation(ABC):
         path: PathLike = '/',
         *,
         recursive: bool = False,
-    ) -> List[str]:
+    ) -> List[FilesObject]:
         pass
 
     @abstractmethod
@@ -686,7 +694,7 @@ class FileLocation(ABC):
         fs = SinglestoreFS(self)
         fuse_options = set(pyfuse3.default_options)
         # fuse_options.add('fsname=singlestore_fs')
-        # fuse_options.add('debug')
+        fuse_options.add('debug')
         pyfuse3.init(fs, mountpoint, fuse_options)
 
         try:
@@ -1131,9 +1139,9 @@ class FileSpace(FileLocation):
                 return False
             raise
 
-    def _listdir(self, path: PathLike, *, recursive: bool = False) -> List[str]:
+    def _listdir(self, path: PathLike, *, recursive: bool = False) -> List[FilesObject]:
         """
-        Return the names of files in a directory.
+        Return the files in a directory.
 
         Parameters
         ----------
@@ -1150,19 +1158,18 @@ class FileSpace(FileLocation):
         if recursive:
             out = []
             for item in res['content'] or []:
-                out.append(item['path'])
+                out.append(FilesObject(item, self))
                 if item['type'] == 'directory':
                     out.extend(self._listdir(item['path'], recursive=recursive))
             return out
-
-        return [x['path'] for x in res['content'] or []]
+        return [FilesObject(x, self) for x in res['content'] or []]
 
     def listdir(
         self,
         path: PathLike = '/',
         *,
         recursive: bool = False,
-    ) -> List[str]:
+    ) -> List[FilesObject]:
         """
         List the files / folders at the given path.
 
@@ -1183,9 +1190,6 @@ class FileSpace(FileLocation):
             raise NotADirectoryError(f'path is not a directory: {path}')
 
         out = self._listdir(path, recursive=recursive)
-        if path != '/':
-            path_n = len(path.split('/')) - 1
-            out = ['/'.join(x.split('/')[path_n:]) for x in out]
         return out
 
     def download_file(
