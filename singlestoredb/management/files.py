@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import datetime
+import errno
 import glob
 import io
 import os
 import re
 from abc import ABC
 from abc import abstractmethod
+import stat
+import sys
+import time
 from typing import Any
 from typing import BinaryIO
 from typing import Dict
@@ -16,6 +20,9 @@ from typing import List
 from typing import Optional
 from typing import TextIO
 from typing import Union
+
+import pyfuse3
+import trio
 
 from .. import config
 from ..exceptions import ManagementError
@@ -311,7 +318,7 @@ class FilesObject(object):
         if self.created_at is None:
             return 0.0
         return self.created_at.timestamp()
-
+    
 
 class FilesObjectTextWriter(io.StringIO):
     """StringIO wrapper for writing to FileLocation."""
@@ -348,6 +355,208 @@ class FilesObjectBytesWriter(io.BytesIO):
 class FilesObjectBytesReader(io.BytesIO):
     """BytesIO wrapper for reading from FileLocation."""
 
+
+class Inode:
+    def __init__(self, fs, parent, name, id=None):
+        self.fs = fs
+
+        if id is None:
+            id = fs.next_id
+            fs.next_id += 1
+
+        self.name = name
+        self.parent = parent
+        self.id = id
+        self._children = None
+
+    def __repr__(self):
+        return f"Inode({self.id}, \"{self.name}\", {self._children})"
+    
+    def getNameWithoutTrailingSlash(self):
+        if self.name == "":
+            return self.name
+        if self.isDir():
+            return self.name[:-1]
+        return self.name
+
+    def getStagePath(self):
+        if self.parent is None:
+            return self.name
+        return self.parent.getStagePath() + self.name
+    
+    def isDir(self):
+        return self.name == "" or self.name.endswith("/")
+    
+    def isFile(self):
+        return not self.isDir()
+    
+    def children(self):
+        if self._children is None:
+            self._children = []
+            childrenNames = self.fs.stage.listdir(self.getStagePath())
+            for childName in childrenNames:
+                childInode = Inode(self.fs, self, childName)
+                self.fs.inodes[childInode.id] = childInode
+                self._children.append(childInode.id)
+
+        return self._children
+
+class SinglestoreFS(pyfuse3.Operations):
+    def __init__(self, fileLocation: FileLocation):
+        super(SinglestoreFS, self).__init__()
+        self.next_id = pyfuse3.ROOT_INODE + 1
+
+        """
+        How to use:
+        workspaceManager = s2.manage_workspaces(access_token, base_url=base_url)
+        workspaceGroup = workspaceManager.get_workspace_group(workspace_group)
+        return workspaceGroup.stage
+        """
+        
+        self.stage = fileLocation
+
+        self.inodes = {
+            pyfuse3.ROOT_INODE: Inode(self, None, "", pyfuse3.ROOT_INODE),
+        }
+
+    async def getattr(self, id, ctx=None):
+        inode = self.inodes[id]
+        info = self.stage.info(inode.getStagePath())
+        
+        entry = pyfuse3.EntryAttributes()
+        if inode.isDir():
+            entry.st_mode = (stat.S_IFDIR | 0o555)
+            entry.st_size = 0
+        elif inode.isFile():
+            entry.st_mode = (stat.S_IFREG | 0o555)
+            entry.st_size = info.size
+        else:
+            raise pyfuse3.FUSEError(errno.ENOENT)
+        if info.writable:
+            entry.st_mode |= 0o222
+
+        entry.st_atime_ns = time.time_ns() # Current timestamp
+        entry.st_ctime_ns = 0
+        if info.created_at is not None:
+            entry.st_ctime_ns = info.created_at.timestamp()*1e9
+        entry.st_mtime_ns = 0
+        if info.last_modified_at is not None:
+            entry.st_mtime_ns = info.last_modified_at.timestamp()*1e9
+        entry.st_gid = os.getgid() # TODO: check
+        entry.st_uid = os.getuid() # TODO: check
+        entry.st_ino = id
+
+        return entry
+
+    async def lookup(self, parent_id, name, ctx=None):
+        parent_inode = self.inodes[parent_id]
+
+        assert parent_inode.isDir()
+
+        for child_id in parent_inode.children():
+            child_inode = self.inodes[child_id]
+            if child_inode.getNameWithoutTrailingSlash() == name.decode():
+                return await self.getattr(child_id)
+        raise pyfuse3.FUSEError(errno.ENOENT)
+
+    async def opendir(self, id, ctx):
+        if not id in self.inodes:
+            raise pyfuse3.FUSEError(errno.ENOENT)
+        return id
+
+    async def readdir(self, fh, start_id, token):
+        if not fh in self.inodes:
+            raise pyfuse3.FUSEError(errno.ENOENT)
+
+        inode = self.inodes[fh]
+
+        assert inode.isDir()
+
+        children = {child: self.inodes[child] for child in inode.children() if child > start_id}
+
+        for child in children.values():
+            pyfuse3.readdir_reply(
+                token,
+                child.getNameWithoutTrailingSlash().encode(),
+                await self.getattr(child.id),
+                child.id
+            )
+        return
+
+    async def open(self, id, flags, ctx):
+        return pyfuse3.FileInfo(fh=id)
+
+    async def read(self, fh, off, size):
+        inode = self.inodes[fh]
+        assert inode.isFile()
+        fileContent = self.stage.download_file(inode.getStagePath())
+        return fileContent[off:off+size]
+    
+    async def create(self, parent_id, name, mode, flags, ctx):
+        parent_inode = self.inodes[parent_id]
+        assert parent_inode.isDir()
+        stagePath = parent_inode.getStagePath() + name.decode()
+        self.stage.open(stagePath, "w").close()
+        inode = Inode(self, parent_inode, name.decode())
+        self.inodes[inode.id] = inode
+        self.inodes[parent_id]._children.append(inode.id)
+        return pyfuse3.FileInfo(fh=inode.id), await self.getattr(inode.id)
+
+    async def setattr(self, id, attr, fields, fh, ctx):
+        return await self.getattr(id)
+
+    async def write(self, fh, offset, data):
+        inode = self.inodes[fh]
+        assert inode.isFile()
+        fileContent = self.stage.download_file(inode.getStagePath())
+        newFileContent = fileContent[:offset] + data + fileContent[offset+len(data):]
+        with self.stage.open(inode.getStagePath(), "wb") as f:
+            return f.write(newFileContent)
+    
+    async def unlink(self, parent_id, name, ctx):
+        parent_inode = self.inodes[parent_id]
+        attr = await self.lookup(parent_id, name)
+        inode = self.inodes[attr.st_ino]
+        assert inode.isFile()
+        self.stage.remove(inode.getStagePath())
+        parent_inode._children.remove(inode.id)
+        del self.inodes[inode.id]
+        return
+    
+    async def mkdir(self, parent_id, name, mode, ctx):
+        parent_inode = self.inodes[parent_id]
+        assert parent_inode.isDir()
+        stagePath = parent_inode.getStagePath() + name.decode() + "/"
+        self.stage.mkdir(stagePath)
+        inode = Inode(self, parent_inode, name.decode() + "/")
+        self.inodes[inode.id] = inode
+        parent_inode._children.append(inode.id)
+        return await self.getattr(inode.id)
+    
+    async def rename(self, parent_id, name, newparent_id, newname, ctx):
+        parent_inode = self.inodes[parent_id]
+        newparent_inode = self.inodes[newparent_id]
+        assert parent_inode.isDir()
+        assert newparent_inode.isDir()
+        attr = await self.lookup(parent_id, name)
+        inode = self.inodes[attr.st_ino]
+        self.stage.rename(inode.getStagePath(), newparent_inode.getStagePath() + newname.decode())
+        inode.parent = newparent_inode
+        inode.name = newname.decode()
+        newparent_inode._children.append(inode.id)
+        parent_inode._children.remove(inode.id)
+        return
+    
+    async def rmdir(self, parent_id, name, ctx):
+        parent_inode = self.inodes[parent_id]
+        assert parent_inode.isDir()
+        attr = await self.lookup(parent_id, name)
+        inode = self.inodes[attr.st_ino]
+        assert inode.isDir()
+        self.stage.rmdir(inode.getStagePath())
+        parent_inode._children.remove(inode.id)
+        del self.inodes[inode.id]
+        return
 
 class FileLocation(ABC):
     @abstractmethod
@@ -472,6 +681,20 @@ class FileLocation(ABC):
     def __repr__(self) -> str:
         pass
 
+    def mount(self, mountpoint) -> None:
+        """Mount to folder"""
+        fs = SinglestoreFS(self)
+        fuse_options = set(pyfuse3.default_options)
+        # fuse_options.add('fsname=singlestore_fs')
+        # fuse_options.add('debug')
+        pyfuse3.init(fs, mountpoint, fuse_options)
+
+        try:
+            trio.run(pyfuse3.main)
+        except:
+            pyfuse3.close(unmount=True)
+
+        # pyfuse3.close()
 
 class FilesManager(Manager):
     """

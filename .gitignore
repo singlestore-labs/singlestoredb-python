@@ -80,3 +80,6 @@ dask-worker-space
 
 ## Test configuration
 singlestoredb/mysql/tests/databases.json
+
+## Env vars
+.env
