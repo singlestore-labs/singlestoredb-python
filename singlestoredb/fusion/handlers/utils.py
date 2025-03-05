@@ -190,6 +190,10 @@ def get_deployment(
         * params['group']['deployment_id']
         * params['in_deployment']['deployment_name']
         * params['in_deployment']['deployment_id']
+        * params['in']['in_group']['deployment_name']
+        * params['in']['in_group']['deployment_id']
+        * params['in']['in_deployment']['deployment_name']
+        * params['in']['in_deployment']['deployment_id']
 
     Or, from the SINGLESTOREDB_WORKSPACE_GROUP
     or SINGLESTOREDB_CLUSTER environment variables.
@@ -199,7 +203,9 @@ def get_deployment(
 
     deployment_name = params.get('deployment_name') or \
         (params.get('in_deployment') or {}).get('deployment_name') or \
-        (params.get('group') or {}).get('deployment_name')
+        (params.get('group') or {}).get('deployment_name') or \
+        ((params.get('in') or {}).get('in_group') or {}).get('deployment_name') or \
+        ((params.get('in') or {}).get('in_deployment') or {}).get('deployment_name')
     if deployment_name:
         workspace_groups = [
             x for x in manager.workspace_groups
@@ -239,7 +245,9 @@ def get_deployment(
 
     deployment_id = params.get('deployment_id') or \
         (params.get('in_deployment') or {}).get('deployment_id') or \
-        (params.get('group') or {}).get('deployment_id')
+        (params.get('group') or {}).get('deployment_id') or \
+        ((params.get('in') or {}).get('in_group') or {}).get('deployment_id') or \
+        ((params.get('in') or {}).get('in_deployment') or {}).get('deployment_id')
     if deployment_id:
         try:
             return manager.get_workspace_group(deployment_id)
