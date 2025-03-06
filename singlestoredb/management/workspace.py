@@ -477,7 +477,7 @@ class Stage(FileLocation):
         stage_path: PathLike = '/',
         *,
         recursive: bool = False,
-    ) -> List[str]:
+    ) -> List[FilesObject]:
         """
         List the files / folders at the given path.
 
@@ -496,9 +496,6 @@ class Stage(FileLocation):
 
         if self.is_dir(stage_path):
             out = self._listdir(stage_path, recursive=recursive)
-            if stage_path != '/':
-                stage_path_n = len(stage_path.split('/')) - 1
-                out = ['/'.join(x.split('/')[stage_path_n:]) for x in out]
             return out
 
         raise NotADirectoryError(f'stage path is not a directory: {stage_path}')

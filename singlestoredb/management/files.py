@@ -355,59 +355,10 @@ class FilesObjectBytesWriter(io.BytesIO):
 class FilesObjectBytesReader(io.BytesIO):
     """BytesIO wrapper for reading from FileLocation."""
 
-
-class Inode:
-    def __init__(self, fs, parent: int, name: str, type:str, id=None):
-        self.fs = fs
-
-        if id is None:
-            id = fs.next_id
-            fs.next_id += 1
-
-        self.name = name
-        self.parent = parent
-        self.id = id
-        self.type = type
-        self._children = None
-
-    def __repr__(self):
-        return f"Inode({self.id}, \"{self.name}\", {self._children})"
-    
-    def getNameWithoutTrailingSlash(self):
-        if self.name == "":
-            return self.name
-        if self.name.endswith("/"):
-            return self.name[:-1]
-        return self.name
-
-    def getStagePath(self):
-        if self.parent is None:
-            return self.name
-        stagepath = self.parent.getStagePath() + self.name
-        if self.type == 'directory':
-            stagepath += "/"
-        return stagepath
-    
-    def isDir(self):
-        return self.name == "" or self.getStagePath().endswith("/")
-    
-    def isFile(self):
-        return not self.isDir()
-    
-    @property
-    def children(self) -> List[int]:
-        if self._children is None:
-            self._children = []
-            children = self.fs.stage.listdir(self.getStagePath())
-            for child in children:
-                childInode = Inode(self.fs, self, child.name, child.type)
-                self.fs.inodes[childInode.id] = childInode
-                self._children.append(childInode.id)
-        return self._children
-    
-    def unlink(self, id):
-        assert self._children is not None
-        self._children.remove(id)
+class FileHandle:
+    def __init__(self, inode: int, f):
+        self.inode = inode
+        self.f = f
 
 class SinglestoreFS(pyfuse3.Operations):
     def __init__(self, fileLocation: FileLocation):
@@ -423,148 +374,275 @@ class SinglestoreFS(pyfuse3.Operations):
         
         self.stage = fileLocation
 
-        self.inodes = {
-            pyfuse3.ROOT_INODE: Inode(self, None, "", 'directory', pyfuse3.ROOT_INODE),
+        # Convert inode to stage path
+        self.inode2path = {
+            pyfuse3.ROOT_INODE: "",
         }
+        self.path2inode = {
+            "": pyfuse3.ROOT_INODE,
+        }
+        self.fileHandles = {}
 
-    async def getattr(self, id, ctx=None):
-        inode = self.inodes[id]
-        info = self.stage.info(inode.getStagePath())
-        
+        self._entryAttributesCache = {}
+        self._listdirCache = {}
+
+    async def getattr(self, inode, ctx=None):
+        path = self.inode2path[inode]
+        if inode in self._entryAttributesCache:
+            return self._entryAttributesCache[inode]
+
+        info = self.stage.info(path)
+        return self._EntryAttributes(inode, info)
+
+    def _EntryAttributes(self, inode: int, obj: FilesObject) -> pyfuse3.EntryAttributes:
         entry = pyfuse3.EntryAttributes()
-        if inode.isDir():
-            entry.st_mode = (stat.S_IFDIR | 0o555)
+        if obj.is_dir():
+            entry.st_mode = (stat.S_IFDIR | 0o777)
             entry.st_size = 0
-        elif inode.isFile():
-            entry.st_mode = (stat.S_IFREG | 0o555)
-            entry.st_size = info.size
+        elif obj.is_file():
+            entry.st_mode = (stat.S_IFREG | 0o777)
+            entry.st_size = obj.size
         else:
             raise pyfuse3.FUSEError(errno.ENOENT)
-        if info.writable:
-            entry.st_mode |= 0o222
 
         entry.st_atime_ns = time.time_ns() # Current timestamp
         entry.st_ctime_ns = 0
-        if info.created_at is not None:
-            entry.st_ctime_ns = info.created_at.timestamp()*1e9
+        if obj.created_at is not None:
+            entry.st_ctime_ns = obj.created_at.timestamp()*1e9
         entry.st_mtime_ns = 0
-        if info.last_modified_at is not None:
-            entry.st_mtime_ns = info.last_modified_at.timestamp()*1e9
+        if obj.last_modified_at is not None:
+            entry.st_mtime_ns = obj.last_modified_at.timestamp()*1e9
         entry.st_gid = os.getgid() # TODO: check
         entry.st_uid = os.getuid() # TODO: check
-        entry.st_ino = id
+        entry.st_ino = inode
+
+        self._entryAttributesCache[inode] = entry
 
         return entry
+    
+    def is_dir(self, path: str) -> bool:
+        return path == "" or path.endswith("/")
 
-    async def lookup(self, parent_id, name, ctx=None):
-        parent_inode = self.inodes[parent_id]
+    async def lookup(self, parent_inode: int, name: str, ctx=None) -> pyfuse3.EntryAttributes:
+        parent_path = self.inode2path[parent_inode]
+        assert self.is_dir(parent_path)
+        if parent_path not in self._listdirCache:
+            self._listdirCache[parent_path] = self.stage.listdir(parent_path)
+        children = self._listdirCache[parent_path]
 
-        assert parent_inode.isDir()
+        for child in children:
+            if child.path not in self.path2inode:
+                child_inode = self.next_id
+                self.next_id += 1
+                self.inode2path[child_inode] = child.path
+                self.path2inode[child.path] = child_inode
+            child_inode = self.path2inode[child.path]
 
-        for child_id in parent_inode.children:
-            child_inode = self.inodes[child_id]
-            if child_inode.getNameWithoutTrailingSlash() == name.decode():
-                return await self.getattr(child_id)
+        for child in children:
+            if child.name == name.decode():
+                return self._EntryAttributes(child_inode, child)
+
         raise pyfuse3.FUSEError(errno.ENOENT)
 
-    async def opendir(self, id, ctx):
-        if not id in self.inodes:
+    async def opendir(self, inode, ctx):
+        if not inode in self.inode2path:
             raise pyfuse3.FUSEError(errno.ENOENT)
-        return id
+        fh = inode
+        return fh
 
     async def readdir(self, fh, start_id, token):
-        if not fh in self.inodes:
+        inode = fh
+
+        if not inode in self.inode2path:
             raise pyfuse3.FUSEError(errno.ENOENT)
 
-        inode = self.inodes[fh]
+        path = self.inode2path[inode]
 
-        assert inode.isDir()
+        assert self.is_dir(path)
 
-        children = {child: self.inodes[child] for child in inode.children if child > start_id}
+        if path not in self._listdirCache:
+            self._listdirCache[path] = self.stage.listdir(path)
+        children = self._listdirCache[path]
 
-        for child in children.values():
+        for child in children:
+            if child.path not in self.path2inode:
+                child_inode = self.next_id
+                self.next_id += 1
+                self.inode2path[child_inode] = child.path
+                self.path2inode[child.path] = child_inode
+
+        for i, child in enumerate(children):
+            if i < start_id:
+                continue
+            child_inode = self.path2inode[child.path]
             pyfuse3.readdir_reply(
                 token,
-                child.getNameWithoutTrailingSlash().encode(),
-                await self.getattr(child.id),
-                child.id
+                child.name.encode(),
+                self._EntryAttributes(child_inode, child),
+                i+1,
             )
         return
 
-    async def open(self, id, flags, ctx):
-        return pyfuse3.FileInfo(fh=id)
+    def _flags2mode(self, flags):
+        mode = ""
+        if flags & os.O_RDONLY:
+            mode += "r"
+        elif flags & os.O_WRONLY:
+            mode += "w"
+        elif flags & os.O_RDWR:
+            mode += "w"
+        elif flags & os.O_EXCL:
+            mode += "x"
+        else:
+            mode += "r"
 
-    async def read(self, fh, off, size):
-        inode = self.inodes[fh]
-        assert inode.isFile()
-        fileContent = self.stage.download_file(inode.getStagePath())
-        return fileContent[off:off+size]
+        mode += "b"
+
+        return mode
+
+    async def open(self, inode, flags, ctx):
+        if len(self.fileHandles) == 0:
+            fh = 1
+        else:
+            fh = max(self.fileHandles) + 1
+        
+        path = self.inode2path[inode]
+
+        mode = self._flags2mode(flags)
+
+        # This is a hack because the Python SDK does not allow us to open a file in append mode (so, the only way to write is to get rid of all contents).
+        if (flags & os.O_WRONLY or flags & os.O_RDWR) and not (flags & os.O_TRUNC):
+            with self.stage.open(path, "rb") as fread:
+                buf = fread.read()
+
+            f = self.stage.open(path, mode)
+            f.write(buf)
+            f.seek(0)
+        else:
+            f = self.stage.open(path, mode)
+
+        self.fileHandles[fh] = FileHandle(
+            inode,
+            f
+        )
+
+        return pyfuse3.FileInfo(fh=fh)
     
-    async def create(self, parent_id, name, mode, flags, ctx):
-        parent_inode = self.inodes[parent_id]
-        assert parent_inode.isDir()
-        stagePath = parent_inode.getStagePath() + name.decode()
-        self.stage.open(stagePath, "w").close()
-        inode = Inode(self, parent_inode, name.decode(), 'file')
-        self.inodes[inode.id] = inode
-        self.inodes[parent_id]._children.append(inode.id)
-        return pyfuse3.FileInfo(fh=inode.id), await self.getattr(inode.id)
+    async def flush(self, fh):
+        fileHandle = self.fileHandles[fh]
+        fileHandle.f.flush()
+
+    async def release(self, fh):
+        fileHandle = self.fileHandles[fh]
+        fileHandle.f.close()
+        del self.fileHandles[fh]
+
+    async def read(self, fh, off, size) -> bytes:
+        fileHandle = self.fileHandles[fh]
+        fileHandle.f.seek(off)
+        buf = fileHandle.f.read(size)
+        return buf
+    
+    async def create(self, parent_inode, name, mode, flags, ctx):
+        parent_path = self.inode2path[parent_inode]
+        assert self.is_dir(parent_path)
+
+        inode = self.next_id
+        self.next_id += 1
+
+        path = parent_path + name.decode()
+
+        self.inode2path[inode] = path
+        self.path2inode[path] = inode
+
+        if len(self.fileHandles) == 0:
+            fh = 1
+        else:
+            fh = max(self.fileHandles) + 1
+
+        mode = self._flags2mode(flags)
+
+        self.stage.open(path, mode).close()
+        if parent_path in self._listdirCache: del self._listdirCache[parent_path]
+
+        # We can apparently only getattr on a file if it is closed...
+        # That's why we're creating the file, closing it, getting attrs, and then opening again.
+        attr = await self.getattr(inode)
+
+        self.fileHandles[fh] = FileHandle(
+            inode,
+            self.stage.open(path, mode)
+        )
+
+        return pyfuse3.FileInfo(fh=fh), attr
 
     async def setattr(self, id, attr, fields, fh, ctx):
+        fileHandle = self.fileHandles[fh]
+
+        if fields.update_size:
+            fileHandle.f.truncate(attr.st_size)
+
         return await self.getattr(id)
 
-    async def write(self, fh, offset, data):
-        inode = self.inodes[fh]
-        assert inode.isFile()
-        fileContent = self.stage.download_file(inode.getStagePath())
-        newFileContent = fileContent[:offset] + data + fileContent[offset+len(data):]
-        with self.stage.open(inode.getStagePath(), "wb") as f:
-            return f.write(newFileContent)
+    async def write(self, fh: int, offset: int, data: bytes) -> int:
+        fileHandle = self.fileHandles[fh]
+        inode = fileHandle.inode
+        path = self.inode2path[inode]
+        fileHandle.f.seek(offset)
+        ret = fileHandle.f.write(data)
+        if inode in self._entryAttributesCache: del self._entryAttributesCache[inode]
+        if path in self._listdirCache: del self._listdirCache[path]
+        return ret
+
+    async def unlink(self, parent_inode, name, ctx):
+        parent_path = self.inode2path[parent_inode]
+        path = parent_path + name.decode()
+        inode = self.path2inode[path]
+        assert not self.is_dir(path)
+        self.stage.remove(path)
+        del self.inode2path[inode]
+        del self.path2inode[path]
+        if inode in self._entryAttributesCache: del self._entryAttributesCache[inode]
+        if parent_path in self._listdirCache: del self._listdirCache[parent_path]
     
-    async def unlink(self, parent_id, name, ctx):
-        parent_inode = self.inodes[parent_id]
-        attr = await self.lookup(parent_id, name)
-        inode = self.inodes[attr.st_ino]
-        assert inode.isFile()
-        self.stage.remove(inode.getStagePath())
-        parent_inode.unlink(inode.id)
-        del self.inodes[inode.id]
-        return
+    async def mkdir(self, parent_inode, name, mode, ctx):
+        parent_path = self.inode2path[parent_inode]
+        assert self.is_dir(parent_path)
+        path = parent_path + name.decode() + "/"
+        filesObj = self.stage.mkdir(path)
+        inode = self.next_id
+        self.next_id += 1
+        self.inode2path[inode] = path
+        self.path2inode[path] = inode
+        if parent_path in self._listdirCache: del self._listdirCache[parent_path]
+        return self._EntryAttributes(inode, filesObj)
     
-    async def mkdir(self, parent_id, name, mode, ctx):
-        parent_inode = self.inodes[parent_id]
-        assert parent_inode.isDir()
-        stagePath = parent_inode.getStagePath() + name.decode() + "/"
-        self.stage.mkdir(stagePath)
-        inode = Inode(self, parent_inode, name.decode() + "/", 'directory')
-        self.inodes[inode.id] = inode
-        parent_inode._children.append(inode.id)
-        return await self.getattr(inode.id)
+    async def rename(self, parent_inode, name, newparent_id, newname, ctx):
+        parent_path = self.inode2path[parent_inode]
+        newparent_path = self.inode2path[newparent_id]
+        assert self.is_dir(parent_path)
+        assert self.is_dir(newparent_path)
+        path = parent_path + name.decode()
+        newpath = newparent_path + newname.decode()
+        inode = self.path2inode[path]
+        self.stage.rename(path, newpath)
+        self.inode2path[inode] = newpath
+        del self.path2inode[path]
+        self.path2inode[newpath] = inode
+        if inode in self._entryAttributesCache: del self._entryAttributesCache[inode]
+        if parent_path in self._listdirCache: del self._listdirCache[parent_path]
     
-    async def rename(self, parent_id, name, newparent_id, newname, ctx):
-        parent_inode = self.inodes[parent_id]
-        newparent_inode = self.inodes[newparent_id]
-        assert parent_inode.isDir()
-        assert newparent_inode.isDir()
-        attr = await self.lookup(parent_id, name)
-        inode = self.inodes[attr.st_ino]
-        self.stage.rename(inode.getStagePath(), newparent_inode.getStagePath() + newname.decode())
-        inode.parent = newparent_inode
-        inode.name = newname.decode()
-        newparent_inode._children.append(inode.id)
-        parent_inode.unlink(inode.id)
-        return
-    
-    async def rmdir(self, parent_id, name, ctx):
-        parent_inode = self.inodes[parent_id]
-        assert parent_inode.isDir()
-        attr = await self.lookup(parent_id, name)
-        inode = self.inodes[attr.st_ino]
-        assert inode.isDir()
-        self.stage.rmdir(inode.getStagePath())
-        parent_inode.unlink(inode.id)
-        del self.inodes[inode.id]
-        return
+    async def rmdir(self, parent_inode, name, ctx):
+        parent_path = self.inode2path[parent_inode]
+        assert self.is_dir(parent_path)
+        path = parent_path + name.decode() + "/"
+        inode = self.path2inode[path]
+        assert self.is_dir(path)
+        self.stage.rmdir(path)
+        del self.inode2path[inode]
+        del self.path2inode[path]
+        if inode in self._entryAttributesCache: del self._entryAttributesCache[inode]
+        if parent_path in self._listdirCache: del self._listdirCache[parent_path]
 
 class FileLocation(ABC):
     @abstractmethod
@@ -701,6 +779,7 @@ class FileLocation(ABC):
             trio.run(pyfuse3.main)
         except:
             pyfuse3.close(unmount=True)
+            raise
 
         # pyfuse3.close()
 
