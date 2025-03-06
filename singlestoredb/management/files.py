@@ -10,11 +10,9 @@ import re
 from abc import ABC
 from abc import abstractmethod
 from typing import Any
-from typing import BinaryIO
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import TextIO
 from typing import Union
 
 from .. import config
@@ -362,7 +360,7 @@ class FileLocation(ABC):
     @abstractmethod
     def upload_file(
         self,
-        local_path: Union[PathLike, TextIO, BinaryIO],
+        local_path: Union[PathLike, io.IOBase],
         path: PathLike,
         *,
         overwrite: bool = False,
@@ -385,7 +383,7 @@ class FileLocation(ABC):
     @abstractmethod
     def _upload(
         self,
-        content: Union[str, bytes, TextIO, BinaryIO],
+        content: Union[str, bytes, io.IOBase],
         path: PathLike,
         *,
         overwrite: bool = False,
@@ -628,7 +626,7 @@ class FileSpace(FileLocation):
 
     def upload_file(
         self,
-        local_path: Union[PathLike, TextIO, BinaryIO],
+        local_path: Union[PathLike, io.IOBase],
         path: PathLike,
         *,
         overwrite: bool = False,
@@ -646,7 +644,7 @@ class FileSpace(FileLocation):
             Should the ``path`` be overwritten if it exists already?
 
         """
-        if isinstance(local_path, (TextIO, BinaryIO)):
+        if isinstance(local_path, io.IOBase):
             pass
         elif not os.path.isfile(local_path):
             raise IsADirectoryError(f'local path is not a file: {local_path}')
@@ -657,8 +655,9 @@ class FileSpace(FileLocation):
 
             self.remove(path)
 
-        if isinstance(local_path, (TextIO, BinaryIO)):
+        if isinstance(local_path, io.IOBase):
             return self._upload(local_path, path, overwrite=overwrite)
+
         return self._upload(open(local_path, 'rb'), path, overwrite=overwrite)
 
     def upload_folder(
@@ -727,7 +726,7 @@ class FileSpace(FileLocation):
 
     def _upload(
         self,
-        content: Union[str, bytes, TextIO, BinaryIO],
+        content: Union[str, bytes, io.IOBase],
         path: PathLike,
         *,
         overwrite: bool = False,
