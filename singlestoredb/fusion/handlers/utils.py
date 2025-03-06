@@ -7,13 +7,11 @@ from typing import Optional
 from typing import Union
 
 from ...exceptions import ManagementError
+from ...management import files as mgmt_files
 from ...management import manage_workspaces
 from ...management.files import FilesManager
 from ...management.files import FileSpace
 from ...management.files import manage_files
-from ...management.files import MODELS_SPACE
-from ...management.files import PERSONAL_SPACE
-from ...management.files import SHARED_SPACE
 from ...management.workspace import StarterWorkspace
 from ...management.workspace import Workspace
 from ...management.workspace import WorkspaceGroup
@@ -306,11 +304,11 @@ def get_file_space(params: Dict[str, Any]) -> FileSpace:
     if file_location:
         file_location_lower_case = file_location.lower()
 
-        if file_location_lower_case == PERSONAL_SPACE:
+        if file_location_lower_case == mgmt_files.PERSONAL_SPACE:
             return manager.personal_space
-        elif file_location_lower_case == SHARED_SPACE:
+        elif file_location_lower_case == mgmt_files.SHARED_SPACE:
             return manager.shared_space
-        elif file_location_lower_case == MODELS_SPACE:
+        elif file_location_lower_case == mgmt_files.MODELS_SPACE:
             return manager.models_space
         else:
             raise ValueError(f'invalid file location: {file_location}')
