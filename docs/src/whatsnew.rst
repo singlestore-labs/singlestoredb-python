@@ -8,6 +8,13 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.12.1 - March 10, 2025
+------------------------
+* Fix struct formatting issue in vector result support
+* Add cloud notebook information to client version
+* Fix ``IN GROUP`` clause in Fusion SQL for files
+* Fix file-like objects in file upload APIs
+
 v1.12.0 - February 27, 2025
 ---------------------------
 * Add support for external TVFs
