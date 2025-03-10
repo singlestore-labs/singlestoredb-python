@@ -1,4 +1,4 @@
-﻿singlestoredb.management.workspace.StageObject.removedirs
+﻿singlestoredb.management.workspace.FilesObject.removedirs
 =========================================================
 .. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StageObject.removedirs
+.. automethod:: FilesObject.removedirs

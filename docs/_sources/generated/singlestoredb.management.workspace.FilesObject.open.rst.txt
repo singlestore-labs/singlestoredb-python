@@ -1,4 +1,4 @@
-﻿singlestoredb.management.workspace.StageObject.open
+﻿singlestoredb.management.workspace.FilesObject.open
 ===================================================
 .. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StageObject.open
+.. automethod:: FilesObject.open

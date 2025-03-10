@@ -1,4 +1,4 @@
-﻿singlestoredb.management.workspace.StageObject.getctime
+﻿singlestoredb.management.workspace.FilesObject.download
 =======================================================
 .. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StageObject.getctime
+.. automethod:: FilesObject.download

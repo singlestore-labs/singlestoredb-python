@@ -1,4 +1,4 @@
-﻿singlestoredb.management.workspace.StageObject.is\_dir
+﻿singlestoredb.management.workspace.FilesObject.is\_dir
 ======================================================
 .. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StageObject.is_dir
+.. automethod:: FilesObject.is_dir

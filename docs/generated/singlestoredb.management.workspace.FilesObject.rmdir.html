@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>singlestoredb.management.workspace.StageObject.dirname &mdash; SingleStoreDB 1.12.0 documentation</title>
+  <title>singlestoredb.management.workspace.FilesObject.rmdir &mdash; SingleStoreDB 1.12.0 documentation</title>
       <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
@@ -16,8 +16,8 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="singlestoredb.management.workspace.StageObject.getmtime" href="singlestoredb.management.workspace.StageObject.getmtime.html" />
-    <link rel="prev" title="singlestoredb.management.workspace.StageObject.basename" href="singlestoredb.management.workspace.StageObject.basename.html" />
+    <link rel="next" title="singlestoredb.notebook.organization" href="singlestoredb.notebook.organization.html" />
+    <link rel="prev" title="singlestoredb.management.workspace.FilesObject.removedirs" href="singlestoredb.management.workspace.FilesObject.removedirs.html" />
 </head>
 <body class="wy-body-for-nav">
   <div class="wy-grid-for-nav">
@@ -52,23 +52,23 @@
 <li class="toctree-l3"><a class="reference internal" href="../api.html#workspacegroup">WorkspaceGroup</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#workspace">Workspace</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../api.html#region">Region</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../api.html#stage">Stage</a></li>
-<li class="toctree-l3 current"><a class="reference internal" href="../api.html#stageobject">StageObject</a><ul class="current">
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.html">workspace.StageObject</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.open.html">workspace.StageObject.open</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.download.html">workspace.StageObject.download</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.exists.html">workspace.StageObject.exists</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.is_dir.html">workspace.StageObject.is_dir</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.is_file.html">workspace.StageObject.is_file</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.abspath.html">workspace.StageObject.abspath</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.basename.html">workspace.StageObject.basename</a></li>
-<li class="toctree-l4 current"><a class="current reference internal" href="#">workspace.StageObject.dirname</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.getmtime.html">workspace.StageObject.getmtime</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.getctime.html">workspace.StageObject.getctime</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.rename.html">workspace.StageObject.rename</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.remove.html">workspace.StageObject.remove</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.removedirs.html">workspace.StageObject.removedirs</a></li>
-<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.StageObject.rmdir.html">workspace.StageObject.rmdir</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#files">Files</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="../api.html#filesobject">FilesObject</a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.html">workspace.FilesObject</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.open.html">workspace.FilesObject.open</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.download.html">workspace.FilesObject.download</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.exists.html">workspace.FilesObject.exists</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.is_dir.html">workspace.FilesObject.is_dir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.is_file.html">workspace.FilesObject.is_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.abspath.html">workspace.FilesObject.abspath</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.basename.html">workspace.FilesObject.basename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.dirname.html">workspace.FilesObject.dirname</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.getmtime.html">workspace.FilesObject.getmtime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.getctime.html">workspace.FilesObject.getctime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.rename.html">workspace.FilesObject.rename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.remove.html">workspace.FilesObject.remove</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.workspace.FilesObject.removedirs.html">workspace.FilesObject.removedirs</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">workspace.FilesObject.rmdir</a></li>
 </ul>
 </li>
 </ul>
@@ -93,28 +93,28 @@
   <ul class="wy-breadcrumbs">
       <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
           <li class="breadcrumb-item"><a href="../api.html">API Reference</a></li>
-      <li class="breadcrumb-item active">singlestoredb.management.workspace.StageObject.dirname</li>
+      <li class="breadcrumb-item active">singlestoredb.management.workspace.FilesObject.rmdir</li>
       <li class="wy-breadcrumbs-aside">
-            <a href="../_sources/generated/singlestoredb.management.workspace.StageObject.dirname.rst.txt" rel="nofollow"> View page source</a>
+            <a href="../_sources/generated/singlestoredb.management.workspace.FilesObject.rmdir.rst.txt" rel="nofollow"> View page source</a>
       </li>
   </ul>
   <hr/>
 </div>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
-  <section id="singlestoredb-management-workspace-stageobject-dirname">
-<h1>singlestoredb.management.workspace.StageObject.dirname<a class="headerlink" href="#singlestoredb-management-workspace-stageobject-dirname" title="Link to this heading">¶</a></h1>
+  <section id="singlestoredb-management-workspace-filesobject-rmdir">
+<h1>singlestoredb.management.workspace.FilesObject.rmdir<a class="headerlink" href="#singlestoredb-management-workspace-filesobject-rmdir" title="Link to this heading">¶</a></h1>
 <dl class="py method">
-<dt class="sig sig-object py" id="singlestoredb.management.workspace.StageObject.dirname">
-<span class="sig-prename descclassname"><span class="pre">StageObject.</span></span><span class="sig-name descname"><span class="pre">dirname</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span></span><a class="headerlink" href="#singlestoredb.management.workspace.StageObject.dirname" title="Link to this definition">¶</a></dt>
-<dd><p>Return the directory name of the object.</p>
+<dt class="sig sig-object py" id="singlestoredb.management.workspace.FilesObject.rmdir">
+<span class="sig-prename descclassname"><span class="pre">FilesObject.</span></span><span class="sig-name descname"><span class="pre">rmdir</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span></span><a class="headerlink" href="#singlestoredb.management.workspace.FilesObject.rmdir" title="Link to this definition">¶</a></dt>
+<dd><p>Delete the empty directory.</p>
 </dd></dl>
 </section>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="singlestoredb.management.workspace.StageObject.basename.html" class="btn btn-neutral float-left" title="singlestoredb.management.workspace.StageObject.basename" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="singlestoredb.management.workspace.StageObject.getmtime.html" class="btn btn-neutral float-right" title="singlestoredb.management.workspace.StageObject.getmtime" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="singlestoredb.management.workspace.FilesObject.removedirs.html" class="btn btn-neutral float-left" title="singlestoredb.management.workspace.FilesObject.removedirs" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="singlestoredb.notebook.organization.html" class="btn btn-neutral float-right" title="singlestoredb.notebook.organization" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
   <hr/>
   <div role="contentinfo">

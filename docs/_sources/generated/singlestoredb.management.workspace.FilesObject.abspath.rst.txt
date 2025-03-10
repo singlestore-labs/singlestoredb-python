@@ -1,4 +1,4 @@
-﻿singlestoredb.management.workspace.StageObject.dirname
+﻿singlestoredb.management.workspace.FilesObject.abspath
 ======================================================
 .. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StageObject.dirname
+.. automethod:: FilesObject.abspath

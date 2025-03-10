@@ -1,4 +1,4 @@
-﻿singlestoredb.management.workspace.StageObject.basename
+﻿singlestoredb.management.workspace.FilesObject.basename
 =======================================================
 .. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StageObject.basename
+.. automethod:: FilesObject.basename

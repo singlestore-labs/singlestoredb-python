@@ -221,9 +221,10 @@ Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
 .. autosummary::
    :toctree: generated/
    Region
-Stage
+Files
 .....
-To interact with Stage, use the :attr:`WorkspaceManager.stage` attribute.
+To interact with personal and shared files, use the
+:attr:`WorkspaceManager.stage` attribute.
 It will return a :class:`Stage` object which defines the following
 methods and attributes.
 .. currentmodule:: singlestoredb.management.workspace
@@ -245,29 +246,29 @@ methods and attributes.
    Stage.remove
    Stage.removedirs
    Stage.rmdir
-StageObject
+FilesObject
 ...........
-:class:`StageObject`s are returned by the :meth:`StageObject.upload_file`
-:meth:`StageObject.upload_folder`, :meth:`StageObject.mkdir`,
-:meth:`StageObject.rename`, and :meth:`StageObject.info` methods.
+:class:`FilesObject`s are returned by the :meth:`StageObject.upload_file`
+:meth:`FilesObject.upload_folder`, :meth:`FilesObject.mkdir`,
+:meth:`FilesObject.rename`, and :meth:`FilesObject.info` methods.
 .. currentmodule:: singlestoredb.management.workspace
 .. autosummary::
    :toctree: generated/
-   StageObject
-   StageObject.open
-   StageObject.download
-   StageObject.exists
-   StageObject.is_dir
-   StageObject.is_file
-   StageObject.abspath
-   StageObject.basename
-   StageObject.dirname
-   StageObject.getmtime
-   StageObject.getctime
-   StageObject.rename
-   StageObject.remove
-   StageObject.removedirs
-   StageObject.rmdir
+   FilesObject
+   FilesObject.open
+   FilesObject.download
+   FilesObject.exists
+   FilesObject.is_dir
+   FilesObject.is_file
+   FilesObject.abspath
+   FilesObject.basename
+   FilesObject.dirname
+   FilesObject.getmtime
+   FilesObject.getctime
+   FilesObject.rename
+   FilesObject.remove
+   FilesObject.removedirs
+   FilesObject.rmdir
 Notebook Tools
 --------------
 The SDK includes a `notebook` sub-module for tools that are for use in

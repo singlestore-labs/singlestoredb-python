@@ -1,4 +1,4 @@
-﻿singlestoredb.management.workspace.StageObject.remove
+﻿singlestoredb.management.workspace.FilesObject.rename
 =====================================================
 .. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StageObject.remove
+.. automethod:: FilesObject.rename
