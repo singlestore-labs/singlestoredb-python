@@ -317,9 +317,9 @@ register_option(
     'external_function.app_mode', 'string',
     functools.partial(
         check_str,
-        valid_values=['remote', 'collocated'],
+        valid_values=['managed', 'remote', 'collocated'],
     ),
-    'remote',
+    'managed',
     'Specifies the mode of operation of the external function application.',
     environ=['SINGLESTOREDB_EXT_FUNC_APP_MODE'],
 )

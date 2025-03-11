@@ -1318,7 +1318,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         link_name=args.link_name or None,
         link_config=json.loads(args.link_config) or None,
         link_credentials=json.loads(args.link_credentials) or None,
-        app_mode='remote',
+        app_mode='managed',
         name_prefix=args.name_prefix,
         name_suffix=args.name_suffix,
     )

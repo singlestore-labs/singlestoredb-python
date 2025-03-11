@@ -734,7 +734,7 @@ def signature_to_sql(
     signature: Dict[str, Any],
     url: Optional[str] = None,
     data_format: str = 'rowdat_1',
-    app_mode: str = 'remote',
+    app_mode: str = 'managed',
     link: Optional[str] = None,
     replace: bool = False,
 ) -> str:
