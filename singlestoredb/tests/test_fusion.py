@@ -4,6 +4,7 @@
 import os
 import random
 import secrets
+import tempfile
 import time
 import unittest
 from typing import Any
@@ -714,3 +715,805 @@ class TestJobsFusion(unittest.TestCase):
         res = out[0]
         assert res[0] == job_id
         assert res[1] == 1
+
+
+@pytest.mark.management
+class TestStageFusion(unittest.TestCase):
+
+    id: str = secrets.token_hex(8)
+    dbname: str = 'information_schema'
+    manager: None
+    workspace_group: None
+    workspace_group_2: None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = s2.manage_workspaces()
+        us_regions = [x for x in cls.manager.regions if x.name.startswith('US')]
+        cls.workspace_group = cls.manager.create_workspace_group(
+            f'Stage Fusion Testing 1 {cls.id}',
+            region=random.choice(us_regions),
+            firewall_ranges=[],
+        )
+        cls.workspace_group_2 = cls.manager.create_workspace_group(
+            f'Stage Fusion Testing 2 {cls.id}',
+            region=random.choice(us_regions),
+            firewall_ranges=[],
+        )
+        # Wait for both workspace groups to start
+        time.sleep(5)
+
+        os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] = 'information_schema'
+        os.environ['SINGLESTOREDB_WORKSPACE_GROUP'] = cls.workspace_group.id
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.workspace_group is not None:
+            cls.workspace_group.terminate(force=True)
+        if cls.workspace_group_2 is not None:
+            cls.workspace_group_2.terminate(force=True)
+        cls.manager = None
+        cls.workspace_group = None
+        cls.workspace_group_2 = None
+        cls.workspace = None
+        cls.workspace_2 = None
+        if os.environ.get('SINGLESTOREDB_WORKSPACE', None) is not None:
+            del os.environ['SINGLESTOREDB_WORKSPACE']
+        if os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP', None) is not None:
+            del os.environ['SINGLESTOREDB_WORKSPACE_GROUP']
+        if os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE', None) is not None:
+            del os.environ['SINGLESTOREDB_DEFAULT_DATABASE']
+
+    def setUp(self):
+        self.enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLED')
+        os.environ['SINGLESTOREDB_FUSION_ENABLED'] = '1'
+        self.conn = s2.connect(database=type(self).dbname, local_infile=True)
+        self.cur = self.conn.cursor()
+
+    def tearDown(self):
+        self._clear_stage()
+
+        if self.enabled:
+            os.environ['SINGLESTOREDB_FUSION_ENABLED'] = self.enabled
+        else:
+            del os.environ['SINGLESTOREDB_FUSION_ENABLED']
+
+        try:
+            if self.cur is not None:
+                self.cur.close()
+        except Exception:
+            # traceback.print_exc()
+            pass
+
+        try:
+            if self.conn is not None:
+                self.conn.close()
+        except Exception:
+            # traceback.print_exc()
+            pass
+
+    def _clear_stage(self):
+        if self.workspace_group is not None:
+            self.cur.execute(f'''
+                show stage files
+                    in group id '{self.workspace_group.id}' recursive
+            ''')
+            files = list(self.cur)
+            folders = []
+            for file in files:
+                if file[0].endswith('/'):
+                    folders.append(file)
+                    continue
+                self.cur.execute(f'''
+                    drop stage file '{file[0]}'
+                        in group id '{self.workspace_group.id}'
+                ''')
+            for folder in folders:
+                self.cur.execute(f'''
+                    drop stage folder '{folder[0]}'
+                        in group id '{self.workspace_group.id}'
+                ''')
+
+        if self.workspace_group_2 is not None:
+            self.cur.execute(f'''
+                show stage files
+                    in group id '{self.workspace_group_2.id}' recursive
+            ''')
+            files = list(self.cur)
+            folders = []
+            for file in files:
+                if file[0].endswith('/'):
+                    folders.append(file)
+                    continue
+                self.cur.execute(f'''
+                    drop stage file '{file[0]}'
+                        in group id '{self.workspace_group_2.id}'
+                ''')
+            for folder in folders:
+                self.cur.execute(f'''
+                    drop stage folder '{folder[0]}'
+                        in group id '{self.workspace_group_2.id}'
+                ''')
+
+    def test_show_stage(self):
+        test2_sql = os.path.join(os.path.dirname(__file__), 'test2.sql')
+
+        # Should be empty
+        self.cur.execute('''
+            show stage files
+        ''')
+        files = list(self.cur)
+        assert len(files) == 0
+
+        # Copy files to stage
+        self.cur.execute(
+            f'upload file to stage "new_test_1.sql" from "{test2_sql}"',
+        )
+        self.cur.execute('create stage folder "subdir1"')
+        self.cur.execute(
+            f'upload file to stage "subdir1/new_test_2.sql" from "{test2_sql}"',
+        )
+        self.cur.execute(
+            f'upload file to stage "subdir1/new_test_3.sql" from "{test2_sql}"',
+        )
+        self.cur.execute('create stage folder "subdir2"')
+        self.cur.execute(
+            f'upload file to stage "subdir2/new_test_4.sql" from "{test2_sql}"',
+        )
+        self.cur.execute(
+            f'upload file to stage "subdir2/new_test_5.sql" from "{test2_sql}"',
+        )
+
+        # Make sure files are there
+        self.cur.execute('''
+            show stage files recursive
+        ''')
+        files = list(self.cur)
+        assert len(files) == 7
+        assert list(sorted(x[0] for x in files)) == [
+            'new_test_1.sql',
+            'subdir1/',
+            'subdir1/new_test_2.sql',
+            'subdir1/new_test_3.sql',
+            'subdir2/',
+            'subdir2/new_test_4.sql',
+            'subdir2/new_test_5.sql',
+        ]
+
+        # Do non-recursive listing
+        self.cur.execute('''
+            show stage files
+        ''')
+        files = list(self.cur)
+        assert len(files) == 3
+        assert list(sorted(x[0] for x in files)) == [
+            'new_test_1.sql',
+            'subdir1/',
+            'subdir2/',
+        ]
+
+        # List files in specific workspace group
+        self.cur.execute(f'''
+            show stage files in group id '{self.workspace_group.id}'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 3
+        assert list(sorted(x[0] for x in files)) == [
+            'new_test_1.sql',
+            'subdir1/',
+            'subdir2/',
+        ]
+
+        self.cur.execute(f'''
+            show stage files in id '{self.workspace_group.id}'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 3
+        assert list(sorted(x[0] for x in files)) == [
+            'new_test_1.sql',
+            'subdir1/',
+            'subdir2/',
+        ]
+
+        self.cur.execute(f'''
+            show stage files in group '{self.workspace_group.name}'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 3
+        assert list(sorted(x[0] for x in files)) == [
+            'new_test_1.sql',
+            'subdir1/',
+            'subdir2/',
+        ]
+
+        self.cur.execute(f'''
+            show stage files in '{self.workspace_group.name}'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 3
+        assert list(sorted(x[0] for x in files)) == [
+            'new_test_1.sql',
+            'subdir1/',
+            'subdir2/',
+        ]
+
+        # Check other workspace group
+        self.cur.execute(f'''
+            show stage files in group '{self.workspace_group_2.name}'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 0
+
+        # Limit results
+        self.cur.execute('''
+            show stage files recursive limit 5
+        ''')
+        files = list(self.cur)
+        assert len(files) == 5
+        assert list(sorted(x[0] for x in files)) == [
+            'new_test_1.sql',
+            'subdir1/',
+            'subdir1/new_test_2.sql',
+            'subdir1/new_test_3.sql',
+            'subdir2/',
+        ]
+
+        # Order by type and name
+        self.cur.execute('''
+            show stage files order by type, name recursive extended
+        ''')
+        files = list(self.cur)
+        assert len(files) == 7
+        assert list(x[0] for x in files) == [
+            'subdir1/',
+            'subdir2/',
+            'new_test_1.sql',
+            'subdir1/new_test_2.sql',
+            'subdir1/new_test_3.sql',
+            'subdir2/new_test_4.sql',
+            'subdir2/new_test_5.sql',
+        ]
+
+        # Order by type and name descending
+        self.cur.execute('''
+            show stage files order by type desc, name desc recursive extended
+        ''')
+        files = list(self.cur)
+        assert len(files) == 7
+        assert list(x[0] for x in files) == [
+            'subdir2/new_test_5.sql',
+            'subdir2/new_test_4.sql',
+            'subdir1/new_test_3.sql',
+            'subdir1/new_test_2.sql',
+            'new_test_1.sql',
+            'subdir2/',
+            'subdir1/',
+        ]
+
+        # List at specific path
+        self.cur.execute('''
+            show stage files at 'subdir2/' recursive
+        ''')
+        files = list(self.cur)
+        assert len(files) == 2
+        assert list(sorted(x[0] for x in files)) == [
+            'new_test_4.sql',
+            'new_test_5.sql',
+        ]
+
+        # LIKE clause
+        self.cur.execute('''
+            show stage files like '%_4.%' recursive
+        ''')
+        files = list(self.cur)
+        assert len(files) == 1
+        assert list(sorted(x[0] for x in files)) == [
+            'subdir2/new_test_4.sql',
+        ]
+
+    def test_download_stage(self):
+        test2_sql = os.path.join(os.path.dirname(__file__), 'test2.sql')
+
+        # Should be empty
+        self.cur.execute('''
+            show stage files
+        ''')
+        files = list(self.cur)
+        assert len(files) == 0
+
+        # Copy file to stage 1
+        self.cur.execute(f'''
+            upload file to stage 'dl_test.sql' from '{test2_sql}'
+        ''')
+
+        self.cur.execute('''
+            show stage files
+        ''')
+        files = list(self.cur)
+        assert len(files) == 1
+        assert list(sorted(x[0] for x in files)) == ['dl_test.sql']
+
+        # Copy file to stage 2
+        self.cur.execute(f'''
+            upload file to stage 'dl_test2.sql'
+                in group '{self.workspace_group_2.name}'
+                from '{test2_sql}'
+        ''')
+
+        # Make sure only one file in stage 2
+        self.cur.execute(f'''
+            show stage files in group '{self.workspace_group_2.name}'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 1
+        assert list(sorted(x[0] for x in files)) == ['dl_test2.sql']
+
+        # Download file from stage 1
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.cur.execute(f'''
+                download stage file 'dl_test.sql' to '{tmpdir}/dl_test.sql'
+            ''')
+            with open(os.path.join(tmpdir, 'dl_test.sql'), 'r') as dl_file:
+                assert dl_file.read() == open(test2_sql, 'r').read()
+
+        # Download file from stage 2
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.cur.execute(f'''
+                download stage file 'dl_test2.sql'
+                    in group '{self.workspace_group_2.name}'
+                    to '{tmpdir}/dl_test2.sql'
+            ''')
+            with open(os.path.join(tmpdir, 'dl_test2.sql'), 'r') as dl_file:
+                assert dl_file.read() == open(test2_sql, 'r').read()
+
+    def test_stage_multi_wg_operations(self):
+        test_sql = os.path.join(os.path.dirname(__file__), 'test.sql')
+        test2_sql = os.path.join(os.path.dirname(__file__), 'test2.sql')
+
+        # Should be empty
+        self.cur.execute('''
+            show stage files
+        ''')
+        files = list(self.cur)
+        assert len(files) == 0
+
+        # Copy file to stage 1
+        self.cur.execute(f'''
+            upload file to stage 'new_test.sql' from '{test_sql}'
+        ''')
+
+        self.cur.execute('''
+            show stage files
+        ''')
+        files = list(self.cur)
+        assert len(files) == 1
+
+        # Copy file to stage 2
+        self.cur.execute(f'''
+            upload file to stage 'new_test2.sql'
+                in group '{self.workspace_group_2.name}'
+                from '{test2_sql}'
+        ''')
+
+        # Make sure only one file in stage 1
+        self.cur.execute('''
+            show stage files
+        ''')
+        files = list(self.cur)
+        assert len(files) == 1
+        assert files[0][0] == 'new_test.sql'
+
+        # Make sure only one file in stage 2
+        self.cur.execute(f'''
+            show stage files in group '{self.workspace_group_2.name}' recursive
+        ''')
+        files = list(self.cur)
+        assert len(files) == 1
+        assert list(sorted(x[0] for x in files)) == ['new_test2.sql']
+
+        # Make sure only one file in stage 2 (using IN)
+        self.cur.execute(f'''
+            show stage files in '{self.workspace_group_2.name}' recursive
+        ''')
+        files = list(self.cur)
+        assert len(files) == 1
+        assert list(sorted(x[0] for x in files)) == ['new_test2.sql']
+
+        # Make subdir
+        self.cur.execute(f'''
+            create stage folder 'data' in group '{self.workspace_group_2.name}'
+        ''')
+
+        # Upload file using workspace ID
+        self.cur.execute(f'''
+            upload file to stage 'data/new_test2_sub.sql'
+                in group id '{self.workspace_group_2.id}'
+                from '{test2_sql}'
+        ''')
+
+        # Make sure only one file in stage 1
+        self.cur.execute('''
+            show stage files
+        ''')
+        files = list(self.cur)
+        assert len(files) == 1
+        assert files[0][0] == 'new_test.sql'
+
+        # Make sure two files in stage 2
+        self.cur.execute(f'''
+            show stage files in group id '{self.workspace_group_2.id}' recursive
+        ''')
+        files = list(self.cur)
+        assert len(files) == 3
+        assert list(sorted(x[0] for x in files)) == \
+            ['data/', 'data/new_test2_sub.sql', 'new_test2.sql']
+
+        # Test overwrite
+        with self.assertRaises(OSError):
+            self.cur.execute(f'''
+                upload file to stage 'data/new_test2_sub.sql'
+                    in group id '{self.workspace_group_2.id}'
+                    from '{test2_sql}'
+            ''')
+
+        self.cur.execute(f'''
+            upload file to stage 'data/new_test2_sub.sql'
+                in group id '{self.workspace_group_2.id}'
+                from '{test2_sql}' overwrite
+        ''')
+
+        # Make sure two files in stage 2
+        self.cur.execute(f'''
+            show stage files in group id '{self.workspace_group_2.id}' recursive
+        ''')
+        files = list(self.cur)
+        assert len(files) == 3
+        assert list(sorted(x[0] for x in files)) == \
+            ['data/', 'data/new_test2_sub.sql', 'new_test2.sql']
+
+        # Test LIKE clause
+        self.cur.execute(f'''
+            show stage files
+                in group id '{self.workspace_group_2.id}'
+                like '%_sub%' recursive
+        ''')
+        files = list(self.cur)
+        assert len(files) == 1
+        assert list(sorted(x[0] for x in files)) == ['data/new_test2_sub.sql']
+
+        # Drop file from default stage
+        self.cur.execute('''
+            drop stage file 'new_test.sql'
+        ''')
+
+        # Make sure no files in stage 1
+        self.cur.execute('''
+            show stage files
+        ''')
+        files = list(self.cur)
+        assert len(files) == 0
+
+        # Make sure two files in stage 2
+        self.cur.execute(f'''
+            show stage files in group id '{self.workspace_group_2.id}' recursive
+        ''')
+        files = list(self.cur)
+        assert len(files) == 3
+        assert list(sorted(x[0] for x in files)) == \
+            ['data/', 'data/new_test2_sub.sql', 'new_test2.sql']
+
+        # Attempt to drop directory from stage 2
+        with self.assertRaises(OSError):
+            self.cur.execute(f'''
+                drop stage folder 'data'
+                    in group id '{self.workspace_group_2.id}'
+            ''')
+
+        self.cur.execute(f'''
+            drop stage file 'data/new_test2_sub.sql'
+                in group id '{self.workspace_group_2.id}'
+        ''')
+
+        # Make sure one file and one directory in stage 2
+        self.cur.execute(f'''
+            show stage files in group id '{self.workspace_group_2.id}' recursive
+        ''')
+        files = list(self.cur)
+        assert len(files) == 2
+        assert list(sorted(x[0] for x in files)) == ['data/', 'new_test2.sql']
+
+        # Drop stage folder from stage 2
+        self.cur.execute(f'''
+            drop stage folder 'data'
+                in group id '{self.workspace_group_2.id}'
+        ''')
+
+        # Make sure one file in stage 2
+        self.cur.execute(f'''
+            show stage files in group id '{self.workspace_group_2.id}' recursive
+        ''')
+        files = list(self.cur)
+        assert len(files) == 1
+        assert list(sorted(x[0] for x in files)) == ['new_test2.sql']
+
+        # Drop last file
+        self.cur.execute(f'''
+            drop stage file 'new_test2.sql'
+                in group id '{self.workspace_group_2.id}'
+        ''')
+
+        # Make sure no files in stage 2
+        self.cur.execute(f'''
+            show stage files in group id '{self.workspace_group_2.id}' recursive
+        ''')
+        files = list(self.cur)
+        assert len(files) == 0
+
+
+@pytest.mark.management
+class TestFilesFusion(unittest.TestCase):
+
+    id: str = secrets.token_hex(8)
+    dbname: str = 'information_schema'
+    manager: None
+    workspace_group: None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = s2.manage_workspaces()
+        us_regions = [x for x in cls.manager.regions if x.name.startswith('US')]
+        cls.workspace_group = cls.manager.create_workspace_group(
+            f'Files Fusion Testing {cls.id}',
+            region=random.choice(us_regions),
+            firewall_ranges=[],
+        )
+        # Wait for both workspace groups to start
+        time.sleep(5)
+
+        os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] = 'information_schema'
+        os.environ['SINGLESTOREDB_WORKSPACE_GROUP'] = cls.workspace_group.id
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.workspace_group is not None:
+            cls.workspace_group.terminate(force=True)
+        cls.manager = None
+        cls.workspace_group = None
+        cls.workspace = None
+        if os.environ.get('SINGLESTOREDB_WORKSPACE', None) is not None:
+            del os.environ['SINGLESTOREDB_WORKSPACE']
+        if os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP', None) is not None:
+            del os.environ['SINGLESTOREDB_WORKSPACE_GROUP']
+        if os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE', None) is not None:
+            del os.environ['SINGLESTOREDB_DEFAULT_DATABASE']
+
+    def setUp(self):
+        self.enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLED')
+        os.environ['SINGLESTOREDB_FUSION_ENABLED'] = '1'
+        self.conn = s2.connect(database=type(self).dbname, local_infile=True)
+        self.cur = self.conn.cursor()
+
+    def tearDown(self):
+        self._clear_files()
+
+        if self.enabled:
+            os.environ['SINGLESTOREDB_FUSION_ENABLED'] = self.enabled
+        else:
+            del os.environ['SINGLESTOREDB_FUSION_ENABLED']
+
+        try:
+            if self.cur is not None:
+                self.cur.close()
+        except Exception:
+            # traceback.print_exc()
+            pass
+
+        try:
+            if self.conn is not None:
+                self.conn.close()
+        except Exception:
+            # traceback.print_exc()
+            pass
+
+    def _clear_files(self):
+        cls = type(self)
+        for i in range(1, 6):
+            try:
+                self.cur.execute(f'''drop personal file "new_test_{i}_{cls.id}.ipynb"''')
+            except (OSError, s2.ManagementError):
+                pass
+        for i in range(1, 6):
+            try:
+                self.cur.execute(f'''drop shared file "new_test_{i}_{cls.id}.ipynb"''')
+            except (OSError, s2.ManagementError):
+                pass
+
+    def test_show_personal_files(self):
+        return self._test_show_files('personal')
+
+    def test_show_shared_files(self):
+        return self._test_show_files('shared')
+
+    def _test_show_files(self, ftype):
+        cls = type(self)
+        nb = os.path.join(os.path.dirname(__file__), 'test.ipynb')
+
+        # Should be empty
+        self.cur.execute(f'''
+            show {ftype} files like 'show_%{cls.id}%'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 0
+
+        # Upload files
+        self.cur.execute(
+            f'upload {ftype} file to "show_test_1_{cls.id}.ipynb" from "{nb}"',
+        )
+        self.cur.execute(
+            f'upload {ftype} file to "show_test_2_{cls.id}.ipynb" from "{nb}"',
+        )
+        self.cur.execute(
+            f'upload {ftype} file to "show_test_3_{cls.id}.ipynb" from "{nb}"',
+        )
+        self.cur.execute(
+            f'upload {ftype} file to "show_test_4_{cls.id}.ipynb" from "{nb}"',
+        )
+        self.cur.execute(
+            f'upload {ftype} file to "show_test_5_{cls.id}.ipynb" from "{nb}"',
+        )
+
+        # Make sure files are there
+        self.cur.execute(f'''
+            show {ftype} files like 'show_%{cls.id}%'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 5
+        assert list(sorted(x[0] for x in files)) == [
+            f'show_test_1_{cls.id}.ipynb',
+            f'show_test_2_{cls.id}.ipynb',
+            f'show_test_3_{cls.id}.ipynb',
+            f'show_test_4_{cls.id}.ipynb',
+            f'show_test_5_{cls.id}.ipynb',
+        ]
+
+        # Test ORDER BY
+        self.cur.execute(f'''
+            show {ftype} files like 'show_%{cls.id}%' order by name desc
+        ''')
+        files = list(self.cur)
+        assert len(files) == 5
+        assert list(x[0] for x in files) == [
+            f'show_test_5_{cls.id}.ipynb',
+            f'show_test_4_{cls.id}.ipynb',
+            f'show_test_3_{cls.id}.ipynb',
+            f'show_test_2_{cls.id}.ipynb',
+            f'show_test_1_{cls.id}.ipynb',
+        ]
+
+        # Test LIMIT
+        self.cur.execute(f'''
+            show {ftype} files like 'show_%{cls.id}%' order by name desc limit 3
+        ''')
+        files = list(self.cur)
+        assert len(files) == 3
+        assert list(x[0] for x in files) == [
+            f'show_test_5_{cls.id}.ipynb',
+            f'show_test_4_{cls.id}.ipynb',
+            f'show_test_3_{cls.id}.ipynb',
+        ]
+
+        # Test EXTENDED
+        self.cur.execute(f'''
+            show {ftype} files like 'show_%{cls.id}%' extended
+        ''')
+        assert [x[0] for x in self.cur.description] == \
+            ['Name', 'Type', 'Size', 'Writable', 'CreatedAt', 'LastModifiedAt']
+
+    def test_download_personal_files(self):
+        return self._test_download_files('personal')
+
+    def test_download_shared_files(self):
+        return self._test_download_files('shared')
+
+    def _test_download_files(self, ftype):
+        cls = type(self)
+        nb = os.path.join(os.path.dirname(__file__), 'test.ipynb')
+
+        # Should be empty
+        self.cur.execute(f'''
+            show {ftype} files like 'dl_%{cls.id}%'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 0
+
+        # Upload files
+        self.cur.execute(f'upload {ftype} file to "dl_test_1_{cls.id}.ipynb" from "{nb}"')
+        self.cur.execute(f'upload {ftype} file to "dl_test_2_{cls.id}.ipynb" from "{nb}"')
+
+        # Make sure files are there
+        self.cur.execute(f'''
+            show {ftype} files like 'dl_%{cls.id}%'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 2
+        assert list(sorted(x[0] for x in files)) == [
+            f'dl_test_1_{cls.id}.ipynb',
+            f'dl_test_2_{cls.id}.ipynb',
+        ]
+
+        # Download files
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.cur.execute(f'''
+                download {ftype} file 'dl_test_1_{cls.id}.ipynb'
+                    to '{tmpdir}/dl_test_1.ipynb'
+            ''')
+            with open(os.path.join(tmpdir, 'dl_test_1.ipynb'), 'r') as dl_file:
+                assert dl_file.read() == open(nb, 'r').read()
+
+            self.cur.execute(f'''
+                download {ftype} file 'dl_test_2_{cls.id}.ipynb'
+                    to '{tmpdir}/dl_test_2.ipynb'
+            ''')
+            with open(os.path.join(tmpdir, 'dl_test_2.ipynb'), 'r') as dl_file:
+                assert dl_file.read() == open(nb, 'r').read()
+
+    def test_drop_personal_files(self):
+        return self._test_drop_files('personal')
+
+    def test_drop_shared_files(self):
+        return self._test_drop_files('shared')
+
+    def _test_drop_files(self, ftype):
+        cls = type(self)
+        nb = os.path.join(os.path.dirname(__file__), 'test.ipynb')
+
+        # Should be empty
+        self.cur.execute(f'''
+            show {ftype} files like 'drop_%{cls.id}%'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 0
+
+        # Upload files
+        self.cur.execute(
+            f'upload {ftype} file to "drop_test_1_{cls.id}.ipynb" from "{nb}"',
+        )
+        self.cur.execute(
+            f'upload {ftype} file to "drop_test_2_{cls.id}.ipynb" from "{nb}"',
+        )
+
+        # Make sure files are there
+        self.cur.execute(f'''
+            show {ftype} files like 'drop_%{cls.id}%'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 2
+        assert list(sorted(x[0] for x in files)) == [
+            f'drop_test_1_{cls.id}.ipynb',
+            f'drop_test_2_{cls.id}.ipynb',
+        ]
+
+        # Drop 1 file
+        self.cur.execute(f'''
+            drop {ftype} file 'drop_test_1_{cls.id}.ipynb'
+        ''')
+
+        # Make sure 1 file is there
+        self.cur.execute(f'''
+            show {ftype} files like 'drop_%{cls.id}%'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 1
+        assert list(x[0] for x in files) == [f'drop_test_2_{cls.id}.ipynb']
+
+        # Drop 2nd file
+        self.cur.execute(f'''
+            drop {ftype} file 'drop_test_2_{cls.id}.ipynb'
+        ''')
+
+        # Make sure no files are there
+        self.cur.execute(f'''
+            show {ftype} files like 'drop_%{cls.id}%'
+        ''')
+        files = list(self.cur)
+        assert len(files) == 0
