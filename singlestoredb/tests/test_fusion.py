@@ -1317,16 +1317,21 @@ class TestFilesFusion(unittest.TestCase):
 
     def _clear_files(self):
         cls = type(self)
-        for i in range(1, 6):
-            try:
-                self.cur.execute(f'''drop personal file "new_test_{i}_{cls.id}.ipynb"''')
-            except (OSError, s2.ManagementError):
-                pass
-        for i in range(1, 6):
-            try:
-                self.cur.execute(f'''drop shared file "new_test_{i}_{cls.id}.ipynb"''')
-            except (OSError, s2.ManagementError):
-                pass
+        for prefix in ['show', 'dl', 'drop']:
+            for i in range(1, 6):
+                try:
+                    self.cur.execute(
+                        f'''drop personal file "{prefix}_test_{i}_{cls.id}.ipynb"''',
+                    )
+                except (OSError, s2.ManagementError):
+                    pass
+            for i in range(1, 6):
+                try:
+                    self.cur.execute(
+                        f'''drop shared file "{prefix}_test_{i}_{cls.id}.ipynb"''',
+                    )
+                except (OSError, s2.ManagementError):
+                    pass
 
     def test_show_personal_files(self):
         return self._test_show_files('personal')
