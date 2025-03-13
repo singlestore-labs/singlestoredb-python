@@ -17,7 +17,7 @@ _running_server: 'typing.Optional[AwaitableUvicornServer]' = None
 async def run_udf_app(
     app: Application,
     log_level: str = 'error',
-    kill_existing_app_server: bool = True,
+    kill_existing_app_server: bool = False,
 ) -> ConnectionInfo:
     global _running_server
     from ._uvicorn_util import AwaitableUvicornServer
@@ -41,6 +41,8 @@ async def run_udf_app(
         kill_process_by_port(app_config.listen_port)
 
     app.root_path = app_config.base_path
+
+    print("Listening on port", app_config.listen_port)
 
     config = uvicorn.Config(
         app,

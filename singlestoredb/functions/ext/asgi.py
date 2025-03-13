@@ -500,7 +500,7 @@ class Application(object):
             ]
         ] = None,
         app_mode: str = get_option('external_function.app_mode'),
-        url: str = get_option('external_function.url'),
+        url: str = get_option('external_function.url') + "invoke",
         data_format: str = get_option('external_function.data_format'),
         data_version: str = get_option('external_function.data_version'),
         link_name: Optional[str] = get_option('external_function.link_name'),
@@ -652,6 +652,18 @@ class Application(object):
         func_info: Dict[str, Any] = {}
         if func_endpoint is not None:
             func, func_info = func_endpoint
+        
+        if method == 'GET' and (path == () or path == ""):
+            await send({
+                'type': 'http.response.start',
+                'status': 200,
+                'headers': [(b'content-type', b'text/plain')],
+            })
+            await send({
+                'type': 'http.response.body',
+                'body': b'Server is alive!',
+            })
+            return
 
         # Call the endpoint
         if method == 'POST' and func is not None and path == self.invoke_path:
@@ -884,6 +896,7 @@ class Application(object):
                     for link in links:
                         cur.execute(f'DROP LINK {link}')
                 for func in self.get_create_functions(replace=replace):
+                    print("FUNC: ", func)
                     cur.execute(func)
 
     def drop_functions(
