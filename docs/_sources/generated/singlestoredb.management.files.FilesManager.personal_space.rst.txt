@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FilesManager.personal\_space
+===========================================================
+.. currentmodule:: singlestoredb.management.files
+.. autoproperty:: FilesManager.personal_space

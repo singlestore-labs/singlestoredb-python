@@ -306,10 +306,10 @@ Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
    Region
 
 
-Files
-.....
+Stage Files
+...........
 
-To interact with personal and shared files, use the
+To interact with files in your Stage, use the
 :attr:`WorkspaceManager.stage` attribute.
 It will return a :class:`Stage` object which defines the following
 methods and attributes.
@@ -335,6 +335,61 @@ methods and attributes.
    Stage.remove
    Stage.removedirs
    Stage.rmdir
+
+
+Personal, Shared, and Model Files
+.................................
+
+To manage personal files, shared files, and model files in an organization,
+you use the :func:`singlestoredb.manage_files` function. This will return a
+:class:`FilesManager` instance to access each location. You then use the
+returned :class:`FileSpace` to manage the files in each location. These
+classes are described below.
+
+.. currentmodule:: singlestoredb
+
+.. autosummary::
+   :toctree: generated/
+
+   manage_files
+
+The :class:`FilesManager` gives you access to each of the personal,
+shared, and model file locations.
+
+.. currentmodule:: singlestoredb.management.files
+
+.. autosummary::
+   :toctree: generated/
+
+   FilesManager
+   FilesManager.personal_space
+   FilesManager.shared_space
+   FilesManager.models_space
+
+The :class:`FileSpace` contains the methods for interacting with the
+personal, shared, or model files.
+
+.. currentmodule:: singlestoredb.management.files
+
+.. autosummary::
+   :toctree: generated/
+
+   FileSpace
+   FileSpace.open
+   FileSpace.download_file
+   FileSpace.download_folder
+   FileSpace.upload_file
+   FileSpace.upload_folder
+   FileSpace.info
+   FileSpace.listdir
+   FileSpace.exists
+   FileSpace.is_dir
+   FileSpace.is_file
+   FileSpace.mkdir
+   FileSpace.rename
+   FileSpace.remove
+   FileSpace.removedirs
+   FileSpace.rmdir
 
 
 FilesObject

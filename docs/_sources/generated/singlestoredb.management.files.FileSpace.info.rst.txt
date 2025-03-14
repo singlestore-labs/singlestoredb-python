@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FileSpace.info
+=============================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FileSpace.info

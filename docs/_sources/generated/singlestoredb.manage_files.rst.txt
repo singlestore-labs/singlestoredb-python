@@ -1,0 +1,4 @@
+﻿singlestoredb.manage\_files
+===========================
+.. currentmodule:: singlestoredb
+.. autofunction:: manage_files

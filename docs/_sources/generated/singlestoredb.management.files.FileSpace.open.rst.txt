@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FileSpace.open
+=============================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FileSpace.open

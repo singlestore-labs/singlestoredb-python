@@ -348,6 +348,7 @@ class FilesObjectBytesReader(io.BytesIO):
 
 
 class FileLocation(ABC):
+
     @abstractmethod
     def open(
         self,
