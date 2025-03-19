@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.12.2 - March 19, 2025
+------------------------
+* Fix workspace group lookup in some Fusion SQL commands
+
 v1.12.1 - March 10, 2025
 ------------------------
 * Fix struct formatting issue in vector result support
