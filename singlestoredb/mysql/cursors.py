@@ -8,6 +8,12 @@ from ..utils import results
 from ..utils.debug import log_query
 from ..utils.results import get_schema
 
+try:
+    from pydantic import BaseModel
+    has_pydantic = True
+except ImportError:
+    has_pydantic = False
+
 
 #: Regular expression for :meth:`Cursor.executemany`.
 #: executemany only supports simple bulk insert.
@@ -149,6 +155,8 @@ class Cursor(BaseCursor):
             return tuple(literal(arg) for arg in args)
         elif dtype is dict or isinstance(args, dict):
             return {key: literal(val) for (key, val) in args.items()}
+        elif has_pydantic and isinstance(args, BaseModel):
+            return {key: literal(val) for (key, val) in args.model_dump().items()}
         # If it's not a dictionary let's try escaping it anyways.
         # Worst case it will throw a Value error
         return conn.escape(args)

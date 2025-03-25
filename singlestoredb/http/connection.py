@@ -43,6 +43,12 @@ try:
 except ImportError:
     has_shapely = False
 
+try:
+    import pydantic
+    has_pydantic = True
+except ImportError:
+    has_pydantic = False
+
 from .. import connection
 from .. import fusion
 from .. import types
@@ -532,6 +538,9 @@ class Cursor(connection.Cursor):
         if re.match(r'^\s*(select|show|call|echo|describe|with)\s+', oper, flags=re.I):
             self._expect_results = True
             sql_type = 'query'
+
+        if has_pydantic and isinstance(params, pydantic.BaseModel):
+            params = params.model_dump()
 
         self._validate_param_subs(oper, params)
 
