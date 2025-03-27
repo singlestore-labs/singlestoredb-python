@@ -6,6 +6,8 @@ import numbers
 import os
 import re
 import string
+import sys
+import types
 import typing
 from typing import Any
 from typing import Callable
@@ -31,6 +33,11 @@ except ImportError:
 
 from . import dtypes as dt
 from ..mysql.converters import escape_item  # type: ignore
+
+if sys.version_info >= (3, 10):
+    _UNION_TYPES = {typing.Union, types.UnionType}
+else:
+    _UNION_TYPES = {typing.Union}
 
 
 array_types: Tuple[Any, ...]
@@ -211,7 +218,7 @@ def simplify_dtype(dtype: Any) -> List[Any]:
     args = []
 
     # Flatten Unions
-    if origin is Union:
+    if origin in _UNION_TYPES:
         for x in typing.get_args(dtype):
             args.extend(simplify_dtype(x))
 

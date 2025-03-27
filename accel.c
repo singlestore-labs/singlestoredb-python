@@ -2179,9 +2179,6 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
     // Get number of columns
     n_cols = PyObject_Length(py_colspec);
-    if (n_cols == 0) {
-        goto error;
-    }
 
     // Determine column types
     ctypes = calloc(sizeof(int), n_cols);
@@ -3979,10 +3976,6 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     end = data + (unsigned long long)length;
 
     colspec_l = PyObject_Length(py_colspec);
-    if (colspec_l == 0) {
-        goto error;
-    }
-
     ctypes = malloc(sizeof(int) * colspec_l);
 
     for (i = 0; i < colspec_l; i++) {
