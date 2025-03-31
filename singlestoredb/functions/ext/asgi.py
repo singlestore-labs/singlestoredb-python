@@ -500,7 +500,7 @@ class Application(object):
             ]
         ] = None,
         app_mode: str = get_option('external_function.app_mode'),
-        url: str = get_option('external_function.url') + "invoke",
+        url: str = get_option('external_function.url'),
         data_format: str = get_option('external_function.data_format'),
         data_version: str = get_option('external_function.data_version'),
         link_name: Optional[str] = get_option('external_function.link_name'),

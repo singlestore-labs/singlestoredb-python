@@ -1,9 +1,10 @@
 import asyncio
 import textwrap
 import typing
+import os
 
-from ._config import AppConfig
-from ._connection_info import ConnectionInfo
+from ._config import PythonUdfAppConfig
+from ._connection_info import ConnectionInfo, PythonUdfConnectionInfo
 from ._process import kill_process_by_port
 from ..functions.ext.asgi import Application
 
@@ -15,9 +16,8 @@ _running_server: 'typing.Optional[AwaitableUvicornServer]' = None
 
 
 async def run_udf_app(
-    app: Application,
     log_level: str = 'error',
-    kill_existing_app_server: bool = False,
+    kill_existing_app_server: bool = True,
 ) -> ConnectionInfo:
     global _running_server
     from ._uvicorn_util import AwaitableUvicornServer
@@ -27,7 +27,7 @@ async def run_udf_app(
     except ImportError:
         raise ImportError('package uvicorn is required to run python udfs')
 
-    app_config = AppConfig.from_env()
+    app_config = PythonUdfAppConfig.from_env()
 
     if kill_existing_app_server:
         # Shutdown the server gracefully if it was started by us.
@@ -40,9 +40,8 @@ async def run_udf_app(
         # Kill if any other process is occupying the port
         kill_process_by_port(app_config.listen_port)
 
+    app = Application()
     app.root_path = app_config.base_path
-
-    print("Listening on port", app_config.listen_port)
 
     config = uvicorn.Config(
         app,
@@ -52,14 +51,14 @@ async def run_udf_app(
     )
     _running_server = AwaitableUvicornServer(config)
 
+    # In interactive mode this should be set to true
+    replace = app_config.running_interactively
     app.register_functions(replace=True)
+
     asyncio.create_task(_running_server.serve())
     await _running_server.wait_for_startup()
 
-    connection_info = ConnectionInfo(app_config.base_url, app_config.token)
+    connection_info = PythonUdfConnectionInfo(app_config.base_url, app.get_function_info())
 
-    print(
-        'Following Python UDFs are available: ', app.get_function_info()
-    )
 
     return connection_info
