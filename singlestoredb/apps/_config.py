@@ -99,8 +99,6 @@ class PythonUdfAppConfig:
             if is_gateway_enabled:
                 base_url = cls._read_variable('SINGLESTOREDB_PYTHON_UDF_BASE_URL')
                 base_path = cls._read_variable('SINGLESTOREDB_PYTHON_UDF_BASE_PATH')
-                assert base_url is not None
-                assert base_path is not None
             else:
                 raise RuntimeError(
                     'Running Python UDFs in interactive mode without nova-gateway enabled is not supported'

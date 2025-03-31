@@ -1,7 +1,5 @@
 import asyncio
-import textwrap
 import typing
-import os
 
 from ._config import PythonUdfAppConfig
 from ._connection_info import ConnectionInfo, PythonUdfConnectionInfo
@@ -16,6 +14,7 @@ _running_server: 'typing.Optional[AwaitableUvicornServer]' = None
 
 
 async def run_udf_app(
+    replace_existing: bool,
     log_level: str = 'error',
     kill_existing_app_server: bool = True,
 ) -> ConnectionInfo:
@@ -40,7 +39,7 @@ async def run_udf_app(
         # Kill if any other process is occupying the port
         kill_process_by_port(app_config.listen_port)
 
-    app = Application()
+    app = Application(url=app_config.base_url)
     app.root_path = app_config.base_path
 
     config = uvicorn.Config(
@@ -51,9 +50,7 @@ async def run_udf_app(
     )
     _running_server = AwaitableUvicornServer(config)
 
-    # In interactive mode this should be set to true
-    replace = app_config.running_interactively
-    app.register_functions(replace=True)
+    app.register_functions(replace=replace_existing)
 
     asyncio.create_task(_running_server.serve())
     await _running_server.wait_for_startup()

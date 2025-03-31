@@ -653,18 +653,6 @@ class Application(object):
         if func_endpoint is not None:
             func, func_info = func_endpoint
         
-        if method == 'GET' and (path == () or path == ""):
-            await send({
-                'type': 'http.response.start',
-                'status': 200,
-                'headers': [(b'content-type', b'text/plain')],
-            })
-            await send({
-                'type': 'http.response.body',
-                'body': b'Server is alive!',
-            })
-            return
-
         # Call the endpoint
         if method == 'POST' and func is not None and path == self.invoke_path:
             data_format = func_info['data_format']
@@ -708,7 +696,7 @@ class Application(object):
             await send(self.text_response_dict)
 
         # Return function info
-        elif method == 'GET' and path == self.show_function_info_path:
+        elif method == 'GET' and (path == "" or path == ()):
             functions = self.get_function_info()
             body = json.dumps(dict(functions=functions)).encode('utf-8')
             await send(self.text_response_dict)
@@ -750,6 +738,7 @@ class Application(object):
         """Locate all current functions and links belonging to this app."""
         funcs, links = set(), set()
         cur.execute('SHOW FUNCTIONS')
+        print("List Cur", list(cur))
         for name, ftype, _, _, _, link in list(cur):
             # Only look at external functions
             if 'external' not in ftype.lower():
