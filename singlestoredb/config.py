@@ -80,7 +80,7 @@ register_option(
 )
 
 register_option(
-    'charset', 'string', check_str, 'utf8',
+    'charset', 'string', check_str, 'utf8mb4',
     'Specifies the character set for the session.',
     environ='SINGLESTOREDB_CHARSET',
 )
