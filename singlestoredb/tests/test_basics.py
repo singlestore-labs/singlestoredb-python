@@ -1314,6 +1314,9 @@ class TestBasics(unittest.TestCase):
                     select json_extract_string('{"foo":"😀"}', "bar");
                 ''')
 
+        if 'http' in self.conn.driver:
+            self.skipTest('Charset is not use in HTTP interface')
+
         with self.assertRaises(s2.OperationalError):
             with s2.connect(database=type(self).dbname, charset='utf8') as conn:
                 with conn.cursor() as cur:
