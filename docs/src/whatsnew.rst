@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.12.3 - April 1, 2025
+-----------------------
+* Fix default charset issue
+
 v1.12.2 - March 19, 2025
 ------------------------
 * Fix workspace group lookup in some Fusion SQL commands

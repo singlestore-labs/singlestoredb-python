@@ -13,7 +13,7 @@ Examples
 
 """
 
-__version__ = '1.12.2'
+__version__ = '1.12.3'
 
 from typing import Any
 
