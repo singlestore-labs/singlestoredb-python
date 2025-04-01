@@ -1307,6 +1307,20 @@ class TestBasics(unittest.TestCase):
                 ]),
             )
 
+    def test_charset(self):
+        with s2.connect(database=type(self).dbname) as conn:
+            with conn.cursor() as cur:
+                cur.execute('''
+                    select json_extract_string('{"foo":"😀"}', "bar");
+                ''')
+
+        with self.assertRaises(s2.OperationalError):
+            with s2.connect(database=type(self).dbname, charset='utf8') as conn:
+                with conn.cursor() as cur:
+                    cur.execute('''
+                        select json_extract_string('{"foo":"😀"}', "bar");
+                    ''')
+
 
 if __name__ == '__main__':
     import nose2
