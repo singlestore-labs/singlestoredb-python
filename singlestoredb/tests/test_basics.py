@@ -1308,6 +1308,8 @@ class TestBasics(unittest.TestCase):
             )
 
     def test_charset(self):
+        self.skipTest('Skip until charset commands are re-implemented')
+
         with s2.connect(database=type(self).dbname) as conn:
             with conn.cursor() as cur:
                 cur.execute('''
