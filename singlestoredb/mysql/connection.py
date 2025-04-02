@@ -989,17 +989,10 @@ class Connection(BaseConnection):
 
     def set_character_set(self, charset, collation=None):
         """
-        Set session charaset (and collation) on the server.
+        Set charaset (and collation) on the server.
 
-        Send "SET [COLLATION|CHARACTER_SET]_SERVER = [collation|charset]" query.
+        Send "SET NAMES charset [COLLATE collation]" query.
         Update Connection.encoding based on charset.
-
-        If charset/collation are being set to utf8mb4, the corresponding global
-        variables (COLLATION_SERVER and CHARACTER_SET_SERVER) must be also set
-        to utf8mb4. This is true by default for SingleStore 8.7+. For previuous
-        versions or non-default setting user must manully run the query
-        `SET global collation_connection = utf8mb4_general_ci`
-        replacing utf8mb4_general_ci with {collation}.
 
         Parameters
         ----------
@@ -1013,9 +1006,9 @@ class Connection(BaseConnection):
         encoding = charset_by_name(charset).encoding
 
         if collation:
-            query = f'SET COLLATION_SERVER={collation}'
+            query = f'SET NAMES {charset} COLLATE {collation}'
         else:
-            query = f'SET CHARACTER_SET_SERVER={charset}'
+            query = f'SET NAMES {charset}'
         self._execute_command(COMMAND.COM_QUERY, query)
         self._read_packet()
         self.charset = charset
@@ -1119,6 +1112,19 @@ class Connection(BaseConnection):
             self._get_server_information()
             self._request_authentication()
 
+            # Send "SET NAMES" query on init for:
+            # - Ensure charaset (and collation) is set to the server.
+            #   - collation_id in handshake packet may be ignored.
+            # - If collation is not specified, we don't know what is server's
+            #   default collation for the charset. For example, default collation
+            #   of utf8mb4 is:
+            #   - MySQL 5.7, MariaDB 10.x: utf8mb4_general_ci
+            #   - MySQL 8.0: utf8mb4_0900_ai_ci
+            #
+            # Reference:
+            # - https://github.com/PyMySQL/PyMySQL/issues/1092
+            # - https://github.com/wagtail/wagtail/issues/9477
+            # - https://zenn.dev/methane/articles/2023-mysql-collation (Japanese)
             self.set_character_set(self.charset, self.collation)
 
             if self.sql_mode is not None:
