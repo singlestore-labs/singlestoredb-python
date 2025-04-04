@@ -31,6 +31,7 @@ try:
 except ImportError:
     has_pydantic = False
 
+
 from . import dtypes as dt
 from ..mysql.converters import escape_item  # type: ignore
 
@@ -192,6 +193,22 @@ class ArrayCollection(Collection):
     pass
 
 
+def get_annotations(obj: Any) -> Dict[str, Any]:
+    """Get the annotations of an object."""
+    if hasattr(inspect, 'get_annotations'):
+        return inspect.get_annotations(obj)
+    if isinstance(obj, type):
+        return obj.__dict__.get('__annotations__', {})
+    return getattr(obj, '__annotations__', {})
+
+
+def is_dataframe(obj: Any) -> bool:
+    """Check if an object is a DataFrame."""
+    # Cheating here a bit so we don't have to import pandas / polars / pyarrow
+    # unless we absolutely need to
+    return getattr(obj, '__name__', '') in ['DataFrame', 'Table']
+
+
 def is_typeddict(obj: Any) -> bool:
     """Check if an object is a TypedDict."""
     if hasattr(typing, 'is_typeddict'):
@@ -332,7 +349,7 @@ def normalize_dtype(dtype: Any) -> str:
         return f'tuple[{item_dtypes}]'
 
     if is_typeddict(dtype):
-        td_fields = inspect.get_annotations(dtype).keys()
+        td_fields = get_annotations(dtype).keys()
         item_dtypes = ','.join(
             f'{normalize_dtype(simplify_dtype(dtype[x]))}' for x in td_fields
         )
@@ -347,7 +364,7 @@ def normalize_dtype(dtype: Any) -> str:
         return f'tuple[{item_dtypes}]'
 
     if is_namedtuple(dtype):
-        nt_fields = inspect.get_annotations(dtype).values()
+        nt_fields = get_annotations(dtype).values()
         item_dtypes = ','.join(
             f'{normalize_dtype(simplify_dtype(dtype[x]))}' for x in nt_fields
         )
@@ -554,7 +571,7 @@ def create_type(
     return out_type, sql
 
 
-def get_dataclass_schema(obj: Any) -> Tuple[List[Any], List[str]]:
+def get_dataclass_schema(obj: Any) -> List[Tuple[str, Any]]:
     """
     Get the schema of a dataclass.
 
@@ -565,19 +582,14 @@ def get_dataclass_schema(obj: Any) -> Tuple[List[Any], List[str]]:
 
     Returns
     -------
-    Tuple[List[Any], List[str]]
-        A tuple containing the field types and field names
+    List[Tuple[str, Any]]
+        A list of tuples containing the field names and field types
 
     """
-    if not dataclasses.is_dataclass(obj):
-        raise TypeError('object is not a dataclass')
-    return (
-        [x.type for x in obj.fields],
-        [x.name for x in obj.fields],
-    )
+    return list(get_annotations(obj).items())
 
 
-def get_typeddict_schema(obj: Any) -> Tuple[List[Any], List[str]]:
+def get_typeddict_schema(obj: Any) -> List[Tuple[str, Any]]:
     """
     Get the schema of a TypedDict.
 
@@ -588,17 +600,14 @@ def get_typeddict_schema(obj: Any) -> Tuple[List[Any], List[str]]:
 
     Returns
     -------
-    Tuple[List[Any], List[str]]
-        A tuple containing the field types and field names
+    List[Tuple[str, Any]]
+        A list of tuples containing the field names and field types
 
     """
-    return (
-        list(inspect.get_annotations(obj).values()),
-        list(inspect.get_annotations(obj).keys()),
-    )
+    return list(get_annotations(obj).items())
 
 
-def get_pydantic_schema(obj: pydantic.BaseModel) -> Tuple[List[Any], List[str]]:
+def get_pydantic_schema(obj: pydantic.BaseModel) -> List[Tuple[str, Any]]:
     """
     Get the schema of a pydantic model.
 
@@ -609,17 +618,14 @@ def get_pydantic_schema(obj: pydantic.BaseModel) -> Tuple[List[Any], List[str]]:
 
     Returns
     -------
-    Tuple[List[Any], List[str]]
-        A tuple containing the field types and field names
+    List[Tuple[str, Any]]
+        A list of tuples containing the field names and field types
 
     """
-    return (
-        list(obj.model_fields.values()),
-        list(obj.model_fields.keys()),
-    )
+    return [(k, v.annotation) for k, v in obj.model_fields.items()]
 
 
-def get_namedtuple_schema(obj: Any) -> Tuple[List[Any], List[str]]:
+def get_namedtuple_schema(obj: Any) -> List[Tuple[Any, str]]:
     """
     Get the schema of a named tuple.
 
@@ -630,115 +636,103 @@ def get_namedtuple_schema(obj: Any) -> Tuple[List[Any], List[str]]:
 
     Returns
     -------
-    Tuple[List[Any], List[str]]
-        A tuple containing the field types and field names
+    List[Tuple[Any, str]]
+        A list of tuples containing the field names and field types
 
     """
-    return (
-        list(inspect.get_annotations(obj).values()),
-        list(inspect.get_annotations(obj).keys()),
-    )
+    return list(get_annotations(obj).items())
 
 
-def get_return_type(
+def get_return_schema(
     spec: Any,
-    name: str,
-    signature: inspect.Signature,
     output_fields: Optional[List[str]] = None,
     function_type: str = 'udf',
-) -> Dict[str, Any]:
+) -> List[Tuple[str, Any]]:
     """
-    Get the return type of a function.
+    Expand a return type annotation into a list of types and field names.
 
     Parameters
     ----------
     spec : Any
         The return type specification
-    name : str
-        The name of the function
-    signature : inspect.Signature
-        The signature of the function
     output_fields : List[str], optional
         The output field names
-    function_type : str, optional
+    function_type : str
         The type of function, either 'udf' or 'tvf'
 
     Returns
     -------
-    Dict[str, Any]
-        A dictionary containing the return type and SQL code
+    List[Tuple[str, Any]]
+        A list of tuples containing the field names and field types
 
     """
+    # Make sure that the result of a TVF is a list or dataframe
+    if function_type == 'tvf':
 
-    # Make sure there is a return type annotation
-    if spec is None \
-            and signature.return_annotation is inspect.Signature.empty:
-        raise TypeError(f'no return value annotation in function {name}')
+        if typing.get_origin(spec) is list:
+            spec = typing.get_args(spec)[0]
 
-    #
-    # Generate the return type and the corresponding SQL code for that value
-    #
+        # DataFrames require special handling. You can't get the schema
+        # from the annotation, you need a separate structure to specify
+        # the types. This should be specified in the output_fields.
+        elif is_dataframe(spec):
+            if output_fields is None:
+                raise TypeError(
+                    'output_fields must be specified for DataFrames / Tables',
+                )
+            spec = output_fields
+            output_fields = None
+
+        else:
+            raise TypeError(
+                'return type for TVF must be a list or DataFrame',
+            )
+
+    elif typing.get_origin(spec) in [list, tuple, dict] \
+            or is_dataframe(spec) \
+            or dataclasses.is_dataclass(spec) \
+            or is_typeddict(spec) \
+            or is_pydantic(spec) \
+            or is_namedtuple(spec):
+        raise TypeError('return type for UDF must be a scalar type')
 
     # Return type is specified by a SQL string
     if isinstance(spec, str):
-        sql = spec
-        out_type = sql_to_dtype(sql)
-
-    # Return type is a record (i.e., has multiple fields)
-    elif isinstance(spec, list):
-
-        # Generate field names if needed
-        if not output_fields:
-            output_fields = [
-                string.ascii_letters[i] for i in range(len(spec))
-            ]
-
-        out_type, sql = create_type(
-            spec, output_fields, function_type=function_type,
-        )
+        return [('', sql_to_dtype(spec))]
 
     # Return type is specified by a dataclass definition
-    elif dataclasses.is_dataclass(spec):
-        out_type, sql = create_type(
-            *get_dataclass_schema(spec),
-            function_type=function_type,
-        )
+    if dataclasses.is_dataclass(spec):
+        schema = get_dataclass_schema(spec)
 
     # Return type is specified by a TypedDict definition
     elif is_typeddict(spec):
-        out_type, sql = create_type(
-            *get_typeddict_schema(spec),
-            function_type=function_type,
-        )
+        schema = get_typeddict_schema(spec)
 
     # Return type is specified by a pydantic model
     elif is_pydantic(spec):
-        out_type, sql = create_type(
-            *get_pydantic_schema(spec),
-            function_type=function_type,
-        )
+        schema = get_pydantic_schema(spec)
 
     # Return type is specified by a named tuple
     elif is_namedtuple(spec):
-        out_type, sql = create_type(
-            *get_namedtuple_schema(spec),
-            function_type=function_type,
-        )
+        schema = get_namedtuple_schema(spec)
 
     # Unrecognized return type
     elif spec is not None:
-        if not output_fields and typing.get_origin(spec) is tuple:
+        if typing.get_origin(spec) is tuple:
             output_fields = [
                 string.ascii_letters[i] for i in range(len(typing.get_args(spec)))
             ]
-        out_type = collapse_dtypes(normalize_dtype(simplify_dtype(spec)))
-        sql = dtype_to_sql(out_type, function_type=function_type)
+            schema = [(x, y) for x, y in zip(output_fields, typing.get_args(spec))]
+        else:
+            schema = [('', spec)]
 
-    else:
-        out_type = 'null'
-        sql = 'NULL'
-
-    return dict(dtype=out_type, sql=sql, default=None, output_fields=output_fields)
+    # Normalize schema data types
+    out = []
+    for k, v in schema:
+        out.append((
+            k, collapse_dtypes([normalize_dtype(x) for x in simplify_dtype(v)]),
+        ))
+    return out
 
 
 def get_signature(
@@ -762,13 +756,15 @@ def get_signature(
     '''
     signature = inspect.signature(func)
     args: List[Dict[str, Any]] = []
+    returns: List[Dict[str, Any]] = []
     attrs = getattr(func, '_singlestoredb_attrs', {})
     name = attrs.get('name', func_name if func_name else func.__name__)
     function_type = attrs.get('function_type', 'udf')
-    out: Dict[str, Any] = dict(name=name, args=args)
+    out: Dict[str, Any] = dict(name=name, args=args, returns=returns)
 
     # Get parameter names, defaults, and annotations
     arg_names = [x for x in signature.parameters]
+    args_overrides = attrs.get('args', None)
     defaults = [
         x.default if x.default is not inspect.Parameter.empty else None
         for x in signature.parameters.values()
@@ -784,10 +780,6 @@ def get_signature(
             raise TypeError('variable positional arguments are not supported')
         elif p.kind == inspect.Parameter.VAR_KEYWORD:
             raise TypeError('variable keyword arguments are not supported')
-
-    args_overrides = attrs.get('args', None)
-    returns = attrs.get('returns', signature.return_annotation)
-    output_fields = attrs.get('output_fields', None)
 
     spec_diff = set(arg_names).difference(set(annotations.keys()))
 
@@ -855,10 +847,19 @@ def get_signature(
         # Append parameter information to the args list
         args.append(dict(name=arg, dtype=arg_type, sql=sql, default=defaults[i]))
 
-    out['returns'] = get_return_type(
-        returns, name, signature,
-        output_fields=output_fields, function_type=function_type,
+    #
+    # Generate the return types and the corresponding SQL code for those values
+    #
+
+    ret_schema = get_return_schema(
+        attrs.get('returns', signature.return_annotation),
+        output_fields=attrs.get('output_fields', None),
+        function_type=function_type,
     )
+
+    for i, (name, rtype) in enumerate(ret_schema):
+        sql = dtype_to_sql(rtype, function_type=function_type)
+        returns.append(dict(name=name, dtype=rtype, sql=sql))
 
     # Copy keys from decorator to signature
     copied_keys = ['database', 'environment', 'packages', 'resources', 'replace']
@@ -994,6 +995,7 @@ def signature_to_sql(
     app_mode: str = 'remote',
     link: Optional[str] = None,
     replace: bool = False,
+    function_type: str = 'udf',
 ) -> str:
     '''
     Convert a dictionary function signature into SQL.
@@ -1021,7 +1023,13 @@ def signature_to_sql(
 
     returns = ''
     if signature.get('returns'):
-        res = signature['returns']['sql']
+        prefix = 'RECORD('
+        if function_type == 'tvf':
+            prefix = 'TABLE('
+        res = prefix + ', '.join(
+            f'{escape_name(x["name"])} {x["sql"]}'
+            for x in signature['returns']
+        ) + ')'
         returns = f' RETURNS {res}'
 
     host = os.environ.get('SINGLESTOREDB_EXT_HOST', '127.0.0.1')

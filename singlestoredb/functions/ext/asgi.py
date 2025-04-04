@@ -306,20 +306,14 @@ def make_func(
         colspec.append((x['name'], rowdat_1_type_map[dtype]))
     info['colspec'] = colspec
 
-    def parse_return_type(s: str) -> List[str]:
-        if s.startswith('tuple['):
-            return s[6:-1].split(',')
-        if s.startswith('array[tuple['):
-            return s[12:-2].split(',')
-        return [s]
-
     # Setup return type
     returns = []
-    for x in parse_return_type(sig['returns']['dtype']):
-        dtype = x.replace('?', '')
+    for x in sig['returns']:
+        dtype = x['dtype'].replace('?', '')
         if dtype not in rowdat_1_type_map:
             raise TypeError(f'no data type mapping for {dtype}')
-        returns.append(rowdat_1_type_map[dtype])
+        print(x['name'], dtype)
+        returns.append((x['name'], rowdat_1_type_map[dtype]))
     info['returns'] = returns
 
     return do_func, info
@@ -665,7 +659,9 @@ class Application(object):
                     func_info['colspec'], b''.join(data),
                 ),
             )
-            body = output_handler['dump'](func_info['returns'], *out)  # type: ignore
+            body = output_handler['dump'](
+                [x[1] for x in func_info['returns']], *out,  # type: ignore
+            )
 
             await send(output_handler['response'])
 
@@ -682,6 +678,7 @@ class Application(object):
                             endpoint_info['signature'],
                             url=self.url or reflected_url,
                             data_format=self.data_format,
+                            function_type=endpoint_info['function_type'],
                         ),
                     )
             body = '\n'.join(syntax).encode('utf-8')
@@ -775,6 +772,7 @@ class Application(object):
                     app_mode=self.app_mode,
                     replace=replace,
                     link=link or None,
+                    function_type=endpoint_info['function_type'],
                 ),
             )
 
