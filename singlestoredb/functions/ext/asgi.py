@@ -286,7 +286,7 @@ def make_func(
     do_func.__name__ = name
     do_func.__doc__ = func.__doc__
 
-    sig = get_signature(func, name=name)
+    sig = get_signature(func, func_name=name)
 
     # Store signature for generating CREATE FUNCTION calls
     info['signature'] = sig
@@ -1216,6 +1216,11 @@ def main(argv: Optional[List[str]] = None) -> None:
     args.replace_existing = args.replace_existing \
         or defaults.get('replace_existing') \
         or get_option('external_function.replace_existing')
+
+    # Substitute in host / port if specified
+    if args.host != defaults.get('host') or args.port != defaults.get('port'):
+        u = urllib.parse.urlparse(args.url)
+        args.url = u._replace(netloc=f'{args.host}:{args.port}').geturl()
 
     # Create application from functions / module
     app = Application(

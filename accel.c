@@ -35,6 +35,7 @@
 #define NUMPY_TIMEDELTA 12
 #define NUMPY_DATETIME 13
 #define NUMPY_OBJECT 14
+#define NUMPY_BYTES 15
 
 #define MYSQL_FLAG_NOT_NULL 1
 #define MYSQL_FLAG_PRI_KEY 2
@@ -338,6 +339,11 @@
 #define IS_TIMEDELTA_MICRO(s, s_l) ((s_l) == 14 || (s_l) == 15 || (s_l) == 16)
 
 #define CHECKRC(x) if ((x) < 0) goto error;
+
+typedef struct {
+    int type;
+    Py_ssize_t length;
+} NumpyColType;
 
 typedef struct {
     int results_type;
@@ -2646,8 +2652,8 @@ error:
 }
 
 
-static int get_numpy_col_type(PyObject *py_array) {
-    int out = 0;
+static NumpyColType get_numpy_col_type(PyObject *py_array) {
+    NumpyColType out = {0};
     char *str = NULL;
     PyObject *py_array_interface = NULL;
     PyObject *py_typestr = NULL;
@@ -2665,58 +2671,79 @@ static int get_numpy_col_type(PyObject *py_array) {
 
     switch (str[1]) {
     case 'b':
-        out = NUMPY_BOOL;
+        out.type = NUMPY_BOOL;
+        out.length = 1;
         break;
     case 'i':
         switch (str[2]) {
         case '1':
-            out = NUMPY_INT8;
+            out.type = NUMPY_INT8;
+            out.length = 1;
             break;
         case '2':
-            out = NUMPY_INT16;
+            out.type = NUMPY_INT16;
+            out.length = 2;
             break;
         case '4':
-            out = NUMPY_INT32;
+            out.type = NUMPY_INT32;
+            out.length = 4;
             break;
         case '8':
-            out = NUMPY_INT64;
+            out.type = NUMPY_INT64;
+            out.length = 8;
             break;
         }
         break;
     case 'u':
         switch (str[2]) {
         case '1':
-            out = NUMPY_UINT8;
+            out.type = NUMPY_UINT8;
+            out.length = 1;
             break;
         case '2':
-            out = NUMPY_UINT16;
+            out.type = NUMPY_UINT16;
+            out.length = 2;
             break;
         case '4':
-            out = NUMPY_UINT32;
+            out.type = NUMPY_UINT32;
+            out.length = 4;
             break;
         case '8':
-            out = NUMPY_UINT64;
+            out.type = NUMPY_UINT64;
+            out.length = 8;
             break;
         }
         break;
     case 'f':
         switch (str[2]) {
         case '4':
-            out = NUMPY_FLOAT32;
+            out.type = NUMPY_FLOAT32;
+            out.length = 4;
             break;
         case '8':
-            out = NUMPY_FLOAT64;
+            out.type = NUMPY_FLOAT64;
+            out.length = 8;
             break;
         }
         break;
     case 'O':
-        out = NUMPY_OBJECT;
+        out.type = NUMPY_OBJECT;
+        out.length = 8;
         break;
     case 'm':
-        out = NUMPY_TIMEDELTA;
+        out.type = NUMPY_TIMEDELTA;
+        out.length = 8;
         break;
     case 'M':
-        out = NUMPY_DATETIME;
+        out.type = NUMPY_DATETIME;
+        out.length = 8;
+        break;
+    case 'S':
+        out.type = NUMPY_BYTES;
+        out.length = (Py_ssize_t)strtol(str + 2, NULL, 10);
+        if (out.length < 0) {
+            goto error;
+        }
         break;
     default:
         goto error;
@@ -2730,7 +2757,8 @@ exit:
     return out;
 
 error:
-    out = 0;
+    out.type = 0;
+    out.length = 0;
     goto exit;
 }
 
@@ -2774,7 +2802,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
     unsigned long long j = 0;
     char **cols = NULL;
     char **masks = NULL;
-    int *col_types = NULL;
+    NumpyColType *col_types = NULL;
     int64_t *row_ids = NULL;
 
     // Parse function args.
@@ -2847,7 +2875,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
     // Get column array memory
     cols = calloc(sizeof(char*), n_cols);
     if (!cols) goto error;
-    col_types = calloc(sizeof(int), n_cols);
+    col_types = calloc(sizeof(NumpyColType), n_cols);
     if (!col_types) goto error;
     masks = calloc(sizeof(char*), n_cols);
     if (!masks) goto error;
@@ -2865,7 +2893,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
         }
 
         col_types[i] = get_numpy_col_type(py_data);
-        if (!col_types[i]) {
+        if (!col_types[i].type) {
             PyErr_SetString(PyExc_ValueError, "unable to get column type of data column");
             goto error;
         }
@@ -2874,7 +2902,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
         if (!py_mask) goto error;
 
         masks[i] = get_array_base_address(py_mask);
-        if (masks[i] && get_numpy_col_type(py_mask) != NUMPY_BOOL) {
+        if (masks[i] && get_numpy_col_type(py_mask).type != NUMPY_BOOL) {
             PyErr_SetString(PyExc_ValueError, "mask must only contain boolean values");
             goto error;
         }
@@ -2958,7 +2986,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
             case MYSQL_TYPE_TINY:
                 CHECKMEM(1);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     i8 = *(int8_t*)(cols[i] + j * 1);
                     CHECK_TINYINT(i8, 0);
@@ -3025,7 +3053,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_TINY:
                 CHECKMEM(1);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     i8 = *(int8_t*)(cols[i] + j * 1);
                     CHECK_UNSIGNED_TINYINT(i8, 0);
@@ -3091,7 +3119,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
             case MYSQL_TYPE_SHORT:
                 CHECKMEM(2);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     i8 = *(int8_t*)(cols[i] + j * 1);
                     CHECK_SMALLINT(i8, 0);
@@ -3158,7 +3186,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_SHORT:
                 CHECKMEM(2);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     i8 = *(int8_t*)(cols[i] + j * 1);
                     CHECK_UNSIGNED_SMALLINT(i8, 0);
@@ -3224,7 +3252,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
             case MYSQL_TYPE_INT24:
                 CHECKMEM(4);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     i8 = *(int8_t*)(cols[i] + j * 1);
                     CHECK_MEDIUMINT(i8, 0);
@@ -3290,7 +3318,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
             case MYSQL_TYPE_LONG:
                 CHECKMEM(4);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     i8 = *(int8_t*)(cols[i] + j * 1);
                     CHECK_INT(i8, 0);
@@ -3357,7 +3385,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_INT24:
                 CHECKMEM(4);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     i8 = *(int8_t*)(cols[i] + j * 1);
                     CHECK_UNSIGNED_MEDIUMINT(i8, 0);
@@ -3424,7 +3452,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_LONG:
                 CHECKMEM(4);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     i8 = *(int8_t*)(cols[i] + j * 1);
                     CHECK_UNSIGNED_INT(i8, 0);
@@ -3490,7 +3518,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
             case MYSQL_TYPE_LONGLONG:
                 CHECKMEM(8);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     i8 = *(int8_t*)(cols[i] + j * 1);
                     CHECK_BIGINT(i8, 0);
@@ -3557,7 +3585,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_LONGLONG:
                 CHECKMEM(8);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     i8 = *(int8_t*)(cols[i] + j * 1);
                     CHECK_UNSIGNED_BIGINT(i8, 0);
@@ -3623,7 +3651,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
             case MYSQL_TYPE_FLOAT:
                 CHECKMEM(4);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     flt = (float)((is_null) ? 0 : *(int8_t*)(cols[i] + j * 1));
                     break;
@@ -3667,7 +3695,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
             case MYSQL_TYPE_DOUBLE:
                 CHECKMEM(8);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     dbl = (double)((is_null) ? 0 : *(int8_t*)(cols[i] + j * 1));
                     break;
@@ -3742,7 +3770,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
             case MYSQL_TYPE_YEAR:
                 CHECKMEM(2);
-                switch (col_types[i]) {
+                switch (col_types[i].type) {
                 case NUMPY_BOOL:
                     i8 = *(int8_t*)(cols[i] + j * 1);
                     CHECK_YEAR(i8);
@@ -3817,7 +3845,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
             case MYSQL_TYPE_MEDIUM_BLOB:
             case MYSQL_TYPE_LONG_BLOB:
             case MYSQL_TYPE_BLOB:
-                if  (col_types[i] != NUMPY_OBJECT) {
+                if  (col_types[i].type != NUMPY_OBJECT) {
                     PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for character output types");
                     goto error;
                 }
@@ -3873,7 +3901,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
             case -MYSQL_TYPE_MEDIUM_BLOB:
             case -MYSQL_TYPE_LONG_BLOB:
             case -MYSQL_TYPE_BLOB:
-                if  (col_types[i] != NUMPY_OBJECT) {
+                if  (col_types[i].type != NUMPY_OBJECT && col_types[i].type != NUMPY_BYTES) {
                     PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for binary output types");
                     goto error;
                 }
@@ -3883,6 +3911,24 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     i64 = 0;
                     memcpy(out+out_idx, &i64, 8);
                     out_idx += 8;
+
+                } else if (col_types[i].type == NUMPY_BYTES) {
+                    void *bytes = (void*)(cols[i] + j * 8);
+
+                    if (bytes == NULL) {
+                        CHECKMEM(8);
+                        i64 = 0;
+                        memcpy(out+out_idx, &i64, 8);
+                        out_idx += 8;
+                    } else {
+                        Py_ssize_t str_l = col_types[i].length;
+                        CHECKMEM(8+str_l);
+                        i64 = str_l;
+                        memcpy(out+out_idx, &i64, 8);
+                        out_idx += 8;
+                        memcpy(out+out_idx, bytes, str_l);
+                        out_idx += str_l;
+                    }
 
                 } else {
                     u64 = *(uint64_t*)(cols[i] + j * 8);

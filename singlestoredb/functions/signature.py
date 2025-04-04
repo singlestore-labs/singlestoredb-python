@@ -192,6 +192,39 @@ class ArrayCollection(Collection):
     pass
 
 
+def is_typeddict(obj: Any) -> bool:
+    """Check if an object is a TypedDict."""
+    if hasattr(typing, 'is_typeddict'):
+        return typing.is_typeddict(obj)  # noqa: TYP006
+    return False
+
+
+def is_namedtuple(obj: Any) -> bool:
+    """Check if an object is a named tuple."""
+    if inspect.isclass(obj):
+        return (
+                issubclass(obj, tuple) and
+                hasattr(obj, '_asdict') and
+                hasattr(obj, '_fields')
+        )
+    return (
+            isinstance(obj, tuple) and
+            hasattr(obj, '_asdict') and
+            hasattr(obj, '_fields')
+    )
+
+
+def is_pydantic(obj: Any) -> bool:
+    """Check if an object is a pydantic model."""
+    if not has_pydantic:
+        return False
+
+    if inspect.isclass(obj):
+        return issubclass(obj, pydantic.BaseModel)
+
+    return isinstance(obj, pydantic.BaseModel)
+
+
 def escape_name(name: str) -> str:
     """Escape a function parameter name."""
     if '`' in name:
@@ -203,6 +236,12 @@ def simplify_dtype(dtype: Any) -> List[Any]:
     """
     Expand a type annotation to a flattened list of atomic types.
 
+    This function will attempty to find the underlying type of a
+    type annotation. For example, a Union of types will be flattened
+    to a list of types. A Tuple or Array type will be expanded to
+    a list of types. A TypeVar will be expanded to a list of
+    constraints and bounds.
+
     Parameters
     ----------
     dtype : Any
@@ -210,7 +249,8 @@ def simplify_dtype(dtype: Any) -> List[Any]:
 
     Returns
     -------
-    List[Any] -- list of dtype strings, TupleCollections, and ArrayCollections
+    List[Any]
+        list of dtype strings, TupleCollections, and ArrayCollections
 
     """
     origin = typing.get_origin(dtype)
@@ -252,10 +292,24 @@ def simplify_dtype(dtype: Any) -> List[Any]:
     return args
 
 
-def classify_dtype(dtype: Any) -> str:
-    """Classify the type annotation into a type name."""
+def normalize_dtype(dtype: Any) -> str:
+    """
+    Normalize the type annotation into a type name.
+
+    Parameters
+    ----------
+    dtype : Any
+        Type annotation, list of type annotations, or a string
+        containing a SQL type name
+
+    Returns
+    -------
+    str
+        Normalized type name
+
+    """
     if isinstance(dtype, list):
-        return '|'.join(classify_dtype(x) for x in dtype)
+        return '|'.join(normalize_dtype(x) for x in dtype)
 
     if isinstance(dtype, str):
         return sql_to_dtype(dtype)
@@ -271,44 +325,60 @@ def classify_dtype(dtype: Any) -> str:
         return 'bool'
 
     if dataclasses.is_dataclass(dtype):
-        fields = dataclasses.fields(dtype)
+        dc_fields = dataclasses.fields(dtype)
         item_dtypes = ','.join(
-            f'{classify_dtype(simplify_dtype(x.type))}' for x in fields
+            f'{normalize_dtype(simplify_dtype(x.type))}' for x in dc_fields
         )
         return f'tuple[{item_dtypes}]'
 
-    if has_pydantic and inspect.isclass(dtype) and issubclass(dtype, pydantic.BaseModel):
-        fields = dtype.model_fields.values()
+    if is_typeddict(dtype):
+        td_fields = inspect.get_annotations(dtype).keys()
         item_dtypes = ','.join(
-            f'{classify_dtype(simplify_dtype(x.annotation))}'  # type: ignore
-            for x in fields
+            f'{normalize_dtype(simplify_dtype(dtype[x]))}' for x in td_fields
+        )
+        return f'tuple[{item_dtypes}]'
+
+    if is_pydantic(dtype):
+        pyd_fields = dtype.model_fields.values()
+        item_dtypes = ','.join(
+            f'{normalize_dtype(simplify_dtype(x.annotation))}'  # type: ignore
+            for x in pyd_fields
+        )
+        return f'tuple[{item_dtypes}]'
+
+    if is_namedtuple(dtype):
+        nt_fields = inspect.get_annotations(dtype).values()
+        item_dtypes = ','.join(
+            f'{normalize_dtype(simplify_dtype(dtype[x]))}' for x in nt_fields
         )
         return f'tuple[{item_dtypes}]'
 
     if not inspect.isclass(dtype):
+
         # Check for compound types
         origin = typing.get_origin(dtype)
         if origin is not None:
+
             # Tuple type
             if origin is Tuple:
                 args = typing.get_args(dtype)
-                item_dtypes = ','.join(classify_dtype(x) for x in args)
+                item_dtypes = ','.join(normalize_dtype(x) for x in args)
                 return f'tuple[{item_dtypes}]'
 
             # Array types
             elif issubclass(origin, array_types):
                 args = typing.get_args(dtype)
-                item_dtype = classify_dtype(args[0])
+                item_dtype = normalize_dtype(args[0])
                 return f'array[{item_dtype}]'
 
             raise TypeError(f'unsupported type annotation: {dtype}')
 
         if isinstance(dtype, ArrayCollection):
-            item_dtypes = ','.join(classify_dtype(x) for x in dtype.item_dtypes)
+            item_dtypes = ','.join(normalize_dtype(x) for x in dtype.item_dtypes)
             return f'array[{item_dtypes}]'
 
         if isinstance(dtype, TupleCollection):
-            item_dtypes = ','.join(classify_dtype(x) for x in dtype.item_dtypes)
+            item_dtypes = ','.join(normalize_dtype(x) for x in dtype.item_dtypes)
             return f'tuple[{item_dtypes}]'
 
     # Check numpy types if it's available
@@ -346,13 +416,16 @@ def classify_dtype(dtype: Any) -> str:
 
     raise TypeError(
         f'unsupported type annotation: {dtype}; '
-        'use `args`/`returns` on the @udf/@tvf decotator to specify the data type',
+        'use `args`/`returns` on the @udf/@tvf decorator to specify the data type',
     )
 
 
 def collapse_dtypes(dtypes: Union[str, List[str]]) -> str:
     """
     Collapse a dtype possibly containing multiple data types to one type.
+
+    This function can fail if there is no single type that naturally
+    encompasses all of the types in the list.
 
     Parameters
     ----------
@@ -364,6 +437,9 @@ def collapse_dtypes(dtypes: Union[str, List[str]]) -> str:
     str
 
     """
+    if isinstance(dtypes, str) and '|' in dtypes:
+        dtypes = dtypes.split('|')
+
     if not isinstance(dtypes, list):
         return dtypes
 
@@ -443,7 +519,232 @@ def collapse_dtypes(dtypes: Union[str, List[str]]) -> str:
     return dtypes[0] + ('?' if is_nullable else '')
 
 
-def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[str, Any]:
+def create_type(
+    types: List[Any],
+    output_fields: List[str],
+    function_type: str = 'udf',
+) -> Tuple[str, str]:
+    """
+    Create the normalized type and SQL code for the given type information.
+
+    Parameters
+    ----------
+    types : List[Any]
+        List of types to be used
+    output_fields : List[str]
+        List of field names for the resulting type
+    function_type : str
+        Type of function, either 'udf' or 'tvf'
+
+    Returns
+    -------
+    Tuple[str, str]
+        Tuple containing the output type and SQL code
+
+    """
+    out_type = 'tuple[' + ','.join([
+        collapse_dtypes(normalize_dtype(x))
+        for x in [simplify_dtype(y) for y in types]
+    ]) + ']'
+
+    sql = dtype_to_sql(
+        out_type, function_type=function_type, field_names=output_fields,
+    )
+
+    return out_type, sql
+
+
+def get_dataclass_schema(obj: Any) -> Tuple[List[Any], List[str]]:
+    """
+    Get the schema of a dataclass.
+
+    Parameters
+    ----------
+    obj : dataclass
+        The dataclass to get the schema of
+
+    Returns
+    -------
+    Tuple[List[Any], List[str]]
+        A tuple containing the field types and field names
+
+    """
+    if not dataclasses.is_dataclass(obj):
+        raise TypeError('object is not a dataclass')
+    return (
+        [x.type for x in obj.fields],
+        [x.name for x in obj.fields],
+    )
+
+
+def get_typeddict_schema(obj: Any) -> Tuple[List[Any], List[str]]:
+    """
+    Get the schema of a TypedDict.
+
+    Parameters
+    ----------
+    obj : TypedDict
+        The TypedDict to get the schema of
+
+    Returns
+    -------
+    Tuple[List[Any], List[str]]
+        A tuple containing the field types and field names
+
+    """
+    return (
+        list(inspect.get_annotations(obj).values()),
+        list(inspect.get_annotations(obj).keys()),
+    )
+
+
+def get_pydantic_schema(obj: pydantic.BaseModel) -> Tuple[List[Any], List[str]]:
+    """
+    Get the schema of a pydantic model.
+
+    Parameters
+    ----------
+    obj : pydantic.BaseModel
+        The pydantic model to get the schema of
+
+    Returns
+    -------
+    Tuple[List[Any], List[str]]
+        A tuple containing the field types and field names
+
+    """
+    return (
+        list(obj.model_fields.values()),
+        list(obj.model_fields.keys()),
+    )
+
+
+def get_namedtuple_schema(obj: Any) -> Tuple[List[Any], List[str]]:
+    """
+    Get the schema of a named tuple.
+
+    Parameters
+    ----------
+    obj : NamedTuple
+        The named tuple to get the schema of
+
+    Returns
+    -------
+    Tuple[List[Any], List[str]]
+        A tuple containing the field types and field names
+
+    """
+    return (
+        list(inspect.get_annotations(obj).values()),
+        list(inspect.get_annotations(obj).keys()),
+    )
+
+
+def get_return_type(
+    spec: Any,
+    name: str,
+    signature: inspect.Signature,
+    output_fields: Optional[List[str]] = None,
+    function_type: str = 'udf',
+) -> Dict[str, Any]:
+    """
+    Get the return type of a function.
+
+    Parameters
+    ----------
+    spec : Any
+        The return type specification
+    name : str
+        The name of the function
+    signature : inspect.Signature
+        The signature of the function
+    output_fields : List[str], optional
+        The output field names
+    function_type : str, optional
+        The type of function, either 'udf' or 'tvf'
+
+    Returns
+    -------
+    Dict[str, Any]
+        A dictionary containing the return type and SQL code
+
+    """
+
+    # Make sure there is a return type annotation
+    if spec is None \
+            and signature.return_annotation is inspect.Signature.empty:
+        raise TypeError(f'no return value annotation in function {name}')
+
+    #
+    # Generate the return type and the corresponding SQL code for that value
+    #
+
+    # Return type is specified by a SQL string
+    if isinstance(spec, str):
+        sql = spec
+        out_type = sql_to_dtype(sql)
+
+    # Return type is a record (i.e., has multiple fields)
+    elif isinstance(spec, list):
+
+        # Generate field names if needed
+        if not output_fields:
+            output_fields = [
+                string.ascii_letters[i] for i in range(len(spec))
+            ]
+
+        out_type, sql = create_type(
+            spec, output_fields, function_type=function_type,
+        )
+
+    # Return type is specified by a dataclass definition
+    elif dataclasses.is_dataclass(spec):
+        out_type, sql = create_type(
+            *get_dataclass_schema(spec),
+            function_type=function_type,
+        )
+
+    # Return type is specified by a TypedDict definition
+    elif is_typeddict(spec):
+        out_type, sql = create_type(
+            *get_typeddict_schema(spec),
+            function_type=function_type,
+        )
+
+    # Return type is specified by a pydantic model
+    elif is_pydantic(spec):
+        out_type, sql = create_type(
+            *get_pydantic_schema(spec),
+            function_type=function_type,
+        )
+
+    # Return type is specified by a named tuple
+    elif is_namedtuple(spec):
+        out_type, sql = create_type(
+            *get_namedtuple_schema(spec),
+            function_type=function_type,
+        )
+
+    # Unrecognized return type
+    elif spec is not None:
+        if not output_fields and typing.get_origin(spec) is tuple:
+            output_fields = [
+                string.ascii_letters[i] for i in range(len(typing.get_args(spec)))
+            ]
+        out_type = collapse_dtypes(normalize_dtype(simplify_dtype(spec)))
+        sql = dtype_to_sql(out_type, function_type=function_type)
+
+    else:
+        out_type = 'null'
+        sql = 'NULL'
+
+    return dict(dtype=out_type, sql=sql, default=None, output_fields=output_fields)
+
+
+def get_signature(
+    func: Callable[..., Any],
+    func_name: Optional[str] = None,
+) -> Dict[str, Any]:
     '''
     Print the UDF signature of the Python callable.
 
@@ -451,7 +752,7 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
     ----------
     func : Callable
         The function to extract the signature of
-    name : str, optional
+    func_name : str, optional
         Name override for function
 
     Returns
@@ -462,10 +763,11 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
     signature = inspect.signature(func)
     args: List[Dict[str, Any]] = []
     attrs = getattr(func, '_singlestoredb_attrs', {})
-    name = attrs.get('name', name if name else func.__name__)
+    name = attrs.get('name', func_name if func_name else func.__name__)
     function_type = attrs.get('function_type', 'udf')
     out: Dict[str, Any] = dict(name=name, args=args)
 
+    # Get parameter names, defaults, and annotations
     arg_names = [x for x in signature.parameters]
     defaults = [
         x.default if x.default is not inspect.Parameter.empty else None
@@ -476,6 +778,7 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
         if x.annotation is not inspect.Parameter.empty
     }
 
+    # Do not allow variable positional or keyword arguments
     for p in signature.parameters.values():
         if p.kind == inspect.Parameter.VAR_POSITIONAL:
             raise TypeError('variable positional arguments are not supported')
@@ -483,17 +786,23 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
             raise TypeError('variable keyword arguments are not supported')
 
     args_overrides = attrs.get('args', None)
-    returns_overrides = attrs.get('returns', None)
+    returns = attrs.get('returns', signature.return_annotation)
     output_fields = attrs.get('output_fields', None)
 
     spec_diff = set(arg_names).difference(set(annotations.keys()))
 
+    #
     # Make sure all arguments are annotated
+    #
+
+    # If there are missing annotations and no overrides, raise an error
     if spec_diff and args_overrides is None:
         raise TypeError(
             'missing annotations for {} in {}'
             .format(', '.join(spec_diff), name),
         )
+
+    # If there are missing annotations and overrides are provided, make sure they match
     elif isinstance(args_overrides, dict):
         for s in spec_diff:
             if s not in args_overrides:
@@ -501,6 +810,8 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
                     'missing annotations for {} in {}'
                     .format(', '.join(spec_diff), name),
                 )
+
+    # If there are missing annotations and overrides are provided, make sure they match
     elif isinstance(args_overrides, list):
         if len(arg_names) != len(args_overrides):
             raise TypeError(
@@ -508,91 +819,57 @@ def get_signature(func: Callable[..., Any], name: Optional[str] = None) -> Dict[
                 .format(name, ', '.join(spec_diff)),
             )
 
+    #
+    # Generate the parameter type and the corresponding SQL code for that parameter
+    #
+
     for i, arg in enumerate(arg_names):
+
+        # If arg_overrides is a list, use corresponding item as SQL
         if isinstance(args_overrides, list):
             sql = args_overrides[i]
             arg_type = sql_to_dtype(sql)
+
+        # If arg_overrides is a dict, use the corresponding key as SQL
         elif isinstance(args_overrides, dict) and arg in args_overrides:
             sql = args_overrides[arg]
             arg_type = sql_to_dtype(sql)
+
+        # If args_overrides is a string, use it as SQL (only one function parameter)
         elif isinstance(args_overrides, str):
             sql = args_overrides
             arg_type = sql_to_dtype(sql)
+
+        # Unrecognized type for args_overrides
         elif args_overrides is not None \
                 and not isinstance(args_overrides, (list, dict, str)):
             raise TypeError(f'unrecognized type for arguments: {args_overrides}')
+
+        # No args_overrides, use the Python type annotation
         else:
             arg_type = collapse_dtypes([
-                classify_dtype(x) for x in simplify_dtype(annotations[arg])
+                normalize_dtype(x) for x in simplify_dtype(annotations[arg])
             ])
             sql = dtype_to_sql(arg_type, function_type=function_type)
+
+        # Append parameter information to the args list
         args.append(dict(name=arg, dtype=arg_type, sql=sql, default=defaults[i]))
 
-    if returns_overrides is None \
-            and signature.return_annotation is inspect.Signature.empty:
-        raise TypeError(f'no return value annotation in function {name}')
+    out['returns'] = get_return_type(
+        returns, name, signature,
+        output_fields=output_fields, function_type=function_type,
+    )
 
-    if isinstance(returns_overrides, str):
-        sql = returns_overrides
-        out_type = sql_to_dtype(sql)
-    elif isinstance(returns_overrides, list):
-        if not output_fields:
-            output_fields = [
-                string.ascii_letters[i] for i in range(len(returns_overrides))
-            ]
-        out_type = 'tuple[' + collapse_dtypes([
-            classify_dtype(x)
-            for x in simplify_dtype(returns_overrides)
-        ]).replace('|', ',') + ']'
-        sql = dtype_to_sql(
-            out_type, function_type=function_type, field_names=output_fields,
-        )
-    elif dataclasses.is_dataclass(returns_overrides):
-        out_type = collapse_dtypes([
-            classify_dtype(x)
-            for x in simplify_dtype([x.type for x in returns_overrides.fields])
-        ])
-        sql = dtype_to_sql(
-            out_type,
-            function_type=function_type,
-            field_names=[x.name for x in returns_overrides.fields],
-        )
-    elif has_pydantic and inspect.isclass(returns_overrides) \
-            and issubclass(returns_overrides, pydantic.BaseModel):
-        out_type = collapse_dtypes([
-            classify_dtype(x)
-            for x in simplify_dtype([x for x in returns_overrides.model_fields.values()])
-        ])
-        sql = dtype_to_sql(
-            out_type,
-            function_type=function_type,
-            field_names=[x for x in returns_overrides.model_fields.keys()],
-        )
-    elif returns_overrides is not None and not isinstance(returns_overrides, str):
-        raise TypeError(f'unrecognized type for return value: {returns_overrides}')
-    else:
-        if not output_fields:
-            if dataclasses.is_dataclass(signature.return_annotation):
-                output_fields = [
-                    x.name for x in dataclasses.fields(signature.return_annotation)
-                ]
-            elif has_pydantic and inspect.isclass(signature.return_annotation) \
-                    and issubclass(signature.return_annotation, pydantic.BaseModel):
-                output_fields = list(signature.return_annotation.model_fields.keys())
-        out_type = collapse_dtypes([
-            classify_dtype(x) for x in simplify_dtype(signature.return_annotation)
-        ])
-        sql = dtype_to_sql(
-            out_type, function_type=function_type, field_names=output_fields,
-        )
-    out['returns'] = dict(dtype=out_type, sql=sql, default=None)
-
+    # Copy keys from decorator to signature
     copied_keys = ['database', 'environment', 'packages', 'resources', 'replace']
     for key in copied_keys:
         if attrs.get(key):
             out[key] = attrs[key]
 
+    # Set the function endpoint
     out['endpoint'] = '/invoke'
+
+    # Set the function doc string
     out['doc'] = func.__doc__
 
     return out
@@ -666,6 +943,9 @@ def dtype_to_sql(
     if dtype.endswith('?'):
         nullable = ' NULL'
         dtype = dtype[:-1]
+    elif '|null' in dtype:
+        nullable = ' NULL'
+        dtype = dtype.replace('|null', '')
 
     if dtype == 'null':
         nullable = ''

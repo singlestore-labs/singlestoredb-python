@@ -122,28 +122,29 @@ def process_types(params: Any) -> Any:
     raise TypeError(f'unrecognized data type for args: {params}')
 
 
+ParameterType = Union[
+    str,
+    List[str],
+    Dict[str, str],
+    'pydantic.BaseModel',
+    type,
+]
+
+ReturnType = Union[
+    str,
+    List[DataType],
+    List[type],
+    'pydantic.BaseModel',
+    type,
+]
+
+
 def _func(
     func: Optional[Callable[..., Any]] = None,
     *,
     name: Optional[str] = None,
-    args: Optional[
-        Union[
-            DataType,
-            List[DataType],
-            Dict[str, DataType],
-            'pydantic.BaseModel',
-            type,
-        ]
-    ] = None,
-    returns: Optional[
-        Union[
-            str,
-            List[DataType],
-            List[type],
-            'pydantic.BaseModel',
-            type,
-        ]
-    ] = None,
+    args: Optional[ParameterType] = None,
+    returns: Optional[ReturnType] = None,
     data_format: Optional[str] = None,
     include_masks: bool = False,
     function_type: str = 'udf',
@@ -204,8 +205,8 @@ def udf(
     func: Optional[Callable[..., Any]] = None,
     *,
     name: Optional[str] = None,
-    args: Optional[Union[DataType, List[DataType], Dict[str, DataType]]] = None,
-    returns: Optional[Union[str, List[DataType], List[type]]] = None,
+    args: Optional[ParameterType] = None,
+    returns: Optional[ReturnType] = None,
     data_format: Optional[str] = None,
     include_masks: bool = False,
 ) -> Callable[..., Any]:
@@ -267,8 +268,8 @@ def tvf(
     func: Optional[Callable[..., Any]] = None,
     *,
     name: Optional[str] = None,
-    args: Optional[Union[DataType, List[DataType], Dict[str, DataType]]] = None,
-    returns: Optional[Union[str, List[DataType], List[type]]] = None,
+    args: Optional[ParameterType] = None,
+    returns: Optional[ReturnType] = None,
     data_format: Optional[str] = None,
     include_masks: bool = False,
     output_fields: Optional[List[str]] = None,
