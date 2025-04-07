@@ -774,10 +774,21 @@ class FileSpace(FileLocation):
         FilesObject
 
         """
-        raise ManagementError(
-            msg='Operation not supported: directories are currently not allowed '
-                'in Files API',
+        path_str = str(path)
+        if not path_str.endswith('/'):
+            path_str = path_str + '/'
+
+        if self.exists(path_str):
+            if not overwrite:
+                raise OSError(f'file path already exists: {path_str}')
+            self.remove(path_str)
+
+        self._manager._put(
+            f'files/fs/{self._location}/{path_str}',
+            headers={'Content-Type': None},
         )
+
+        return self.info(path_str)
 
     mkdirs = mkdir
 
@@ -803,12 +814,6 @@ class FileSpace(FileLocation):
         """
         if not self.exists(old_path):
             raise OSError(f'file path does not exist: {old_path}')
-
-        if str(old_path).endswith('/') or str(new_path).endswith('/'):
-            raise ManagementError(
-                msg='Operation not supported: directories are currently not allowed '
-                    'in Files API',
-            )
 
         if self.exists(new_path):
             if not overwrite:
@@ -1088,10 +1093,11 @@ class FileSpace(FileLocation):
             Path to the file location
 
         """
-        raise ManagementError(
-            msg='Operation not supported: directories are currently not allowed '
-                'in Files API',
-        )
+        path_str = str(path)
+        if not path_str.endswith('/'):
+            path_str = path_str + '/'
+
+        self._manager._delete(f'files/fs/{self._location}/{path_str}')
 
     def __str__(self) -> str:
         """Return string representation."""
