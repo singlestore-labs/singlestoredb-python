@@ -1023,13 +1023,17 @@ def signature_to_sql(
 
     returns = ''
     if signature.get('returns'):
-        prefix = 'RECORD('
+        ret = signature['returns']
         if function_type == 'tvf':
-            prefix = 'TABLE('
-        res = prefix + ', '.join(
-            f'{escape_name(x["name"])} {x["sql"]}'
-            for x in signature['returns']
-        ) + ')'
+            res = 'TABLE(' + ', '.join(
+                f'{escape_name(x["name"])} {x["sql"]}' for x in ret
+            ) + ')'
+        elif ret[0]['name']:
+            res = 'RECORD(' + ', '.join(
+                f'{escape_name(x["name"])} {x["sql"]}' for x in ret
+            ) + ')'
+        else:
+            res = ret[0]['sql']
         returns = f' RETURNS {res}'
 
     host = os.environ.get('SINGLESTOREDB_EXT_HOST', '127.0.0.1')
