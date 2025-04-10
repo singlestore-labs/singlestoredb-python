@@ -16,6 +16,7 @@ from typing import List
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
+from typing import Type
 from typing import TypeVar
 from typing import Union
 
@@ -27,6 +28,7 @@ except ImportError:
 
 try:
     import pydantic
+    import pydantic_core
     has_pydantic = True
 except ImportError:
     has_pydantic = False
@@ -44,6 +46,9 @@ else:
 def is_union(x: Any) -> bool:
     """Check if the object is a Union."""
     return typing.get_origin(x) in _UNION_TYPES
+
+
+NO_DEFAULT = object()
 
 
 array_types: Tuple[Any, ...]
@@ -608,7 +613,10 @@ def collapse_dtypes(dtypes: Union[str, List[str]]) -> str:
     return dtypes[0] + ('?' if is_nullable else '')
 
 
-def get_dataclass_schema(obj: Any) -> List[Tuple[str, Any]]:
+def get_dataclass_schema(
+    obj: Any,
+    include_default: bool = False,
+) -> List[Union[Tuple[str, Any], Tuple[str, Any, Any]]]:
     """
     Get the schema of a dataclass.
 
@@ -619,14 +627,25 @@ def get_dataclass_schema(obj: Any) -> List[Tuple[str, Any]]:
 
     Returns
     -------
-    List[Tuple[str, Any]]
+    List[Tuple[str, Any]] | List[Tuple[str, Any, Any]]
         A list of tuples containing the field names and field types
 
     """
-    return list(get_annotations(obj).items())
+    if include_default:
+        return [
+            (
+                f.name, f.type,
+                NO_DEFAULT if f.default is dataclasses.MISSING else f.default,
+            )
+            for f in dataclasses.fields(obj)
+        ]
+    return [(f.name, f.type) for f in dataclasses.fields(obj)]
 
 
-def get_typeddict_schema(obj: Any) -> List[Tuple[str, Any]]:
+def get_typeddict_schema(
+    obj: Any,
+    include_default: bool = False,
+) -> List[Union[Tuple[str, Any], Tuple[str, Any, Any]]]:
     """
     Get the schema of a TypedDict.
 
@@ -634,17 +653,27 @@ def get_typeddict_schema(obj: Any) -> List[Tuple[str, Any]]:
     ----------
     obj : TypedDict
         The TypedDict to get the schema of
+    include_default : bool, optional
+        Whether to include the default value in the column specification
 
     Returns
     -------
-    List[Tuple[str, Any]]
+    List[Tuple[str, Any]] | List[Tuple[str, Any, Any]]
         A list of tuples containing the field names and field types
 
     """
+    if include_default:
+        return [
+            (k, v, getattr(obj, 'k', NO_DEFAULT))
+            for k, v in get_annotations(obj).items()
+        ]
     return list(get_annotations(obj).items())
 
 
-def get_pydantic_schema(obj: pydantic.BaseModel) -> List[Tuple[str, Any]]:
+def get_pydantic_schema(
+    obj: pydantic.BaseModel,
+    include_default: bool = False,
+) -> List[Union[Tuple[str, Any], Tuple[str, Any, Any]]]:
     """
     Get the schema of a pydantic model.
 
@@ -652,17 +681,30 @@ def get_pydantic_schema(obj: pydantic.BaseModel) -> List[Tuple[str, Any]]:
     ----------
     obj : pydantic.BaseModel
         The pydantic model to get the schema of
+    include_default : bool, optional
+        Whether to include the default value in the column specification
 
     Returns
     -------
-    List[Tuple[str, Any]]
+    List[Tuple[str, Any]] | List[Tuple[str, Any, Any]]
         A list of tuples containing the field names and field types
 
     """
+    if include_default:
+        return [
+            (
+                k, v.annotation,
+                NO_DEFAULT if v.default is pydantic_core.PydanticUndefined else v.default,
+            )
+            for k, v in obj.model_fields.items()
+        ]
     return [(k, v.annotation) for k, v in obj.model_fields.items()]
 
 
-def get_namedtuple_schema(obj: Any) -> List[Tuple[Any, str]]:
+def get_namedtuple_schema(
+    obj: Any,
+    include_default: bool = False,
+) -> List[Union[Tuple[Any, str], Tuple[Any, str, Any]]]:
     """
     Get the schema of a named tuple.
 
@@ -670,19 +712,85 @@ def get_namedtuple_schema(obj: Any) -> List[Tuple[Any, str]]:
     ----------
     obj : NamedTuple
         The named tuple to get the schema of
+    include_default : bool, optional
+        Whether to include the default value in the column specification
 
     Returns
     -------
-    List[Tuple[Any, str]]
+    List[Tuple[Any, str]] | List[Tuple[Any, str, Any]]
         A list of tuples containing the field names and field types
 
     """
+    if include_default:
+        return [
+            (
+                k,
+                v,
+                obj._field_defaults.get(k, NO_DEFAULT),
+            )
+            for k, v in get_annotations(obj).items()
+        ]
     return list(get_annotations(obj).items())
+
+
+def get_colspec(
+    overrides: Any,
+    include_default: bool = False,
+) -> List[Union[Tuple[str, Any], Tuple[str, Any, Any]]]:
+    """
+    Get the column specification from the overrides.
+
+    Parameters
+    ----------
+    overrides : Any
+        The overrides to get the column specification from
+    include_default : bool, optional
+        Whether to include the default value in the column specification
+
+    Returns
+    -------
+    List[Tuple[str, Any]] | List[Tuple[str, Any, Any]]
+        A list of tuples containing the field names and field types
+
+    """
+    overrides_colspec = []
+    if overrides:
+        if dataclasses.is_dataclass(overrides):
+            overrides_colspec = get_dataclass_schema(
+                overrides, include_default=include_default,
+            )
+        elif is_typeddict(overrides):
+            overrides_colspec = get_typeddict_schema(
+                overrides, include_default=include_default,
+            )
+        elif is_namedtuple(overrides):
+            overrides_colspec = get_namedtuple_schema(
+                overrides, include_default=include_default,
+            )
+        elif is_pydantic(overrides):
+            overrides_colspec = get_pydantic_schema(
+                overrides, include_default=include_default,
+            )
+        elif isinstance(overrides, list):
+            if include_default:
+                overrides_colspec = [
+                    (getattr(x, 'name', ''), x, NO_DEFAULT) for x in overrides
+                ]
+            else:
+                overrides_colspec = [(getattr(x, 'name', ''), x) for x in overrides]
+        else:
+            if include_default:
+                overrides_colspec = [
+                    (getattr(overrides, 'name', ''), overrides, NO_DEFAULT),
+                ]
+            else:
+                overrides_colspec = [(getattr(overrides, 'name', ''), overrides)]
+    return overrides_colspec
 
 
 def get_schema(
     spec: Any,
-    overrides: Optional[List[str]] = None,
+    overrides: Optional[Union[List[str], Type[Any]]] = None,
     function_type: str = 'udf',
     mode: str = 'parameter',
 ) -> Tuple[List[Tuple[str, Any, Optional[str]]], str]:
@@ -748,18 +856,7 @@ def get_schema(
     #
 
     # Compute overrides colspec from various formats
-    overrides_colspec = []
-    if overrides:
-        if dataclasses.is_dataclass(overrides):
-            overrides_colspec = get_dataclass_schema(overrides)
-        elif is_typeddict(overrides):
-            overrides_colspec = get_typeddict_schema(overrides)
-        elif is_namedtuple(overrides):
-            overrides_colspec = get_namedtuple_schema(overrides)
-        elif is_pydantic(overrides):
-            overrides_colspec = get_pydantic_schema(overrides)
-        else:
-            overrides_colspec = [(getattr(x, 'name', ''), x) for x in overrides]
+    overrides_colspec = get_colspec(overrides)
 
     # Numpy array types
     if is_numpy(spec):
@@ -878,7 +975,7 @@ def get_schema(
     # Normalize colspec data types
     out = []
 
-    for k, v in colspec:
+    for k, v, *_ in colspec:
         out.append((
             k,
             collapse_dtypes([normalize_dtype(x) for x in simplify_dtype(v)]),
@@ -953,10 +1050,13 @@ def get_signature(
     # Generate the parameter type and the corresponding SQL code for that parameter
     args_schema = []
     args_data_formats = []
-    for param in signature.parameters.values():
+    args_colspec = [x for x in get_colspec(attrs.get('args', []), include_default=True)]
+    args_overrides = [x[1] for x in args_colspec]
+    args_defaults = [x[2] for x in args_colspec]  # type: ignore
+    for i, param in enumerate(signature.parameters.values()):
         arg_schema, args_data_format = get_schema(
             param.annotation,
-            overrides=attrs.get('args', None),
+            overrides=args_overrides[i] if args_overrides else [],
             function_type=function_type,
             mode='parameter',
         )
@@ -967,12 +1067,24 @@ def get_signature(
             args_schema.append((param.name, *arg_schema[0][1:]))
 
     for i, (name, atype, sql) in enumerate(args_schema):
+        # Get default value
+        default_option = {}
+        if args_defaults:
+            if args_defaults[i] is not NO_DEFAULT:
+                default_option['default'] = args_defaults[i]
+        else:
+            if param.default is not param.empty:
+                default_option['default'] = param.default
+
+        # Generate SQL code for the parameter
         sql = sql or dtype_to_sql(
             atype,
             function_type=function_type,
-            default=param.default if param.default is not param.empty else None,
+            **default_option,
         )
-        args.append(dict(name=name, dtype=atype, sql=sql))
+
+        # Add parameter to args definitions
+        args.append(dict(name=name, dtype=atype, sql=sql, **default_option))
 
     # Check that all the data formats are all the same
     if len(set(args_data_formats)) > 1:
@@ -1059,7 +1171,7 @@ def sql_to_dtype(sql: str) -> str:
 
 def dtype_to_sql(
     dtype: str,
-    default: Any = None,
+    default: Any = NO_DEFAULT,
     field_names: Optional[List[str]] = None,
     function_type: str = 'udf',
 ) -> str:
@@ -1092,7 +1204,7 @@ def dtype_to_sql(
         nullable = ''
 
     default_clause = ''
-    if default is not None:
+    if default is not NO_DEFAULT:
         if default is dt.NULL:
             default = None
         default_clause = f' DEFAULT {escape_item(default, "utf8")}'
