@@ -36,6 +36,7 @@
 #define NUMPY_DATETIME 13
 #define NUMPY_OBJECT 14
 #define NUMPY_BYTES 15
+#define NUMPY_FIXED_STRING 16
 
 #define MYSQL_FLAG_NOT_NULL 1
 #define MYSQL_FLAG_PRI_KEY 2
@@ -2745,6 +2746,13 @@ static NumpyColType get_numpy_col_type(PyObject *py_array) {
             goto error;
         }
         break;
+    case 'U':
+        out.type = NUMPY_FIXED_STRING;
+        out.length = (Py_ssize_t)strtol(str + 2, NULL, 10);
+        if (out.length < 0) {
+            goto error;
+        }
+        break;
     default:
         goto error;
     }
@@ -3845,7 +3853,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
             case MYSQL_TYPE_MEDIUM_BLOB:
             case MYSQL_TYPE_LONG_BLOB:
             case MYSQL_TYPE_BLOB:
-                if  (col_types[i].type != NUMPY_OBJECT) {
+                if  (col_types[i].type != NUMPY_OBJECT && col_types[i].type != NUMPY_FIXED_STRING) {
                     PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for character output types");
                     goto error;
                 }
@@ -3855,6 +3863,24 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     i64 = 0;
                     memcpy(out+out_idx, &i64, 8);
                     out_idx += 8;
+
+                } else if (col_types[i].type == NUMPY_FIXED_STRING) {
+                    void *bytes = (void*)(cols[i] + j * 8);
+
+                    if (bytes == NULL) {
+                        CHECKMEM(8);
+                        i64 = 0;
+                        memcpy(out+out_idx, &i64, 8);
+                        out_idx += 8;
+                    } else {
+                        Py_ssize_t str_l = strnlen(bytes, col_types[i].length);
+                        CHECKMEM(8+str_l);
+                        i64 = str_l;
+                        memcpy(out+out_idx, &i64, 8);
+                        out_idx += 8;
+                        memcpy(out+out_idx, bytes, str_l);
+                        out_idx += str_l;
+                    }
 
                 } else {
                     u64 = *(uint64_t*)(cols[i] + j * 8);

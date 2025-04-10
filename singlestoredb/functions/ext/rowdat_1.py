@@ -720,6 +720,8 @@ def _dump_arrow_accel(
 if not has_accel:
     load = _load_accel = _load
     dump = _dump_accel = _dump
+    load_list = _load_vectors  # noqa: F811
+    dump_list = _dump_vectors  # noqa: F811
     load_pandas = _load_pandas_accel = _load_pandas  # noqa: F811
     dump_pandas = _dump_pandas_accel = _dump_pandas  # noqa: F811
     load_numpy = _load_numpy_accel = _load_numpy  # noqa: F811
@@ -734,6 +736,8 @@ else:
     _dump_accel = _singlestoredb_accel.dump_rowdat_1
     load = _load_accel
     dump = _dump_accel
+    load_list = _load_vectors
+    dump_list = _dump_vectors
     load_pandas = _load_pandas_accel
     dump_pandas = _dump_pandas_accel
     load_numpy = _load_numpy_accel

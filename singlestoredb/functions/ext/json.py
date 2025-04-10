@@ -313,6 +313,10 @@ def _dump_vectors(
     return json.dumps(dict(data=data), cls=JSONEncoder).encode('utf-8')
 
 
+load_list = _load_vectors
+dump_list = _dump_vectors
+
+
 def dump_pandas(
     returns: List[int],
     row_ids: 'pd.Series[int]',

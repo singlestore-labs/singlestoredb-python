@@ -41,6 +41,11 @@ else:
     _UNION_TYPES = {typing.Union}
 
 
+def is_union(x: Any) -> bool:
+    """Check if the object is a Union."""
+    return typing.get_origin(x) in _UNION_TYPES
+
+
 array_types: Tuple[Any, ...]
 
 if has_numpy:
@@ -202,11 +207,75 @@ def get_annotations(obj: Any) -> Dict[str, Any]:
     return getattr(obj, '__annotations__', {})
 
 
+def is_numpy(obj: Any) -> bool:
+    """Check if an object is a numpy array."""
+    if is_union(obj):
+        obj = typing.get_args(obj)[0]
+    if not has_numpy:
+        return False
+    if inspect.isclass(obj):
+        return obj is np.ndarray
+    if typing.get_origin(obj) is np.ndarray:
+        return True
+    return isinstance(obj, np.ndarray)
+
+
 def is_dataframe(obj: Any) -> bool:
     """Check if an object is a DataFrame."""
+    # Cheating here a bit so we don't have to import pandas / polars / pyarrow:
+    # unless we absolutely need to
+    if getattr(obj, '__module__', '').startswith('pandas.'):
+        return getattr(obj, '__name__', '') == 'DataFrame'
+    if getattr(obj, '__module__', '').startswith('polars.'):
+        return getattr(obj, '__name__', '') == 'DataFrame'
+    if getattr(obj, '__module__', '').startswith('pyarrow.'):
+        return getattr(obj, '__name__', '') == 'Table'
+    return False
+
+
+def get_data_format(obj: Any) -> str:
+    """Return the data format of the DataFrame / Table / vector."""
     # Cheating here a bit so we don't have to import pandas / polars / pyarrow
     # unless we absolutely need to
-    return getattr(obj, '__name__', '') in ['DataFrame', 'Table']
+    if getattr(obj, '__module__', '').startswith('pandas.'):
+        return 'pandas'
+    if getattr(obj, '__module__', '').startswith('polars.'):
+        return 'polars'
+    if getattr(obj, '__module__', '').startswith('pyarrow.'):
+        return 'pyarrow'
+    if getattr(obj, '__module__', '').startswith('numpy.'):
+        return 'numpy'
+    return 'scalar'
+
+
+def is_pandas_series(obj: Any) -> bool:
+    """Check if an object is a pandas Series."""
+    if is_union(obj):
+        obj = typing.get_args(obj)[0]
+    return (
+        getattr(obj, '__module__', '').startswith('pandas.') and
+        getattr(obj, '__name__', '') == 'Series'
+    )
+
+
+def is_polars_series(obj: Any) -> bool:
+    """Check if an object is a polars Series."""
+    if is_union(obj):
+        obj = typing.get_args(obj)[0]
+    return (
+        getattr(obj, '__module__', '').startswith('polars.') and
+        getattr(obj, '__name__', '') == 'Series'
+    )
+
+
+def is_pyarrow_array(obj: Any) -> bool:
+    """Check if an object is a pyarrow Array."""
+    if is_union(obj):
+        obj = typing.get_args(obj)[0]
+    return (
+        getattr(obj, '__module__', '').startswith('pyarrow.') and
+        getattr(obj, '__name__', '') == 'Array'
+    )
 
 
 def is_typeddict(obj: Any) -> bool:
@@ -275,7 +344,7 @@ def simplify_dtype(dtype: Any) -> List[Any]:
     args = []
 
     # Flatten Unions
-    if origin in _UNION_TYPES:
+    if is_union(dtype):
         for x in typing.get_args(dtype):
             args.extend(simplify_dtype(x))
 
@@ -287,7 +356,7 @@ def simplify_dtype(dtype: Any) -> List[Any]:
             args.extend(simplify_dtype(dtype.__bound__))
 
     # Sequence types
-    elif origin is not None and issubclass(origin, Sequence):
+    elif origin is not None and inspect.isclass(origin) and issubclass(origin, Sequence):
         item_args: List[Union[List[type], type]] = []
         for x in typing.get_args(dtype):
             item_dtype = simplify_dtype(x)
@@ -330,6 +399,9 @@ def normalize_dtype(dtype: Any) -> str:
 
     if isinstance(dtype, str):
         return sql_to_dtype(dtype)
+
+    if typing.get_origin(dtype) is np.dtype:
+        dtype = typing.get_args(dtype)[0]
 
     # Specific types
     if dtype is None or dtype is type(None):  # noqa: E721
@@ -383,7 +455,7 @@ def normalize_dtype(dtype: Any) -> str:
                 return f'tuple[{item_dtypes}]'
 
             # Array types
-            elif issubclass(origin, array_types):
+            elif inspect.isclass(origin) and issubclass(origin, array_types):
                 args = typing.get_args(dtype)
                 item_dtype = normalize_dtype(args[0])
                 return f'array[{item_dtype}]'
@@ -536,41 +608,6 @@ def collapse_dtypes(dtypes: Union[str, List[str]]) -> str:
     return dtypes[0] + ('?' if is_nullable else '')
 
 
-def create_type(
-    types: List[Any],
-    output_fields: List[str],
-    function_type: str = 'udf',
-) -> Tuple[str, str]:
-    """
-    Create the normalized type and SQL code for the given type information.
-
-    Parameters
-    ----------
-    types : List[Any]
-        List of types to be used
-    output_fields : List[str]
-        List of field names for the resulting type
-    function_type : str
-        Type of function, either 'udf' or 'tvf'
-
-    Returns
-    -------
-    Tuple[str, str]
-        Tuple containing the output type and SQL code
-
-    """
-    out_type = 'tuple[' + ','.join([
-        collapse_dtypes(normalize_dtype(x))
-        for x in [simplify_dtype(y) for y in types]
-    ]) + ']'
-
-    sql = dtype_to_sql(
-        out_type, function_type=function_type, field_names=output_fields,
-    )
-
-    return out_type, sql
-
-
 def get_dataclass_schema(obj: Any) -> List[Tuple[str, Any]]:
     """
     Get the schema of a dataclass.
@@ -643,11 +680,12 @@ def get_namedtuple_schema(obj: Any) -> List[Tuple[Any, str]]:
     return list(get_annotations(obj).items())
 
 
-def get_return_schema(
+def get_schema(
     spec: Any,
-    output_fields: Optional[List[str]] = None,
+    overrides: Optional[List[str]] = None,
     function_type: str = 'udf',
-) -> List[Tuple[str, Any]]:
+    mode: str = 'parameter',
+) -> Tuple[List[Tuple[str, Any, Optional[str]]], str]:
     """
     Expand a return type annotation into a list of types and field names.
 
@@ -655,84 +693,225 @@ def get_return_schema(
     ----------
     spec : Any
         The return type specification
-    output_fields : List[str], optional
-        The output field names
+    overrides : List[str], optional
+        List of SQL type specifications for the return type
     function_type : str
         The type of function, either 'udf' or 'tvf'
+    mode : str
+        The mode of the function, either 'parameter' or 'return'
 
     Returns
     -------
-    List[Tuple[str, Any]]
-        A list of tuples containing the field names and field types
+    Tuple[List[Tuple[str, Any]], str]
+        A list of tuples containing the field names and field types,
+        the normalized data format, and optionally the SQL
+        definition of the type
 
     """
-    # Make sure that the result of a TVF is a list or dataframe
-    if function_type == 'tvf':
+    data_format = 'scalar'
 
+    # Make sure that the result of a TVF is a list or dataframe
+    if function_type == 'tvf' and mode == 'return':
+
+        # Use the item type from the list if it's a list
         if typing.get_origin(spec) is list:
             spec = typing.get_args(spec)[0]
 
         # DataFrames require special handling. You can't get the schema
         # from the annotation, you need a separate structure to specify
-        # the types. This should be specified in the output_fields.
+        # the types. This should be specified in the overrides.
         elif is_dataframe(spec):
-            if output_fields is None:
+            if not overrides:
                 raise TypeError(
-                    'output_fields must be specified for DataFrames / Tables',
+                    'type overrides must be specified for DataFrames / Tables',
                 )
-            spec = output_fields
-            output_fields = None
 
+        # Unsuported types
         else:
             raise TypeError(
                 'return type for TVF must be a list or DataFrame',
             )
 
-    elif typing.get_origin(spec) in [list, tuple, dict] \
+    # Error out for incorrect types
+    elif typing.get_origin(spec) in [tuple, dict] \
             or is_dataframe(spec) \
             or dataclasses.is_dataclass(spec) \
             or is_typeddict(spec) \
             or is_pydantic(spec) \
             or is_namedtuple(spec):
+        if mode == 'parameter':
+            raise TypeError('parameter types must be scalar or vector')
         raise TypeError('return type for UDF must be a scalar type')
 
-    # Return type is specified by a SQL string
-    if isinstance(spec, str):
-        return [('', sql_to_dtype(spec))]
+    #
+    # Process each parameter / return type into a colspec
+    #
+
+    # Compute overrides colspec from various formats
+    overrides_colspec = []
+    if overrides:
+        if dataclasses.is_dataclass(overrides):
+            overrides_colspec = get_dataclass_schema(overrides)
+        elif is_typeddict(overrides):
+            overrides_colspec = get_typeddict_schema(overrides)
+        elif is_namedtuple(overrides):
+            overrides_colspec = get_namedtuple_schema(overrides)
+        elif is_pydantic(overrides):
+            overrides_colspec = get_pydantic_schema(overrides)
+        else:
+            overrides_colspec = [(getattr(x, 'name', ''), x) for x in overrides]
+
+    # Numpy array types
+    if is_numpy(spec):
+        data_format = 'numpy'
+        if overrides:
+            colspec = overrides_colspec
+        elif len(typing.get_args(spec)) < 2:
+            raise TypeError(
+                'numpy array must have a data type specified '
+                'in the @udf / @tvf decorator or with an NDArray type annotation',
+            )
+        else:
+            colspec = [('', typing.get_args(spec)[1])]
+
+    # Pandas Series
+    elif is_pandas_series(spec):
+        data_format = 'pandas'
+        if not overrides:
+            raise TypeError(
+                'pandas Series must have a data type specified '
+                'in the @udf / @tvf decorator',
+            )
+        colspec = overrides_colspec
+
+    # Polars Series
+    elif is_polars_series(spec):
+        data_format = 'polars'
+        if not overrides:
+            raise TypeError(
+                'polars Series must have a data type specified '
+                'in the @udf / @tvf decorator',
+            )
+        colspec = overrides_colspec
+
+    # PyArrow Array
+    elif is_pyarrow_array(spec):
+        data_format = 'pyarrow'
+        if not overrides:
+            raise TypeError(
+                'pyarrow Arrays must have a data type specified '
+                'in the @udf / @tvf decorator',
+            )
+        colspec = overrides_colspec
 
     # Return type is specified by a dataclass definition
-    if dataclasses.is_dataclass(spec):
-        schema = get_dataclass_schema(spec)
+    elif dataclasses.is_dataclass(spec):
+        colspec = overrides_colspec or get_dataclass_schema(spec)
 
     # Return type is specified by a TypedDict definition
     elif is_typeddict(spec):
-        schema = get_typeddict_schema(spec)
+        colspec = overrides_colspec or get_typeddict_schema(spec)
 
     # Return type is specified by a pydantic model
     elif is_pydantic(spec):
-        schema = get_pydantic_schema(spec)
+        colspec = overrides_colspec or get_pydantic_schema(spec)
 
     # Return type is specified by a named tuple
     elif is_namedtuple(spec):
-        schema = get_namedtuple_schema(spec)
+        colspec = overrides_colspec or get_namedtuple_schema(spec)
 
     # Unrecognized return type
     elif spec is not None:
-        if typing.get_origin(spec) is tuple:
-            output_fields = [
-                string.ascii_letters[i] for i in range(len(typing.get_args(spec)))
-            ]
-            schema = [(x, y) for x, y in zip(output_fields, typing.get_args(spec))]
-        else:
-            schema = [('', spec)]
 
-    # Normalize schema data types
+        # Return type is specified by a SQL string
+        if isinstance(spec, str):
+            data_format = 'scalar'
+            colspec = [(getattr(spec, 'name', ''), spec)]
+
+        # Plain list vector
+        elif typing.get_origin(spec) is list:
+            data_format = 'list'
+            colspec = [('', typing.get_args(spec)[0])]
+
+        # Multiple return values
+        elif typing.get_origin(spec) is tuple:
+
+            data_formats, colspec = [], []
+
+            for i, (y, vec) in enumerate(vector_check(typing.get_args(spec))):
+
+                # Apply override types as needed
+                if overrides:
+                    colspec.append(overrides_colspec[i])
+
+                # Some vector types do not have annotated types, so they must
+                # be specified in the decorator
+                elif y is None:
+                    raise TypeError(
+                        f'type overrides must be specified for vector type: {vec}',
+                    )
+
+                else:
+                    colspec.append(('', y))
+
+                data_formats.append(vec)
+
+            # Make sure that all the data formats are the same
+            if len(set(data_formats)) > 1:
+                raise TypeError(
+                    'data formats must be all be the same vector / scalar type: '
+                    f'{", ".join(data_formats)}',
+                )
+
+            data_format = data_formats[0]
+
+        # Use overrides if specified
+        elif overrides:
+            data_format = get_data_format(spec)
+            colspec = overrides_colspec
+
+        # Single value, no override
+        else:
+            data_format = 'scalar'
+            colspec = [('', spec)]
+
+    # Normalize colspec data types
     out = []
-    for k, v in schema:
+
+    for k, v in colspec:
         out.append((
-            k, collapse_dtypes([normalize_dtype(x) for x in simplify_dtype(v)]),
+            k,
+            collapse_dtypes([normalize_dtype(x) for x in simplify_dtype(v)]),
+            v if isinstance(v, str) else None,
         ))
-    return out
+
+    return out, data_format
+
+
+def vector_check(obj: Any) -> Tuple[Any, str]:
+    """
+    Check if the object is a vector type.
+
+    Parameters
+    ----------
+    obj : Any
+        The object to check
+
+    Returns
+    -------
+    Tuple[Any, str]
+        The scalar type and the data format ('scalar', 'numpy', 'pandas', 'polars')
+
+    """
+    if is_numpy(obj):
+        return typing.get_args(obj)[1], 'numpy'
+    if is_pandas_series(obj):
+        return None, 'pandas'
+    if is_polars_series(obj):
+        return None, 'polars'
+    if is_pyarrow_array(obj):
+        return None, 'pyarrow'
+    return obj, 'scalar'
 
 
 def get_signature(
@@ -757,22 +936,12 @@ def get_signature(
     signature = inspect.signature(func)
     args: List[Dict[str, Any]] = []
     returns: List[Dict[str, Any]] = []
-    attrs = getattr(func, '_singlestoredb_attrs', {})
-    name = attrs.get('name', func_name if func_name else func.__name__)
-    function_type = attrs.get('function_type', 'udf')
-    out: Dict[str, Any] = dict(name=name, args=args, returns=returns)
 
-    # Get parameter names, defaults, and annotations
-    arg_names = [x for x in signature.parameters]
-    args_overrides = attrs.get('args', None)
-    defaults = [
-        x.default if x.default is not inspect.Parameter.empty else None
-        for x in signature.parameters.values()
-    ]
-    annotations = {
-        k: x.annotation for k, x in signature.parameters.items()
-        if x.annotation is not inspect.Parameter.empty
-    }
+    attrs = getattr(func, '_singlestoredb_attrs', {})
+    function_type = attrs.get('function_type', 'udf')
+    name = attrs.get('name', func_name if func_name else func.__name__)
+
+    out: Dict[str, Any] = dict(name=name, args=args, returns=returns)
 
     # Do not allow variable positional or keyword arguments
     for p in signature.parameters.values():
@@ -781,84 +950,55 @@ def get_signature(
         elif p.kind == inspect.Parameter.VAR_KEYWORD:
             raise TypeError('variable keyword arguments are not supported')
 
-    spec_diff = set(arg_names).difference(set(annotations.keys()))
+    # Generate the parameter type and the corresponding SQL code for that parameter
+    args_schema = []
+    args_data_formats = []
+    for param in signature.parameters.values():
+        arg_schema, args_data_format = get_schema(
+            param.annotation,
+            overrides=attrs.get('args', None),
+            function_type=function_type,
+            mode='parameter',
+        )
+        args_data_formats.append(args_data_format)
 
-    #
-    # Make sure all arguments are annotated
-    #
+        # Insert parameter names as needed
+        if not arg_schema[0][0]:
+            args_schema.append((param.name, *arg_schema[0][1:]))
 
-    # If there are missing annotations and no overrides, raise an error
-    if spec_diff and args_overrides is None:
+    for i, (name, atype, sql) in enumerate(args_schema):
+        sql = sql or dtype_to_sql(
+            atype,
+            function_type=function_type,
+            default=param.default if param.default is not param.empty else None,
+        )
+        args.append(dict(name=name, dtype=atype, sql=sql))
+
+    # Check that all the data formats are all the same
+    if len(set(args_data_formats)) > 1:
         raise TypeError(
-            'missing annotations for {} in {}'
-            .format(', '.join(spec_diff), name),
+            'input data formats must be all be the same: '
+            f'{", ".join(args_data_formats)}',
         )
 
-    # If there are missing annotations and overrides are provided, make sure they match
-    elif isinstance(args_overrides, dict):
-        for s in spec_diff:
-            if s not in args_overrides:
-                raise TypeError(
-                    'missing annotations for {} in {}'
-                    .format(', '.join(spec_diff), name),
-                )
+    out['args_data_format'] = args_data_formats[0]
 
-    # If there are missing annotations and overrides are provided, make sure they match
-    elif isinstance(args_overrides, list):
-        if len(arg_names) != len(args_overrides):
-            raise TypeError(
-                'number of annotations does not match in {}: {}'
-                .format(name, ', '.join(spec_diff)),
-            )
-
-    #
-    # Generate the parameter type and the corresponding SQL code for that parameter
-    #
-
-    for i, arg in enumerate(arg_names):
-
-        # If arg_overrides is a list, use corresponding item as SQL
-        if isinstance(args_overrides, list):
-            sql = args_overrides[i]
-            arg_type = sql_to_dtype(sql)
-
-        # If arg_overrides is a dict, use the corresponding key as SQL
-        elif isinstance(args_overrides, dict) and arg in args_overrides:
-            sql = args_overrides[arg]
-            arg_type = sql_to_dtype(sql)
-
-        # If args_overrides is a string, use it as SQL (only one function parameter)
-        elif isinstance(args_overrides, str):
-            sql = args_overrides
-            arg_type = sql_to_dtype(sql)
-
-        # Unrecognized type for args_overrides
-        elif args_overrides is not None \
-                and not isinstance(args_overrides, (list, dict, str)):
-            raise TypeError(f'unrecognized type for arguments: {args_overrides}')
-
-        # No args_overrides, use the Python type annotation
-        else:
-            arg_type = collapse_dtypes([
-                normalize_dtype(x) for x in simplify_dtype(annotations[arg])
-            ])
-            sql = dtype_to_sql(arg_type, function_type=function_type)
-
-        # Append parameter information to the args list
-        args.append(dict(name=arg, dtype=arg_type, sql=sql, default=defaults[i]))
-
-    #
     # Generate the return types and the corresponding SQL code for those values
-    #
-
-    ret_schema = get_return_schema(
-        attrs.get('returns', signature.return_annotation),
-        output_fields=attrs.get('output_fields', None),
+    ret_schema, out['returns_data_format'] = get_schema(
+        signature.return_annotation,
+        overrides=attrs.get('returns', None),
         function_type=function_type,
+        mode='return',
     )
 
-    for i, (name, rtype) in enumerate(ret_schema):
-        sql = dtype_to_sql(rtype, function_type=function_type)
+    # Generate names for fields as needed
+    if function_type == 'tvf' or len(ret_schema) > 1:
+        for i, (name, rtype, sql) in enumerate(ret_schema):
+            if not name:
+                ret_schema[i] = (string.ascii_letters[i], rtype, sql)
+
+    for i, (name, rtype, sql) in enumerate(ret_schema):
+        sql = sql or dtype_to_sql(rtype, function_type=function_type)
         returns.append(dict(name=name, dtype=rtype, sql=sql))
 
     # Copy keys from decorator to signature
