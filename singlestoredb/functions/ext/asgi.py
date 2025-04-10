@@ -1289,6 +1289,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 host=args.host or None,
                 port=args.port or None,
                 log_level=args.log_level,
+                lifespan='off',
             ).items() if v is not None
         }
 
