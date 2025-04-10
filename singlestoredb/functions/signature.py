@@ -48,7 +48,11 @@ def is_union(x: Any) -> bool:
     return typing.get_origin(x) in _UNION_TYPES
 
 
-NO_DEFAULT = object()
+class NoDefaultType:
+    pass
+
+
+NO_DEFAULT = NoDefaultType()
 
 
 array_types: Tuple[Any, ...]
@@ -664,7 +668,7 @@ def get_typeddict_schema(
     """
     if include_default:
         return [
-            (k, v, getattr(obj, 'k', NO_DEFAULT))
+            (k, v, getattr(obj, k, NO_DEFAULT))
             for k, v in get_annotations(obj).items()
         ]
     return list(get_annotations(obj).items())
@@ -724,8 +728,7 @@ def get_namedtuple_schema(
     if include_default:
         return [
             (
-                k,
-                v,
+                k, v,
                 obj._field_defaults.get(k, NO_DEFAULT),
             )
             for k, v in get_annotations(obj).items()
@@ -754,23 +757,34 @@ def get_colspec(
 
     """
     overrides_colspec = []
+
     if overrides:
+
+        # Dataclass
         if dataclasses.is_dataclass(overrides):
             overrides_colspec = get_dataclass_schema(
                 overrides, include_default=include_default,
             )
+
+        # TypedDict
         elif is_typeddict(overrides):
             overrides_colspec = get_typeddict_schema(
                 overrides, include_default=include_default,
             )
+
+        # Named tuple
         elif is_namedtuple(overrides):
             overrides_colspec = get_namedtuple_schema(
                 overrides, include_default=include_default,
             )
+
+        # Pydantic model
         elif is_pydantic(overrides):
             overrides_colspec = get_pydantic_schema(
                 overrides, include_default=include_default,
             )
+
+        # List of types
         elif isinstance(overrides, list):
             if include_default:
                 overrides_colspec = [
@@ -778,6 +792,8 @@ def get_colspec(
                 ]
             else:
                 overrides_colspec = [(getattr(x, 'name', ''), x) for x in overrides]
+
+        # Other
         else:
             if include_default:
                 overrides_colspec = [
@@ -785,6 +801,7 @@ def get_colspec(
                 ]
             else:
                 overrides_colspec = [(getattr(overrides, 'name', ''), overrides)]
+
     return overrides_colspec
 
 
