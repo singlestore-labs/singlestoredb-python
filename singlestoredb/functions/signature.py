@@ -242,6 +242,14 @@ def is_dataframe(obj: Any) -> bool:
     return False
 
 
+def is_vector(obj: Any) -> bool:
+    """Check if an object is a vector type."""
+    return is_pandas_series(obj) \
+        or is_polars_series(obj) \
+        or is_pyarrow_array(obj) \
+        or is_numpy(obj)
+
+
 def get_data_format(obj: Any) -> str:
     """Return the data format of the DataFrame / Table / vector."""
     # Cheating here a bit so we don't have to import pandas / polars / pyarrow
@@ -254,6 +262,8 @@ def get_data_format(obj: Any) -> str:
         return 'pyarrow'
     if getattr(obj, '__module__', '').startswith('numpy.'):
         return 'numpy'
+    if isinstance(obj, list):
+        return 'list'
     return 'scalar'
 
 
@@ -842,10 +852,18 @@ def get_schema(
         if typing.get_origin(spec) is list:
             spec = typing.get_args(spec)[0]
 
+        # If it's a tuple, it must be a tuple of vectors
+        elif typing.get_origin(spec) is tuple:
+            if not all([is_vector(x) for x in typing.get_args(spec)]):
+                raise TypeError(
+                    'return type for TVF must be a list, DataFrame / Table, '
+                    'or tuple of vectors',
+                )
+
         # DataFrames require special handling. You can't get the schema
         # from the annotation, you need a separate structure to specify
         # the types. This should be specified in the overrides.
-        elif is_dataframe(spec):
+        elif is_dataframe(spec) or is_vector(spec):
             if not overrides:
                 raise TypeError(
                     'type overrides must be specified for DataFrames / Tables',
@@ -854,7 +872,8 @@ def get_schema(
         # Unsuported types
         else:
             raise TypeError(
-                'return type for TVF must be a list or DataFrame',
+                'return type for TVF must be a list, DataFrame / Table, '
+                'or tuple of vectors',
             )
 
     # Error out for incorrect types
@@ -950,34 +969,48 @@ def get_schema(
         # Multiple return values
         elif typing.get_origin(spec) is tuple:
 
-            data_formats, colspec = [], []
-
-            for i, (y, vec) in enumerate(vector_check(typing.get_args(spec))):
-
-                # Apply override types as needed
-                if overrides:
-                    colspec.append(overrides_colspec[i])
-
-                # Some vector types do not have annotated types, so they must
-                # be specified in the decorator
-                elif y is None:
-                    raise TypeError(
-                        f'type overrides must be specified for vector type: {vec}',
+            out_names, out_overrides = [], []
+            if overrides:
+                out_colspec = [
+                    x for x in get_colspec(
+                        overrides, include_default=True,
                     )
+                ]
+                out_names = [x[0] for x in out_colspec]
+                out_overrides = [x[1] for x in out_colspec]
 
-                else:
-                    colspec.append(('', y))
-
-                data_formats.append(vec)
-
-            # Make sure that all the data formats are the same
-            if len(set(data_formats)) > 1:
-                raise TypeError(
-                    'data formats must be all be the same vector / scalar type: '
-                    f'{", ".join(data_formats)}',
+            colspec = []
+            out_data_formats = []
+            for i, x in enumerate(typing.get_args(spec)):
+                out_item, out_data_format = get_schema(
+                    x,
+                    overrides=out_overrides[i] if out_overrides else [],
+                    # Always use UDF for individual items
+                    function_type='udf',
+                    mode=mode,
                 )
 
-            data_format = data_formats[0]
+                # Use the name from the overrides if specified
+                if out_names and out_names[i] and not out_item[0][0]:
+                    out_item = [(out_names[i], *out_item[0][1:])]
+                elif not out_item[0][0]:
+                    out_item = [(f'{string.ascii_letters[i]}', *out_item[0][1:])]
+
+                colspec += out_item
+                out_data_formats.append(out_data_format)
+
+            # Make sure that all the data formats are the same
+            if len(set(out_data_formats)) > 1:
+                raise TypeError(
+                    'data formats must be all be the same vector / scalar type: '
+                    f'{", ".join(out_data_formats)}',
+                )
+
+            data_format = out_data_formats[0]
+
+            # Since the colspec was computed by get_schema already, don't go
+            # through the process of normalizing the dtypes again
+            return colspec, data_format  # type: ignore
 
         # Use overrides if specified
         elif overrides:
@@ -1018,6 +1051,8 @@ def vector_check(obj: Any) -> Tuple[Any, str]:
 
     """
     if is_numpy(obj):
+        if len(typing.get_args(obj)) < 2:
+            return None, 'numpy'
         return typing.get_args(obj)[1], 'numpy'
     if is_pandas_series(obj):
         return None, 'pandas'

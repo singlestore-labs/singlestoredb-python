@@ -372,6 +372,70 @@ char *_PyUnicode_AsUTF8(PyObject *unicode) {
     return out;
 }
 
+// Function to convert a UCS-4 string to a UTF-8 string
+// Returns the length of the resulting UTF-8 string, or -1 on error
+int ucs4_to_utf8(const uint32_t *ucs4_str, size_t ucs4_len, char **utf8_str) {
+    if (!ucs4_str || !utf8_str) {
+        return -1; // Invalid input
+    }
+
+    // Allocate a buffer for the UTF-8 string (worst-case: 4 bytes per UCS-4 character)
+    size_t utf8_max_len = ucs4_len * 4 + 1; // +1 for null terminator
+    *utf8_str = malloc(utf8_max_len);
+    if (!*utf8_str) {
+        return -1; // Memory allocation failed
+    }
+
+    char *utf8_ptr = *utf8_str;
+    size_t utf8_len = 0;
+
+    for (size_t i = 0; i < ucs4_len; i++) {
+        uint32_t codepoint = ucs4_str[i];
+
+        if (codepoint <= 0x7F) {
+            // 1-byte UTF-8
+            if (utf8_len + 1 > utf8_max_len) goto error; // Buffer overflow
+            *utf8_ptr++ = (char)codepoint;
+            utf8_len += 1;
+        } else if (codepoint <= 0x7FF) {
+            // 2-byte UTF-8
+            if (utf8_len + 2 > utf8_max_len) goto error; // Buffer overflow
+            *utf8_ptr++ = (char)(0xC0 | (codepoint >> 6));
+            *utf8_ptr++ = (char)(0x80 | (codepoint & 0x3F));
+            utf8_len += 2;
+        } else if (codepoint <= 0xFFFF) {
+            // 3-byte UTF-8
+            if (utf8_len + 3 > utf8_max_len) goto error; // Buffer overflow
+            *utf8_ptr++ = (char)(0xE0 | (codepoint >> 12));
+            *utf8_ptr++ = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+            *utf8_ptr++ = (char)(0x80 | (codepoint & 0x3F));
+            utf8_len += 3;
+        } else if (codepoint <= 0x10FFFF) {
+            // 4-byte UTF-8
+            if (utf8_len + 4 > utf8_max_len) goto error; // Buffer overflow
+            *utf8_ptr++ = (char)(0xF0 | (codepoint >> 18));
+            *utf8_ptr++ = (char)(0x80 | ((codepoint >> 12) & 0x3F));
+            *utf8_ptr++ = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+            *utf8_ptr++ = (char)(0x80 | (codepoint & 0x3F));
+            utf8_len += 4;
+        } else {
+            // Invalid codepoint
+            goto error;
+        }
+    }
+
+    // Null-terminate the UTF-8 string
+    if (utf8_len + 1 > utf8_max_len) goto error; // Buffer overflow
+    *utf8_ptr = '\0';
+
+    return (int)utf8_len;
+
+error:
+    free(*utf8_str);
+    *utf8_str = NULL;
+    return -1;
+}
+
 //
 // Cached int values for date/time components
 //
@@ -3873,13 +3937,20 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                         memcpy(out+out_idx, &i64, 8);
                         out_idx += 8;
                     } else {
-                        Py_ssize_t str_l = strnlen(bytes, col_types[i].length);
+                        char *utf8_str = NULL;
+                        Py_ssize_t str_l = ucs4_to_utf8(bytes, col_types[i].length, &utf8_str);
+                        if (str_l < 0) {
+                            PyErr_SetString(PyExc_ValueError, "invalid UCS4 string");
+                            if (utf8_str) free(utf8_str);
+                            goto error;
+                        }
                         CHECKMEM(8+str_l);
                         i64 = str_l;
                         memcpy(out+out_idx, &i64, 8);
                         out_idx += 8;
-                        memcpy(out+out_idx, bytes, str_l);
+                        memcpy(out+out_idx, utf8_str, str_l);
                         out_idx += str_l;
+                        free(utf8_str);
                     }
 
                 } else {

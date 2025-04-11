@@ -173,6 +173,12 @@ def get_dataframe_columns(df: Any) -> List[Any]:
         return [df[x] for x in df.columns]
     elif 'table' in rtype:
         return df.columns
+    elif 'series' in rtype:
+        return [df]
+    elif 'array' in rtype:
+        return [df]
+    elif 'tuple' in rtype:
+        return list(df)
     raise TypeError(
         'Unsupported data type for dataframe columns: '
         f'{rtype}',
@@ -388,6 +394,13 @@ class Application(object):
     text_response_dict: Dict[str, Any] = dict(
         type='http.response.start',
         status=200,
+        headers=[(b'content-type', b'text/plain')],
+    )
+
+    # Error response start
+    error_response_dict: Dict[str, Any] = dict(
+        type='http.response.start',
+        status=401,
         headers=[(b'content-type', b'text/plain')],
     )
 
@@ -691,16 +704,22 @@ class Application(object):
             input_handler = self.handlers[(content_type, data_version, args_data_format)]
             output_handler = self.handlers[(accepts, data_version, returns_data_format)]
 
-            out = await func(
-                *input_handler['load'](  # type: ignore
-                    func_info['colspec'], b''.join(data),
-                ),
-            )
-            body = output_handler['dump'](
-                [x[1] for x in func_info['returns']], *out,  # type: ignore
-            )
+            try:
+                out = await func(
+                    *input_handler['load'](  # type: ignore
+                        func_info['colspec'], b''.join(data),
+                    ),
+                )
+                print(func_info, *out)
+                body = output_handler['dump'](
+                    [x[1] for x in func_info['returns']], *out,  # type: ignore
+                )
+                await send(output_handler['response'])
 
-            await send(output_handler['response'])
+            except Exception as e:
+                logging.exception('Error in function call')
+                body = f'[{type(e).__name__}] {str(e).strip()}'.encode('utf-8')
+                await send(self.error_response_dict)
 
         # Handle api reflection
         elif method == 'GET' and path == self.show_create_function_path:
