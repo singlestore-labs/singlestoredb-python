@@ -710,7 +710,6 @@ class Application(object):
                         func_info['colspec'], b''.join(data),
                     ),
                 )
-                print(func_info, *out)
                 body = output_handler['dump'](
                     [x[1] for x in func_info['returns']], *out,  # type: ignore
                 )
