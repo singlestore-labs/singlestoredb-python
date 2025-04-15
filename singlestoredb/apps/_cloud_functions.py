@@ -31,8 +31,8 @@ async def run_function_app(
     except ImportError:
         raise ImportError('package fastapi is required to run cloud functions')
 
-    if not isinstance(app, fastapi.FastAPI):
-        raise TypeError('app is not an instance of FastAPI')
+    if not isinstance(app, fastapi.FastAPI) and not isinstance(app, fastapi.FastMCP):
+        raise TypeError('app is not an instance of FastAPI or FastMCP')
 
     app_config = AppConfig.from_env()
 
