@@ -26,15 +26,9 @@ try:
 except ImportError:
     has_numpy = False
 
-try:
-    import pydantic
-    import pydantic_core
-    has_pydantic = True
-except ImportError:
-    has_pydantic = False
-
 
 from . import dtypes as dt
+from . import utils
 from ..mysql.converters import escape_item  # type: ignore
 
 if sys.version_info >= (3, 10):
@@ -207,49 +201,6 @@ class ArrayCollection(Collection):
     pass
 
 
-def get_annotations(obj: Any) -> Dict[str, Any]:
-    """Get the annotations of an object."""
-    if hasattr(inspect, 'get_annotations'):
-        return inspect.get_annotations(obj)
-    if isinstance(obj, type):
-        return obj.__dict__.get('__annotations__', {})
-    return getattr(obj, '__annotations__', {})
-
-
-def is_numpy(obj: Any) -> bool:
-    """Check if an object is a numpy array."""
-    if is_union(obj):
-        obj = typing.get_args(obj)[0]
-    if not has_numpy:
-        return False
-    if inspect.isclass(obj):
-        return obj is np.ndarray
-    if typing.get_origin(obj) is np.ndarray:
-        return True
-    return isinstance(obj, np.ndarray)
-
-
-def is_dataframe(obj: Any) -> bool:
-    """Check if an object is a DataFrame."""
-    # Cheating here a bit so we don't have to import pandas / polars / pyarrow:
-    # unless we absolutely need to
-    if getattr(obj, '__module__', '').startswith('pandas.'):
-        return getattr(obj, '__name__', '') == 'DataFrame'
-    if getattr(obj, '__module__', '').startswith('polars.'):
-        return getattr(obj, '__name__', '') == 'DataFrame'
-    if getattr(obj, '__module__', '').startswith('pyarrow.'):
-        return getattr(obj, '__name__', '') == 'Table'
-    return False
-
-
-def is_vector(obj: Any) -> bool:
-    """Check if an object is a vector type."""
-    return is_pandas_series(obj) \
-        or is_polars_series(obj) \
-        or is_pyarrow_array(obj) \
-        or is_numpy(obj)
-
-
 def get_data_format(obj: Any) -> str:
     """Return the data format of the DataFrame / Table / vector."""
     # Cheating here a bit so we don't have to import pandas / polars / pyarrow
@@ -259,75 +210,12 @@ def get_data_format(obj: Any) -> str:
     if getattr(obj, '__module__', '').startswith('polars.'):
         return 'polars'
     if getattr(obj, '__module__', '').startswith('pyarrow.'):
-        return 'pyarrow'
+        return 'arrow'
     if getattr(obj, '__module__', '').startswith('numpy.'):
         return 'numpy'
     if isinstance(obj, list):
         return 'list'
     return 'scalar'
-
-
-def is_pandas_series(obj: Any) -> bool:
-    """Check if an object is a pandas Series."""
-    if is_union(obj):
-        obj = typing.get_args(obj)[0]
-    return (
-        getattr(obj, '__module__', '').startswith('pandas.') and
-        getattr(obj, '__name__', '') == 'Series'
-    )
-
-
-def is_polars_series(obj: Any) -> bool:
-    """Check if an object is a polars Series."""
-    if is_union(obj):
-        obj = typing.get_args(obj)[0]
-    return (
-        getattr(obj, '__module__', '').startswith('polars.') and
-        getattr(obj, '__name__', '') == 'Series'
-    )
-
-
-def is_pyarrow_array(obj: Any) -> bool:
-    """Check if an object is a pyarrow Array."""
-    if is_union(obj):
-        obj = typing.get_args(obj)[0]
-    return (
-        getattr(obj, '__module__', '').startswith('pyarrow.') and
-        getattr(obj, '__name__', '') == 'Array'
-    )
-
-
-def is_typeddict(obj: Any) -> bool:
-    """Check if an object is a TypedDict."""
-    if hasattr(typing, 'is_typeddict'):
-        return typing.is_typeddict(obj)  # noqa: TYP006
-    return False
-
-
-def is_namedtuple(obj: Any) -> bool:
-    """Check if an object is a named tuple."""
-    if inspect.isclass(obj):
-        return (
-                issubclass(obj, tuple) and
-                hasattr(obj, '_asdict') and
-                hasattr(obj, '_fields')
-        )
-    return (
-            isinstance(obj, tuple) and
-            hasattr(obj, '_asdict') and
-            hasattr(obj, '_fields')
-    )
-
-
-def is_pydantic(obj: Any) -> bool:
-    """Check if an object is a pydantic model."""
-    if not has_pydantic:
-        return False
-
-    if inspect.isclass(obj):
-        return issubclass(obj, pydantic.BaseModel)
-
-    return isinstance(obj, pydantic.BaseModel)
 
 
 def escape_name(name: str) -> str:
@@ -432,21 +320,21 @@ def normalize_dtype(dtype: Any) -> str:
     if dtype is bool:
         return 'bool'
 
-    if dataclasses.is_dataclass(dtype):
+    if utils.is_dataclass(dtype):
         dc_fields = dataclasses.fields(dtype)
         item_dtypes = ','.join(
             f'{normalize_dtype(simplify_dtype(x.type))}' for x in dc_fields
         )
         return f'tuple[{item_dtypes}]'
 
-    if is_typeddict(dtype):
-        td_fields = get_annotations(dtype).keys()
+    if utils.is_typeddict(dtype):
+        td_fields = utils.get_annotations(dtype).keys()
         item_dtypes = ','.join(
             f'{normalize_dtype(simplify_dtype(dtype[x]))}' for x in td_fields
         )
         return f'tuple[{item_dtypes}]'
 
-    if is_pydantic(dtype):
+    if utils.is_pydantic(dtype):
         pyd_fields = dtype.model_fields.values()
         item_dtypes = ','.join(
             f'{normalize_dtype(simplify_dtype(x.annotation))}'  # type: ignore
@@ -454,8 +342,8 @@ def normalize_dtype(dtype: Any) -> str:
         )
         return f'tuple[{item_dtypes}]'
 
-    if is_namedtuple(dtype):
-        nt_fields = get_annotations(dtype).values()
+    if utils.is_namedtuple(dtype):
+        nt_fields = utils.get_annotations(dtype).values()
         item_dtypes = ','.join(
             f'{normalize_dtype(simplify_dtype(dtype[x]))}' for x in nt_fields
         )
@@ -528,7 +416,7 @@ def normalize_dtype(dtype: Any) -> str:
     )
 
 
-def collapse_dtypes(dtypes: Union[str, List[str]]) -> str:
+def collapse_dtypes(dtypes: Union[str, List[str]], include_null: bool = False) -> str:
     """
     Collapse a dtype possibly containing multiple data types to one type.
 
@@ -539,6 +427,8 @@ def collapse_dtypes(dtypes: Union[str, List[str]]) -> str:
     ----------
     dtypes : str or list[str]
         The data types to collapse
+    include_null : bool, optional
+        Whether to force include null types in the result
 
     Returns
     -------
@@ -554,7 +444,7 @@ def collapse_dtypes(dtypes: Union[str, List[str]]) -> str:
     orig_dtypes = dtypes
     dtypes = list(set(dtypes))
 
-    is_nullable = 'null' in dtypes
+    is_nullable = include_null or 'null' in dtypes
 
     dtypes = [x for x in dtypes if x != 'null']
 
@@ -679,13 +569,13 @@ def get_typeddict_schema(
     if include_default:
         return [
             (k, v, getattr(obj, k, NO_DEFAULT))
-            for k, v in get_annotations(obj).items()
+            for k, v in utils.get_annotations(obj).items()
         ]
-    return list(get_annotations(obj).items())
+    return list(utils.get_annotations(obj).items())
 
 
 def get_pydantic_schema(
-    obj: pydantic.BaseModel,
+    obj: Any,
     include_default: bool = False,
 ) -> List[Union[Tuple[str, Any], Tuple[str, Any, Any]]]:
     """
@@ -704,6 +594,7 @@ def get_pydantic_schema(
         A list of tuples containing the field names and field types
 
     """
+    import pydantic_core
     if include_default:
         return [
             (
@@ -741,9 +632,9 @@ def get_namedtuple_schema(
                 k, v,
                 obj._field_defaults.get(k, NO_DEFAULT),
             )
-            for k, v in get_annotations(obj).items()
+            for k, v in utils.get_annotations(obj).items()
         ]
-    return list(get_annotations(obj).items())
+    return list(utils.get_annotations(obj).items())
 
 
 def get_colspec(
@@ -771,25 +662,25 @@ def get_colspec(
     if overrides:
 
         # Dataclass
-        if dataclasses.is_dataclass(overrides):
+        if utils.is_dataclass(overrides):
             overrides_colspec = get_dataclass_schema(
                 overrides, include_default=include_default,
             )
 
         # TypedDict
-        elif is_typeddict(overrides):
+        elif utils.is_typeddict(overrides):
             overrides_colspec = get_typeddict_schema(
                 overrides, include_default=include_default,
             )
 
         # Named tuple
-        elif is_namedtuple(overrides):
+        elif utils.is_namedtuple(overrides):
             overrides_colspec = get_namedtuple_schema(
                 overrides, include_default=include_default,
             )
 
         # Pydantic model
-        elif is_pydantic(overrides):
+        elif utils.is_pydantic(overrides):
             overrides_colspec = get_pydantic_schema(
                 overrides, include_default=include_default,
             )
@@ -815,11 +706,39 @@ def get_colspec(
     return overrides_colspec
 
 
+def unpack_masked_type(obj: Any) -> Any:
+    """
+    Unpack a masked type into a single type.
+
+    Parameters
+    ----------
+    obj : Any
+        The masked type to unpack
+
+    Returns
+    -------
+    Any
+        The unpacked type
+
+    """
+    if typing.get_origin(obj) is not tuple:
+        raise TypeError(f'masked type must be a tuple, got {obj}')
+    args = typing.get_args(obj)
+    if len(args) != 2:
+        raise TypeError(f'masked type must be a tuple of length 2, got {obj}')
+    if not utils.is_vector(args[0]):
+        raise TypeError(f'masked type must be a vector, got {args[0]}')
+    if not utils.is_vector(args[1]):
+        raise TypeError(f'masked type must be a vector, got {args[1]}')
+    return args[0]
+
+
 def get_schema(
     spec: Any,
     overrides: Optional[Union[List[str], Type[Any]]] = None,
     function_type: str = 'udf',
     mode: str = 'parameter',
+    with_null_masks: bool = False,
 ) -> Tuple[List[Tuple[str, Any, Optional[str]]], str]:
     """
     Expand a return type annotation into a list of types and field names.
@@ -834,6 +753,8 @@ def get_schema(
         The type of function, either 'udf' or 'tvf'
     mode : str
         The mode of the function, either 'parameter' or 'return'
+    with_null_masks : bool
+        Whether to use null masks for the parameters and return value
 
     Returns
     -------
@@ -843,6 +764,7 @@ def get_schema(
         definition of the type
 
     """
+    colspec = []
     data_format = 'scalar'
 
     # Make sure that the result of a TVF is a list or dataframe
@@ -854,7 +776,7 @@ def get_schema(
 
         # If it's a tuple, it must be a tuple of vectors
         elif typing.get_origin(spec) is tuple:
-            if not all([is_vector(x) for x in typing.get_args(spec)]):
+            if not all([utils.is_vector(x) for x in typing.get_args(spec)]):
                 raise TypeError(
                     'return type for TVF must be a list, DataFrame / Table, '
                     'or tuple of vectors',
@@ -863,7 +785,7 @@ def get_schema(
         # DataFrames require special handling. You can't get the schema
         # from the annotation, you need a separate structure to specify
         # the types. This should be specified in the overrides.
-        elif is_dataframe(spec) or is_vector(spec):
+        elif utils.is_dataframe(spec) or utils.is_vector(spec):
             if not overrides:
                 raise TypeError(
                     'type overrides must be specified for DataFrames / Tables',
@@ -877,15 +799,28 @@ def get_schema(
             )
 
     # Error out for incorrect types
-    elif typing.get_origin(spec) in [tuple, dict] \
-            or is_dataframe(spec) \
-            or dataclasses.is_dataclass(spec) \
-            or is_typeddict(spec) \
-            or is_pydantic(spec) \
-            or is_namedtuple(spec):
-        if mode == 'parameter':
-            raise TypeError('parameter types must be scalar or vector')
-        raise TypeError('return type for UDF must be a scalar type')
+    elif typing.get_origin(spec) in [tuple, dict] or \
+            (
+                # Check for optional tuples and dicts
+                is_union(spec) and
+                any([
+                    typing.get_origin(x) in [tuple, dict]
+                    for x in typing.get_args(spec)
+                ])
+            ) \
+            or utils.is_dataframe(spec) \
+            or utils.is_dataclass(spec) \
+            or utils.is_typeddict(spec) \
+            or utils.is_pydantic(spec) \
+            or utils.is_namedtuple(spec):
+        if typing.get_origin(spec) is tuple:
+            raise TypeError(
+                f'{mode} types must be scalar or vector, got {spec}; '
+                'if you are trying to use null masks, you must use the '
+                f'@{function_type}_with_null_masks decorator',
+            )
+        else:
+            raise TypeError(f'{mode} types must be scalar or vector, got {spec}')
 
     #
     # Process each parameter / return type into a colspec
@@ -895,7 +830,7 @@ def get_schema(
     overrides_colspec = get_colspec(overrides)
 
     # Numpy array types
-    if is_numpy(spec):
+    if utils.is_numpy(spec):
         data_format = 'numpy'
         if overrides:
             colspec = overrides_colspec
@@ -908,7 +843,7 @@ def get_schema(
             colspec = [('', typing.get_args(spec)[1])]
 
     # Pandas Series
-    elif is_pandas_series(spec):
+    elif utils.is_pandas_series(spec):
         data_format = 'pandas'
         if not overrides:
             raise TypeError(
@@ -918,7 +853,7 @@ def get_schema(
         colspec = overrides_colspec
 
     # Polars Series
-    elif is_polars_series(spec):
+    elif utils.is_polars_series(spec):
         data_format = 'polars'
         if not overrides:
             raise TypeError(
@@ -928,8 +863,8 @@ def get_schema(
         colspec = overrides_colspec
 
     # PyArrow Array
-    elif is_pyarrow_array(spec):
-        data_format = 'pyarrow'
+    elif utils.is_pyarrow_array(spec):
+        data_format = 'arrow'
         if not overrides:
             raise TypeError(
                 'pyarrow Arrays must have a data type specified '
@@ -938,19 +873,19 @@ def get_schema(
         colspec = overrides_colspec
 
     # Return type is specified by a dataclass definition
-    elif dataclasses.is_dataclass(spec):
+    elif utils.is_dataclass(spec):
         colspec = overrides_colspec or get_dataclass_schema(spec)
 
     # Return type is specified by a TypedDict definition
-    elif is_typeddict(spec):
+    elif utils.is_typeddict(spec):
         colspec = overrides_colspec or get_typeddict_schema(spec)
 
     # Return type is specified by a pydantic model
-    elif is_pydantic(spec):
+    elif utils.is_pydantic(spec):
         colspec = overrides_colspec or get_pydantic_schema(spec)
 
     # Return type is specified by a named tuple
-    elif is_namedtuple(spec):
+    elif utils.is_namedtuple(spec):
         colspec = overrides_colspec or get_namedtuple_schema(spec)
 
     # Unrecognized return type
@@ -979,15 +914,22 @@ def get_schema(
                 out_names = [x[0] for x in out_colspec]
                 out_overrides = [x[1] for x in out_colspec]
 
+            if out_overrides and len(typing.get_args(spec)) != len(out_overrides):
+                raise ValueError(
+                    'number of return types does not match the number of '
+                    'overrides specified',
+                )
+
             colspec = []
             out_data_formats = []
             for i, x in enumerate(typing.get_args(spec)):
                 out_item, out_data_format = get_schema(
-                    x,
+                    x if not with_null_masks else unpack_masked_type(x),
                     overrides=out_overrides[i] if out_overrides else [],
-                    # Always use UDF for individual items
+                    # Always use UDF mode for individual items
                     function_type='udf',
                     mode=mode,
+                    with_null_masks=with_null_masks,
                 )
 
                 # Use the name from the overrides if specified
@@ -1006,7 +948,8 @@ def get_schema(
                     f'{", ".join(out_data_formats)}',
                 )
 
-            data_format = out_data_formats[0]
+            if out_data_formats:
+                data_format = out_data_formats[0]
 
             # Since the colspec was computed by get_schema already, don't go
             # through the process of normalizing the dtypes again
@@ -1028,7 +971,10 @@ def get_schema(
     for k, v, *_ in colspec:
         out.append((
             k,
-            collapse_dtypes([normalize_dtype(x) for x in simplify_dtype(v)]),
+            collapse_dtypes(
+                [normalize_dtype(x) for x in simplify_dtype(v)],
+                include_null=with_null_masks,
+            ),
             v if isinstance(v, str) else None,
         ))
 
@@ -1050,16 +996,16 @@ def vector_check(obj: Any) -> Tuple[Any, str]:
         The scalar type and the data format ('scalar', 'numpy', 'pandas', 'polars')
 
     """
-    if is_numpy(obj):
+    if utils.is_numpy(obj):
         if len(typing.get_args(obj)) < 2:
             return None, 'numpy'
         return typing.get_args(obj)[1], 'numpy'
-    if is_pandas_series(obj):
+    if utils.is_pandas_series(obj):
         return None, 'pandas'
-    if is_polars_series(obj):
+    if utils.is_polars_series(obj):
         return None, 'polars'
-    if is_pyarrow_array(obj):
-        return None, 'pyarrow'
+    if utils.is_pyarrow_array(obj):
+        return None, 'arrow'
     return obj, 'scalar'
 
 
@@ -1088,6 +1034,7 @@ def get_signature(
 
     attrs = getattr(func, '_singlestoredb_attrs', {})
     function_type = attrs.get('function_type', 'udf')
+    with_null_masks = attrs.get('with_null_masks', False)
     name = attrs.get('name', func_name if func_name else func.__name__)
 
     out: Dict[str, Any] = dict(name=name, args=args, returns=returns)
@@ -1105,12 +1052,23 @@ def get_signature(
     args_colspec = [x for x in get_colspec(attrs.get('args', []), include_default=True)]
     args_overrides = [x[1] for x in args_colspec]
     args_defaults = [x[2] for x in args_colspec]  # type: ignore
-    for i, param in enumerate(signature.parameters.values()):
+
+    if args_overrides and len(args_overrides) != len(signature.parameters):
+        raise ValueError(
+            'number of args in the decorator does not match '
+            'the number of parameters in the function signature',
+        )
+
+    params = list(signature.parameters.values())
+
+    for i, param in enumerate(params):
         arg_schema, args_data_format = get_schema(
-            param.annotation,
+            param.annotation
+            if not with_null_masks else unpack_masked_type(param.annotation),
             overrides=args_overrides[i] if args_overrides else [],
             function_type=function_type,
             mode='parameter',
+            with_null_masks=with_null_masks,
         )
         args_data_formats.append(args_data_format)
 
@@ -1125,8 +1083,8 @@ def get_signature(
             if args_defaults[i] is not NO_DEFAULT:
                 default_option['default'] = args_defaults[i]
         else:
-            if param.default is not param.empty:
-                default_option['default'] = param.default
+            if params[i].default is not param.empty:
+                default_option['default'] = params[i].default
 
         # Generate SQL code for the parameter
         sql = sql or dtype_to_sql(
@@ -1145,14 +1103,16 @@ def get_signature(
             f'{", ".join(args_data_formats)}',
         )
 
-    out['args_data_format'] = args_data_formats[0]
+    out['args_data_format'] = args_data_formats[0] if args_data_formats else 'scalar'
 
     # Generate the return types and the corresponding SQL code for those values
     ret_schema, out['returns_data_format'] = get_schema(
-        signature.return_annotation,
+        signature.return_annotation
+        if not with_null_masks else unpack_masked_type(signature.return_annotation),
         overrides=attrs.get('returns', None),
         function_type=function_type,
         mode='return',
+        with_null_masks=with_null_masks,
     )
 
     # Generate names for fields as needed
@@ -1339,6 +1299,8 @@ def signature_to_sql(
         else:
             res = ret[0]['sql']
         returns = f' RETURNS {res}'
+    else:
+        returns = ' RETURNS NULL'
 
     host = os.environ.get('SINGLESTOREDB_EXT_HOST', '127.0.0.1')
     port = os.environ.get('SINGLESTOREDB_EXT_PORT', '8000')

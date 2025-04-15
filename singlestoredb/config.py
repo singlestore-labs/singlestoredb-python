@@ -408,6 +408,18 @@ register_option(
 )
 
 register_option(
+    'external_function.name_prefix', 'string', check_str, '',
+    'Prefix to add to external function names.',
+    environ=['SINGLESTOREDB_EXT_FUNC_NAME_PREFIX'],
+)
+
+register_option(
+    'external_function.name_suffix', 'string', check_str, '',
+    'Suffix to add to external function names.',
+    environ=['SINGLESTOREDB_EXT_FUNC_NAME_SUFFIX'],
+)
+
+register_option(
     'external_function.connection', 'string', check_str,
     os.environ.get('SINGLESTOREDB_URL') or None,
     'Specifies the connection string for the database to register functions with.',

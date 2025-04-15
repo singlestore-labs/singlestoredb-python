@@ -3,6 +3,7 @@ import json
 from typing import Any
 from typing import List
 from typing import Tuple
+from typing import TYPE_CHECKING
 
 from ..dtypes import DEFAULT_VALUES
 from ..dtypes import NUMPY_TYPE_MAP
@@ -11,29 +12,23 @@ from ..dtypes import POLARS_TYPE_MAP
 from ..dtypes import PYARROW_TYPE_MAP
 from ..dtypes import PYTHON_CONVERTERS
 
-try:
-    import numpy as np
-    has_numpy = True
-except ImportError:
-    has_numpy = False
-
-try:
-    import polars as pl
-    has_polars = True
-except ImportError:
-    has_polars = False
-
-try:
-    import pandas as pd
-    has_pandas = True
-except ImportError:
-    has_pandas = False
-
-try:
-    import pyarrow as pa
-    has_pyarrow = True
-except ImportError:
-    has_pyarrow = False
+if TYPE_CHECKING:
+    try:
+        import numpy as np
+    except ImportError:
+        pass
+    try:
+        import pandas as pd
+    except ImportError:
+        pass
+    try:
+        import polars as pl
+    except ImportError:
+        pass
+    try:
+        import pyarrow as pa
+    except ImportError:
+        pass
 
 
 class JSONEncoder(json.JSONEncoder):
@@ -135,9 +130,6 @@ def load_pandas(
     Tuple[pd.Series[int], List[pd.Series[Any]]
 
     '''
-    if not has_pandas or not has_numpy:
-        raise RuntimeError('This operation requires pandas and numpy to be installed')
-
     row_ids, cols = _load_vectors(colspec, data)
     index = pd.Series(row_ids, dtype=np.longlong)
     return index, \
@@ -172,9 +164,6 @@ def load_polars(
     Tuple[polars.Series[int], List[polars.Series[Any]]
 
     '''
-    if not has_polars or not has_numpy:
-        raise RuntimeError('This operation requires polars and numpy to be installed')
-
     row_ids, cols = _load_vectors(colspec, data)
     return pl.Series(None, row_ids, dtype=pl.Int64), \
         [
@@ -205,9 +194,6 @@ def load_numpy(
     Tuple[np.ndarray[int], List[np.ndarray[Any]]
 
     '''
-    if not has_numpy:
-        raise RuntimeError('This operation requires numpy to be installed')
-
     row_ids, cols = _load_vectors(colspec, data)
     return np.asarray(row_ids, dtype=np.longlong), \
         [
@@ -238,9 +224,6 @@ def load_arrow(
     Tuple[pyarrow.Array[int], List[pyarrow.Array[Any]]
 
     '''
-    if not has_pyarrow or not has_numpy:
-        raise RuntimeError('This operation requires pyarrow and numpy to be installed')
-
     row_ids, cols = _load_vectors(colspec, data)
     return pa.array(row_ids, type=pa.int64()), \
         [

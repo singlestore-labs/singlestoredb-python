@@ -338,7 +338,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         app_mode='collocated',
     )
 
-    funcs = app.show_create_functions(replace=args.replace_existing)
+    funcs = app.get_create_functions(replace=args.replace_existing)
     if not funcs:
         raise RuntimeError('no functions specified')
 

@@ -225,7 +225,7 @@ def make_func(
 
     """
     attrs = getattr(func, '_singlestoredb_attrs', {})
-    include_masks = attrs.get('include_masks', False)
+    with_null_masks = attrs.get('with_null_masks', False)
     function_type = attrs.get('function_type', 'udf').lower()
     info: Dict[str, Any] = {}
 
@@ -263,9 +263,9 @@ def make_func(
                 #        each result row, so we just have to use the same
                 #        row ID for all rows in the result.
 
-                # If `include_masks` is set, the function is expected to return
+                # If `with_null_masks` is set, the function is expected to return
                 # a tuple of (data, mask) for each column.
-                if include_masks:
+                if with_null_masks:
                     out = func(*cols)
                     assert isinstance(out, tuple)
                     row_ids = array_cls([row_ids[0]] * len(out[0][0]))
@@ -300,9 +300,9 @@ def make_func(
                 '''Call function on given cols of data.'''
                 row_ids = array_cls(row_ids)
 
-                # If `include_masks` is set, the function is expected to return
+                # If `with_null_masks` is set, the function is expected to return
                 # a tuple of (data, mask) for each column.`
-                if include_masks:
+                if with_null_masks:
                     out = func(*cols)
                     assert isinstance(out, tuple)
                     return row_ids, [out]
@@ -528,6 +528,7 @@ class Application(object):
     # Valid URL paths
     invoke_path = ('invoke',)
     show_create_function_path = ('show', 'create_function')
+    show_function_info_path = ('show', 'function_info')
 
     def __init__(
         self,
@@ -548,6 +549,8 @@ class Application(object):
         link_name: Optional[str] = get_option('external_function.link_name'),
         link_config: Optional[Dict[str, Any]] = None,
         link_credentials: Optional[Dict[str, Any]] = None,
+        name_prefix: str = get_option('external_function.name_prefix'),
+        name_suffix: str = get_option('external_function.name_suffix'),
     ) -> None:
         if link_name and (link_config or link_credentials):
             raise ValueError(
@@ -604,6 +607,7 @@ class Application(object):
                         if not hasattr(x, '_singlestoredb_attrs'):
                             continue
                         name = x._singlestoredb_attrs.get('name', x.__name__)
+                        name = f'{name_prefix}{name}{name_suffix}'
                         external_functions[x.__name__] = x
                         func, info = make_func(name, x)
                         endpoints[name.encode('utf-8')] = func, info
@@ -619,6 +623,7 @@ class Application(object):
                     # Add endpoint for each exported function
                     for name, alias in get_func_names(func_names):
                         item = getattr(pkg, name)
+                        alias = f'{name_prefix}{name}{name_suffix}'
                         external_functions[name] = item
                         func, info = make_func(alias, item)
                         endpoints[alias.encode('utf-8')] = func, info
@@ -631,6 +636,7 @@ class Application(object):
                     if not hasattr(x, '_singlestoredb_attrs'):
                         continue
                     name = x._singlestoredb_attrs.get('name', x.__name__)
+                    name = f'{name_prefix}{name}{name_suffix}'
                     external_functions[x.__name__] = x
                     func, info = make_func(name, x)
                     endpoints[name.encode('utf-8')] = func, info
@@ -638,6 +644,7 @@ class Application(object):
             else:
                 alias = funcs.__name__
                 external_functions[funcs.__name__] = funcs
+                alias = f'{name_prefix}{alias}{name_suffix}'
                 func, info = make_func(alias, funcs)
                 endpoints[alias.encode('utf-8')] = func, info
 
@@ -740,6 +747,12 @@ class Application(object):
 
             await send(self.text_response_dict)
 
+        # Return function info
+        elif method == 'GET' and (path == self.show_function_info_path or not path):
+            functions = self.get_function_info()
+            body = json.dumps(dict(functions=functions)).encode('utf-8')
+            await send(self.text_response_dict)
+
         # Path not found
         else:
             body = b''
@@ -784,14 +797,70 @@ class Application(object):
             # See if function URL matches url
             cur.execute(f'SHOW CREATE FUNCTION `{name}`')
             for fname, _, code, *_ in list(cur):
-                m = re.search(r" (?:\w+) SERVICE '([^']+)'", code)
+                m = re.search(r" (?:\w+) (?:SERVICE|MANAGED) '([^']+)'", code)
                 if m and m.group(1) == self.url:
                     funcs.add(fname)
                     if link and re.match(r'^py_ext_func_link_\S{14}$', link):
                         links.add(link)
         return funcs, links
 
-    def show_create_functions(
+    def get_function_info(
+        self,
+        func_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Return the functions and function signature information.
+        Returns
+        -------
+        Dict[str, Any]
+        """
+        functions = {}
+        no_default = object()
+
+        for key, (_, info) in self.endpoints.items():
+            if not func_name or key == func_name:
+                sig = info['signature']
+                args = []
+
+                # Function arguments
+                for a in sig.get('args', []):
+                    dtype = a['dtype']
+                    nullable = '?' in dtype
+                    args.append(
+                        dict(
+                            name=a['name'],
+                            dtype=dtype.replace('?', ''),
+                            nullable=nullable,
+                        ),
+                    )
+                    if a.get('default', no_default) is not no_default:
+                        args[-1]['default'] = a['default']
+
+                # Return values
+                ret = sig.get('returns', [])
+                returns = []
+
+                for a in ret:
+                    dtype = a['dtype']
+                    nullable = '?' in dtype
+                    returns.append(
+                        dict(
+                            dtype=dtype.replace('?', ''),
+                            nullable=nullable,
+                        ),
+                    )
+                    if a.get('name', None):
+                        returns[-1]['name'] = a['name']
+                    if a.get('default', no_default) is not no_default:
+                        returns[-1]['default'] = a['default']
+
+                functions[sig['name']] = dict(
+                    args=args, returns=returns, function_type=info['function_type'],
+                )
+
+        return functions
+
+    def get_create_functions(
         self,
         replace: bool = False,
     ) -> List[str]:
@@ -860,7 +929,7 @@ class Application(object):
                         cur.execute(f'DROP FUNCTION IF EXISTS `{fname}`')
                     for link in links:
                         cur.execute(f'DROP LINK {link}')
-                for func in self.show_create_functions(replace=replace):
+                for func in self.get_create_functions(replace=replace):
                     cur.execute(func)
 
     def drop_functions(
@@ -1189,6 +1258,22 @@ def main(argv: Optional[List[str]] = None) -> None:
             help='logging level',
         )
         parser.add_argument(
+            '--name-prefix', metavar='name_prefix',
+            default=defaults.get(
+                'name_prefix',
+                get_option('external_function.name_prefix'),
+            ),
+            help='Prefix to add to function names',
+        )
+        parser.add_argument(
+            '--name-suffix', metavar='name_suffix',
+            default=defaults.get(
+                'name_suffix',
+                get_option('external_function.name_suffix'),
+            ),
+            help='Suffix to add to function names',
+        )
+        parser.add_argument(
             'functions', metavar='module.or.func.path', nargs='*',
             help='functions or modules to export in UDF server',
         )
@@ -1285,9 +1370,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         link_config=json.loads(args.link_config) or None,
         link_credentials=json.loads(args.link_credentials) or None,
         app_mode='remote',
+        name_prefix=args.name_prefix,
+        name_suffix=args.name_suffix,
     )
 
-    funcs = app.show_create_functions(replace=args.replace_existing)
+    funcs = app.get_create_functions(replace=args.replace_existing)
     if not funcs:
         raise RuntimeError('no functions specified')
 
