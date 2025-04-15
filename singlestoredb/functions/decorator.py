@@ -49,7 +49,7 @@ def is_valid_callable(obj: Any) -> bool:
     if not callable(obj):
         return False
 
-    returns = inspect.get_annotations(obj).get('return', None)
+    returns = utils.get_annotations(obj).get('return', None)
 
     if inspect.isclass(returns) and issubclass(returns, str):
         return True
