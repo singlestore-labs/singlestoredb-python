@@ -1744,3 +1744,51 @@ def ARRAY(
     out = SQLString(f'ARRAY({dtype})' + _modifiers(nullable=nullable))
     out.name = name
     return out
+
+
+F32 = 'F32'
+F64 = 'F64'
+I8 = 'I8'
+I16 = 'I16'
+I32 = 'I32'
+I64 = 'I64'
+
+
+def VECTOR(
+    length: int,
+    element_type: str = F32,
+    *,
+    nullable: bool = True,
+    default: Optional[bytes] = None,
+    name: Optional[str] = None,
+) -> SQLString:
+    """
+    VECTOR type specification.
+
+    Parameters
+    ----------
+    n : int
+        Number of elements in vector
+    element_type : str, optional
+        Type of the elements in the vector:
+        F32, F64, I8, I16, I32, I64
+    nullable : bool, optional
+        Can the value be NULL?
+    default : str, optional
+        Default value
+    name : str, optional
+        Name of the column / parameter
+
+    Returns
+    -------
+    SQLString
+
+    """
+    out = f'VECTOR({int(length)}, {element_type})'
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default,
+        ),
+    )
+    out.name = name
+    return out

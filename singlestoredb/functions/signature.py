@@ -788,7 +788,7 @@ def get_schema(
         elif utils.is_dataframe(spec) or utils.is_vector(spec):
             if not overrides:
                 raise TypeError(
-                    'type overrides must be specified for DataFrames / Tables',
+                    'type overrides must be specified for vectors or DataFrames / Tables',
                 )
 
         # Unsuported types

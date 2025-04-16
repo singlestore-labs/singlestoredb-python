@@ -694,3 +694,19 @@ class TestUDF(unittest.TestCase):
 
         assert dt.ARRAY(dt.INT) == 'ARRAY(INT NULL) NULL'
         assert dt.ARRAY(dt.INT, nullable=False) == 'ARRAY(INT NULL) NOT NULL'
+
+        assert dt.VECTOR(8) == 'VECTOR(8, F32) NULL'
+        assert dt.VECTOR(8, dt.F32) == 'VECTOR(8, F32) NULL'
+        assert dt.VECTOR(8, dt.F64) == 'VECTOR(8, F64) NULL'
+        assert dt.VECTOR(8, dt.I8) == 'VECTOR(8, I8) NULL'
+        assert dt.VECTOR(8, dt.I16) == 'VECTOR(8, I16) NULL'
+        assert dt.VECTOR(8, dt.I32) == 'VECTOR(8, I32) NULL'
+        assert dt.VECTOR(8, dt.I64) == 'VECTOR(8, I64) NULL'
+
+        assert dt.VECTOR(8, nullable=False) == 'VECTOR(8, F32) NOT NULL'
+        assert dt.VECTOR(8, dt.F32, nullable=False) == 'VECTOR(8, F32) NOT NULL'
+        assert dt.VECTOR(8, dt.F64, nullable=False) == 'VECTOR(8, F64) NOT NULL'
+        assert dt.VECTOR(8, dt.I8, nullable=False) == 'VECTOR(8, I8) NOT NULL'
+        assert dt.VECTOR(8, dt.I16, nullable=False) == 'VECTOR(8, I16) NOT NULL'
+        assert dt.VECTOR(8, dt.I32, nullable=False) == 'VECTOR(8, I32) NOT NULL'
+        assert dt.VECTOR(8, dt.I64, nullable=False) == 'VECTOR(8, I64) NOT NULL'
