@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import base64
 import datetime
 import decimal
 import re
@@ -106,7 +107,7 @@ def bytestr(x: Any) -> Optional[bytes]:
         return x
     if isinstance(x, bytes):
         return x
-    return bytes.fromhex(x)
+    return base64.b64decode(x)
 
 
 PYTHON_CONVERTERS = {

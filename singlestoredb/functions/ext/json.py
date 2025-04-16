@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import base64
 import json
 from typing import Any
 from typing import List
@@ -35,7 +36,7 @@ class JSONEncoder(json.JSONEncoder):
 
     def default(self, obj: Any) -> Any:
         if isinstance(obj, bytes):
-            return obj.hex()
+            return base64.b64encode(obj).decode('utf-8')
         return json.JSONEncoder.default(self, obj)
 
 
@@ -130,6 +131,8 @@ def load_pandas(
     Tuple[pd.Series[int], List[pd.Series[Any]]
 
     '''
+    import numpy as np
+    import pandas as pd
     row_ids, cols = _load_vectors(colspec, data)
     index = pd.Series(row_ids, dtype=np.longlong)
     return index, \
@@ -164,6 +167,7 @@ def load_polars(
     Tuple[polars.Series[int], List[polars.Series[Any]]
 
     '''
+    import polars as pl
     row_ids, cols = _load_vectors(colspec, data)
     return pl.Series(None, row_ids, dtype=pl.Int64), \
         [
@@ -194,6 +198,7 @@ def load_numpy(
     Tuple[np.ndarray[int], List[np.ndarray[Any]]
 
     '''
+    import numpy as np
     row_ids, cols = _load_vectors(colspec, data)
     return np.asarray(row_ids, dtype=np.longlong), \
         [
@@ -224,6 +229,7 @@ def load_arrow(
     Tuple[pyarrow.Array[int], List[pyarrow.Array[Any]]
 
     '''
+    import pyarrow as pa
     row_ids, cols = _load_vectors(colspec, data)
     return pa.array(row_ids, type=pa.int64()), \
         [

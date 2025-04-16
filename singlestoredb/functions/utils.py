@@ -6,12 +6,6 @@ import typing
 from typing import Any
 from typing import Dict
 
-try:
-    import numpy as np
-    has_numpy = True
-except ImportError:
-    has_numpy = False
-
 
 if sys.version_info >= (3, 10):
     _UNION_TYPES = {typing.Union, types.UnionType}
@@ -36,29 +30,51 @@ def get_annotations(obj: Any) -> Dict[str, Any]:
     return getattr(obj, '__annotations__', {})
 
 
+def get_module(obj: Any) -> str:
+    """Get the module of an object."""
+    module = getattr(obj, '__module__', '').split('.')
+    if module:
+        return module[0]
+    return ''
+
+
+def get_type_name(obj: Any) -> str:
+    """Get the type name of an object."""
+    if hasattr(obj, '__name__'):
+        return obj.__name__
+    if hasattr(obj, '__class__'):
+        return obj.__class__.__name__
+    return ''
+
+
 def is_numpy(obj: Any) -> bool:
     """Check if an object is a numpy array."""
-    if is_union(obj):
-        obj = typing.get_args(obj)[0]
-    if not has_numpy:
-        return False
     if inspect.isclass(obj):
-        return obj is np.ndarray
-    if typing.get_origin(obj) is np.ndarray:
-        return True
-    return isinstance(obj, np.ndarray)
+        if get_module(obj) == 'numpy':
+            return get_type_name(obj) == 'ndarray'
+
+    origin = typing.get_origin(obj)
+    if get_module(origin) == 'numpy':
+        if get_type_name(origin) == 'ndarray':
+            return True
+
+    dtype = type(obj)
+    if get_module(dtype) == 'numpy':
+        return get_type_name(dtype) == 'ndarray'
+
+    return False
 
 
 def is_dataframe(obj: Any) -> bool:
     """Check if an object is a DataFrame."""
     # Cheating here a bit so we don't have to import pandas / polars / pyarrow:
     # unless we absolutely need to
-    if getattr(obj, '__module__', '').startswith('pandas.'):
-        return getattr(obj, '__name__', '') == 'DataFrame'
-    if getattr(obj, '__module__', '').startswith('polars.'):
-        return getattr(obj, '__name__', '') == 'DataFrame'
-    if getattr(obj, '__module__', '').startswith('pyarrow.'):
-        return getattr(obj, '__name__', '') == 'Table'
+    if get_module(obj) == 'pandas':
+        return get_type_name(obj) == 'DataFrame'
+    if get_module(obj) == 'polars':
+        return get_type_name(obj) == 'DataFrame'
+    if get_module(obj) == 'pyarrow':
+        return get_type_name(obj) == 'Table'
     return False
 
 
@@ -74,13 +90,13 @@ def get_data_format(obj: Any) -> str:
     """Return the data format of the DataFrame / Table / vector."""
     # Cheating here a bit so we don't have to import pandas / polars / pyarrow
     # unless we absolutely need to
-    if getattr(obj, '__module__', '').startswith('pandas.'):
+    if get_module(obj) == 'pandas':
         return 'pandas'
-    if getattr(obj, '__module__', '').startswith('polars.'):
+    if get_module(obj) == 'polars':
         return 'polars'
-    if getattr(obj, '__module__', '').startswith('pyarrow.'):
+    if get_module(obj) == 'pyarrow':
         return 'arrow'
-    if getattr(obj, '__module__', '').startswith('numpy.'):
+    if get_module(obj) == 'numpy':
         return 'numpy'
     if isinstance(obj, list):
         return 'list'
@@ -92,8 +108,8 @@ def is_pandas_series(obj: Any) -> bool:
     if is_union(obj):
         obj = typing.get_args(obj)[0]
     return (
-        getattr(obj, '__module__', '').startswith('pandas.') and
-        getattr(obj, '__name__', '') == 'Series'
+        get_module(obj) == 'pandas' and
+        get_type_name(obj) == 'Series'
     )
 
 
@@ -102,8 +118,8 @@ def is_polars_series(obj: Any) -> bool:
     if is_union(obj):
         obj = typing.get_args(obj)[0]
     return (
-        getattr(obj, '__module__', '').startswith('polars.') and
-        getattr(obj, '__name__', '') == 'Series'
+        get_module(obj) == 'polars' and
+        get_type_name(obj) == 'Series'
     )
 
 
@@ -112,8 +128,8 @@ def is_pyarrow_array(obj: Any) -> bool:
     if is_union(obj):
         obj = typing.get_args(obj)[0]
     return (
-        getattr(obj, '__module__', '').startswith('pyarrow.') and
-        getattr(obj, '__name__', '') == 'Array'
+        get_module(obj) == 'pyarrow' and
+        get_type_name(obj) == 'Array'
     )
 
 
@@ -147,6 +163,6 @@ def is_pydantic(obj: Any) -> bool:
     # the class is a subclass
     return bool([
         x for x in inspect.getmro(obj)
-        if x.__module__.startswith('pydantic.')
-        and x.__name__ == 'BaseModel'
+        if get_module(x) == 'pydantic'
+        and get_type_name(x) == 'BaseModel'
     ])

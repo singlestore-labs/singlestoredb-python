@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     except ImportError:
         pass
     try:
-        import pyarrow.compute as pc
+        import pyarrow.compute as pc  # noqa: F401
     except ImportError:
         pass
 
@@ -205,6 +205,7 @@ def _load_pandas(
     Tuple[pd.Series[int], List[Tuple[pd.Series[Any], pd.Series[bool]]]]
 
     '''
+    import numpy as np
     import pandas as pd
 
     row_ids, cols = _load_vectors(colspec, data)
@@ -558,6 +559,7 @@ def _load_pandas_accel(
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
+    import numpy as np
     import pandas as pd
 
     numpy_ids, numpy_cols = _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
@@ -663,8 +665,11 @@ def _create_arrow_mask(
     data: 'pa.Array[Any]',
     mask: 'pa.Array[pa.bool_]',
 ) -> 'pa.Array[pa.bool_]':
+    import pyarrow.compute as pc  # noqa: F811
+
     if mask is None:
         return data.is_null().to_numpy(zero_copy_only=False)
+
     return pc.or_(data.is_null(), mask.is_null()).to_numpy(zero_copy_only=False)
 
 
