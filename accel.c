@@ -436,6 +436,19 @@ error:
     return -1;
 }
 
+size_t length_without_trailing_nulls(const char *str, size_t len) {
+    if (!str || len == 0) {
+        return 0; // Handle null or empty input
+    }
+
+    // Start from the end of the string and move backward
+    while (len > 0 && str[len - 1] == '\0') {
+        len--;
+    }
+
+    return len;
+}
+
 //
 // Cached int values for date/time components
 //
@@ -4022,6 +4035,9 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     } else {
                         Py_ssize_t str_l = col_types[i].length;
                         CHECKMEM(8+str_l);
+
+                        str_l = length_without_trailing_nulls(bytes, str_l);
+
                         i64 = str_l;
                         memcpy(out+out_idx, &i64, 8);
                         out_idx += 8;

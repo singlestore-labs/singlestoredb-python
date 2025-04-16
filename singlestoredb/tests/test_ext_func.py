@@ -1213,9 +1213,9 @@ class TestExtFunc(unittest.TestCase):
         self.cur.execute('select * from numpy_fixed_binary()')
 
         assert [tuple(x) for x in self.cur] == [
-            ('hello'.encode('utf8') + b'\x00' * 8,),
+            ('hello'.encode('utf8'),),
             ('hi there 😜'.encode('utf8'),),
-            ('😜 bye'.encode('utf8') + b'\x00' * 5,),
+            ('😜 bye'.encode('utf8'),),
         ]
 
         desc = self.cur.description
