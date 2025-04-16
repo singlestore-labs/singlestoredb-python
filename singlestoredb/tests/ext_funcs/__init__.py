@@ -9,9 +9,11 @@ import pyarrow as pa
 
 from singlestoredb.functions import Masked
 from singlestoredb.functions import MaskedNDArray
+from singlestoredb.functions import tvf
 from singlestoredb.functions import udf
 from singlestoredb.functions import udf_with_null_masks
 from singlestoredb.functions.dtypes import BIGINT
+from singlestoredb.functions.dtypes import BLOB
 from singlestoredb.functions.dtypes import DOUBLE
 from singlestoredb.functions.dtypes import FLOAT
 from singlestoredb.functions.dtypes import MEDIUMINT
@@ -480,3 +482,34 @@ def arrow_nullable_tinyint_mult_with_masks(
     x_data, x_nulls = x
     y_data, y_nulls = y
     return (pc.multiply(x_data, y_data), pc.or_(x_nulls, y_nulls))
+
+
+@tvf(returns=[TEXT(nullable=False, name='res')])
+def numpy_fixed_strings() -> npt.NDArray[np.str_]:
+    out = np.array(
+        [
+            'hello',
+            'hi there 😜',
+            '😜 bye',
+        ], dtype=np.str_,
+    )
+    assert str(out.dtype) == '<U10'
+    return out
+
+
+@tvf(returns=[BLOB(nullable=False, name='res')])
+def numpy_fixed_binary() -> npt.NDArray[np.bytes_]:
+    out = np.array(
+        [
+            'hello'.encode('utf8'),
+            'hi there 😜'.encode('utf8'),
+            '😜 bye'.encode('utf8'),
+        ], dtype=np.bytes_,
+    )
+    assert str(out.dtype) == '|S13'
+    return out
+
+
+@udf
+def no_args_no_return_value() -> None:
+    pass

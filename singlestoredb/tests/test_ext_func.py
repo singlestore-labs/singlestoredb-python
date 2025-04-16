@@ -1193,3 +1193,44 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].name == 'res'
         assert desc[0].type_code == ft.BLOB
         assert desc[0].null_ok is True
+
+    def test_numpy_fixed_strings(self):
+        self.cur.execute('select * from numpy_fixed_strings()')
+
+        assert [tuple(x) for x in self.cur] == [
+            ('hello',),
+            ('hi there 😜',),
+            ('😜 bye',),
+        ]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.BLOB
+        assert desc[0].null_ok is False
+
+    def test_numpy_fixed_binary(self):
+        self.cur.execute('select * from numpy_fixed_binary()')
+
+        assert [tuple(x) for x in self.cur] == [
+            ('hello'.encode('utf8') + b'\x00' * 8,),
+            ('hi there 😜'.encode('utf8'),),
+            ('😜 bye'.encode('utf8') + b'\x00' * 5,),
+        ]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.BLOB
+        assert desc[0].null_ok is False
+
+    def test_no_args_no_return_value(self):
+        self.cur.execute('select no_args_no_return_value() as res')
+
+        assert [tuple(x) for x in self.cur] == [(None,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is True

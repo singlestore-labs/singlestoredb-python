@@ -3929,7 +3929,8 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     out_idx += 8;
 
                 } else if (col_types[i].type == NUMPY_FIXED_STRING) {
-                    void *bytes = (void*)(cols[i] + j * 8);
+                    // Jump to col_types[i].length * 4 for UCS4 fixed length string
+                    void *bytes = (void*)(cols[i] + j * col_types[i].length * 4);
 
                     if (bytes == NULL) {
                         CHECKMEM(8);
@@ -3944,6 +3945,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                             if (utf8_str) free(utf8_str);
                             goto error;
                         }
+                        str_l = strnlen(utf8_str, str_l);
                         CHECKMEM(8+str_l);
                         i64 = str_l;
                         memcpy(out+out_idx, &i64, 8);
@@ -4010,7 +4012,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     out_idx += 8;
 
                 } else if (col_types[i].type == NUMPY_BYTES) {
-                    void *bytes = (void*)(cols[i] + j * 8);
+                    void *bytes = (void*)(cols[i] + j * col_types[i].length);
 
                     if (bytes == NULL) {
                         CHECKMEM(8);
@@ -4434,7 +4436,10 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
     // Get return types
     n_cols = (unsigned long long)PyObject_Length(py_returns);
-    if (n_cols == 0) goto error;
+    if (n_cols == 0) {
+        PyErr_SetString(PyExc_ValueError, "no return values specified");
+        goto error;
+    }
 
     returns = malloc(sizeof(int) * n_cols);
     if (!returns) goto error;

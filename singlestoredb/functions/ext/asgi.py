@@ -272,7 +272,10 @@ def make_func(
                     return row_ids, [out]
 
                 # Call function on each column of data
-                res = get_dataframe_columns(func(*[x[0] for x in cols]))
+                if cols and cols[0]:
+                    res = get_dataframe_columns(func(*[x[0] for x in cols]))
+                else:
+                    res = get_dataframe_columns(func())
 
                 # Generate row IDs
                 row_ids = array_cls([row_ids[0]] * len(res[0]))
@@ -308,7 +311,10 @@ def make_func(
                     return row_ids, [out]
 
                 # Call the function with `cols` as the function parameters
-                out = func(*[x[0] for x in cols])
+                if cols and cols[0]:
+                    out = func(*[x[0] for x in cols])
+                else:
+                    out = func()
 
                 # Multiple return values
                 if isinstance(out, tuple):
@@ -717,6 +723,7 @@ class Application(object):
                         func_info['colspec'], b''.join(data),
                     ),
                 )
+                print(func_info['returns'], out)
                 body = output_handler['dump'](
                     [x[1] for x in func_info['returns']], *out,  # type: ignore
                 )

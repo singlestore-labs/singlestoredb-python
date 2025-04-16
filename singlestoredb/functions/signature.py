@@ -1115,6 +1115,11 @@ def get_signature(
         with_null_masks=with_null_masks,
     )
 
+    # All functions have to return a value, so if none was specified try to
+    # insert a reasonable default that includes NULLs.
+    if not ret_schema:
+        ret_schema = [('', 'int8?', 'TINYINT NULL')]
+
     # Generate names for fields as needed
     if function_type == 'tvf' or len(ret_schema) > 1:
         for i, (name, rtype, sql) in enumerate(ret_schema):
@@ -1300,7 +1305,9 @@ def signature_to_sql(
             res = ret[0]['sql']
         returns = f' RETURNS {res}'
     else:
-        returns = ' RETURNS NULL'
+        raise ValueError(
+            'function signature must have a return type specified',
+        )
 
     host = os.environ.get('SINGLESTOREDB_EXT_HOST', '127.0.0.1')
     port = os.environ.get('SINGLESTOREDB_EXT_PORT', '8000')
