@@ -790,7 +790,8 @@ class Application(object):
         """Locate all current functions and links belonging to this app."""
         funcs, links = set(), set()
         cur.execute('SHOW FUNCTIONS')
-        for name, ftype, _, _, _, link in list(cur):
+        for row in list(cur):
+            name, ftype, link = row[0], row[1], row[-1]
             # Only look at external functions
             if 'external' not in ftype.lower():
                 continue
