@@ -1297,7 +1297,7 @@ def signature_to_sql(
             res = 'TABLE(' + ', '.join(
                 f'{escape_name(x["name"])} {x["sql"]}' for x in ret
             ) + ')'
-        elif ret[0]['name']:
+        elif ret[0]['name'] and len(ret) > 1:
             res = 'RECORD(' + ', '.join(
                 f'{escape_name(x["name"])} {x["sql"]}' for x in ret
             ) + ')'
