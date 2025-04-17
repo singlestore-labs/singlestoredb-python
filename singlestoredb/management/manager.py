@@ -76,9 +76,7 @@ class Manager(object):
             base_url
             or config.get_option('management.base_url')
             or type(self).default_base_url,
-            version
-            or config.get_option('management.version')
-            or type(self).default_version,
+            version or type(self).default_version,
         ) + '/'
 
         self._params: Dict[str, str] = {}
