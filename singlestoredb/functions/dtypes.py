@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import base64
 import datetime
 import decimal
 import re
@@ -18,6 +19,11 @@ from ..utils.dtypes import PYARROW_TYPE_MAP  # noqa
 
 
 DataType = Union[str, Callable[..., Any]]
+
+
+class SQLString(str):
+    """SQL string type."""
+    name: Optional[str] = None
 
 
 class NULL:
@@ -101,7 +107,7 @@ def bytestr(x: Any) -> Optional[bytes]:
         return x
     if isinstance(x, bytes):
         return x
-    return bytes.fromhex(x)
+    return base64.b64decode(x)
 
 
 PYTHON_CONVERTERS = {
@@ -194,7 +200,12 @@ def _bool(x: Optional[bool] = None) -> Optional[bool]:
     return bool(x)
 
 
-def BOOL(*, nullable: bool = True, default: Optional[bool] = None) -> str:
+def BOOL(
+    *,
+    nullable: bool = True,
+    default: Optional[bool] = None,
+    name: Optional[str] = None,
+) -> SQLString:
     """
     BOOL type specification.
 
@@ -204,16 +215,25 @@ def BOOL(*, nullable: bool = True, default: Optional[bool] = None) -> str:
         Can the value be NULL?
     default : bool, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
-    return 'BOOL' + _modifiers(nullable=nullable, default=_bool(default))
+    out = SQLString('BOOL' + _modifiers(nullable=nullable, default=_bool(default)))
+    out.name = name
+    return out
 
 
-def BOOLEAN(*, nullable: bool = True, default: Optional[bool] = None) -> str:
+def BOOLEAN(
+    *,
+    nullable: bool = True,
+    default: Optional[bool] = None,
+    name: Optional[str] = None,
+) -> SQLString:
     """
     BOOLEAN type specification.
 
@@ -223,16 +243,25 @@ def BOOLEAN(*, nullable: bool = True, default: Optional[bool] = None) -> str:
         Can the value be NULL?
     default : bool, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
-    return 'BOOLEAN' + _modifiers(nullable=nullable, default=_bool(default))
+    out = SQLString('BOOLEAN' + _modifiers(nullable=nullable, default=_bool(default)))
+    out.name = name
+    return out
 
 
-def BIT(*, nullable: bool = True, default: Optional[int] = None) -> str:
+def BIT(
+    *,
+    nullable: bool = True,
+    default: Optional[int] = None,
+    name: Optional[str] = None,
+) -> SQLString:
     """
     BIT type specification.
 
@@ -242,13 +271,17 @@ def BIT(*, nullable: bool = True, default: Optional[int] = None) -> str:
         Can the value be NULL?
     default : int, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
-    return 'BIT' + _modifiers(nullable=nullable, default=default)
+    out = SQLString('BIT' + _modifiers(nullable=nullable, default=default))
+    out.name = name
+    return out
 
 
 def TINYINT(
@@ -257,7 +290,8 @@ def TINYINT(
     nullable: bool = True,
     default: Optional[int] = None,
     unsigned: bool = False,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     TINYINT type specification.
 
@@ -271,14 +305,20 @@ def TINYINT(
         Default value
     unsigned : bool, optional
         Is the int unsigned?
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'TINYINT({display_width})' if display_width else 'TINYINT'
-    return out + _modifiers(nullable=nullable, default=default, unsigned=unsigned)
+    out = SQLString(
+        out + _modifiers(nullable=nullable, default=default, unsigned=unsigned),
+    )
+    out.name = name
+    return out
 
 
 def TINYINT_UNSIGNED(
@@ -286,7 +326,8 @@ def TINYINT_UNSIGNED(
     *,
     nullable: bool = True,
     default: Optional[int] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     TINYINT UNSIGNED type specification.
 
@@ -298,14 +339,18 @@ def TINYINT_UNSIGNED(
         Can the value be NULL?
     default : int, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'TINYINT({display_width})' if display_width else 'TINYINT'
-    return out + _modifiers(nullable=nullable, default=default, unsigned=True)
+    out = SQLString(out + _modifiers(nullable=nullable, default=default, unsigned=True))
+    out.name = name
+    return out
 
 
 def SMALLINT(
@@ -314,7 +359,8 @@ def SMALLINT(
     nullable: bool = True,
     default: Optional[int] = None,
     unsigned: bool = False,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     SMALLINT type specification.
 
@@ -328,14 +374,20 @@ def SMALLINT(
         Default value
     unsigned : bool, optional
         Is the int unsigned?
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'SMALLINT({display_width})' if display_width else 'SMALLINT'
-    return out + _modifiers(nullable=nullable, default=default, unsigned=unsigned)
+    out = SQLString(
+        out + _modifiers(nullable=nullable, default=default, unsigned=unsigned),
+    )
+    out.name = name
+    return out
 
 
 def SMALLINT_UNSIGNED(
@@ -343,7 +395,8 @@ def SMALLINT_UNSIGNED(
     *,
     nullable: bool = True,
     default: Optional[int] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     SMALLINT UNSIGNED type specification.
 
@@ -355,14 +408,18 @@ def SMALLINT_UNSIGNED(
         Can the value be NULL?
     default : int, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'SMALLINT({display_width})' if display_width else 'SMALLINT'
-    return out + _modifiers(nullable=nullable, default=default, unsigned=True)
+    out = SQLString(out + _modifiers(nullable=nullable, default=default, unsigned=True))
+    out.name = name
+    return out
 
 
 def MEDIUMINT(
@@ -371,7 +428,8 @@ def MEDIUMINT(
     nullable: bool = True,
     default: Optional[int] = None,
     unsigned: bool = False,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     MEDIUMINT type specification.
 
@@ -385,14 +443,20 @@ def MEDIUMINT(
         Default value
     unsigned : bool, optional
         Is the int unsigned?
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'MEDIUMINT({display_width})' if display_width else 'MEDIUMINT'
-    return out + _modifiers(nullable=nullable, default=default, unsigned=unsigned)
+    out = SQLString(
+        out + _modifiers(nullable=nullable, default=default, unsigned=unsigned),
+    )
+    out.name = name
+    return out
 
 
 def MEDIUMINT_UNSIGNED(
@@ -400,7 +464,8 @@ def MEDIUMINT_UNSIGNED(
     *,
     nullable: bool = True,
     default: Optional[int] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     MEDIUMINT UNSIGNED type specification.
 
@@ -412,14 +477,18 @@ def MEDIUMINT_UNSIGNED(
         Can the value be NULL?
     default : int, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'MEDIUMINT({display_width})' if display_width else 'MEDIUMINT'
-    return out + _modifiers(nullable=nullable, default=default, unsigned=True)
+    out = SQLString(out + _modifiers(nullable=nullable, default=default, unsigned=True))
+    out.name = name
+    return out
 
 
 def INT(
@@ -428,7 +497,8 @@ def INT(
     nullable: bool = True,
     default: Optional[int] = None,
     unsigned: bool = False,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     INT type specification.
 
@@ -442,14 +512,20 @@ def INT(
         Default value
     unsigned : bool, optional
         Is the int unsigned?
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'INT({display_width})' if display_width else 'INT'
-    return out + _modifiers(nullable=nullable, default=default, unsigned=unsigned)
+    out = SQLString(
+        out + _modifiers(nullable=nullable, default=default, unsigned=unsigned),
+    )
+    out.name = name
+    return out
 
 
 def INT_UNSIGNED(
@@ -457,7 +533,8 @@ def INT_UNSIGNED(
     *,
     nullable: bool = True,
     default: Optional[int] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     INT UNSIGNED type specification.
 
@@ -469,14 +546,18 @@ def INT_UNSIGNED(
         Can the value be NULL?
     default : int, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'INT({display_width})' if display_width else 'INT'
-    return out + _modifiers(nullable=nullable, default=default, unsigned=True)
+    out = SQLString(out + _modifiers(nullable=nullable, default=default, unsigned=True))
+    out.name = name
+    return out
 
 
 def INTEGER(
@@ -485,7 +566,8 @@ def INTEGER(
     nullable: bool = True,
     default: Optional[int] = None,
     unsigned: bool = False,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     INTEGER type specification.
 
@@ -499,14 +581,20 @@ def INTEGER(
         Default value
     unsigned : bool, optional
         Is the int unsigned?
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'INTEGER({display_width})' if display_width else 'INTEGER'
-    return out + _modifiers(nullable=nullable, default=default, unsigned=unsigned)
+    out = SQLString(
+        out + _modifiers(nullable=nullable, default=default, unsigned=unsigned),
+    )
+    out.name = name
+    return out
 
 
 def INTEGER_UNSIGNED(
@@ -514,7 +602,8 @@ def INTEGER_UNSIGNED(
     *,
     nullable: bool = True,
     default: Optional[int] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     INTEGER UNSIGNED type specification.
 
@@ -526,14 +615,18 @@ def INTEGER_UNSIGNED(
         Can the value be NULL?
     default : int, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'INTEGER({display_width})' if display_width else 'INTEGER'
-    return out + _modifiers(nullable=nullable, default=default, unsigned=True)
+    out = SQLString(out + _modifiers(nullable=nullable, default=default, unsigned=True))
+    out.name = name
+    return out
 
 
 def BIGINT(
@@ -542,7 +635,8 @@ def BIGINT(
     nullable: bool = True,
     default: Optional[int] = None,
     unsigned: bool = False,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     BIGINT type specification.
 
@@ -556,14 +650,20 @@ def BIGINT(
         Default value
     unsigned : bool, optional
         Is the int unsigned?
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'BIGINT({display_width})' if display_width else 'BIGINT'
-    return out + _modifiers(nullable=nullable, default=default, unsigned=unsigned)
+    out = SQLString(
+        out + _modifiers(nullable=nullable, default=default, unsigned=unsigned),
+    )
+    out.name = name
+    return out
 
 
 def BIGINT_UNSIGNED(
@@ -571,7 +671,8 @@ def BIGINT_UNSIGNED(
     *,
     nullable: bool = True,
     default: Optional[int] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     BIGINT UNSIGNED type specification.
 
@@ -583,14 +684,18 @@ def BIGINT_UNSIGNED(
         Can the value be NULL?
     default : int, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'BIGINT({int(display_width)})' if display_width else 'BIGINT'
-    return out + _modifiers(nullable=nullable, default=default, unsigned=True)
+    out = SQLString(out + _modifiers(nullable=nullable, default=default, unsigned=True))
+    out.name = name
+    return out
 
 
 def FLOAT(
@@ -598,7 +703,8 @@ def FLOAT(
     *,
     nullable: bool = True,
     default: Optional[float] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     FLOAT type specification.
 
@@ -610,14 +716,18 @@ def FLOAT(
         Can the value be NULL?
     default : float, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'FLOAT({int(display_decimals)})' if display_decimals else 'FLOAT'
-    return out + _modifiers(nullable=nullable, default=default)
+    out = SQLString(out + _modifiers(nullable=nullable, default=default))
+    out.name = name
+    return out
 
 
 def DOUBLE(
@@ -625,7 +735,8 @@ def DOUBLE(
     *,
     nullable: bool = True,
     default: Optional[float] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     DOUBLE type specification.
 
@@ -637,14 +748,18 @@ def DOUBLE(
         Can the value be NULL?
     default : float, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'DOUBLE({int(display_decimals)})' if display_decimals else 'DOUBLE'
-    return out + _modifiers(nullable=nullable, default=default)
+    out = SQLString(out + _modifiers(nullable=nullable, default=default))
+    out.name = name
+    return out
 
 
 def REAL(
@@ -652,7 +767,8 @@ def REAL(
     *,
     nullable: bool = True,
     default: Optional[float] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     REAL type specification.
 
@@ -664,14 +780,18 @@ def REAL(
         Can the value be NULL?
     default : float, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'REAL({int(display_decimals)})' if display_decimals else 'REAL'
-    return out + _modifiers(nullable=nullable, default=default)
+    out = SQLString(out + _modifiers(nullable=nullable, default=default))
+    out.name = name
+    return out
 
 
 def DECIMAL(
@@ -680,7 +800,8 @@ def DECIMAL(
     *,
     nullable: bool = True,
     default: Optional[Union[str, decimal.Decimal]] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     DECIMAL type specification.
 
@@ -694,14 +815,20 @@ def DECIMAL(
         Can the value be NULL?
     default : str or decimal.Decimal, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
-    return f'DECIMAL({int(precision)}, {int(scale)})' + \
-           _modifiers(nullable=nullable, default=default)
+    out = SQLString(
+        f'DECIMAL({int(precision)}, {int(scale)})' +
+        _modifiers(nullable=nullable, default=default),
+    )
+    out.name = name
+    return out
 
 
 def DEC(
@@ -710,7 +837,8 @@ def DEC(
     *,
     nullable: bool = True,
     default: Optional[Union[str, decimal.Decimal]] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     DEC type specification.
 
@@ -724,14 +852,20 @@ def DEC(
         Can the value be NULL?
     default : str or decimal.Decimal, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
-    return f'DEC({int(precision)}, {int(scale)})' + \
-           _modifiers(nullable=nullable, default=default)
+    out = SQLString(
+        f'DEC({int(precision)}, {int(scale)})' +
+        _modifiers(nullable=nullable, default=default),
+    )
+    out.name = name
+    return out
 
 
 def FIXED(
@@ -740,7 +874,8 @@ def FIXED(
     *,
     nullable: bool = True,
     default: Optional[Union[str, decimal.Decimal]] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     FIXED type specification.
 
@@ -754,14 +889,20 @@ def FIXED(
         Can the value be NULL?
     default : str or decimal.Decimal, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
-    return f'FIXED({int(precision)}, {int(scale)})' + \
-           _modifiers(nullable=nullable, default=default)
+    out = SQLString(
+        f'FIXED({int(precision)}, {int(scale)})' +
+        _modifiers(nullable=nullable, default=default),
+    )
+    out.name = name
+    return out
 
 
 def NUMERIC(
@@ -770,7 +911,8 @@ def NUMERIC(
     *,
     nullable: bool = True,
     default: Optional[Union[str, decimal.Decimal]] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     NUMERIC type specification.
 
@@ -784,21 +926,28 @@ def NUMERIC(
         Can the value be NULL?
     default : str or decimal.Decimal, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
-    return f'NUMERIC({int(precision)}, {int(scale)})' + \
-           _modifiers(nullable=nullable, default=default)
+    out = SQLString(
+        f'NUMERIC({int(precision)}, {int(scale)})' +
+        _modifiers(nullable=nullable, default=default),
+    )
+    out.name = name
+    return out
 
 
 def DATE(
     *,
     nullable: bool = True,
     default: Optional[Union[str, datetime.date]] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     DATE type specification.
 
@@ -808,13 +957,17 @@ def DATE(
         Can the value be NULL?
     default : str or datetime.date, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
-    return 'DATE' + _modifiers(nullable=nullable, default=default)
+    out = SQLString('DATE' + _modifiers(nullable=nullable, default=default))
+    out.name = name
+    return out
 
 
 def TIME(
@@ -822,7 +975,8 @@ def TIME(
     *,
     nullable: bool = True,
     default: Optional[Union[str, datetime.timedelta]] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     TIME type specification.
 
@@ -834,14 +988,18 @@ def TIME(
         Can the value be NULL?
     default : str or datetime.timedelta, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'TIME({int(precision)})' if precision else 'TIME'
-    return out + _modifiers(nullable=nullable, default=default)
+    out = SQLString(out + _modifiers(nullable=nullable, default=default))
+    out.name = name
+    return out
 
 
 def DATETIME(
@@ -849,7 +1007,8 @@ def DATETIME(
     *,
     nullable: bool = True,
     default: Optional[Union[str, datetime.datetime]] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     DATETIME type specification.
 
@@ -861,14 +1020,18 @@ def DATETIME(
         Can the value be NULL?
     default : str or datetime.datetime, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'DATETIME({int(precision)})' if precision else 'DATETIME'
-    return out + _modifiers(nullable=nullable, default=default)
+    out = SQLString(out + _modifiers(nullable=nullable, default=default))
+    out.name = name
+    return out
 
 
 def TIMESTAMP(
@@ -876,7 +1039,8 @@ def TIMESTAMP(
     *,
     nullable: bool = True,
     default: Optional[Union[str, datetime.datetime]] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     TIMESTAMP type specification.
 
@@ -888,17 +1052,26 @@ def TIMESTAMP(
         Can the value be NULL?
     default : str or datetime.datetime, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'TIMESTAMP({int(precision)})' if precision else 'TIMESTAMP'
-    return out + _modifiers(nullable=nullable, default=default)
+    out = SQLString(out + _modifiers(nullable=nullable, default=default))
+    out.name = name
+    return out
 
 
-def YEAR(*, nullable: bool = True, default: Optional[int] = None) -> str:
+def YEAR(
+    *,
+    nullable: bool = True,
+    default: Optional[int] = None,
+    name: Optional[str] = None,
+) -> SQLString:
     """
     YEAR type specification.
 
@@ -908,13 +1081,17 @@ def YEAR(*, nullable: bool = True, default: Optional[int] = None) -> str:
         Can the value be NULL?
     default : int, optional
         Default value
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
-    return 'YEAR' + _modifiers(nullable=nullable, default=default)
+    out = SQLString('YEAR' + _modifiers(nullable=nullable, default=default))
+    out.name = name
+    return out
 
 
 def CHAR(
@@ -924,7 +1101,8 @@ def CHAR(
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     CHAR type specification.
 
@@ -940,17 +1118,23 @@ def CHAR(
         Collation
     charset : str, optional
         Character set
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'CHAR({int(length)})' if length else 'CHAR'
-    return out + _modifiers(
-        nullable=nullable, default=default,
-        collate=collate, charset=charset,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default,
+            collate=collate, charset=charset,
+        ),
     )
+    out.name = name
+    return out
 
 
 def VARCHAR(
@@ -960,7 +1144,8 @@ def VARCHAR(
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     VARCHAR type specification.
 
@@ -976,17 +1161,23 @@ def VARCHAR(
         Collation
     charset : str, optional
         Character set
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'VARCHAR({int(length)})' if length else 'VARCHAR'
-    return out + _modifiers(
-        nullable=nullable, default=default,
-        collate=collate, charset=charset,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default,
+            collate=collate, charset=charset,
+        ),
     )
+    out.name = name
+    return out
 
 
 def LONGTEXT(
@@ -996,7 +1187,8 @@ def LONGTEXT(
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     LONGTEXT type specification.
 
@@ -1012,17 +1204,23 @@ def LONGTEXT(
         Collation
     charset : str, optional
         Character set
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'LONGTEXT({int(length)})' if length else 'LONGTEXT'
-    return out + _modifiers(
-        nullable=nullable, default=default,
-        collate=collate, charset=charset,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default,
+            collate=collate, charset=charset,
+        ),
     )
+    out.name = name
+    return out
 
 
 def MEDIUMTEXT(
@@ -1032,7 +1230,8 @@ def MEDIUMTEXT(
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     MEDIUMTEXT type specification.
 
@@ -1048,17 +1247,23 @@ def MEDIUMTEXT(
         Collation
     charset : str, optional
         Character set
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'MEDIUMTEXT({int(length)})' if length else 'MEDIUMTEXT'
-    return out + _modifiers(
-        nullable=nullable, default=default,
-        collate=collate, charset=charset,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default,
+            collate=collate, charset=charset,
+        ),
     )
+    out.name = name
+    return out
 
 
 def TEXT(
@@ -1068,7 +1273,8 @@ def TEXT(
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     TEXT type specification.
 
@@ -1084,17 +1290,23 @@ def TEXT(
         Collation
     charset : str, optional
         Character set
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'TEXT({int(length)})' if length else 'TEXT'
-    return out + _modifiers(
-        nullable=nullable, default=default,
-        collate=collate, charset=charset,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default,
+            collate=collate, charset=charset,
+        ),
     )
+    out.name = name
+    return out
 
 
 def TINYTEXT(
@@ -1104,7 +1316,8 @@ def TINYTEXT(
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     TINYTEXT type specification.
 
@@ -1120,17 +1333,23 @@ def TINYTEXT(
         Collation
     charset : str, optional
         Character set
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'TINYTEXT({int(length)})' if length else 'TINYTEXT'
-    return out + _modifiers(
-        nullable=nullable, default=default,
-        collate=collate, charset=charset,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default,
+            collate=collate, charset=charset,
+        ),
     )
+    out.name = name
+    return out
 
 
 def BINARY(
@@ -1139,7 +1358,8 @@ def BINARY(
     nullable: bool = True,
     default: Optional[bytes] = None,
     collate: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     BINARY type specification.
 
@@ -1153,16 +1373,22 @@ def BINARY(
         Default value
     collate : str, optional
         Collation
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'BINARY({int(length)})' if length else 'BINARY'
-    return out + _modifiers(
-        nullable=nullable, default=default, collate=collate,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default, collate=collate,
+        ),
     )
+    out.name = name
+    return out
 
 
 def VARBINARY(
@@ -1171,7 +1397,8 @@ def VARBINARY(
     nullable: bool = True,
     default: Optional[bytes] = None,
     collate: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     VARBINARY type specification.
 
@@ -1185,16 +1412,22 @@ def VARBINARY(
         Default value
     collate : str, optional
         Collation
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'VARBINARY({int(length)})' if length else 'VARBINARY'
-    return out + _modifiers(
-        nullable=nullable, default=default, collate=collate,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default, collate=collate,
+        ),
     )
+    out.name = name
+    return out
 
 
 def LONGBLOB(
@@ -1203,7 +1436,8 @@ def LONGBLOB(
     nullable: bool = True,
     default: Optional[bytes] = None,
     collate: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     LONGBLOB type specification.
 
@@ -1217,16 +1451,22 @@ def LONGBLOB(
         Default value
     collate : str, optional
         Collation
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'LONGBLOB({int(length)})' if length else 'LONGBLOB'
-    return out + _modifiers(
-        nullable=nullable, default=default, collate=collate,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default, collate=collate,
+        ),
     )
+    out.name = name
+    return out
 
 
 def MEDIUMBLOB(
@@ -1235,7 +1475,8 @@ def MEDIUMBLOB(
     nullable: bool = True,
     default: Optional[bytes] = None,
     collate: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     MEDIUMBLOB type specification.
 
@@ -1249,16 +1490,22 @@ def MEDIUMBLOB(
         Default value
     collate : str, optional
         Collation
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'MEDIUMBLOB({int(length)})' if length else 'MEDIUMBLOB'
-    return out + _modifiers(
-        nullable=nullable, default=default, collate=collate,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default, collate=collate,
+        ),
     )
+    out.name = name
+    return out
 
 
 def BLOB(
@@ -1267,7 +1514,8 @@ def BLOB(
     nullable: bool = True,
     default: Optional[bytes] = None,
     collate: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     BLOB type specification.
 
@@ -1281,16 +1529,22 @@ def BLOB(
         Default value
     collate : str, optional
         Collation
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'BLOB({int(length)})' if length else 'BLOB'
-    return out + _modifiers(
-        nullable=nullable, default=default, collate=collate,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default, collate=collate,
+        ),
     )
+    out.name = name
+    return out
 
 
 def TINYBLOB(
@@ -1299,7 +1553,8 @@ def TINYBLOB(
     nullable: bool = True,
     default: Optional[bytes] = None,
     collate: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     TINYBLOB type specification.
 
@@ -1313,16 +1568,22 @@ def TINYBLOB(
         Default value
     collate : str, optional
         Collation
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'TINYBLOB({int(length)})' if length else 'TINYBLOB'
-    return out + _modifiers(
-        nullable=nullable, default=default, collate=collate,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default, collate=collate,
+        ),
     )
+    out.name = name
+    return out
 
 
 def JSON(
@@ -1332,7 +1593,8 @@ def JSON(
     default: Optional[str] = None,
     collate: Optional[str] = None,
     charset: Optional[str] = None,
-) -> str:
+    name: Optional[str] = None,
+) -> SQLString:
     """
     JSON type specification.
 
@@ -1348,20 +1610,59 @@ def JSON(
         Collation
     charset : str, optional
         Character set
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     out = f'JSON({int(length)})' if length else 'JSON'
-    return out + _modifiers(
-        nullable=nullable, default=default,
-        collate=collate, charset=charset,
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default,
+            collate=collate, charset=charset,
+        ),
     )
+    out.name = name
+    return out
 
 
-def GEOGRAPHYPOINT(*, nullable: bool = True, default: Optional[str] = None) -> str:
+def GEOGRAPHYPOINT(
+    *,
+    nullable: bool = True,
+    default: Optional[str] = None,
+    name: Optional[str] = None,
+) -> SQLString:
+    """
+    GEOGRAPHYPOINT type specification.
+
+    Parameters
+    ----------
+    nullable : bool, optional
+        Can the value be NULL?
+    default : str, optional
+        Default value
+    name : str, optional
+        Name of the column / parameter
+
+    Returns
+    -------
+    SQLString
+
+    """
+    out = SQLString('GEOGRAPHYPOINT' + _modifiers(nullable=nullable, default=default))
+    out.name = name
+    return out
+
+
+def GEOGRAPHY(
+    *,
+    nullable: bool = True,
+    default: Optional[str] = None,
+    name: Optional[str] = None,
+) -> SQLString:
     """
     GEOGRAPHYPOINT type specification.
 
@@ -1377,29 +1678,16 @@ def GEOGRAPHYPOINT(*, nullable: bool = True, default: Optional[str] = None) -> s
     str
 
     """
-    return 'GEOGRAPHYPOINT' + _modifiers(nullable=nullable, default=default)
+    out = SQLString('GEOGRAPHY' + _modifiers(nullable=nullable, default=default))
+    out.name = name
+    return out
 
 
-def GEOGRAPHY(*, nullable: bool = True, default: Optional[str] = None) -> str:
-    """
-    GEOGRAPHYPOINT type specification.
-
-    Parameters
-    ----------
-    nullable : bool, optional
-        Can the value be NULL?
-    default : str, optional
-        Default value
-
-    Returns
-    -------
-    str
-
-    """
-    return 'GEOGRAPHY' + _modifiers(nullable=nullable, default=default)
-
-
-def RECORD(*args: Tuple[str, DataType], nullable: bool = True) -> str:
+def RECORD(
+    *args: Tuple[str, DataType],
+    nullable: bool = True,
+    name: Optional[str] = None,
+) -> SQLString:
     """
     RECORD type specification.
 
@@ -1409,10 +1697,12 @@ def RECORD(*args: Tuple[str, DataType], nullable: bool = True) -> str:
         Field specifications
     nullable : bool, optional
         Can the value be NULL?
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     assert len(args) > 0
@@ -1422,10 +1712,16 @@ def RECORD(*args: Tuple[str, DataType], nullable: bool = True) -> str:
             fields.append(f'{escape_name(name)} {value()}')
         else:
             fields.append(f'{escape_name(name)} {value}')
-    return f'RECORD({", ".join(fields)})' + _modifiers(nullable=nullable)
+    out = SQLString(f'RECORD({", ".join(fields)})' + _modifiers(nullable=nullable))
+    out.name = name
+    return out
 
 
-def ARRAY(dtype: DataType, nullable: bool = True) -> str:
+def ARRAY(
+    dtype: DataType,
+    nullable: bool = True,
+    name: Optional[str] = None,
+) -> SQLString:
     """
     ARRAY type specification.
 
@@ -1435,12 +1731,64 @@ def ARRAY(dtype: DataType, nullable: bool = True) -> str:
         The data type of the array elements
     nullable : bool, optional
         Can the value be NULL?
+    name : str, optional
+        Name of the column / parameter
 
     Returns
     -------
-    str
+    SQLString
 
     """
     if callable(dtype):
         dtype = dtype()
-    return f'ARRAY({dtype})' + _modifiers(nullable=nullable)
+    out = SQLString(f'ARRAY({dtype})' + _modifiers(nullable=nullable))
+    out.name = name
+    return out
+
+
+F32 = 'F32'
+F64 = 'F64'
+I8 = 'I8'
+I16 = 'I16'
+I32 = 'I32'
+I64 = 'I64'
+
+
+def VECTOR(
+    length: int,
+    element_type: str = F32,
+    *,
+    nullable: bool = True,
+    default: Optional[bytes] = None,
+    name: Optional[str] = None,
+) -> SQLString:
+    """
+    VECTOR type specification.
+
+    Parameters
+    ----------
+    n : int
+        Number of elements in vector
+    element_type : str, optional
+        Type of the elements in the vector:
+        F32, F64, I8, I16, I32, I64
+    nullable : bool, optional
+        Can the value be NULL?
+    default : str, optional
+        Default value
+    name : str, optional
+        Name of the column / parameter
+
+    Returns
+    -------
+    SQLString
+
+    """
+    out = f'VECTOR({int(length)}, {element_type})'
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default,
+        ),
+    )
+    out.name = name
+    return out

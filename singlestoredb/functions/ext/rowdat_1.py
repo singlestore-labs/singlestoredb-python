@@ -7,40 +7,37 @@ from typing import List
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
+from typing import TYPE_CHECKING
 
 from ...config import get_option
+from ...mysql.constants import FIELD_TYPE as ft
 from ..dtypes import DEFAULT_VALUES
 from ..dtypes import NUMPY_TYPE_MAP
 from ..dtypes import PANDAS_TYPE_MAP
 from ..dtypes import POLARS_TYPE_MAP
 from ..dtypes import PYARROW_TYPE_MAP
 
-try:
-    import numpy as np
-    has_numpy = True
-except ImportError:
-    has_numpy = False
-
-try:
-    import polars as pl
-    has_polars = True
-except ImportError:
-    has_polars = False
-
-try:
-    import pandas as pd
-    has_pandas = True
-except ImportError:
-    has_pandas = False
-
-try:
-    import pyarrow as pa
-    import pyarrow.compute as pc
-    has_pyarrow = True
-except ImportError:
-    has_pyarrow = False
-
-from ...mysql.constants import FIELD_TYPE as ft
+if TYPE_CHECKING:
+    try:
+        import numpy as np
+    except ImportError:
+        pass
+    try:
+        import polars as pl
+    except ImportError:
+        pass
+    try:
+        import pandas as pd
+    except ImportError:
+        pass
+    try:
+        import pyarrow as pa
+    except ImportError:
+        pass
+    try:
+        import pyarrow.compute as pc  # noqa: F401
+    except ImportError:
+        pass
 
 has_accel = False
 try:
@@ -208,8 +205,8 @@ def _load_pandas(
     Tuple[pd.Series[int], List[Tuple[pd.Series[Any], pd.Series[bool]]]]
 
     '''
-    if not has_pandas or not has_numpy:
-        raise RuntimeError('pandas must be installed for this operation')
+    import numpy as np
+    import pandas as pd
 
     row_ids, cols = _load_vectors(colspec, data)
     index = pd.Series(row_ids)
@@ -244,8 +241,7 @@ def _load_polars(
     Tuple[polars.Series[int], List[polars.Series[Any]]]
 
     '''
-    if not has_polars:
-        raise RuntimeError('polars must be installed for this operation')
+    import polars as pl
 
     row_ids, cols = _load_vectors(colspec, data)
     return pl.Series(None, row_ids, dtype=pl.Int64), \
@@ -280,8 +276,7 @@ def _load_numpy(
     Tuple[np.ndarray[int], List[np.ndarray[Any]]]
 
     '''
-    if not has_numpy:
-        raise RuntimeError('numpy must be installed for this operation')
+    import numpy as np
 
     row_ids, cols = _load_vectors(colspec, data)
     return np.asarray(row_ids, dtype=np.int64), \
@@ -298,8 +293,8 @@ def _load_arrow(
     colspec: List[Tuple[str, int]],
     data: bytes,
 ) -> Tuple[
-    'pa.Array[pa.int64()]',
-    List[Tuple['pa.Array[Any]', 'pa.Array[pa.bool_()]']],
+    'pa.Array[pa.int64]',
+    List[Tuple['pa.Array[Any]', 'pa.Array[pa.bool_]']],
 ]:
     '''
     Convert bytes in rowdat_1 format into rows of data.
@@ -316,8 +311,7 @@ def _load_arrow(
     Tuple[pyarrow.Array[int], List[pyarrow.Array[Any]]]
 
     '''
-    if not has_pyarrow:
-        raise RuntimeError('pyarrow must be installed for this operation')
+    import pyarrow as pa
 
     row_ids, cols = _load_vectors(colspec, data)
     return pa.array(row_ids, type=pa.int64()), \
@@ -488,9 +482,6 @@ def _dump_arrow(
     row_ids: 'pa.Array[int]',
     cols: List[Tuple['pa.Array[Any]', 'pa.Array[bool]']],
 ) -> bytes:
-    if not has_pyarrow:
-        raise RuntimeError('pyarrow must be installed for this operation')
-
     return _dump_vectors(
         returns,
         row_ids.tolist(),
@@ -503,9 +494,6 @@ def _dump_numpy(
     row_ids: 'np.typing.NDArray[np.int64]',
     cols: List[Tuple['np.typing.NDArray[Any]', 'np.typing.NDArray[np.bool_]']],
 ) -> bytes:
-    if not has_numpy:
-        raise RuntimeError('numpy must be installed for this operation')
-
     return _dump_vectors(
         returns,
         row_ids.tolist(),
@@ -518,9 +506,6 @@ def _dump_pandas(
     row_ids: 'pd.Series[np.int64]',
     cols: List[Tuple['pd.Series[Any]', 'pd.Series[np.bool_]']],
 ) -> bytes:
-    if not has_pandas or not has_numpy:
-        raise RuntimeError('pandas must be installed for this operation')
-
     return _dump_vectors(
         returns,
         row_ids.to_list(),
@@ -533,9 +518,6 @@ def _dump_polars(
     row_ids: 'pl.Series[pl.Int64]',
     cols: List[Tuple['pl.Series[Any]', 'pl.Series[pl.Boolean]']],
 ) -> bytes:
-    if not has_polars:
-        raise RuntimeError('polars must be installed for this operation')
-
     return _dump_vectors(
         returns,
         row_ids.to_list(),
@@ -550,8 +532,6 @@ def _load_numpy_accel(
     'np.typing.NDArray[np.int64]',
     List[Tuple['np.typing.NDArray[Any]', 'np.typing.NDArray[np.bool_]']],
 ]:
-    if not has_numpy:
-        raise RuntimeError('numpy must be installed for this operation')
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
@@ -563,8 +543,6 @@ def _dump_numpy_accel(
     row_ids: 'np.typing.NDArray[np.int64]',
     cols: List[Tuple['np.typing.NDArray[Any]', 'np.typing.NDArray[np.bool_]']],
 ) -> bytes:
-    if not has_numpy:
-        raise RuntimeError('numpy must be installed for this operation')
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
@@ -578,10 +556,11 @@ def _load_pandas_accel(
     'pd.Series[np.int64]',
     List[Tuple['pd.Series[Any]', 'pd.Series[np.bool_]']],
 ]:
-    if not has_pandas or not has_numpy:
-        raise RuntimeError('pandas must be installed for this operation')
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
+
+    import numpy as np
+    import pandas as pd
 
     numpy_ids, numpy_cols = _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
     cols = [
@@ -599,8 +578,6 @@ def _dump_pandas_accel(
     row_ids: 'pd.Series[np.int64]',
     cols: List[Tuple['pd.Series[Any]', 'pd.Series[np.bool_]']],
 ) -> bytes:
-    if not has_pandas or not has_numpy:
-        raise RuntimeError('pandas must be installed for this operation')
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
@@ -622,10 +599,10 @@ def _load_polars_accel(
     'pl.Series[pl.Int64]',
     List[Tuple['pl.Series[Any]', 'pl.Series[pl.Boolean]']],
 ]:
-    if not has_polars:
-        raise RuntimeError('polars must be installed for this operation')
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
+
+    import polars as pl
 
     numpy_ids, numpy_cols = _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
     cols = [
@@ -647,8 +624,6 @@ def _dump_polars_accel(
     row_ids: 'pl.Series[pl.Int64]',
     cols: List[Tuple['pl.Series[Any]', 'pl.Series[pl.Boolean]']],
 ) -> bytes:
-    if not has_polars:
-        raise RuntimeError('polars must be installed for this operation')
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
@@ -667,13 +642,13 @@ def _load_arrow_accel(
     colspec: List[Tuple[str, int]],
     data: bytes,
 ) -> Tuple[
-    'pa.Array[pa.int64()]',
-    List[Tuple['pa.Array[Any]', 'pa.Array[pa.bool_()]']],
+    'pa.Array[pa.int64]',
+    List[Tuple['pa.Array[Any]', 'pa.Array[pa.bool_]']],
 ]:
-    if not has_pyarrow:
-        raise RuntimeError('pyarrow must be installed for this operation')
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
+
+    import pyarrow as pa
 
     numpy_ids, numpy_cols = _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
     cols = [
@@ -688,20 +663,21 @@ def _load_arrow_accel(
 
 def _create_arrow_mask(
     data: 'pa.Array[Any]',
-    mask: 'pa.Array[pa.bool_()]',
-) -> 'pa.Array[pa.bool_()]':
+    mask: 'pa.Array[pa.bool_]',
+) -> 'pa.Array[pa.bool_]':
+    import pyarrow.compute as pc  # noqa: F811
+
     if mask is None:
         return data.is_null().to_numpy(zero_copy_only=False)
+
     return pc.or_(data.is_null(), mask.is_null()).to_numpy(zero_copy_only=False)
 
 
 def _dump_arrow_accel(
     returns: List[int],
-    row_ids: 'pa.Array[pa.int64()]',
-    cols: List[Tuple['pa.Array[Any]', 'pa.Array[pa.bool_()]']],
+    row_ids: 'pa.Array[pa.int64]',
+    cols: List[Tuple['pa.Array[Any]', 'pa.Array[pa.bool_]']],
 ) -> bytes:
-    if not has_pyarrow:
-        raise RuntimeError('pyarrow must be installed for this operation')
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
@@ -720,6 +696,8 @@ def _dump_arrow_accel(
 if not has_accel:
     load = _load_accel = _load
     dump = _dump_accel = _dump
+    load_list = _load_vectors  # noqa: F811
+    dump_list = _dump_vectors  # noqa: F811
     load_pandas = _load_pandas_accel = _load_pandas  # noqa: F811
     dump_pandas = _dump_pandas_accel = _dump_pandas  # noqa: F811
     load_numpy = _load_numpy_accel = _load_numpy  # noqa: F811
@@ -734,6 +712,8 @@ else:
     _dump_accel = _singlestoredb_accel.dump_rowdat_1
     load = _load_accel
     dump = _dump_accel
+    load_list = _load_vectors
+    dump_list = _dump_vectors
     load_pandas = _load_pandas_accel
     dump_pandas = _dump_pandas_accel
     load_numpy = _load_numpy_accel
