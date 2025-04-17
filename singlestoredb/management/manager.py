@@ -77,16 +77,17 @@ class Manager(object):
         # Check to see if the current default_base_url or the environment variable
         # is different from the default_base_url and use that if so.
         config_base_url = config.get_option('management.base_url')
+        default_base_url = type(self).default_base_url
         env_base_url = os.environ.get('SINGLESTOREDB_MANAGEMENT_BASE_URL', '').strip()
         if base_url:
             pass
-        elif config_base_url and config_base_url != type(self).default_base_url:
-            base_url = config_base_url
-        elif env_base_url and env_base_url != type(self).default_base_url:
+        elif default_base_url and default_base_url != config_base_url:
+            base_url = default_base_url
+        elif env_base_url and env_base_url != config_base_url:
             base_url = env_base_url
 
         self._base_url = urljoin(
-            base_url or type(self).default_base_url,
+            base_url or default_base_url,
             version or type(self).default_version,
         ) + '/'
 
