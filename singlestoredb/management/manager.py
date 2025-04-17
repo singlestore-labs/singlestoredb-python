@@ -72,23 +72,13 @@ class Manager(object):
             'User-Agent': f'SingleStoreDB-Python/{client_version}',
         })
 
-        # The base URL must be able to be set dynamically using the default_base_url
-        # class variable or the environment variable SINGLESTOREDB_MANAGEMENT_BASE_URL.
-        # Check to see if the current default_base_url or the environment variable
-        # is different from the default_base_url and use that if so.
-        config_base_url = config.get_option('management.base_url')
-        default_base_url = type(self).default_base_url
-        env_base_url = os.environ.get('SINGLESTOREDB_MANAGEMENT_BASE_URL', '').strip()
-        if base_url:
-            pass
-        elif default_base_url and default_base_url != config_base_url:
-            base_url = default_base_url
-        elif env_base_url and env_base_url != config_base_url:
-            base_url = env_base_url
-
         self._base_url = urljoin(
-            base_url or default_base_url,
-            version or type(self).default_version,
+            base_url
+            or config.get_option('management.base_url')
+            or type(self).default_base_url,
+            version
+            or config.get_option('management.version')
+            or type(self).default_version,
         ) + '/'
 
         self._params: Dict[str, str] = {}
