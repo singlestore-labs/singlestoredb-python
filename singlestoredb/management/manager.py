@@ -62,6 +62,7 @@ class Manager(object):
         )
         if not new_access_token:
             raise ManagementError(msg='No management token was configured.')
+
         self._is_jwt = not access_token and new_access_token and is_jwt(new_access_token)
         self._sess = requests.Session()
         self._sess.headers.update({
@@ -70,10 +71,14 @@ class Manager(object):
             'Accept': 'application/json',
             'User-Agent': f'SingleStoreDB-Python/{client_version}',
         })
+
         self._base_url = urljoin(
-            base_url or type(self).default_base_url,
+            base_url
+            or config.get_option('management.base_url')
+            or type(self).default_base_url,
             version or type(self).default_version,
         ) + '/'
+
         self._params: Dict[str, str] = {}
         if organization_id:
             self._params['organizationID'] = organization_id
