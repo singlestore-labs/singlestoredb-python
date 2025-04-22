@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.13.0 - April 16, 2025
+------------------------
+* Refactor external function server (experimental) type system
+
 v1.12.4 - April 2, 2025
 -----------------------
 * Back out charset setting code

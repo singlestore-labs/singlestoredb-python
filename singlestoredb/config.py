@@ -427,7 +427,7 @@ register_option(
 )
 
 register_option(
-    'external_function.host', 'string', check_str, '127.0.0.1',
+    'external_function.host', 'string', check_str, 'localhost',
     'Specifies the host to bind the server to.',
     environ=['SINGLESTOREDB_EXT_FUNC_HOST'],
 )

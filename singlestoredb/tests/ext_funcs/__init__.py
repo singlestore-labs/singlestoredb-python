@@ -1,15 +1,30 @@
 #!/usr/bin/env python3
-# type: ignore
 from typing import Optional
-from typing import Tuple
 
-from singlestoredb.functions.decorator import udf
+import numpy as np
+import numpy.typing as npt
+import pandas as pd
+import polars as pl
+import pyarrow as pa
+
+from singlestoredb.functions import Masked
+from singlestoredb.functions import MaskedNDArray
+from singlestoredb.functions import tvf
+from singlestoredb.functions import udf
+from singlestoredb.functions import udf_with_null_masks
 from singlestoredb.functions.dtypes import BIGINT
+from singlestoredb.functions.dtypes import BLOB
+from singlestoredb.functions.dtypes import DOUBLE
 from singlestoredb.functions.dtypes import FLOAT
 from singlestoredb.functions.dtypes import MEDIUMINT
 from singlestoredb.functions.dtypes import SMALLINT
+from singlestoredb.functions.dtypes import TEXT
 from singlestoredb.functions.dtypes import TINYINT
-from singlestoredb.functions.dtypes import VARCHAR
+
+
+@udf
+def int_mult(x: int, y: int) -> int:
+    return x * y
 
 
 @udf
@@ -17,24 +32,36 @@ def double_mult(x: float, y: float) -> float:
     return x * y
 
 
-@udf.pandas
-def pandas_double_mult(x: float, y: float) -> float:
+@udf(
+    args=[DOUBLE(nullable=False), DOUBLE(nullable=False)],
+    returns=DOUBLE(nullable=False),
+)
+def pandas_double_mult(x: pd.Series, y: pd.Series) -> pd.Series:
     return x * y
 
 
-@udf.numpy
-def numpy_double_mult(x: float, y: float) -> float:
+@udf
+def numpy_double_mult(
+    x: npt.NDArray[np.float64],
+    y: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
     return x * y
 
 
-@udf.arrow
-def arrow_double_mult(x: float, y: float) -> float:
+@udf(
+    args=[DOUBLE(nullable=False), DOUBLE(nullable=False)],
+    returns=DOUBLE(nullable=False),
+)
+def arrow_double_mult(x: pa.Array, y: pa.Array) -> pa.Array:
     import pyarrow.compute as pc
     return pc.multiply(x, y)
 
 
-@udf.polars
-def polars_double_mult(x: float, y: float) -> float:
+@udf(
+    args=[DOUBLE(nullable=False), DOUBLE(nullable=False)],
+    returns=DOUBLE(nullable=False),
+)
+def polars_double_mult(x: pl.Series, y: pl.Series) -> pl.Series:
     return x * y
 
 
@@ -57,277 +84,313 @@ def nullable_float_mult(x: Optional[float], y: Optional[float]) -> Optional[floa
     return x * y
 
 
-def _int_mult(x: int, y: int) -> int:
+#
+# TINYINT
+#
+
+tinyint_udf = udf(
+    args=[TINYINT(nullable=False), TINYINT(nullable=False)],
+    returns=TINYINT(nullable=False),
+)
+
+
+@tinyint_udf
+def tinyint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
     if x is None or y is None:
         return None
     return x * y
 
 
-def _arrow_int_mult(x: int, y: int) -> int:
+@tinyint_udf
+def pandas_tinyint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+    return x * y
+
+
+@tinyint_udf
+def polars_tinyint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+    return x * y
+
+
+@tinyint_udf
+def numpy_tinyint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    return x * y
+
+
+@tinyint_udf
+def arrow_tinyint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+    import pyarrow.compute as pc
+    return pc.multiply(x, y)
+
+#
+# SMALLINT
+#
+
+
+smallint_udf = udf(
+    args=[SMALLINT(nullable=False), SMALLINT(nullable=False)],
+    returns=SMALLINT(nullable=False),
+)
+
+
+@smallint_udf
+def smallint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
+    if x is None or y is None:
+        return None
+    return x * y
+
+
+@smallint_udf
+def pandas_smallint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+    return x * y
+
+
+@smallint_udf
+def polars_smallint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+    return x * y
+
+
+@smallint_udf
+def numpy_smallint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    return x * y
+
+
+@smallint_udf
+def arrow_smallint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
     import pyarrow.compute as pc
     return pc.multiply(x, y)
 
 
-def _int_mult_with_masks(x: Tuple[int, bool], y: Tuple[int, bool]) -> Tuple[int, bool]:
-    x_data, x_nulls = x
-    y_data, y_nulls = y
-    return (x_data * y_data, x_nulls | y_nulls)
+#
+# MEDIUMINT
+#
 
 
-def _arrow_int_mult_with_masks(
-    x: Tuple[int, bool],
-    y: Tuple[int, bool],
-) -> Tuple[int, bool]:
+mediumint_udf = udf(
+    args=[MEDIUMINT(nullable=False), MEDIUMINT(nullable=False)],
+    returns=MEDIUMINT(nullable=False),
+)
+
+
+@mediumint_udf
+def mediumint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
+    if x is None or y is None:
+        return None
+    return x * y
+
+
+@mediumint_udf
+def pandas_mediumint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+    return x * y
+
+
+@mediumint_udf
+def polars_mediumint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+    return x * y
+
+
+@mediumint_udf
+def numpy_mediumint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    return x * y
+
+
+@mediumint_udf
+def arrow_mediumint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
     import pyarrow.compute as pc
-    x_data, x_nulls = x
-    y_data, y_nulls = y
-    return (pc.multiply(x_data, y_data), pc.or_(x_nulls, y_nulls))
+    return pc.multiply(x, y)
 
 
-int_mult = udf(_int_mult, name='int_mult')
+#
+# BIGINT
+#
 
-tinyint_mult = udf(
-    _int_mult,
-    name='tinyint_mult',
-    args=[TINYINT(nullable=False), TINYINT(nullable=False)],
-    returns=TINYINT(nullable=False),
-)
 
-pandas_tinyint_mult = udf.pandas(
-    _int_mult,
-    name='pandas_tinyint_mult',
-    args=[TINYINT(nullable=False), TINYINT(nullable=False)],
-    returns=TINYINT(nullable=False),
-)
-
-polars_tinyint_mult = udf.polars(
-    _int_mult,
-    name='polars_tinyint_mult',
-    args=[TINYINT(nullable=False), TINYINT(nullable=False)],
-    returns=TINYINT(nullable=False),
-)
-
-numpy_tinyint_mult = udf.numpy(
-    _int_mult,
-    name='numpy_tinyint_mult',
-    args=[TINYINT(nullable=False), TINYINT(nullable=False)],
-    returns=TINYINT(nullable=False),
-)
-
-arrow_tinyint_mult = udf.arrow(
-    _arrow_int_mult,
-    name='arrow_tinyint_mult',
-    args=[TINYINT(nullable=False), TINYINT(nullable=False)],
-    returns=TINYINT(nullable=False),
-)
-
-smallint_mult = udf(
-    _int_mult,
-    name='smallint_mult',
-    args=[SMALLINT(nullable=False), SMALLINT(nullable=False)],
-    returns=SMALLINT(nullable=False),
-)
-
-pandas_smallint_mult = udf.pandas(
-    _int_mult,
-    name='pandas_smallint_mult',
-    args=[SMALLINT(nullable=False), SMALLINT(nullable=False)],
-    returns=SMALLINT(nullable=False),
-)
-
-polars_smallint_mult = udf.polars(
-    _int_mult,
-    name='polars_smallint_mult',
-    args=[SMALLINT(nullable=False), SMALLINT(nullable=False)],
-    returns=SMALLINT(nullable=False),
-)
-
-numpy_smallint_mult = udf.numpy(
-    _int_mult,
-    name='numpy_smallint_mult',
-    args=[SMALLINT(nullable=False), SMALLINT(nullable=False)],
-    returns=SMALLINT(nullable=False),
-)
-
-arrow_smallint_mult = udf.arrow(
-    _arrow_int_mult,
-    name='arrow_smallint_mult',
-    args=[SMALLINT(nullable=False), SMALLINT(nullable=False)],
-    returns=SMALLINT(nullable=False),
-)
-
-mediumint_mult = udf(
-    _int_mult,
-    name='mediumint_mult',
-    args=[MEDIUMINT(nullable=False), MEDIUMINT(nullable=False)],
-    returns=MEDIUMINT(nullable=False),
-)
-
-pandas_mediumint_mult = udf.pandas(
-    _int_mult,
-    name='pandas_mediumint_mult',
-    args=[MEDIUMINT(nullable=False), MEDIUMINT(nullable=False)],
-    returns=MEDIUMINT(nullable=False),
-)
-
-polars_mediumint_mult = udf.polars(
-    _int_mult,
-    name='polars_mediumint_mult',
-    args=[MEDIUMINT(nullable=False), MEDIUMINT(nullable=False)],
-    returns=MEDIUMINT(nullable=False),
-)
-
-numpy_mediumint_mult = udf.numpy(
-    _int_mult,
-    name='numpy_mediumint_mult',
-    args=[MEDIUMINT(nullable=False), MEDIUMINT(nullable=False)],
-    returns=MEDIUMINT(nullable=False),
-)
-
-arrow_mediumint_mult = udf.arrow(
-    _arrow_int_mult,
-    name='arrow_mediumint_mult',
-    args=[MEDIUMINT(nullable=False), MEDIUMINT(nullable=False)],
-    returns=MEDIUMINT(nullable=False),
-)
-
-bigint_mult = udf(
-    _int_mult,
-    name='bigint_mult',
+bigint_udf = udf(
     args=[BIGINT(nullable=False), BIGINT(nullable=False)],
     returns=BIGINT(nullable=False),
 )
 
-pandas_bigint_mult = udf.pandas(
-    _int_mult,
-    name='pandas_bigint_mult',
-    args=[BIGINT(nullable=False), BIGINT(nullable=False)],
-    returns=BIGINT(nullable=False),
+
+@bigint_udf
+def bigint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
+    if x is None or y is None:
+        return None
+    return x * y
+
+
+@bigint_udf
+def pandas_bigint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+    return x * y
+
+
+@bigint_udf
+def polars_bigint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+    return x * y
+
+
+@bigint_udf
+def numpy_bigint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    return x * y
+
+
+@bigint_udf
+def arrow_bigint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+    import pyarrow.compute as pc
+    return pc.multiply(x, y)
+
+
+#
+# NULLABLE TINYINT
+#
+
+
+nullable_tinyint_udf = udf(
+    args=[TINYINT(nullable=True), TINYINT(nullable=True)],
+    returns=TINYINT(nullable=True),
 )
 
-polars_bigint_mult = udf.polars(
-    _int_mult,
-    name='polars_bigint_mult',
-    args=[BIGINT(nullable=False), BIGINT(nullable=False)],
-    returns=BIGINT(nullable=False),
+
+@nullable_tinyint_udf
+def nullable_tinyint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
+    if x is None or y is None:
+        return None
+    return x * y
+
+
+@nullable_tinyint_udf
+def pandas_nullable_tinyint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+    return x * y
+
+
+@nullable_tinyint_udf
+def polars_nullable_tinyint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+    return x * y
+
+
+@nullable_tinyint_udf
+def numpy_nullable_tinyint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    return x * y
+
+
+@nullable_tinyint_udf
+def arrow_nullable_tinyint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+    import pyarrow.compute as pc
+    return pc.multiply(x, y)
+
+#
+# NULLABLE SMALLINT
+#
+
+
+nullable_smallint_udf = udf(
+    args=[SMALLINT(nullable=True), SMALLINT(nullable=True)],
+    returns=SMALLINT(nullable=True),
 )
 
-numpy_bigint_mult = udf.numpy(
-    _int_mult,
-    name='numpy_bigint_mult',
-    args=[BIGINT(nullable=False), BIGINT(nullable=False)],
-    returns=BIGINT(nullable=False),
+
+@nullable_smallint_udf
+def nullable_smallint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
+    if x is None or y is None:
+        return None
+    return x * y
+
+
+@nullable_smallint_udf
+def pandas_nullable_smallint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+    return x * y
+
+
+@nullable_smallint_udf
+def polars_nullable_smallint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+    return x * y
+
+
+@nullable_smallint_udf
+def numpy_nullable_smallint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    return x * y
+
+
+@nullable_smallint_udf
+def arrow_nullable_smallint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+    import pyarrow.compute as pc
+    return pc.multiply(x, y)
+
+
+#
+# NULLABLE MEDIUMINT
+#
+
+
+nullable_mediumint_udf = udf(
+    args=[MEDIUMINT(nullable=True), MEDIUMINT(nullable=True)],
+    returns=MEDIUMINT(nullable=True),
 )
 
-arrow_bigint_mult = udf.arrow(
-    _arrow_int_mult,
-    name='arrow_bigint_mult',
-    args=[BIGINT(nullable=False), BIGINT(nullable=False)],
-    returns=BIGINT(nullable=False),
+
+@nullable_mediumint_udf
+def nullable_mediumint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
+    if x is None or y is None:
+        return None
+    return x * y
+
+
+@nullable_mediumint_udf
+def pandas_nullable_mediumint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+    return x * y
+
+
+@nullable_mediumint_udf
+def polars_nullable_mediumint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+    return x * y
+
+
+@nullable_mediumint_udf
+def numpy_nullable_mediumint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    return x * y
+
+
+@nullable_mediumint_udf
+def arrow_nullable_mediumint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+    import pyarrow.compute as pc
+    return pc.multiply(x, y)
+
+
+#
+# NULLABLE BIGINT
+#
+
+
+nullable_bigint_udf = udf(
+    args=[BIGINT(nullable=True), BIGINT(nullable=True)],
+    returns=BIGINT(nullable=True),
 )
 
-nullable_tinyint_mult = udf(
-    _int_mult,
-    name='nullable_tinyint_mult',
-    args=[TINYINT, TINYINT],
-    returns=TINYINT,
-)
 
-pandas_nullable_tinyint_mult = udf.pandas(
-    _int_mult,
-    name='pandas_nullable_tinyint_mult',
-    args=[TINYINT, TINYINT],
-    returns=TINYINT,
-)
+@nullable_bigint_udf
+def nullable_bigint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
+    if x is None or y is None:
+        return None
+    return x * y
 
-pandas_nullable_tinyint_mult_with_masks = udf.pandas(
-    _int_mult_with_masks,
-    name='pandas_nullable_tinyint_mult_with_masks',
-    args=[TINYINT, TINYINT],
-    returns=TINYINT,
-    include_masks=True,
-)
 
-polars_nullable_tinyint_mult = udf.polars(
-    _int_mult,
-    name='polars_nullable_tinyint_mult',
-    args=[TINYINT, TINYINT],
-    returns=TINYINT,
-)
+@nullable_bigint_udf
+def pandas_nullable_bigint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+    return x * y
 
-polars_nullable_tinyint_mult_with_masks = udf.polars(
-    _int_mult_with_masks,
-    name='polars_nullable_tinyint_mult_with_masks',
-    args=[TINYINT, TINYINT],
-    returns=TINYINT,
-    include_masks=True,
-)
 
-numpy_nullable_tinyint_mult = udf.numpy(
-    _int_mult,
-    name='numpy_nullable_tinyint_mult',
-    args=[TINYINT, TINYINT],
-    returns=TINYINT,
-)
+@nullable_bigint_udf
+def polars_nullable_bigint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+    return x * y
 
-numpy_nullable_tinyint_mult_with_masks = udf.numpy(
-    _int_mult_with_masks,
-    name='numpy_nullable_tinyint_mult_with_masks',
-    args=[TINYINT, TINYINT],
-    returns=TINYINT,
-    include_masks=True,
-)
 
-arrow_nullable_tinyint_mult = udf.arrow(
-    _arrow_int_mult,
-    name='arrow_nullable_tinyint_mult',
-    args=[TINYINT, TINYINT],
-    returns=TINYINT,
-)
+@nullable_bigint_udf
+def numpy_nullable_bigint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    return x * y
 
-arrow_nullable_tinyint_mult_with_masks = udf.arrow(
-    _arrow_int_mult_with_masks,
-    name='arrow_nullable_tinyint_mult_with_masks',
-    args=[TINYINT, TINYINT],
-    returns=TINYINT,
-    include_masks=True,
-)
 
-nullable_smallint_mult = udf(
-    _int_mult,
-    name='nullable_smallint_mult',
-    args=[SMALLINT, SMALLINT],
-    returns=SMALLINT,
-)
-
-nullable_mediumint_mult = udf(
-    _int_mult,
-    name='nullable_mediumint_mult',
-    args=[MEDIUMINT, MEDIUMINT],
-    returns=MEDIUMINT,
-)
-
-nullable_bigint_mult = udf(
-    _int_mult,
-    name='nullable_bigint_mult',
-    args=[BIGINT, BIGINT],
-    returns=BIGINT,
-)
-
-numpy_nullable_bigint_mult = udf.numpy(
-    _int_mult,
-    name='numpy_nullable_bigint_mult',
-    args=[BIGINT, BIGINT],
-    returns=BIGINT,
-)
-
-numpy_nullable_bigint_mult_with_masks = udf.numpy(
-    _int_mult_with_masks,
-    name='numpy_nullable_bigint_mult',
-    args=[BIGINT, BIGINT],
-    returns=BIGINT,
-    include_masks=True,
-)
+@nullable_bigint_udf
+def arrow_nullable_bigint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+    import pyarrow.compute as pc
+    return pc.multiply(x, y)
 
 
 @udf
@@ -342,13 +405,15 @@ def string_mult(x: str, times: int) -> str:
     return x * times
 
 
-@udf.pandas
-def pandas_string_mult(x: str, times: int) -> str:
+@udf(args=[TEXT(nullable=False), BIGINT(nullable=False)], returns=TEXT(nullable=False))
+def pandas_string_mult(x: pd.Series, times: pd.Series) -> pd.Series:
     return x * times
 
 
-@udf.numpy
-def numpy_string_mult(x: str, times: int) -> str:
+@udf
+def numpy_string_mult(
+    x: npt.NDArray[np.str_], times: npt.NDArray[np.int_],
+) -> npt.NDArray[np.str_]:
     return x * times
 
 
@@ -373,13 +438,78 @@ def nullable_string_mult(x: Optional[str], times: Optional[int]) -> Optional[str
     return x * times
 
 
-@udf(args=dict(x=VARCHAR(20, nullable=False)))
-def varchar_mult(x: str, times: int) -> str:
-    return x * times
+@udf_with_null_masks(
+    args=[TINYINT(nullable=True), TINYINT(nullable=True)],
+    returns=TINYINT(nullable=True),
+)
+def pandas_nullable_tinyint_mult_with_masks(
+    x: Masked[pd.Series], y: Masked[pd.Series],
+) -> Masked[pd.Series]:
+    x_data, x_nulls = x
+    y_data, y_nulls = y
+    return (x_data * y_data, x_nulls | y_nulls)
 
 
-@udf(args=dict(x=VARCHAR(20, nullable=True)))
-def nullable_varchar_mult(x: Optional[str], times: Optional[int]) -> Optional[str]:
-    if x is None or times is None:
-        return None
-    return x * times
+@udf_with_null_masks
+def numpy_nullable_tinyint_mult_with_masks(
+    x: MaskedNDArray[np.int8], y: MaskedNDArray[np.int8],
+) -> MaskedNDArray[np.int8]:
+    x_data, x_nulls = x
+    y_data, y_nulls = y
+    return (x_data * y_data, x_nulls | y_nulls)
+
+
+@udf_with_null_masks(
+    args=[TINYINT(nullable=True), TINYINT(nullable=True)],
+    returns=TINYINT(nullable=True),
+)
+def polars_nullable_tinyint_mult_with_masks(
+    x: Masked[pl.Series], y: Masked[pl.Series],
+) -> Masked[pl.Series]:
+    x_data, x_nulls = x
+    y_data, y_nulls = y
+    return (x_data * y_data, x_nulls | y_nulls)
+
+
+@udf_with_null_masks(
+    args=[TINYINT(nullable=True), TINYINT(nullable=True)],
+    returns=TINYINT(nullable=True),
+)
+def arrow_nullable_tinyint_mult_with_masks(
+    x: Masked[pa.Array], y: Masked[pa.Array],
+) -> Masked[pa.Array]:
+    import pyarrow.compute as pc
+    x_data, x_nulls = x
+    y_data, y_nulls = y
+    return (pc.multiply(x_data, y_data), pc.or_(x_nulls, y_nulls))
+
+
+@tvf(returns=[TEXT(nullable=False, name='res')])
+def numpy_fixed_strings() -> npt.NDArray[np.str_]:
+    out = np.array(
+        [
+            'hello',
+            'hi there 😜',
+            '😜 bye',
+        ], dtype=np.str_,
+    )
+    assert str(out.dtype) == '<U10'
+    return out
+
+
+@tvf(returns=[BLOB(nullable=False, name='res')])
+def numpy_fixed_binary() -> npt.NDArray[np.bytes_]:
+    out = np.array(
+        [
+            'hello'.encode('utf8'),
+            'hi there 😜'.encode('utf8'),
+            '😜 bye'.encode('utf8'),
+        ], dtype=np.bytes_,
+    )
+    assert str(out.dtype) == '|S13'
+    return out
+
+
+@udf
+def no_args_no_return_value() -> None:
+    pass

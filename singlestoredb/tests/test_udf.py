@@ -28,7 +28,10 @@ E = Optional[List[Optional[Union[float, int]]]]
 
 
 def to_sql(x):
-    out = sig.signature_to_sql(sig.get_signature(x))
+    out = sig.signature_to_sql(
+        sig.get_signature(x),
+        function_type=getattr(x, '_singlestoredb_attrs', {}).get('function_type', 'udf'),
+    )
     out = re.sub(r'^CREATE EXTERNAL FUNCTION ', r'', out)
     out = re.sub(r' AS REMOTE SERVICE.+$', r'', out)
     return out.strip()
@@ -45,7 +48,7 @@ class TestUDF(unittest.TestCase):
 
         # NULL return value
         def foo() -> None: ...
-        assert to_sql(foo) == '`foo`() RETURNS NULL'
+        assert to_sql(foo) == '`foo`() RETURNS TINYINT NULL'
 
         # Simple return value
         def foo() -> int: ...
@@ -101,28 +104,24 @@ class TestUDF(unittest.TestCase):
             to_sql(foo)
 
         # Tuple
-        def foo() -> Tuple[int, float, str]: ...
-        assert to_sql(foo) == '`foo`() RETURNS RECORD(`a` BIGINT NOT NULL, ' \
-            '`b` DOUBLE NOT NULL, ' \
-            '`c` TEXT NOT NULL) NOT NULL'
+        with self.assertRaises(TypeError):
+            def foo() -> Tuple[int, float, str]: ...
+            to_sql(foo)
 
         # Optional tuple
-        def foo() -> Optional[Tuple[int, float, str]]: ...
-        assert to_sql(foo) == '`foo`() RETURNS RECORD(`a` BIGINT NOT NULL, ' \
-            '`b` DOUBLE NOT NULL, ' \
-            '`c` TEXT NOT NULL) NULL'
+        with self.assertRaises(TypeError):
+            def foo() -> Optional[Tuple[int, float, str]]: ...
+            to_sql(foo)
 
         # Optional tuple with optional element
-        def foo() -> Optional[Tuple[int, float, Optional[str]]]: ...
-        assert to_sql(foo) == '`foo`() RETURNS RECORD(`a` BIGINT NOT NULL, ' \
-            '`b` DOUBLE NOT NULL, ' \
-            '`c` TEXT NULL) NULL'
+        with self.assertRaises(TypeError):
+            def foo() -> Optional[Tuple[int, float, Optional[str]]]: ...
+            to_sql(foo)
 
         # Optional tuple with optional union element
-        def foo() -> Optional[Tuple[int, Optional[Union[float, int]], str]]: ...
-        assert to_sql(foo) == '`foo`() RETURNS RECORD(`a` BIGINT NOT NULL, ' \
-            '`b` DOUBLE NULL, ' \
-            '`c` TEXT NOT NULL) NULL'
+        with self.assertRaises(TypeError):
+            def foo() -> Optional[Tuple[int, Optional[Union[float, int]], str]]: ...
+            to_sql(foo)
 
         # Unknown type
         def foo() -> set: ...
@@ -139,44 +138,44 @@ class TestUDF(unittest.TestCase):
 
         # Simple parameter
         def foo(x: int) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) RETURNS TINYINT NULL'
 
         # Optional parameter
         def foo(x: Optional[int]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` BIGINT NULL) RETURNS TINYINT NULL'
 
         # Optional parameter
         def foo(x: Union[int, None]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` BIGINT NULL) RETURNS TINYINT NULL'
 
         # Optional multiple parameter types
         def foo(x: Union[int, float, None]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` DOUBLE NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` DOUBLE NULL) RETURNS TINYINT NULL'
 
         # Optional parameter with custom type
         def foo(x: Optional[B]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` DOUBLE NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` DOUBLE NULL) RETURNS TINYINT NULL'
 
         # Optional parameter with nested custom type
         def foo(x: Optional[C]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` DOUBLE NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` DOUBLE NULL) RETURNS TINYINT NULL'
 
         # Optional parameter with collection type
         def foo(x: Optional[List[str]]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` ARRAY(TEXT NOT NULL) NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` ARRAY(TEXT NOT NULL) NULL) RETURNS TINYINT NULL'
 
         # Optional parameter with nested collection type
         def foo(x: Optional[List[List[str]]]) -> None: ...
         assert to_sql(foo) == '`foo`(`x` ARRAY(ARRAY(TEXT NOT NULL) NOT NULL) NULL) ' \
-            'RETURNS NULL'
+            'RETURNS TINYINT NULL'
 
         # Optional parameter with collection type with nulls
         def foo(x: Optional[List[Optional[str]]]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` ARRAY(TEXT NULL) NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` ARRAY(TEXT NULL) NULL) RETURNS TINYINT NULL'
 
         # Custom type with bound
         def foo(x: D) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` TEXT NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` TEXT NOT NULL) RETURNS TINYINT NULL'
 
         # Incompatible types
         def foo(x: Union[int, str]) -> None: ...
@@ -184,22 +183,21 @@ class TestUDF(unittest.TestCase):
             to_sql(foo)
 
         # Tuple
-        def foo(x: Tuple[int, float, str]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` RECORD(`a` BIGINT NOT NULL, ' \
-            '`b` DOUBLE NOT NULL, ' \
-            '`c` TEXT NOT NULL) NOT NULL) RETURNS NULL'
+        with self.assertRaises(TypeError):
+            def foo(x: Tuple[int, float, str]) -> None: ...
+            to_sql(foo)
 
         # Optional tuple with optional element
-        def foo(x: Optional[Tuple[int, float, Optional[str]]]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` RECORD(`a` BIGINT NOT NULL, ' \
-            '`b` DOUBLE NOT NULL, ' \
-            '`c` TEXT NULL) NULL) RETURNS NULL'
+        with self.assertRaises(TypeError):
+            def foo(x: Optional[Tuple[int, float, Optional[str]]]) -> None: ...
+            to_sql(foo)
 
         # Optional tuple with optional union element
-        def foo(x: Optional[Tuple[int, Optional[Union[float, int]], str]]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` RECORD(`a` BIGINT NOT NULL, ' \
-            '`b` DOUBLE NULL, ' \
-            '`c` TEXT NOT NULL) NULL) RETURNS NULL'
+        with self.assertRaises(TypeError):
+            def foo(
+                x: Optional[Tuple[int, Optional[Union[float, int]], str]],
+            ) -> None: ...
+            to_sql(foo)
 
         # Unknown type
         def foo(x: set) -> None: ...
@@ -211,15 +209,15 @@ class TestUDF(unittest.TestCase):
 
         # Datetime
         def foo(x: datetime.datetime) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` DATETIME NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` DATETIME NOT NULL) RETURNS TINYINT NULL'
 
         # Date
         def foo(x: datetime.date) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` DATE NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` DATE NOT NULL) RETURNS TINYINT NULL'
 
         # Time
         def foo(x: datetime.timedelta) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` TIME NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` TIME NOT NULL) RETURNS TINYINT NULL'
 
         # Datetime + Date
         def foo(x: Union[datetime.datetime, datetime.date]) -> None: ...
@@ -231,75 +229,76 @@ class TestUDF(unittest.TestCase):
         # Ints
         #
         def foo(x: int) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) RETURNS TINYINT NULL'
 
         def foo(x: np.int8) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` TINYINT NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` TINYINT NOT NULL) RETURNS TINYINT NULL'
 
         def foo(x: np.int16) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` SMALLINT NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` SMALLINT NOT NULL) RETURNS TINYINT NULL'
 
         def foo(x: np.int32) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` INT NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` INT NOT NULL) RETURNS TINYINT NULL'
 
         def foo(x: np.int64) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) RETURNS TINYINT NULL'
 
         #
         # Unsigned ints
         #
         def foo(x: np.uint8) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` TINYINT UNSIGNED NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` TINYINT UNSIGNED NOT NULL) RETURNS TINYINT NULL'
 
         def foo(x: np.uint16) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` SMALLINT UNSIGNED NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` SMALLINT UNSIGNED NOT NULL) RETURNS TINYINT NULL'
 
         def foo(x: np.uint32) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` INT UNSIGNED NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` INT UNSIGNED NOT NULL) RETURNS TINYINT NULL'
 
         def foo(x: np.uint64) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT UNSIGNED NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` BIGINT UNSIGNED NOT NULL) RETURNS TINYINT NULL'
 
         #
         # Floats
         #
         def foo(x: float) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` DOUBLE NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` DOUBLE NOT NULL) RETURNS TINYINT NULL'
 
         def foo(x: np.float32) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` FLOAT NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` FLOAT NOT NULL) RETURNS TINYINT NULL'
 
         def foo(x: np.float64) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` DOUBLE NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` DOUBLE NOT NULL) RETURNS TINYINT NULL'
 
         #
         # Type collapsing
         #
         def foo(x: Union[np.int8, np.int16]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` SMALLINT NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` SMALLINT NOT NULL) RETURNS TINYINT NULL'
 
         def foo(x: Union[np.int64, np.double]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` DOUBLE NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` DOUBLE NOT NULL) RETURNS TINYINT NULL'
 
         def foo(x: Union[int, float]) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` DOUBLE NOT NULL) RETURNS NULL'
+        assert to_sql(foo) == '`foo`(`x` DOUBLE NOT NULL) RETURNS TINYINT NULL'
 
     def test_positional_and_keyword_parameters(self):
         # Keyword only
         def foo(x: int = 100) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL DEFAULT 100) RETURNS NULL'
+        assert to_sql(foo) == \
+            '`foo`(`x` BIGINT NOT NULL DEFAULT 100) RETURNS TINYINT NULL'
 
         # Multiple keywords
         def foo(x: int = 100, y: float = 3.14) -> None: ...
         assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL DEFAULT 100, ' \
-            '`y` DOUBLE NOT NULL DEFAULT 3.14e0) RETURNS NULL'
+            '`y` DOUBLE NOT NULL DEFAULT 3.14e0) RETURNS TINYINT NULL'
 
         # Keywords and positional
         def foo(a: str, b: str, x: int = 100, y: float = 3.14) -> None: ...
         assert to_sql(foo) == '`foo`(`a` TEXT NOT NULL, ' \
             '`b` TEXT NOT NULL, ' \
             '`x` BIGINT NOT NULL DEFAULT 100, ' \
-            '`y` DOUBLE NOT NULL DEFAULT 3.14e0) RETURNS NULL'
+            '`y` DOUBLE NOT NULL DEFAULT 3.14e0) RETURNS TINYINT NULL'
 
         # Variable positional
         def foo(*args: int) -> None: ...
@@ -336,9 +335,8 @@ class TestUDF(unittest.TestCase):
         # Override multiple params with one type
         @udf(args=dt.SMALLINT(nullable=False))
         def foo(x: int, y: float, z: np.int8) -> int: ...
-        assert to_sql(foo) == '`foo`(`x` SMALLINT NOT NULL, ' \
-            '`y` SMALLINT NOT NULL, ' \
-            '`z` SMALLINT NOT NULL) RETURNS BIGINT NOT NULL'
+        with self.assertRaises(ValueError):
+            to_sql(foo)
 
         # Override with list
         @udf(args=[dt.SMALLINT, dt.FLOAT, dt.CHAR(30)])
@@ -350,13 +348,13 @@ class TestUDF(unittest.TestCase):
         # Override with too short of a list
         @udf(args=[dt.SMALLINT, dt.FLOAT])
         def foo(x: int, y: float, z: str) -> int: ...
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             to_sql(foo)
 
         # Override with too long of a list
         @udf(args=[dt.SMALLINT, dt.FLOAT, dt.CHAR(30), dt.TEXT])
         def foo(x: int, y: float, z: str) -> int: ...
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             to_sql(foo)
 
         # Override with list
@@ -367,32 +365,10 @@ class TestUDF(unittest.TestCase):
             '`z` CHAR(30) NULL) RETURNS BIGINT NOT NULL'
 
         # Override with dict
-        @udf(args=dict(x=dt.SMALLINT, z=dt.CHAR(30)))
-        def foo(x: int, y: float, z: str) -> int: ...
-        assert to_sql(foo) == '`foo`(`x` SMALLINT NULL, ' \
-            '`y` DOUBLE NOT NULL, ' \
-            '`z` CHAR(30) NULL) RETURNS BIGINT NOT NULL'
-
-        # Override with empty dict
-        @udf(args=dict())
-        def foo(x: int, y: float, z: str) -> int: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL, ' \
-            '`y` DOUBLE NOT NULL, ' \
-            '`z` TEXT NOT NULL) RETURNS BIGINT NOT NULL'
-
-        # Override with dict with extra keys
-        @udf(args=dict(bar=dt.INT))
-        def foo(x: int, y: float, z: str) -> int: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL, ' \
-            '`y` DOUBLE NOT NULL, ' \
-            '`z` TEXT NOT NULL) RETURNS BIGINT NOT NULL'
-
-        # Override parameters and return value
-        @udf(args=dict(x=dt.SMALLINT, z=dt.CHAR(30)), returns=dt.SMALLINT(nullable=False))
-        def foo(x: int, y: float, z: str) -> int: ...
-        assert to_sql(foo) == '`foo`(`x` SMALLINT NULL, ' \
-            '`y` DOUBLE NOT NULL, ' \
-            '`z` CHAR(30) NULL) RETURNS SMALLINT NOT NULL'
+        with self.assertRaises(TypeError):
+            @udf(args=dict(x=dt.SMALLINT, z=dt.CHAR(30)))
+            def foo(x: int, y: float, z: str) -> int: ...
+            assert to_sql(foo)
 
         # Change function name
         @udf(name='hello_world')
@@ -411,26 +387,19 @@ class TestUDF(unittest.TestCase):
             two: str
             three: float
 
-        @udf
-        def foo(x: int) -> MyData: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
-            'RETURNS RECORD(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
-            '`three` DOUBLE NOT NULL) NOT NULL'
-
-        @udf(returns=MyData)
-        def foo(x: int) -> Tuple[int, int, int]: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
-            'RETURNS RECORD(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
-            '`three` DOUBLE NOT NULL) NOT NULL'
+        with self.assertRaises(TypeError):
+            @udf
+            def foo(x: int) -> MyData: ...
+            to_sql(foo)
 
         @tvf
-        def foo(x: int) -> MyData: ...
+        def foo(x: int) -> List[MyData]: ...
         assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
             'RETURNS TABLE(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
             '`three` DOUBLE NOT NULL)'
 
         @tvf(returns=MyData)
-        def foo(x: int) -> Tuple[int, int, int]: ...
+        def foo(x: int) -> List[Tuple[int, int, int]]: ...
         assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
             'RETURNS TABLE(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
             '`three` DOUBLE NOT NULL)'
@@ -440,26 +409,14 @@ class TestUDF(unittest.TestCase):
             two: str
             three: float
 
-        @udf
-        def foo(x: int) -> MyData: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
-            'RETURNS RECORD(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
-            '`three` DOUBLE NOT NULL) NOT NULL'
-
-        @udf(returns=MyData)
-        def foo(x: int) -> Tuple[int, int, int]: ...
-        assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
-            'RETURNS RECORD(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
-            '`three` DOUBLE NOT NULL) NOT NULL'
-
         @tvf
-        def foo(x: int) -> MyData: ...
+        def foo(x: int) -> List[MyData]: ...
         assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
             'RETURNS TABLE(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
             '`three` DOUBLE NOT NULL)'
 
         @tvf(returns=MyData)
-        def foo(x: int) -> Tuple[int, int, int]: ...
+        def foo(x: int) -> List[Tuple[int, int, int]]: ...
         assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
             'RETURNS TABLE(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
             '`three` DOUBLE NOT NULL)'
@@ -737,3 +694,19 @@ class TestUDF(unittest.TestCase):
 
         assert dt.ARRAY(dt.INT) == 'ARRAY(INT NULL) NULL'
         assert dt.ARRAY(dt.INT, nullable=False) == 'ARRAY(INT NULL) NOT NULL'
+
+        # assert dt.VECTOR(8) == 'VECTOR(8, F32) NULL'
+        # assert dt.VECTOR(8, dt.F32) == 'VECTOR(8, F32) NULL'
+        # assert dt.VECTOR(8, dt.F64) == 'VECTOR(8, F64) NULL'
+        # assert dt.VECTOR(8, dt.I8) == 'VECTOR(8, I8) NULL'
+        # assert dt.VECTOR(8, dt.I16) == 'VECTOR(8, I16) NULL'
+        # assert dt.VECTOR(8, dt.I32) == 'VECTOR(8, I32) NULL'
+        # assert dt.VECTOR(8, dt.I64) == 'VECTOR(8, I64) NULL'
+
+        # assert dt.VECTOR(8, nullable=False) == 'VECTOR(8, F32) NOT NULL'
+        # assert dt.VECTOR(8, dt.F32, nullable=False) == 'VECTOR(8, F32) NOT NULL'
+        # assert dt.VECTOR(8, dt.F64, nullable=False) == 'VECTOR(8, F64) NOT NULL'
+        # assert dt.VECTOR(8, dt.I8, nullable=False) == 'VECTOR(8, I8) NOT NULL'
+        # assert dt.VECTOR(8, dt.I16, nullable=False) == 'VECTOR(8, I16) NOT NULL'
+        # assert dt.VECTOR(8, dt.I32, nullable=False) == 'VECTOR(8, I32) NOT NULL'
+        # assert dt.VECTOR(8, dt.I64, nullable=False) == 'VECTOR(8, I64) NOT NULL'

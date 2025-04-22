@@ -149,7 +149,9 @@ def as_tuple(x: Any) -> Any:
         return tuple(x.model_dump().values())
     if dataclasses.is_dataclass(x):
         return dataclasses.astuple(x)
-    return x
+    if isinstance(x, dict):
+        return tuple(x.values())
+    return tuple(x)
 
 
 def as_list_of_tuples(x: Any) -> Any:
@@ -159,7 +161,48 @@ def as_list_of_tuples(x: Any) -> Any:
             return [tuple(y.model_dump().values()) for y in x]
         if dataclasses.is_dataclass(x[0]):
             return [dataclasses.astuple(y) for y in x]
+        if isinstance(x[0], dict):
+            return [tuple(y.values()) for y in x]
     return x
+
+
+def get_dataframe_columns(df: Any) -> List[Any]:
+    """Return columns of data from a dataframe/table."""
+    rtype = str(type(df)).lower()
+    if 'dataframe' in rtype:
+        return [df[x] for x in df.columns]
+    elif 'table' in rtype:
+        return df.columns
+    elif 'series' in rtype:
+        return [df]
+    elif 'array' in rtype:
+        return [df]
+    elif 'tuple' in rtype:
+        return list(df)
+    raise TypeError(
+        'Unsupported data type for dataframe columns: '
+        f'{rtype}',
+    )
+
+
+def get_array_class(data_format: str) -> Callable[..., Any]:
+    """
+    Get the array class for the current data format.
+
+    """
+    if data_format == 'polars':
+        import polars as pl
+        array_cls = pl.Series
+    elif data_format == 'arrow':
+        import pyarrow as pa
+        array_cls = pa.array
+    elif data_format == 'pandas':
+        import pandas as pd
+        array_cls = pd.Series
+    else:
+        import numpy as np
+        array_cls = np.array
+    return array_cls
 
 
 def make_func(
@@ -182,99 +225,96 @@ def make_func(
 
     """
     attrs = getattr(func, '_singlestoredb_attrs', {})
-    data_format = attrs.get('data_format') or 'python'
-    include_masks = attrs.get('include_masks', False)
+    with_null_masks = attrs.get('with_null_masks', False)
     function_type = attrs.get('function_type', 'udf').lower()
     info: Dict[str, Any] = {}
 
+    sig = get_signature(func, func_name=name)
+
+    args_data_format = sig.get('args_data_format', 'scalar')
+    returns_data_format = sig.get('returns_data_format', 'scalar')
+
     if function_type == 'tvf':
-        if data_format == 'python':
+        # Scalar (Python) types
+        if returns_data_format == 'scalar':
             async def do_func(
                 row_ids: Sequence[int],
                 rows: Sequence[Sequence[Any]],
-            ) -> Tuple[
-                Sequence[int],
-                List[Tuple[Any]],
-            ]:
+            ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
                 '''Call function on given rows of data.'''
                 out_ids: List[int] = []
                 out = []
+                # Call function on each row of data
                 for i, res in zip(row_ids, func_map(func, rows)):
                     out.extend(as_list_of_tuples(res))
                     out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
                 return out_ids, out
 
+        # Vector formats
         else:
-            # Vector formats use the same function wrapper
+            array_cls = get_array_class(returns_data_format)
+
             async def do_func(  # type: ignore
                 row_ids: Sequence[int],
                 cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
             ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
                 '''Call function on given cols of data.'''
-                if include_masks:
-                    out = func(*cols)
-                    assert isinstance(out, tuple)
-                    return row_ids, [out]
-
-                out = []
-                res = func(*[x[0] for x in cols])
-                rtype = str(type(res)).lower()
-
-                # Map tables / dataframes to a list of columns
-                if 'dataframe' in rtype:
-                    res = [res[x] for x in res.columns]
-                elif 'table' in rtype:
-                    res = res.columns
-
-                for vec in res:
-                    # C extension only supports Python objects as strings
-                    if data_format == 'numpy' and str(vec.dtype)[:2] in ['<U', '<S']:
-                        vec = vec.astype(object)
-                    out.append((vec, None))
-
                 # NOTE: There is no way to determine which row ID belongs to
                 #        each result row, so we just have to use the same
                 #        row ID for all rows in the result.
-                if data_format == 'polars':
-                    import polars as pl
-                    array_cls = pl.Series
-                elif data_format == 'arrow':
-                    import pyarrow as pa
-                    array_cls = pa.array
-                elif data_format == 'pandas':
-                    import pandas as pd
-                    array_cls = pd.Series
-                else:
-                    import numpy as np
-                    array_cls = np.array
 
-                return array_cls([row_ids[0]] * len(out[0][0])), out
+                # If `with_null_masks` is set, the function is expected to return
+                # a tuple of (data, mask) for each column.
+                if with_null_masks:
+                    out = func(*cols)
+                    assert isinstance(out, tuple)
+                    row_ids = array_cls([row_ids[0]] * len(out[0][0]))
+                    return row_ids, [out]
+
+                # Call function on each column of data
+                if cols and cols[0]:
+                    res = get_dataframe_columns(func(*[x[0] for x in cols]))
+                else:
+                    res = get_dataframe_columns(func())
+
+                # Generate row IDs
+                row_ids = array_cls([row_ids[0]] * len(res[0]))
+
+                return row_ids, [(x, None) for x in res]
 
     else:
-        if data_format == 'python':
+        # Scalar (Python) types
+        if returns_data_format == 'scalar':
             async def do_func(
                 row_ids: Sequence[int],
                 rows: Sequence[Sequence[Any]],
-            ) -> Tuple[
-                Sequence[int],
-                List[Tuple[Any]],
-            ]:
+            ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
                 '''Call function on given rows of data.'''
                 return row_ids, [as_tuple(x) for x in zip(func_map(func, rows))]
 
+        # Vector formats
         else:
-            # Vector formats use the same function wrapper
+            array_cls = get_array_class(returns_data_format)
+
             async def do_func(  # type: ignore
                 row_ids: Sequence[int],
                 cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
             ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
                 '''Call function on given cols of data.'''
-                if include_masks:
+                row_ids = array_cls(row_ids)
+
+                # If `with_null_masks` is set, the function is expected to return
+                # a tuple of (data, mask) for each column.`
+                if with_null_masks:
                     out = func(*cols)
                     assert isinstance(out, tuple)
                     return row_ids, [out]
 
-                out = func(*[x[0] for x in cols])
+                # Call the function with `cols` as the function parameters
+                if cols and cols[0]:
+                    out = func(*[x[0] for x in cols])
+                else:
+                    out = func()
 
                 # Multiple return values
                 if isinstance(out, tuple):
@@ -286,13 +326,12 @@ def make_func(
     do_func.__name__ = name
     do_func.__doc__ = func.__doc__
 
-    sig = get_signature(func, name=name)
-
     # Store signature for generating CREATE FUNCTION calls
     info['signature'] = sig
 
     # Set data format
-    info['data_format'] = data_format
+    info['args_data_format'] = args_data_format
+    info['returns_data_format'] = returns_data_format
 
     # Set function type
     info['function_type'] = function_type
@@ -306,20 +345,13 @@ def make_func(
         colspec.append((x['name'], rowdat_1_type_map[dtype]))
     info['colspec'] = colspec
 
-    def parse_return_type(s: str) -> List[str]:
-        if s.startswith('tuple['):
-            return s[6:-1].split(',')
-        if s.startswith('array[tuple['):
-            return s[12:-2].split(',')
-        return [s]
-
     # Setup return type
     returns = []
-    for x in parse_return_type(sig['returns']['dtype']):
-        dtype = x.replace('?', '')
+    for x in sig['returns']:
+        dtype = x['dtype'].replace('?', '')
         if dtype not in rowdat_1_type_map:
             raise TypeError(f'no data type mapping for {dtype}')
-        returns.append(rowdat_1_type_map[dtype])
+        returns.append((x['name'], rowdat_1_type_map[dtype]))
     info['returns'] = returns
 
     return do_func, info
@@ -371,6 +403,13 @@ class Application(object):
         headers=[(b'content-type', b'text/plain')],
     )
 
+    # Error response start
+    error_response_dict: Dict[str, Any] = dict(
+        type='http.response.start',
+        status=401,
+        headers=[(b'content-type', b'text/plain')],
+    )
+
     # JSON response start
     json_response_dict: Dict[str, Any] = dict(
         type='http.response.start',
@@ -405,9 +444,14 @@ class Application(object):
 
     # Data format + version handlers
     handlers = {
-        (b'application/octet-stream', b'1.0', 'python'): dict(
+        (b'application/octet-stream', b'1.0', 'scalar'): dict(
             load=rowdat_1.load,
             dump=rowdat_1.dump,
+            response=rowdat_1_response_dict,
+        ),
+        (b'application/octet-stream', b'1.0', 'list'): dict(
+            load=rowdat_1.load_list,
+            dump=rowdat_1.dump_list,
             response=rowdat_1_response_dict,
         ),
         (b'application/octet-stream', b'1.0', 'pandas'): dict(
@@ -430,9 +474,14 @@ class Application(object):
             dump=rowdat_1.dump_arrow,
             response=rowdat_1_response_dict,
         ),
-        (b'application/json', b'1.0', 'python'): dict(
+        (b'application/json', b'1.0', 'scalar'): dict(
             load=jdata.load,
             dump=jdata.dump,
+            response=json_response_dict,
+        ),
+        (b'application/json', b'1.0', 'list'): dict(
+            load=jdata.load_list,
+            dump=jdata.dump_list,
             response=json_response_dict,
         ),
         (b'application/json', b'1.0', 'pandas'): dict(
@@ -455,7 +504,7 @@ class Application(object):
             dump=jdata.dump_arrow,
             response=json_response_dict,
         ),
-        (b'application/vnd.apache.arrow.file', b'1.0', 'python'): dict(
+        (b'application/vnd.apache.arrow.file', b'1.0', 'scalar'): dict(
             load=arrow.load,
             dump=arrow.dump,
             response=arrow_response_dict,
@@ -602,6 +651,7 @@ class Application(object):
                 alias = funcs.__name__
                 alias = f'{name_prefix}{alias}{name_suffix}'
                 external_functions[funcs.__name__] = funcs
+                alias = f'{name_prefix}{alias}{name_suffix}'
                 func, info = make_func(alias, funcs)
                 endpoints[alias.encode('utf-8')] = func, info
 
@@ -655,7 +705,8 @@ class Application(object):
         
         # Call the endpoint
         if method == 'POST' and func is not None and path == self.invoke_path:
-            data_format = func_info['data_format']
+            args_data_format = func_info['args_data_format']
+            returns_data_format = func_info['returns_data_format']
             data = []
             more_body = True
             while more_body:
@@ -664,17 +715,24 @@ class Application(object):
                 more_body = request.get('more_body', False)
 
             data_version = headers.get(b's2-ef-version', b'')
-            input_handler = self.handlers[(content_type, data_version, data_format)]
-            output_handler = self.handlers[(accepts, data_version, data_format)]
+            input_handler = self.handlers[(content_type, data_version, args_data_format)]
+            output_handler = self.handlers[(accepts, data_version, returns_data_format)]
 
-            out = await func(
-                *input_handler['load'](  # type: ignore
-                    func_info['colspec'], b''.join(data),
-                ),
-            )
-            body = output_handler['dump'](func_info['returns'], *out)  # type: ignore
+            try:
+                out = await func(
+                    *input_handler['load'](  # type: ignore
+                        func_info['colspec'], b''.join(data),
+                    ),
+                )
+                body = output_handler['dump'](
+                    [x[1] for x in func_info['returns']], *out,  # type: ignore
+                )
+                await send(output_handler['response'])
 
-            await send(output_handler['response'])
+            except Exception as e:
+                logging.exception('Error in function call')
+                body = f'[{type(e).__name__}] {str(e).strip()}'.encode('utf-8')
+                await send(self.error_response_dict)
 
         # Handle api reflection
         elif method == 'GET' and path == self.show_create_function_path:
@@ -689,6 +747,7 @@ class Application(object):
                             endpoint_info['signature'],
                             url=self.url or reflected_url,
                             data_format=self.data_format,
+                            function_type=endpoint_info['function_type'],
                         ),
                     )
             body = '\n'.join(syntax).encode('utf-8')
@@ -696,7 +755,7 @@ class Application(object):
             await send(self.text_response_dict)
 
         # Return function info
-        elif method == 'GET' and (path == "" or path == ()):
+        elif method == 'GET' and (path == self.show_function_info_path or not path):
             functions = self.get_function_info()
             body = json.dumps(dict(functions=functions)).encode('utf-8')
             await send(self.text_response_dict)
@@ -738,8 +797,8 @@ class Application(object):
         """Locate all current functions and links belonging to this app."""
         funcs, links = set(), set()
         cur.execute('SHOW FUNCTIONS')
-        print("List Cur", list(cur))
-        for name, ftype, _, _, _, link in list(cur):
+        for row in list(cur):
+            name, ftype, link = row[0], row[1], row[-1]
             # Only look at external functions
             if 'external' not in ftype.lower():
                 continue
@@ -759,14 +818,12 @@ class Application(object):
     ) -> Dict[str, Any]:
         """
         Return the functions and function signature information.
-
         Returns
         -------
         Dict[str, Any]
-
         """
-        returns: Dict[str, Any] = {}
         functions = {}
+        no_default = object()
 
         for key, (_, info) in self.endpoints.items():
             if not func_name or key == func_name:
@@ -784,35 +841,30 @@ class Application(object):
                             nullable=nullable,
                         ),
                     )
+                    if a.get('default', no_default) is not no_default:
+                        args[-1]['default'] = a['default']
 
-                # Record / table return types
-                if sig['returns']['dtype'].startswith('tuple['):
-                    fields = []
-                    dtypes = sig['returns']['dtype'][6:-1].split(',')
-                    field_names = sig['returns']['field_names']
-                    for i, dtype in enumerate(dtypes):
-                        nullable = '?' in dtype
-                        dtype = dtype.replace('?', '')
-                        fields.append(
-                            dict(
-                                name=field_names[i],
-                                dtype=dtype,
-                                nullable=nullable,
-                            ),
-                        )
-                    returns = dict(
-                        dtype='table' if info['function_type'] == 'tvf' else 'struct',
-                        fields=fields,
+                # Return values
+                ret = sig.get('returns', [])
+                returns = []
+
+                for a in ret:
+                    dtype = a['dtype']
+                    nullable = '?' in dtype
+                    returns.append(
+                        dict(
+                            dtype=dtype.replace('?', ''),
+                            nullable=nullable,
+                        ),
                     )
+                    if a.get('name', None):
+                        returns[-1]['name'] = a['name']
+                    if a.get('default', no_default) is not no_default:
+                        returns[-1]['default'] = a['default']
 
-                # Atomic return types
-                else:
-                    returns = dict(
-                        dtype=sig['returns'].get('dtype').replace('?', ''),
-                        nullable='?' in sig['returns'].get('dtype', ''),
-                    )
-
-                functions[sig['name']] = dict(args=args, returns=returns)
+                functions[sig['name']] = dict(
+                    args=args, returns=returns, function_type=info['function_type'],
+                )
 
         return functions
 
@@ -852,6 +904,7 @@ class Application(object):
                     app_mode=self.app_mode,
                     replace=replace,
                     link=link or None,
+                    function_type=endpoint_info['function_type'],
                 ),
             )
 
@@ -885,7 +938,6 @@ class Application(object):
                     for link in links:
                         cur.execute(f'DROP LINK {link}')
                 for func in self.get_create_functions(replace=replace):
-                    print("FUNC: ", func)
                     cur.execute(func)
 
     def drop_functions(
@@ -1311,6 +1363,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         or defaults.get('replace_existing') \
         or get_option('external_function.replace_existing')
 
+    # Substitute in host / port if specified
+    if args.host != defaults.get('host') or args.port != defaults.get('port'):
+        u = urllib.parse.urlparse(args.url)
+        args.url = u._replace(netloc=f'{args.host}:{args.port}').geturl()
+
     # Create application from functions / module
     app = Application(
         functions=args.functions,
@@ -1320,7 +1377,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         link_name=args.link_name or None,
         link_config=json.loads(args.link_config) or None,
         link_credentials=json.loads(args.link_credentials) or None,
-        app_mode='managed',
+        app_mode='remote',
         name_prefix=args.name_prefix,
         name_suffix=args.name_suffix,
     )
@@ -1345,6 +1402,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 host=args.host or None,
                 port=args.port or None,
                 log_level=args.log_level,
+                lifespan='off',
             ).items() if v is not None
         }
 
