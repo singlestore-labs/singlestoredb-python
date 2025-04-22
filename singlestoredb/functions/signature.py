@@ -639,7 +639,7 @@ def get_namedtuple_schema(
 
 
 def get_table_schema(
-    obj: Table[Any],
+    obj: Any,
     include_default: bool = False,
 ) -> List[Union[Tuple[Any, str], Tuple[Any, str, Any]]]:
     """

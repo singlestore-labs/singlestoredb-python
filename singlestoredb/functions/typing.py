@@ -37,5 +37,5 @@ Ts = TypeVarTuple('Ts')
 class Table(Tuple[Unpack[Ts]]):
     """Return type for a table valued function."""
 
-    def __new__(cls, *args: Unpack[Ts]) -> 'Table[Tuple[Unpack[Ts]]]':
+    def __new__(cls, *args: Unpack[Ts]) -> 'Table[Tuple[Unpack[Ts]]]':  # type: ignore
         return tuple.__new__(cls, args)  # type: ignore

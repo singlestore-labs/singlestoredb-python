@@ -30,7 +30,7 @@ JSONList = List[JSON]
 T = TypeVar('T')
 
 if sys.version_info < (3, 10):
-    PathLike = Union[str, os.PathLike]
+    PathLike = Union[str, os.PathLike]  # type: ignore
     PathLikeABC = os.PathLike
 else:
     PathLike = Union[str, os.PathLike[str]]
