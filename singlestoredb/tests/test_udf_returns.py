@@ -1,4 +1,4 @@
-# type ignore[type-arg]
+# mypy: disable-error-code="type-arg"
 # from __future__ import annotations
 import unittest
 from typing import Any
