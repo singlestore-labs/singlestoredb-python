@@ -1089,7 +1089,7 @@ def get_signature(
     Dict[str, Any]
 
     '''
-    signature = inspect.signature(func, eval_str=True)
+    signature = inspect.signature(func)
     args: List[Dict[str, Any]] = []
     returns: List[Dict[str, Any]] = []
 
@@ -1105,6 +1105,8 @@ def get_signature(
             raise TypeError('variable positional arguments are not supported')
         elif p.kind == inspect.Parameter.VAR_KEYWORD:
             raise TypeError('variable keyword arguments are not supported')
+
+    # TODO: Use typing.get_type_hints() for parameters / return values?
 
     # Generate the parameter type and the corresponding SQL code for that parameter
     args_schema = []

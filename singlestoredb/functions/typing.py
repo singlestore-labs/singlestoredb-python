@@ -4,8 +4,8 @@ from typing import Tuple
 from typing import TypeVar
 
 try:
-    from typing import TypeVarTuple
-    from typing import Unpack
+    from typing import TypeVarTuple  # type: ignore
+    from typing import Unpack  # type: ignore
 except ImportError:
     # Python 3.8 and earlier do not have TypeVarTuple
     from typing_extensions import TypeVarTuple  # type: ignore
@@ -37,5 +37,5 @@ Ts = TypeVarTuple('Ts')
 class Table(Tuple[Unpack[Ts]]):
     """Return type for a table valued function."""
 
-    def __new__(cls, *args: Unpack[Ts]) -> 'Table[Unpack[Ts]]':
+    def __new__(cls, *args: Unpack[Ts]) -> 'Table[Tuple[Unpack[Ts]]]':
         return tuple.__new__(cls, args)  # type: ignore
