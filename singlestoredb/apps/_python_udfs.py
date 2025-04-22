@@ -39,8 +39,7 @@ async def run_udf_app(
         # Kill if any other process is occupying the port
         kill_process_by_port(app_config.listen_port)
 
-    app = Application(url=app_config.base_url)
-    app.root_path = app_config.base_path
+    app = Application(url=app_config.base_url) 
 
     config = uvicorn.Config(
         app,
@@ -50,12 +49,12 @@ async def run_udf_app(
     )
     _running_server = AwaitableUvicornServer(config)
 
+    # Register the functions
     app.register_functions(replace=replace_existing)
 
     asyncio.create_task(_running_server.serve())
     await _running_server.wait_for_startup()
 
     connection_info = PythonUdfConnectionInfo(app_config.base_url, app.get_function_info())
-
 
     return connection_info

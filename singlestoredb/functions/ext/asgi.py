@@ -649,7 +649,6 @@ class Application(object):
 
             else:
                 alias = funcs.__name__
-                alias = f'{name_prefix}{alias}{name_suffix}'
                 external_functions[funcs.__name__] = funcs
                 alias = f'{name_prefix}{alias}{name_suffix}'
                 func, info = make_func(alias, funcs)
@@ -702,7 +701,7 @@ class Application(object):
         func_info: Dict[str, Any] = {}
         if func_endpoint is not None:
             func, func_info = func_endpoint
-        
+
         # Call the endpoint
         if method == 'POST' and func is not None and path == self.invoke_path:
             args_data_format = func_info['args_data_format']

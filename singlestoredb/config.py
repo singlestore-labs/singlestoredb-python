@@ -310,7 +310,7 @@ register_option(
 register_option(
     'external_function.url', 'string', check_str, 'http://localhost:8000/invoke',
     'Specifies the URL of the external function application.',
-    environ=['SINGLESTOREDB_APP_BASE_URL'],
+    environ=['SINGLESTOREDB_EXT_FUNC_URL' ],
 )
 
 register_option(

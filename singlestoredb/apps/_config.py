@@ -70,7 +70,6 @@ class AppConfig:
 class PythonUdfAppConfig:
     listen_port: int
     base_url: str
-    base_path: str
     running_interactively: bool
     is_gateway_enabled: bool
 
@@ -88,7 +87,6 @@ class PythonUdfAppConfig:
     def from_env(cls) -> 'AppConfig':
         port = cls._read_variable('SINGLESTOREDB_APP_LISTEN_PORT')
         base_url = cls._read_variable('SINGLESTOREDB_APP_BASE_URL')
-        base_path = cls._read_variable('SINGLESTOREDB_APP_BASE_PATH')
 
         workload_type = os.environ.get('SINGLESTOREDB_WORKLOAD_TYPE')
         running_interactively = workload_type == 'InteractiveNotebook'
@@ -97,8 +95,7 @@ class PythonUdfAppConfig:
 
         if running_interactively:
             if is_gateway_enabled:
-                base_url = cls._read_variable('SINGLESTOREDB_PYTHON_UDF_BASE_URL')
-                base_path = cls._read_variable('SINGLESTOREDB_PYTHON_UDF_BASE_PATH')
+                base_url = cls._read_variable('SINGLESTOREDB_NOVA_GATEWAY_DEV_BASE_URL')
             else:
                 raise RuntimeError(
                     'Running Python UDFs in interactive mode without nova-gateway enabled is not supported'
@@ -107,7 +104,6 @@ class PythonUdfAppConfig:
         return cls(
             listen_port=int(port),
             base_url=base_url,
-            base_path=base_path,
             running_interactively=running_interactively,
             is_gateway_enabled=is_gateway_enabled,
         )
