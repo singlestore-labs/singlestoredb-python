@@ -10,6 +10,7 @@ from typing import Union
 
 from . import utils
 from .dtypes import SQLString
+from .typing import Masked
 
 
 ParameterType = Union[
@@ -62,23 +63,10 @@ def is_valid_callable(obj: Any) -> bool:
 
 def verify_mask(obj: Any) -> bool:
     """Verify that the object is a tuple of two vector types."""
-    if typing.get_origin(obj) is not tuple or len(typing.get_args(obj)) != 2:
+    if not typing.get_origin(obj) is Masked:
         raise TypeError(
-            f'Expected a tuple of two vector types, but got {type(obj)}',
+            f'expected a Masked type, but got {type(obj)}',
         )
-
-    args = typing.get_args(obj)
-
-    if not utils.is_vector(args[0]):
-        raise TypeError(
-            f'Expected a vector type for the first element, but got {args[0]}',
-        )
-
-    if not utils.is_vector(args[1]):
-        raise TypeError(
-            f'Expected a vector type for the second element, but got {args[1]}',
-        )
-
     return True
 
 
@@ -136,7 +124,6 @@ def _func(
     args: Optional[ParameterType] = None,
     returns: Optional[ReturnType] = None,
     with_null_masks: bool = False,
-    function_type: str = 'udf',
 ) -> Callable[..., Any]:
     """Generic wrapper for UDF and TVF decorators."""
 
@@ -146,7 +133,6 @@ def _func(
             args=expand_types(args),
             returns=expand_types(returns),
             with_null_masks=with_null_masks,
-            function_type=function_type,
         ).items() if v is not None
     }
 
@@ -222,7 +208,6 @@ def udf(
         args=args,
         returns=returns,
         with_null_masks=False,
-        function_type='udf',
     )
 
 
@@ -270,101 +255,4 @@ def udf_with_null_masks(
         args=args,
         returns=returns,
         with_null_masks=True,
-        function_type='udf',
-    )
-
-
-def tvf(
-    func: Optional[Callable[..., Any]] = None,
-    *,
-    name: Optional[str] = None,
-    args: Optional[ParameterType] = None,
-    returns: Optional[ReturnType] = None,
-) -> Callable[..., Any]:
-    """
-    Define a table-valued function (TVF).
-
-    Parameters
-    ----------
-    func : callable, optional
-        The TVF to apply parameters to
-    name : str, optional
-        The name to use for the TVF in the database
-    args : str | Callable | List[str | Callable], optional
-        Specifies the data types of the function arguments. Typically,
-        the function data types are derived from the function parameter
-        annotations. These annotations can be overridden. If the function
-        takes a single type for all parameters, `args` can be set to a
-        SQL string describing all parameters. If the function takes more
-        than one parameter and all of the parameters are being manually
-        defined, a list of SQL strings may be used (one for each parameter).
-        A dictionary of SQL strings may be used to specify a parameter type
-        for a subset of parameters; the keys are the names of the
-        function parameters. Callables may also be used for datatypes. This
-        is primarily for using the functions in the ``dtypes`` module that
-        are associated with SQL types with all default options (e.g., ``dt.FLOAT``).
-    returns : str, optional
-        Specifies the return data type of the function. If not specified,
-        the type annotation from the function is used.
-
-    Returns
-    -------
-    Callable
-
-    """
-    return _func(
-        func=func,
-        name=name,
-        args=args,
-        returns=returns,
-        with_null_masks=False,
-        function_type='tvf',
-    )
-
-
-def tvf_with_null_masks(
-    func: Optional[Callable[..., Any]] = None,
-    *,
-    name: Optional[str] = None,
-    args: Optional[ParameterType] = None,
-    returns: Optional[ReturnType] = None,
-) -> Callable[..., Any]:
-    """
-    Define a table-valued function (TVF) using null masks.
-
-    Parameters
-    ----------
-    func : callable, optional
-        The TVF to apply parameters to
-    name : str, optional
-        The name to use for the TVF in the database
-    args : str | Callable | List[str | Callable], optional
-        Specifies the data types of the function arguments. Typically,
-        the function data types are derived from the function parameter
-        annotations. These annotations can be overridden. If the function
-        takes a single type for all parameters, `args` can be set to a
-        SQL string describing all parameters. If the function takes more
-        than one parameter and all of the parameters are being manually
-        defined, a list of SQL strings may be used (one for each parameter).
-        A dictionary of SQL strings may be used to specify a parameter type
-        for a subset of parameters; the keys are the names of the
-        function parameters. Callables may also be used for datatypes. This
-        is primarily for using the functions in the ``dtypes`` module that
-        are associated with SQL types with all default options (e.g., ``dt.FLOAT``).
-    returns : str, optional
-        Specifies the return data type of the function. If not specified,
-        the type annotation from the function is used.
-
-    Returns
-    -------
-    Callable
-
-    """
-    return _func(
-        func=func,
-        name=name,
-        args=args,
-        returns=returns,
-        with_null_masks=True,
-        function_type='tvf',
     )

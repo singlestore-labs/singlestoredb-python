@@ -148,7 +148,7 @@ def as_tuple(x: Any) -> Any:
     if has_pydantic and isinstance(x, BaseModel):
         return tuple(x.model_dump().values())
     if dataclasses.is_dataclass(x):
-        return dataclasses.astuple(x)
+        return dataclasses.astuple(x)  # type: ignore
     if isinstance(x, dict):
         return tuple(x.values())
     return tuple(x)
@@ -168,6 +168,8 @@ def as_list_of_tuples(x: Any) -> Any:
 
 def get_dataframe_columns(df: Any) -> List[Any]:
     """Return columns of data from a dataframe/table."""
+    if isinstance(df, tuple):
+        return list(df)
     rtype = str(type(df)).lower()
     if 'dataframe' in rtype:
         return [df[x] for x in df.columns]
@@ -226,11 +228,11 @@ def make_func(
     """
     attrs = getattr(func, '_singlestoredb_attrs', {})
     with_null_masks = attrs.get('with_null_masks', False)
-    function_type = attrs.get('function_type', 'udf').lower()
     info: Dict[str, Any] = {}
 
     sig = get_signature(func, func_name=name)
 
+    function_type = sig.get('function_type', 'udf')
     args_data_format = sig.get('args_data_format', 'scalar')
     returns_data_format = sig.get('returns_data_format', 'scalar')
 
@@ -746,7 +748,6 @@ class Application(object):
                             endpoint_info['signature'],
                             url=self.url or reflected_url,
                             data_format=self.data_format,
-                            function_type=endpoint_info['function_type'],
                         ),
                     )
             body = '\n'.join(syntax).encode('utf-8')
@@ -903,7 +904,6 @@ class Application(object):
                     app_mode=self.app_mode,
                     replace=replace,
                     link=link or None,
-                    function_type=endpoint_info['function_type'],
                 ),
             )
 

@@ -8,8 +8,6 @@ import polars as pl
 import pyarrow as pa
 
 from singlestoredb.functions import Masked
-from singlestoredb.functions import MaskedNDArray
-from singlestoredb.functions import tvf
 from singlestoredb.functions import udf
 from singlestoredb.functions import udf_with_null_masks
 from singlestoredb.functions.dtypes import BIGINT
@@ -20,6 +18,7 @@ from singlestoredb.functions.dtypes import MEDIUMINT
 from singlestoredb.functions.dtypes import SMALLINT
 from singlestoredb.functions.dtypes import TEXT
 from singlestoredb.functions.dtypes import TINYINT
+from singlestoredb.functions.typing import Table
 
 
 @udf
@@ -447,16 +446,16 @@ def pandas_nullable_tinyint_mult_with_masks(
 ) -> Masked[pd.Series]:
     x_data, x_nulls = x
     y_data, y_nulls = y
-    return (x_data * y_data, x_nulls | y_nulls)
+    return Masked(x_data * y_data, x_nulls | y_nulls)
 
 
 @udf_with_null_masks
 def numpy_nullable_tinyint_mult_with_masks(
-    x: MaskedNDArray[np.int8], y: MaskedNDArray[np.int8],
-) -> MaskedNDArray[np.int8]:
+    x: Masked[npt.NDArray[np.int8]], y: Masked[npt.NDArray[np.int8]],
+) -> Masked[npt.NDArray[np.int8]]:
     x_data, x_nulls = x
     y_data, y_nulls = y
-    return (x_data * y_data, x_nulls | y_nulls)
+    return Masked(x_data * y_data, x_nulls | y_nulls)
 
 
 @udf_with_null_masks(
@@ -468,7 +467,7 @@ def polars_nullable_tinyint_mult_with_masks(
 ) -> Masked[pl.Series]:
     x_data, x_nulls = x
     y_data, y_nulls = y
-    return (x_data * y_data, x_nulls | y_nulls)
+    return Masked(x_data * y_data, x_nulls | y_nulls)
 
 
 @udf_with_null_masks(
@@ -481,11 +480,11 @@ def arrow_nullable_tinyint_mult_with_masks(
     import pyarrow.compute as pc
     x_data, x_nulls = x
     y_data, y_nulls = y
-    return (pc.multiply(x_data, y_data), pc.or_(x_nulls, y_nulls))
+    return Masked(pc.multiply(x_data, y_data), pc.or_(x_nulls, y_nulls))
 
 
-@tvf(returns=[TEXT(nullable=False, name='res')])
-def numpy_fixed_strings() -> npt.NDArray[np.str_]:
+@udf(returns=[TEXT(nullable=False, name='res')])
+def numpy_fixed_strings() -> Table[npt.NDArray[np.str_]]:
     out = np.array(
         [
             'hello',
@@ -494,11 +493,24 @@ def numpy_fixed_strings() -> npt.NDArray[np.str_]:
         ], dtype=np.str_,
     )
     assert str(out.dtype) == '<U10'
-    return out
+    return Table(out)
 
 
-@tvf(returns=[BLOB(nullable=False, name='res')])
-def numpy_fixed_binary() -> npt.NDArray[np.bytes_]:
+@udf(returns=[TEXT(nullable=False, name='res'), TINYINT(nullable=False, name='res2')])
+def numpy_fixed_strings_2() -> Table[npt.NDArray[np.str_], npt.NDArray[np.int8]]:
+    out = np.array(
+        [
+            'hello',
+            'hi there 😜',
+            '😜 bye',
+        ], dtype=np.str_,
+    )
+    assert str(out.dtype) == '<U10'
+    return Table(out, out)
+
+
+@udf(returns=[BLOB(nullable=False, name='res')])
+def numpy_fixed_binary() -> Table[npt.NDArray[np.bytes_]]:
     out = np.array(
         [
             'hello'.encode('utf8'),
@@ -507,7 +519,7 @@ def numpy_fixed_binary() -> npt.NDArray[np.bytes_]:
         ], dtype=np.bytes_,
     )
     assert str(out.dtype) == '|S13'
-    return out
+    return Table(out)
 
 
 @udf

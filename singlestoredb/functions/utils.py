@@ -23,11 +23,7 @@ def is_union(x: Any) -> bool:
 
 def get_annotations(obj: Any) -> Dict[str, Any]:
     """Get the annotations of an object."""
-    if hasattr(inspect, 'get_annotations'):
-        return inspect.get_annotations(obj)
-    if isinstance(obj, type):
-        return obj.__dict__.get('__annotations__', {})
-    return getattr(obj, '__annotations__', {})
+    return typing.get_type_hints(obj)
 
 
 def get_module(obj: Any) -> str:

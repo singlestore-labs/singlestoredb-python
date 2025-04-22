@@ -648,7 +648,9 @@ class Cursor(connection.Cursor):
                         if 'UNSIGNED' in data_type:
                             flags = 32
                         if data_type.endswith('BLOB') or data_type.endswith('BINARY'):
-                            converter = functools.partial(b64decode_converter, converter)
+                            converter = functools.partial(
+                                b64decode_converter, converter,  # type: ignore
+                            )
                             charset = 63  # BINARY
                         if type_code == 0:  # DECIMAL
                             type_code = types.ColumnType.get_code('NEWDECIMAL')
