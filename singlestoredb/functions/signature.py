@@ -951,7 +951,7 @@ def get_schema(
 
         # Multiple return values
         elif inspect.isclass(typing.get_origin(spec)) \
-                and issubclass(typing.get_origin(spec), tuple):
+                and issubclass(typing.get_origin(spec), tuple):  # type: ignore[arg-type]
 
             out_names, out_overrides = [], []
 
