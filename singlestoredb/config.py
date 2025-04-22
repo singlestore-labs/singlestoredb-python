@@ -317,7 +317,7 @@ register_option(
     'external_function.app_mode', 'string',
     functools.partial(
         check_str,
-        valid_values=['remote', 'collocated'],
+        valid_values=['remote', 'collocated', 'managed'],
     ),
     'remote',
     'Specifies the mode of operation of the external function application.',
