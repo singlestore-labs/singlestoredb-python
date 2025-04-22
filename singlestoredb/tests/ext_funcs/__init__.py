@@ -10,7 +10,6 @@ import pyarrow as pa
 
 from singlestoredb.functions import Masked
 from singlestoredb.functions import udf
-from singlestoredb.functions import udf_with_null_masks
 from singlestoredb.functions.dtypes import BIGINT
 from singlestoredb.functions.dtypes import BLOB
 from singlestoredb.functions.dtypes import DOUBLE
@@ -438,7 +437,7 @@ def nullable_string_mult(x: Optional[str], times: Optional[int]) -> Optional[str
     return x * times
 
 
-@udf_with_null_masks(
+@udf(
     args=[TINYINT(nullable=True), TINYINT(nullable=True)],
     returns=TINYINT(nullable=True),
 )
@@ -450,7 +449,7 @@ def pandas_nullable_tinyint_mult_with_masks(
     return Masked(x_data * y_data, x_nulls | y_nulls)
 
 
-@udf_with_null_masks
+@udf
 def numpy_nullable_tinyint_mult_with_masks(
     x: Masked[npt.NDArray[np.int8]], y: Masked[npt.NDArray[np.int8]],
 ) -> Masked[npt.NDArray[np.int8]]:
@@ -459,7 +458,7 @@ def numpy_nullable_tinyint_mult_with_masks(
     return Masked(x_data * y_data, x_nulls | y_nulls)
 
 
-@udf_with_null_masks(
+@udf(
     args=[TINYINT(nullable=True), TINYINT(nullable=True)],
     returns=TINYINT(nullable=True),
 )
@@ -471,7 +470,7 @@ def polars_nullable_tinyint_mult_with_masks(
     return Masked(x_data * y_data, x_nulls | y_nulls)
 
 
-@udf_with_null_masks(
+@udf(
     args=[TINYINT(nullable=True), TINYINT(nullable=True)],
     returns=TINYINT(nullable=True),
 )

@@ -30,6 +30,7 @@ except ImportError:
 from . import dtypes as dt
 from . import utils
 from .typing import Table
+from .typing import Masked
 from ..mysql.converters import escape_item  # type: ignore
 
 if sys.version_info >= (3, 10):
@@ -750,22 +751,15 @@ def unpack_masked_type(obj: Any) -> Any:
         The unpacked type
 
     """
-    # TODO: Fix checks
-    # if typing.get_origin(obj) not in MASK_TYPES:
-    #     raise TypeError(f'masked type must be a tuple, got {obj}')
-    args = typing.get_args(obj)
-    if len(args) != 1:
-        raise TypeError(f'masked type must be a tuple of length 1, got {obj}')
-    # if not utils.is_vector(args[0]):
-    #    raise TypeError(f'masked type must be a vector, got {args[0]}')
-    return args[0]
+    if typing.get_origin(obj) is Masked:
+        return typing.get_args(obj)[0]
+    return obj
 
 
 def get_schema(
     spec: Any,
     overrides: Optional[Union[List[str], Type[Any]]] = None,
     mode: str = 'parameter',
-    with_null_masks: bool = False,
 ) -> Tuple[List[Tuple[str, Any, Optional[str]]], str, str]:
     """
     Expand a return type annotation into a list of types and field names.
@@ -778,8 +772,6 @@ def get_schema(
         List of SQL type specifications for the return type
     mode : str
         The mode of the function, either 'parameter' or 'return'
-    with_null_masks : bool
-        Whether to use null masks for the parameters and return value
 
     Returns
     -------
@@ -977,11 +969,10 @@ def get_schema(
             # Get the colspec for each item in the tuple
             for i, x in enumerate(typing.get_args(spec)):
                 out_item, out_data_format, _ = get_schema(
-                    x if not with_null_masks else unpack_masked_type(x),
+                    unpack_masked_type(x),
                     overrides=out_overrides[i] if out_overrides else [],
                     # Always pass UDF mode for individual items
                     mode=mode,
-                    with_null_masks=with_null_masks,
                 )
 
                 # Use the name from the overrides if specified
@@ -1027,7 +1018,6 @@ def get_schema(
             k,
             collapse_dtypes(
                 [normalize_dtype(x) for x in simplify_dtype(v)],
-                include_null=with_null_masks,
             ),
             v if isinstance(v, str) else None,
         ))
@@ -1070,6 +1060,44 @@ def vector_check(obj: Any) -> Tuple[Any, str]:
     return obj, 'scalar'
 
 
+def get_masks(func: Callable[..., Any]) -> Tuple[List[bool], List[bool]]:
+    """
+    Get the list of masked parameters and return values for the function.
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call as the endpoint
+
+    Returns
+    -------
+    Tuple[List[bool], List[bool]]
+        A Tuple containing the parameter / return value masks
+        as lists of booleans
+
+
+    """
+    params = inspect.signature(func).parameters
+    returns = inspect.signature(func).return_annotation
+
+    ret_masks = []
+    if typing.get_origin(returns) is Masked:
+        ret_masks = [True]
+    elif typing.get_origin(returns) is Table:
+        for x in typing.get_args(returns):
+            if typing.get_origin(x) is Masked:
+                ret_masks.append(True)
+            else:
+                ret_masks.append(False)
+        if not any(ret_masks):
+            ret_masks = []
+
+    return (
+        [typing.get_origin(x.annotation) is Masked for x in params.values()],
+        ret_masks,
+    )
+
+
 def get_signature(
     func: Callable[..., Any],
     func_name: Optional[str] = None,
@@ -1094,7 +1122,6 @@ def get_signature(
     returns: List[Dict[str, Any]] = []
 
     attrs = getattr(func, '_singlestoredb_attrs', {})
-    with_null_masks = attrs.get('with_null_masks', False)
     name = attrs.get('name', func_name if func_name else func.__name__)
 
     out: Dict[str, Any] = dict(name=name, args=args, returns=returns)
@@ -1114,6 +1141,9 @@ def get_signature(
     args_colspec = [x for x in get_colspec(attrs.get('args', []), include_default=True)]
     args_overrides = [x[1] for x in args_colspec]
     args_defaults = [x[2] for x in args_colspec]  # type: ignore
+    args_masks, ret_masks = get_masks(func)
+
+    print(func, args_masks, ret_masks)
 
     if args_overrides and len(args_overrides) != len(signature.parameters):
         raise ValueError(
@@ -1126,11 +1156,9 @@ def get_signature(
     # Get the colspec for each parameter
     for i, param in enumerate(params):
         arg_schema, args_data_format, _ = get_schema(
-            param.annotation
-            if not with_null_masks else unpack_masked_type(param.annotation),
+            unpack_masked_type(param.annotation),
             overrides=args_overrides[i] if args_overrides else [],
             mode='parameter',
-            with_null_masks=with_null_masks,
         )
         args_data_formats.append(args_data_format)
 
@@ -1138,10 +1166,10 @@ def get_signature(
         if not arg_schema[0][0]:
             args_schema.append((param.name, *arg_schema[0][1:]))
 
-    # Insert default values as needed
     for i, (name, atype, sql) in enumerate(args_schema):
         default_option = {}
 
+        # Insert default values as needed
         if args_defaults:
             if args_defaults[i] is not NO_DEFAULT:
                 default_option['default'] = args_defaults[i]
@@ -1150,7 +1178,9 @@ def get_signature(
                 default_option['default'] = params[i].default
 
         # Generate SQL code for the parameter
-        sql = sql or dtype_to_sql(atype, **default_option)
+        sql = sql or dtype_to_sql(
+            atype, force_nullable=args_masks[i], **default_option,
+        )
 
         # Add parameter to args definitions
         args.append(dict(name=name, dtype=atype, sql=sql, **default_option))
@@ -1166,11 +1196,9 @@ def get_signature(
 
     # Generate the return types and the corresponding SQL code for those values
     ret_schema, out['returns_data_format'], function_type = get_schema(
-        signature.return_annotation
-        if not with_null_masks else unpack_masked_type(signature.return_annotation),
+        unpack_masked_type(signature.return_annotation),
         overrides=attrs.get('returns', None),
         mode='return',
-        with_null_masks=with_null_masks,
     )
 
     out['returns_data_format'] = out['returns_data_format'] or 'scalar'
@@ -1189,7 +1217,11 @@ def get_signature(
 
     # Generate SQL code for the return values
     for i, (name, rtype, sql) in enumerate(ret_schema):
-        sql = sql or dtype_to_sql(rtype, function_type=function_type)
+        sql = sql or dtype_to_sql(
+            rtype,
+            force_nullable=ret_masks[i] if ret_masks else False,
+            function_type=function_type,
+        )
         returns.append(dict(name=name, dtype=rtype, sql=sql))
 
     # Set the function endpoint
@@ -1247,6 +1279,7 @@ def dtype_to_sql(
     default: Any = NO_DEFAULT,
     field_names: Optional[List[str]] = None,
     function_type: str = 'udf',
+    force_nullable: bool = False,
 ) -> str:
     """
     Convert a collapsed dtype string to a SQL type.
@@ -1259,6 +1292,10 @@ def dtype_to_sql(
         Default value
     field_names : List[str], optional
         Field names for tuple types
+    function_type : str, optional
+        Function type, either 'udf' or 'tvf'
+    force_nullable : bool, optional
+        Whether to force the type to be nullable
 
     Returns
     -------
@@ -1266,7 +1303,9 @@ def dtype_to_sql(
 
     """
     nullable = ' NOT NULL'
-    if dtype.endswith('?'):
+    if force_nullable:
+        nullable = ' NULL'
+    elif dtype.endswith('?'):
         nullable = ' NULL'
         dtype = dtype[:-1]
     elif '|null' in dtype:

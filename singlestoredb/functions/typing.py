@@ -27,7 +27,7 @@ T = TypeVar('T', bound=Iterable[Any])  # Generic type for iterable types
 
 
 class Masked(Tuple[T, T]):
-    def __new__(cls, *args: T) -> 'Masked[T]':
+    def __new__(cls, *args: T) -> 'Masked[Tuple[T, T]]':  # type: ignore
         return tuple.__new__(cls, (args[0], args[1]))  # type: ignore
 
 

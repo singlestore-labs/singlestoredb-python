@@ -26,6 +26,7 @@ import argparse
 import asyncio
 import dataclasses
 import importlib.util
+import inspect
 import io
 import itertools
 import json
@@ -36,6 +37,7 @@ import secrets
 import sys
 import tempfile
 import textwrap
+import typing
 import urllib
 import zipfile
 import zipimport
@@ -62,6 +64,7 @@ from ...config import get_option
 from ...mysql.constants import FIELD_TYPE as ft
 from ..signature import get_signature
 from ..signature import signature_to_sql
+from ..typing import Masked
 
 try:
     import cloudpickle
@@ -207,6 +210,25 @@ def get_array_class(data_format: str) -> Callable[..., Any]:
     return array_cls
 
 
+def get_masked_params(func: Callable[..., Any]) -> List[bool]:
+    """
+    Get the list of masked parameters for the function.
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call as the endpoint
+
+    Returns
+    -------
+    List[bool]
+        Boolean list of masked parameters
+
+    """
+    params = inspect.signature(func).parameters
+    return [typing.get_origin(x.annotation) is Masked for x in params.values()]
+
+
 def make_func(
     name: str,
     func: Callable[..., Any],
@@ -226,8 +248,6 @@ def make_func(
     (Callable, Dict[str, Any])
 
     """
-    attrs = getattr(func, '_singlestoredb_attrs', {})
-    with_null_masks = attrs.get('with_null_masks', False)
     info: Dict[str, Any] = {}
 
     sig = get_signature(func, func_name=name)
@@ -235,6 +255,8 @@ def make_func(
     function_type = sig.get('function_type', 'udf')
     args_data_format = sig.get('args_data_format', 'scalar')
     returns_data_format = sig.get('returns_data_format', 'scalar')
+
+    masks = get_masked_params(func)
 
     if function_type == 'tvf':
         # Scalar (Python) types
@@ -265,24 +287,21 @@ def make_func(
                 #        each result row, so we just have to use the same
                 #        row ID for all rows in the result.
 
-                # If `with_null_masks` is set, the function is expected to return
-                # a tuple of (data, mask) for each column.
-                if with_null_masks:
-                    out = func(*cols)
-                    assert isinstance(out, tuple)
-                    row_ids = array_cls([row_ids[0]] * len(out[0][0]))
-                    return row_ids, [out]
+                def build_tuple(x: Any) -> Any:
+                    return tuple(x) if isinstance(x, Masked) else (x, None)
 
                 # Call function on each column of data
                 if cols and cols[0]:
-                    res = get_dataframe_columns(func(*[x[0] for x in cols]))
+                    res = get_dataframe_columns(
+                        func(*[x if m else x[0] for x, m in zip(cols, masks)]),
+                    )
                 else:
                     res = get_dataframe_columns(func())
 
                 # Generate row IDs
                 row_ids = array_cls([row_ids[0]] * len(res[0]))
 
-                return row_ids, [(x, None) for x in res]
+                return row_ids, [build_tuple(x) for x in res]
 
     else:
         # Scalar (Python) types
@@ -305,22 +324,22 @@ def make_func(
                 '''Call function on given cols of data.'''
                 row_ids = array_cls(row_ids)
 
-                # If `with_null_masks` is set, the function is expected to return
-                # a tuple of (data, mask) for each column.`
-                if with_null_masks:
-                    out = func(*cols)
-                    assert isinstance(out, tuple)
-                    return row_ids, [out]
+                def build_tuple(x: Any) -> Any:
+                    return tuple(x) if isinstance(x, Masked) else (x, None)
 
                 # Call the function with `cols` as the function parameters
                 if cols and cols[0]:
-                    out = func(*[x[0] for x in cols])
+                    out = func(*[x if m else x[0] for x, m in zip(cols, masks)])
                 else:
                     out = func()
 
+                # Single masked value
+                if isinstance(out, Masked):
+                    return row_ids, [tuple(out)]
+
                 # Multiple return values
                 if isinstance(out, tuple):
-                    return row_ids, [(x, None) for x in out]
+                    return row_ids, [build_tuple(x) for x in out]
 
                 # Single return value
                 return row_ids, [(out, None)]
