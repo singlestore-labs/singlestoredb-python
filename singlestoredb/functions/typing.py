@@ -5,9 +5,11 @@ from typing import TypeVar
 
 try:
     from typing import TypeVarTuple
+    from typing import Unpack
 except ImportError:
     # Python 3.8 and earlier do not have TypeVarTuple
     from typing_extensions import TypeVarTuple  # type: ignore
+    from typing_extensions import Unpack  # type: ignore
 
 
 T = TypeVar('T', bound=Iterable[Any])  # Generic type for iterable types
@@ -32,8 +34,8 @@ class Masked(Tuple[T, T]):
 Ts = TypeVarTuple('Ts')
 
 
-class Table(Tuple[*Ts]):
+class Table(Tuple[Unpack[Ts]]):
     """Return type for a table valued function."""
 
-    def __new__(cls, *args: *Ts) -> 'Table[*Ts]':
+    def __new__(cls, *args: Unpack[Ts]) -> 'Table[Unpack[Ts]]':
         return tuple.__new__(cls, args)  # type: ignore
