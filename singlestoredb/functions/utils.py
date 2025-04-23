@@ -45,6 +45,9 @@ def get_type_name(obj: Any) -> str:
 
 def is_numpy(obj: Any) -> bool:
     """Check if an object is a numpy array."""
+    if str(obj).startswith('numpy.ndarray['):
+        return True
+
     if inspect.isclass(obj):
         if get_module(obj) == 'numpy':
             return get_type_name(obj) == 'ndarray'

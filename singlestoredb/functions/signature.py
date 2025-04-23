@@ -1143,8 +1143,6 @@ def get_signature(
     args_defaults = [x[2] for x in args_colspec]  # type: ignore
     args_masks, ret_masks = get_masks(func)
 
-    print(func, args_masks, ret_masks)
-
     if args_overrides and len(args_overrides) != len(signature.parameters):
         raise ValueError(
             'number of args in the decorator does not match '
