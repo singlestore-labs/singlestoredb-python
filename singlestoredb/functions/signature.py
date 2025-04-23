@@ -794,7 +794,9 @@ def get_schema(
 
         # See if it's a Table subclass with annotations
         if inspect.isclass(origin) and origin is Table:
+
             function_type = 'tvf'
+
             if utils.is_dataframe(args[0]):
                 if not overrides:
                     raise TypeError(
@@ -828,6 +830,10 @@ def get_schema(
                     'or tuple of vectors',
                 )
 
+        # Short circuit check for common valid types
+        elif utils.is_vector(spec) or spec in [str, float, int, bytes]:
+            pass
+
         # Try to catch some common mistakes
         elif origin in [tuple, dict] or tuple in args_origins or \
                 (
@@ -841,8 +847,13 @@ def get_schema(
                     )
                 ):
             raise TypeError(
-                'return type for table-valued functions must be annotated with a Table,',
+                'invalid return type for a UDF; '
+                f'expecting a scalar or vector, but got {spec}',
             )
+
+    # Short circuit check for common valid types
+    elif utils.is_vector(spec) or spec in [str, float, int, bytes]:
+        pass
 
     # Error out for incorrect parameter types
     elif origin in [tuple, dict] or tuple in args_origins or \
