@@ -649,7 +649,6 @@ class Application(object):
 
             else:
                 alias = funcs.__name__
-                alias = f'{name_prefix}{alias}{name_suffix}'
                 external_functions[funcs.__name__] = funcs
                 alias = f'{name_prefix}{alias}{name_suffix}'
                 func, info = make_func(alias, funcs)

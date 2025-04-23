@@ -41,7 +41,11 @@ async def run_udf_app(
         kill_process_by_port(app_config.listen_port)
 
     base_url = generate_base_url(app_config)
-    app = Application(url=base_url, app_mode='managed') 
+    
+    udf_suffix = ""
+    if app_config.running_interactively:
+        udf_suffix = "_test"
+    app = Application(url=base_url, app_mode='managed', name_suffix=udf_suffix)
 
     config = uvicorn.Config(
         app,
