@@ -414,8 +414,12 @@ class TestStage(unittest.TestCase):
         with self.assertRaises(OSError):
             st.upload_file(TEST_DIR / 'test.sql', 'upload_test.sql')
 
-        # Force overwrite with new content
-        f = st.upload_file(TEST_DIR / 'test2.sql', 'upload_test.sql', overwrite=True)
+        # Force overwrite with new content; use file object this time
+        f = st.upload_file(
+            open(TEST_DIR / 'test2.sql', 'r'),
+            'upload_test.sql',
+            overwrite=True,
+        )
         assert str(f.path) == 'upload_test.sql'
         assert f.type == 'file'
 
@@ -1077,6 +1081,50 @@ class TestFileSpaces(unittest.TestCase):
             # Force overwrite with new content
             f = space.upload_file(
                 TEST_DIR / 'test2.ipynb',
+                'upload_test.ipynb', overwrite=True,
+            )
+            assert str(f.path) == 'upload_test.ipynb'
+            assert f.type == 'notebook'
+
+            # Verify new content
+            txt = f.download(encoding='utf-8')
+            assert txt == open(TEST_DIR / 'test2.ipynb').read()
+
+            # Make sure we can't upload a folder
+            with self.assertRaises(s2.ManagementError):
+                space.upload_folder(TEST_DIR, 'test')
+
+            # Cleanup
+            space.remove('upload_test.ipynb')
+
+    def test_upload_file_io(self):
+        for space in [self.personal_space, self.shared_space]:
+            root = space.info('/')
+            assert str(root.path) == '/'
+            assert root.type == 'directory'
+
+            # Upload files
+            f = space.upload_file(
+                open(TEST_DIR / 'test.ipynb', 'r'),
+                'upload_test.ipynb',
+            )
+            assert str(f.path) == 'upload_test.ipynb'
+            assert f.type == 'notebook'
+
+            # Download and compare to original
+            txt = f.download(encoding='utf-8')
+            assert txt == open(TEST_DIR / 'test.ipynb').read()
+
+            # Make sure we can't overwrite
+            with self.assertRaises(OSError):
+                space.upload_file(
+                    open(TEST_DIR / 'test.ipynb', 'r'),
+                    'upload_test.ipynb',
+                )
+
+            # Force overwrite with new content
+            f = space.upload_file(
+                open(TEST_DIR / 'test2.ipynb', 'r'),
                 'upload_test.ipynb', overwrite=True,
             )
             assert str(f.path) == 'upload_test.ipynb'

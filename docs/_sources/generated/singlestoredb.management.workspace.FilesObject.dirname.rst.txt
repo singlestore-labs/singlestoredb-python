@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.FilesObject.dirname
+======================================================
+.. currentmodule:: singlestoredb.management.workspace
+.. automethod:: FilesObject.dirname

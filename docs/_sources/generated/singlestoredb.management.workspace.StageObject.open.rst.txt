@@ -1,4 +1,0 @@
-﻿singlestoredb.management.workspace.StageObject.open
-===================================================
-.. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StageObject.open

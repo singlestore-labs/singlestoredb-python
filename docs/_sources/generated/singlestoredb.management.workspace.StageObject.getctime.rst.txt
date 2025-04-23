@@ -1,4 +1,0 @@
-﻿singlestoredb.management.workspace.StageObject.getctime
-=======================================================
-.. currentmodule:: singlestoredb.management.workspace
-.. automethod:: StageObject.getctime

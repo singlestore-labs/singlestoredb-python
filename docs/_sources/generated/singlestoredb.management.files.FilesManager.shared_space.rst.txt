@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FilesManager.shared\_space
+=========================================================
+.. currentmodule:: singlestoredb.management.files
+.. autoproperty:: FilesManager.shared_space

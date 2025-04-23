@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStoreDB 1.12.0 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 1.13.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
-        <script src="_static/documentation_options.js?v=fe8e256b"></script>
+        <script src="_static/documentation_options.js?v=8f5b6f32"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                1.12.0
+                1.13.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -101,6 +101,7 @@
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.scroll.html">Cursor.scroll</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.next.html">Cursor.next</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Cursor.is_connected.html">Cursor.is_connected</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#uploading-from-streaming-sources">Uploading from streaming sources</a></li>
 </ul>
 </li>
 </ul>
@@ -144,7 +145,7 @@
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.region.Region.html">region.Region</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="#stage">Stage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#stage-files">Stage Files</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.html">workspace.Stage</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.open.html">workspace.stage.open</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.download_file.html">workspace.stage.download_file</a></li>
@@ -163,22 +164,46 @@
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.rmdir.html">workspace.stage.rmdir</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="#stageobject">StageObject</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.html">workspace.StageObject</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.open.html">workspace.StageObject.open</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.download.html">workspace.StageObject.download</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.exists.html">workspace.StageObject.exists</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.is_dir.html">workspace.StageObject.is_dir</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.is_file.html">workspace.StageObject.is_file</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.abspath.html">workspace.StageObject.abspath</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.basename.html">workspace.StageObject.basename</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.dirname.html">workspace.StageObject.dirname</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.getmtime.html">workspace.StageObject.getmtime</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.getctime.html">workspace.StageObject.getctime</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rename.html">workspace.StageObject.rename</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.remove.html">workspace.StageObject.remove</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.removedirs.html">workspace.StageObject.removedirs</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rmdir.html">workspace.StageObject.rmdir</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#personal-shared-and-model-files">Personal, Shared, and Model Files</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.manage_files.html">singlestoredb.manage_files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesManager.html">files.FilesManager</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesManager.personal_space.html">files.FilesManager.personal_space</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesManager.shared_space.html">files.FilesManager.shared_space</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesManager.models_space.html">files.FilesManager.models_space</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.html">files.FileSpace</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.open.html">files.FileSpace.open</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.download_file.html">files.FileSpace.download_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.download_folder.html">files.FileSpace.download_folder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.upload_file.html">files.FileSpace.upload_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.upload_folder.html">files.FileSpace.upload_folder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.info.html">files.FileSpace.info</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.listdir.html">files.FileSpace.listdir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.exists.html">files.FileSpace.exists</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.is_dir.html">files.FileSpace.is_dir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.is_file.html">files.FileSpace.is_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.mkdir.html">files.FileSpace.mkdir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.rename.html">files.FileSpace.rename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.remove.html">files.FileSpace.remove</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.removedirs.html">files.FileSpace.removedirs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.rmdir.html">files.FileSpace.rmdir</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#filesobject">FilesObject</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.html">workspace.FilesObject</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.open.html">workspace.FilesObject.open</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.download.html">workspace.FilesObject.download</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.exists.html">workspace.FilesObject.exists</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.is_dir.html">workspace.FilesObject.is_dir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.is_file.html">workspace.FilesObject.is_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.abspath.html">workspace.FilesObject.abspath</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.basename.html">workspace.FilesObject.basename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.dirname.html">workspace.FilesObject.dirname</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.getmtime.html">workspace.FilesObject.getmtime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.getctime.html">workspace.FilesObject.getctime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.rename.html">workspace.FilesObject.rename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.remove.html">workspace.FilesObject.remove</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.removedirs.html">workspace.FilesObject.removedirs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.rmdir.html">workspace.FilesObject.rmdir</a></li>
 </ul>
 </li>
 </ul>
@@ -459,6 +484,71 @@ created using the <a class="reference internal" href="generated/singlestoredb.co
 </tr>
 </tbody>
 </table>
+<section id="uploading-from-streaming-sources">
+<h4>Uploading from streaming sources<a class="headerlink" href="#uploading-from-streaming-sources" title="Link to this heading">¶</a></h4>
+<p>While the standard way of loading a local file using <code class="docutils literal notranslate"><span class="pre">LOAD</span> <span class="pre">DATA</span> <span class="pre">LOCAL</span> <span class="pre">INFILE</span></code>
+is well-known, it is possible to load data from programmatic sources
+as well. This means that you can generate data with a Python function
+and load that data into the database without writing it to a file
+first. Below are two methods of doing this. Both of them use the
+<code class="docutils literal notranslate"><span class="pre">local_infile=true</span></code> parameter on the connection and the <code class="docutils literal notranslate"><span class="pre">infile_stream=</span></code>
+option on the <code class="docutils literal notranslate"><span class="pre">cursor.execute</span></code> method.</p>
+<section id="uploading-data-using-a-generator-function">
+<h5>Uploading data using a generator function<a class="headerlink" href="#uploading-data-using-a-generator-function" title="Link to this heading">¶</a></h5>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;s2-host.com/my_db?local_infile=true&#39;</span><span class="p">)</span>
+<span class="n">cur</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+<span class="k">def</span> <span class="nf">upload_csv</span><span class="p">():</span>
+    <span class="k">yield</span> <span class="s1">&#39;1,2,3</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="k">yield</span> <span class="s1">&#39;4,5,6</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="k">yield</span> <span class="s1">&#39;7,8,9</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="c1"># Note that the data returned does not have to</span>
+    <span class="c1"># correspond to a single row. Any length of</span>
+    <span class="c1"># data can be returned.</span>
+    <span class="k">yield</span> <span class="s1">&#39;10,11,12</span><span class="se">\n</span><span class="s1">13,14,15</span><span class="se">\n</span><span class="s1">&#39;</span>
+<span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;CREATE TABLE generator (a INT, b INT, c INT)&#39;</span><span class="p">)</span>
+<span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    LOAD DATA LOCAL INFILE &#39;:stream:&#39; INTO TABLE generator</span>
+<span class="sd">        FIELDS TERMINATED BY &#39;,&#39; ENCLOSED BY &#39;&quot;&#39;</span>
+<span class="sd">    &#39;&#39;&#39;</span><span class="p">,</span>
+    <span class="n">infile_stream</span><span class="o">=</span><span class="n">upload_csv</span><span class="p">(),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="uploading-data-using-a-queue-and-threads">
+<h5>Uploading data using a queue and threads<a class="headerlink" href="#uploading-data-using-a-queue-and-threads" title="Link to this heading">¶</a></h5>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">queue</span> <span class="kn">import</span> <span class="n">Queue</span>
+<span class="kn">from</span> <span class="nn">threading</span> <span class="kn">import</span> <span class="n">Thread</span>
+<span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;s2-host.com/my_db?local_infile=true&#39;</span><span class="p">)</span>
+<span class="n">cur</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+<span class="n">data_feeder</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">()</span>
+<span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s1">&#39;CREATE TABLE queue (a INT, b INT, c INT)&#39;</span><span class="p">)</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">Thread</span><span class="p">(</span>
+    <span class="n">target</span><span class="o">=</span><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">,</span>
+    <span class="n">args</span><span class="o">=</span><span class="p">(</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        LOAD DATA LOCAL INFILE &#39;:stream:&#39; INTO TABLE queue</span>
+<span class="sd">            FIELDS TERMINATED BY &#39;,&#39; ENCLOSED BY &#39;&quot;&#39;</span>
+<span class="sd">        &#39;&#39;&#39;</span><span class="p">,</span>
+    <span class="p">),</span>
+    <span class="n">kwargs</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">infile_stream</span><span class="o">=</span><span class="n">data_feeder</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+<span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;1,2,3</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;4,5,6</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;7,8,9</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="c1"># Note that the data sent does not have to</span>
+<span class="c1"># correspond to a single row. Any length of</span>
+<span class="c1"># data can be sent.</span>
+<span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;10,11,12</span><span class="se">\n</span><span class="s1">13,14,15</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="c1"># Send an empty string to end the data loader.</span>
+<span class="n">data_feeder</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
+<span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
 </section>
 </section>
 <section id="utilities">
@@ -584,9 +674,10 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 </tbody>
 </table>
 </section>
-<section id="stage">
-<h3>Stage<a class="headerlink" href="#stage" title="Link to this heading">¶</a></h3>
-<p>To interact with Stage, use the <code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.stage</span></code> attribute.
+<section id="stage-files">
+<h3>Stage Files<a class="headerlink" href="#stage-files" title="Link to this heading">¶</a></h3>
+<p>To interact with files in your Stage, use the
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.stage</span></code> attribute.
 It will return a<a href="singlestoredb.management.workspace.Stage.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Stage</span></code></a> object which defines the following
 methods and attributes.</p>
 <table class="autosummary longtable docutils align-default">
@@ -642,56 +733,143 @@ methods and attributes.</p>
 </tbody>
 </table>
 </section>
-<section id="stageobject">
-<h3>StageObject<a class="headerlink" href="#stageobject" title="Link to this heading">¶</a></h3>
-<p><code class="xref py py-class docutils literal notranslate"><span class="pre">StageObject`s</span> <span class="pre">are</span> <span class="pre">returned</span> <span class="pre">by</span> <span class="pre">the</span> <span class="pre">:meth:`StageObject.upload_file</span></code>
-<code class="xref py py-meth docutils literal notranslate"><span class="pre">StageObject.upload_folder()</span></code>, <code class="xref py py-meth docutils literal notranslate"><span class="pre">StageObject.mkdir()</span></code>,
-<a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rename.html#singlestoredb.management.workspace.StageObject.rename" title="singlestoredb.management.workspace.StageObject.rename"><code class="xref py py-meth docutils literal notranslate"><span class="pre">StageObject.rename()</span></code></a>, and <code class="xref py py-meth docutils literal notranslate"><span class="pre">StageObject.info()</span></code> methods.</p>
+<section id="personal-shared-and-model-files">
+<h3>Personal, Shared, and Model Files<a class="headerlink" href="#personal-shared-and-model-files" title="Link to this heading">¶</a></h3>
+<p>To manage personal files, shared files, and model files in an organization,
+you use the <a class="reference internal" href="generated/singlestoredb.manage_files.html#singlestoredb.manage_files" title="singlestoredb.manage_files"><code class="xref py py-func docutils literal notranslate"><span class="pre">singlestoredb.manage_files()</span></code></a> function. This will return a<a href="singlestoredb.management.files.FilesManager.html">
+<code class="xref py py-class docutils literal notranslate"><span class="pre">FilesManager</span></code></a> instance to access each location. You then use the
+returned<a href="singlestoredb.management.files.FileSpace.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">FileSpace</span></code></a> to manage the files in each location. These
+classes are described below.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.html#singlestoredb.management.workspace.StageObject" title="singlestoredb.management.workspace.StageObject"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject</span></code></a></p></td>
-<td><p>alias of <code class="xref py py-class docutils literal notranslate"><span class="pre">FilesObject</span></code></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.manage_files.html#singlestoredb.manage_files" title="singlestoredb.manage_files"><code class="xref py py-obj docutils literal notranslate"><span class="pre">manage_files</span></code></a>([access_token, version, ...])</p></td>
+<td><p>Retrieve a SingleStoreDB files manager.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.open.html#singlestoredb.management.workspace.StageObject.open" title="singlestoredb.management.workspace.StageObject.open"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.open</span></code></a>([mode, encoding])</p></td>
+</tbody>
+</table>
+<p>The<a href="singlestoredb.management.files.FilesManager.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">FilesManager</span></code></a> gives you access to each of the personal,
+shared, and model file locations.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesManager.html#singlestoredb.management.files.FilesManager" title="singlestoredb.management.files.FilesManager"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesManager</span></code></a>([access_token, version, ...])</p></td>
+<td><p>SingleStoreDB files manager.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesManager.personal_space.html#singlestoredb.management.files.FilesManager.personal_space" title="singlestoredb.management.files.FilesManager.personal_space"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesManager.personal_space</span></code></a></p></td>
+<td><p>Return the personal file space.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesManager.shared_space.html#singlestoredb.management.files.FilesManager.shared_space" title="singlestoredb.management.files.FilesManager.shared_space"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesManager.shared_space</span></code></a></p></td>
+<td><p>Return the shared file space.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesManager.models_space.html#singlestoredb.management.files.FilesManager.models_space" title="singlestoredb.management.files.FilesManager.models_space"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesManager.models_space</span></code></a></p></td>
+<td><p>Return the models file space.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The <a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.html#singlestoredb.management.files.FileSpace" title="singlestoredb.management.files.FileSpace"><code class="xref py py-class docutils literal notranslate"><span class="pre">FileSpace</span></code></a> contains the methods for interacting with the
+personal, shared, or model files.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.html#singlestoredb.management.files.FileSpace" title="singlestoredb.management.files.FileSpace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace</span></code></a>(location, manager)</p></td>
+<td><p>FileSpace manager.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.open.html#singlestoredb.management.files.FileSpace.open" title="singlestoredb.management.files.FileSpace.open"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.open</span></code></a>(path[, mode, encoding])</p></td>
 <td><p>Open a file path for reading or writing.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.download.html#singlestoredb.management.workspace.StageObject.download" title="singlestoredb.management.workspace.StageObject.download"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.download</span></code></a>([local_path, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.download_file.html#singlestoredb.management.files.FileSpace.download_file" title="singlestoredb.management.files.FileSpace.download_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.download_file</span></code></a>(path[, local_path, ...])</p></td>
 <td><p>Download the content of a file path.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.exists.html#singlestoredb.management.workspace.StageObject.exists" title="singlestoredb.management.workspace.StageObject.exists"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.exists</span></code></a>()</p></td>
-<td><p>Does the file / folder exist?</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.download_folder.html#singlestoredb.management.files.FileSpace.download_folder" title="singlestoredb.management.files.FileSpace.download_folder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.download_folder</span></code></a>(path[, ...])</p></td>
+<td><p>Download a FileSpace folder to a local directory.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.is_dir.html#singlestoredb.management.workspace.StageObject.is_dir" title="singlestoredb.management.workspace.StageObject.is_dir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.is_dir</span></code></a>()</p></td>
-<td><p>Is the object a directory?</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.upload_file.html#singlestoredb.management.files.FileSpace.upload_file" title="singlestoredb.management.files.FileSpace.upload_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.upload_file</span></code></a>(local_path, path, *[, ...])</p></td>
+<td><p>Upload a local file.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.is_file.html#singlestoredb.management.workspace.StageObject.is_file" title="singlestoredb.management.workspace.StageObject.is_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.is_file</span></code></a>()</p></td>
-<td><p>Is the object a file?</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.upload_folder.html#singlestoredb.management.files.FileSpace.upload_folder" title="singlestoredb.management.files.FileSpace.upload_folder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.upload_folder</span></code></a>(local_path, path, *)</p></td>
+<td><p>Upload a folder recursively.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.abspath.html#singlestoredb.management.workspace.StageObject.abspath" title="singlestoredb.management.workspace.StageObject.abspath"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.abspath</span></code></a>()</p></td>
-<td><p>Return the full path of the object.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.info.html#singlestoredb.management.files.FileSpace.info" title="singlestoredb.management.files.FileSpace.info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.info</span></code></a>(path)</p></td>
+<td><p>Return information about a file location.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.basename.html#singlestoredb.management.workspace.StageObject.basename" title="singlestoredb.management.workspace.StageObject.basename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.basename</span></code></a>()</p></td>
-<td><p>Return the basename of the object.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.listdir.html#singlestoredb.management.files.FileSpace.listdir" title="singlestoredb.management.files.FileSpace.listdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.listdir</span></code></a>([path, recursive])</p></td>
+<td><p>List the files / folders at the given path.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.dirname.html#singlestoredb.management.workspace.StageObject.dirname" title="singlestoredb.management.workspace.StageObject.dirname"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.dirname</span></code></a>()</p></td>
-<td><p>Return the directory name of the object.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.exists.html#singlestoredb.management.files.FileSpace.exists" title="singlestoredb.management.files.FileSpace.exists"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.exists</span></code></a>(path)</p></td>
+<td><p>Does the given file path exist?</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.getmtime.html#singlestoredb.management.workspace.StageObject.getmtime" title="singlestoredb.management.workspace.StageObject.getmtime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.getmtime</span></code></a>()</p></td>
-<td><p>Return the last modified datetime as a UNIX timestamp.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.is_dir.html#singlestoredb.management.files.FileSpace.is_dir" title="singlestoredb.management.files.FileSpace.is_dir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.is_dir</span></code></a>(path)</p></td>
+<td><p>Is the given file path a directory?</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.getctime.html#singlestoredb.management.workspace.StageObject.getctime" title="singlestoredb.management.workspace.StageObject.getctime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.getctime</span></code></a>()</p></td>
-<td><p>Return the creation datetime as a UNIX timestamp.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.is_file.html#singlestoredb.management.files.FileSpace.is_file" title="singlestoredb.management.files.FileSpace.is_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.is_file</span></code></a>(path)</p></td>
+<td><p>Is the given file path a file?</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rename.html#singlestoredb.management.workspace.StageObject.rename" title="singlestoredb.management.workspace.StageObject.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.rename</span></code></a>(new_path, *[, overwrite])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.mkdir.html#singlestoredb.management.files.FileSpace.mkdir" title="singlestoredb.management.files.FileSpace.mkdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.mkdir</span></code></a>(path[, overwrite])</p></td>
+<td><p>Make a directory in the file space.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.rename.html#singlestoredb.management.files.FileSpace.rename" title="singlestoredb.management.files.FileSpace.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.rename</span></code></a>(old_path, new_path, *[, ...])</p></td>
 <td><p>Move the file to a new location.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.remove.html#singlestoredb.management.workspace.StageObject.remove" title="singlestoredb.management.workspace.StageObject.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.remove</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.remove.html#singlestoredb.management.files.FileSpace.remove" title="singlestoredb.management.files.FileSpace.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.remove</span></code></a>(path)</p></td>
+<td><p>Delete a file location.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.removedirs.html#singlestoredb.management.files.FileSpace.removedirs" title="singlestoredb.management.files.FileSpace.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.removedirs</span></code></a>(path)</p></td>
+<td><p>Delete a folder recursively.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.rmdir.html#singlestoredb.management.files.FileSpace.rmdir" title="singlestoredb.management.files.FileSpace.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FileSpace.rmdir</span></code></a>(path)</p></td>
+<td><p>Delete a folder.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="filesobject">
+<h3>FilesObject<a class="headerlink" href="#filesobject" title="Link to this heading">¶</a></h3>
+<p><code class="xref py py-class docutils literal notranslate"><span class="pre">FilesObject`s</span> <span class="pre">are</span> <span class="pre">returned</span> <span class="pre">by</span> <span class="pre">the</span> <span class="pre">:meth:`StageObject.upload_file</span></code>
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">FilesObject.upload_folder()</span></code>, <code class="xref py py-meth docutils literal notranslate"><span class="pre">FilesObject.mkdir()</span></code>,
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">FilesObject.rename()</span></code>, and <code class="xref py py-meth docutils literal notranslate"><span class="pre">FilesObject.info()</span></code> methods.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.html#singlestoredb.management.workspace.FilesObject" title="singlestoredb.management.workspace.FilesObject"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject</span></code></a>(name, path, size, type, format, ...)</p></td>
+<td><p>File / folder object.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.open.html#singlestoredb.management.workspace.FilesObject.open" title="singlestoredb.management.workspace.FilesObject.open"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.open</span></code></a>([mode, encoding])</p></td>
+<td><p>Open a file path for reading or writing.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.download.html#singlestoredb.management.workspace.FilesObject.download" title="singlestoredb.management.workspace.FilesObject.download"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.download</span></code></a>([local_path, ...])</p></td>
+<td><p>Download the content of a file path.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.exists.html#singlestoredb.management.workspace.FilesObject.exists" title="singlestoredb.management.workspace.FilesObject.exists"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.exists</span></code></a>()</p></td>
+<td><p>Does the file / folder exist?</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.is_dir.html#singlestoredb.management.workspace.FilesObject.is_dir" title="singlestoredb.management.workspace.FilesObject.is_dir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.is_dir</span></code></a>()</p></td>
+<td><p>Is the object a directory?</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.is_file.html#singlestoredb.management.workspace.FilesObject.is_file" title="singlestoredb.management.workspace.FilesObject.is_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.is_file</span></code></a>()</p></td>
+<td><p>Is the object a file?</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.abspath.html#singlestoredb.management.workspace.FilesObject.abspath" title="singlestoredb.management.workspace.FilesObject.abspath"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.abspath</span></code></a>()</p></td>
+<td><p>Return the full path of the object.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.basename.html#singlestoredb.management.workspace.FilesObject.basename" title="singlestoredb.management.workspace.FilesObject.basename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.basename</span></code></a>()</p></td>
+<td><p>Return the basename of the object.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.dirname.html#singlestoredb.management.workspace.FilesObject.dirname" title="singlestoredb.management.workspace.FilesObject.dirname"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.dirname</span></code></a>()</p></td>
+<td><p>Return the directory name of the object.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.getmtime.html#singlestoredb.management.workspace.FilesObject.getmtime" title="singlestoredb.management.workspace.FilesObject.getmtime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.getmtime</span></code></a>()</p></td>
+<td><p>Return the last modified datetime as a UNIX timestamp.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.getctime.html#singlestoredb.management.workspace.FilesObject.getctime" title="singlestoredb.management.workspace.FilesObject.getctime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.getctime</span></code></a>()</p></td>
+<td><p>Return the creation datetime as a UNIX timestamp.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.rename.html#singlestoredb.management.workspace.FilesObject.rename" title="singlestoredb.management.workspace.FilesObject.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.rename</span></code></a>(new_path, *[, overwrite])</p></td>
+<td><p>Move the file to a new location.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.remove.html#singlestoredb.management.workspace.FilesObject.remove" title="singlestoredb.management.workspace.FilesObject.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.remove</span></code></a>()</p></td>
 <td><p>Delete the file.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.removedirs.html#singlestoredb.management.workspace.StageObject.removedirs" title="singlestoredb.management.workspace.StageObject.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.removedirs</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.removedirs.html#singlestoredb.management.workspace.FilesObject.removedirs" title="singlestoredb.management.workspace.FilesObject.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.removedirs</span></code></a>()</p></td>
 <td><p>Delete the directory recursively.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.StageObject.rmdir.html#singlestoredb.management.workspace.StageObject.rmdir" title="singlestoredb.management.workspace.StageObject.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StageObject.rmdir</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.rmdir.html#singlestoredb.management.workspace.FilesObject.rmdir" title="singlestoredb.management.workspace.FilesObject.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.rmdir</span></code></a>()</p></td>
 <td><p>Delete the empty directory.</p></td>
 </tr>
 </tbody>

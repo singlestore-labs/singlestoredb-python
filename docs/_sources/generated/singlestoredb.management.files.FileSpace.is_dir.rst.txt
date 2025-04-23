@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FileSpace.is\_dir
+================================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FileSpace.is_dir

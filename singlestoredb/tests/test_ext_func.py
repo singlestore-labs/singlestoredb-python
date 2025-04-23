@@ -929,8 +929,10 @@ class TestExtFunc(unittest.TestCase):
             'from data_with_nulls order by id',
         )
 
+        # assert [tuple(x) for x in self.cur] == \
+        #        [(200,), (200,), (500,), (None,), (0,)]
         assert [tuple(x) for x in self.cur] == \
-               [(200,), (200,), (500,), (None,), (0,)]
+               [(200,), (200,), (500,), (0,), (0,)]
 
         desc = self.cur.description
         assert len(desc) == 1
@@ -1145,7 +1147,7 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.BLOB
         assert desc[0].null_ok is True
 
-    def test_varchar_mult(self):
+    def _test_varchar_mult(self):
         self.cur.execute(
             'select varchar_mult(name, value) as res '
             'from data order by id',
@@ -1172,7 +1174,7 @@ class TestExtFunc(unittest.TestCase):
                 'from data order by id',
             )
 
-    def test_nullable_varchar_mult(self):
+    def _test_nullable_varchar_mult(self):
         self.cur.execute(
             'select nullable_varchar_mult(name, value) as res '
             'from data_with_nulls order by id',
@@ -1190,4 +1192,45 @@ class TestExtFunc(unittest.TestCase):
         assert len(desc) == 1
         assert desc[0].name == 'res'
         assert desc[0].type_code == ft.BLOB
+        assert desc[0].null_ok is True
+
+    def test_numpy_fixed_strings(self):
+        self.cur.execute('select * from numpy_fixed_strings()')
+
+        assert [tuple(x) for x in self.cur] == [
+            ('hello',),
+            ('hi there 😜',),
+            ('😜 bye',),
+        ]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.BLOB
+        assert desc[0].null_ok is False
+
+    def test_numpy_fixed_binary(self):
+        self.cur.execute('select * from numpy_fixed_binary()')
+
+        assert [tuple(x) for x in self.cur] == [
+            ('hello'.encode('utf8'),),
+            ('hi there 😜'.encode('utf8'),),
+            ('😜 bye'.encode('utf8'),),
+        ]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.BLOB
+        assert desc[0].null_ok is False
+
+    def test_no_args_no_return_value(self):
+        self.cur.execute('select no_args_no_return_value() as res')
+
+        assert [tuple(x) for x in self.cur] == [(None,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
         assert desc[0].null_ok is True

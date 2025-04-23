@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FileSpace.remove
+===============================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FileSpace.remove

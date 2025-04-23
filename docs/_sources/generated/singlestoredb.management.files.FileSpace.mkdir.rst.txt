@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FileSpace.mkdir
+==============================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FileSpace.mkdir

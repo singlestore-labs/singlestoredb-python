@@ -8,6 +8,38 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.13.0 - April 16, 2025
+------------------------
+* Refactor external function server (experimental) type system
+
+v1.12.4 - April 2, 2025
+-----------------------
+* Back out charset setting code
+
+v1.12.3 - April 1, 2025
+-----------------------
+* Fix default charset issue
+
+v1.12.2 - March 19, 2025
+------------------------
+* Fix workspace group lookup in some Fusion SQL commands
+
+v1.12.1 - March 10, 2025
+------------------------
+* Fix struct formatting issue in vector result support
+* Add cloud notebook information to client version
+* Fix ``IN GROUP`` clause in Fusion SQL for files
+* Fix file-like objects in file upload APIs
+
+v1.12.0 - February 27, 2025
+---------------------------
+* Add support for external TVFs
+* Add support for pyarrow Table and pandas / polars DataFrames return values in external functions
+* Add support for return value field names
+* Add support for dataclasses and Pydantic external function parameter and return value definitions
+* Add ``singlestoredb.server.docker`` and ``singlestoredb.server.free_tier`` server interfaces
+* Fix vector result conversions when numpy is not installed
+
 v1.11.0 - January 9, 2025
 -------------------------
 * Fix connection memory leak

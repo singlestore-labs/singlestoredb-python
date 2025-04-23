@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.FilesObject.download
+=======================================================
+.. currentmodule:: singlestoredb.management.workspace
+.. automethod:: FilesObject.download

@@ -97,6 +97,66 @@ created using the :meth:`Connection.cursor` method.
    Cursor.scroll
    Cursor.next
    Cursor.is_connected
+Uploading from streaming sources
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+While the standard way of loading a local file using ``LOAD DATA LOCAL INFILE``
+is well-known, it is possible to load data from programmatic sources
+as well. This means that you can generate data with a Python function
+and load that data into the database without writing it to a file
+first. Below are two methods of doing this. Both of them use the
+``local_infile=true`` parameter on the connection and the ``infile_stream=``
+option on the ``cursor.execute`` method.
+Uploading data using a generator function
+:::::::::::::::::::::::::::::::::::::::::
+.. sourcecode:: python
+   conn = s2.connect('s2-host.com/my_db?local_infile=true')
+   cur = conn.cursor()
+   def upload_csv():
+       yield '1,2,3\n'
+       yield '4,5,6\n'
+       yield '7,8,9\n'
+       # Note that the data returned does not have to
+       # correspond to a single row. Any length of
+       # data can be returned.
+       yield '10,11,12\n13,14,15\n'
+   cur.execute('CREATE TABLE generator (a INT, b INT, c INT)')
+   cur.execute(
+       '''
+       LOAD DATA LOCAL INFILE ':stream:' INTO TABLE generator
+           FIELDS TERMINATED BY ',' ENCLOSED BY '"'
+       ''',
+       infile_stream=upload_csv(),
+   )
+Uploading data using a queue and threads
+::::::::::::::::::::::::::::::::::::::::
+.. sourcecode:: python
+   from queue import Queue
+   from threading import Thread
+   conn = s2.connect('s2-host.com/my_db?local_infile=true')
+   cur = conn.cursor()
+   data_feeder = Queue()
+   cur.execute('CREATE TABLE queue (a INT, b INT, c INT)')
+   t = Thread(
+       target=cur.execute,
+       args=(
+           '''
+           LOAD DATA LOCAL INFILE ':stream:' INTO TABLE queue
+               FIELDS TERMINATED BY ',' ENCLOSED BY '"'
+           ''',
+       ),
+       kwargs=dict(infile_stream=data_feeder),
+   )
+   t.start()
+   data_feeder.put('1,2,3\n')
+   data_feeder.put('4,5,6\n')
+   data_feeder.put('7,8,9\n')
+   # Note that the data sent does not have to
+   # correspond to a single row. Any length of
+   # data can be sent.
+   data_feeder.put('10,11,12\n13,14,15\n')
+   # Send an empty string to end the data loader.
+   data_feeder.put('')
+   t.join()
 Utilities
 ---------
 .. currentmodule:: singlestoredb.auth
@@ -161,9 +221,10 @@ Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
 .. autosummary::
    :toctree: generated/
    Region
-Stage
-.....
-To interact with Stage, use the :attr:`WorkspaceManager.stage` attribute.
+Stage Files
+...........
+To interact with files in your Stage, use the
+:attr:`WorkspaceManager.stage` attribute.
 It will return a :class:`Stage` object which defines the following
 methods and attributes.
 .. currentmodule:: singlestoredb.management.workspace
@@ -185,29 +246,70 @@ methods and attributes.
    Stage.remove
    Stage.removedirs
    Stage.rmdir
-StageObject
+Personal, Shared, and Model Files
+.................................
+To manage personal files, shared files, and model files in an organization,
+you use the :func:`singlestoredb.manage_files` function. This will return a
+:class:`FilesManager` instance to access each location. You then use the
+returned :class:`FileSpace` to manage the files in each location. These
+classes are described below.
+.. currentmodule:: singlestoredb
+.. autosummary::
+   :toctree: generated/
+   manage_files
+The :class:`FilesManager` gives you access to each of the personal,
+shared, and model file locations.
+.. currentmodule:: singlestoredb.management.files
+.. autosummary::
+   :toctree: generated/
+   FilesManager
+   FilesManager.personal_space
+   FilesManager.shared_space
+   FilesManager.models_space
+The :class:`FileSpace` contains the methods for interacting with the
+personal, shared, or model files.
+.. currentmodule:: singlestoredb.management.files
+.. autosummary::
+   :toctree: generated/
+   FileSpace
+   FileSpace.open
+   FileSpace.download_file
+   FileSpace.download_folder
+   FileSpace.upload_file
+   FileSpace.upload_folder
+   FileSpace.info
+   FileSpace.listdir
+   FileSpace.exists
+   FileSpace.is_dir
+   FileSpace.is_file
+   FileSpace.mkdir
+   FileSpace.rename
+   FileSpace.remove
+   FileSpace.removedirs
+   FileSpace.rmdir
+FilesObject
 ...........
-:class:`StageObject`s are returned by the :meth:`StageObject.upload_file`
-:meth:`StageObject.upload_folder`, :meth:`StageObject.mkdir`,
-:meth:`StageObject.rename`, and :meth:`StageObject.info` methods.
+:class:`FilesObject`s are returned by the :meth:`StageObject.upload_file`
+:meth:`FilesObject.upload_folder`, :meth:`FilesObject.mkdir`,
+:meth:`FilesObject.rename`, and :meth:`FilesObject.info` methods.
 .. currentmodule:: singlestoredb.management.workspace
 .. autosummary::
    :toctree: generated/
-   StageObject
-   StageObject.open
-   StageObject.download
-   StageObject.exists
-   StageObject.is_dir
-   StageObject.is_file
-   StageObject.abspath
-   StageObject.basename
-   StageObject.dirname
-   StageObject.getmtime
-   StageObject.getctime
-   StageObject.rename
-   StageObject.remove
-   StageObject.removedirs
-   StageObject.rmdir
+   FilesObject
+   FilesObject.open
+   FilesObject.download
+   FilesObject.exists
+   FilesObject.is_dir
+   FilesObject.is_file
+   FilesObject.abspath
+   FilesObject.basename
+   FilesObject.dirname
+   FilesObject.getmtime
+   FilesObject.getctime
+   FilesObject.rename
+   FilesObject.remove
+   FilesObject.removedirs
+   FilesObject.rmdir
 Notebook Tools
 --------------
 The SDK includes a `notebook` sub-module for tools that are for use in

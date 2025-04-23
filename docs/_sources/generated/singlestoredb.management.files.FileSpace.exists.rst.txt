@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FileSpace.exists
+===============================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FileSpace.exists

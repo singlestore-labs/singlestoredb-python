@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FileSpace.download\_file
+=======================================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FileSpace.download_file

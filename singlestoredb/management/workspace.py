@@ -10,11 +10,9 @@ import re
 import time
 from collections.abc import Mapping
 from typing import Any
-from typing import BinaryIO
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import TextIO
 from typing import Union
 
 from .. import config
@@ -165,7 +163,7 @@ class Stage(FileLocation):
 
     def upload_file(
         self,
-        local_path: Union[PathLike, TextIO, BinaryIO],
+        local_path: Union[PathLike, io.IOBase],
         stage_path: PathLike,
         *,
         overwrite: bool = False,
@@ -183,7 +181,7 @@ class Stage(FileLocation):
             Should the ``stage_path`` be overwritten if it exists already?
 
         """
-        if isinstance(local_path, (TextIO, BinaryIO)):
+        if isinstance(local_path, io.IOBase):
             pass
         elif not os.path.isfile(local_path):
             raise IsADirectoryError(f'local path is not a file: {local_path}')
@@ -194,8 +192,9 @@ class Stage(FileLocation):
 
             self.remove(stage_path)
 
-        if isinstance(local_path, (TextIO, BinaryIO)):
+        if isinstance(local_path, io.IOBase):
             return self._upload(local_path, stage_path, overwrite=overwrite)
+
         return self._upload(open(local_path, 'rb'), stage_path, overwrite=overwrite)
 
     def upload_folder(
@@ -258,7 +257,7 @@ class Stage(FileLocation):
 
     def _upload(
         self,
-        content: Union[str, bytes, TextIO, BinaryIO],
+        content: Union[str, bytes, io.IOBase],
         stage_path: PathLike,
         *,
         overwrite: bool = False,

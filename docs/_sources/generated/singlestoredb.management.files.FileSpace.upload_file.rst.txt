@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FileSpace.upload\_file
+=====================================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FileSpace.upload_file

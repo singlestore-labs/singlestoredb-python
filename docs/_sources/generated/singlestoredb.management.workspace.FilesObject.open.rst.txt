@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.FilesObject.open
+===================================================
+.. currentmodule:: singlestoredb.management.workspace
+.. automethod:: FilesObject.open

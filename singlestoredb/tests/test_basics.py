@@ -6,6 +6,7 @@ import decimal
 import math
 import os
 import unittest
+from typing import Optional
 
 from requests.exceptions import InvalidJSONError
 
@@ -27,6 +28,12 @@ try:
     has_pygeos = True
 except ImportError:
     has_pygeos = False
+
+try:
+    import pydantic
+    has_pydantic = True
+except ImportError:
+    has_pydantic = False
 
 import singlestoredb as s2
 from . import utils
@@ -1254,6 +1261,70 @@ class TestBasics(unittest.TestCase):
             self.cur.execute(f'DROP TABLE test_character_lengths_{tbl_id}')
         except Exception:
             pass
+
+    def test_pydantic(self):
+        if not has_pydantic:
+            self.skipTest('Test requires pydantic')
+
+        tblname = 'foo_' + str(id(self))
+
+        class FooData(pydantic.BaseModel):
+            x: Optional[int]
+            y: Optional[float]
+            z: Optional[str] = None
+
+        self.cur.execute(f'''
+            CREATE TABLE {tblname}(
+                x INT,
+                y DOUBLE,
+                z TEXT
+            )
+        ''')
+
+        self.cur.execute(
+            f'INSERT INTO {tblname}(x, y) VALUES (%(x)s, %(y)s)',
+            FooData(x=2, y=3.23),
+        )
+
+        self.cur.execute('SELECT * FROM ' + tblname)
+
+        assert list(sorted(self.cur.fetchall())) == \
+            list(sorted([(2, 3.23, None)]))
+
+        self.cur.executemany(
+            f'INSERT INTO {tblname}(x) VALUES (%(x)s)',
+            [FooData(x=3, y=3.12), FooData(x=10, y=100.11)],
+        )
+
+        self.cur.execute('SELECT * FROM ' + tblname)
+
+        assert list(sorted(self.cur.fetchall())) == \
+            list(
+                sorted([
+                    (2, 3.23, None),
+                    (3, None, None),
+                    (10, None, None),
+                ]),
+            )
+
+    def test_charset(self):
+        self.skipTest('Skip until charset commands are re-implemented')
+
+        with s2.connect(database=type(self).dbname) as conn:
+            with conn.cursor() as cur:
+                cur.execute('''
+                    select json_extract_string('{"foo":"😀"}', "bar");
+                ''')
+
+        if 'http' in self.conn.driver:
+            self.skipTest('Charset is not use in HTTP interface')
+
+        with self.assertRaises(s2.OperationalError):
+            with s2.connect(database=type(self).dbname, charset='utf8') as conn:
+                with conn.cursor() as cur:
+                    cur.execute('''
+                        select json_extract_string('{"foo":"😀"}', "bar");
+                    ''')
 
 
 if __name__ == '__main__':

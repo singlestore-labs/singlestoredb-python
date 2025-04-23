@@ -1,0 +1,36 @@
+﻿singlestoredb.management.workspace.FilesObject
+==============================================
+.. currentmodule:: singlestoredb.management.workspace
+.. autoclass:: FilesObject
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~FilesObject.__init__
+      ~FilesObject.abspath
+      ~FilesObject.basename
+      ~FilesObject.dirname
+      ~FilesObject.download
+      ~FilesObject.download_file
+      ~FilesObject.exists
+      ~FilesObject.from_dict
+      ~FilesObject.getctime
+      ~FilesObject.getmtime
+      ~FilesObject.is_dir
+      ~FilesObject.is_file
+      ~FilesObject.open
+      ~FilesObject.remove
+      ~FilesObject.removedirs
+      ~FilesObject.rename
+      ~FilesObject.rmdir
+   .. rubric:: Attributes
+   .. autosummary::
+      ~FilesObject.name
+      ~FilesObject.path
+      ~FilesObject.size
+      ~FilesObject.type
+      ~FilesObject.format
+      ~FilesObject.mimetype
+      ~FilesObject.created_at
+      ~FilesObject.last_modified_at
+      ~FilesObject.writable
+      ~FilesObject.content

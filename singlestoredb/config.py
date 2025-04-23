@@ -80,7 +80,7 @@ register_option(
 )
 
 register_option(
-    'charset', 'string', check_str, 'utf8',
+    'charset', 'string', check_str, 'utf8mb4',
     'Specifies the character set for the session.',
     environ='SINGLESTOREDB_CHARSET',
 )
@@ -427,7 +427,7 @@ register_option(
 )
 
 register_option(
-    'external_function.host', 'string', check_str, '127.0.0.1',
+    'external_function.host', 'string', check_str, 'localhost',
     'Specifies the host to bind the server to.',
     environ=['SINGLESTOREDB_EXT_FUNC_HOST'],
 )

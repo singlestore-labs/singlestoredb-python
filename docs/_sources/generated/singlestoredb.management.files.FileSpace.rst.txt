@@ -1,0 +1,24 @@
+﻿singlestoredb.management.files.FileSpace
+========================================
+.. currentmodule:: singlestoredb.management.files
+.. autoclass:: FileSpace
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~FileSpace.__init__
+      ~FileSpace.download_file
+      ~FileSpace.download_folder
+      ~FileSpace.exists
+      ~FileSpace.info
+      ~FileSpace.is_dir
+      ~FileSpace.is_file
+      ~FileSpace.listdir
+      ~FileSpace.mkdir
+      ~FileSpace.mkdirs
+      ~FileSpace.open
+      ~FileSpace.remove
+      ~FileSpace.removedirs
+      ~FileSpace.rename
+      ~FileSpace.rmdir
+      ~FileSpace.upload_file
+      ~FileSpace.upload_folder

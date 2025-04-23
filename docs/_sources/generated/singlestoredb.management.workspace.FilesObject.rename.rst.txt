@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.FilesObject.rename
+=====================================================
+.. currentmodule:: singlestoredb.management.workspace
+.. automethod:: FilesObject.rename
