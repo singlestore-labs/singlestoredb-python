@@ -65,6 +65,7 @@ from ...mysql.constants import FIELD_TYPE as ft
 from ..signature import get_signature
 from ..signature import signature_to_sql
 from ..typing import Masked
+from ..typing import Table
 
 try:
     import cloudpickle
@@ -159,18 +160,28 @@ def as_tuple(x: Any) -> Any:
 
 def as_list_of_tuples(x: Any) -> Any:
     """Convert object to a list of tuples."""
+    if isinstance(x, Table):
+        x = x[0]
     if isinstance(x, (list, tuple)) and len(x) > 0:
+        if isinstance(x[0], (list, tuple)):
+            return x
         if has_pydantic and isinstance(x[0], BaseModel):
             return [tuple(y.model_dump().values()) for y in x]
         if dataclasses.is_dataclass(x[0]):
             return [dataclasses.astuple(y) for y in x]
         if isinstance(x[0], dict):
             return [tuple(y.values()) for y in x]
+        return [(y,) for y in x]
     return x
 
 
 def get_dataframe_columns(df: Any) -> List[Any]:
     """Return columns of data from a dataframe/table."""
+    if isinstance(df, Table):
+        if len(df) == 1:
+            df = df[0]
+        else:
+            return list(df)
     if isinstance(df, tuple):
         return list(df)
     rtype = str(type(df)).lower()
@@ -259,8 +270,8 @@ def make_func(
     masks = get_masked_params(func)
 
     if function_type == 'tvf':
-        # Scalar (Python) types
-        if returns_data_format == 'scalar':
+        # Scalar / list types (row-based)
+        if returns_data_format in ['scalar', 'list']:
             async def do_func(
                 row_ids: Sequence[int],
                 rows: Sequence[Sequence[Any]],
@@ -274,7 +285,7 @@ def make_func(
                     out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
                 return out_ids, out
 
-        # Vector formats
+        # Vector formats (column-based)
         else:
             array_cls = get_array_class(returns_data_format)
 
@@ -304,8 +315,8 @@ def make_func(
                 return row_ids, [build_tuple(x) for x in res]
 
     else:
-        # Scalar (Python) types
-        if returns_data_format == 'scalar':
+        # Scalar / list types (row-based)
+        if returns_data_format in ['scalar', 'list']:
             async def do_func(
                 row_ids: Sequence[int],
                 rows: Sequence[Sequence[Any]],
@@ -313,7 +324,7 @@ def make_func(
                 '''Call function on given rows of data.'''
                 return row_ids, [as_tuple(x) for x in zip(func_map(func, rows))]
 
-        # Vector formats
+        # Vector formats (column-based)
         else:
             array_cls = get_array_class(returns_data_format)
 
@@ -471,8 +482,8 @@ class Application(object):
             response=rowdat_1_response_dict,
         ),
         (b'application/octet-stream', b'1.0', 'list'): dict(
-            load=rowdat_1.load_list,
-            dump=rowdat_1.dump_list,
+            load=rowdat_1.load,
+            dump=rowdat_1.dump,
             response=rowdat_1_response_dict,
         ),
         (b'application/octet-stream', b'1.0', 'pandas'): dict(
@@ -501,8 +512,8 @@ class Application(object):
             response=json_response_dict,
         ),
         (b'application/json', b'1.0', 'list'): dict(
-            load=jdata.load_list,
-            dump=jdata.dump_list,
+            load=jdata.load,
+            dump=jdata.dump,
             response=json_response_dict,
         ),
         (b'application/json', b'1.0', 'pandas'): dict(

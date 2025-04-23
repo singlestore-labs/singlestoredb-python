@@ -1234,3 +1234,58 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].name == 'res'
         assert desc[0].type_code == ft.TINY
         assert desc[0].null_ok is True
+
+    def test_table_function(self):
+        self.cur.execute('select * from table_function(5)')
+
+        assert [x[0] for x in self.cur] == [10, 10, 10, 10, 10]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'a'
+        assert desc[0].type_code == ft.LONGLONG
+        assert desc[0].null_ok is False
+
+    def test_table_function_tuple(self):
+        self.cur.execute('select * from table_function_tuple(3)')
+
+        out = list(self.cur)
+
+        assert out == [
+            (10, 10.0, 'ten'),
+            (10, 10.0, 'ten'),
+            (10, 10.0, 'ten'),
+        ]
+
+        desc = self.cur.description
+        assert len(desc) == 3
+        assert desc[0].name == 'c_int'
+        assert desc[1].name == 'c_float'
+        assert desc[2].name == 'c_str'
+
+    def test_table_function_struct(self):
+        self.cur.execute('select * from table_function_struct(3)')
+
+        out = list(self.cur)
+
+        assert out == [
+            (10, 10.0, 'ten'),
+            (10, 10.0, 'ten'),
+            (10, 10.0, 'ten'),
+        ]
+
+        desc = self.cur.description
+        assert len(desc) == 3
+        assert desc[0].name == 'c_int'
+        assert desc[1].name == 'c_float'
+        assert desc[2].name == 'c_str'
+
+    def test_vec_function(self):
+        self.cur.execute('select vec_function(5, 10) as res')
+
+        assert [tuple(x) for x in self.cur] == [(50.0,)]
+
+    def test_vec_function_ints(self):
+        self.cur.execute('select vec_function(5, 10) as res')
+
+        assert [tuple(x) for x in self.cur] == [(50,)]

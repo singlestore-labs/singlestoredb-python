@@ -1002,7 +1002,7 @@ def get_schema(
                     f'{", ".join(out_data_formats)}',
                 )
 
-            if out_data_formats:
+            if data_format != 'list' and out_data_formats:
                 data_format = out_data_formats[0]
 
             # Since the colspec was computed by get_schema already, don't go

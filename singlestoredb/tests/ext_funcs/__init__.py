@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # mypy: disable-error-code="type-arg"
+import typing
+from typing import List
+from typing import NamedTuple
 from typing import Optional
+from typing import Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -8,7 +12,9 @@ import pandas as pd
 import polars as pl
 import pyarrow as pa
 
+import singlestoredb.functions.dtypes as dt
 from singlestoredb.functions import Masked
+from singlestoredb.functions import Table
 from singlestoredb.functions import udf
 from singlestoredb.functions.dtypes import BIGINT
 from singlestoredb.functions.dtypes import BLOB
@@ -18,7 +24,6 @@ from singlestoredb.functions.dtypes import MEDIUMINT
 from singlestoredb.functions.dtypes import SMALLINT
 from singlestoredb.functions.dtypes import TEXT
 from singlestoredb.functions.dtypes import TINYINT
-from singlestoredb.functions.typing import Table
 
 
 @udf
@@ -525,3 +530,53 @@ def numpy_fixed_binary() -> Table[npt.NDArray[np.bytes_]]:
 @udf
 def no_args_no_return_value() -> None:
     pass
+
+
+@udf
+def table_function(n: int) -> Table[List[int]]:
+    return Table([10] * n)
+
+
+@udf(
+    returns=[
+        dt.INT(name='c_int', nullable=False),
+        dt.DOUBLE(name='c_float', nullable=False),
+        dt.TEXT(name='c_str', nullable=False),
+    ],
+)
+def table_function_tuple(n: int) -> Table[List[Tuple[int, float, str]]]:
+    return Table([(10, 10.0, 'ten')] * n)
+
+
+class MyTable(NamedTuple):
+    c_int: int
+    c_float: float
+    c_str: str
+
+
+@udf
+def table_function_struct(n: int) -> Table[List[MyTable]]:
+    return Table([MyTable(10, 10.0, 'ten')] * n)
+
+
+@udf
+def vec_function(
+    x: npt.NDArray[np.float64], y: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
+    return x * y
+
+
+class VecInputs(typing.NamedTuple):
+    x: np.int8
+    y: np.int8
+
+
+class VecOutputs(typing.NamedTuple):
+    res: np.int16
+
+
+@udf(args=VecInputs, returns=VecOutputs)
+def vec_function_ints(
+    x: npt.NDArray[np.int_], y: npt.NDArray[np.int_],
+) -> npt.NDArray[np.int_]:
+    return x * y
