@@ -58,7 +58,7 @@ class AppConfig:
             user_token=user_token,
             running_interactively=running_interactively,
             is_gateway_enabled=is_gateway_enabled,
-            is_local_dev=is_local_dev_env_var=="true"
+            is_local_dev=is_local_dev_env_var == 'true',
         )
 
     @property

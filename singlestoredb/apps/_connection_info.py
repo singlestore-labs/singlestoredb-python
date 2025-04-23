@@ -1,5 +1,7 @@
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Any
+from typing import Dict
+from typing import Optional
 
 
 @dataclass
@@ -9,7 +11,8 @@ class ConnectionInfo:
     # Only present in interactive mode
     token: Optional[str]
 
+
 @dataclass
 class UdfConnectionInfo:
     url: str
-    functions: Dict[str, Any] 
+    functions: Dict[str, Any]

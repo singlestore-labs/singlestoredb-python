@@ -2,10 +2,10 @@ import asyncio
 import os
 import typing
 
-from ._config import AppConfig
-from ._connection_info import ConnectionInfo, UdfConnectionInfo
-from ._process import kill_process_by_port
 from ..functions.ext.asgi import Application
+from ._config import AppConfig
+from ._connection_info import UdfConnectionInfo
+from ._process import kill_process_by_port
 
 if typing.TYPE_CHECKING:
     from ._uvicorn_util import AwaitableUvicornServer
@@ -18,7 +18,7 @@ async def run_udf_app(
     replace_existing: bool,
     log_level: str = 'error',
     kill_existing_app_server: bool = True,
-) -> ConnectionInfo:
+) -> UdfConnectionInfo:
     global _running_server
     from ._uvicorn_util import AwaitableUvicornServer
 
@@ -41,10 +41,10 @@ async def run_udf_app(
         kill_process_by_port(app_config.listen_port)
 
     base_url = generate_base_url(app_config)
-    
-    udf_suffix = ""
+
+    udf_suffix = ''
     if app_config.running_interactively:
-        udf_suffix = "_test"
+        udf_suffix = '_test'
     app = Application(url=base_url, app_mode='managed', name_suffix=udf_suffix)
 
     config = uvicorn.Config(
@@ -65,9 +65,10 @@ async def run_udf_app(
 
     return UdfConnectionInfo(base_url, app.get_function_info())
 
-def generate_base_url(app_config: AppConfig) -> str :
+
+def generate_base_url(app_config: AppConfig) -> str:
     if not app_config.is_gateway_enabled:
-        raise RuntimeError("Python UDFs are not available if Nova Gateway is not enabled")
+        raise RuntimeError('Python UDFs are not available if Nova Gateway is not enabled')
 
     if not app_config.running_interactively:
         return app_config.base_url
@@ -77,6 +78,8 @@ def generate_base_url(app_config: AppConfig) -> str :
     if app_config.is_local_dev:
         gateway_url = os.environ.get('SINGLESTOREDB_NOVA_GATEWAY_DEV_ENDPOINT')
         if gateway_url is None:
-            raise RuntimeError("Missing SINGLESTOREDB_NOVA_GATEWAY_DEV_ENDPOINT environment variable.")
+            raise RuntimeError(
+                'Missing SINGLESTOREDB_NOVA_GATEWAY_DEV_ENDPOINT environment variable.',
+            )
 
-    return f'{gateway_url}/pythonudfs/{app_config.notebook_server_id}/interactive'
+    return f'{gateway_url}/pythonudfs/{app_config.notebook_server_id}/interactive/'
