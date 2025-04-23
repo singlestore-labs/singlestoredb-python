@@ -40,7 +40,7 @@ async def run_udf_app(
         # Kill if any other process is occupying the port
         kill_process_by_port(app_config.listen_port)
 
-    base_url = generate_base_url(app_config.base_url)
+    base_url = generate_base_url(app_config)
     app = Application(url=base_url, app_mode='managed') 
 
     config = uvicorn.Config(
