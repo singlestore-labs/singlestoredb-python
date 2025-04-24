@@ -8,10 +8,12 @@ class AppConfig:
     listen_port: int
     base_url: str
     base_path: str
+    notebook_server_id: str
     app_token: Optional[str]
     user_token: Optional[str]
     running_interactively: bool
     is_gateway_enabled: bool
+    is_local_dev: bool
 
     @staticmethod
     def _read_variable(name: str) -> str:
@@ -28,6 +30,8 @@ class AppConfig:
         port = cls._read_variable('SINGLESTOREDB_APP_LISTEN_PORT')
         base_url = cls._read_variable('SINGLESTOREDB_APP_BASE_URL')
         base_path = cls._read_variable('SINGLESTOREDB_APP_BASE_PATH')
+        notebook_server_id = cls._read_variable('SINGLESTOREDB_NOTEBOOK_SERVER_ID')
+        is_local_dev_env_var = cls._read_variable('SINGLESTOREDB_IS_LOCAL_DEV')
 
         workload_type = os.environ.get('SINGLESTOREDB_WORKLOAD_TYPE')
         running_interactively = workload_type == 'InteractiveNotebook'
@@ -49,10 +53,12 @@ class AppConfig:
             listen_port=int(port),
             base_url=base_url,
             base_path=base_path,
+            notebook_server_id=notebook_server_id,
             app_token=app_token,
             user_token=user_token,
             running_interactively=running_interactively,
             is_gateway_enabled=is_gateway_enabled,
+            is_local_dev=is_local_dev_env_var == 'true',
         )
 
     @property
