@@ -1286,6 +1286,97 @@ class TestExtFunc(unittest.TestCase):
         assert [tuple(x) for x in self.cur] == [(50.0,)]
 
     def test_vec_function_ints(self):
-        self.cur.execute('select vec_function(5, 10) as res')
+        self.cur.execute('select vec_function_ints(5, 10) as res')
 
         assert [tuple(x) for x in self.cur] == [(50,)]
+
+    def test_vec_function_df(self):
+        self.cur.execute('select * from vec_function_df(5, 10)')
+
+        out = list(self.cur)
+
+        assert out == [
+            (1, 1.1),
+            (2, 2.2),
+            (3, 3.3),
+        ]
+
+        desc = self.cur.description
+        assert len(desc) == 2
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.SHORT
+        assert desc[0].null_ok is False
+        assert desc[1].name == 'res2'
+        assert desc[1].type_code == ft.DOUBLE
+        assert desc[1].null_ok is False
+
+    def test_vec_function_ints_masked(self):
+        self.cur.execute('select * from vec_function_ints_masked(5, 10)')
+
+        assert [tuple(x) for x in self.cur] == [(50,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.SHORT
+        assert desc[0].null_ok is True
+
+        self.cur.execute('select * from vec_function_ints_masked(NULL, 10)')
+
+        assert [tuple(x) for x in self.cur] == [(None,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.SHORT
+        assert desc[0].null_ok is True
+
+        self.cur.execute('select * from vec_function_ints_masked(5, NULL)')
+
+        assert [tuple(x) for x in self.cur] == [(None,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.SHORT
+        assert desc[0].null_ok is True
+
+    def test_vec_function_ints_masked2(self):
+        self.cur.execute('select * from vec_function_ints_masked2(5, 10)')
+
+        assert [tuple(x) for x in self.cur] == [(50, 50)]
+
+        desc = self.cur.description
+        assert len(desc) == 2
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.SHORT
+        assert desc[0].null_ok is True
+        assert desc[1].name == 'res2'
+        assert desc[1].type_code == ft.SHORT
+        assert desc[1].null_ok is True
+
+        self.cur.execute('select * from vec_function_ints_masked2(NULL, 10)')
+
+        assert [tuple(x) for x in self.cur] == [(None, None)]
+
+        desc = self.cur.description
+        assert len(desc) == 2
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.SHORT
+        assert desc[0].null_ok is True
+        assert desc[1].name == 'res2'
+        assert desc[1].type_code == ft.SHORT
+        assert desc[1].null_ok is True
+
+        self.cur.execute('select * from vec_function_ints_masked2(5, NULL)')
+
+        assert [tuple(x) for x in self.cur] == [(None, None)]
+
+        desc = self.cur.description
+        assert len(desc) == 2
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.SHORT
+        assert desc[0].null_ok is True
+        assert desc[1].name == 'res2'
+        assert desc[1].type_code == ft.SHORT
+        assert desc[1].null_ok is True

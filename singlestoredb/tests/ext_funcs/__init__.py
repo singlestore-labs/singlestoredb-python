@@ -580,3 +580,45 @@ def vec_function_ints(
     x: npt.NDArray[np.int_], y: npt.NDArray[np.int_],
 ) -> npt.NDArray[np.int_]:
     return x * y
+
+
+class DFOutputs(typing.NamedTuple):
+    res: np.int16
+    res2: np.float64
+
+
+@udf(args=VecInputs, returns=DFOutputs)
+def vec_function_df(
+    x: npt.NDArray[np.int_], y: npt.NDArray[np.int_],
+) -> Table[pd.DataFrame]:
+    return pd.DataFrame(dict(res=[1, 2, 3], res2=[1.1, 2.2, 3.3]))
+
+
+class MaskOutputs(typing.NamedTuple):
+    res: Optional[np.int16]
+
+
+@udf(args=VecInputs, returns=MaskOutputs)
+def vec_function_ints_masked(
+    x: Masked[npt.NDArray[np.int_]], y: Masked[npt.NDArray[np.int_]],
+) -> Table[Masked[npt.NDArray[np.int_]]]:
+    x_data, x_nulls = x
+    y_data, y_nulls = y
+    return Table(Masked(x_data * y_data, x_nulls | y_nulls))
+
+
+class MaskOutputs2(typing.NamedTuple):
+    res: Optional[np.int16]
+    res2: Optional[np.int16]
+
+
+@udf(args=VecInputs, returns=MaskOutputs2)
+def vec_function_ints_masked2(
+    x: Masked[npt.NDArray[np.int_]], y: Masked[npt.NDArray[np.int_]],
+) -> Table[Masked[npt.NDArray[np.int_]], Masked[npt.NDArray[np.int_]]]:
+    x_data, x_nulls = x
+    y_data, y_nulls = y
+    return Table(
+        Masked(x_data * y_data, x_nulls | y_nulls),
+        Masked(x_data * y_data, x_nulls | y_nulls),
+    )

@@ -817,14 +817,16 @@ def get_schema(
                 if len(args) != 1:
                     raise TypeError(
                         'only one list is supported within a table; to '
-                        'return multiple columns, use a NamedTuple, dataclass, '
-                        'TypedDict, or pydantic model',
+                        'return multiple columns, use a tuple, NamedTuple, '
+                        'dataclass, TypedDict, or pydantic model',
                     )
                 spec = typing.get_args(args[0])[0]
                 data_format = 'list'
 
-            elif not all([utils.is_vector(x) for x in args]):
-                # TODO: Don't fail if types are specified in np.ndarrays
+            elif all([utils.is_vector(x, include_masks=True) for x in args]):
+                pass
+
+            else:
                 raise TypeError(
                     'return type for TVF must be a list, DataFrame / Table, '
                     'or tuple of vectors',
@@ -970,7 +972,7 @@ def get_schema(
             # return types or parameter types
             if out_overrides and len(typing.get_args(spec)) != len(out_overrides):
                 raise ValueError(
-                    'number of {mode} types does not match the number of '
+                    f'number of {mode} types does not match the number of '
                     'overrides specified',
                 )
 
@@ -1312,14 +1314,14 @@ def dtype_to_sql(
 
     """
     nullable = ' NOT NULL'
-    if force_nullable:
-        nullable = ' NULL'
-    elif dtype.endswith('?'):
+    if dtype.endswith('?'):
         nullable = ' NULL'
         dtype = dtype[:-1]
     elif '|null' in dtype:
         nullable = ' NULL'
         dtype = dtype.replace('|null', '')
+    elif force_nullable:
+        nullable = ' NULL'
 
     if dtype == 'null':
         nullable = ''

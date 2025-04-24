@@ -182,8 +182,13 @@ def get_dataframe_columns(df: Any) -> List[Any]:
             df = df[0]
         else:
             return list(df)
+
+    if isinstance(df, Masked):
+        return [df]
+
     if isinstance(df, tuple):
         return list(df)
+
     rtype = str(type(df)).lower()
     if 'dataframe' in rtype:
         return [df[x] for x in df.columns]
@@ -195,6 +200,7 @@ def get_dataframe_columns(df: Any) -> List[Any]:
         return [df]
     elif 'tuple' in rtype:
         return list(df)
+
     raise TypeError(
         'Unsupported data type for dataframe columns: '
         f'{rtype}',
@@ -292,7 +298,10 @@ def make_func(
             async def do_func(  # type: ignore
                 row_ids: Sequence[int],
                 cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-            ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
+            ) -> Tuple[
+                Sequence[int],
+                List[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
+            ]:
                 '''Call function on given cols of data.'''
                 # NOTE: There is no way to determine which row ID belongs to
                 #        each result row, so we just have to use the same
@@ -310,7 +319,10 @@ def make_func(
                     res = get_dataframe_columns(func())
 
                 # Generate row IDs
-                row_ids = array_cls([row_ids[0]] * len(res[0]))
+                if isinstance(res[0], Masked):
+                    row_ids = array_cls([row_ids[0]] * len(res[0][0]))
+                else:
+                    row_ids = array_cls([row_ids[0]] * len(res[0]))
 
                 return row_ids, [build_tuple(x) for x in res]
 
@@ -331,7 +343,10 @@ def make_func(
             async def do_func(  # type: ignore
                 row_ids: Sequence[int],
                 cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-            ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
+            ) -> Tuple[
+                Sequence[int],
+                List[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
+            ]:
                 '''Call function on given cols of data.'''
                 row_ids = array_cls(row_ids)
 

@@ -6,6 +6,7 @@ import typing
 from typing import Any
 from typing import Dict
 
+from .typing import Masked
 
 if sys.version_info >= (3, 10):
     _UNION_TYPES = {typing.Union, types.UnionType}
@@ -14,6 +15,15 @@ else:
 
 
 is_dataclass = dataclasses.is_dataclass
+
+
+def is_masked(obj: Any) -> bool:
+    """Check if an object is a Masked type."""
+    origin = typing.get_origin(obj)
+    if origin is not None:
+        return origin is Masked or \
+            (inspect.isclass(origin) and issubclass(origin, Masked))
+    return False
 
 
 def is_union(x: Any) -> bool:
@@ -77,12 +87,13 @@ def is_dataframe(obj: Any) -> bool:
     return False
 
 
-def is_vector(obj: Any) -> bool:
+def is_vector(obj: Any, include_masks: bool = False) -> bool:
     """Check if an object is a vector type."""
     return is_pandas_series(obj) \
         or is_polars_series(obj) \
         or is_pyarrow_array(obj) \
-        or is_numpy(obj)
+        or is_numpy(obj) \
+        or is_masked(obj)
 
 
 def get_data_format(obj: Any) -> str:
