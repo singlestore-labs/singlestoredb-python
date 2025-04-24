@@ -6,7 +6,6 @@ import re
 from typing import Any
 from typing import Callable
 from typing import Optional
-from typing import Tuple
 from typing import Union
 
 from ..converters import converters
@@ -1683,67 +1682,67 @@ def GEOGRAPHY(
     return out
 
 
-def RECORD(
-    *args: Tuple[str, DataType],
-    nullable: bool = True,
-    name: Optional[str] = None,
-) -> SQLString:
-    """
-    RECORD type specification.
+# def RECORD(
+#     *args: Tuple[str, DataType],
+#     nullable: bool = True,
+#     name: Optional[str] = None,
+# ) -> SQLString:
+#     """
+#     RECORD type specification.
+#
+#     Parameters
+#     ----------
+#     *args : Tuple[str, DataType]
+#         Field specifications
+#     nullable : bool, optional
+#         Can the value be NULL?
+#     name : str, optional
+#         Name of the column / parameter
+#
+#     Returns
+#     -------
+#     SQLString
+#
+#     """
+#     assert len(args) > 0
+#     fields = []
+#     for name, value in args:
+#         if callable(value):
+#             fields.append(f'{escape_name(name)} {value()}')
+#         else:
+#             fields.append(f'{escape_name(name)} {value}')
+#     out = SQLString(f'RECORD({", ".join(fields)})' + _modifiers(nullable=nullable))
+#     out.name = name
+#     return out
 
-    Parameters
-    ----------
-    *args : Tuple[str, DataType]
-        Field specifications
-    nullable : bool, optional
-        Can the value be NULL?
-    name : str, optional
-        Name of the column / parameter
 
-    Returns
-    -------
-    SQLString
-
-    """
-    assert len(args) > 0
-    fields = []
-    for name, value in args:
-        if callable(value):
-            fields.append(f'{escape_name(name)} {value()}')
-        else:
-            fields.append(f'{escape_name(name)} {value}')
-    out = SQLString(f'RECORD({", ".join(fields)})' + _modifiers(nullable=nullable))
-    out.name = name
-    return out
-
-
-def ARRAY(
-    dtype: DataType,
-    nullable: bool = True,
-    name: Optional[str] = None,
-) -> SQLString:
-    """
-    ARRAY type specification.
-
-    Parameters
-    ----------
-    dtype : DataType
-        The data type of the array elements
-    nullable : bool, optional
-        Can the value be NULL?
-    name : str, optional
-        Name of the column / parameter
-
-    Returns
-    -------
-    SQLString
-
-    """
-    if callable(dtype):
-        dtype = dtype()
-    out = SQLString(f'ARRAY({dtype})' + _modifiers(nullable=nullable))
-    out.name = name
-    return out
+# def ARRAY(
+#     dtype: DataType,
+#     nullable: bool = True,
+#     name: Optional[str] = None,
+# ) -> SQLString:
+#     """
+#     ARRAY type specification.
+#
+#     Parameters
+#     ----------
+#     dtype : DataType
+#         The data type of the array elements
+#     nullable : bool, optional
+#         Can the value be NULL?
+#     name : str, optional
+#         Name of the column / parameter
+#
+#     Returns
+#     -------
+#     SQLString
+#
+#     """
+#     if callable(dtype):
+#         dtype = dtype()
+#     out = SQLString(f'ARRAY({dtype})' + _modifiers(nullable=nullable))
+#     out.name = name
+#     return out
 
 
 # F32 = 'F32'

@@ -30,7 +30,7 @@ JSONList = List[JSON]
 T = TypeVar('T')
 
 if sys.version_info < (3, 10):
-    PathLike = Union[str, os.PathLike]
+    PathLike = Union[str, os.PathLike]  # type: ignore
     PathLikeABC = os.PathLike
 else:
     PathLike = Union[str, os.PathLike[str]]
@@ -73,7 +73,7 @@ def ttl_property(ttl: datetime.timedelta) -> Callable[[Any], Any]:
     """Property with a time-to-live."""
     def wrapper(func: Callable[[Any], Any]) -> Any:
         out = TTLProperty(func, ttl=ttl)
-        return functools.wraps(func)(out)
+        return functools.wraps(func)(out)  # type: ignore
     return wrapper
 
 

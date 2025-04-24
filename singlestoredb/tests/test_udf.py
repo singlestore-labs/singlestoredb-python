@@ -16,7 +16,7 @@ import pydantic
 
 from ..functions import dtypes as dt
 from ..functions import signature as sig
-from ..functions import tvf
+from ..functions import Table
 from ..functions import udf
 
 
@@ -28,10 +28,7 @@ E = Optional[List[Optional[Union[float, int]]]]
 
 
 def to_sql(x):
-    out = sig.signature_to_sql(
-        sig.get_signature(x),
-        function_type=getattr(x, '_singlestoredb_attrs', {}).get('function_type', 'udf'),
-    )
+    out = sig.signature_to_sql(sig.get_signature(x))
     out = re.sub(r'^CREATE EXTERNAL FUNCTION ', r'', out)
     out = re.sub(r' AS REMOTE SERVICE.+$', r'', out)
     return out.strip()
@@ -392,14 +389,14 @@ class TestUDF(unittest.TestCase):
             def foo(x: int) -> MyData: ...
             to_sql(foo)
 
-        @tvf
-        def foo(x: int) -> List[MyData]: ...
+        @udf
+        def foo(x: int) -> Table[List[MyData]]: ...
         assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
             'RETURNS TABLE(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
             '`three` DOUBLE NOT NULL)'
 
-        @tvf(returns=MyData)
-        def foo(x: int) -> List[Tuple[int, int, int]]: ...
+        @udf(returns=MyData)
+        def foo(x: int) -> Table[List[Tuple[int, int, int]]]: ...
         assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
             'RETURNS TABLE(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
             '`three` DOUBLE NOT NULL)'
@@ -409,14 +406,14 @@ class TestUDF(unittest.TestCase):
             two: str
             three: float
 
-        @tvf
-        def foo(x: int) -> List[MyData]: ...
+        @udf
+        def foo(x: int) -> Table[List[MyData]]: ...
         assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
             'RETURNS TABLE(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
             '`three` DOUBLE NOT NULL)'
 
-        @tvf(returns=MyData)
-        def foo(x: int) -> List[Tuple[int, int, int]]: ...
+        @udf(returns=MyData)
+        def foo(x: int) -> Table[List[Tuple[int, int, int]]]: ...
         assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) ' \
             'RETURNS TABLE(`one` BIGINT NULL, `two` TEXT NOT NULL, ' \
             '`three` DOUBLE NOT NULL)'
@@ -685,15 +682,15 @@ class TestUDF(unittest.TestCase):
         assert dt.GEOGRAPHY(nullable=False) == 'GEOGRAPHY NOT NULL'
         assert dt.GEOGRAPHY(default='hi') == "GEOGRAPHY NULL DEFAULT 'hi'"
 
-        with self.assertRaises(AssertionError):
-            dt.RECORD()
-        assert dt.RECORD(('a', dt.INT), ('b', dt.FLOAT)) == \
-            'RECORD(`a` INT NULL, `b` FLOAT NULL) NULL'
-        assert dt.RECORD(('a', dt.INT), ('b', dt.FLOAT), nullable=False) == \
-            'RECORD(`a` INT NULL, `b` FLOAT NULL) NOT NULL'
+        # with self.assertRaises(AssertionError):
+        #     dt.RECORD()
+        # assert dt.RECORD(('a', dt.INT), ('b', dt.FLOAT)) == \
+        #     'RECORD(`a` INT NULL, `b` FLOAT NULL) NULL'
+        # assert dt.RECORD(('a', dt.INT), ('b', dt.FLOAT), nullable=False) == \
+        #     'RECORD(`a` INT NULL, `b` FLOAT NULL) NOT NULL'
 
-        assert dt.ARRAY(dt.INT) == 'ARRAY(INT NULL) NULL'
-        assert dt.ARRAY(dt.INT, nullable=False) == 'ARRAY(INT NULL) NOT NULL'
+        # assert dt.ARRAY(dt.INT) == 'ARRAY(INT NULL) NULL'
+        # assert dt.ARRAY(dt.INT, nullable=False) == 'ARRAY(INT NULL) NOT NULL'
 
         # assert dt.VECTOR(8) == 'VECTOR(8, F32) NULL'
         # assert dt.VECTOR(8, dt.F32) == 'VECTOR(8, F32) NULL'

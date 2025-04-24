@@ -26,6 +26,7 @@ import argparse
 import asyncio
 import dataclasses
 import importlib.util
+import inspect
 import io
 import itertools
 import json
@@ -36,6 +37,7 @@ import secrets
 import sys
 import tempfile
 import textwrap
+import typing
 import urllib
 import zipfile
 import zipimport
@@ -62,6 +64,8 @@ from ...config import get_option
 from ...mysql.constants import FIELD_TYPE as ft
 from ..signature import get_signature
 from ..signature import signature_to_sql
+from ..typing import Masked
+from ..typing import Table
 
 try:
     import cloudpickle
@@ -148,7 +152,7 @@ def as_tuple(x: Any) -> Any:
     if has_pydantic and isinstance(x, BaseModel):
         return tuple(x.model_dump().values())
     if dataclasses.is_dataclass(x):
-        return dataclasses.astuple(x)
+        return dataclasses.astuple(x)  # type: ignore
     if isinstance(x, dict):
         return tuple(x.values())
     return tuple(x)
@@ -156,18 +160,35 @@ def as_tuple(x: Any) -> Any:
 
 def as_list_of_tuples(x: Any) -> Any:
     """Convert object to a list of tuples."""
+    if isinstance(x, Table):
+        x = x[0]
     if isinstance(x, (list, tuple)) and len(x) > 0:
+        if isinstance(x[0], (list, tuple)):
+            return x
         if has_pydantic and isinstance(x[0], BaseModel):
             return [tuple(y.model_dump().values()) for y in x]
         if dataclasses.is_dataclass(x[0]):
             return [dataclasses.astuple(y) for y in x]
         if isinstance(x[0], dict):
             return [tuple(y.values()) for y in x]
+        return [(y,) for y in x]
     return x
 
 
 def get_dataframe_columns(df: Any) -> List[Any]:
     """Return columns of data from a dataframe/table."""
+    if isinstance(df, Table):
+        if len(df) == 1:
+            df = df[0]
+        else:
+            return list(df)
+
+    if isinstance(df, Masked):
+        return [df]
+
+    if isinstance(df, tuple):
+        return list(df)
+
     rtype = str(type(df)).lower()
     if 'dataframe' in rtype:
         return [df[x] for x in df.columns]
@@ -179,6 +200,7 @@ def get_dataframe_columns(df: Any) -> List[Any]:
         return [df]
     elif 'tuple' in rtype:
         return list(df)
+
     raise TypeError(
         'Unsupported data type for dataframe columns: '
         f'{rtype}',
@@ -205,6 +227,25 @@ def get_array_class(data_format: str) -> Callable[..., Any]:
     return array_cls
 
 
+def get_masked_params(func: Callable[..., Any]) -> List[bool]:
+    """
+    Get the list of masked parameters for the function.
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call as the endpoint
+
+    Returns
+    -------
+    List[bool]
+        Boolean list of masked parameters
+
+    """
+    params = inspect.signature(func).parameters
+    return [typing.get_origin(x.annotation) is Masked for x in params.values()]
+
+
 def make_func(
     name: str,
     func: Callable[..., Any],
@@ -224,19 +265,19 @@ def make_func(
     (Callable, Dict[str, Any])
 
     """
-    attrs = getattr(func, '_singlestoredb_attrs', {})
-    with_null_masks = attrs.get('with_null_masks', False)
-    function_type = attrs.get('function_type', 'udf').lower()
     info: Dict[str, Any] = {}
 
     sig = get_signature(func, func_name=name)
 
+    function_type = sig.get('function_type', 'udf')
     args_data_format = sig.get('args_data_format', 'scalar')
     returns_data_format = sig.get('returns_data_format', 'scalar')
 
+    masks = get_masked_params(func)
+
     if function_type == 'tvf':
-        # Scalar (Python) types
-        if returns_data_format == 'scalar':
+        # Scalar / list types (row-based)
+        if returns_data_format in ['scalar', 'list']:
             async def do_func(
                 row_ids: Sequence[int],
                 rows: Sequence[Sequence[Any]],
@@ -250,41 +291,44 @@ def make_func(
                     out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
                 return out_ids, out
 
-        # Vector formats
+        # Vector formats (column-based)
         else:
             array_cls = get_array_class(returns_data_format)
 
             async def do_func(  # type: ignore
                 row_ids: Sequence[int],
                 cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-            ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
+            ) -> Tuple[
+                Sequence[int],
+                List[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
+            ]:
                 '''Call function on given cols of data.'''
                 # NOTE: There is no way to determine which row ID belongs to
                 #        each result row, so we just have to use the same
                 #        row ID for all rows in the result.
 
-                # If `with_null_masks` is set, the function is expected to return
-                # a tuple of (data, mask) for each column.
-                if with_null_masks:
-                    out = func(*cols)
-                    assert isinstance(out, tuple)
-                    row_ids = array_cls([row_ids[0]] * len(out[0][0]))
-                    return row_ids, [out]
+                def build_tuple(x: Any) -> Any:
+                    return tuple(x) if isinstance(x, Masked) else (x, None)
 
                 # Call function on each column of data
                 if cols and cols[0]:
-                    res = get_dataframe_columns(func(*[x[0] for x in cols]))
+                    res = get_dataframe_columns(
+                        func(*[x if m else x[0] for x, m in zip(cols, masks)]),
+                    )
                 else:
                     res = get_dataframe_columns(func())
 
                 # Generate row IDs
-                row_ids = array_cls([row_ids[0]] * len(res[0]))
+                if isinstance(res[0], Masked):
+                    row_ids = array_cls([row_ids[0]] * len(res[0][0]))
+                else:
+                    row_ids = array_cls([row_ids[0]] * len(res[0]))
 
-                return row_ids, [(x, None) for x in res]
+                return row_ids, [build_tuple(x) for x in res]
 
     else:
-        # Scalar (Python) types
-        if returns_data_format == 'scalar':
+        # Scalar / list types (row-based)
+        if returns_data_format in ['scalar', 'list']:
             async def do_func(
                 row_ids: Sequence[int],
                 rows: Sequence[Sequence[Any]],
@@ -292,33 +336,36 @@ def make_func(
                 '''Call function on given rows of data.'''
                 return row_ids, [as_tuple(x) for x in zip(func_map(func, rows))]
 
-        # Vector formats
+        # Vector formats (column-based)
         else:
             array_cls = get_array_class(returns_data_format)
 
             async def do_func(  # type: ignore
                 row_ids: Sequence[int],
                 cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-            ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
+            ) -> Tuple[
+                Sequence[int],
+                List[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
+            ]:
                 '''Call function on given cols of data.'''
                 row_ids = array_cls(row_ids)
 
-                # If `with_null_masks` is set, the function is expected to return
-                # a tuple of (data, mask) for each column.`
-                if with_null_masks:
-                    out = func(*cols)
-                    assert isinstance(out, tuple)
-                    return row_ids, [out]
+                def build_tuple(x: Any) -> Any:
+                    return tuple(x) if isinstance(x, Masked) else (x, None)
 
                 # Call the function with `cols` as the function parameters
                 if cols and cols[0]:
-                    out = func(*[x[0] for x in cols])
+                    out = func(*[x if m else x[0] for x, m in zip(cols, masks)])
                 else:
                     out = func()
 
+                # Single masked value
+                if isinstance(out, Masked):
+                    return row_ids, [tuple(out)]
+
                 # Multiple return values
                 if isinstance(out, tuple):
-                    return row_ids, [(x, None) for x in out]
+                    return row_ids, [build_tuple(x) for x in out]
 
                 # Single return value
                 return row_ids, [(out, None)]
@@ -450,8 +497,8 @@ class Application(object):
             response=rowdat_1_response_dict,
         ),
         (b'application/octet-stream', b'1.0', 'list'): dict(
-            load=rowdat_1.load_list,
-            dump=rowdat_1.dump_list,
+            load=rowdat_1.load,
+            dump=rowdat_1.dump,
             response=rowdat_1_response_dict,
         ),
         (b'application/octet-stream', b'1.0', 'pandas'): dict(
@@ -480,8 +527,8 @@ class Application(object):
             response=json_response_dict,
         ),
         (b'application/json', b'1.0', 'list'): dict(
-            load=jdata.load_list,
-            dump=jdata.dump_list,
+            load=jdata.load,
+            dump=jdata.dump,
             response=json_response_dict,
         ),
         (b'application/json', b'1.0', 'pandas'): dict(
@@ -746,7 +793,6 @@ class Application(object):
                             endpoint_info['signature'],
                             url=self.url or reflected_url,
                             data_format=self.data_format,
-                            function_type=endpoint_info['function_type'],
                         ),
                     )
             body = '\n'.join(syntax).encode('utf-8')
@@ -903,7 +949,6 @@ class Application(object):
                     app_mode=self.app_mode,
                     replace=replace,
                     link=link or None,
-                    function_type=endpoint_info['function_type'],
                 ),
             )
 

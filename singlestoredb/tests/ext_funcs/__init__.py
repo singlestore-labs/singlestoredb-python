@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
+# mypy: disable-error-code="type-arg"
+import typing
+from typing import List
+from typing import NamedTuple
 from typing import Optional
+from typing import Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -7,11 +12,10 @@ import pandas as pd
 import polars as pl
 import pyarrow as pa
 
+import singlestoredb.functions.dtypes as dt
 from singlestoredb.functions import Masked
-from singlestoredb.functions import MaskedNDArray
-from singlestoredb.functions import tvf
+from singlestoredb.functions import Table
 from singlestoredb.functions import udf
-from singlestoredb.functions import udf_with_null_masks
 from singlestoredb.functions.dtypes import BIGINT
 from singlestoredb.functions.dtypes import BLOB
 from singlestoredb.functions.dtypes import DOUBLE
@@ -438,7 +442,7 @@ def nullable_string_mult(x: Optional[str], times: Optional[int]) -> Optional[str
     return x * times
 
 
-@udf_with_null_masks(
+@udf(
     args=[TINYINT(nullable=True), TINYINT(nullable=True)],
     returns=TINYINT(nullable=True),
 )
@@ -447,19 +451,19 @@ def pandas_nullable_tinyint_mult_with_masks(
 ) -> Masked[pd.Series]:
     x_data, x_nulls = x
     y_data, y_nulls = y
-    return (x_data * y_data, x_nulls | y_nulls)
+    return Masked(x_data * y_data, x_nulls | y_nulls)
 
 
-@udf_with_null_masks
+@udf
 def numpy_nullable_tinyint_mult_with_masks(
-    x: MaskedNDArray[np.int8], y: MaskedNDArray[np.int8],
-) -> MaskedNDArray[np.int8]:
+    x: Masked[npt.NDArray[np.int8]], y: Masked[npt.NDArray[np.int8]],
+) -> Masked[npt.NDArray[np.int8]]:
     x_data, x_nulls = x
     y_data, y_nulls = y
-    return (x_data * y_data, x_nulls | y_nulls)
+    return Masked(x_data * y_data, x_nulls | y_nulls)
 
 
-@udf_with_null_masks(
+@udf(
     args=[TINYINT(nullable=True), TINYINT(nullable=True)],
     returns=TINYINT(nullable=True),
 )
@@ -468,10 +472,10 @@ def polars_nullable_tinyint_mult_with_masks(
 ) -> Masked[pl.Series]:
     x_data, x_nulls = x
     y_data, y_nulls = y
-    return (x_data * y_data, x_nulls | y_nulls)
+    return Masked(x_data * y_data, x_nulls | y_nulls)
 
 
-@udf_with_null_masks(
+@udf(
     args=[TINYINT(nullable=True), TINYINT(nullable=True)],
     returns=TINYINT(nullable=True),
 )
@@ -481,11 +485,11 @@ def arrow_nullable_tinyint_mult_with_masks(
     import pyarrow.compute as pc
     x_data, x_nulls = x
     y_data, y_nulls = y
-    return (pc.multiply(x_data, y_data), pc.or_(x_nulls, y_nulls))
+    return Masked(pc.multiply(x_data, y_data), pc.or_(x_nulls, y_nulls))
 
 
-@tvf(returns=[TEXT(nullable=False, name='res')])
-def numpy_fixed_strings() -> npt.NDArray[np.str_]:
+@udf(returns=[TEXT(nullable=False, name='res')])
+def numpy_fixed_strings() -> Table[npt.NDArray[np.str_]]:
     out = np.array(
         [
             'hello',
@@ -494,11 +498,24 @@ def numpy_fixed_strings() -> npt.NDArray[np.str_]:
         ], dtype=np.str_,
     )
     assert str(out.dtype) == '<U10'
-    return out
+    return Table(out)
 
 
-@tvf(returns=[BLOB(nullable=False, name='res')])
-def numpy_fixed_binary() -> npt.NDArray[np.bytes_]:
+@udf(returns=[TEXT(nullable=False, name='res'), TINYINT(nullable=False, name='res2')])
+def numpy_fixed_strings_2() -> Table[npt.NDArray[np.str_], npt.NDArray[np.int8]]:
+    out = np.array(
+        [
+            'hello',
+            'hi there 😜',
+            '😜 bye',
+        ], dtype=np.str_,
+    )
+    assert str(out.dtype) == '<U10'
+    return Table(out, out)
+
+
+@udf(returns=[BLOB(nullable=False, name='res')])
+def numpy_fixed_binary() -> Table[npt.NDArray[np.bytes_]]:
     out = np.array(
         [
             'hello'.encode('utf8'),
@@ -507,9 +524,101 @@ def numpy_fixed_binary() -> npt.NDArray[np.bytes_]:
         ], dtype=np.bytes_,
     )
     assert str(out.dtype) == '|S13'
-    return out
+    return Table(out)
 
 
 @udf
 def no_args_no_return_value() -> None:
     pass
+
+
+@udf
+def table_function(n: int) -> Table[List[int]]:
+    return Table([10] * n)
+
+
+@udf(
+    returns=[
+        dt.INT(name='c_int', nullable=False),
+        dt.DOUBLE(name='c_float', nullable=False),
+        dt.TEXT(name='c_str', nullable=False),
+    ],
+)
+def table_function_tuple(n: int) -> Table[List[Tuple[int, float, str]]]:
+    return Table([(10, 10.0, 'ten')] * n)
+
+
+class MyTable(NamedTuple):
+    c_int: int
+    c_float: float
+    c_str: str
+
+
+@udf
+def table_function_struct(n: int) -> Table[List[MyTable]]:
+    return Table([MyTable(10, 10.0, 'ten')] * n)
+
+
+@udf
+def vec_function(
+    x: npt.NDArray[np.float64], y: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
+    return x * y
+
+
+class VecInputs(typing.NamedTuple):
+    x: np.int8
+    y: np.int8
+
+
+class VecOutputs(typing.NamedTuple):
+    res: np.int16
+
+
+@udf(args=VecInputs, returns=VecOutputs)
+def vec_function_ints(
+    x: npt.NDArray[np.int_], y: npt.NDArray[np.int_],
+) -> npt.NDArray[np.int_]:
+    return x * y
+
+
+class DFOutputs(typing.NamedTuple):
+    res: np.int16
+    res2: np.float64
+
+
+@udf(args=VecInputs, returns=DFOutputs)
+def vec_function_df(
+    x: npt.NDArray[np.int_], y: npt.NDArray[np.int_],
+) -> Table[pd.DataFrame]:
+    return pd.DataFrame(dict(res=[1, 2, 3], res2=[1.1, 2.2, 3.3]))
+
+
+class MaskOutputs(typing.NamedTuple):
+    res: Optional[np.int16]
+
+
+@udf(args=VecInputs, returns=MaskOutputs)
+def vec_function_ints_masked(
+    x: Masked[npt.NDArray[np.int_]], y: Masked[npt.NDArray[np.int_]],
+) -> Table[Masked[npt.NDArray[np.int_]]]:
+    x_data, x_nulls = x
+    y_data, y_nulls = y
+    return Table(Masked(x_data * y_data, x_nulls | y_nulls))
+
+
+class MaskOutputs2(typing.NamedTuple):
+    res: Optional[np.int16]
+    res2: Optional[np.int16]
+
+
+@udf(args=VecInputs, returns=MaskOutputs2)
+def vec_function_ints_masked2(
+    x: Masked[npt.NDArray[np.int_]], y: Masked[npt.NDArray[np.int_]],
+) -> Table[Masked[npt.NDArray[np.int_]], Masked[npt.NDArray[np.int_]]]:
+    x_data, x_nulls = x
+    y_data, y_nulls = y
+    return Table(
+        Masked(x_data * y_data, x_nulls | y_nulls),
+        Masked(x_data * y_data, x_nulls | y_nulls),
+    )
