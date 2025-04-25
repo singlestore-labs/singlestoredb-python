@@ -8,6 +8,8 @@ from enum import Enum
 from typing import Any
 from typing import Dict
 from typing import Iterable
+from typing import Tuple
+from typing import Union
 
 from .typing import Masked
 
@@ -192,96 +194,84 @@ class VectorTypes(str, Enum):
     I64 = 'i64'
 
 
+def _vector_type_to_numpy_type(
+    vector_type: VectorTypes,
+) -> str:
+    """Convert a vector type to a numpy type."""
+    if vector_type == VectorTypes.F32:
+        return 'f4'
+    elif vector_type == VectorTypes.F64:
+        return 'f8'
+    elif vector_type == VectorTypes.I8:
+        return 'i1'
+    elif vector_type == VectorTypes.I16:
+        return 'i2'
+    elif vector_type == VectorTypes.I32:
+        return 'i4'
+    elif vector_type == VectorTypes.I64:
+        return 'i8'
+    raise ValueError(f'unsupported element type: {vector_type}')
+
+
+def _vector_type_to_struct_format(
+    vec: Any,
+    vector_type: VectorTypes,
+) -> str:
+    """Convert a vector type to a struct format string."""
+    n = len(vec)
+    if vector_type == VectorTypes.F32:
+        if isinstance(vec, (bytes, bytearray)):
+            n = n // 4
+        return f'<{n}f'
+    elif vector_type == VectorTypes.F64:
+        if isinstance(vec, (bytes, bytearray)):
+            n = n // 8
+        return f'<{n}d'
+    elif vector_type == VectorTypes.I8:
+        return f'<{n}b'
+    elif vector_type == VectorTypes.I16:
+        if isinstance(vec, (bytes, bytearray)):
+            n = n // 2
+        return f'<{n}h'
+    elif vector_type == VectorTypes.I32:
+        if isinstance(vec, (bytes, bytearray)):
+            n = n // 4
+        return f'<{n}i'
+    elif vector_type == VectorTypes.I64:
+        if isinstance(vec, (bytes, bytearray)):
+            n = n // 8
+        return f'<{n}q'
+    raise ValueError(f'unsupported element type: {vector_type}')
+
+
 def unpack_vector(
-    obj: Any,
-    element_type: VectorTypes = VectorTypes.F32,
-) -> Iterable[Any]:
+    obj: Union[bytes, bytearray],
+    vec_type: VectorTypes = VectorTypes.F32,
+) -> Tuple[Any]:
     """
     Unpack a vector from bytes.
 
     Parameters
     ----------
-    obj : Any
+    obj : bytes or bytearray
         The object to unpack.
-    element_type : VectorTypes
+    vec_type : VectorTypes
         The type of the elements in the vector.
         Can be one of 'f32', 'f64', 'i8', 'i16', 'i32', or 'i64'.
         Default is 'f32'.
 
     Returns
     -------
-    Iterable[Any]
+    Tuple[Any]
         The unpacked vector.
 
     """
-    if isinstance(obj, (bytes, bytearray, list, tuple)):
-        if element_type == 'f32':
-            n = len(obj) // 4
-            fmt = 'f'
-        elif element_type == 'f64':
-            n = len(obj) // 8
-            fmt = 'd'
-        elif element_type == 'i8':
-            n = len(obj)
-            fmt = 'b'
-        elif element_type == 'i16':
-            n = len(obj) // 2
-            fmt = 'h'
-        elif element_type == 'i32':
-            n = len(obj) // 4
-            fmt = 'i'
-        elif element_type == 'i64':
-            n = len(obj) // 8
-            fmt = 'q'
-        else:
-            raise ValueError(f'unsupported element type: {element_type}')
-
-        if isinstance(obj, (bytes, bytearray)):
-            return struct.unpack(f'<{n}{fmt}', obj)
-        return tuple([struct.unpack(f'<{n}{fmt}', x) for x in obj])
-
-    if element_type == 'f32':
-        np_type = 'f4'
-    elif element_type == 'f64':
-        np_type = 'f8'
-    elif element_type == 'i8':
-        np_type = 'i1'
-    elif element_type == 'i16':
-        np_type = 'i2'
-    elif element_type == 'i32':
-        np_type = 'i4'
-    elif element_type == 'i64':
-        np_type = 'i8'
-    else:
-        raise ValueError(f'unsupported element type: {element_type}')
-
-    if is_numpy(obj):
-        import numpy as np
-        return np.array([np.frombuffer(x, dtype=np_type) for x in obj])
-
-    if is_pandas_series(obj):
-        import numpy as np
-        import pandas as pd
-        return pd.Series([np.frombuffer(x, dtype=np_type) for x in obj])
-
-    if is_polars_series(obj):
-        import numpy as np
-        import polars as pl
-        return pl.Series([np.frombuffer(x, dtype=np_type) for x in obj])
-
-    if is_pyarrow_array(obj):
-        import numpy as np
-        import pyarrow as pa
-        return pa.array([np.frombuffer(x, dtype=np_type) for x in obj])
-
-    raise ValueError(
-        f'unsupported object type: {type(obj)}',
-    )
+    return struct.unpack(_vector_type_to_struct_format(obj, vec_type), obj)
 
 
 def pack_vector(
     obj: Any,
-    element_type: VectorTypes = VectorTypes.F32,
+    vec_type: VectorTypes = VectorTypes.F32,
 ) -> bytes:
     """
     Pack a vector into bytes.
@@ -290,7 +280,7 @@ def pack_vector(
     ----------
     obj : Any
         The object to pack.
-    element_type : VectorTypes
+    vec_type : VectorTypes
         The type of the elements in the vector.
         Can be one of 'f32', 'f64', 'i8', 'i16', 'i32', or 'i64'.
         Default is 'f32'.
@@ -301,42 +291,131 @@ def pack_vector(
         The packed vector.
 
     """
-    if element_type == 'f32':
-        fmt = 'f'
-    elif element_type == 'f64':
-        fmt = 'd'
-    elif element_type == 'i8':
-        fmt = 'b'
-    elif element_type == 'i16':
-        fmt = 'h'
-    elif element_type == 'i32':
-        fmt = 'i'
-    elif element_type == 'i64':
-        fmt = 'q'
-    else:
-        raise ValueError(f'unsupported element type: {element_type}')
-
     if isinstance(obj, (list, tuple)):
-        return struct.pack(f'<{len(obj)}{fmt}', *obj)
+        return struct.pack(_vector_type_to_struct_format(obj, vec_type), *obj)
 
-    elif is_numpy(obj):
+    if is_numpy(obj):
         return obj.tobytes()
 
-    elif is_pandas_series(obj):
-        # TODO: Nested vectors
+    if is_pandas_series(obj):
         import pandas as pd
         return pd.Series(obj).to_numpy().tobytes()
 
-    elif is_polars_series(obj):
-        # TODO: Nested vectors
+    if is_polars_series(obj):
         import polars as pl
         return pl.Series(obj).to_numpy().tobytes()
 
-    elif is_pyarrow_array(obj):
-        # TODO: Nested vectors
+    if is_pyarrow_array(obj):
         import pyarrow as pa
         return pa.array(obj).to_numpy().tobytes()
 
     raise ValueError(
         f'unsupported object type: {type(obj)}',
+    )
+
+
+def unpack_vectors(
+    arr_of_vec: Any,
+    vec_type: VectorTypes = VectorTypes.F32,
+) -> Iterable[Any]:
+    """
+    Unpack a vector from an array of bytes.
+
+    Parameters
+    ----------
+    arr_of_vec : Iterable[Any]
+        The array of bytes to unpack.
+    vec_type : VectorTypes
+        The type of the elements in the vector.
+        Can be one of 'f32', 'f64', 'i8', 'i16', 'i32', or 'i64'.
+        Default is 'f32'.
+
+    Returns
+    -------
+    Iterable[Any]
+        The unpacked vector.
+
+    """
+    if isinstance(arr_of_vec, (list, tuple)):
+        return [unpack_vector(x, vec_type) for x in arr_of_vec]
+
+    import numpy as np
+
+    dtype = _vector_type_to_numpy_type(vec_type)
+
+    np_arr = np.array(
+        [np.frombuffer(x, dtype=dtype) for x in arr_of_vec],
+        dtype=dtype,
+    )
+
+    if is_numpy(arr_of_vec):
+        return np_arr
+
+    if is_pandas_series(arr_of_vec):
+        import pandas as pd
+        return pd.Series(np_arr)
+
+    if is_polars_series(arr_of_vec):
+        import polars as pl
+        return pl.Series(np_arr)
+
+    if is_pyarrow_array(arr_of_vec):
+        import pyarrow as pa
+        return pa.array(np_arr)
+
+    raise ValueError(
+        f'unsupported object type: {type(arr_of_vec)}',
+    )
+
+
+def pack_vectors(
+    arr_of_arr: Iterable[Any],
+    vec_type: VectorTypes = VectorTypes.F32,
+) -> Iterable[Any]:
+    """
+    Pack a vector into an array of bytes.
+
+    Parameters
+    ----------
+    arr_of_arr : Iterable[Any]
+        The array of bytes to pack.
+    vec_type : VectorTypes
+        The type of the elements in the vector.
+        Can be one of 'f32', 'f64', 'i8', 'i16', 'i32', or 'i64'.
+        Default is 'f32'.
+
+    Returns
+    -------
+    Iterable[Any]
+        The array of packed vectors.
+
+    """
+    if isinstance(arr_of_arr, (list, tuple)):
+        if not arr_of_arr:
+            return []
+        fmt = _vector_type_to_struct_format(arr_of_arr[0], vec_type)
+        return [struct.pack(fmt, x) for x in arr_of_arr]
+
+    import numpy as np
+
+    # Use object type because numpy truncates nulls at the end of fixed binary
+    np_arr = np.array([x.tobytes() for x in arr_of_arr], dtype=np.object_)
+
+    if is_numpy(arr_of_arr):
+        return np_arr
+
+    if is_pandas_series(arr_of_arr):
+        import pandas as pd
+        return pd.Series(np_arr)
+
+    if is_polars_series(arr_of_arr):
+        import polars as pl
+        return pl.Series(np_arr)
+
+    if is_pyarrow_array(arr_of_arr):
+        import pyarrow as pa
+        return pa.array(np_arr)
+
+    raise ValueError(
+        f'unsupported object type: {type(arr_of_arr)}',
     )

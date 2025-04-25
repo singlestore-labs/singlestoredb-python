@@ -1,6 +1,10 @@
 from .decorator import udf  # noqa: F401
 from .typing import Masked  # noqa: F401
 from .typing import Table  # noqa: F401
+from .utils import pack_vector  # noqa: F401
+from .utils import pack_vectors  # noqa: F401
+from .utils import unpack_vector  # noqa: F401
+from .utils import unpack_vectors  # noqa: F401
 from .utils import VectorTypes
 
 
