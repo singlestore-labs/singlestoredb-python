@@ -246,6 +246,192 @@ def get_masked_params(func: Callable[..., Any]) -> List[bool]:
     return [typing.get_origin(x.annotation) is Masked for x in params.values()]
 
 
+def build_tuple(x: Any) -> Any:
+    """Convert object to tuple."""
+    return tuple(x) if isinstance(x, Masked) else (x, None)
+
+
+def build_udf_endpoint(
+    func: Callable[..., Any],
+    returns_data_format: str,
+) -> Callable[..., Any]:
+    """
+    Build a UDF endpoint for scalar / list types (row-based).
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call as the endpoint
+    returns_data_format : str
+        The format of the return values
+
+    Returns
+    -------
+    Callable
+        The function endpoint
+
+    """
+    if returns_data_format in ['scalar', 'list']:
+
+        async def do_func(
+            row_ids: Sequence[int],
+            rows: Sequence[Sequence[Any]],
+        ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
+            '''Call function on given rows of data.'''
+            return row_ids, [as_tuple(x) for x in zip(func_map(func, rows))]
+
+        return do_func
+
+    return build_vector_udf_endpoint(func, returns_data_format)
+
+
+def build_vector_udf_endpoint(
+    func: Callable[..., Any],
+    returns_data_format: str,
+) -> Callable[..., Any]:
+    """
+    Build a UDF endpoint for vector formats (column-based).
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call as the endpoint
+    returns_data_format : str
+        The format of the return values
+
+    Returns
+    -------
+    Callable
+        The function endpoint
+
+    """
+    masks = get_masked_params(func)
+    array_cls = get_array_class(returns_data_format)
+
+    async def do_func(
+        row_ids: Sequence[int],
+        cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
+    ) -> Tuple[
+        Sequence[int],
+        List[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
+    ]:
+        '''Call function on given columns of data.'''
+        row_ids = array_cls(row_ids)
+
+        # Call the function with `cols` as the function parameters
+        if cols and cols[0]:
+            out = func(*[x if m else x[0] for x, m in zip(cols, masks)])
+        else:
+            out = func()
+
+        # Single masked value
+        if isinstance(out, Masked):
+            return row_ids, [tuple(out)]
+
+        # Multiple return values
+        if isinstance(out, tuple):
+            return row_ids, [build_tuple(x) for x in out]
+
+        # Single return value
+        return row_ids, [(out, None)]
+
+    return do_func
+
+
+def build_tvf_endpoint(
+    func: Callable[..., Any],
+    returns_data_format: str,
+) -> Callable[..., Any]:
+    """
+    Build a TVF endpoint for scalar / list types (row-based).
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call as the endpoint
+    returns_data_format : str
+        The format of the return values
+
+    Returns
+    -------
+    Callable
+        The function endpoint
+
+    """
+    if returns_data_format in ['scalar', 'list']:
+
+        async def do_func(
+            row_ids: Sequence[int],
+            rows: Sequence[Sequence[Any]],
+        ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
+            '''Call function on given rows of data.'''
+            out_ids: List[int] = []
+            out = []
+            # Call function on each row of data
+            for i, res in zip(row_ids, func_map(func, rows)):
+                out.extend(as_list_of_tuples(res))
+                out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
+            return out_ids, out
+
+        return do_func
+
+    return build_vector_tvf_endpoint(func, returns_data_format)
+
+
+def build_vector_tvf_endpoint(
+    func: Callable[..., Any],
+    returns_data_format: str,
+) -> Callable[..., Any]:
+    """
+    Build a TVF endpoint for vector formats (column-based).
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call as the endpoint
+    returns_data_format : str
+        The format of the return values
+
+    Returns
+    -------
+    Callable
+        The function endpoint
+
+    """
+    masks = get_masked_params(func)
+    array_cls = get_array_class(returns_data_format)
+
+    async def do_func(
+        row_ids: Sequence[int],
+        cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
+    ) -> Tuple[
+        Sequence[int],
+        List[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
+    ]:
+        '''Call function on given columns of data.'''
+        # NOTE: There is no way to determine which row ID belongs to
+        #        each result row, so we just have to use the same
+        #        row ID for all rows in the result.
+
+        # Call function on each column of data
+        if cols and cols[0]:
+            res = get_dataframe_columns(
+                func(*[x if m else x[0] for x, m in zip(cols, masks)]),
+            )
+        else:
+            res = get_dataframe_columns(func())
+
+        # Generate row IDs
+        if isinstance(res[0], Masked):
+            row_ids = array_cls([row_ids[0]] * len(res[0][0]))
+        else:
+            row_ids = array_cls([row_ids[0]] * len(res[0]))
+
+        return row_ids, [build_tuple(x) for x in res]
+
+    return do_func
+
+
 def make_func(
     name: str,
     func: Callable[..., Any],
@@ -273,102 +459,10 @@ def make_func(
     args_data_format = sig.get('args_data_format', 'scalar')
     returns_data_format = sig.get('returns_data_format', 'scalar')
 
-    masks = get_masked_params(func)
-
     if function_type == 'tvf':
-        # Scalar / list types (row-based)
-        if returns_data_format in ['scalar', 'list']:
-            async def do_func(
-                row_ids: Sequence[int],
-                rows: Sequence[Sequence[Any]],
-            ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
-                '''Call function on given rows of data.'''
-                out_ids: List[int] = []
-                out = []
-                # Call function on each row of data
-                for i, res in zip(row_ids, func_map(func, rows)):
-                    out.extend(as_list_of_tuples(res))
-                    out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
-                return out_ids, out
-
-        # Vector formats (column-based)
-        else:
-            array_cls = get_array_class(returns_data_format)
-
-            async def do_func(  # type: ignore
-                row_ids: Sequence[int],
-                cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-            ) -> Tuple[
-                Sequence[int],
-                List[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-            ]:
-                '''Call function on given cols of data.'''
-                # NOTE: There is no way to determine which row ID belongs to
-                #        each result row, so we just have to use the same
-                #        row ID for all rows in the result.
-
-                def build_tuple(x: Any) -> Any:
-                    return tuple(x) if isinstance(x, Masked) else (x, None)
-
-                # Call function on each column of data
-                if cols and cols[0]:
-                    res = get_dataframe_columns(
-                        func(*[x if m else x[0] for x, m in zip(cols, masks)]),
-                    )
-                else:
-                    res = get_dataframe_columns(func())
-
-                # Generate row IDs
-                if isinstance(res[0], Masked):
-                    row_ids = array_cls([row_ids[0]] * len(res[0][0]))
-                else:
-                    row_ids = array_cls([row_ids[0]] * len(res[0]))
-
-                return row_ids, [build_tuple(x) for x in res]
-
+        do_func = build_tvf_endpoint(func, returns_data_format)
     else:
-        # Scalar / list types (row-based)
-        if returns_data_format in ['scalar', 'list']:
-            async def do_func(
-                row_ids: Sequence[int],
-                rows: Sequence[Sequence[Any]],
-            ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
-                '''Call function on given rows of data.'''
-                return row_ids, [as_tuple(x) for x in zip(func_map(func, rows))]
-
-        # Vector formats (column-based)
-        else:
-            array_cls = get_array_class(returns_data_format)
-
-            async def do_func(  # type: ignore
-                row_ids: Sequence[int],
-                cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-            ) -> Tuple[
-                Sequence[int],
-                List[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-            ]:
-                '''Call function on given cols of data.'''
-                row_ids = array_cls(row_ids)
-
-                def build_tuple(x: Any) -> Any:
-                    return tuple(x) if isinstance(x, Masked) else (x, None)
-
-                # Call the function with `cols` as the function parameters
-                if cols and cols[0]:
-                    out = func(*[x if m else x[0] for x, m in zip(cols, masks)])
-                else:
-                    out = func()
-
-                # Single masked value
-                if isinstance(out, Masked):
-                    return row_ids, [tuple(out)]
-
-                # Multiple return values
-                if isinstance(out, tuple):
-                    return row_ids, [build_tuple(x) for x in out]
-
-                # Single return value
-                return row_ids, [(out, None)]
+        do_func = build_udf_endpoint(func, returns_data_format)
 
     do_func.__name__ = name
     do_func.__doc__ = func.__doc__
