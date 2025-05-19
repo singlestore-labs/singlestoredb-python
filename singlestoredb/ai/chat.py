@@ -4,7 +4,7 @@ from typing import Any
 from singlestoredb.fusion.handlers.utils import get_workspace_manager
 
 try:
-    from langchain_openai import OpenAIEmbeddings
+    from langchain_openai import ChatOpenAI
 except ImportError:
     raise ImportError(
         'Could not import langchain_openai python package. '
@@ -12,8 +12,7 @@ except ImportError:
     )
 
 
-class SingleStoreEmbeddings(OpenAIEmbeddings):
-
+class SingleStoreChatOpenAI(ChatOpenAI):
     def __init__(self, model_name: str, **kwargs: Any):
         inference_api_manger = (
             get_workspace_manager().organizations.current.inference_apis

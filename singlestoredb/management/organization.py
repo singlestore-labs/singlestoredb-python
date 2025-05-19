@@ -7,6 +7,7 @@ from typing import Optional
 from typing import Union
 
 from ..exceptions import ManagementError
+from .inference_api import InferenceAPIManager
 from .job import JobsManager
 from .manager import Manager
 from .utils import vars_to_str
@@ -207,3 +208,19 @@ class Organization(object):
         :class:`JobsManager`
         """
         return JobsManager(self._manager)
+
+    @property
+    def inference_apis(self) -> InferenceAPIManager:
+        """
+        Retrieve a SingleStoreDB inference api manager.
+
+        Parameters
+        ----------
+        manager : WorkspaceManager, optional
+            The WorkspaceManager the InferenceAPIManager belongs to
+
+        Returns
+        -------
+        :class:`InferenceAPIManager`
+        """
+        return InferenceAPIManager(self._manager)
