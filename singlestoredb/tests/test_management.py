@@ -35,7 +35,7 @@ class TestCluster(unittest.TestCase):
         cls.manager = s2.manage_cluster()
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20) + '-x&'
+        cls.password = secrets.token_urlsafe(20) + '-x&$'
 
         cls.cluster = cls.manager.create_cluster(
             clean_name('cm-test-{}'.format(secrets.token_urlsafe(20)[:20])),
@@ -201,7 +201,7 @@ class TestWorkspace(unittest.TestCase):
         cls.manager = s2.manage_workspaces()
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20)
+        cls.password = secrets.token_urlsafe(20) + '-x&$'
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
@@ -375,7 +375,7 @@ class TestStage(unittest.TestCase):
         cls.manager = s2.manage_workspaces()
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20)
+        cls.password = secrets.token_urlsafe(20) + '-x&$'
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
@@ -839,7 +839,7 @@ class TestSecrets(unittest.TestCase):
         cls.manager = s2.manage_workspaces()
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20)
+        cls.password = secrets.token_urlsafe(20) + '-x&$'
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
@@ -898,7 +898,7 @@ class TestJob(unittest.TestCase):
         cls.manager = s2.manage_workspaces()
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20)
+        cls.password = secrets.token_urlsafe(20) + '-x&$'
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 

@@ -25,7 +25,7 @@ parser.add_option(
 )
 parser.add_option(
     '-p', '--password',
-    default=secrets.token_urlsafe(20) + '-x&',
+    default=secrets.token_urlsafe(20) + '-x&$',
     help='admin password',
 )
 parser.add_option(
