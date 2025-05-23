@@ -155,7 +155,7 @@ class ExportService(object):
                     partitionSpec=partition_spec,
                     sortOrderSpec=sort_order_spec,
                     properties=self.properties,
-                    incremental=self.incremental,
+                    incremental=self.incremental or None,
                     refreshInterval=self.refresh_interval.total_seconds()
                     if self.refresh_interval is not None else None,
                 ).items() if v is not None
