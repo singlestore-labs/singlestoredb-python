@@ -162,7 +162,7 @@ def _start_export(params: Dict[str, Any]) -> Optional[FusionSQLResult]:
     refresh_interval = params.get('refresh_interval', None)
     if refresh_interval is not None:
         value = int(refresh_interval['refresh_interval_value'])
-        time_unit = refresh_interval['refresh_interval_time_unit']
+        time_unit = refresh_interval['refresh_interval_time_unit'].upper()
         if value < 0:
             raise ValueError('refresh interval must be greater than 0')
         if time_unit == 'SECONDS':
