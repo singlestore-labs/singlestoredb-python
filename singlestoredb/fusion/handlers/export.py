@@ -420,3 +420,24 @@ class ShowExport(SQLHandler):
 
 
 ShowExport.register(overwrite=True)
+
+
+class StopExport(SQLHandler):
+    """
+    STOP EXPORT export_id;
+
+    # ID of export
+    export_id = '<export-id>'
+
+    """
+
+    _enabled = False
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        wsg = get_workspace_group({})
+        service = ExportService.from_export_id(wsg, params['export_id'])
+        service.stop()
+        return None
+
+
+StopExport.register(overwrite=True)
