@@ -1,34 +1,35 @@
-from __future__ import annotations
-from typing import Optional, Dict, Callable, Any
+from typing import Any
+from typing import Callable
+from typing import Dict
+from typing import Optional
 
-from vectorstore import (
-    IndexInterface,
-    IndexList,
-    IndexModel,
-    MatchTypedDict,
-    Metric,
-    IndexStatsTypedDict,
-    NamespaceStatsTypedDict,
-    Vector,
-    VectorDictMetadataValue,
-    VectorMetadataTypedDict,
-    VectorTuple,
-    VectorTupleWithMetadata,
-    DeletionProtection,
-    AndFilter,
-    EqFilter,
-    ExactMatchFilter,
-    FilterTypedDict,
-    GteFilter,
-    GtFilter,
-    InFilter,
-    LteFilter,
-    LtFilter,
-    NeFilter,
-    NinFilter,
-    OrFilter,
-    SimpleFilter
-)
+from vectorstore import AndFilter  # noqa: F401
+from vectorstore import DeletionProtection  # noqa: F401
+from vectorstore import EqFilter  # noqa: F401
+from vectorstore import ExactMatchFilter  # noqa: F401
+from vectorstore import FilterTypedDict  # noqa: F401
+from vectorstore import GteFilter  # noqa: F401
+from vectorstore import GtFilter  # noqa: F401
+from vectorstore import IndexInterface  # noqa: F401
+from vectorstore import IndexList  # noqa: F401
+from vectorstore import IndexModel  # noqa: F401
+from vectorstore import IndexStatsTypedDict  # noqa: F401
+from vectorstore import InFilter  # noqa: F401
+from vectorstore import LteFilter  # noqa: F401
+from vectorstore import LtFilter  # noqa: F401
+from vectorstore import MatchTypedDict  # noqa: F401
+from vectorstore import Metric  # noqa: F401
+from vectorstore import NamespaceStatsTypedDict  # noqa: F401
+from vectorstore import NeFilter  # noqa: F401
+from vectorstore import NinFilter  # noqa: F401
+from vectorstore import OrFilter  # noqa: F401
+from vectorstore import SimpleFilter  # noqa: F401
+from vectorstore import Vector  # noqa: F401
+from vectorstore import VectorDictMetadataValue  # noqa: F401
+from vectorstore import VectorMetadataTypedDict  # noqa: F401
+from vectorstore import VectorTuple  # noqa: F401
+from vectorstore import VectorTupleWithMetadata  # noqa: F401
+
 
 def vector_db(
     host: Optional[str] = None, user: Optional[str] = None,
@@ -62,9 +63,9 @@ def vector_db(
     pool_size: Optional[int] = 5,
     max_overflow: Optional[int] = 10,
     timeout: Optional[float] = 30,
-) -> "VectorDB":
+) -> Any:
     """
-    Return a vectorstore API connection. 
+    Return a vectorstore API connection.
     Database should be specified in the URL or as a keyword.
 
     Parameters
@@ -87,7 +88,7 @@ def vector_db(
         Database port. This defaults to 3306 for non-HTTP connections, 80
         for HTTP connections, and 443 for HTTPS connections.
     database : str, optional
-        Database name. 
+        Database name.
     pure_python : bool, optional
         Use the connector in pure Python mode
     local_infile : bool, optional
@@ -167,23 +168,25 @@ def vector_db(
 
     """
     from vectorstore import VectorDB
-    return VectorDB(host=host, user=user, password=password, port=port,
-                    database=database, driver=driver, pure_python=pure_python,
-                    local_infile=local_infile, charset=charset,
-                    ssl_key=ssl_key, ssl_cert=ssl_cert, ssl_ca=ssl_ca,
-                    ssl_disabled=ssl_disabled, ssl_cipher=ssl_cipher,
-                    ssl_verify_cert=ssl_verify_cert,
-                    tls_sni_servername=tls_sni_servername,
-                    ssl_verify_identity=ssl_verify_identity, conv=conv,
-                    credential_type=credential_type, autocommit=autocommit,
-                    results_type=results_type, buffered=buffered,
-                    results_format=results_format, program_name=program_name,
-                    conn_attrs=conn_attrs, multi_statements=multi_statements,
-                    client_found_rows=client_found_rows,
-                    connect_timeout=connect_timeout, nan_as_null=nan_as_null,
-                    inf_as_null=inf_as_null, encoding_errors=encoding_errors,
-                    track_env=track_env,
-                    enable_extended_data_types=enable_extended_data_types,
-                    vector_data_format=vector_data_format,
-                    parse_json=parse_json, pool_size=pool_size,
-                    max_overflow=max_overflow, timeout=timeout)
+    return VectorDB(
+        host=host, user=user, password=password, port=port,
+        database=database, driver=driver, pure_python=pure_python,
+        local_infile=local_infile, charset=charset,
+        ssl_key=ssl_key, ssl_cert=ssl_cert, ssl_ca=ssl_ca,
+        ssl_disabled=ssl_disabled, ssl_cipher=ssl_cipher,
+        ssl_verify_cert=ssl_verify_cert,
+        tls_sni_servername=tls_sni_servername,
+        ssl_verify_identity=ssl_verify_identity, conv=conv,
+        credential_type=credential_type, autocommit=autocommit,
+        results_type=results_type, buffered=buffered,
+        results_format=results_format, program_name=program_name,
+        conn_attrs=conn_attrs, multi_statements=multi_statements,
+        client_found_rows=client_found_rows,
+        connect_timeout=connect_timeout, nan_as_null=nan_as_null,
+        inf_as_null=inf_as_null, encoding_errors=encoding_errors,
+        track_env=track_env,
+        enable_extended_data_types=enable_extended_data_types,
+        vector_data_format=vector_data_format,
+        parse_json=parse_json, pool_size=pool_size,
+        max_overflow=max_overflow, timeout=timeout,
+    )

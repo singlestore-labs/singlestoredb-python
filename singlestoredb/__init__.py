@@ -31,7 +31,15 @@ from .types import (
     Date, Time, Timestamp, DateFromTicks, TimeFromTicks, TimestampFromTicks,
     Binary, STRING, BINARY, NUMBER, DATETIME, ROWID,
 )
-from .vectorstore import vector_db
+from .vectorstore import (
+    vector_db, IndexInterface, IndexList, IndexModel, MatchTypedDict,
+    Metric, IndexStatsTypedDict, NamespaceStatsTypedDict, Vector,
+    VectorDictMetadataValue, VectorMetadataTypedDict, VectorTuple,
+    VectorTupleWithMetadata, DeletionProtection, AndFilter, EqFilter,
+    ExactMatchFilter, FilterTypedDict, GteFilter, GtFilter, InFilter,
+    LteFilter, LtFilter, NeFilter, NinFilter, OrFilter, SimpleFilter,
+)
+
 
 #
 # This function is defined here to prevent the side-effect of

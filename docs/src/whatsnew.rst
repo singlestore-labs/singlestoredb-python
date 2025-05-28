@@ -11,7 +11,7 @@ This document outlines features and improvements from each release.
 v1.14.0 - May 28, 2025
 ------------------------
 * Add ``vector_db`` property to a ``Connection`` object to get the vectorstor API to the current database
-* Add ``vector_db(...)`` function to connect to a database and optain a vectorstor API 
+* Add ``vector_db(...)`` function to connect to a database and optain a vectorstor API
 
 v1.13.0 - April 16, 2025
 ------------------------

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 """SingleStoreDB connections and cursors."""
-
 import abc
 import inspect
 import io
@@ -23,7 +22,6 @@ from typing import Union
 from urllib.parse import parse_qs
 from urllib.parse import unquote_plus
 from urllib.parse import urlparse
-
 
 import sqlparams
 try:
@@ -1293,12 +1291,13 @@ class Connection(metaclass=abc.ABCMeta):
     @property
     def vector_db(self) -> Any:
         """
-        Get vectorstore API accessor 
+        Get vectorstore API accessor
         """
         from vectorstore import VectorDB
         if not hasattr(self, '_vector_db'):
             self._vector_db = VectorDB(connection=self)
         return self._vector_db
+
 
 #
 # NOTE: When adding parameters to this function, you should always
