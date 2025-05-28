@@ -7,3 +7,4 @@ sqlparams
 tomli>=1.1.0; python_version < '3.11'
 typing_extensions<=4.13.2
 wheel
+singlestore-vecorstore>=0.1.1

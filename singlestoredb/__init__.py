@@ -13,7 +13,7 @@ Examples
 
 """
 
-__version__ = '1.13.1'
+__version__ = '1.14.0'
 
 from typing import Any
 
@@ -31,7 +31,7 @@ from .types import (
     Date, Time, Timestamp, DateFromTicks, TimeFromTicks, TimestampFromTicks,
     Binary, STRING, BINARY, NUMBER, DATETIME, ROWID,
 )
-
+from .vectorstore import vector_db
 
 #
 # This function is defined here to prevent the side-effect of
