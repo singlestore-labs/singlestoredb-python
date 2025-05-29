@@ -46,3 +46,6 @@ class TestVectorDB(unittest.TestCase):
             assert index.dimension == 4
             assert index.tags == {'name': 'test_tag'}
             assert db.has_index('test_index_1')
+
+            db2: VectorDB = conn.vector_db
+            assert db2.has_index('test_index_1')

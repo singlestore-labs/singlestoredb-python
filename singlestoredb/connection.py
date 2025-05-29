@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """SingleStoreDB connections and cursors."""
 import abc
+import functools
 import inspect
 import io
 import queue
@@ -1288,15 +1289,13 @@ class Connection(metaclass=abc.ABCMeta):
         """Access server properties managed by the SHOW statement."""
         return ShowAccessor(self)
 
-    @property
+    @functools.cached_property
     def vector_db(self) -> Any:
         """
         Get vectorstore API accessor
         """
         from vectorstore import VectorDB
-        if not hasattr(self, '_vector_db'):
-            self._vector_db = VectorDB(connection=self)
-        return self._vector_db
+        return VectorDB(connection=self)
 
 
 #
