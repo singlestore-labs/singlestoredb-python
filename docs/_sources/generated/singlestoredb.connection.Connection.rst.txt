@@ -23,6 +23,7 @@
       ~Connection.messages
       ~Connection.paramstyle
       ~Connection.show
+      ~Connection.vector_db
       ~Connection.encoding
       ~Connection.globals
       ~Connection.locals

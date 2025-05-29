@@ -1,0 +1,4 @@
+﻿singlestoredb.connection.Connection.vector\_db
+==============================================
+.. currentmodule:: singlestoredb.connection
+.. autoproperty:: Connection.vector_db

@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStoreDB 1.13.1 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 1.14.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
-        <script src="_static/documentation_options.js?v=2b23eb2b"></script>
+        <script src="_static/documentation_options.js?v=01009efc"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                1.13.1
+                1.14.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -46,6 +46,7 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">API Reference</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#connections">Connections</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.connect.html">singlestoredb.connect</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.vector_db.html">singlestoredb.vector_db</a></li>
 <li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.create_engine.html">singlestoredb.create_engine</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#connection">Connection</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.html">Connection</a></li>
@@ -57,6 +58,7 @@
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.is_connected.html">Connection.is_connected</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.enable_data_api.html">Connection.enable_data_api</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.disable_data_api.html">Connection.disable_data_api</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.Connection.vector_db.html">Connection.vector_db</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.aggregates.html">Connection.show.aggregates</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.columns.html">Connection.show.columns</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.connection.ShowAccessor.create_aggregate.html">Connection.show.create_aggregate</a></li>
@@ -284,6 +286,8 @@
 package. It connects to a SingleStore database using either
 <a class="reference external" href="https://peps.python.org/pep-0249/">DB-API</a> compliant parameters,
 or a connection string in the form of a URL.</p>
+<p>The <a class="reference internal" href="generated/singlestoredb.vector_db.html#singlestoredb.vector_db" title="singlestoredb.vector_db"><code class="xref py py-func docutils literal notranslate"><span class="pre">vector_db()</span></code></a> function gives you an interface for working with
+an API better for working with vector data.</p>
 <p>The <a class="reference internal" href="generated/singlestoredb.create_engine.html#singlestoredb.create_engine" title="singlestoredb.create_engine"><code class="xref py py-func docutils literal notranslate"><span class="pre">create_engine()</span></code></a> function is used with the SQLAlchemy package
 to create an SQLAlchemy engine for SingleStoreDB connections. This is
 primarily for use in environments where the connection parameters are
@@ -294,7 +298,10 @@ connections without specifying any parameters in the code itself.</p>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connect.html#singlestoredb.connect" title="singlestoredb.connect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">connect</span></code></a>([host, user, password, port, ...])</p></td>
 <td><p>Return a SingleStoreDB connection.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.create_engine.html#singlestoredb.create_engine" title="singlestoredb.create_engine"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_engine</span></code></a>(*args, **kwargs)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.vector_db.html#singlestoredb.vector_db" title="singlestoredb.vector_db"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vector_db</span></code></a>([host, user, password, port, ...])</p></td>
+<td><p>Return a vectorstore API connection.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.create_engine.html#singlestoredb.create_engine" title="singlestoredb.create_engine"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_engine</span></code></a>(*args, **kwargs)</p></td>
 <td><p>Create an SQLAlchemy engine for SingleStoreDB.</p></td>
 </tr>
 </tbody>
@@ -331,6 +338,9 @@ used to create<a href="singlestoredb.connection.Cursor.html"> <code class="xref 
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.disable_data_api.html#singlestoredb.connection.Connection.disable_data_api" title="singlestoredb.connection.Connection.disable_data_api"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.disable_data_api</span></code></a>()</p></td>
 <td><p>Disable the data API.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.connection.Connection.vector_db.html#singlestoredb.connection.Connection.vector_db" title="singlestoredb.connection.Connection.vector_db"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Connection.vector_db</span></code></a></p></td>
+<td><p>Get vectorstore API accessor</p></td>
 </tr>
 </tbody>
 </table>

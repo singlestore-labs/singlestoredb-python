@@ -15,6 +15,9 @@ package. It connects to a SingleStore database using either
 `DB-API <https://peps.python.org/pep-0249/>`_ compliant parameters,
 or a connection string in the form of a URL.
 
+The :func:`vector_db` function gives you an interface for working with
+an API better for working with vector data.
+
 The :func:`create_engine` function is used with the SQLAlchemy package
 to create an SQLAlchemy engine for SingleStoreDB connections. This is
 primarily for use in environments where the connection parameters are
@@ -25,6 +28,7 @@ connections without specifying any parameters in the code itself.
    :toctree: generated/
 
    connect
+   vector_db
    create_engine
 
 
@@ -48,6 +52,7 @@ used to create :class:`Cursor` objects for querying the database.
    Connection.is_connected
    Connection.enable_data_api
    Connection.disable_data_api
+   Connection.vector_db
 
 
 The :attr:`Connection.show` attribute of the connection objects allow you to access various

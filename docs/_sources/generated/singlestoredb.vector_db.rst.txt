@@ -1,0 +1,4 @@
+﻿singlestoredb.vector\_db
+========================
+.. currentmodule:: singlestoredb
+.. autofunction:: vector_db
