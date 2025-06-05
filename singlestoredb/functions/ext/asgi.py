@@ -24,7 +24,9 @@ Example
 """
 import argparse
 import asyncio
+import contextvars
 import dataclasses
+import functools
 import importlib.util
 import inspect
 import io
@@ -37,6 +39,7 @@ import secrets
 import sys
 import tempfile
 import textwrap
+import threading
 import typing
 import urllib
 import zipfile
@@ -93,6 +96,15 @@ if num_processes > 1:
     func_map = Pool(num_processes).starmap
 else:
     func_map = itertools.starmap
+
+
+async def to_thread(
+    func: Any, /, *args: Any, **kwargs: Dict[str, Any],
+) -> Any:
+    loop = asyncio.get_running_loop()
+    ctx = contextvars.copy_context()
+    func_call = functools.partial(ctx.run, func, *args, **kwargs)
+    return await loop.run_in_executor(None, func_call)
 
 
 # Use negative values to indicate unsigned ints / binary data / usec time precision
@@ -274,11 +286,19 @@ def build_udf_endpoint(
     if returns_data_format in ['scalar', 'list']:
 
         async def do_func(
+            cancel_event: threading.Event,
             row_ids: Sequence[int],
             rows: Sequence[Sequence[Any]],
         ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
             '''Call function on given rows of data.'''
-            return row_ids, [as_tuple(x) for x in zip(func_map(func, rows))]
+            out = []
+            for row in rows:
+                if cancel_event.is_set():
+                    raise asyncio.CancelledError(
+                        'Function call was cancelled',
+                    )
+                out.append(func(*row))
+            return row_ids, list(zip(out))
 
         return do_func
 
@@ -309,6 +329,7 @@ def build_vector_udf_endpoint(
     array_cls = get_array_class(returns_data_format)
 
     async def do_func(
+        cancel_event: threading.Event,
         row_ids: Sequence[int],
         cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
     ) -> Tuple[
@@ -361,6 +382,7 @@ def build_tvf_endpoint(
     if returns_data_format in ['scalar', 'list']:
 
         async def do_func(
+            cancel_event: threading.Event,
             row_ids: Sequence[int],
             rows: Sequence[Sequence[Any]],
         ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
@@ -369,6 +391,10 @@ def build_tvf_endpoint(
             out = []
             # Call function on each row of data
             for i, res in zip(row_ids, func_map(func, rows)):
+                if cancel_event.is_set():
+                    raise asyncio.CancelledError(
+                        'Function call was cancelled',
+                    )
                 out.extend(as_list_of_tuples(res))
                 out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
             return out_ids, out
@@ -402,6 +428,7 @@ def build_vector_tvf_endpoint(
     array_cls = get_array_class(returns_data_format)
 
     async def do_func(
+        cancel_event: threading.Event,
         row_ids: Sequence[int],
         cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
     ) -> Tuple[
@@ -458,6 +485,7 @@ def make_func(
     function_type = sig.get('function_type', 'udf')
     args_data_format = sig.get('args_data_format', 'scalar')
     returns_data_format = sig.get('returns_data_format', 'scalar')
+    timeout = sig.get('timeout', get_option('external_function.timeout'))
 
     if function_type == 'tvf':
         do_func = build_tvf_endpoint(func, returns_data_format)
@@ -476,6 +504,9 @@ def make_func(
 
     # Set function type
     info['function_type'] = function_type
+
+    # Set timeout
+    info['timeout'] = max(timeout, 1)
 
     # Setup argument types for rowdat_1 parser
     colspec = []
@@ -496,6 +527,37 @@ def make_func(
     info['returns'] = returns
 
     return do_func, info
+
+
+async def cancel_on_timeout(timeout: int) -> None:
+    """Cancel request if it takes too long."""
+    await asyncio.sleep(timeout)
+    raise asyncio.CancelledError(
+        'Function call was cancelled due to timeout',
+    )
+
+
+async def cancel_on_disconnect(
+    receive: Callable[..., Awaitable[Any]],
+) -> None:
+    """Cancel request if client disconnects."""
+    while True:
+        message = await receive()
+        if message['type'] == 'http.disconnect':
+            raise asyncio.CancelledError(
+                'Function call was cancelled by client',
+            )
+
+
+def cancel_all_tasks(tasks: Iterable[asyncio.Task[Any]]) -> None:
+    """Cancel all tasks."""
+    for task in tasks:
+        if task.done():
+            continue
+        try:
+            task.cancel()
+        except Exception:
+            pass
 
 
 class Application(object):
@@ -851,6 +913,8 @@ class Application(object):
             more_body = True
             while more_body:
                 request = await receive()
+                if request['type'] == 'http.disconnect':
+                    raise RuntimeError('client disconnected')
                 data.append(request['body'])
                 more_body = request.get('more_body', False)
 
@@ -859,20 +923,86 @@ class Application(object):
             output_handler = self.handlers[(accepts, data_version, returns_data_format)]
 
             try:
-                out = await func(
-                    *input_handler['load'](  # type: ignore
-                        func_info['colspec'], b''.join(data),
+                result = []
+
+                cancel_event = threading.Event()
+
+                func_task = asyncio.create_task(
+                    to_thread(
+                        lambda: asyncio.run(
+                            func(
+                                cancel_event,
+                                *input_handler['load'](  # type: ignore
+                                    func_info['colspec'], b''.join(data),
+                                ),
+                            ),
+                        ),
                     ),
                 )
-                body = output_handler['dump'](
-                    [x[1] for x in func_info['returns']], *out,  # type: ignore
+                disconnect_task = asyncio.create_task(
+                    cancel_on_disconnect(receive),
                 )
+                timeout_task = asyncio.create_task(
+                    cancel_on_timeout(func_info['timeout']),
+                )
+
+                all_tasks = [func_task, disconnect_task, timeout_task]
+
+                done, pending = await asyncio.wait(
+                    all_tasks, return_when=asyncio.FIRST_COMPLETED,
+                )
+
+                cancel_all_tasks(pending)
+
+                for task in done:
+                    if task is disconnect_task:
+                        cancel_event.set()
+                        raise asyncio.CancelledError(
+                            'Function call was cancelled by client disconnect',
+                        )
+
+                    elif task is timeout_task:
+                        cancel_event.set()
+                        raise asyncio.TimeoutError(
+                            'Function call was cancelled due to timeout',
+                        )
+
+                    elif task is func_task:
+                        result.extend(task.result())
+
+                body = output_handler['dump'](
+                    [x[1] for x in func_info['returns']], *result,  # type: ignore
+                )
+
                 await send(output_handler['response'])
 
+            except asyncio.TimeoutError:
+                logging.exception(
+                    'Timeout in function call: ' + func_name.decode('utf-8'),
+                )
+                body = (
+                    '[TimeoutError] Function call timed out after ' +
+                    str(func_info['timeout']) +
+                    ' seconds'
+                ).encode('utf-8')
+                await send(self.error_response_dict)
+
+            except asyncio.CancelledError:
+                logging.exception(
+                    'Function call cancelled: ' + func_name.decode('utf-8'),
+                )
+                body = b'[CancelledError] Function call was cancelled'
+                await send(self.error_response_dict)
+
             except Exception as e:
-                logging.exception('Error in function call')
+                logging.exception(
+                    'Error in function call: ' + func_name.decode('utf-8'),
+                )
                 body = f'[{type(e).__name__}] {str(e).strip()}'.encode('utf-8')
                 await send(self.error_response_dict)
+
+            finally:
+                cancel_all_tasks(all_tasks)
 
         # Handle api reflection
         elif method == 'GET' and path == self.show_create_function_path:
