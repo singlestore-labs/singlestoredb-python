@@ -100,6 +100,7 @@ def _func(
     name: Optional[str] = None,
     args: Optional[ParameterType] = None,
     returns: Optional[ReturnType] = None,
+    timeout: Optional[int] = None,
 ) -> Callable[..., Any]:
     """Generic wrapper for UDF and TVF decorators."""
 
@@ -108,6 +109,7 @@ def _func(
             name=name,
             args=expand_types(args),
             returns=expand_types(returns),
+            timeout=timeout,
         ).items() if v is not None
     }
 
