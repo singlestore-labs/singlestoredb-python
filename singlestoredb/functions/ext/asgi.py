@@ -273,12 +273,24 @@ def build_udf_endpoint(
     """
     if returns_data_format in ['scalar', 'list']:
 
+        is_async = asyncio.iscoroutinefunction(func)
+
         async def do_func(
             row_ids: Sequence[int],
             rows: Sequence[Sequence[Any]],
         ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
             '''Call function on given rows of data.'''
-            return row_ids, [as_tuple(x) for x in zip(func_map(func, rows))]
+            out = []
+            for row in rows:
+                if cancel_event.is_set():
+                    raise asyncio.CancelledError(
+                        'Function call was cancelled',
+                    )
+                if is_async:
+                    out.append(await func(*row))
+                else:
+                    out.append(func(*row))
+            return row_ids, list(zip(out))
 
         return do_func
 
@@ -307,6 +319,7 @@ def build_vector_udf_endpoint(
     """
     masks = get_masked_params(func)
     array_cls = get_array_class(returns_data_format)
+    is_async = asyncio.iscoroutinefunction(func)
 
     async def do_func(
         row_ids: Sequence[int],
@@ -320,9 +333,15 @@ def build_vector_udf_endpoint(
 
         # Call the function with `cols` as the function parameters
         if cols and cols[0]:
-            out = func(*[x if m else x[0] for x, m in zip(cols, masks)])
+            if is_async:
+                out = await func(*[x if m else x[0] for x, m in zip(cols, masks)])
+            else:
+                out = func(*[x if m else x[0] for x, m in zip(cols, masks)])
         else:
-            out = func()
+            if is_async:
+                out = await func()
+            else:
+                out = func()
 
         # Single masked value
         if isinstance(out, Masked):
@@ -360,6 +379,8 @@ def build_tvf_endpoint(
     """
     if returns_data_format in ['scalar', 'list']:
 
+        is_async = asyncio.iscoroutinefunction(func)
+
         async def do_func(
             row_ids: Sequence[int],
             rows: Sequence[Sequence[Any]],
@@ -368,7 +389,15 @@ def build_tvf_endpoint(
             out_ids: List[int] = []
             out = []
             # Call function on each row of data
-            for i, res in zip(row_ids, func_map(func, rows)):
+            for i, row in zip(row_ids, rows):
+                if cancel_event.is_set():
+                    raise asyncio.CancelledError(
+                        'Function call was cancelled',
+                    )
+                if is_async:
+                    res = await func(*row)
+                else:
+                    res = func(*row)
                 out.extend(as_list_of_tuples(res))
                 out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
             return out_ids, out
@@ -413,13 +442,23 @@ def build_vector_tvf_endpoint(
         #        each result row, so we just have to use the same
         #        row ID for all rows in the result.
 
+        is_async = asyncio.iscoroutinefunction(func)
+
         # Call function on each column of data
         if cols and cols[0]:
-            res = get_dataframe_columns(
-                func(*[x if m else x[0] for x, m in zip(cols, masks)]),
-            )
+            if is_async:
+                res = get_dataframe_columns(
+                    await func(*[x if m else x[0] for x, m in zip(cols, masks)]),
+                )
+            else:
+                res = get_dataframe_columns(
+                    func(*[x if m else x[0] for x, m in zip(cols, masks)]),
+                )
         else:
-            res = get_dataframe_columns(func())
+            if is_async:
+                res = get_dataframe_columns(await func())
+            else:
+                res = get_dataframe_columns(func())
 
         # Generate row IDs
         if isinstance(res[0], Masked):
@@ -476,6 +515,12 @@ def make_func(
 
     # Set function type
     info['function_type'] = function_type
+
+    # Set timeout
+    info['timeout'] = max(timeout, 1)
+
+    # Set async flag
+    info['is_async'] = asyncio.iscoroutinefunction(func)
 
     # Setup argument types for rowdat_1 parser
     colspec = []
@@ -859,11 +904,64 @@ class Application(object):
             output_handler = self.handlers[(accepts, data_version, returns_data_format)]
 
             try:
-                out = await func(
-                    *input_handler['load'](  # type: ignore
-                        func_info['colspec'], b''.join(data),
-                    ),
+                result = []
+
+                cancel_event = threading.Event()
+
+                if func_info['is_async']:
+                    func_task = asyncio.create_task(
+                        func(
+                            cancel_event,
+                            *input_handler['load'](  # type: ignore
+                                func_info['colspec'], b''.join(data),
+                            ),
+                        ),
+                    )
+                else:
+                    func_task = asyncio.create_task(
+                        to_thread(
+                            lambda: asyncio.run(
+                                func(
+                                    cancel_event,
+                                    *input_handler['load'](  # type: ignore
+                                        func_info['colspec'], b''.join(data),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    )
+                disconnect_task = asyncio.create_task(
+                    cancel_on_disconnect(receive),
                 )
+                timeout_task = asyncio.create_task(
+                    cancel_on_timeout(func_info['timeout']),
+                )
+
+                all_tasks = [func_task, disconnect_task, timeout_task]
+
+                done, pending = await asyncio.wait(
+                    all_tasks, return_when=asyncio.FIRST_COMPLETED,
+                )
+
+                cancel_all_tasks(pending)
+
+                for task in done:
+                    if task is disconnect_task:
+                        cancel_event.set()
+                        raise asyncio.CancelledError(
+                            'Function call was cancelled by client disconnect',
+                        )
+
+                    elif task is timeout_task:
+                        cancel_event.set()
+                        raise asyncio.TimeoutError(
+                            'Function call was cancelled due to timeout',
+                        )
+
+                    elif task is func_task:
+                        result.extend(task.result())
+
+                print(result)
                 body = output_handler['dump'](
                     [x[1] for x in func_info['returns']], *out,  # type: ignore
                 )
