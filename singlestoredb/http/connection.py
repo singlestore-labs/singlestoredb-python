@@ -569,8 +569,10 @@ class Cursor(connection.Cursor):
 
         if res.status_code >= 400:
             if res.text:
-                if re.match(r'^Error\s+\d+:', res.text):
-                    code, msg = res.text.split(':', 1)
+                m = re.match(r'^Error\s+(\d+).*?:', res.text)
+                if m:
+                    code = m.group(1)
+                    msg = res.text.split(':', 1)[-1]
                     icode = int(code.split()[-1])
                 else:
                     icode = res.status_code
