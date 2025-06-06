@@ -40,8 +40,10 @@ import sys
 import tempfile
 import textwrap
 import threading
+import time
 import typing
 import urllib
+import uuid
 import zipfile
 import zipimport
 from types import ModuleType
@@ -69,6 +71,7 @@ from ..signature import get_signature
 from ..signature import signature_to_sql
 from ..typing import Masked
 from ..typing import Table
+from .timer import Timer
 
 try:
     import cloudpickle
@@ -613,6 +616,16 @@ def cancel_all_tasks(tasks: Iterable[asyncio.Task[Any]]) -> None:
             pass
 
 
+def start_counter() -> float:
+    """Start a timer and return the start time."""
+    return time.perf_counter()
+
+
+def end_counter(start: float) -> float:
+    """End a timer and return the elapsed time."""
+    return time.perf_counter() - start
+
+
 class Application(object):
     """
     Create an external function application.
@@ -939,6 +952,8 @@ class Application(object):
             Function to send response information
 
         '''
+        timer = Timer(id=str(uuid.uuid4()), timestamp=time.time())
+
         assert scope['type'] == 'http'
 
         method = scope['method']
@@ -964,12 +979,13 @@ class Application(object):
             returns_data_format = func_info['returns_data_format']
             data = []
             more_body = True
-            while more_body:
-                request = await receive()
-                if request['type'] == 'http.disconnect':
-                    raise RuntimeError('client disconnected')
-                data.append(request['body'])
-                more_body = request.get('more_body', False)
+            with timer('receive_data'):
+                while more_body:
+                    request = await receive()
+                    if request['type'] == 'http.disconnect':
+                        raise RuntimeError('client disconnected')
+                    data.append(request['body'])
+                    more_body = request.get('more_body', False)
 
             data_version = headers.get(b's2-ef-version', b'')
             input_handler = self.handlers[(content_type, data_version, args_data_format)]
@@ -981,17 +997,17 @@ class Application(object):
 
                 cancel_event = threading.Event()
 
-                func_args = [
-                    cancel_event,
-                    *input_handler['load'](  # type: ignore
+                with timer('parse_input'):
+                    inputs = input_handler['load'](  # type: ignore
                         func_info['colspec'], b''.join(data),
-                    ),
-                ]
+                    )
 
                 func_task = asyncio.create_task(
-                    func(*func_args)
+                    func(cancel_event, *inputs)
                     if func_info['is_async']
-                    else to_thread(lambda: asyncio.run(func(*func_args))),
+                    else to_thread(
+                        lambda: asyncio.run(func(cancel_event, *inputs)),
+                    ),
                 )
                 disconnect_task = asyncio.create_task(
                     cancel_on_disconnect(receive),
@@ -1002,9 +1018,10 @@ class Application(object):
 
                 all_tasks += [func_task, disconnect_task, timeout_task]
 
-                done, pending = await asyncio.wait(
-                    all_tasks, return_when=asyncio.FIRST_COMPLETED,
-                )
+                with timer('function_call'):
+                    done, pending = await asyncio.wait(
+                        all_tasks, return_when=asyncio.FIRST_COMPLETED,
+                    )
 
                 cancel_all_tasks(pending)
 
@@ -1024,9 +1041,10 @@ class Application(object):
                     elif task is func_task:
                         result.extend(task.result())
 
-                body = output_handler['dump'](
-                    [x[1] for x in func_info['returns']], *result,  # type: ignore
-                )
+                with timer('format_output'):
+                    body = output_handler['dump'](
+                        [x[1] for x in func_info['returns']], *result,  # type: ignore
+                    )
 
                 await send(output_handler['response'])
 
@@ -1089,9 +1107,14 @@ class Application(object):
             await send(self.path_not_found_response_dict)
 
         # Send body
-        out = self.body_response_dict.copy()
-        out['body'] = body
-        await send(out)
+        with timer('send_response'):
+            out = self.body_response_dict.copy()
+            out['body'] = body
+            await send(out)
+
+        timer.metadata['function'] = func_name.decode('utf-8') if func_name else ''
+        timer.finish()
+        timer.log_metrics()
 
     def _create_link(
         self,
