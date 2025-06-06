@@ -14,6 +14,28 @@ INSERT INTO data SET id='e', name='elephants', value=0;
 
 COMMIT;
 
+CREATE ROWSTORE TABLE IF NOT EXISTS longer_data (
+    id VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    value BIGINT NOT NULL,
+    PRIMARY KEY (id) USING HASH
+) DEFAULT CHARSET = utf8 COLLATE = utf8_unicode_ci;
+
+INSERT INTO longer_data SET id='a', name='antelopes', value=2;
+INSERT INTO longer_data SET id='b', name='bears', value=2;
+INSERT INTO longer_data SET id='c', name='cats', value=5;
+INSERT INTO longer_data SET id='d', name='dogs', value=4;
+INSERT INTO longer_data SET id='e', name='elephants', value=0;
+INSERT INTO longer_data SET id='f', name='ferrets', value=2;
+INSERT INTO longer_data SET id='g', name='gorillas', value=4;
+INSERT INTO longer_data SET id='h', name='horses', value=6;
+INSERT INTO longer_data SET id='i', name='iguanas', value=2;
+INSERT INTO longer_data SET id='j', name='jaguars', value=0;
+INSERT INTO longer_data SET id='k', name='kiwis', value=0;
+INSERT INTO longer_data SET id='l', name='leopards', value=1;
+
+COMMIT;
+
 CREATE ROWSTORE TABLE IF NOT EXISTS data_with_nulls (
     id VARCHAR(255) NOT NULL,
     name VARCHAR(255),
