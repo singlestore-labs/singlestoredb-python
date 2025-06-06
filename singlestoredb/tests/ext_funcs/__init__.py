@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # mypy: disable-error-code="type-arg"
+import asyncio
+import time
 import typing
 from typing import List
 from typing import NamedTuple
@@ -36,6 +38,25 @@ def double_mult(x: float, y: float) -> float:
     return x * y
 
 
+@udf(timeout=2)
+def timeout_double_mult(x: float, y: float) -> float:
+    print('TIMEOUT', x, y)
+    time.sleep(5)
+    return x * y
+
+
+@udf
+async def async_double_mult(x: float, y: float) -> float:
+    return x * y
+
+
+@udf(timeout=2)
+async def async_timeout_double_mult(x: float, y: float) -> float:
+    print('ASYNC TIMEOUT', x, y)
+    await asyncio.sleep(5)
+    return x * y
+
+
 @udf(
     args=[DOUBLE(nullable=False), DOUBLE(nullable=False)],
     returns=DOUBLE(nullable=False),
@@ -46,6 +67,14 @@ def pandas_double_mult(x: pd.Series, y: pd.Series) -> pd.Series:
 
 @udf
 def numpy_double_mult(
+    x: npt.NDArray[np.float64],
+    y: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
+    return x * y
+
+
+@udf
+async def async_numpy_double_mult(
     x: npt.NDArray[np.float64],
     y: npt.NDArray[np.float64],
 ) -> npt.NDArray[np.float64]:
@@ -537,6 +566,11 @@ def table_function(n: int) -> Table[List[int]]:
     return Table([10] * n)
 
 
+@udf
+async def async_table_function(n: int) -> Table[List[int]]:
+    return Table([10] * n)
+
+
 @udf(
     returns=[
         dt.INT(name='c_int', nullable=False),
@@ -589,6 +623,13 @@ class DFOutputs(typing.NamedTuple):
 
 @udf(args=VecInputs, returns=DFOutputs)
 def vec_function_df(
+    x: npt.NDArray[np.int_], y: npt.NDArray[np.int_],
+) -> Table[pd.DataFrame]:
+    return pd.DataFrame(dict(res=[1, 2, 3], res2=[1.1, 2.2, 3.3]))
+
+
+@udf(args=VecInputs, returns=DFOutputs)
+async def async_vec_function_df(
     x: npt.NDArray[np.int_], y: npt.NDArray[np.int_],
 ) -> Table[pd.DataFrame]:
     return pd.DataFrame(dict(res=[1, 2, 3], res2=[1.1, 2.2, 3.3]))
