@@ -156,7 +156,7 @@ class ExportService(object):
                     sortOrderSpec=sort_order_spec,
                     properties=self.properties,
                     incremental=self.incremental or None,
-                    refreshInterval=self.refresh_interval.total_seconds()
+                    refreshInterval=int(self.refresh_interval.total_seconds())
                     if self.refresh_interval is not None else None,
                 ).items() if v is not None
             },
