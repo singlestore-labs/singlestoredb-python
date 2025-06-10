@@ -5,6 +5,10 @@ This document outlines features and improvements from each release.
 .. note:: All releases before v1.0.0 are considered pre-release and
    are for non-production testing and evaluation, and may include
    changes to the API.
+v1.14.1 - June 10, 2025
+-----------------------
+* Add additional Fusion SQL commands for Iceberg export (experimental)
+* Fix unsigned ints in Data API
 v1.14.0 - May 29, 2025
 ----------------------
 * Add `vector_db` interface
