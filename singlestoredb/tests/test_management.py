@@ -450,55 +450,59 @@ class TestStage(unittest.TestCase):
     def test_open(self):
         st = self.wg.stage
 
+        open_test_sql = f'open_test_{id(self)}.sql'
+
         # See if error is raised for non-existent file
         with self.assertRaises(s2.ManagementError):
-            st.open('open_test.sql', 'r')
+            st.open(open_test_sql, 'r')
 
         # Load test file
-        st.upload_file(TEST_DIR / 'test.sql', 'open_test.sql')
+        st.upload_file(TEST_DIR / 'test.sql', open_test_sql)
 
         # Read file using `open`
-        with st.open('open_test.sql', 'r') as rfile:
+        with st.open(open_test_sql, 'r') as rfile:
             assert rfile.read() == open(TEST_DIR / 'test.sql').read()
 
         # Read file using `open` with 'rt' mode
-        with st.open('open_test.sql', 'rt') as rfile:
+        with st.open(open_test_sql, 'rt') as rfile:
             assert rfile.read() == open(TEST_DIR / 'test.sql').read()
 
         # Read file using `open` with 'rb' mode
-        with st.open('open_test.sql', 'rb') as rfile:
+        with st.open(open_test_sql, 'rb') as rfile:
             assert rfile.read() == open(TEST_DIR / 'test.sql', 'rb').read()
 
         # Read file using `open` with 'rb' mode
         with self.assertRaises(ValueError):
-            with st.open('open_test.sql', 'b') as rfile:
+            with st.open(open_test_sql, 'b') as rfile:
                 pass
 
         # Attempt overwrite file using `open` with mode 'x'
         with self.assertRaises(OSError):
-            with st.open('open_test.sql', 'x') as wfile:
+            with st.open(open_test_sql, 'x') as wfile:
                 pass
 
         # Attempt overwrite file using `open` with mode 'w'
-        with st.open('open_test.sql', 'w') as wfile:
+        with st.open(open_test_sql, 'w') as wfile:
             wfile.write(open(TEST_DIR / 'test2.sql').read())
 
-        txt = st.download_file('open_test.sql', encoding='utf-8')
+        txt = st.download_file(open_test_sql, encoding='utf-8')
 
         assert txt == open(TEST_DIR / 'test2.sql').read()
 
+        open_raw_test_sql = f'open_raw_test_{id(self)}.sql'
+
         # Test writer without context manager
-        wfile = st.open('open_raw_test.sql', 'w')
+        wfile = st.open(open_raw_test_sql, 'w')
         for line in open(TEST_DIR / 'test.sql'):
             wfile.write(line)
         wfile.close()
 
-        txt = st.download_file('open_raw_test.sql', encoding='utf-8')
+        txt = st.download_file(open_raw_test_sql, encoding='utf-8')
 
         assert txt == open(TEST_DIR / 'test.sql').read()
 
         # Test reader without context manager
-        rfile = st.open('open_raw_test.sql', 'r')
+        rfile = st.open(open_raw_test_sql, 'r')
         txt = ''
         for line in rfile:
             txt += line
@@ -509,15 +513,18 @@ class TestStage(unittest.TestCase):
     def test_obj_open(self):
         st = self.wg.stage
 
+        obj_open_test_sql = f'obj_open_test_{id(self)}.sql'
+        obj_open_dir = f'obj_open_dir_{id(self)}'
+
         # Load test file
-        f = st.upload_file(TEST_DIR / 'test.sql', 'obj_open_test.sql')
+        f = st.upload_file(TEST_DIR / 'test.sql', obj_open_test_sql)
 
         # Read file using `open`
         with f.open() as rfile:
             assert rfile.read() == open(TEST_DIR / 'test.sql').read()
 
         # Make sure directories error out
-        d = st.mkdir('obj_open_dir')
+        d = st.mkdir(obj_open_dir)
         with self.assertRaises(IsADirectoryError):
             d.open()
 
@@ -1143,58 +1150,62 @@ class TestFileSpaces(unittest.TestCase):
 
     def test_open(self):
         for space in [self.personal_space, self.shared_space]:
+            open_test_ipynb = f'open_test_ipynb_{id(self)}.ipynb'
+
             # See if error is raised for non-existent file
             with self.assertRaises(s2.ManagementError):
-                space.open('open_test.ipynb', 'r')
+                space.open(open_test_ipynb, 'r')
 
             # Load test file
-            space.upload_file(TEST_DIR / 'test.ipynb', 'open_test.ipynb')
+            space.upload_file(TEST_DIR / 'test.ipynb', open_test_ipynb)
 
             # Read file using `open`
-            with space.open('open_test.ipynb', 'r') as rfile:
+            with space.open(open_test_ipynb, 'r') as rfile:
                 assert rfile.read() == open(TEST_DIR / 'test.ipynb').read()
 
             # Read file using `open` with 'rt' mode
-            with space.open('open_test.ipynb', 'rt') as rfile:
+            with space.open(open_test_ipynb, 'rt') as rfile:
                 assert rfile.read() == open(TEST_DIR / 'test.ipynb').read()
 
             # Read file using `open` with 'rb' mode
-            with space.open('open_test.ipynb', 'rb') as rfile:
+            with space.open(open_test_ipynb, 'rb') as rfile:
                 assert rfile.read() == open(TEST_DIR / 'test.ipynb', 'rb').read()
 
             # Read file using `open` with 'rb' mode
             with self.assertRaises(ValueError):
-                with space.open('open_test.ipynb', 'b') as rfile:
+                with space.open(open_test_ipynb, 'b') as rfile:
                     pass
 
             # Attempt overwrite file using `open` with mode 'x'
             with self.assertRaises(OSError):
-                with space.open('open_test.ipynb', 'x') as wfile:
+                with space.open(open_test_ipynb, 'x') as wfile:
                     pass
 
             # Attempt overwrite file using `open` with mode 'w'
-            with space.open('open_test.ipynb', 'w') as wfile:
+            with space.open(open_test_ipynb, 'w') as wfile:
                 wfile.write(open(TEST_DIR / 'test2.ipynb').read())
 
-            txt = space.download_file('open_test.ipynb', encoding='utf-8')
+            txt = space.download_file(open_test_ipynb, encoding='utf-8')
 
             assert txt == open(TEST_DIR / 'test2.ipynb').read()
 
+            open_raw_test_ipynb = f'open_raw_test_{id(self)}.ipynb'
+
             # Test writer without context manager
-            wfile = space.open('open_raw_test.ipynb', 'w')
+            wfile = space.open(open_raw_test_ipynb, 'w')
             for line in open(TEST_DIR / 'test.ipynb'):
                 wfile.write(line)
             wfile.close()
 
             txt = space.download_file(
-                'open_raw_test.ipynb',
+                open_raw_test_ipynb,
                 encoding='utf-8',
             )
 
             assert txt == open(TEST_DIR / 'test.ipynb').read()
 
             # Test reader without context manager
-            rfile = space.open('open_raw_test.ipynb', 'r')
+            rfile = space.open(open_raw_test_ipynb, 'r')
             txt = ''
             for line in rfile:
                 txt += line
@@ -1203,15 +1214,18 @@ class TestFileSpaces(unittest.TestCase):
             assert txt == open(TEST_DIR / 'test.ipynb').read()
 
             # Cleanup
-            space.remove('open_test.ipynb')
-            space.remove('open_raw_test.ipynb')
+            space.remove(open_test_ipynb)
+            space.remove(open_raw_test_ipynb)
 
     def test_obj_open(self):
         for space in [self.personal_space, self.shared_space]:
+            obj_open_test_ipynb = f'obj_open_test_{id(self)}.ipynb'
+            obj_open_dir = f'obj_open_dir_{id(self)}'
+
             # Load test file
             f = space.upload_file(
                 TEST_DIR / 'test.ipynb',
-                'obj_open_test.ipynb',
+                obj_open_test_ipynb,
             )
 
             # Read file using `open`
@@ -1220,7 +1234,7 @@ class TestFileSpaces(unittest.TestCase):
 
             # Make sure directories error out
             with self.assertRaises(s2.ManagementError):
-                space.mkdir('obj_open_dir')
+                space.mkdir(obj_open_dir)
 
             # Write file using `open`
             with f.open('w', encoding='utf-8') as wfile:
@@ -1248,7 +1262,7 @@ class TestFileSpaces(unittest.TestCase):
             assert txt == open(TEST_DIR / 'test.ipynb').read()
 
             # Cleanup
-            space.remove('obj_open_test.ipynb')
+            space.remove(obj_open_test_ipynb)
 
     def test_os_directories(self):
         for space in [self.personal_space, self.shared_space]:
