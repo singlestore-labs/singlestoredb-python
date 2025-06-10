@@ -6,6 +6,7 @@ from typing import Dict
 from typing import Optional
 
 from .. import result
+from ...management.export import _get_exports
 from ...management.export import ExportService
 from ...management.export import ExportStatus
 from ..handler import SQLHandler
@@ -187,7 +188,8 @@ def _start_export(params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         order_by=order_by or None,
         properties=json.loads(params['properties']) if params['properties'] else None,
         incremental=params.get('incremental', False),
-        refresh_interval=refresh_interval_delta,
+        refresh_interval=int(refresh_interval_delta.total_seconds())
+        if refresh_interval_delta is not None else None,
     ).start()
 
     res = FusionSQLResult()
@@ -387,6 +389,25 @@ class StartIncrementalExport(SQLHandler):
 StartIncrementalExport.register(overwrite=True)
 
 
+def _format_status(export_id: str, status: ExportStatus) -> Optional[FusionSQLResult]:
+    """Return the status of an export operation."""
+    info = status._info()
+
+    res = FusionSQLResult()
+    res.add_field('ExportID', result.STRING)
+    res.add_field('Status', result.STRING)
+    res.add_field('Message', result.STRING)
+    res.set_rows([
+        (
+            export_id,
+            info.get('status', 'Unknown'),
+            info.get('statusMsg', ''),
+        ),
+    ])
+
+    return res
+
+
 class ShowExport(SQLHandler):
     """
     SHOW EXPORT export_id;
@@ -400,9 +421,29 @@ class ShowExport(SQLHandler):
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         wsg = get_workspace_group({})
-        out = ExportStatus(params['export_id'], wsg)
+        return _format_status(
+            params['export_id'], ExportStatus(params['export_id'], wsg),
+        )
 
-        status = out._info()
+
+ShowExport.register(overwrite=True)
+
+
+class ShowExports(SQLHandler):
+    """
+    SHOW EXPORTS [ scope ];
+
+    # Location of the export
+    scope = FOR '<scope>'
+
+    """
+
+    _enabled = False
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        wsg = get_workspace_group({})
+
+        exports = _get_exports(wsg, params.get('scope', 'all'))
 
         res = FusionSQLResult()
         res.add_field('ExportID', result.STRING)
@@ -410,21 +451,22 @@ class ShowExport(SQLHandler):
         res.add_field('Message', result.STRING)
         res.set_rows([
             (
-                params['export_id'],
-                status.get('status', 'Unknown'),
-                status.get('statusMsg', ''),
-            ),
+                info['egressID'],
+                info.get('status', 'Unknown'),
+                info.get('statusMsg', ''),
+            )
+            for info in [x._info() for x in exports]
         ])
 
         return res
 
 
-ShowExport.register(overwrite=True)
+ShowExports.register(overwrite=True)
 
 
-class StopExport(SQLHandler):
+class SuspendExport(SQLHandler):
     """
-    STOP EXPORT export_id;
+    SUSPEND EXPORT export_id;
 
     # ID of export
     export_id = '<export-id>'
@@ -436,8 +478,48 @@ class StopExport(SQLHandler):
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         wsg = get_workspace_group({})
         service = ExportService.from_export_id(wsg, params['export_id'])
-        service.stop()
+        return _format_status(params['export_id'], service.suspend())
+
+
+SuspendExport.register(overwrite=True)
+
+
+class ResumeExport(SQLHandler):
+    """
+    RESUME EXPORT export_id;
+
+    # ID of export
+    export_id = '<export-id>'
+
+    """
+
+    _enabled = False
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        wsg = get_workspace_group({})
+        service = ExportService.from_export_id(wsg, params['export_id'])
+        return _format_status(params['export_id'], service.resume())
+
+
+ResumeExport.register(overwrite=True)
+
+
+class DropExport(SQLHandler):
+    """
+    DROP EXPORT export_id;
+
+    # ID of export
+    export_id = '<export-id>'
+
+    """
+
+    _enabled = False
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        wsg = get_workspace_group({})
+        service = ExportService.from_export_id(wsg, params['export_id'])
+        service.drop()
         return None
 
 
-StopExport.register(overwrite=True)
+DropExport.register(overwrite=True)

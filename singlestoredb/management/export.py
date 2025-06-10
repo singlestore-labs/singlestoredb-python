@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import datetime
 import json
 from typing import Any
 from typing import Dict
@@ -29,7 +28,7 @@ class ExportService(object):
     order_by: Optional[List[Dict[str, Dict[str, str]]]]
     properties: Optional[Dict[str, Any]]
     incremental: bool
-    refresh_interval: Optional[datetime.timedelta]
+    refresh_interval: Optional[int]
     export_id: Optional[str]
 
     def __init__(
@@ -43,7 +42,7 @@ class ExportService(object):
         partition_by: Optional[List[Dict[str, str]]] = None,
         order_by: Optional[List[Dict[str, Dict[str, str]]]] = None,
         incremental: bool = False,
-        refresh_interval: Optional[datetime.timedelta] = None,
+        refresh_interval: Optional[int] = None,
         properties: Optional[Dict[str, Any]] = None,
     ):
         #: Workspace group
@@ -156,7 +155,7 @@ class ExportService(object):
                     sortOrderSpec=sort_order_spec,
                     properties=self.properties,
                     incremental=self.incremental or None,
-                    refreshInterval=int(self.refresh_interval.total_seconds())
+                    refreshInterval=self.refresh_interval
                     if self.refresh_interval is not None else None,
                 ).items() if v is not None
             },
@@ -166,8 +165,8 @@ class ExportService(object):
 
         return ExportStatus(self.export_id, self.workspace_group)
 
-    def stop(self) -> 'ExportStatus':
-        """Stop the export process."""
+    def suspend(self) -> 'ExportStatus':
+        """Suspend the export process."""
         if self._manager is None:
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
@@ -179,11 +178,49 @@ class ExportService(object):
             )
 
         self._manager._post(
-            f'workspaceGroups/{self.workspace_group.id}/egress/stopTableEgress',
+            f'workspaceGroups/{self.workspace_group.id}/egress/suspendTableEgress',
             json=dict(egressID=self.export_id),
         )
 
         return ExportStatus(self.export_id, self.workspace_group)
+
+    def resume(self) -> 'ExportStatus':
+        """Resume the export process."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        if self.export_id is None:
+            raise ManagementError(
+                msg='Export ID is not set. You must start the export first.',
+            )
+
+        self._manager._post(
+            f'workspaceGroups/{self.workspace_group.id}/egress/resumeTableEgress',
+            json=dict(egressID=self.export_id),
+        )
+
+        return ExportStatus(self.export_id, self.workspace_group)
+
+    def drop(self) -> None:
+        """Drop the export process."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        if self.export_id is None:
+            raise ManagementError(
+                msg='Export ID is not set. You must start the export first.',
+            )
+
+        self._manager._post(
+            f'workspaceGroups/{self.workspace_group.id}/egress/dropTableEgress',
+            json=dict(egressID=self.export_id),
+        )
+
+        return None
 
     def status(self) -> ExportStatus:
         """Get the status of the export process."""
@@ -238,3 +275,21 @@ class ExportStatus(object):
 
     def __repr__(self) -> str:
         return self.status
+
+
+def _get_exports(
+    workspace_group: WorkspaceGroup,
+    scope: str = 'all',
+) -> List[ExportStatus]:
+    """Get all exports in the workspace group."""
+    if workspace_group._manager is None:
+        raise ManagementError(
+            msg='No workspace manager is associated with this object.',
+        )
+
+    out = workspace_group._manager._get(
+        f'workspaceGroups/{workspace_group.id}/egress/tableEgressStatus',
+        json=dict(scope=scope),
+    )
+
+    return out.json()
