@@ -26,6 +26,7 @@ import argparse
 import asyncio
 import contextvars
 import dataclasses
+import datetime
 import functools
 import importlib.util
 import inspect
@@ -962,7 +963,14 @@ class Application(object):
             Function to send response information
 
         '''
-        timer = Timer(id=str(uuid.uuid4()), timestamp=time.time())
+        request_id = str(uuid.uuid4())
+
+        timer = Timer(
+            id=request_id,
+            timestamp=datetime.datetime.now(
+                datetime.timezone.utc,
+            ).strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+        )
 
         assert scope['type'] == 'http'
 
@@ -978,6 +986,8 @@ class Application(object):
         func_name = headers.get(b's2-ef-name', b'')
         func_endpoint = self.endpoints.get(func_name)
 
+        timer.metadata['function'] = func_name.decode('utf-8') if func_name else ''
+
         func = None
         func_info: Dict[str, Any] = {}
         if func_endpoint is not None:
@@ -985,6 +995,17 @@ class Application(object):
 
         # Call the endpoint
         if method == 'POST' and func is not None and path == self.invoke_path:
+
+            logger.info(
+                json.dumps({
+                    'type': 'function_call',
+                    'id': request_id,
+                    'name': func_name.decode('utf-8'),
+                    'content_type': content_type.decode('utf-8'),
+                    'accepts': accepts.decode('utf-8'),
+                }),
+            )
+
             args_data_format = func_info['args_data_format']
             returns_data_format = func_info['returns_data_format']
             data = []
@@ -1122,9 +1143,7 @@ class Application(object):
             out['body'] = body
             await send(out)
 
-        timer.metadata['function'] = func_name.decode('utf-8') if func_name else ''
         timer.finish()
-        timer.log_metrics()
 
     def _create_link(
         self,
