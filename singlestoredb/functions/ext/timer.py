@@ -108,15 +108,13 @@ class Timer:
         # Pop the current timing from stack
         timing_info = self._stack.pop()
         elapsed = time.perf_counter() - timing_info['start_time']
-        self.metrics[timing_info['key']] = elapsed
+        self.metrics.setdefault(timing_info['key'], 0)
+        self.metrics[timing_info['key']] += elapsed
 
     def finish(self) -> None:
         """Finish the current timing context and store the elapsed time."""
         if self._stack:
-            raise RuntimeError(
-                'finish() called without a matching __enter__(). '
-                'Use the context manager instead.',
-            )
+            raise RuntimeError('finish() called within a `with` block.')
 
         self.metrics['total'] = time.perf_counter() - self.start_time
 

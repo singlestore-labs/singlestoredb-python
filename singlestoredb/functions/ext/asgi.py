@@ -313,17 +313,19 @@ def build_udf_endpoint(
 
         async def do_func(
             cancel_event: threading.Event,
+            timer: Timer,
             row_ids: Sequence[int],
             rows: Sequence[Sequence[Any]],
         ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
             '''Call function on given rows of data.'''
             out = []
-            for row in rows:
-                cancel_on_event(cancel_event)
-                if is_async:
-                    out.append(await func(*row))
-                else:
-                    out.append(func(*row))
+            with timer('call_function'):
+                for row in rows:
+                    cancel_on_event(cancel_event)
+                    if is_async:
+                        out.append(await func(*row))
+                    else:
+                        out.append(func(*row))
             return row_ids, list(zip(out))
 
         return do_func
@@ -357,6 +359,7 @@ def build_vector_udf_endpoint(
 
     async def do_func(
         cancel_event: threading.Event,
+        timer: Timer,
         row_ids: Sequence[int],
         cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
     ) -> Tuple[
@@ -367,16 +370,17 @@ def build_vector_udf_endpoint(
         row_ids = array_cls(row_ids)
 
         # Call the function with `cols` as the function parameters
-        if cols and cols[0]:
-            if is_async:
-                out = await func(*[x if m else x[0] for x, m in zip(cols, masks)])
+        with timer('call_function'):
+            if cols and cols[0]:
+                if is_async:
+                    out = await func(*[x if m else x[0] for x, m in zip(cols, masks)])
+                else:
+                    out = func(*[x if m else x[0] for x, m in zip(cols, masks)])
             else:
-                out = func(*[x if m else x[0] for x, m in zip(cols, masks)])
-        else:
-            if is_async:
-                out = await func()
-            else:
-                out = func()
+                if is_async:
+                    out = await func()
+                else:
+                    out = func()
 
         cancel_on_event(cancel_event)
 
@@ -420,6 +424,7 @@ def build_tvf_endpoint(
 
         async def do_func(
             cancel_event: threading.Event,
+            timer: Timer,
             row_ids: Sequence[int],
             rows: Sequence[Sequence[Any]],
         ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
@@ -427,14 +432,15 @@ def build_tvf_endpoint(
             out_ids: List[int] = []
             out = []
             # Call function on each row of data
-            for i, row in zip(row_ids, rows):
-                cancel_on_event(cancel_event)
-                if is_async:
-                    res = await func(*row)
-                else:
-                    res = func(*row)
-                out.extend(as_list_of_tuples(res))
-                out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
+            with timer('call_function'):
+                for i, row in zip(row_ids, rows):
+                    cancel_on_event(cancel_event)
+                    if is_async:
+                        res = await func(*row)
+                    else:
+                        res = func(*row)
+                    out.extend(as_list_of_tuples(res))
+                    out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
             return out_ids, out
 
         return do_func
@@ -467,6 +473,7 @@ def build_vector_tvf_endpoint(
 
     async def do_func(
         cancel_event: threading.Event,
+        timer: Timer,
         row_ids: Sequence[int],
         cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
     ) -> Tuple[
@@ -481,20 +488,23 @@ def build_vector_tvf_endpoint(
         is_async = asyncio.iscoroutinefunction(func)
 
         # Call function on each column of data
-        if cols and cols[0]:
-            if is_async:
-                res = get_dataframe_columns(
-                    await func(*[x if m else x[0] for x, m in zip(cols, masks)]),
-                )
+        with timer('call_function'):
+            if cols and cols[0]:
+                if is_async:
+                    func_res = await func(
+                        *[x if m else x[0] for x, m in zip(cols, masks)],
+                    )
+                else:
+                    func_res = func(
+                        *[x if m else x[0] for x, m in zip(cols, masks)],
+                    )
             else:
-                res = get_dataframe_columns(
-                    func(*[x if m else x[0] for x, m in zip(cols, masks)]),
-                )
-        else:
-            if is_async:
-                res = get_dataframe_columns(await func())
-            else:
-                res = get_dataframe_columns(func())
+                if is_async:
+                    func_res = await func()
+                else:
+                    func_res = func()
+
+        res = get_dataframe_columns(func_res)
 
         cancel_on_event(cancel_event)
 
@@ -1003,10 +1013,10 @@ class Application(object):
                     )
 
                 func_task = asyncio.create_task(
-                    func(cancel_event, *inputs)
+                    func(cancel_event, timer, *inputs)
                     if func_info['is_async']
                     else to_thread(
-                        lambda: asyncio.run(func(cancel_event, *inputs)),
+                        lambda: asyncio.run(func(cancel_event, timer, *inputs)),
                     ),
                 )
                 disconnect_task = asyncio.create_task(
@@ -1018,7 +1028,7 @@ class Application(object):
 
                 all_tasks += [func_task, disconnect_task, timeout_task]
 
-                with timer('function_call'):
+                with timer('function_wrapper'):
                     done, pending = await asyncio.wait(
                         all_tasks, return_when=asyncio.FIRST_COMPLETED,
                     )
