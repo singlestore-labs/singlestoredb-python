@@ -33,7 +33,7 @@ CORE_GRAMMAR = r'''
     close_paren = ws* ")" ws*
     open_repeats = ws* ~r"[\(\[\{]" ws*
     close_repeats = ws* ~r"[\)\]\}]" ws*
-    select = ~r"SELECT"i ws+ ~r".+" ws*
+    expression = ~r"[\s\S]*" ws*
     table = ~r"(?:([A-Za-z0-9_\-]+)|`([^\`]+)`)(?:\.(?:([A-Za-z0-9_\-]+)|`([^\`]+)`))?" ws*
     column = ~r"(?:([A-Za-z0-9_\-]+)|`([^\`]+)`)(?:\.(?:([A-Za-z0-9_\-]+)|`([^\`]+)`))?" ws*
     link_name = ~r"(?:([A-Za-z0-9_\-]+)|`([^\`]+)`)(?:\.(?:([A-Za-z0-9_\-]+)|`([^\`]+)`))?" ws*
@@ -77,6 +77,7 @@ BUILTINS = {
     '<file-type>': r'''
     file_type = { FILE | FOLDER }
     ''',
+    '<expression>': '',
 }
 
 BUILTIN_DEFAULTS = {  # type: ignore
@@ -627,6 +628,18 @@ class SQLHandler(NodeVisitor):
         cls.compile()
         registry.register_handler(cls, overwrite=overwrite)
 
+    def create_result(self) -> result.FusionSQLResult:
+        """
+        Create a new result object.
+
+        Returns
+        -------
+        FusionSQLResult
+            A new result object for this handler
+
+        """
+        return result.FusionSQLResult()
+
     def execute(self, sql: str) -> result.FusionSQLResult:
         """
         Parse the SQL and invoke the handler method.
@@ -746,9 +759,9 @@ class SQLHandler(NodeVisitor):
         _, out, *_ = visited_children
         return out
 
-    def visit_select(self, node: Node, visited_children: Iterable[Any]) -> Any:
-        out = ' '.join(flatten(visited_children))
-        return {'select': out}
+    def visit_expression(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        out = ' '.join(flatten(visited_children)).strip()
+        return {'expression': out}
 
     def visit_order_by(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Handle ORDER BY."""
