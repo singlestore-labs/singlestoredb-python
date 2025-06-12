@@ -58,7 +58,7 @@ jobs:
             # For pushes to main/master, compare against previous commit
             BASE_COMMIT="HEAD~1"
             echo "Push to main/master: Comparing against $BASE_COMMIT"
-          else:
+          else
             # For pushes to other branches, compare against master/main
             if git rev-parse --verify origin/main >/dev/null 2>&1; then
               BASE_COMMIT="origin/main"
