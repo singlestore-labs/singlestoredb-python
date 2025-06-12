@@ -33,7 +33,7 @@ CORE_GRAMMAR = r'''
     close_paren = ws* ")" ws*
     open_repeats = ws* ~r"[\(\[\{]" ws*
     close_repeats = ws* ~r"[\)\]\}]" ws*
-    expression = ~r"[\s\S]*" ws*
+    statement = ~r"[\s\S]*" ws*
     table = ~r"(?:([A-Za-z0-9_\-]+)|`([^\`]+)`)(?:\.(?:([A-Za-z0-9_\-]+)|`([^\`]+)`))?" ws*
     column = ~r"(?:([A-Za-z0-9_\-]+)|`([^\`]+)`)(?:\.(?:([A-Za-z0-9_\-]+)|`([^\`]+)`))?" ws*
     link_name = ~r"(?:([A-Za-z0-9_\-]+)|`([^\`]+)`)(?:\.(?:([A-Za-z0-9_\-]+)|`([^\`]+)`))?" ws*
@@ -77,7 +77,7 @@ BUILTINS = {
     '<file-type>': r'''
     file_type = { FILE | FOLDER }
     ''',
-    '<expression>': '',
+    '<statement>': '',
 }
 
 BUILTIN_DEFAULTS = {  # type: ignore
@@ -759,9 +759,9 @@ class SQLHandler(NodeVisitor):
         _, out, *_ = visited_children
         return out
 
-    def visit_expression(self, node: Node, visited_children: Iterable[Any]) -> Any:
+    def visit_statement(self, node: Node, visited_children: Iterable[Any]) -> Any:
         out = ' '.join(flatten(visited_children)).strip()
-        return {'expression': out}
+        return {'statement': out}
 
     def visit_order_by(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Handle ORDER BY."""

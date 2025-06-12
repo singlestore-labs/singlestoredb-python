@@ -10,7 +10,9 @@ time.
 By default, Fusion SQL commands are not processed by the client. They
 must be enabled by setting an environment variable.
 ```
-SINGLESTOREDB_FUSION_ENABLED=1
+import os
+
+os.environ['SINGLESTOREDB_FUSION_ENABLED']='1'
 ```
 
 ## Writing Fusion SQL handler classes
@@ -42,7 +44,7 @@ class ListDirHandler(SQLHandler):
 
     def run(self, params: Dict[str, Any]) -> Optional[result.FusionSQLResult]:
         # Create a result object
-        res = self.create_result()
+        res = result.FusionSQLResult()
 
         # Add a field to the results
         res.add_field('Name', result.STRING)
@@ -271,7 +273,7 @@ class CreateWorkspaceGroupHandler(SQLHandler):
             firewall_ranges=params['with_firewall_ranges'],
         )
 
-        return self.create_result()
+        return None
 
 
 CreateWorkspaceGroupHandler.register()
