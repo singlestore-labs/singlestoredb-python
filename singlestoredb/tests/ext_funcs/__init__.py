@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # mypy: disable-error-code="type-arg"
+import asyncio
+import time
 import typing
 from typing import List
 from typing import NamedTuple
@@ -7,10 +9,6 @@ from typing import Optional
 from typing import Tuple
 
 import numpy as np
-import numpy.typing as npt
-import pandas as pd
-import polars as pl
-import pyarrow as pa
 
 import singlestoredb.functions.dtypes as dt
 from singlestoredb.functions import Masked
@@ -24,6 +22,10 @@ from singlestoredb.functions.dtypes import MEDIUMINT
 from singlestoredb.functions.dtypes import SMALLINT
 from singlestoredb.functions.dtypes import TEXT
 from singlestoredb.functions.dtypes import TINYINT
+from singlestoredb.functions.typing import numpy as npt
+from singlestoredb.functions.typing import pandas as pdt
+from singlestoredb.functions.typing import polars as plt
+from singlestoredb.functions.typing import pyarrow as pat
 
 
 @udf
@@ -36,19 +38,44 @@ def double_mult(x: float, y: float) -> float:
     return x * y
 
 
+@udf(timeout=2)
+def timeout_double_mult(x: float, y: float) -> float:
+    time.sleep(5)
+    return x * y
+
+
+@udf
+async def async_double_mult(x: float, y: float) -> float:
+    return x * y
+
+
+@udf(timeout=2)
+async def async_timeout_double_mult(x: float, y: float) -> float:
+    await asyncio.sleep(5)
+    return x * y
+
+
 @udf(
     args=[DOUBLE(nullable=False), DOUBLE(nullable=False)],
     returns=DOUBLE(nullable=False),
 )
-def pandas_double_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+def pandas_double_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
     return x * y
 
 
 @udf
 def numpy_double_mult(
-    x: npt.NDArray[np.float64],
-    y: npt.NDArray[np.float64],
-) -> npt.NDArray[np.float64]:
+    x: npt.Float64Array,
+    y: npt.Float64Array,
+) -> npt.Float64Array:
+    return x * y
+
+
+@udf
+async def async_numpy_double_mult(
+    x: npt.Float64Array,
+    y: npt.Float64Array,
+) -> npt.Float64Array:
     return x * y
 
 
@@ -56,7 +83,7 @@ def numpy_double_mult(
     args=[DOUBLE(nullable=False), DOUBLE(nullable=False)],
     returns=DOUBLE(nullable=False),
 )
-def arrow_double_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+def arrow_double_mult(x: pat.Array, y: pat.Array) -> pat.Array:
     import pyarrow.compute as pc
     return pc.multiply(x, y)
 
@@ -65,7 +92,7 @@ def arrow_double_mult(x: pa.Array, y: pa.Array) -> pa.Array:
     args=[DOUBLE(nullable=False), DOUBLE(nullable=False)],
     returns=DOUBLE(nullable=False),
 )
-def polars_double_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+def polars_double_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -106,12 +133,12 @@ def tinyint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 
 @tinyint_udf
-def pandas_tinyint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+def pandas_tinyint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
     return x * y
 
 
 @tinyint_udf
-def polars_tinyint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+def polars_tinyint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -121,7 +148,7 @@ def numpy_tinyint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 @tinyint_udf
-def arrow_tinyint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+def arrow_tinyint_mult(x: pat.Array, y: pat.Array) -> pat.Array:
     import pyarrow.compute as pc
     return pc.multiply(x, y)
 
@@ -144,12 +171,12 @@ def smallint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 
 @smallint_udf
-def pandas_smallint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+def pandas_smallint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
     return x * y
 
 
 @smallint_udf
-def polars_smallint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+def polars_smallint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -159,7 +186,7 @@ def numpy_smallint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 @smallint_udf
-def arrow_smallint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+def arrow_smallint_mult(x: pat.Array, y: pat.Array) -> pat.Array:
     import pyarrow.compute as pc
     return pc.multiply(x, y)
 
@@ -183,12 +210,12 @@ def mediumint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 
 @mediumint_udf
-def pandas_mediumint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+def pandas_mediumint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
     return x * y
 
 
 @mediumint_udf
-def polars_mediumint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+def polars_mediumint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -198,7 +225,7 @@ def numpy_mediumint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 @mediumint_udf
-def arrow_mediumint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+def arrow_mediumint_mult(x: pat.Array, y: pat.Array) -> pat.Array:
     import pyarrow.compute as pc
     return pc.multiply(x, y)
 
@@ -222,12 +249,12 @@ def bigint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 
 @bigint_udf
-def pandas_bigint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+def pandas_bigint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
     return x * y
 
 
 @bigint_udf
-def polars_bigint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+def polars_bigint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -237,7 +264,7 @@ def numpy_bigint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 @bigint_udf
-def arrow_bigint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+def arrow_bigint_mult(x: pat.Array, y: pat.Array) -> pat.Array:
     import pyarrow.compute as pc
     return pc.multiply(x, y)
 
@@ -261,12 +288,12 @@ def nullable_tinyint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 
 @nullable_tinyint_udf
-def pandas_nullable_tinyint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+def pandas_nullable_tinyint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
     return x * y
 
 
 @nullable_tinyint_udf
-def polars_nullable_tinyint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+def polars_nullable_tinyint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -276,7 +303,7 @@ def numpy_nullable_tinyint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 @nullable_tinyint_udf
-def arrow_nullable_tinyint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+def arrow_nullable_tinyint_mult(x: pat.Array, y: pat.Array) -> pat.Array:
     import pyarrow.compute as pc
     return pc.multiply(x, y)
 
@@ -299,12 +326,12 @@ def nullable_smallint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 
 @nullable_smallint_udf
-def pandas_nullable_smallint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+def pandas_nullable_smallint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
     return x * y
 
 
 @nullable_smallint_udf
-def polars_nullable_smallint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+def polars_nullable_smallint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -314,7 +341,7 @@ def numpy_nullable_smallint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 @nullable_smallint_udf
-def arrow_nullable_smallint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+def arrow_nullable_smallint_mult(x: pat.Array, y: pat.Array) -> pat.Array:
     import pyarrow.compute as pc
     return pc.multiply(x, y)
 
@@ -338,12 +365,12 @@ def nullable_mediumint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]
 
 
 @nullable_mediumint_udf
-def pandas_nullable_mediumint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+def pandas_nullable_mediumint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
     return x * y
 
 
 @nullable_mediumint_udf
-def polars_nullable_mediumint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+def polars_nullable_mediumint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -353,7 +380,7 @@ def numpy_nullable_mediumint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 @nullable_mediumint_udf
-def arrow_nullable_mediumint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+def arrow_nullable_mediumint_mult(x: pat.Array, y: pat.Array) -> pat.Array:
     import pyarrow.compute as pc
     return pc.multiply(x, y)
 
@@ -377,12 +404,12 @@ def nullable_bigint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 
 @nullable_bigint_udf
-def pandas_nullable_bigint_mult(x: pd.Series, y: pd.Series) -> pd.Series:
+def pandas_nullable_bigint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
     return x * y
 
 
 @nullable_bigint_udf
-def polars_nullable_bigint_mult(x: pl.Series, y: pl.Series) -> pl.Series:
+def polars_nullable_bigint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -392,7 +419,7 @@ def numpy_nullable_bigint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 @nullable_bigint_udf
-def arrow_nullable_bigint_mult(x: pa.Array, y: pa.Array) -> pa.Array:
+def arrow_nullable_bigint_mult(x: pat.Array, y: pat.Array) -> pat.Array:
     import pyarrow.compute as pc
     return pc.multiply(x, y)
 
@@ -410,7 +437,7 @@ def string_mult(x: str, times: int) -> str:
 
 
 @udf(args=[TEXT(nullable=False), BIGINT(nullable=False)], returns=TEXT(nullable=False))
-def pandas_string_mult(x: pd.Series, times: pd.Series) -> pd.Series:
+def pandas_string_mult(x: pdt.Series, times: pdt.Series) -> pdt.Series:
     return x * times
 
 
@@ -447,8 +474,8 @@ def nullable_string_mult(x: Optional[str], times: Optional[int]) -> Optional[str
     returns=TINYINT(nullable=True),
 )
 def pandas_nullable_tinyint_mult_with_masks(
-    x: Masked[pd.Series], y: Masked[pd.Series],
-) -> Masked[pd.Series]:
+    x: Masked[pdt.Series], y: Masked[pdt.Series],
+) -> Masked[pdt.Series]:
     x_data, x_nulls = x
     y_data, y_nulls = y
     return Masked(x_data * y_data, x_nulls | y_nulls)
@@ -468,8 +495,8 @@ def numpy_nullable_tinyint_mult_with_masks(
     returns=TINYINT(nullable=True),
 )
 def polars_nullable_tinyint_mult_with_masks(
-    x: Masked[pl.Series], y: Masked[pl.Series],
-) -> Masked[pl.Series]:
+    x: Masked[plt.Series], y: Masked[plt.Series],
+) -> Masked[plt.Series]:
     x_data, x_nulls = x
     y_data, y_nulls = y
     return Masked(x_data * y_data, x_nulls | y_nulls)
@@ -480,8 +507,8 @@ def polars_nullable_tinyint_mult_with_masks(
     returns=TINYINT(nullable=True),
 )
 def arrow_nullable_tinyint_mult_with_masks(
-    x: Masked[pa.Array], y: Masked[pa.Array],
-) -> Masked[pa.Array]:
+    x: Masked[pat.Array], y: Masked[pat.Array],
+) -> Masked[pat.Array]:
     import pyarrow.compute as pc
     x_data, x_nulls = x
     y_data, y_nulls = y
@@ -489,7 +516,7 @@ def arrow_nullable_tinyint_mult_with_masks(
 
 
 @udf(returns=[TEXT(nullable=False, name='res')])
-def numpy_fixed_strings() -> Table[npt.NDArray[np.str_]]:
+def numpy_fixed_strings() -> Table[npt.StrArray]:
     out = np.array(
         [
             'hello',
@@ -502,7 +529,7 @@ def numpy_fixed_strings() -> Table[npt.NDArray[np.str_]]:
 
 
 @udf(returns=[TEXT(nullable=False, name='res'), TINYINT(nullable=False, name='res2')])
-def numpy_fixed_strings_2() -> Table[npt.NDArray[np.str_], npt.NDArray[np.int8]]:
+def numpy_fixed_strings_2() -> Table[npt.StrArray, npt.Int8Array]:
     out = np.array(
         [
             'hello',
@@ -515,7 +542,7 @@ def numpy_fixed_strings_2() -> Table[npt.NDArray[np.str_], npt.NDArray[np.int8]]
 
 
 @udf(returns=[BLOB(nullable=False, name='res')])
-def numpy_fixed_binary() -> Table[npt.NDArray[np.bytes_]]:
+def numpy_fixed_binary() -> Table[npt.BytesArray]:
     out = np.array(
         [
             'hello'.encode('utf8'),
@@ -534,6 +561,11 @@ def no_args_no_return_value() -> None:
 
 @udf
 def table_function(n: int) -> Table[List[int]]:
+    return Table([10] * n)
+
+
+@udf
+async def async_table_function(n: int) -> Table[List[int]]:
     return Table([10] * n)
 
 
@@ -561,8 +593,8 @@ def table_function_struct(n: int) -> Table[List[MyTable]]:
 
 @udf
 def vec_function(
-    x: npt.NDArray[np.float64], y: npt.NDArray[np.float64],
-) -> npt.NDArray[np.float64]:
+    x: npt.Float64Array, y: npt.Float64Array,
+) -> npt.Float64Array:
     return x * y
 
 
@@ -577,8 +609,8 @@ class VecOutputs(typing.NamedTuple):
 
 @udf(args=VecInputs, returns=VecOutputs)
 def vec_function_ints(
-    x: npt.NDArray[np.int_], y: npt.NDArray[np.int_],
-) -> npt.NDArray[np.int_]:
+    x: npt.IntArray, y: npt.IntArray,
+) -> npt.IntArray:
     return x * y
 
 
@@ -589,9 +621,16 @@ class DFOutputs(typing.NamedTuple):
 
 @udf(args=VecInputs, returns=DFOutputs)
 def vec_function_df(
-    x: npt.NDArray[np.int_], y: npt.NDArray[np.int_],
-) -> Table[pd.DataFrame]:
-    return pd.DataFrame(dict(res=[1, 2, 3], res2=[1.1, 2.2, 3.3]))
+    x: npt.IntArray, y: npt.IntArray,
+) -> Table[pdt.DataFrame]:
+    return pdt.DataFrame(dict(res=[1, 2, 3], res2=[1.1, 2.2, 3.3]))
+
+
+@udf(args=VecInputs, returns=DFOutputs)
+async def async_vec_function_df(
+    x: npt.IntArray, y: npt.IntArray,
+) -> Table[pdt.DataFrame]:
+    return pdt.DataFrame(dict(res=[1, 2, 3], res2=[1.1, 2.2, 3.3]))
 
 
 class MaskOutputs(typing.NamedTuple):
@@ -600,8 +639,8 @@ class MaskOutputs(typing.NamedTuple):
 
 @udf(args=VecInputs, returns=MaskOutputs)
 def vec_function_ints_masked(
-    x: Masked[npt.NDArray[np.int_]], y: Masked[npt.NDArray[np.int_]],
-) -> Table[Masked[npt.NDArray[np.int_]]]:
+    x: Masked[npt.IntArray], y: Masked[npt.IntArray],
+) -> Table[Masked[npt.IntArray]]:
     x_data, x_nulls = x
     y_data, y_nulls = y
     return Table(Masked(x_data * y_data, x_nulls | y_nulls))
@@ -614,8 +653,8 @@ class MaskOutputs2(typing.NamedTuple):
 
 @udf(args=VecInputs, returns=MaskOutputs2)
 def vec_function_ints_masked2(
-    x: Masked[npt.NDArray[np.int_]], y: Masked[npt.NDArray[np.int_]],
-) -> Table[Masked[npt.NDArray[np.int_]], Masked[npt.NDArray[np.int_]]]:
+    x: Masked[npt.IntArray], y: Masked[npt.IntArray],
+) -> Table[Masked[npt.IntArray], Masked[npt.IntArray]]:
     x_data, x_nulls = x
     y_data, y_nulls = y
     return Table(

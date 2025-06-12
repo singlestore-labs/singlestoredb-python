@@ -438,6 +438,11 @@ register_option(
     environ=['SINGLESTOREDB_EXT_FUNC_PORT'],
 )
 
+register_option(
+    'external_function.timeout', 'int', check_int, 24*60*60,
+    'Specifies the timeout in seconds for processing a batch of rows.',
+    environ=['SINGLESTOREDB_EXT_FUNC_TIMEOUT'],
+)
 
 #
 # Debugging options
