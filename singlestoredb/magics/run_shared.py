@@ -113,7 +113,9 @@ class RunSharedMagic(Magics):
         with prepended_to_syspath(dname):
             try:
                 for cell in get_cells():
-                    result = self.run_cell(cell, silent=True, shell_futures=shell_futures)
+                    result = self.shell.run_cell(
+                        cell, silent=True, shell_futures=shell_futures,
+                    )
                     if raise_exceptions:
                         result.raise_error()
                     elif not result.success:
@@ -121,5 +123,5 @@ class RunSharedMagic(Magics):
             except Exception:
                 if raise_exceptions:
                     raise
-                self.showtraceback()
+                self.shell.showtraceback()
                 warn('Unknown failure executing file: <%s>' % fpath)
