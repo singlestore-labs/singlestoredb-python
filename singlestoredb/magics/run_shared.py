@@ -103,6 +103,8 @@ class RunSharedMagic(Magics):
                     return
                 for cell in nb.cells:
                     if cell.cell_type == 'code':
+                        if not cell.source.strip():
+                            continue
                         output_redirect = getattr(
                             cell, 'metadata', {},
                         ).get('output_variable', '') or ''
