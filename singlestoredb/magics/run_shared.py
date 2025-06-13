@@ -105,9 +105,9 @@ class RunSharedMagic(Magics):
                     if cell.cell_type == 'code':
                         output_redirect = getattr(
                             cell, 'metadata', {},
-                        ).get('output_variable', '')
+                        ).get('output_variable', '') or ''
                         if output_redirect:
-                            output_redirect = f' << {output_redirect}'
+                            output_redirect = f' {output_redirect} <<'
                         if getattr(cell, 'metadata', {}).get('language', '') == 'sql':
                             yield f'%%sql{output_redirect}\n{cell.source}'
                         else:
