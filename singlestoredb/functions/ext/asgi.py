@@ -964,6 +964,13 @@ class Application(object):
         functions = {}
         no_default = object()
 
+        # Generate CREATE FUNCTION SQL for each function using get_create_functions
+        create_sqls = self.get_create_functions(replace=True)
+        sql_map = {}
+        for key, (_, info), sql in zip(self.endpoints.keys(), self.endpoints.values(), create_sqls):
+            sig = info['signature']
+            sql_map[sig['name']] = sql
+
         for key, (_, info) in self.endpoints.items():
             if not func_name or key == func_name:
                 sig = info['signature']
@@ -1002,7 +1009,10 @@ class Application(object):
                         returns[-1]['default'] = a['default']
 
                 functions[sig['name']] = dict(
-                    args=args, returns=returns, function_type=info['function_type'],
+                    args=args,
+                    returns=returns,
+                    function_type=info['function_type'],
+                    sql_statement=sql_map[sig['name']] if sig['name'] in sql_map else None,
                 )
 
         return functions
