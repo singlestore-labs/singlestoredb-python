@@ -56,7 +56,7 @@ class RunSharedMagic(Magics):
             # Run the downloaded file
             with preserve_keys(self.shell.user_ns, '__file__'):
                 self.shell.user_ns['__file__'] = temp_file_path
-                self.shell.safe_execfile_ipy(temp_file_path, raise_exceptions=True)
+                self.safe_execfile_ipy(temp_file_path, raise_exceptions=True)
 
     def safe_execfile_ipy(
         self,
