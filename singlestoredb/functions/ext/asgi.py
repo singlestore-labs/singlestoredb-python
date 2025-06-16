@@ -1008,11 +1008,12 @@ class Application(object):
                     if a.get('default', no_default) is not no_default:
                         returns[-1]['default'] = a['default']
 
+                sql = sql_map.get(sig['name'], '')
                 functions[sig['name']] = dict(
                     args=args,
                     returns=returns,
                     function_type=info['function_type'],
-                    sql_statement=sql_map[sig['name']] if sig['name'] in sql_map else None,
+                    sql_statement= sql,
                 )
 
         return functions
