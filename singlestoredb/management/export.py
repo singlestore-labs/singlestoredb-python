@@ -215,7 +215,7 @@ class ExportService(object):
                 msg='Export ID is not set. You must start the export first.',
             )
 
-        self._manager._post(
+        self._manager._delete(
             f'workspaceGroups/{self.workspace_group.id}/egress/dropTableEgress',
             json=dict(egressID=self.export_id),
         )
