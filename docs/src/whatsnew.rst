@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.14.2 - June 16, 2025
+-----------------------
+* Fixes for Iceberg export Fusion SQL (experimental)
+
 v1.14.1 - June 10, 2025
 -----------------------
 * Add additional Fusion SQL commands for Iceberg export (experimental)
