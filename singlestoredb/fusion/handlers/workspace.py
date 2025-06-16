@@ -4,10 +4,12 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from singlestoredb.management.workspace import StarterWorkspace
+
 from .. import result
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
-from .utils import dt_isoformat
+from .utils import dt_isoformat, get_deployment
 from .utils import get_workspace
 from .utils import get_workspace_group
 from .utils import get_workspace_manager
@@ -889,3 +891,90 @@ class DropWorkspaceHandler(SQLHandler):
 
 
 DropWorkspaceHandler.register(overwrite=True)
+
+class UpgradeVirtualWorkspaceHandler(SQLHandler):
+    """
+    UPGRADE SHAREDTIER { virtual_workspace_name | virtual_workspace_id }
+        [ new_workspace_name ] 
+        [ size ]
+        [ new_workspace_group_name ]
+        [ region_id ]
+
+    # Name of the virtual workspace to upgrade
+    virtual_workspace_name = '<virtual-workspace-name>'
+
+    # ID of the virtual workspace to upgrade
+    virtual_workspace_id = ID '<virtual-workspace-id>'
+
+    # New name for the upgraded workspace
+    new_workspace_name = 'AS <new-workspace-name>'
+
+    # Runtime size
+    size = 'WITH SIZE <size>'
+
+    # New workspace group name
+    new_workspace_group_name = 'TO <new-workspace-group-name>'
+    
+    # Region to create the new workspace group in
+    region_id = 'IN REGION <region-id>'
+
+    Description
+    -----------
+    Upgrade a SharedTier Workspace to a dedicated Cluster. Refer to
+    `Upgrading from SharedTier <TODO: GET LINK/>`_
+    for more information.
+
+    Arguments
+    ---------
+    * ``<virtual_workspace_name>``: The name of the virtual workspace to upgrade.
+    * ``<virtual_workspace_id>``: The ID of the virtual workspace to upgrade.
+    * ``<new_workspace_name>``: The name of the new workspace to create.
+    * ``<size>``: The size of the new workspace in workspace size notation,
+      for example "S-1".
+    * ``<new_workspace_group_name>``: The name of the new workspace group to create.
+    * ``<region_id>``: The ID of the region in which to create the new workspace group.
+
+    Remarks
+    -------
+    * By omition the new workspace will be created in the first region available.    
+
+    Example
+    -------
+    The following command upgrades a virtual workspace named **strater-workspace** to a workspace
+    named **workspace** with size **S-2** in a new workspace group named **wsgroup**::
+
+        UPGRADE SHAREDTIER "strater-workspace"
+        AS "workspace"
+        WITH SIZE "S-2"
+        TO "wsgroup"
+
+    """
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        
+        search_params = { }
+        if params['virtual_workspace_name']:
+            search_params['deployment_name'] = params['virtual_workspace_name']
+        elif params['virtual_workspace_id']:
+            search_params['deployment_id'] = params['virtual_workspace_id']
+        else:
+            raise ValueError('either virtual_workspace_name or virtual_workspace_id must be specified')
+
+        virtual_workspace = get_deployment(search_params)
+
+        if not isinstance(virtual_workspace, StarterWorkspace):
+            raise ValueError(
+                'Starter workspace not found',
+            )
+
+        virtual_workspace.upgrade(
+            new_workspace_name=params['new_workspace_name'],
+            size=params['size'],
+            new_workspace_group_name=params['new_workspace_group_name'],
+            region_id=params['region_id'],
+        )
+
+        return None
+
+
+UpgradeVirtualWorkspaceHandler.register(overwrite=True)

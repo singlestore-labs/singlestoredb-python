@@ -1386,6 +1386,47 @@ class StarterWorkspace(object):
             [StarterWorkspace.from_dict(item, self._manager) for item in res.json()],
         )
 
+    def upgrade(
+        self,
+        new_workspace_name: Optional [str] = None,
+        size: Optional [str] = None,
+        new_workspace_group_name: Optional[str] = None,
+        region_id: Optional[str] = None,
+    ) -> Workspace:
+        """
+        Upgrade the starter workspace to a new workspace in a dedicated cluster.
+
+        Parameters
+        ----------
+        new_workspace_name : str
+            Name of the new workspace
+        size : str
+            Size of the new workspace in workspace size notation (S-00, S-1, etc.)
+        new_workspace_group_name : str
+            Name of the new workspace group
+        region_id : str
+            ID of the region where the new workspace group should be created
+
+        Returns
+        -------
+        :class:`Workspace`
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        return self._manager._post(
+            f'sharedtier/virtualWorkspaces/{self.id}/upgrade',
+            json={
+                'name': new_workspace_name,
+                'customWorkspaceSize': size,
+                'workspaceGroup': {
+                    'name': new_workspace_group_name,
+                    'regionID': region_id,
+                },
+            },
+        ).json()
 
 class Billing(object):
     """Billing information."""
