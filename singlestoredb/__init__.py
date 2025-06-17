@@ -31,14 +31,18 @@ from .types import (
     Date, Time, Timestamp, DateFromTicks, TimeFromTicks, TimestampFromTicks,
     Binary, STRING, BINARY, NUMBER, DATETIME, ROWID,
 )
-from .vectorstore import (
-    vector_db, IndexInterface, IndexList, IndexModel, MatchTypedDict,
-    Metric, IndexStatsTypedDict, NamespaceStatsTypedDict, Vector,
-    VectorDictMetadataValue, VectorMetadataTypedDict, VectorTuple,
-    VectorTupleWithMetadata, DeletionProtection, AndFilter, EqFilter,
-    ExactMatchFilter, FilterTypedDict, GteFilter, GtFilter, InFilter,
-    LteFilter, LtFilter, NeFilter, NinFilter, OrFilter, SimpleFilter,
-)
+# These are only loaded if the singlestore-vectorstore package is available
+try:
+    from .vectorstore import (
+        vector_db, IndexInterface, IndexList, IndexModel, MatchTypedDict,
+        Metric, IndexStatsTypedDict, NamespaceStatsTypedDict, Vector,
+        VectorDictMetadataValue, VectorMetadataTypedDict, VectorTuple,
+        VectorTupleWithMetadata, DeletionProtection, AndFilter, EqFilter,
+        ExactMatchFilter, FilterTypedDict, GteFilter, GtFilter, InFilter,
+        LteFilter, LtFilter, NeFilter, NinFilter, OrFilter, SimpleFilter,
+    )
+except (ImportError, ModuleNotFoundError):
+    pass
 
 
 #
