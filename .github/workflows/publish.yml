@@ -64,7 +64,7 @@ jobs:
         os:
           - ubuntu-24.04
           - macos-13
-          - windows-2019
+          - windows-2022
 
     steps:
       - uses: actions/checkout@v3
