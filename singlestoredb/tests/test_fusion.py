@@ -499,7 +499,10 @@ class TestJobsFusion(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         for job_id in cls.job_ids:
-            cls.manager.organizations.current.jobs.delete(job_id)
+            try:
+                cls.manager.organizations.current.jobs.delete(job_id)
+            except Exception:
+                pass
         if cls.workspace_group is not None:
             cls.workspace_group.terminate(force=True)
         cls.manager = None
