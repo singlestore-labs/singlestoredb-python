@@ -397,13 +397,16 @@ class TestStage(unittest.TestCase):
     def test_upload_file(self):
         st = self.wg.stage
 
+        upload_test_sql = f'upload_test_{id(self)}.sql'
+        upload_test2_sql = f'upload_test2_{id(self)}.sql'
+
         root = st.info('/')
         assert str(root.path) == '/'
         assert root.type == 'directory'
 
         # Upload file
-        f = st.upload_file(TEST_DIR / 'test.sql', 'upload_test.sql')
-        assert str(f.path) == 'upload_test.sql'
+        f = st.upload_file(TEST_DIR / 'test.sql', upload_test_sql)
+        assert str(f.path) == upload_test_sql
         assert f.type == 'file'
 
         # Download and compare to original
@@ -412,15 +415,15 @@ class TestStage(unittest.TestCase):
 
         # Make sure we can't overwrite
         with self.assertRaises(OSError):
-            st.upload_file(TEST_DIR / 'test.sql', 'upload_test.sql')
+            st.upload_file(TEST_DIR / 'test.sql', upload_test_sql)
 
         # Force overwrite with new content; use file object this time
         f = st.upload_file(
             open(TEST_DIR / 'test2.sql', 'r'),
-            'upload_test.sql',
+            upload_test_sql,
             overwrite=True,
         )
-        assert str(f.path) == 'upload_test.sql'
+        assert str(f.path) == upload_test_sql
         assert f.type == 'file'
 
         # Verify new content
@@ -442,9 +445,9 @@ class TestStage(unittest.TestCase):
         # Write file into folder
         f = st.upload_file(
             TEST_DIR / 'test2.sql',
-            os.path.join(lib.path, 'upload_test2.sql'),
+            os.path.join(lib.path, upload_test2_sql),
         )
-        assert str(f.path) == 'lib/upload_test2.sql'
+        assert str(f.path) == 'lib/' + upload_test2_sql
         assert f.type == 'file'
 
     def test_open(self):
@@ -928,7 +931,10 @@ class TestJob(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         for job_id in cls.job_ids:
-            cls.manager.organizations.current.jobs.delete(job_id)
+            try:
+                cls.manager.organizations.current.jobs.delete(job_id)
+            except Exception:
+                pass
         if cls.workspace_group is not None:
             cls.workspace_group.terminate(force=True)
         cls.workspace_group = None
@@ -1061,6 +1067,8 @@ class TestFileSpaces(unittest.TestCase):
         cls.shared_space = None
 
     def test_upload_file(self):
+        upload_test_ipynb = f'upload_test_{id(self)}.ipynb'
+
         for space in [self.personal_space, self.shared_space]:
             root = space.info('/')
             assert str(root.path) == '/'
@@ -1069,9 +1077,9 @@ class TestFileSpaces(unittest.TestCase):
             # Upload files
             f = space.upload_file(
                 TEST_DIR / 'test.ipynb',
-                'upload_test.ipynb',
+                upload_test_ipynb,
             )
-            assert str(f.path) == 'upload_test.ipynb'
+            assert str(f.path) == upload_test_ipynb
             assert f.type == 'notebook'
 
             # Download and compare to original
@@ -1082,15 +1090,15 @@ class TestFileSpaces(unittest.TestCase):
             with self.assertRaises(OSError):
                 space.upload_file(
                     TEST_DIR / 'test.ipynb',
-                    'upload_test.ipynb',
+                    upload_test_ipynb,
                 )
 
             # Force overwrite with new content
             f = space.upload_file(
                 TEST_DIR / 'test2.ipynb',
-                'upload_test.ipynb', overwrite=True,
+                upload_test_ipynb, overwrite=True,
             )
-            assert str(f.path) == 'upload_test.ipynb'
+            assert str(f.path) == upload_test_ipynb
             assert f.type == 'notebook'
 
             # Verify new content
@@ -1102,9 +1110,11 @@ class TestFileSpaces(unittest.TestCase):
                 space.upload_folder(TEST_DIR, 'test')
 
             # Cleanup
-            space.remove('upload_test.ipynb')
+            space.remove(upload_test_ipynb)
 
     def test_upload_file_io(self):
+        upload_test_ipynb = f'upload_test_{id(self)}.ipynb'
+
         for space in [self.personal_space, self.shared_space]:
             root = space.info('/')
             assert str(root.path) == '/'
@@ -1113,9 +1123,9 @@ class TestFileSpaces(unittest.TestCase):
             # Upload files
             f = space.upload_file(
                 open(TEST_DIR / 'test.ipynb', 'r'),
-                'upload_test.ipynb',
+                upload_test_ipynb,
             )
-            assert str(f.path) == 'upload_test.ipynb'
+            assert str(f.path) == upload_test_ipynb
             assert f.type == 'notebook'
 
             # Download and compare to original
@@ -1126,15 +1136,15 @@ class TestFileSpaces(unittest.TestCase):
             with self.assertRaises(OSError):
                 space.upload_file(
                     open(TEST_DIR / 'test.ipynb', 'r'),
-                    'upload_test.ipynb',
+                    upload_test_ipynb,
                 )
 
             # Force overwrite with new content
             f = space.upload_file(
                 open(TEST_DIR / 'test2.ipynb', 'r'),
-                'upload_test.ipynb', overwrite=True,
+                upload_test_ipynb, overwrite=True,
             )
-            assert str(f.path) == 'upload_test.ipynb'
+            assert str(f.path) == upload_test_ipynb
             assert f.type == 'notebook'
 
             # Verify new content
@@ -1146,7 +1156,7 @@ class TestFileSpaces(unittest.TestCase):
                 space.upload_folder(TEST_DIR, 'test')
 
             # Cleanup
-            space.remove('upload_test.ipynb')
+            space.remove(upload_test_ipynb)
 
     def test_open(self):
         for space in [self.personal_space, self.shared_space]:
