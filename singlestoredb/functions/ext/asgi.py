@@ -967,7 +967,7 @@ class Application(object):
         # Generate CREATE FUNCTION SQL for each function using get_create_functions
         create_sqls = self.get_create_functions(replace=True)
         sql_map = {}
-        for key, (_, info), sql in zip(self.endpoints.keys(), self.endpoints.values(), create_sqls):
+        for (_, info), sql in zip(self.endpoints.values(), create_sqls):
             sig = info['signature']
             sql_map[sig['name']] = sql
 
@@ -1013,7 +1013,7 @@ class Application(object):
                     args=args,
                     returns=returns,
                     function_type=info['function_type'],
-                    sql_statement= sql,
+                    sql_statement=sql,
                 )
 
         return functions

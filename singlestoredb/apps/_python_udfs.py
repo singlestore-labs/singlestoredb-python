@@ -15,7 +15,6 @@ _running_server: 'typing.Optional[AwaitableUvicornServer]' = None
 
 
 async def run_udf_app(
-    replace_existing: bool,
     log_level: str = 'error',
     kill_existing_app_server: bool = True,
 ) -> UdfConnectionInfo:
@@ -57,7 +56,7 @@ async def run_udf_app(
 
     # Register the functions only if the app is running interactively.
     if app_config.running_interactively:
-        app.register_functions(replace=replace_existing)
+        app.register_functions(replace=True)
 
     asyncio.create_task(_running_server.serve())
     await _running_server.wait_for_startup()
