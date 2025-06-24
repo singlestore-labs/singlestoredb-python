@@ -363,6 +363,121 @@ class TestWorkspace(unittest.TestCase):
         assert 'endpoint' in cm.exception.msg, cm.exception.msg
 
 
+class TestStarterWorkspace(unittest.TestCase):
+
+    manager = None
+    starter_workspace = None
+    starter_workspace_user = {
+        'username': 'starter_user',
+        'password': None,
+    }
+
+    @property
+    def starter_username(self):
+        """Return the username for the starter workspace user."""
+        return self.starter_workspace_user['username']
+
+    @property
+    def password(self):
+        """Return the password for the starter workspace user."""
+        return self.starter_workspace_user['password']
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = s2.manage_workspaces()
+
+        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
+        cls.password = secrets.token_urlsafe(20) + '-x&$'
+
+        name = clean_name(secrets.token_urlsafe(20)[:20])
+
+        cls.starter_workspace = cls.manager.create_starter_workspace(
+            f'starter-ws-test-{name}',
+            database_name=f'starter_db_{name}',
+            workspace_group={
+                'name': f'starter-wg-test-{name}',
+                'cell_id': random.choice(us_regions).id,
+            },
+        )
+
+        cls.manager.create_starter_workspace_user(
+            starter_workspace_id=cls.starter_workspace.id,
+            username=cls.starter_username,
+            password=cls.password,
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.starter_workspace is not None:
+            cls.starter_workspace.terminate(force=True)
+        cls.manager = None
+        cls.password = None
+
+    def test_str(self):
+        assert self.starter_workspace.name in str(self.starter_workspace.name)
+
+    def test_repr(self):
+        assert repr(self.starter_workspace) == str(self.starter_workspace)
+
+    def test_get_starter_workspace(self):
+        workspace = self.manager.get_starter_workspace(self.starter_workspace.id)
+        assert workspace.id == self.starter_workspace.id, workspace.id
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            workspace = self.manager.get_starter_workspace('bad id')
+
+        assert 'UUID' in cm.exception.msg, cm.exception.msg
+
+    def test_starter_workspaces(self):
+        workspaces = self.manager.starter_workspaces
+        ids = [x.id for x in workspaces]
+        names = [x.name for x in workspaces]
+        assert self.starter_workspace.id in ids
+        assert self.starter_workspace.name in names
+
+        objs = {}
+        for item in workspaces:
+            objs[item.id] = item
+            objs[item.name] = item
+
+        name = random.choice(names)
+        assert workspaces[name] == objs[name]
+        id = random.choice(ids)
+        assert workspaces[id] == objs[id]
+
+    def test_no_manager(self):
+        workspace = self.manager.get_starter_workspace(self.starter_workspace.id)
+        workspace._manager = None
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            workspace.refresh()
+
+        assert 'No workspace manager' in cm.exception.msg, cm.exception.msg
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            workspace.terminate()
+
+        assert 'No workspace manager' in cm.exception.msg, cm.exception.msg
+
+    def test_connect(self):
+        with self.starter_workspace.connect(
+            user=self.starter_username,
+            password=self.password,
+        ) as conn:
+            with conn.cursor() as cur:
+                cur.execute('show databases')
+                assert 'starter_db' in [x[0] for x in list(cur)]
+
+        # Test missing endpoint
+        workspace = self.manager.get_starter_workspace(self.starter_workspace.id)
+        workspace.endpoint = None
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            workspace.connect(user='admin', password=self.password)
+
+        assert 'endpoint' in cm.exception.msg, cm.exception.msg
+
+
 @pytest.mark.management
 class TestStage(unittest.TestCase):
 
