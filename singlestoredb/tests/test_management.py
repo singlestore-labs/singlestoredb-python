@@ -363,6 +363,7 @@ class TestWorkspace(unittest.TestCase):
         assert 'endpoint' in cm.exception.msg, cm.exception.msg
 
 
+@pytest.mark.management
 class TestStarterWorkspace(unittest.TestCase):
 
     manager = None
