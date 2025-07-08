@@ -516,9 +516,6 @@ def make_func(
     # Set function type
     info['function_type'] = function_type
 
-    # Set timeout
-    info['timeout'] = max(timeout, 1)
-
     # Set async flag
     info['is_async'] = asyncio.iscoroutinefunction(func)
 
