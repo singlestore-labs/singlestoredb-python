@@ -280,8 +280,9 @@ def build_udf_endpoint(
             '''Call function on given rows of data.'''
             return row_ids, [as_tuple(x) for x in zip(func_map(func, rows))]
 
+        print("building scalar endpoint")
         return do_func
-
+    print("building vector endpoint")
     return build_vector_udf_endpoint(func, returns_data_format)
 
 
@@ -323,13 +324,21 @@ def build_vector_udf_endpoint(
         if cols and cols[0]:
             if is_async:
                 out = await func(*[x if m else x[0] for x, m in zip(cols, masks)])
+                print("v1")
+                print(out)
             else:
                 out = await asyncio.to_thread(func, *[x if m else x[0] for x, m in zip(cols, masks)])
+                print("v2")
+                print(out)
         else:
             if is_async:
                 out = await func()
+                print("v3")
+                print(out)
             else:
                 out = await asyncio.to_thread(func())
+                print("v4")
+                print(out)
                 
         # Single masked value
         if isinstance(out, Masked):
