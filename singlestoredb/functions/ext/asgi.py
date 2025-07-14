@@ -53,6 +53,7 @@ from typing import Sequence
 from typing import Set
 from typing import Tuple
 from typing import Union
+from ...apps._config import AppConfig
 
 from . import arrow
 from . import json as jdata
@@ -67,8 +68,6 @@ from ..signature import signature_to_sql
 from ..typing import Masked
 from ..typing import Table
 from ...config import get_option
-from singlestoredb.connection import build_params
-
 
 try:
     import cloudpickle
@@ -905,8 +904,18 @@ class Application(object):
 
         # Return function info
         elif method == 'GET' and (path == self.show_function_info_path or not path):
+            app_config = AppConfig.from_env()
             functions = self.get_function_info()
-            body = json.dumps(dict(functions=functions)).encode('utf-8')
+            workspace = app_config.workspace_group_id
+            database = app_config.database_name
+
+            body = json.dumps({
+                    "functions": functions,
+                    "cluster_id": workspace,
+                    "database": database,
+                }).encode('utf-8')
+            
+            print(body)
             await send(self.text_response_dict)
 
         # Path not found
@@ -981,18 +990,7 @@ class Application(object):
             sig = info['signature']
             sql_map[sig['name']] = sql
 
-        if 'SINGLESTOREDB_URL' in os.environ:
-            dbname = build_params(host=os.environ['SINGLESTOREDB_URL']).get('database')
-        elif 'SINGLESTOREDB_HOST' in os.environ:
-            dbname = build_params(host=os.environ['SINGLESTOREDB_HOST']).get('database')
-        elif 'SINGLESTOREDB_DATABASE' in os.environ:
-            dbname = os.environ['SINGLESTOREDB_DATBASE']
         
-        connection_info = {}
-        workspace_group_id = os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP')
-        connection_info['database_name'] = dbname
-        connection_info['workspace_group_id'] = workspace_group_id
-
 
         for key, (_, info) in self.endpoints.items():
             if not func_name or key == func_name:
@@ -1039,10 +1037,7 @@ class Application(object):
                     sql_statement=sql,
                 )
 
-        return {
-            'functions': functions,
-            'connection_info': connection_info
-        }
+        return functions
 
     def get_create_functions(
         self,

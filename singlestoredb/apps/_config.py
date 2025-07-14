@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
 from typing import Optional
+from singlestoredb.connection import build_params
 
 
 @dataclass
@@ -9,6 +10,8 @@ class AppConfig:
     base_url: str
     base_path: str
     notebook_server_id: str
+    workspace_group_id: str
+    database_name: str
     app_token: Optional[str]
     user_token: Optional[str]
     running_interactively: bool
@@ -41,6 +44,15 @@ class AppConfig:
         app_token = os.environ.get('SINGLESTOREDB_APP_TOKEN')
         user_token = os.environ.get('SINGLESTOREDB_USER_TOKEN')
 
+        if 'SINGLESTOREDB_URL' in os.environ:
+            dbname = build_params(host=os.environ['SINGLESTOREDB_URL']).get('database')
+        elif 'SINGLESTOREDB_HOST' in os.environ:
+            dbname = build_params(host=os.environ['SINGLESTOREDB_HOST']).get('database')
+        elif 'SINGLESTOREDB_DATABASE' in os.environ:
+            dbname = os.environ['SINGLESTOREDB_DATBASE']
+        
+        workspace_group_id = os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP')
+
         # Make sure the required variables are present
         # and present useful error message if not
         if running_interactively:
@@ -54,6 +66,8 @@ class AppConfig:
             base_url=base_url,
             base_path=base_path,
             notebook_server_id=notebook_server_id,
+            workspace_group_id=workspace_group_id,
+            database_name=dbname,
             app_token=app_token,
             user_token=user_token,
             running_interactively=running_interactively,
