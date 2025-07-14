@@ -1958,7 +1958,7 @@ class WorkspaceManager(Manager):
             raise ManagementError(msg='No password available from API response')
 
         return {
-            'userID': user_id,
+            'user_id': user_id,
             'password': returned_password,
         }
 
