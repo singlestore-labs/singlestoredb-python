@@ -13,6 +13,8 @@ import pytest
 import singlestoredb as s2
 from singlestoredb.management.job import Status
 from singlestoredb.management.job import TargetType
+from singlestoredb.management.region import Region
+from singlestoredb.management.utils import NamedList
 
 
 TEST_DIR = pathlib.Path(os.path.dirname(__file__))
@@ -1372,3 +1374,107 @@ class TestFileSpaces(unittest.TestCase):
 
             # Cleanup
             space.remove('obj_test_2.ipynb')
+
+
+@pytest.mark.management
+class TestRegions(unittest.TestCase):
+    """Test cases for region management."""
+
+    manager = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_regions()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        cls.manager = None
+
+    def test_list_regions(self):
+        """Test listing all regions."""
+        regions = self.manager.list_regions()
+
+        # Verify we get a NamedList
+        assert isinstance(regions, NamedList)
+
+        # Verify we have at least one region
+        assert len(regions) > 0
+
+        # Verify region properties
+        region = regions[0]
+        assert isinstance(region, Region)
+        assert hasattr(region, 'id')
+        assert hasattr(region, 'name')
+        assert hasattr(region, 'provider')
+
+        # Verify provider values
+        providers = {x.provider for x in regions}
+        assert 'Azure' in providers or 'GCP' in providers or 'AWS' in providers
+
+        # Verify region can be accessed by name or ID
+        region_by_name = regions[region.name]
+        region_by_id = regions[region.id]
+        assert region_by_name == region_by_id
+        assert region_by_name.id == region.id
+        assert region_by_name.name == region.name
+        assert region_by_name.provider == region.provider
+
+    def test_list_shared_tier_regions(self):
+        """Test listing shared tier regions."""
+        regions = self.manager.list_shared_tier_regions()
+
+        # Verify we get a NamedList
+        assert isinstance(regions, NamedList)
+
+        # Verify region properties if we have any shared tier regions
+        if regions:
+            region = regions[0]
+            assert isinstance(region, Region)
+            assert hasattr(region, 'id')
+            assert hasattr(region, 'name')
+            assert hasattr(region, 'provider')
+
+            # Verify provider values
+            providers = {x.provider for x in regions}
+            assert any(p in providers for p in ['Azure', 'GCP', 'AWS'])
+
+            # Verify region can be accessed by name or ID
+            region_by_name = regions[region.name]
+            region_by_id = regions[region.id]
+            assert region_by_name == region_by_id
+            assert region_by_name.id == region.id
+            assert region_by_name.name == region.name
+            assert region_by_name.provider == region.provider
+
+    def test_str_repr(self):
+        """Test string representation of regions."""
+        regions = self.manager.list_regions()
+        if not regions:
+            self.skipTest('No regions available for testing')
+
+        region = regions[0]
+
+        # Test __str__
+        s = str(region)
+        assert region.id in s
+        assert region.name in s
+        assert region.provider in s
+
+        # Test __repr__
+        assert repr(region) == str(region)
+
+    def test_no_manager(self):
+        """Test behavior when manager is not available."""
+        regions = self.manager.list_regions()
+        if not regions:
+            self.skipTest('No regions available for testing')
+
+        region = regions[0]
+        region._manager = None
+
+        # Verify from_dict class method
+        with self.assertRaises(s2.ManagementError) as cm:
+            Region.get_shared_tier_regions(None)
+        assert 'No workspace manager' in str(cm.exception)
