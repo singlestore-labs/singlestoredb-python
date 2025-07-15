@@ -319,7 +319,6 @@ def build_udf_endpoint(
 
         async def do_func(
             cancel_event: threading.Event,
-            finished_event: threading.Event,
             timer: Timer,
             row_ids: Sequence[int],
             rows: Sequence[Sequence[Any]],
@@ -333,7 +332,6 @@ def build_udf_endpoint(
                         out.append(await func(*row))
                     else:
                         out.append(func(*row))
-            finished_event.set()
             return row_ids, list(zip(out))
 
         return do_func
@@ -367,7 +365,6 @@ def build_vector_udf_endpoint(
 
     async def do_func(
         cancel_event: threading.Event,
-        finished_event: threading.Event,
         timer: Timer,
         row_ids: Sequence[int],
         cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
@@ -391,7 +388,6 @@ def build_vector_udf_endpoint(
                 else:
                     out = func()
 
-        finished_event.set()
         cancel_on_event(cancel_event)
 
         # Single masked value
@@ -434,7 +430,6 @@ def build_tvf_endpoint(
 
         async def do_func(
             cancel_event: threading.Event,
-            finished_event: threading.Event,
             timer: Timer,
             row_ids: Sequence[int],
             rows: Sequence[Sequence[Any]],
@@ -452,7 +447,6 @@ def build_tvf_endpoint(
                         res = func(*row)
                     out.extend(as_list_of_tuples(res))
                     out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
-            finished_event.set()
             return out_ids, out
 
         return do_func
@@ -485,7 +479,6 @@ def build_vector_tvf_endpoint(
 
     async def do_func(
         cancel_event: threading.Event,
-        finished_event: threading.Event,
         timer: Timer,
         row_ids: Sequence[int],
         cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
@@ -516,8 +509,6 @@ def build_vector_tvf_endpoint(
                     func_res = await func()
                 else:
                     func_res = func()
-
-        finished_event.set()
 
         res = get_dataframe_columns(func_res)
 
@@ -981,6 +972,12 @@ class Application(object):
                 datetime.timezone.utc,
             ).strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         )
+        call_timer = Timer(
+            id=request_id,
+            timestamp=datetime.datetime.now(
+                datetime.timezone.utc,
+            ).strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+        )
 
         assert scope['type'] == 'http'
 
@@ -997,6 +994,7 @@ class Application(object):
         func_endpoint = self.endpoints.get(func_name)
 
         timer.metadata['function'] = func_name.decode('utf-8') if func_name else ''
+        call_timer.metadata['function'] = timer.metadata['function']
 
         func = None
         func_info: Dict[str, Any] = {}
@@ -1037,11 +1035,6 @@ class Application(object):
                 result = []
 
                 cancel_event = threading.Event()
-                finished_event = threading.Event()
-
-                # Async functions don't need to set the finished event
-                if func_info['is_async']:
-                    finished_event.set()
 
                 with timer('parse_input'):
                     inputs = input_handler['load'](  # type: ignore
@@ -1049,11 +1042,11 @@ class Application(object):
                     )
 
                 func_task = asyncio.create_task(
-                    func(cancel_event, finished_event, timer, *inputs)
+                    func(cancel_event, call_timer, *inputs)
                     if func_info['is_async']
                     else to_thread(
                         lambda: asyncio.run(
-                            func(cancel_event, finished_event, timer, *inputs),
+                            func(cancel_event, call_timer, *inputs),
                         ),
                     ),
                 )
@@ -1072,9 +1065,6 @@ class Application(object):
                     )
 
                 await cancel_all_tasks(pending)
-
-                # Make sure threads finish before we proceed
-                finished_event.wait()
 
                 for task in done:
                     if task is disconnect_task:
@@ -1162,6 +1152,9 @@ class Application(object):
             out = self.body_response_dict.copy()
             out['body'] = body
             await send(out)
+
+        for k, v in call_timer.metrics.items():
+            timer.metrics[k] = v
 
         timer.finish()
 

@@ -2,7 +2,7 @@ import json
 import time
 from typing import Any
 from typing import Dict
-from typing import List
+from typing import Optional
 
 from . import utils
 
@@ -46,92 +46,51 @@ class Timer:
     print(timer.metrics)
     # {'receive_data': 0.1, 'parse_input': 0.2, 'inner_operation': 0.05,
     #  'call_function': 0.35, 'total': 0.65}
+
     """
 
     def __init__(self, **kwargs: Any) -> None:
-        """
-        Initialize the Timer.
-
-        Parameters
-        ----------
-        metrics : Dict[str, float]
-            Dictionary to store the timing results
-
-        """
         self.metadata: Dict[str, Any] = kwargs
         self.metrics: Dict[str, float] = dict()
-        self._stack: List[Dict[str, Any]] = []
+        self.entries: Dict[str, float] = dict()
+        self._current_key: Optional[str] = None
         self.start_time = time.perf_counter()
 
     def __call__(self, key: str) -> 'Timer':
-        """
-        Set the key for the next context manager usage.
-
-        Parameters
-        ----------
-        key : str
-            The key to store the execution time under
-
-        Returns
-        -------
-        Timer
-            Self, to be used as context manager
-
-        """
         self._current_key = key
         return self
 
     def __enter__(self) -> 'Timer':
-        """Enter the context manager and start timing."""
-        if not hasattr(self, '_current_key'):
+        if self._current_key is None:
             raise ValueError(
                 "No key specified. Use timer('key_name') as context manager.",
             )
-
-        # Push current timing info onto stack
-        timing_info = {
-            'key': self._current_key,
-            'start_time': time.perf_counter(),
-        }
-        self._stack.append(timing_info)
-
-        # Clear current key for next use
-        delattr(self, '_current_key')
-
+        self.entries[self._current_key] = time.perf_counter()
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Exit the context manager and store the elapsed time."""
-        if not self._stack:
-            return
-
-        # Pop the current timing from stack
-        timing_info = self._stack.pop()
-        elapsed = time.perf_counter() - timing_info['start_time']
-        self.metrics.setdefault(timing_info['key'], 0)
-        self.metrics[timing_info['key']] += elapsed
+        key = self._current_key
+        if key and key in self.entries:
+            start = self.entries.pop(key)
+            elapsed = time.perf_counter() - start
+            self.metrics[key] = elapsed
+        self._current_key = None
 
     async def __aenter__(self) -> 'Timer':
-        """Async enter for async context manager support."""
         return self.__enter__()
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Async exit for async context manager support."""
         self.__exit__(exc_type, exc_val, exc_tb)
+
+    def reset(self) -> None:
+        self.metrics.clear()
+        self.entries.clear()
+        self._current_key = None
 
     def finish(self) -> None:
         """Finish the current timing context and store the elapsed time."""
-        if self._stack:
-            raise RuntimeError('finish() called within a `with` block.')
-
         self.metrics['total'] = time.perf_counter() - self.start_time
-
         self.log_metrics()
-
-    def reset(self) -> None:
-        """Clear all stored times and reset the stack."""
-        self.metrics.clear()
-        self._stack.clear()
 
     def log_metrics(self) -> None:
         if self.metadata.get('function'):
