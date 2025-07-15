@@ -44,6 +44,9 @@ def is_jwt(token: str) -> bool:
 class Manager(object):
     """SingleStoreDB manager base class."""
 
+    #: Management API version if none is specified.
+    default_version = config.get_option('management.version') or 'v1'
+
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url') \
         or 'https://api.singlestore.com'
@@ -52,7 +55,7 @@ class Manager(object):
     obj_type = ''
 
     def __init__(
-        self, access_token: Optional[str] = None, version: Optional[str] = 'v1',
+        self, access_token: Optional[str] = None, version: Optional[str] = None,
         base_url: Optional[str] = None, *, organization_id: Optional[str] = None,
     ):
         from .. import __version__ as client_version
@@ -61,6 +64,8 @@ class Manager(object):
         )
         if not new_access_token:
             raise ManagementError(msg='No management token was configured.')
+
+        self.version = version or self.default_version
 
         self._is_jwt = not access_token and new_access_token and is_jwt(new_access_token)
         self._sess = requests.Session()
@@ -71,13 +76,11 @@ class Manager(object):
             'User-Agent': f'SingleStoreDB-Python/{client_version}',
         })
 
-        self._base_url = ''.join([
+        self._base_url = (
             base_url
             or config.get_option('management.base_url')
-            or type(self).default_base_url,
-            '/',
-        ])
-        self._version = version
+            or type(self).default_base_url
+        ) + '/'
         self._access_token = new_access_token
         self._params: Dict[str, str] = {}
         if organization_id:
@@ -89,7 +92,7 @@ class Manager(object):
         new_manager._is_jwt = self._is_jwt
         new_manager._sess = deepcopy(self._sess)
         new_manager._base_url = self._base_url
-        new_manager._version = self._version
+        new_manager.version = self.version
         new_manager._access_token = self._access_token
         new_manager._params = deepcopy(self._params)
         return new_manager
@@ -98,7 +101,7 @@ class Manager(object):
         """Handle dynamic version attributes (v2, v3, etc.)."""
         if re.match(r'^v\d+[0-9a-z]*$', name):
             new_mgr = self.copy()
-            new_mgr._version = name
+            new_mgr.version = name
             return new_mgr
         return super().__getattribute__(name)
 
@@ -323,8 +326,3 @@ class Manager(object):
             out = getattr(self, f'get_{self.obj_type}')(out.id)
 
         return out
-
-
-class ManagerV2(Manager):
-    """V2 API implementation."""
-    default_version = 'v2'
