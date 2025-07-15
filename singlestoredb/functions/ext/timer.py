@@ -111,6 +111,14 @@ class Timer:
         self.metrics.setdefault(timing_info['key'], 0)
         self.metrics[timing_info['key']] += elapsed
 
+    async def __aenter__(self) -> 'Timer':
+        """Async enter for async context manager support."""
+        return self.__enter__()
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Async exit for async context manager support."""
+        self.__exit__(exc_type, exc_val, exc_tb)
+
     def finish(self) -> None:
         """Finish the current timing context and store the elapsed time."""
         if self._stack:

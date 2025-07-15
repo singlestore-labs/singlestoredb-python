@@ -14,6 +14,7 @@ import singlestoredb as s2
 from singlestoredb.management.job import Status
 from singlestoredb.management.job import TargetType
 from singlestoredb.management.region import Region
+from singlestoredb.management.region import RegionManager
 from singlestoredb.management.utils import NamedList
 
 
@@ -1591,5 +1592,5 @@ class TestRegions(unittest.TestCase):
 
         # Verify from_dict class method
         with self.assertRaises(s2.ManagementError) as cm:
-            Region.get_shared_tier_regions(None)
+            RegionManager.list_shared_tier_regions(None)
         assert 'No workspace manager' in str(cm.exception)
