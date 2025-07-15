@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 """SingleStoreDB Base Manager."""
 import os
+import re
 import sys
 import time
+from copy import deepcopy
 from typing import Any
 from typing import Dict
 from typing import List
@@ -42,9 +44,6 @@ def is_jwt(token: str) -> bool:
 class Manager(object):
     """SingleStoreDB manager base class."""
 
-    #: Management API version if none is specified.
-    default_version = config.get_option('management.version') or 'v1'
-
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url') \
         or 'https://api.singlestore.com'
@@ -53,7 +52,7 @@ class Manager(object):
     obj_type = ''
 
     def __init__(
-        self, access_token: Optional[str] = None, version: Optional[str] = None,
+        self, access_token: Optional[str] = None, version: Optional[str] = 'v1',
         base_url: Optional[str] = None, *, organization_id: Optional[str] = None,
     ):
         from .. import __version__ as client_version
@@ -72,16 +71,36 @@ class Manager(object):
             'User-Agent': f'SingleStoreDB-Python/{client_version}',
         })
 
-        self._base_url = urljoin(
+        self._base_url = ''.join([
             base_url
             or config.get_option('management.base_url')
             or type(self).default_base_url,
-            version or type(self).default_version,
-        ) + '/'
-
+            '/',
+        ])
+        self._version = version
+        self._access_token = new_access_token
         self._params: Dict[str, str] = {}
         if organization_id:
             self._params['organizationID'] = organization_id
+
+    def copy(self) -> 'Manager':
+        """Create a new instance with the same settings."""
+        new_manager = type(self).__new__(type(self))
+        new_manager._is_jwt = self._is_jwt
+        new_manager._sess = deepcopy(self._sess)
+        new_manager._base_url = self._base_url
+        new_manager._version = self._version
+        new_manager._access_token = self._access_token
+        new_manager._params = deepcopy(self._params)
+        return new_manager
+
+    def __getattr__(self, name: str) -> Any:
+        """Handle dynamic version attributes (v2, v3, etc.)."""
+        if re.match(r'^v\d+[0-9a-z]*$', name):
+            new_mgr = self.copy()
+            new_mgr._version = name
+            return new_mgr
+        return super().__getattribute__(name)
 
     def _check(
         self, res: requests.Response, url: str, params: Dict[str, Any],
@@ -125,8 +144,12 @@ class Manager(object):
         # Refresh the JWT as needed
         if self._is_jwt:
             self._sess.headers.update({'Authorization': f'Bearer {get_token()}'})
+
+        # Combine version and path
+        versioned_path = f'{self._version}/{path}'
+
         return getattr(self._sess, method.lower())(
-            urljoin(self._base_url, path), *args, **kwargs,
+            urljoin(self._base_url, versioned_path), *args, **kwargs,
         )
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
@@ -300,3 +323,8 @@ class Manager(object):
             out = getattr(self, f'get_{self.obj_type}')(out.id)
 
         return out
+
+
+class ManagerV2(Manager):
+    """V2 API implementation."""
+    default_version = 'v2'
