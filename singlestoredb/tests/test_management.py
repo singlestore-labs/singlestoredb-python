@@ -366,6 +366,7 @@ class TestWorkspace(unittest.TestCase):
         assert 'endpoint' in cm.exception.msg, cm.exception.msg
 
 
+@pytest.mark.skip(reason='Not implemented in server yet')
 @pytest.mark.management
 class TestStarterWorkspace(unittest.TestCase):
 
@@ -1492,6 +1493,7 @@ class TestFileSpaces(unittest.TestCase):
             space.remove('obj_test_2.ipynb')
 
 
+@pytest.mark.skip(reason='Not implemented in server yet')
 @pytest.mark.management
 class TestRegions(unittest.TestCase):
     """Test cases for region management."""
