@@ -14,6 +14,7 @@ import singlestoredb as s2
 from singlestoredb.management.job import Status
 from singlestoredb.management.job import TargetType
 from singlestoredb.management.region import Region
+from singlestoredb.management.region import RegionManager
 from singlestoredb.management.utils import NamedList
 
 
@@ -365,6 +366,7 @@ class TestWorkspace(unittest.TestCase):
         assert 'endpoint' in cm.exception.msg, cm.exception.msg
 
 
+@pytest.mark.skip(reason='Not implemented in server yet')
 @pytest.mark.management
 class TestStarterWorkspace(unittest.TestCase):
 
@@ -1491,6 +1493,7 @@ class TestFileSpaces(unittest.TestCase):
             space.remove('obj_test_2.ipynb')
 
 
+@pytest.mark.skip(reason='Not implemented in server yet')
 @pytest.mark.management
 class TestRegions(unittest.TestCase):
     """Test cases for region management."""
@@ -1591,5 +1594,5 @@ class TestRegions(unittest.TestCase):
 
         # Verify from_dict class method
         with self.assertRaises(s2.ManagementError) as cm:
-            Region.get_shared_tier_regions(None)
+            RegionManager.list_shared_tier_regions(None)
         assert 'No workspace manager' in str(cm.exception)

@@ -162,6 +162,43 @@ class TestExtFunc(unittest.TestCase):
                 'from data order by id',
             )
 
+    def test_timeout_double_mult(self):
+        with self.assertRaises(self.conn.OperationalError) as exc:
+            self.cur.execute(
+                'select timeout_double_mult(value, 100) as res '
+                'from longer_data order by id',
+            )
+            assert 'timeout' in str(exc.exception).lower()
+
+    def test_async_double_mult(self):
+        self.cur.execute(
+            'select async_double_mult(value, 100) as res from data order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.DOUBLE
+        assert desc[0].null_ok is False
+
+        # NULL is not valid
+        with self.assertRaises(self.conn.OperationalError):
+            self.cur.execute(
+                'select async_double_mult(value, NULL) as res '
+                'from data order by id',
+            )
+
+    def test_async_timeout_double_mult(self):
+        with self.assertRaises(self.conn.OperationalError) as exc:
+            self.cur.execute(
+                'select async_timeout_double_mult(value, 100) as res '
+                'from longer_data order by id',
+            )
+            assert 'timeout' in str(exc.exception).lower()
+
     def test_pandas_double_mult(self):
         self.cur.execute(
             'select pandas_double_mult(value, 100) as res '
@@ -203,6 +240,28 @@ class TestExtFunc(unittest.TestCase):
         with self.assertRaises(self.conn.OperationalError):
             self.cur.execute(
                 'select numpy_double_mult(value, NULL) as res '
+                'from data order by id',
+            )
+
+    def test_async_numpy_double_mult(self):
+        self.cur.execute(
+            'select async_numpy_double_mult(value, 100) as res '
+            'from data order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(200.0,), (200.0,), (500.0,), (400.0,), (0.0,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.DOUBLE
+        assert desc[0].null_ok is False
+
+        # NULL is not valid
+        with self.assertRaises(self.conn.OperationalError):
+            self.cur.execute(
+                'select async_numpy_double_mult(value, NULL) as res '
                 'from data order by id',
             )
 
@@ -1246,6 +1305,17 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.LONGLONG
         assert desc[0].null_ok is False
 
+    def test_async_table_function(self):
+        self.cur.execute('select * from async_table_function(5)')
+
+        assert [x[0] for x in self.cur] == [10, 10, 10, 10, 10]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'a'
+        assert desc[0].type_code == ft.LONGLONG
+        assert desc[0].null_ok is False
+
     def test_table_function_tuple(self):
         self.cur.execute('select * from table_function_tuple(3)')
 
@@ -1292,6 +1362,26 @@ class TestExtFunc(unittest.TestCase):
 
     def test_vec_function_df(self):
         self.cur.execute('select * from vec_function_df(5, 10)')
+
+        out = list(self.cur)
+
+        assert out == [
+            (1, 1.1),
+            (2, 2.2),
+            (3, 3.3),
+        ]
+
+        desc = self.cur.description
+        assert len(desc) == 2
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.SHORT
+        assert desc[0].null_ok is False
+        assert desc[1].name == 'res2'
+        assert desc[1].type_code == ft.DOUBLE
+        assert desc[1].null_ok is False
+
+    def test_async_vec_function_df(self):
+        self.cur.execute('select * from async_vec_function_df(5, 10)')
 
         out = list(self.cur)
 

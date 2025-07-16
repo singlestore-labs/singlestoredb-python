@@ -1,3 +1,4 @@
+import asyncio
 import functools
 import inspect
 from typing import Any
@@ -19,6 +20,7 @@ ParameterType = Union[
 ]
 
 ReturnType = ParameterType
+UDFType = Callable[..., Any]
 
 
 def is_valid_type(obj: Any) -> bool:
@@ -100,7 +102,8 @@ def _func(
     name: Optional[str] = None,
     args: Optional[ParameterType] = None,
     returns: Optional[ReturnType] = None,
-) -> Callable[..., Any]:
+    timeout: Optional[int] = None,
+) -> UDFType:
     """Generic wrapper for UDF and TVF decorators."""
 
     _singlestoredb_attrs = {  # type: ignore
@@ -108,6 +111,7 @@ def _func(
             name=name,
             args=expand_types(args),
             returns=expand_types(returns),
+            timeout=timeout,
         ).items() if v is not None
     }
 
@@ -115,23 +119,33 @@ def _func(
     # called later, so the wrapper much be created with the func passed
     # in at that time.
     if func is None:
-        def decorate(func: Callable[..., Any]) -> Callable[..., Any]:
+        def decorate(func: UDFType) -> UDFType:
 
-            def wrapper(*args: Any, **kwargs: Any) -> Callable[..., Any]:
-                return func(*args, **kwargs)  # type: ignore
+            if asyncio.iscoroutinefunction(func):
+                async def async_wrapper(*args: Any, **kwargs: Any) -> UDFType:
+                    return await func(*args, **kwargs)  # type: ignore
+                async_wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
+                return functools.wraps(func)(async_wrapper)
 
-            wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
-
-            return functools.wraps(func)(wrapper)
+            else:
+                def wrapper(*args: Any, **kwargs: Any) -> UDFType:
+                    return func(*args, **kwargs)  # type: ignore
+                wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
+                return functools.wraps(func)(wrapper)
 
         return decorate
 
-    def wrapper(*args: Any, **kwargs: Any) -> Callable[..., Any]:
-        return func(*args, **kwargs)  # type: ignore
+    if asyncio.iscoroutinefunction(func):
+        async def async_wrapper(*args: Any, **kwargs: Any) -> UDFType:
+            return await func(*args, **kwargs)  # type: ignore
+        async_wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
+        return functools.wraps(func)(async_wrapper)
 
-    wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
-
-    return functools.wraps(func)(wrapper)
+    else:
+        def wrapper(*args: Any, **kwargs: Any) -> UDFType:
+            return func(*args, **kwargs)  # type: ignore
+        wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
+        return functools.wraps(func)(wrapper)
 
 
 def udf(
@@ -140,7 +154,8 @@ def udf(
     name: Optional[str] = None,
     args: Optional[ParameterType] = None,
     returns: Optional[ReturnType] = None,
-) -> Callable[..., Any]:
+    timeout: Optional[int] = None,
+) -> UDFType:
     """
     Define a user-defined function (UDF).
 
@@ -167,6 +182,9 @@ def udf(
         Specifies the return data type of the function. This parameter
         works the same way as `args`. If the function is a table-valued
         function, the return type should be a `Table` object.
+    timeout : int, optional
+        The timeout in seconds for the UDF execution. If not specified,
+        the global default timeout is used.
 
     Returns
     -------
@@ -178,4 +196,5 @@ def udf(
         name=name,
         args=args,
         returns=returns,
+        timeout=timeout,
     )
