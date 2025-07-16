@@ -149,7 +149,7 @@ class Manager(object):
             self._sess.headers.update({'Authorization': f'Bearer {get_token()}'})
 
         # Combine version and path
-        versioned_path = f'{self._version}/{path}'
+        versioned_path = f'{self.version}/{path}'
 
         return getattr(self._sess, method.lower())(
             urljoin(self._base_url, versioned_path), *args, **kwargs,
