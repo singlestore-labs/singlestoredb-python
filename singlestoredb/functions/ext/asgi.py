@@ -92,18 +92,6 @@ except ImportError:
 
 logger = utils.get_logger('singlestoredb.functions.ext.asgi')
 
-# If a number of processes is specified, create a pool of workers
-num_processes = max(0, int(os.environ.get('SINGLESTOREDB_EXT_NUM_PROCESSES', 0)))
-if num_processes > 1:
-    try:
-        from ray.util.multiprocessing import Pool
-    except ImportError:
-        from multiprocessing import Pool
-    func_map = Pool(num_processes).starmap
-else:
-    func_map = itertools.starmap
-
-
 async def to_thread(
     func: Any, /, *args: Any, **kwargs: Dict[str, Any],
 ) -> Any:
@@ -295,6 +283,53 @@ def cancel_on_event(
         )
 
 
+def identity(x: Any) -> Any:
+    """Identity function."""
+    return x
+
+
+async def run_in_parallel(
+    func: Callable[..., Any],
+    params_list: Sequence[Sequence[Any]],
+    cancel_event: threading.Event,
+    limit: int = 10,
+    transformer: Callable[[Any], Any] = identity,
+) -> List[Any]:
+    """"
+    Run a function in parallel with a limit on the number of concurrent tasks.
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call in parallel
+    params_list : Sequence[Sequence[Any]]
+        The parameters to pass to the function
+    cancel_event : threading.Event
+        The event to check for cancellation
+    limit : int
+        The maximum number of concurrent tasks to run
+
+    Returns
+    -------
+    List[Any]
+        The results of the function calls
+
+    """
+    semaphore = asyncio.Semaphore(limit)
+
+    async def worker(params: Sequence[Any]) -> Any:
+        async with semaphore:
+            cancel_on_event(cancel_event)
+            if asyncio.iscoroutinefunction(func):
+                return transformer(await func(*params))
+            else:
+                return transformer(await to_thread(func, *params))
+
+    tasks = [worker(p) for p in params_list]
+
+    return await asyncio.gather(*tasks)
+
+
 def build_udf_endpoint(
     func: Callable[..., Any],
     returns_data_format: str,
@@ -317,8 +352,6 @@ def build_udf_endpoint(
     """
     if returns_data_format in ['scalar', 'list']:
 
-        is_async = asyncio.iscoroutinefunction(func)
-
         async def do_func(
             cancel_event: threading.Event,
             timer: Timer,
@@ -326,14 +359,8 @@ def build_udf_endpoint(
             rows: Sequence[Sequence[Any]],
         ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
             '''Call function on given rows of data.'''
-            out = []
             async with timer('call_function'):
-                for row in rows:
-                    cancel_on_event(cancel_event)
-                    if is_async:
-                        out.append(await func(*row))
-                    else:
-                        out.append(func(*row))
+                out = await run_in_parallel(func, rows, cancel_event)
             return row_ids, list(zip(out))
 
         return do_func
@@ -428,8 +455,6 @@ def build_tvf_endpoint(
     """
     if returns_data_format in ['scalar', 'list']:
 
-        is_async = asyncio.iscoroutinefunction(func)
-
         async def do_func(
             cancel_event: threading.Event,
             timer: Timer,
@@ -437,19 +462,13 @@ def build_tvf_endpoint(
             rows: Sequence[Sequence[Any]],
         ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
             '''Call function on given rows of data.'''
-            out_ids: List[int] = []
-            out = []
-            # Call function on each row of data
             async with timer('call_function'):
-                for i, row in zip(row_ids, rows):
-                    cancel_on_event(cancel_event)
-                    if is_async:
-                        res = await func(*row)
-                    else:
-                        res = func(*row)
-                    out.extend(as_list_of_tuples(res))
-                    out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
-            return out_ids, out
+                items = await run_in_parallel(
+                    func, rows, cancel_event,
+                    transformer=as_list_of_tuples,
+                )
+            out = list(itertools.chain.from_iterable(items))
+            return [row_ids[0]] * len(out), out
 
         return do_func
 
