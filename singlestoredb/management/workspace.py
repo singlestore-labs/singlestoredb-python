@@ -1400,41 +1400,13 @@ class StarterWorkspace(object):
             kwargs['host'] = self.endpoint
         return connection.connect(**kwargs)
 
-    def terminate(
-        self,
-        wait_on_terminated: bool = False,
-        wait_interval: int = 10,
-        wait_timeout: int = 600,
-    ) -> None:
-        """
-        Terminate the starter workspace.
-
-        Parameters
-        ----------
-        wait_on_terminated : bool, optional
-            Wait for the workspace to go into 'Terminated' mode before returning
-        wait_interval : int, optional
-            Number of seconds between each server check
-        wait_timeout : int, optional
-            Total number of seconds to check server before giving up
-
-        Raises
-        ------
-        ManagementError
-            If timeout is reached
-
-        """
+    def terminate(self) -> None:
+        """Terminate the starter workspace."""
         if self._manager is None:
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
         self._manager._delete(f'sharedtier/virtualWorkspaces/{self.id}')
-        if wait_on_terminated:
-            self._manager._wait_on_state(
-                self._manager.get_starter_workspace(self.id),
-                'Terminated', interval=wait_interval, timeout=wait_timeout,
-            )
-            self.refresh()
 
     def refresh(self) -> StarterWorkspace:
         """Update the object to the current state."""
