@@ -404,8 +404,7 @@ class TestStarterWorkspace(unittest.TestCase):
             },
         )
 
-        cls.manager.create_starter_workspace_user(
-            starter_workspace_id=cls.starter_workspace.id,
+        cls.starter_workspace.create_user(
             username=cls.starter_username,
             password=cls.password,
         )
@@ -413,7 +412,7 @@ class TestStarterWorkspace(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         if cls.starter_workspace is not None:
-            cls.starter_workspace.terminate(force=True)
+            cls.starter_workspace.terminate()
         cls.manager = None
         cls.password = None
 
