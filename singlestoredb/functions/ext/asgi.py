@@ -55,6 +55,8 @@ from types import ModuleType
 from typing import Any
 from typing import Callable
 from typing import Dict
+from typing import Iterable
+from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Set
@@ -288,11 +290,21 @@ def identity(x: Any) -> Any:
     return x
 
 
+def chunked(seq: Sequence[Any], max_chunks: int) -> Iterator[Sequence[Any]]:
+    """Yield up to max_chunks chunks from seq, splitting as evenly as possible."""
+    n = len(seq)
+    if max_chunks <= 0 or max_chunks > n:
+        max_chunks = n
+    chunk_size = (n + max_chunks - 1) // max_chunks  # ceil division
+    for i in range(0, n, chunk_size):
+        yield seq[i:i + chunk_size]
+
+
 async def run_in_parallel(
     func: Callable[..., Any],
     params_list: Sequence[Sequence[Any]],
     cancel_event: threading.Event,
-    limit: int = 10,
+    limit: int = get_option('external_function.concurrency_limit'),
     transformer: Callable[[Any], Any] = identity,
 ) -> List[Any]:
     """"
@@ -308,6 +320,8 @@ async def run_in_parallel(
         The event to check for cancellation
     limit : int
         The maximum number of concurrent tasks to run
+    transformer : Callable[[Any], Any]
+        A function to transform the results
 
     Returns
     -------
@@ -315,19 +329,30 @@ async def run_in_parallel(
         The results of the function calls
 
     """
-    semaphore = asyncio.Semaphore(limit)
+    is_async = asyncio.iscoroutinefunction(func)
 
-    async def worker(params: Sequence[Any]) -> Any:
-        async with semaphore:
+    async def call(batch: Sequence[Any]) -> Any:
+        """Loop over batches of parameters and call the function."""
+        res = []
+        for params in batch:
             cancel_on_event(cancel_event)
-            if asyncio.iscoroutinefunction(func):
-                return transformer(await func(*params))
+            if is_async:
+                res.append(transformer(await func(*params)))
             else:
-                return transformer(await to_thread(func, *params))
+                res.append(transformer(func(*params)))
+        return res
 
-    tasks = [worker(p) for p in params_list]
+    async def thread_call(batch: Sequence[Any]) -> Any:
+        if is_async:
+            return await call(batch)
+        return await to_thread(lambda: asyncio.run(call(batch)))
 
-    return await asyncio.gather(*tasks)
+    # Create tasks in chunks to limit concurrency
+    tasks = [thread_call(batch) for batch in chunked(params_list, limit)]
+
+    results = await asyncio.gather(*tasks)
+
+    return list(itertools.chain.from_iterable(results))
 
 
 def build_udf_endpoint(
