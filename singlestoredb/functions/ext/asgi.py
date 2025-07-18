@@ -304,7 +304,6 @@ async def run_in_parallel(
     func: Callable[..., Any],
     params_list: Sequence[Sequence[Any]],
     cancel_event: threading.Event,
-    limit: int = get_option('external_function.concurrency_limit'),
     transformer: Callable[[Any], Any] = identity,
 ) -> List[Any]:
     """"
@@ -318,8 +317,6 @@ async def run_in_parallel(
         The parameters to pass to the function
     cancel_event : threading.Event
         The event to check for cancellation
-    limit : int
-        The maximum number of concurrent tasks to run
     transformer : Callable[[Any], Any]
         A function to transform the results
 
@@ -329,6 +326,7 @@ async def run_in_parallel(
         The results of the function calls
 
     """
+    limit = get_concurrency_limit(func)
     is_async = asyncio.iscoroutinefunction(func)
 
     async def call(batch: Sequence[Any]) -> Any:
@@ -353,6 +351,29 @@ async def run_in_parallel(
     results = await asyncio.gather(*tasks)
 
     return list(itertools.chain.from_iterable(results))
+
+
+def get_concurrency_limit(func: Callable[..., Any]) -> int:
+    """
+    Get the concurrency limit for a function.
+
+    Parameters
+    ----------
+    func : Callable
+        The function to get the concurrency limit for
+
+    Returns
+    -------
+    int
+        The concurrency limit for the function
+
+    """
+    return max(
+        1, func._singlestoredb_attrs.get(  # type: ignore
+            'concurrency_limit',
+            get_option('external_function.concurrency_limit'),
+        ),
+    )
 
 
 def build_udf_endpoint(
