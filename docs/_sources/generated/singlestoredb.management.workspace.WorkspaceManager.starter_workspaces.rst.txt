@@ -1,0 +1,4 @@
+﻿singlestoredb.management.workspace.WorkspaceManager.starter\_workspaces
+=======================================================================
+.. currentmodule:: singlestoredb.management.workspace
+.. autoproperty:: WorkspaceManager.starter_workspaces

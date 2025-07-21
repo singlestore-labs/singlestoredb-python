@@ -5,6 +5,11 @@ This document outlines features and improvements from each release.
 .. note:: All releases before v1.0.0 are considered pre-release and
    are for non-production testing and evaluation, and may include
    changes to the API.
+v1.15.0 - July 21, 2025
+-----------------------
+* Fix issues with SQL notebook cells in notebooks called from `%run_shared` or `%run_personal`
+* Add starter workspace objects to Management API
+* Add async support, timeouts, logging, and the ability to cancel UDFs in the UDF ASGI application (experimental)
 v1.14.2 - June 16, 2025
 -----------------------
 * Fixes for Iceberg export Fusion SQL (experimental)

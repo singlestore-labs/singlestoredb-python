@@ -6,12 +6,14 @@
    .. rubric:: Methods
    .. autosummary::
       ~WorkspaceManager.__init__
+      ~WorkspaceManager.create_starter_workspace
       ~WorkspaceManager.create_workspace
       ~WorkspaceManager.create_workspace_group
       ~WorkspaceManager.get_starter_workspace
       ~WorkspaceManager.get_workspace
       ~WorkspaceManager.get_workspace_group
       ~WorkspaceManager.regions
+      ~WorkspaceManager.shared_tier_regions
    .. rubric:: Attributes
    .. autosummary::
       ~WorkspaceManager.billing
