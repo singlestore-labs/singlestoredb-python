@@ -329,21 +329,26 @@ async def run_in_parallel(
     limit = get_concurrency_limit(func)
     is_async = asyncio.iscoroutinefunction(func)
 
-    async def call(batch: Sequence[Any]) -> Any:
-        """Loop over batches of parameters and call the function."""
+    async def call_sync(batch: Sequence[Any]) -> Any:
+        """Loop over batches of parameters and call the sync function."""
         res = []
         for params in batch:
             cancel_on_event(cancel_event)
-            if is_async:
-                res.append(transformer(await func(*params)))
-            else:
-                res.append(transformer(func(*params)))
+            res.append(transformer(func(*params)))
+        return res
+
+    async def call_async(batch: Sequence[Any]) -> Any:
+        """Loop over batches of parameters and call the async function."""
+        res = []
+        for params in batch:
+            cancel_on_event(cancel_event)
+            res.append(transformer(await func(*params)))
         return res
 
     async def thread_call(batch: Sequence[Any]) -> Any:
         if is_async:
-            return await call(batch)
-        return await to_thread(lambda: asyncio.run(call(batch)))
+            return await call_async(batch)
+        return await to_thread(lambda: asyncio.run(call_sync(batch)))
 
     # Create tasks in chunks to limit concurrency
     tasks = [thread_call(batch) for batch in chunked(params_list, limit)]
