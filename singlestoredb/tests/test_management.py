@@ -13,6 +13,9 @@ import pytest
 import singlestoredb as s2
 from singlestoredb.management.job import Status
 from singlestoredb.management.job import TargetType
+from singlestoredb.management.region import Region
+from singlestoredb.management.region import RegionManager
+from singlestoredb.management.utils import NamedList
 
 
 TEST_DIR = pathlib.Path(os.path.dirname(__file__))
@@ -359,6 +362,120 @@ class TestWorkspace(unittest.TestCase):
 
         with self.assertRaises(s2.ManagementError) as cm:
             space.connect(user='admin', password=self.password)
+
+        assert 'endpoint' in cm.exception.msg, cm.exception.msg
+
+
+@pytest.mark.management
+class TestStarterWorkspace(unittest.TestCase):
+
+    manager = None
+    starter_workspace = None
+    starter_workspace_user = {
+        'username': 'starter_user',
+        'password': None,
+    }
+
+    @property
+    def starter_username(self):
+        """Return the username for the starter workspace user."""
+        return self.starter_workspace_user['username']
+
+    @property
+    def password(self):
+        """Return the password for the starter workspace user."""
+        return self.starter_workspace_user['password']
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = s2.manage_workspaces()
+
+        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
+        cls.password = secrets.token_urlsafe(20) + '-x&$'
+
+        name = clean_name(secrets.token_urlsafe(20)[:20])
+
+        cls.starter_workspace = cls.manager.create_starter_workspace(
+            f'starter-ws-test-{name}',
+            database_name=f'starter_db_{name}',
+            workspace_group={
+                'cell_id': random.choice(us_regions).id,
+            },
+        )
+
+        cls.starter_workspace.create_user(
+            username=cls.starter_username,
+            password=cls.password,
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.starter_workspace is not None:
+            cls.starter_workspace.terminate()
+        cls.manager = None
+        cls.password = None
+
+    def test_str(self):
+        assert self.starter_workspace.name in str(self.starter_workspace.name)
+
+    def test_repr(self):
+        assert repr(self.starter_workspace) == str(self.starter_workspace)
+
+    def test_get_starter_workspace(self):
+        workspace = self.manager.get_starter_workspace(self.starter_workspace.id)
+        assert workspace.id == self.starter_workspace.id, workspace.id
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            workspace = self.manager.get_starter_workspace('bad id')
+
+        assert 'UUID' in cm.exception.msg, cm.exception.msg
+
+    def test_starter_workspaces(self):
+        workspaces = self.manager.starter_workspaces
+        ids = [x.id for x in workspaces]
+        names = [x.name for x in workspaces]
+        assert self.starter_workspace.id in ids
+        assert self.starter_workspace.name in names
+
+        objs = {}
+        for item in workspaces:
+            objs[item.id] = item
+            objs[item.name] = item
+
+        name = random.choice(names)
+        assert workspaces[name] == objs[name]
+        id = random.choice(ids)
+        assert workspaces[id] == objs[id]
+
+    def test_no_manager(self):
+        workspace = self.manager.get_starter_workspace(self.starter_workspace.id)
+        workspace._manager = None
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            workspace.refresh()
+
+        assert 'No workspace manager' in cm.exception.msg, cm.exception.msg
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            workspace.terminate()
+
+        assert 'No workspace manager' in cm.exception.msg, cm.exception.msg
+
+    def test_connect(self):
+        with self.starter_workspace.connect(
+            user=self.starter_username,
+            password=self.password,
+        ) as conn:
+            with conn.cursor() as cur:
+                cur.execute('show databases')
+                assert 'starter_db' in [x[0] for x in list(cur)]
+
+        # Test missing endpoint
+        workspace = self.manager.get_starter_workspace(self.starter_workspace.id)
+        workspace.endpoint = None
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            workspace.connect(user='admin', password=self.password)
 
         assert 'endpoint' in cm.exception.msg, cm.exception.msg
 
@@ -1372,3 +1489,107 @@ class TestFileSpaces(unittest.TestCase):
 
             # Cleanup
             space.remove('obj_test_2.ipynb')
+
+
+@pytest.mark.management
+class TestRegions(unittest.TestCase):
+    """Test cases for region management."""
+
+    manager = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_regions()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        cls.manager = None
+
+    def test_list_regions(self):
+        """Test listing all regions."""
+        regions = self.manager.list_regions()
+
+        # Verify we get a NamedList
+        assert isinstance(regions, NamedList)
+
+        # Verify we have at least one region
+        assert len(regions) > 0
+
+        # Verify region properties
+        region = regions[0]
+        assert isinstance(region, Region)
+        assert hasattr(region, 'id')
+        assert hasattr(region, 'name')
+        assert hasattr(region, 'provider')
+
+        # Verify provider values
+        providers = {x.provider for x in regions}
+        assert 'Azure' in providers or 'GCP' in providers or 'AWS' in providers
+
+        # Verify region can be accessed by name or ID
+        region_by_name = regions[region.name]
+        region_by_id = regions[region.id]
+        assert region_by_name == region_by_id
+        assert region_by_name.id == region.id
+        assert region_by_name.name == region.name
+        assert region_by_name.provider == region.provider
+
+    def test_list_shared_tier_regions(self):
+        """Test listing shared tier regions."""
+        regions = self.manager.list_shared_tier_regions()
+
+        # Verify we get a NamedList
+        assert isinstance(regions, NamedList)
+
+        # Verify region properties if we have any shared tier regions
+        if regions:
+            region = regions[0]
+            assert isinstance(region, Region)
+            assert hasattr(region, 'id')
+            assert hasattr(region, 'name')
+            assert hasattr(region, 'provider')
+
+            # Verify provider values
+            providers = {x.provider for x in regions}
+            assert any(p in providers for p in ['Azure', 'GCP', 'AWS'])
+
+            # Verify region can be accessed by name or ID
+            region_by_name = regions[region.name]
+            region_by_id = regions[region.id]
+            assert region_by_name == region_by_id
+            assert region_by_name.id == region.id
+            assert region_by_name.name == region.name
+            assert region_by_name.provider == region.provider
+
+    def test_str_repr(self):
+        """Test string representation of regions."""
+        regions = self.manager.list_regions()
+        if not regions:
+            self.skipTest('No regions available for testing')
+
+        region = regions[0]
+
+        # Test __str__
+        s = str(region)
+        assert region.id in s
+        assert region.name in s
+        assert region.provider in s
+
+        # Test __repr__
+        assert repr(region) == str(region)
+
+    def test_no_manager(self):
+        """Test behavior when manager is not available."""
+        regions = self.manager.list_regions()
+        if not regions:
+            self.skipTest('No regions available for testing')
+
+        region = regions[0]
+        region._manager = None
+
+        # Verify from_dict class method
+        with self.assertRaises(s2.ManagementError) as cm:
+            RegionManager.list_shared_tier_regions(None)
+        assert 'No workspace manager' in str(cm.exception)

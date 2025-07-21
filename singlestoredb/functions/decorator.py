@@ -111,6 +111,7 @@ def _func(
             name=name,
             args=expand_types(args),
             returns=expand_types(returns),
+            timeout=timeout,
         ).items() if v is not None
     }
 
@@ -181,6 +182,9 @@ def udf(
         Specifies the return data type of the function. This parameter
         works the same way as `args`. If the function is a table-valued
         function, the return type should be a `Table` object.
+    timeout : int, optional
+        The timeout in seconds for the UDF execution. If not specified,
+        the global default timeout is used.
 
     Returns
     -------
@@ -192,4 +196,5 @@ def udf(
         name=name,
         args=args,
         returns=returns,
+        timeout=timeout,
     )

@@ -256,11 +256,15 @@ create new ones.
    WorkspaceManager
    WorkspaceManager.organization
    WorkspaceManager.workspace_groups
+   WorkspaceManager.starter_workspaces
    WorkspaceManager.regions
+   WorkspaceManager.shared_tier_regions
    WorkspaceManager.create_workspace_group
    WorkspaceManager.create_workspace
+   WorkspaceManager.create_starter_workspace
    WorkspaceManager.get_workspace_group
    WorkspaceManager.get_workspace
+   WorkspaceManager.get_starter_workspace
 
 
 WorkspaceGroup
