@@ -399,6 +399,7 @@ class TestStarterWorkspace(unittest.TestCase):
             f'starter-ws-test-{name}',
             database_name=f'starter_db_{name}',
             workspace_group={
+                'name': f'starter-wg-test-{name}',
                 'cell_id': random.choice(us_regions).id,
             },
         )
