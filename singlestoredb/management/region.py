@@ -21,7 +21,10 @@ class Region(object):
 
     """
 
-    def __init__(self, id: str, name: str, provider: str):
+    def __init__(
+        self, name: str, provider: str, id: Optional[str] = None,
+        region_name: Optional[str] = None,
+    ) -> None:
         """Use :attr:`WorkspaceManager.regions` instead."""
         #: Unique ID of the region
         self.id = id
@@ -31,6 +34,9 @@ class Region(object):
 
         #: Name of the cloud provider
         self.provider = provider
+
+        #: Name of the provider region
+        self.region_name = region_name
 
         self._manager: Optional[Manager] = None
 
@@ -59,10 +65,14 @@ class Region(object):
         :class:`Region`
 
         """
+        id = obj.get('regionID', None)
+        region_name = obj.get('regionName', None)
+
         out = cls(
-            id=obj['regionID'],
+            id=id,
             name=obj['region'],
             provider=obj['provider'],
+            region_name=region_name,
         )
         out._manager = manager
         return out

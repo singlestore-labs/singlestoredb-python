@@ -1074,7 +1074,7 @@ class WorkspaceGroup(object):
         try:
             region = [x for x in manager.regions if x.id == obj['regionID']][0]
         except IndexError:
-            region = Region(obj.get('regionID', '<unknown>'), '<unknown>', '<unknown>')
+            region = Region('<unknown>', '<unknown>', obj.get('regionID', '<unknown>'))
         out = cls(
             name=obj['name'],
             id=obj['workspaceGroupID'],
@@ -1715,7 +1715,7 @@ class WorkspaceManager(Manager):
         :class:`WorkspaceGroup`
 
         """
-        if isinstance(region, Region):
+        if isinstance(region, Region) and region.id:
             region = region.id
         res = self._post(
             'workspaceGroups', json=dict(

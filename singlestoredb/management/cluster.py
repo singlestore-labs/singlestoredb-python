@@ -390,7 +390,7 @@ class ClusterManager(Manager):
         :class:`Cluster`
 
         """
-        if isinstance(region, Region):
+        if isinstance(region, Region) and region.id:
             region = region.id
         res = self._post(
             'clusters', json=dict(
