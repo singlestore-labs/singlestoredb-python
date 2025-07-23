@@ -1866,7 +1866,7 @@ class WorkspaceManager(Manager):
         database_name : str
             Name of the database for the starter workspace
         workspace_group : dict[str, str]
-            Workspace group input (dict with keys: 'cell_id')
+            Workspace group input (dict with keys: 'cell_id' and 'name').
 
         Returns
         -------
@@ -1875,15 +1875,16 @@ class WorkspaceManager(Manager):
         if not workspace_group or not isinstance(workspace_group, dict):
             raise ValueError(
                 'workspace_group must be a dict with keys: '
-                "'cell_id'",
+                "'cell_id' and 'name'",
             )
-        if set(workspace_group.keys()) != {'cell_id'}:
-            raise ValueError("workspace_group must contain only 'cell_id'")
+        if set(workspace_group.keys()) != {'cell_id', 'name'}:
+            raise ValueError("workspace_group must contain only 'cell_id' and 'name'")
 
         payload = {
             'name': name,
             'databaseName': database_name,
             'workspaceGroup': {
+                'name': workspace_group['name'],
                 'cellID': workspace_group['cell_id'],
             },
         }
