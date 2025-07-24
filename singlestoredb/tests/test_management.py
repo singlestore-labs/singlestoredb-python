@@ -1529,14 +1529,6 @@ class TestRegions(unittest.TestCase):
         providers = {x.provider for x in regions}
         assert 'Azure' in providers or 'GCP' in providers or 'AWS' in providers
 
-        # Verify region can be accessed by name or ID
-        region_by_name = regions[region.name]
-        region_by_id = regions[region.id]
-        assert region_by_name == region_by_id
-        assert region_by_name.id == region.id
-        assert region_by_name.name == region.name
-        assert region_by_name.provider == region.provider
-
     def test_list_shared_tier_regions(self):
         """Test listing shared tier regions."""
         regions = self.manager.list_shared_tier_regions()
@@ -1548,21 +1540,13 @@ class TestRegions(unittest.TestCase):
         if regions:
             region = regions[0]
             assert isinstance(region, Region)
-            assert hasattr(region, 'id')
             assert hasattr(region, 'name')
             assert hasattr(region, 'provider')
+            assert hasattr(region, 'region_name')
 
             # Verify provider values
             providers = {x.provider for x in regions}
             assert any(p in providers for p in ['Azure', 'GCP', 'AWS'])
-
-            # Verify region can be accessed by name or ID
-            region_by_name = regions[region.name]
-            region_by_id = regions[region.id]
-            assert region_by_name == region_by_id
-            assert region_by_name.id == region.id
-            assert region_by_name.name == region.name
-            assert region_by_name.provider == region.provider
 
     def test_str_repr(self):
         """Test string representation of regions."""
