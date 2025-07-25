@@ -390,7 +390,9 @@ class TestStarterWorkspace(unittest.TestCase):
     def setUpClass(cls):
         cls.manager = s2.manage_workspaces()
 
-        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
+        shared_tier_regions = [
+            x for x in cls.manager.shared_tier_regions if 'US' in x.name
+        ]
         cls.password = secrets.token_urlsafe(20) + '-x&$'
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
@@ -400,7 +402,7 @@ class TestStarterWorkspace(unittest.TestCase):
             database_name=f'starter_db_{name}',
             workspace_group={
                 'name': f'starter-wg-test-{name}',
-                'cell_id': random.choice(us_regions).id,
+                'cell_id': random.choice(shared_tier_regions).id,
             },
         )
 
