@@ -6,6 +6,7 @@ from ..functions.ext.asgi import Application
 from ._config import AppConfig
 from ._connection_info import UdfConnectionInfo
 from ._process import kill_process_by_port
+from singlestoredb.connection import build_params
 
 if typing.TYPE_CHECKING:
     from ._uvicorn_util import AwaitableUvicornServer
@@ -43,7 +44,7 @@ async def run_udf_app(
 
     udf_suffix = ''
     if app_config.running_interactively:
-        udf_suffix = '_test'
+        udf_suffix = "_" +  app_config.notebook_server_id
     app = Application(url=base_url, app_mode='managed', name_suffix=udf_suffix)
 
     config = uvicorn.Config(

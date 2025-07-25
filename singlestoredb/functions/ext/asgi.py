@@ -59,6 +59,7 @@ from typing import Sequence
 from typing import Set
 from typing import Tuple
 from typing import Union
+from ...apps._config import AppConfig
 
 from . import arrow
 from . import json as jdata
@@ -72,6 +73,7 @@ from ..signature import get_signature
 from ..signature import signature_to_sql
 from ..typing import Masked
 from ..typing import Table
+from ...config import get_option
 from .timer import Timer
 
 try:
@@ -1138,8 +1140,18 @@ class Application(object):
 
         # Return function info
         elif method == 'GET' and (path == self.show_function_info_path or not path):
+            app_config = AppConfig.from_env()
             functions = self.get_function_info()
-            body = json.dumps(dict(functions=functions)).encode('utf-8')
+            workspace = app_config.workspace_group_id
+            database = app_config.database_name
+
+            body = json.dumps({
+                    "functions": functions,
+                    "cluster_id": workspace,
+                    "database": database,
+                }).encode('utf-8')
+            
+            print(body)
             await send(self.text_response_dict)
 
         # Path not found
@@ -1219,6 +1231,8 @@ class Application(object):
         for (_, info), sql in zip(self.endpoints.values(), create_sqls):
             sig = info['signature']
             sql_map[sig['name']] = sql
+
+        
 
         for key, (_, info) in self.endpoints.items():
             if not func_name or key == func_name:
