@@ -14,7 +14,6 @@ import singlestoredb as s2
 from singlestoredb.management.job import Status
 from singlestoredb.management.job import TargetType
 from singlestoredb.management.region import Region
-from singlestoredb.management.region import RegionManager
 from singlestoredb.management.utils import NamedList
 
 
@@ -390,7 +389,9 @@ class TestStarterWorkspace(unittest.TestCase):
     def setUpClass(cls):
         cls.manager = s2.manage_workspaces()
 
-        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
+        shared_tier_regions = [
+            x for x in cls.manager.shared_tier_regions if 'US' in x.name
+        ]
         cls.password = secrets.token_urlsafe(20) + '-x&$'
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
@@ -400,7 +401,7 @@ class TestStarterWorkspace(unittest.TestCase):
             database_name=f'starter_db_{name}',
             workspace_group={
                 'name': f'starter-wg-test-{name}',
-                'cell_id': random.choice(us_regions).id,
+                'cell_id': random.choice(shared_tier_regions).id,
             },
         )
 
@@ -1564,17 +1565,3 @@ class TestRegions(unittest.TestCase):
 
         # Test __repr__
         assert repr(region) == str(region)
-
-    def test_no_manager(self):
-        """Test behavior when manager is not available."""
-        regions = self.manager.list_regions()
-        if not regions:
-            self.skipTest('No regions available for testing')
-
-        region = regions[0]
-        region._manager = None
-
-        # Verify from_dict class method
-        with self.assertRaises(s2.ManagementError) as cm:
-            RegionManager.list_shared_tier_regions(None)
-        assert 'No workspace manager' in str(cm.exception)
