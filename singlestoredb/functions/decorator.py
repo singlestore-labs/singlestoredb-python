@@ -23,7 +23,7 @@ ReturnType = ParameterType
 UDFType = Callable[..., Any]
 
 
-def is_valid_type(obj: Any) -> bool:
+def is_valid_object_type(obj: Any) -> bool:
     """Check if the object is a valid type for a schema definition."""
     if not inspect.isclass(obj):
         return False
@@ -52,48 +52,29 @@ def is_valid_callable(obj: Any) -> bool:
 
     returns = utils.get_annotations(obj).get('return', None)
 
-    if inspect.isclass(returns) and issubclass(returns, str):
+    if inspect.isclass(returns) and issubclass(returns, SQLString):
         return True
 
-    raise TypeError(
-        f'callable {obj} must return a str, '
-        f'but got {returns}',
-    )
+    return False
 
 
-def expand_types(args: Any) -> Optional[Union[List[str], Type[Any]]]:
+def expand_types(args: Any) -> List[Any]:
     """Expand the types for the function arguments / return values."""
     if args is None:
-        return None
+        return []
 
-    # SQL string
-    if isinstance(args, str):
-        return [args]
+    if not isinstance(args, list):
+        args = [args]
 
-    # General way of accepting pydantic.BaseModel, NamedTuple, TypedDict
-    elif is_valid_type(args):
-        return args
-
-    # List of SQL strings or callables
-    elif isinstance(args, list):
-        new_args = []
-        for arg in args:
-            if isinstance(arg, str):
-                new_args.append(arg)
-            elif callable(arg):
-                new_args.append(arg())
-            else:
-                raise TypeError(f'unrecognized type for parameter: {arg}')
-        return new_args
-
-    # Callable that returns a SQL string
-    elif is_valid_callable(args):
-        out = args()
-        if not isinstance(out, str):
-            raise TypeError(f'unrecognized type for parameter: {args}')
-        return [out]
-
-    raise TypeError(f'unrecognized type for parameter: {args}')
+    new_args = []
+    for arg in args:
+        if isinstance(arg, str):
+            new_args.append(arg)
+        elif is_valid_callable(arg):
+            new_args.append(arg())
+        else:
+            new_args.append(arg)
+    return new_args
 
 
 def _func(

@@ -4108,6 +4108,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     PyObject *py_colspec = NULL;
     PyObject *py_str = NULL;
     PyObject *py_blob = NULL;
+    PyObject **py_transformers = NULL;
     Py_ssize_t length = 0;
     uint64_t row_id = 0;
     uint8_t is_null = 0;
@@ -4138,6 +4139,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
     colspec_l = PyObject_Length(py_colspec);
     ctypes = malloc(sizeof(int) * colspec_l);
+    py_transformers = calloc(sizeof(PyObject*), colspec_l);
 
     for (i = 0; i < colspec_l; i++) {
         PyObject *py_cspec = PySequence_GetItem(py_colspec, i);
@@ -4145,6 +4147,15 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
         PyObject *py_ctype = PySequence_GetItem(py_cspec, 1);
         if (!py_ctype) { Py_DECREF(py_cspec); goto error; }
         ctypes[i] = (int)PyLong_AsLong(py_ctype);
+        py_transformers[i] = PySequence_GetItem(py_cspec, 2);
+        if (!py_transformers[i]) {
+            Py_DECREF(py_ctype);
+            Py_DECREF(py_cspec);
+            goto error;
+        }
+        if (py_transformers[i] == Py_None) {
+            py_transformers[i] = NULL;
+        }
         Py_DECREF(py_ctype);
         Py_DECREF(py_cspec);
         if (PyErr_Occurred()) { goto error; }
@@ -4380,6 +4391,14 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
             default:
                 goto error;
             }
+
+            if (py_transformers[i]) {
+                PyObject *py_item = PyTuple_GetItem(py_row, i);
+                PyObject *py_transformed = PyObject_CallFunction(py_transformers[i], "O", py_item);
+                if (!py_transformed) goto error;
+                Py_DECREF(py_item);
+                CHECKRC(PyTuple_SetItem(py_row, i, py_transformed));
+            }
         }
 
         CHECKRC(PyList_Append(py_out_rows, py_row));
@@ -4389,6 +4408,12 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
 exit:
     if (ctypes) free(ctypes);
+    if (py_transformers) {
+        for (i = 0; i < colspec_l; i++) {
+            Py_XDECREF(py_transformers[i]);
+        }
+        free(py_transformers);
+    }
 
     Py_XDECREF(py_row);
 
@@ -4412,6 +4437,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     PyObject *py_row_ids = NULL;
     PyObject *py_row_ids_iter = NULL;
     PyObject *py_item = NULL;
+    PyObject **py_transformers = NULL;
     uint64_t row_id = 0;
     uint8_t is_null = 0;
     int8_t i8 = 0;
@@ -4459,12 +4485,26 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
     returns = malloc(sizeof(int) * n_cols);
     if (!returns) goto error;
+    py_transformers = calloc(sizeof(PyObject*), n_cols);
+    if (!py_transformers) goto error;
 
     for (i = 0; i < n_cols; i++) {
-        PyObject *py_item = PySequence_GetItem(py_returns, i);
-        if (!py_item) goto error;
-        returns[i] = (int)PyLong_AsLong(py_item);
-        Py_DECREF(py_item);
+        PyObject *py_cspec = PySequence_GetItem(py_returns, i);
+        if (!py_cspec) goto error;
+        PyObject *py_ctype = PySequence_GetItem(py_cspec, 1);
+        if (!py_ctype) { Py_DECREF(py_cspec); goto error; }
+        returns[i] = (int)PyLong_AsLong(py_ctype);
+        py_transformers[i] = PySequence_GetItem(py_cspec, 2);
+        if (!py_transformers[i]) {
+            Py_DECREF(py_ctype);
+            Py_DECREF(py_cspec);
+            goto error;
+        }
+        if (py_transformers[i] == Py_None) {
+            py_transformers[i] = NULL;
+        }
+        Py_DECREF(py_ctype);
+        Py_DECREF(py_cspec);
         if (PyErr_Occurred()) { goto error; }
     }
 
@@ -4503,6 +4543,13 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
             CHECKMEM(1);
             memcpy(out+out_idx, &is_null, 1);
             out_idx += 1;
+
+            if (py_transformers[i]) {
+                PyObject *py_transformed = PyObject_CallFunction(py_transformers[i], "O", py_item);
+                if (!py_transformed) goto error;
+                Py_DECREF(py_item);
+                py_item = py_transformed;
+            }
 
             switch (returns[i]) {
             case MYSQL_TYPE_BIT:
@@ -4702,6 +4749,12 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
 exit:
     if (returns) free(returns);
+    if (py_transformers) {
+        for (i = 0; i < n_cols; i++) {
+            Py_XDECREF(py_transformers[i]);
+        }
+        free(py_transformers);
+    }
 
     Py_XDECREF(py_item);
     Py_XDECREF(py_row_iter);

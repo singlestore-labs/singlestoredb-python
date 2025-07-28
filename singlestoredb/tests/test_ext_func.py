@@ -1407,7 +1407,7 @@ class TestExtFunc(unittest.TestCase):
 
         desc = self.cur.description
         assert len(desc) == 1
-        assert desc[0].name == 'res'
+        assert desc[0].name == 'a'
         assert desc[0].type_code == ft.SHORT
         assert desc[0].null_ok is True
 
@@ -1417,7 +1417,7 @@ class TestExtFunc(unittest.TestCase):
 
         desc = self.cur.description
         assert len(desc) == 1
-        assert desc[0].name == 'res'
+        assert desc[0].name == 'a'
         assert desc[0].type_code == ft.SHORT
         assert desc[0].null_ok is True
 
@@ -1427,7 +1427,7 @@ class TestExtFunc(unittest.TestCase):
 
         desc = self.cur.description
         assert len(desc) == 1
-        assert desc[0].name == 'res'
+        assert desc[0].name == 'a'
         assert desc[0].type_code == ft.SHORT
         assert desc[0].null_ok is True
 
@@ -1438,10 +1438,10 @@ class TestExtFunc(unittest.TestCase):
 
         desc = self.cur.description
         assert len(desc) == 2
-        assert desc[0].name == 'res'
+        assert desc[0].name == 'a'
         assert desc[0].type_code == ft.SHORT
         assert desc[0].null_ok is True
-        assert desc[1].name == 'res2'
+        assert desc[1].name == 'b'
         assert desc[1].type_code == ft.SHORT
         assert desc[1].null_ok is True
 
@@ -1451,10 +1451,10 @@ class TestExtFunc(unittest.TestCase):
 
         desc = self.cur.description
         assert len(desc) == 2
-        assert desc[0].name == 'res'
+        assert desc[0].name == 'a'
         assert desc[0].type_code == ft.SHORT
         assert desc[0].null_ok is True
-        assert desc[1].name == 'res2'
+        assert desc[1].name == 'b'
         assert desc[1].type_code == ft.SHORT
         assert desc[1].null_ok is True
 
@@ -1464,9 +1464,9 @@ class TestExtFunc(unittest.TestCase):
 
         desc = self.cur.description
         assert len(desc) == 2
-        assert desc[0].name == 'res'
+        assert desc[0].name == 'a'
         assert desc[0].type_code == ft.SHORT
         assert desc[0].null_ok is True
-        assert desc[1].name == 'res2'
+        assert desc[1].name == 'b'
         assert desc[1].type_code == ft.SHORT
         assert desc[1].null_ok is True

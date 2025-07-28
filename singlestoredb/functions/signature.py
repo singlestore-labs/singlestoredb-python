@@ -16,9 +16,10 @@ from typing import List
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
-from typing import Type
 from typing import TypeVar
 from typing import Union
+
+from singlestoredb.functions import transformers
 
 try:
     import numpy as np
@@ -185,7 +186,29 @@ sql_to_type_map = {
     'TINYBLOB': 'bytes',
     'MEDIUMBLOB': 'bytes',
     'LONGBLOB': 'bytes',
+    'JSON': 'json',
 }
+
+
+@dataclasses.dataclass
+class ParamSpec:
+    # Normalized data type of the parameter
+    dtype: Any
+
+    # Name of the parameter, if applicable
+    name: str = ''
+
+    # SQL type of the parameter
+    sql_type: str = ''
+
+    # Default value of the parameter, if applicable
+    default: Any = NO_DEFAULT
+
+    # Transformer function to apply to the parameter
+    transformer: Optional[Callable[..., Any]] = None
+
+    # Whether the parameter is optional (e.g., Union[T, None] or Optional[T])
+    is_optional: bool = False
 
 
 class Collection:
@@ -522,7 +545,7 @@ def collapse_dtypes(dtypes: Union[str, List[str]], include_null: bool = False) -
 def get_dataclass_schema(
     obj: Any,
     include_default: bool = False,
-) -> List[Union[Tuple[str, Any], Tuple[str, Any, Any]]]:
+) -> List[ParamSpec]:
     """
     Get the schema of a dataclass.
 
@@ -533,25 +556,26 @@ def get_dataclass_schema(
 
     Returns
     -------
-    List[Tuple[str, Any]] | List[Tuple[str, Any, Any]]
-        A list of tuples containing the field names and field types
+    List[ParamSpec]
+        A list of parameter specifications for the dataclass fields
 
     """
     if include_default:
         return [
-            (
-                f.name, f.type,
-                NO_DEFAULT if f.default is dataclasses.MISSING else f.default,
+            ParamSpec(
+                name=f.name,
+                dtype=f.type,
+                default=NO_DEFAULT if f.default is dataclasses.MISSING else f.default,
             )
             for f in dataclasses.fields(obj)
         ]
-    return [(f.name, f.type) for f in dataclasses.fields(obj)]
+    return [ParamSpec(name=f.name, dtype=f.type) for f in dataclasses.fields(obj)]
 
 
 def get_typeddict_schema(
     obj: Any,
     include_default: bool = False,
-) -> List[Union[Tuple[str, Any], Tuple[str, Any, Any]]]:
+) -> List[ParamSpec]:
     """
     Get the schema of a TypedDict.
 
@@ -564,22 +588,26 @@ def get_typeddict_schema(
 
     Returns
     -------
-    List[Tuple[str, Any]] | List[Tuple[str, Any, Any]]
-        A list of tuples containing the field names and field types
+    List[ParamSpec]
+        A list of parameter specifications for the TypedDict fields
 
     """
     if include_default:
         return [
-            (k, v, getattr(obj, k, NO_DEFAULT))
+            ParamSpec(
+                name=k,
+                dtype=v,
+                default=getattr(obj, k, NO_DEFAULT),
+            )
             for k, v in utils.get_annotations(obj).items()
         ]
-    return list(utils.get_annotations(obj).items())
+    return [ParamSpec(name=k, dtype=v) for k, v in utils.get_annotations(obj).items()]
 
 
 def get_pydantic_schema(
     obj: Any,
     include_default: bool = False,
-) -> List[Union[Tuple[str, Any], Tuple[str, Any, Any]]]:
+) -> List[ParamSpec]:
     """
     Get the schema of a pydantic model.
 
@@ -592,26 +620,28 @@ def get_pydantic_schema(
 
     Returns
     -------
-    List[Tuple[str, Any]] | List[Tuple[str, Any, Any]]
-        A list of tuples containing the field names and field types
+    List[ParamSpec]
+        A list of parameter specifications for the pydantic model fields
 
     """
     import pydantic_core
     if include_default:
         return [
-            (
-                k, v.annotation,
-                NO_DEFAULT if v.default is pydantic_core.PydanticUndefined else v.default,
+            ParamSpec(
+                name=k,
+                dtype=v.annotation,
+                default=NO_DEFAULT
+                if v.default is pydantic_core.PydanticUndefined else v.default,
             )
             for k, v in obj.model_fields.items()
         ]
-    return [(k, v.annotation) for k, v in obj.model_fields.items()]
+    return [ParamSpec(name=k, dtype=v.annotation) for k, v in obj.model_fields.items()]
 
 
 def get_namedtuple_schema(
     obj: Any,
     include_default: bool = False,
-) -> List[Union[Tuple[Any, str], Tuple[Any, str, Any]]]:
+) -> List[ParamSpec]:
     """
     Get the schema of a named tuple.
 
@@ -624,25 +654,28 @@ def get_namedtuple_schema(
 
     Returns
     -------
-    List[Tuple[Any, str]] | List[Tuple[Any, str, Any]]
-        A list of tuples containing the field names and field types
+    List[ParamSpec]
+        A list of parameter specifications for the named tuple fields
 
     """
     if include_default:
         return [
             (
-                k, v,
-                obj._field_defaults.get(k, NO_DEFAULT),
+                ParamSpec(
+                    name=k,
+                    dtype=v,
+                    default=obj._field_defaults.get(k, NO_DEFAULT),
+                )
             )
             for k, v in utils.get_annotations(obj).items()
         ]
-    return list(utils.get_annotations(obj).items())
+    return [ParamSpec(name=k, dtype=v) for k, v in utils.get_annotations(obj).items()]
 
 
 def get_table_schema(
     obj: Any,
     include_default: bool = False,
-) -> List[Union[Tuple[Any, str], Tuple[Any, str, Any]]]:
+) -> List[ParamSpec]:
     """
     Get the schema of a Table.
 
@@ -655,22 +688,26 @@ def get_table_schema(
 
     Returns
     -------
-    List[Tuple[Any, str]] | List[Tuple[Any, str, Any]]
-        A list of tuples containing the field names and field types
+    List[ParamSpec]
+        A list of parameter specifications for the Table fields
 
     """
     if include_default:
         return [
-            (k, v, getattr(obj, k, NO_DEFAULT))
+            ParamSpec(
+                name=k,
+                dtype=v,
+                default=getattr(obj, k, NO_DEFAULT),
+            )
             for k, v in utils.get_annotations(obj).items()
         ]
-    return list(utils.get_annotations(obj).items())
+    return [ParamSpec(name=k, dtype=v) for k, v in utils.get_annotations(obj).items()]
 
 
 def get_colspec(
     overrides: Any,
     include_default: bool = False,
-) -> List[Union[Tuple[str, Any], Tuple[str, Any, Any]]]:
+) -> List[ParamSpec]:
     """
     Get the column specification from the overrides.
 
@@ -683,8 +720,8 @@ def get_colspec(
 
     Returns
     -------
-    List[Tuple[str, Any]] | List[Tuple[str, Any, Any]]
-        A list of tuples containing the field names and field types
+    List[ParamSpec]
+        A list of parameter specifications for the column fields
 
     """
     overrides_colspec = []
@@ -717,21 +754,24 @@ def get_colspec(
 
         # List of types
         elif isinstance(overrides, list):
-            if include_default:
-                overrides_colspec = [
-                    (getattr(x, 'name', ''), x, NO_DEFAULT) for x in overrides
-                ]
-            else:
-                overrides_colspec = [(getattr(x, 'name', ''), x) for x in overrides]
+            overrides_colspec = [
+                ParamSpec(
+                    name=getattr(x, 'name', ''),
+                    dtype=sql_to_dtype(x) if isinstance(x, str) else x,
+                    sql_type=x if isinstance(x, str) else '',
+                ) for x in overrides
+            ]
 
         # Other
         else:
-            if include_default:
-                overrides_colspec = [
-                    (getattr(overrides, 'name', ''), overrides, NO_DEFAULT),
-                ]
-            else:
-                overrides_colspec = [(getattr(overrides, 'name', ''), overrides)]
+            overrides_colspec = [
+                ParamSpec(
+                    name=getattr(overrides, 'name', ''),
+                    dtype=sql_to_dtype(overrides)
+                    if isinstance(overrides, str) else overrides,
+                    sql_type=overrides if isinstance(overrides, str) else '',
+                ),
+            ]
 
     return overrides_colspec
 
@@ -756,11 +796,87 @@ def unpack_masked_type(obj: Any) -> Any:
     return obj
 
 
+def unwrap_optional(annotation: Any) -> Tuple[Any, bool]:
+    """
+    Unwrap Optional[T] and Union[T, None] annotations to get the underlying type.
+    Also indicates whether the type was optional.
+
+    Examples:
+        Optional[int] -> (int, True)
+        Union[str, None] -> (str, True)
+        Union[int, str, None] -> (Union[int, str], True)
+        Union[int, str] -> (Union[int, str], False)
+        int -> (int, False)
+
+    Parameters
+    ----------
+    annotation : Any
+        The type annotation to unwrap
+
+    Returns
+    -------
+    Tuple[Any, bool]
+        A tuple containing:
+        - The unwrapped type annotation
+        - A boolean indicating if the original type was optional (contained None)
+
+    """
+    origin = typing.get_origin(annotation)
+    is_optional = False
+
+    # Handle Union types (which includes Optional)
+    if origin is Union:
+        args = typing.get_args(annotation)
+        # Check if None is in the union
+        is_optional = type(None) in args
+
+        # Filter out None/NoneType
+        non_none_args = [arg for arg in args if arg is not type(None)]
+
+        if not non_none_args:
+            # If only None was in the Union
+            from typing import Any
+            return Any, is_optional
+        elif len(non_none_args) == 1:
+            # If there's only one type left, return it directly
+            return non_none_args[0], is_optional
+        else:
+            # Recreate the Union with the remaining types
+            return Union[tuple(non_none_args)], is_optional
+
+    return annotation, is_optional
+
+
+def is_object_type(spec: Any, mode: str, is_optional: bool) -> Optional[List[ParamSpec]]:
+    """
+    Check if the type is an object type and return a list of ParamSpecs.
+
+    """
+    input_or_output = 1 if mode == 'return' else 0
+    if inspect.isclass(spec) and (
+        issubclass(spec, dict)
+        or utils.is_dataclass(spec)
+        or utils.is_typeddict(spec)
+        or utils.is_pydantic(spec)
+        or utils.is_namedtuple(spec)
+    ):
+        return [
+            ParamSpec(
+                dtype='json',
+                sql_type='TEXT NULL' if is_optional else 'TEXT NOT NULL',
+                default=NO_DEFAULT,
+                transformer=transformers.create_json_transformers(spec)[input_or_output],
+                is_optional=is_optional,
+            ),
+        ]
+    return None
+
+
 def get_schema(
     spec: Any,
-    overrides: Optional[Union[List[str], Type[Any]]] = None,
+    overrides: Optional[List[ParamSpec]] = None,
     mode: str = 'parameter',
-) -> Tuple[List[Tuple[str, Any, Optional[str]]], str, str]:
+) -> Tuple[List[ParamSpec], str, str]:
     """
     Expand a return type annotation into a list of types and field names.
 
@@ -768,14 +884,14 @@ def get_schema(
     ----------
     spec : Any
         The return type specification
-    overrides : List[str], optional
+    overrides : List[ParamSpec], optional
         List of SQL type specifications for the return type
     mode : str
         The mode of the function, either 'parameter' or 'return'
 
     Returns
     -------
-    Tuple[List[Tuple[str, Any, Optional[str]]], str, str]
+    Tuple[List[ParamSpec], str, str]
         A list of tuples containing the field names and field types,
         the normalized data format, optionally the SQL
         definition of the type, and the data format of the type
@@ -785,6 +901,7 @@ def get_schema(
     data_format = ''
     function_type = 'udf'
 
+    spec, is_optional = unwrap_optional(spec)
     origin = typing.get_origin(spec)
     args = typing.get_args(spec)
     args_origins = [typing.get_origin(x) if x is not None else None for x in args]
@@ -836,18 +953,27 @@ def get_schema(
         elif utils.is_vector(spec) or spec in [str, float, int, bytes]:
             pass
 
+        elif inspect.isclass(spec) and (
+                issubclass(spec, dict)
+                or utils.is_dataframe(spec)
+                or utils.is_dataclass(spec)
+                or utils.is_typeddict(spec)
+                or utils.is_pydantic(spec)
+                or utils.is_namedtuple(spec)
+        ):
+            # TODO: Use TEXT for now because external functions don't support JSON
+            return [
+                ParamSpec(
+                    dtype='json',
+                    sql_type='TEXT NULL' if is_optional else 'TEXT NOT NULL',
+                    default=NO_DEFAULT,
+                    transformer=transformers.create_json_transformers(spec)[1],
+                    is_optional=is_optional,
+                ),
+            ], 'scalar', 'udf'
+
         # Try to catch some common mistakes
-        elif origin in [tuple, dict] or tuple in args_origins or \
-                (
-                    inspect.isclass(spec) and
-                    (
-                        utils.is_dataframe(spec)
-                        or utils.is_dataclass(spec)
-                        or utils.is_typeddict(spec)
-                        or utils.is_pydantic(spec)
-                        or utils.is_namedtuple(spec)
-                    )
-                ):
+        elif origin in [tuple, dict] or tuple in args_origins:
             raise TypeError(
                 'invalid return type for a UDF; '
                 f'expecting a scalar or vector, but got {spec}',
@@ -857,43 +983,64 @@ def get_schema(
     elif utils.is_vector(spec) or spec in [str, float, int, bytes]:
         pass
 
+    # Object types get converted to JSON
+    elif inspect.isclass(spec) and (
+        issubclass(spec, dict)
+        or utils.is_dataclass(spec)
+        or utils.is_typeddict(spec)
+        or utils.is_pydantic(spec)
+        or utils.is_namedtuple(spec)
+    ):
+        # TODO: Use TEXT for now because external functions don't support JSON
+        return [
+            ParamSpec(
+                dtype='json',
+                sql_type='TEXT NULL' if is_optional else 'TEXT NOT NULL',
+                default=NO_DEFAULT,
+                transformer=transformers.create_json_transformers(spec)[0],
+                is_optional=is_optional,
+            ),
+        ], 'scalar', 'udf'
+
     # Error out for incorrect parameter types
-    elif origin in [tuple, dict] or tuple in args_origins or \
-            (
-                inspect.isclass(spec) and
-                (
-                    utils.is_dataframe(spec)
-                    or utils.is_dataclass(spec)
-                    or utils.is_typeddict(spec)
-                    or utils.is_pydantic(spec)
-                    or utils.is_namedtuple(spec)
-                )
-            ):
+    elif origin in [tuple, dict] or tuple in args_origins or (
+        inspect.isclass(spec) and utils.is_dataframe(spec)
+    ):
         raise TypeError(f'parameter types must be scalar or vector, got {spec}')
 
     #
     # Process each parameter / return type into a colspec
     #
 
-    # Compute overrides colspec from various formats
-    overrides_colspec = get_colspec(overrides)
-
     # Dataframe type
     if utils.is_dataframe(spec):
-        colspec = overrides_colspec
+        if not overrides:
+            raise TypeError(
+                'column types must be specified by the '
+                '`returns=` parameter of the @udf decorator for a DataFrame',
+            )
+        colspec = get_colspec(overrides[0].dtype, include_default=True)
 
     # Numpy array types
     elif utils.is_numpy(spec):
         data_format = 'numpy'
+
         if overrides:
-            colspec = overrides_colspec
+
+            # Short circuit if the data type will be converted to JSON
+            obj = is_object_type(overrides[0].dtype, mode, is_optional)
+            if obj is not None:
+                return obj, data_format, function_type
+
+            colspec = overrides
+
         elif len(typing.get_args(spec)) < 2:
             raise TypeError(
                 'numpy array must have a data type specified '
                 'in the @udf decorator or with an NDArray type annotation',
             )
         else:
-            colspec = [('', typing.get_args(spec)[1])]
+            colspec = [ParamSpec(dtype=typing.get_args(spec)[1])]
 
     # Pandas Series
     elif utils.is_pandas_series(spec):
@@ -903,7 +1050,13 @@ def get_schema(
                 'pandas Series must have a data type specified '
                 'in the @udf decorator',
             )
-        colspec = overrides_colspec
+
+        # Short circuit if the data type will be converted to JSON
+        obj = is_object_type(overrides[0].dtype, mode, is_optional)
+        if obj is not None:
+            return obj, data_format, function_type
+
+        colspec = overrides
 
     # Polars Series
     elif utils.is_polars_series(spec):
@@ -913,7 +1066,13 @@ def get_schema(
                 'polars Series must have a data type specified '
                 'in the @udf decorator',
             )
-        colspec = overrides_colspec
+
+        # Short circuit if the data type will be converted to JSON
+        obj = is_object_type(overrides[0].dtype, mode, is_optional)
+        if obj is not None:
+            return obj, data_format, function_type
+
+        colspec = overrides
 
     # PyArrow Array
     elif utils.is_pyarrow_array(spec):
@@ -923,23 +1082,29 @@ def get_schema(
                 'pyarrow Arrays must have a data type specified '
                 'in the @udf decorator',
             )
-        colspec = overrides_colspec
+
+        # Short circuit if the data type will be converted to JSON
+        obj = is_object_type(overrides[0].dtype, mode, is_optional)
+        if obj is not None:
+            return obj, data_format, function_type
+
+        colspec = overrides
 
     # Return type is specified by a dataclass definition
     elif utils.is_dataclass(spec):
-        colspec = overrides_colspec or get_dataclass_schema(spec)
+        colspec = overrides or get_dataclass_schema(spec)
 
     # Return type is specified by a TypedDict definition
     elif utils.is_typeddict(spec):
-        colspec = overrides_colspec or get_typeddict_schema(spec)
+        colspec = overrides or get_typeddict_schema(spec)
 
     # Return type is specified by a pydantic model
     elif utils.is_pydantic(spec):
-        colspec = overrides_colspec or get_pydantic_schema(spec)
+        colspec = overrides or get_pydantic_schema(spec)
 
     # Return type is specified by a named tuple
     elif utils.is_namedtuple(spec):
-        colspec = overrides_colspec or get_namedtuple_schema(spec)
+        colspec = overrides or get_namedtuple_schema(spec)
 
     # Unrecognized return type
     elif spec is not None:
@@ -947,30 +1112,21 @@ def get_schema(
         # Return type is specified by a SQL string
         if isinstance(spec, str):
             data_format = 'scalar'
-            colspec = [(getattr(spec, 'name', ''), spec)]
+            colspec = [ParamSpec(dtype=spec, is_optional=is_optional)]
 
         # Plain list vector
         elif typing.get_origin(spec) is list:
             data_format = 'list'
-            colspec = [('', typing.get_args(spec)[0])]
+            spec, is_optional = unwrap_optional(typing.get_args(spec)[0])
+            colspec = [ParamSpec(dtype=spec, is_optional=is_optional)]
 
         # Multiple return values
         elif inspect.isclass(typing.get_origin(spec)) \
                 and issubclass(typing.get_origin(spec), tuple):  # type: ignore[arg-type]
 
-            out_names, out_overrides = [], []
-
-            # Get the colspec for the overrides
-            if overrides:
-                out_colspec = [
-                    x for x in get_colspec(overrides, include_default=True)
-                ]
-                out_names = [x[0] for x in out_colspec]
-                out_overrides = [x[1] for x in out_colspec]
-
             # Make sure that the number of overrides matches the number of
             # return types or parameter types
-            if out_overrides and len(typing.get_args(spec)) != len(out_overrides):
+            if overrides and len(typing.get_args(spec)) != len(overrides):
                 raise ValueError(
                     f'number of {mode} types does not match the number of '
                     'overrides specified',
@@ -981,20 +1137,21 @@ def get_schema(
 
             # Get the colspec for each item in the tuple
             for i, x in enumerate(typing.get_args(spec)):
-                out_item, out_data_format, _ = get_schema(
+                params, out_data_format, _ = get_schema(
                     unpack_masked_type(x),
-                    overrides=out_overrides[i] if out_overrides else [],
+                    overrides=overrides if overrides else None,
                     # Always pass UDF mode for individual items
                     mode=mode,
                 )
 
                 # Use the name from the overrides if specified
-                if out_names and out_names[i] and not out_item[0][0]:
-                    out_item = [(out_names[i], *out_item[0][1:])]
-                elif not out_item[0][0]:
-                    out_item = [(f'{string.ascii_letters[i]}', *out_item[0][1:])]
+                if overrides:
+                    if overrides[i] and not params[i].name:
+                        params[i].name = overrides[i].name
+                    elif not overrides[i].name:
+                        params[i].name = f'{string.ascii_letters[i]}'
 
-                colspec += out_item
+                colspec.append(params[i])
                 out_data_formats.append(out_data_format)
 
             # Make sure that all the data formats are the same
@@ -1015,25 +1172,35 @@ def get_schema(
         elif overrides:
             if not data_format:
                 data_format = get_data_format(spec)
-            colspec = overrides_colspec
+            colspec = overrides
 
         # Single value, no override
         else:
             if not data_format:
                 data_format = 'scalar'
-            colspec = [('', spec)]
+            colspec = [ParamSpec(dtype=spec, is_optional=is_optional)]
 
     out = []
 
     # Normalize colspec data types
-    for k, v, *_ in colspec:
-        out.append((
-            k,
-            collapse_dtypes(
-                [normalize_dtype(x) for x in simplify_dtype(v)],
-            ),
-            v if isinstance(v, str) else None,
-        ))
+    for c in colspec:
+
+        if isinstance(c.dtype, str):
+            dtype = c.dtype
+        else:
+            dtype = collapse_dtypes(
+                [normalize_dtype(x) for x in simplify_dtype(c.dtype)],
+                include_null=c.is_optional,
+            )
+
+        p = ParamSpec(
+            name=c.name,
+            dtype=dtype,
+            sql_type=c.sql_type if isinstance(c.sql_type, str) else None,
+            is_optional=c.is_optional,
+        )
+
+        out.append(p)
 
     return out, data_format, function_type
 
@@ -1151,12 +1318,10 @@ def get_signature(
     # Generate the parameter type and the corresponding SQL code for that parameter
     args_schema = []
     args_data_formats = []
-    args_colspec = [x for x in get_colspec(attrs.get('args', []), include_default=True)]
-    args_overrides = [x[1] for x in args_colspec]
-    args_defaults = [x[2] for x in args_colspec]  # type: ignore
+    args_colspec = get_colspec(attrs.get('args', []), include_default=True)
     args_masks, ret_masks = get_masks(func)
 
-    if args_overrides and len(args_overrides) != len(signature.parameters):
+    if args_colspec and len(args_colspec) != len(signature.parameters):
         raise ValueError(
             'number of args in the decorator does not match '
             'the number of parameters in the function signature',
@@ -1168,33 +1333,49 @@ def get_signature(
     for i, param in enumerate(params):
         arg_schema, args_data_format, _ = get_schema(
             unpack_masked_type(param.annotation),
-            overrides=args_overrides[i] if args_overrides else [],
+            overrides=[args_colspec[i]] if args_colspec else None,
             mode='parameter',
         )
         args_data_formats.append(args_data_format)
 
-        # Insert parameter names as needed
-        if not arg_schema[0][0]:
-            args_schema.append((param.name, *arg_schema[0][1:]))
+        if len(arg_schema) > 1:
+            raise TypeError(
+                'only one parameter type is supported; '
+                f'got {len(arg_schema)} types for parameter {param.name}',
+            )
 
-    for i, (name, atype, sql) in enumerate(args_schema):
+        # Insert parameter names as needed
+        if not arg_schema[0].name:
+            arg_schema[0].name = param.name
+
+        args_schema.append(arg_schema[0])
+
+    for i, pspec in enumerate(args_schema):
         default_option = {}
 
         # Insert default values as needed
-        if args_defaults:
-            if args_defaults[i] is not NO_DEFAULT:
-                default_option['default'] = args_defaults[i]
-        else:
-            if params[i].default is not param.empty:
-                default_option['default'] = params[i].default
+        if args_colspec and args_colspec[i].default is not NO_DEFAULT:
+            default_option['default'] = args_colspec[i].default
+        elif params and params[i].default is not param.empty:
+            default_option['default'] = params[i].default
 
         # Generate SQL code for the parameter
-        sql = sql or dtype_to_sql(
-            atype, force_nullable=args_masks[i], **default_option,
+        sql = pspec.sql_type or dtype_to_sql(
+            pspec.dtype,
+            force_nullable=args_masks[i] or pspec.is_optional,
+            **default_option,
         )
 
         # Add parameter to args definitions
-        args.append(dict(name=name, dtype=atype, sql=sql, **default_option))
+        args.append(
+            dict(
+                name=pspec.name,
+                dtype=pspec.dtype,
+                sql=sql,
+                **default_option,
+                transformer=pspec.transformer,
+            ),
+        )
 
     # Check that all the data formats are all the same
     if len(set(args_data_formats)) > 1:
@@ -1205,10 +1386,12 @@ def get_signature(
 
     out['args_data_format'] = args_data_formats[0] if args_data_formats else 'scalar'
 
+    returns_colspec = get_colspec(attrs.get('returns', []), include_default=True)
+
     # Generate the return types and the corresponding SQL code for those values
     ret_schema, out['returns_data_format'], function_type = get_schema(
         unpack_masked_type(signature.return_annotation),
-        overrides=attrs.get('returns', None),
+        overrides=returns_colspec if returns_colspec else None,
         mode='return',
     )
 
@@ -1218,22 +1401,39 @@ def get_signature(
     # All functions have to return a value, so if none was specified try to
     # insert a reasonable default that includes NULLs.
     if not ret_schema:
-        ret_schema = [('', 'int8?', 'TINYINT NULL')]
+        ret_schema = [
+            ParamSpec(
+                dtype='int8?', sql_type='TINYINT NULL', default=None, is_optional=True,
+            ),
+        ]
 
     # Generate field names for the return values
     if function_type == 'tvf' or len(ret_schema) > 1:
-        for i, (name, rtype, sql) in enumerate(ret_schema):
-            if not name:
-                ret_schema[i] = (string.ascii_letters[i], rtype, sql)
+        for i, rspec in enumerate(ret_schema):
+            if not rspec.name:
+                ret_schema[i] = ParamSpec(
+                    name=string.ascii_letters[i],
+                    dtype=rspec.dtype,
+                    sql_type=rspec.sql_type,
+                    transformer=rspec.transformer,
+                )
 
     # Generate SQL code for the return values
-    for i, (name, rtype, sql) in enumerate(ret_schema):
-        sql = sql or dtype_to_sql(
-            rtype,
-            force_nullable=ret_masks[i] if ret_masks else False,
+    for i, rspec in enumerate(ret_schema):
+        sql = rspec.sql_type or dtype_to_sql(
+            rspec.dtype,
+            force_nullable=(ret_masks[i] or rspec.is_optional)
+            if ret_masks else rspec.is_optional,
             function_type=function_type,
         )
-        returns.append(dict(name=name, dtype=rtype, sql=sql))
+        returns.append(
+            dict(
+                name=rspec.name,
+                dtype=rspec.dtype,
+                sql=sql,
+                transformer=rspec.transformer,
+            ),
+        )
 
     # Set the function endpoint
     out['endpoint'] = '/invoke'
