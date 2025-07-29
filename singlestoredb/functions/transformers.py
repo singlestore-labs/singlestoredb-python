@@ -20,8 +20,8 @@ def json_to_dict(cls: Type[T], json_value: str) -> Dict[str, Any]:
 
     Parameters
     ----------
-    json_value : str or dict
-        The JSON string or dictionary representing the object.
+    json_value : str
+        The JSON string representing the object.
 
     Returns
     -------
@@ -40,8 +40,8 @@ def json_to_pydantic(cls: Type[T], json_value: str) -> T:
     ----------
     cls : Type[T]
         The Pydantic model type to instantiate.
-    json_value : str or dict
-        The JSON string or dictionary representing the object.
+    json_value : str
+        The JSON string representing the object.
 
     Returns
     -------
@@ -60,8 +60,8 @@ def json_to_namedtuple(cls: Type[T], json_value: str) -> T:
     ----------
     cls : Type[T]
         The namedtuple type to instantiate.
-    json_value : str or dict
-        The JSON string or dictionary representing the object.
+    json_value : str
+        The JSON string representing the object.
 
     Returns
     -------
@@ -92,8 +92,8 @@ def json_to_typeddict(cls: Type[T], json_value: str) -> Dict[str, Any]:
     ----------
     cls : Type[T]
         The TypedDict type to instantiate.
-    json_value : str or dict
-        The JSON string or dictionary representing the object.
+    json_value : str
+        The JSON string representing the object.
 
     Returns
     -------
@@ -159,8 +159,8 @@ def json_to_pandas_dataframe(cls: Type[T], json_value: str) -> T:
     ----------
     cls : Type[T]
         The DataFrame type to instantiate.
-    json_value : str or dict
-        The JSON string or dictionary representing the object.
+    json_value : str
+        The JSON string representing the object.
 
     Returns
     -------

@@ -1139,19 +1139,19 @@ def get_schema(
             for i, x in enumerate(typing.get_args(spec)):
                 params, out_data_format, _ = get_schema(
                     unpack_masked_type(x),
-                    overrides=overrides if overrides else None,
+                    overrides=[overrides[i]] if overrides else None,
                     # Always pass UDF mode for individual items
                     mode=mode,
                 )
 
                 # Use the name from the overrides if specified
                 if overrides:
-                    if overrides[i] and not params[i].name:
-                        params[i].name = overrides[i].name
+                    if overrides[i] and not params[0].name:
+                        params[0].name = overrides[i].name
                     elif not overrides[i].name:
-                        params[i].name = f'{string.ascii_letters[i]}'
+                        params[0].name = f'{string.ascii_letters[i]}'
 
-                colspec.append(params[i])
+                colspec.append(params[0])
                 out_data_formats.append(out_data_format)
 
             # Make sure that all the data formats are the same
