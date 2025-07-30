@@ -58,12 +58,14 @@ def is_valid_callable(obj: Any) -> bool:
     return False
 
 
-def expand_types(args: Any) -> List[Any]:
+def expand_types(args: Any) -> Any:
     """Expand the types for the function arguments / return values."""
     if args is None:
         return []
 
+    is_list = True
     if not isinstance(args, list):
+        is_list = False
         args = [args]
 
     new_args = []
@@ -74,6 +76,9 @@ def expand_types(args: Any) -> List[Any]:
             new_args.append(arg())
         else:
             new_args.append(arg)
+
+    if not is_list:
+        return new_args[0]
     return new_args
 
 
@@ -86,6 +91,15 @@ def _func(
     timeout: Optional[int] = None,
 ) -> UDFType:
     """Generic wrapper for UDF and TVF decorators."""
+
+    if isinstance(args, dict):
+        raise TypeError(
+            'The `args` parameter must be a list of data types, not a dict.',
+        )
+    if isinstance(returns, dict):
+        raise TypeError(
+            'The `returns` parameter must be a list of data types, not a dict.',
+        )
 
     _singlestoredb_attrs = {  # type: ignore
         k: v for k, v in dict(

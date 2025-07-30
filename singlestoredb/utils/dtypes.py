@@ -136,7 +136,7 @@ if has_pyarrow:
         15: pa.string(),  # Varchar
         -15: pa.binary(),  # Varbinary
         16: pa.binary(),  # Bit
-        245: pa.binary(),  # JSON
+        245: pa.string(),  # JSON
         246: pa.decimal128(18, 6),  # NewDecimal
         -246: pa.decimal128(18, 6),  # NewDecimal
         247: pa.string(),  # Enum
@@ -182,7 +182,7 @@ if has_polars:
         15: pl.Utf8,  # Varchar
         -15: pl.Utf8,  # Varbinary
         16: pl.Binary,  # Bit
-        245: pl.Struct,  # JSON
+        245: pl.Object,  # JSON
         246: pl.Decimal(10, 6),  # NewDecimal
         -246: pl.Decimal(10, 6),  # NewDecimal
         247: pl.Utf8,  # Enum

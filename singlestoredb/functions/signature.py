@@ -542,10 +542,7 @@ def collapse_dtypes(dtypes: Union[str, List[str]], include_null: bool = False) -
     return dtypes[0] + ('?' if is_nullable else '')
 
 
-def get_dataclass_schema(
-    obj: Any,
-    include_default: bool = False,
-) -> List[ParamSpec]:
+def get_dataclass_schema(obj: Any) -> List[ParamSpec]:
     """
     Get the schema of a dataclass.
 
@@ -560,22 +557,17 @@ def get_dataclass_schema(
         A list of parameter specifications for the dataclass fields
 
     """
-    if include_default:
-        return [
-            ParamSpec(
-                name=f.name,
-                dtype=f.type,
-                default=NO_DEFAULT if f.default is dataclasses.MISSING else f.default,
-            )
-            for f in dataclasses.fields(obj)
-        ]
-    return [ParamSpec(name=f.name, dtype=f.type) for f in dataclasses.fields(obj)]
+    return [
+        ParamSpec(
+            name=f.name,
+            dtype=f.type,
+            default=NO_DEFAULT if f.default is dataclasses.MISSING else f.default,
+        )
+        for f in dataclasses.fields(obj)
+    ]
 
 
-def get_typeddict_schema(
-    obj: Any,
-    include_default: bool = False,
-) -> List[ParamSpec]:
+def get_typeddict_schema(obj: Any) -> List[ParamSpec]:
     """
     Get the schema of a TypedDict.
 
@@ -583,8 +575,6 @@ def get_typeddict_schema(
     ----------
     obj : TypedDict
         The TypedDict to get the schema of
-    include_default : bool, optional
-        Whether to include the default value in the column specification
 
     Returns
     -------
@@ -592,22 +582,17 @@ def get_typeddict_schema(
         A list of parameter specifications for the TypedDict fields
 
     """
-    if include_default:
-        return [
-            ParamSpec(
-                name=k,
-                dtype=v,
-                default=getattr(obj, k, NO_DEFAULT),
-            )
-            for k, v in utils.get_annotations(obj).items()
-        ]
-    return [ParamSpec(name=k, dtype=v) for k, v in utils.get_annotations(obj).items()]
+    return [
+        ParamSpec(
+            name=k,
+            dtype=v,
+            default=getattr(obj, k, NO_DEFAULT),
+        )
+        for k, v in utils.get_annotations(obj).items()
+    ]
 
 
-def get_pydantic_schema(
-    obj: Any,
-    include_default: bool = False,
-) -> List[ParamSpec]:
+def get_pydantic_schema(obj: Any) -> List[ParamSpec]:
     """
     Get the schema of a pydantic model.
 
@@ -615,8 +600,6 @@ def get_pydantic_schema(
     ----------
     obj : pydantic.BaseModel
         The pydantic model to get the schema of
-    include_default : bool, optional
-        Whether to include the default value in the column specification
 
     Returns
     -------
@@ -625,23 +608,18 @@ def get_pydantic_schema(
 
     """
     import pydantic_core
-    if include_default:
-        return [
-            ParamSpec(
-                name=k,
-                dtype=v.annotation,
-                default=NO_DEFAULT
-                if v.default is pydantic_core.PydanticUndefined else v.default,
-            )
-            for k, v in obj.model_fields.items()
-        ]
-    return [ParamSpec(name=k, dtype=v.annotation) for k, v in obj.model_fields.items()]
+    return [
+        ParamSpec(
+            name=k,
+            dtype=v.annotation,
+            default=NO_DEFAULT
+            if v.default is pydantic_core.PydanticUndefined else v.default,
+        )
+        for k, v in obj.model_fields.items()
+    ]
 
 
-def get_namedtuple_schema(
-    obj: Any,
-    include_default: bool = False,
-) -> List[ParamSpec]:
+def get_namedtuple_schema(obj: Any) -> List[ParamSpec]:
     """
     Get the schema of a named tuple.
 
@@ -649,8 +627,6 @@ def get_namedtuple_schema(
     ----------
     obj : NamedTuple
         The named tuple to get the schema of
-    include_default : bool, optional
-        Whether to include the default value in the column specification
 
     Returns
     -------
@@ -658,24 +634,19 @@ def get_namedtuple_schema(
         A list of parameter specifications for the named tuple fields
 
     """
-    if include_default:
-        return [
-            (
-                ParamSpec(
-                    name=k,
-                    dtype=v,
-                    default=obj._field_defaults.get(k, NO_DEFAULT),
-                )
+    return [
+        (
+            ParamSpec(
+                name=k,
+                dtype=v,
+                default=obj._field_defaults.get(k, NO_DEFAULT),
             )
-            for k, v in utils.get_annotations(obj).items()
-        ]
-    return [ParamSpec(name=k, dtype=v) for k, v in utils.get_annotations(obj).items()]
+        )
+        for k, v in utils.get_annotations(obj).items()
+    ]
 
 
-def get_table_schema(
-    obj: Any,
-    include_default: bool = False,
-) -> List[ParamSpec]:
+def get_table_schema(obj: Any) -> List[ParamSpec]:
     """
     Get the schema of a Table.
 
@@ -683,8 +654,6 @@ def get_table_schema(
     ----------
     obj : Table
         The Table to get the schema of
-    include_default : bool, optional
-        Whether to include the default value in the column specification
 
     Returns
     -------
@@ -692,22 +661,17 @@ def get_table_schema(
         A list of parameter specifications for the Table fields
 
     """
-    if include_default:
-        return [
-            ParamSpec(
-                name=k,
-                dtype=v,
-                default=getattr(obj, k, NO_DEFAULT),
-            )
-            for k, v in utils.get_annotations(obj).items()
-        ]
-    return [ParamSpec(name=k, dtype=v) for k, v in utils.get_annotations(obj).items()]
+    return [
+        ParamSpec(
+            name=k,
+            dtype=v,
+            default=getattr(obj, k, NO_DEFAULT),
+        )
+        for k, v in utils.get_annotations(obj).items()
+    ]
 
 
-def get_colspec(
-    overrides: Any,
-    include_default: bool = False,
-) -> List[ParamSpec]:
+def get_colspec(overrides: Any) -> List[ParamSpec]:
     """
     Get the column specification from the overrides.
 
@@ -715,8 +679,6 @@ def get_colspec(
     ----------
     overrides : Any
         The overrides to get the column specification from
-    include_default : bool, optional
-        Whether to include the default value in the column specification
 
     Returns
     -------
@@ -730,27 +692,19 @@ def get_colspec(
 
         # Dataclass
         if utils.is_dataclass(overrides):
-            overrides_colspec = get_dataclass_schema(
-                overrides, include_default=include_default,
-            )
+            overrides_colspec = get_dataclass_schema(overrides)
 
         # TypedDict
         elif utils.is_typeddict(overrides):
-            overrides_colspec = get_typeddict_schema(
-                overrides, include_default=include_default,
-            )
+            overrides_colspec = get_typeddict_schema(overrides)
 
         # Named tuple
         elif utils.is_namedtuple(overrides):
-            overrides_colspec = get_namedtuple_schema(
-                overrides, include_default=include_default,
-            )
+            overrides_colspec = get_namedtuple_schema(overrides)
 
         # Pydantic model
         elif utils.is_pydantic(overrides):
-            overrides_colspec = get_pydantic_schema(
-                overrides, include_default=include_default,
-            )
+            overrides_colspec = get_pydantic_schema(overrides)
 
         # List of types
         elif isinstance(overrides, list):
@@ -847,7 +801,7 @@ def unwrap_optional(annotation: Any) -> Tuple[Any, bool]:
     return annotation, is_optional
 
 
-def is_object_type(spec: Any, mode: str, is_optional: bool) -> Optional[List[ParamSpec]]:
+def check_object(spec: Any, mode: str, is_optional: bool) -> Optional[List[ParamSpec]]:
     """
     Check if the type is an object type and return a list of ParamSpecs.
 
@@ -870,6 +824,30 @@ def is_object_type(spec: Any, mode: str, is_optional: bool) -> Optional[List[Par
             ),
         ]
     return None
+
+
+def is_object(spec: Any) -> bool:
+    """
+    Check if the object is a dataclass, TypedDict, Pydantic model, or NamedTuple.
+
+    Parameters
+    ----------
+    spec : Any
+        The object to check
+
+    Returns
+    -------
+    bool
+        True if the object is one of the supported types, False otherwise
+
+    """
+    return inspect.isclass(spec) and (
+        issubclass(spec, dict)
+        or utils.is_dataclass(spec)
+        or utils.is_typeddict(spec)
+        or utils.is_pydantic(spec)
+        or utils.is_namedtuple(spec)
+    )
 
 
 def get_schema(
@@ -953,14 +931,7 @@ def get_schema(
         elif utils.is_vector(spec) or spec in [str, float, int, bytes]:
             pass
 
-        elif inspect.isclass(spec) and (
-                issubclass(spec, dict)
-                or utils.is_dataframe(spec)
-                or utils.is_dataclass(spec)
-                or utils.is_typeddict(spec)
-                or utils.is_pydantic(spec)
-                or utils.is_namedtuple(spec)
-        ):
+        elif is_object(spec):
             # TODO: Use TEXT for now because external functions don't support JSON
             return [
                 ParamSpec(
@@ -984,13 +955,7 @@ def get_schema(
         pass
 
     # Object types get converted to JSON
-    elif inspect.isclass(spec) and (
-        issubclass(spec, dict)
-        or utils.is_dataclass(spec)
-        or utils.is_typeddict(spec)
-        or utils.is_pydantic(spec)
-        or utils.is_namedtuple(spec)
-    ):
+    elif is_object(spec):
         # TODO: Use TEXT for now because external functions don't support JSON
         return [
             ParamSpec(
@@ -1019,7 +984,7 @@ def get_schema(
                 'column types must be specified by the '
                 '`returns=` parameter of the @udf decorator for a DataFrame',
             )
-        colspec = get_colspec(overrides[0].dtype, include_default=True)
+        colspec = get_colspec(overrides[0].dtype)
 
     # Numpy array types
     elif utils.is_numpy(spec):
@@ -1028,7 +993,7 @@ def get_schema(
         if overrides:
 
             # Short circuit if the data type will be converted to JSON
-            obj = is_object_type(overrides[0].dtype, mode, is_optional)
+            obj = check_object(overrides[0].dtype, mode, is_optional)
             if obj is not None:
                 return obj, data_format, function_type
 
@@ -1052,7 +1017,7 @@ def get_schema(
             )
 
         # Short circuit if the data type will be converted to JSON
-        obj = is_object_type(overrides[0].dtype, mode, is_optional)
+        obj = check_object(overrides[0].dtype, mode, is_optional)
         if obj is not None:
             return obj, data_format, function_type
 
@@ -1068,7 +1033,7 @@ def get_schema(
             )
 
         # Short circuit if the data type will be converted to JSON
-        obj = is_object_type(overrides[0].dtype, mode, is_optional)
+        obj = check_object(overrides[0].dtype, mode, is_optional)
         if obj is not None:
             return obj, data_format, function_type
 
@@ -1084,7 +1049,7 @@ def get_schema(
             )
 
         # Short circuit if the data type will be converted to JSON
-        obj = is_object_type(overrides[0].dtype, mode, is_optional)
+        obj = check_object(overrides[0].dtype, mode, is_optional)
         if obj is not None:
             return obj, data_format, function_type
 
@@ -1318,7 +1283,7 @@ def get_signature(
     # Generate the parameter type and the corresponding SQL code for that parameter
     args_schema = []
     args_data_formats = []
-    args_colspec = get_colspec(attrs.get('args', []), include_default=True)
+    args_colspec = get_colspec(attrs.get('args', []))
     args_masks, ret_masks = get_masks(func)
 
     if args_colspec and len(args_colspec) != len(signature.parameters):
@@ -1386,7 +1351,7 @@ def get_signature(
 
     out['args_data_format'] = args_data_formats[0] if args_data_formats else 'scalar'
 
-    returns_colspec = get_colspec(attrs.get('returns', []), include_default=True)
+    returns_colspec = get_colspec(attrs.get('returns', []))
 
     # Generate the return types and the corresponding SQL code for those values
     ret_schema, out['returns_data_format'], function_type = get_schema(
