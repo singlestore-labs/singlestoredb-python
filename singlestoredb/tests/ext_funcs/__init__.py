@@ -3,12 +3,16 @@
 import asyncio
 import time
 import typing
+from dataclasses import dataclass
 from typing import List
 from typing import NamedTuple
 from typing import Optional
 from typing import Tuple
 
 import numpy as np
+import pandas as pd
+import polars as pl
+import pyarrow as pa
 
 import singlestoredb.functions.dtypes as dt
 from singlestoredb.functions import Masked
@@ -598,13 +602,8 @@ def vec_function(
     return x * y
 
 
-class VecInputs(typing.NamedTuple):
-    x: np.int8
-    y: np.int8
-
-
-class VecOutputs(typing.NamedTuple):
-    res: np.int16
+VecInputs = [np.int8, np.int8]
+VecOutputs = np.int16
 
 
 @udf(args=VecInputs, returns=VecOutputs)
@@ -633,11 +632,7 @@ async def async_vec_function_df(
     return pdt.DataFrame(dict(res=[1, 2, 3], res2=[1.1, 2.2, 3.3]))
 
 
-class MaskOutputs(typing.NamedTuple):
-    res: Optional[np.int16]
-
-
-@udf(args=VecInputs, returns=MaskOutputs)
+@udf(args=VecInputs, returns=np.int16)
 def vec_function_ints_masked(
     x: Masked[npt.IntArray], y: Masked[npt.IntArray],
 ) -> Table[Masked[npt.IntArray]]:
@@ -646,9 +641,7 @@ def vec_function_ints_masked(
     return Table(Masked(x_data * y_data, x_nulls | y_nulls))
 
 
-class MaskOutputs2(typing.NamedTuple):
-    res: Optional[np.int16]
-    res2: Optional[np.int16]
+MaskOutputs2 = [np.int16, np.int16]
 
 
 @udf(args=VecInputs, returns=MaskOutputs2)
@@ -661,3 +654,76 @@ def vec_function_ints_masked2(
         Masked(x_data * y_data, x_nulls | y_nulls),
         Masked(x_data * y_data, x_nulls | y_nulls),
     )
+
+
+@dataclass
+class InputStruct:
+    a: int
+    b: int
+    c: str
+
+
+@dataclass
+class OutputStruct:
+    a: str
+    b: str
+
+
+@udf
+def json_func(x: InputStruct, y: int = 2) -> OutputStruct:
+    return OutputStruct(
+        a=x.a * x.c * y,
+        b=x.b * x.c * y,
+    )
+
+
+@udf(args=InputStruct, returns=OutputStruct)
+def numpy_vec_json_func(x: np.ndarray) -> np.ndarray:
+    out = []
+    for item in x:
+        out.append(
+            OutputStruct(
+                a=item.a * item.c,
+                b=item.b * item.c,
+            ),
+        )
+    return np.array(out)
+
+
+@udf(args=InputStruct, returns=OutputStruct)
+def pandas_vec_json_func(x: pd.Series) -> pd.Series:
+    out = []
+    for item in x:
+        out.append(
+            OutputStruct(
+                a=item.a * item.c,
+                b=item.b * item.c,
+            ),
+        )
+    return pd.Series(out)
+
+
+@udf(args=InputStruct, returns=OutputStruct)
+def arrow_vec_json_func(x: pa.Array) -> pa.Array:
+    out = []
+    for item in x:
+        out.append(
+            OutputStruct(
+                a=item.a * item.c,
+                b=item.b * item.c,
+            ),
+        )
+    return pa.array(out)
+
+
+@udf(args=dict, returns=dict)
+def polars_vec_json_func(x: pl.Series) -> pl.Series:
+    out = []
+    for item in x:
+        out.append(
+            OutputStruct(
+                a=item['a'] * item['c'],
+                b=int(item['b']) * item['c'],
+            ),
+        )
+    return pl.Series(out)

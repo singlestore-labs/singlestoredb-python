@@ -31,24 +31,21 @@ STRING = 254
 BINARY = -254
 
 col_spec = [
-    ('tiny', TINYINT),
-    ('unsigned_tiny', UNSIGNED_TINYINT),
-    ('short', SMALLINT),
-    ('unsigned_short', UNSIGNED_SMALLINT),
-    ('long', INT),
-    ('unsigned_long', UNSIGNED_INT),
-    ('float', FLOAT),
-    ('double', DOUBLE),
-    ('longlong', BIGINT),
-    ('unsigned_longlong', UNSIGNED_BIGINT),
-    ('int24', MEDIUMINT),
-    ('unsigned_int24', UNSIGNED_MEDIUMINT),
-    ('string', STRING),
-    ('binary', BINARY),
+    ('tiny', TINYINT, None),
+    ('unsigned_tiny', UNSIGNED_TINYINT, None),
+    ('short', SMALLINT, None),
+    ('unsigned_short', UNSIGNED_SMALLINT, None),
+    ('long', INT, None),
+    ('unsigned_long', UNSIGNED_INT, None),
+    ('float', FLOAT, None),
+    ('double', DOUBLE, None),
+    ('longlong', BIGINT, None),
+    ('unsigned_longlong', UNSIGNED_BIGINT, None),
+    ('int24', MEDIUMINT, None),
+    ('unsigned_int24', UNSIGNED_MEDIUMINT, None),
+    ('string', STRING, None),
+    ('binary', BINARY, None),
 ]
-
-col_types = [x[1] for x in col_spec]
-col_names = [x[0] for x in col_spec]
 
 numpy_row_ids = np.array([1, 2, 3, 4])
 numpy_nulls = np.array([False, False, False, True])
@@ -268,7 +265,7 @@ class TestRowdat1(unittest.TestCase):
 
     def test_numpy_accel(self):
         dump_res = rowdat_1._dump_numpy_accel(
-            col_types, numpy_row_ids, numpy_data,
+            col_spec, numpy_row_ids, numpy_data,
         ).tobytes()
         load_res = rowdat_1._load_numpy_accel(col_spec, dump_res)
 
@@ -293,7 +290,7 @@ class TestRowdat1(unittest.TestCase):
 
     def test_numpy(self):
         dump_res = rowdat_1._dump_numpy(
-            col_types, numpy_row_ids, numpy_data,
+            col_spec, numpy_row_ids, numpy_data,
         ).tobytes()
         load_res = rowdat_1._load_numpy(col_spec, dump_res)
 
@@ -386,7 +383,7 @@ class TestRowdat1(unittest.TestCase):
             # Accelerated
             with self.assertRaises(res, msg=f'Expected {res} for {data} in {dtype}'):
                 rowdat_1._dump_numpy_accel(
-                    [dtype], numpy_row_ids, [(arr, None)],
+                    [('x', dtype, None)], numpy_row_ids, [(arr, None)],
                 ).tobytes()
 
             # Pure Python
@@ -395,23 +392,23 @@ class TestRowdat1(unittest.TestCase):
             else:
                 with self.assertRaises(res, msg=f'Expected {res} for {data} in {dtype}'):
                     rowdat_1._dump_numpy(
-                        [dtype], numpy_row_ids, [(arr, None)],
+                        [('x', dtype, None)], numpy_row_ids, [(arr, None)],
                     ).tobytes()
 
         else:
             # Accelerated
             dump_res = rowdat_1._dump_numpy_accel(
-                [dtype], numpy_row_ids, [(arr, None)],
+                [('x', dtype, None)], numpy_row_ids, [(arr, None)],
             ).tobytes()
-            load_res = rowdat_1._load_numpy_accel([('x', dtype)], dump_res)
+            load_res = rowdat_1._load_numpy_accel([('x', dtype, None)], dump_res)
             assert load_res[1][0][0] == res, \
                 f'Expected {res} for {data}, but got {load_res[1][0][0]} in {dtype}'
 
             # Pure Python
             dump_res = rowdat_1._dump_numpy(
-                [dtype], numpy_row_ids, [(arr, None)],
+                [('x', dtype, None)], numpy_row_ids, [(arr, None)],
             ).tobytes()
-            load_res = rowdat_1._load_numpy([('x', dtype)], dump_res)
+            load_res = rowdat_1._load_numpy([('x', dtype, None)], dump_res)
             assert load_res[1][0][0] == res, \
                 f'Expected {res} for {data}, but got {load_res[1][0][0]} in {dtype}'
 
@@ -787,9 +784,9 @@ class TestRowdat1(unittest.TestCase):
 
         # Accelerated
         dump_res = rowdat_1._dump_numpy_accel(
-            [dtype], numpy_row_ids, [(data, None)],
+            [('x', dtype, None)], numpy_row_ids, [(data, None)],
         ).tobytes()
-        load_res = rowdat_1._load_numpy_accel([('x', dtype)], dump_res)
+        load_res = rowdat_1._load_numpy_accel([('x', dtype, None)], dump_res)
 
         if name == 'double from float32':
             assert load_res[1][0][0].dtype is res.dtype
@@ -799,9 +796,9 @@ class TestRowdat1(unittest.TestCase):
 
         # Pure Python
         dump_res = rowdat_1._dump_numpy(
-            [dtype], numpy_row_ids, [(data, None)],
+            [('x', dtype, None)], numpy_row_ids, [(data, None)],
         ).tobytes()
-        load_res = rowdat_1._load_numpy([('x', dtype)], dump_res)
+        load_res = rowdat_1._load_numpy([('x', dtype, None)], dump_res)
 
         if name == 'double from float32':
             assert load_res[1][0][0].dtype is res.dtype
@@ -811,7 +808,7 @@ class TestRowdat1(unittest.TestCase):
 
     def test_python(self):
         dump_res = rowdat_1._dump(
-            col_types, py_row_ids, py_col_data,
+            col_spec, py_row_ids, py_col_data,
         ).tobytes()
         load_res = rowdat_1._load(col_spec, dump_res)
 
@@ -823,7 +820,7 @@ class TestRowdat1(unittest.TestCase):
 
     def test_python_accel(self):
         dump_res = rowdat_1._dump_accel(
-            col_types, py_row_ids, py_col_data,
+            col_spec, py_row_ids, py_col_data,
         ).tobytes()
         load_res = rowdat_1._load_accel(col_spec, dump_res)
 
@@ -835,7 +832,7 @@ class TestRowdat1(unittest.TestCase):
 
     def test_polars(self):
         dump_res = rowdat_1._dump_polars(
-            col_types, polars_row_ids, polars_data,
+            col_spec, polars_row_ids, polars_data,
         ).tobytes()
         load_res = rowdat_1._load_polars(col_spec, dump_res)
 
@@ -860,7 +857,7 @@ class TestRowdat1(unittest.TestCase):
 
     def test_polars_accel(self):
         dump_res = rowdat_1._dump_polars_accel(
-            col_types, polars_row_ids, polars_data,
+            col_spec, polars_row_ids, polars_data,
         ).tobytes()
         load_res = rowdat_1._load_polars_accel(col_spec, dump_res)
 
@@ -885,7 +882,7 @@ class TestRowdat1(unittest.TestCase):
 
     def test_pandas(self):
         dump_res = rowdat_1._dump_pandas(
-            col_types, pandas_row_ids, pandas_data,
+            col_spec, pandas_row_ids, pandas_data,
         ).tobytes()
         load_res = rowdat_1._load_pandas(col_spec, dump_res)
 
@@ -910,7 +907,7 @@ class TestRowdat1(unittest.TestCase):
 
     def test_pandas_accel(self):
         dump_res = rowdat_1._dump_pandas_accel(
-            col_types, pandas_row_ids, pandas_data,
+            col_spec, pandas_row_ids, pandas_data,
         ).tobytes()
         load_res = rowdat_1._load_pandas_accel(col_spec, dump_res)
 
@@ -935,7 +932,7 @@ class TestRowdat1(unittest.TestCase):
 
     def test_pyarrow(self):
         dump_res = rowdat_1._dump_arrow(
-            col_types, pyarrow_row_ids, pyarrow_data,
+            col_spec, pyarrow_row_ids, pyarrow_data,
         ).tobytes()
         load_res = rowdat_1._load_arrow(col_spec, dump_res)
 
@@ -960,7 +957,7 @@ class TestRowdat1(unittest.TestCase):
 
     def test_pyarrow_accel(self):
         dump_res = rowdat_1._dump_arrow_accel(
-            col_types, pyarrow_row_ids, pyarrow_data,
+            col_spec, pyarrow_row_ids, pyarrow_data,
         ).tobytes()
         load_res = rowdat_1._load_arrow_accel(col_spec, dump_res)
 
@@ -988,7 +985,7 @@ class TestJSON(unittest.TestCase):
 
     def test_numpy(self):
         dump_res = jsonx.dump_numpy(
-            col_types, numpy_row_ids, numpy_data,
+            col_spec, numpy_row_ids, numpy_data,
         )
         import pprint
         pprint.pprint(json.loads(dump_res))
@@ -1015,7 +1012,7 @@ class TestJSON(unittest.TestCase):
 
     def test_python(self):
         dump_res = jsonx.dump(
-            col_types, py_row_ids, py_col_data,
+            col_spec, py_row_ids, py_col_data,
         )
         load_res = jsonx.load(col_spec, dump_res)
 
@@ -1027,7 +1024,7 @@ class TestJSON(unittest.TestCase):
 
     def test_polars(self):
         dump_res = jsonx.dump_polars(
-            col_types, polars_row_ids, polars_data,
+            col_spec, polars_row_ids, polars_data,
         )
         load_res = jsonx.load_polars(col_spec, dump_res)
 
@@ -1052,7 +1049,7 @@ class TestJSON(unittest.TestCase):
 
     def test_pandas(self):
         dump_res = rowdat_1._dump_pandas(
-            col_types, pandas_row_ids, pandas_data,
+            col_spec, pandas_row_ids, pandas_data,
         ).tobytes()
         load_res = rowdat_1._load_pandas(col_spec, dump_res)
 
@@ -1077,7 +1074,7 @@ class TestJSON(unittest.TestCase):
 
     def test_pyarrow(self):
         dump_res = rowdat_1._dump_arrow(
-            col_types, pyarrow_row_ids, pyarrow_data,
+            col_spec, pyarrow_row_ids, pyarrow_data,
         ).tobytes()
         load_res = rowdat_1._load_arrow(col_spec, dump_res)
 

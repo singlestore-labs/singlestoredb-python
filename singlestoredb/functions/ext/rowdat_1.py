@@ -3,6 +3,7 @@ import struct
 import warnings
 from io import BytesIO
 from typing import Any
+from typing import Callable
 from typing import List
 from typing import Optional
 from typing import Sequence
@@ -88,8 +89,15 @@ string_types = set([15, 245, 247, 248, 249, 250, 251, 252, 253, 254])
 binary_types = set([-x for x in string_types])
 
 
+def apply_transformer(
+    transformer: Optional[Callable[..., Any]],
+    value: Any,
+) -> Any:
+    return transformer(value) if transformer is not None else value
+
+
 def _load(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     data: bytes,
 ) -> Tuple[List[int], List[Any]]:
     '''
@@ -115,7 +123,7 @@ def _load(
     while data_io.tell() < data_len:
         row_ids.append(struct.unpack('<q', data_io.read(8))[0])
         row = []
-        for _, ctype in colspec:
+        for _, ctype, transformer in colspec:
             is_null = data_io.read(1) == b'\x01'
             if ctype in numeric_formats:
                 val = struct.unpack(
@@ -130,13 +138,13 @@ def _load(
                 val = data_io.read(slen)
             else:
                 raise TypeError(f'unrecognized column type: {ctype}')
-            row.append(None if is_null else val)
+            row.append(None if is_null else apply_transformer(transformer, val))
         rows.append(row)
     return row_ids, rows
 
 
 def _load_vectors(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     data: bytes,
 ) -> Tuple[List[int], List[Tuple[Sequence[Any], Optional[Sequence[Any]]]]]:
     '''
@@ -162,7 +170,7 @@ def _load_vectors(
     val = None
     while data_io.tell() < data_len:
         row_ids.append(struct.unpack('<q', data_io.read(8))[0])
-        for i, (_, ctype) in enumerate(colspec):
+        for i, (_, ctype, transformer) in enumerate(colspec):
             default = DEFAULT_VALUES[ctype]
             is_null = data_io.read(1) == b'\x01'
             if ctype in numeric_formats:
@@ -178,13 +186,13 @@ def _load_vectors(
                 val = data_io.read(slen)
             else:
                 raise TypeError(f'unrecognized column type: {ctype}')
-            cols[i].append(default if is_null else val)
+            cols[i].append(default if is_null else apply_transformer(transformer, val))
             masks[i].append(True if is_null else False)
     return row_ids, [(x, y) for x, y in zip(cols, masks)]
 
 
 def _load_pandas(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     data: bytes,
 ) -> Tuple[
     'pd.Series[np.int64]',
@@ -215,12 +223,12 @@ def _load_pandas(
             pd.Series(data, index=index, name=name, dtype=PANDAS_TYPE_MAP[dtype]),
             pd.Series(mask, index=index, dtype=np.bool_),
         )
-        for (data, mask), (name, dtype) in zip(cols, colspec)
+        for (data, mask), (name, dtype, transformer) in zip(cols, colspec)
     ]
 
 
 def _load_polars(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     data: bytes,
 ) -> Tuple[
     'pl.Series[pl.Int64]',
@@ -247,15 +255,21 @@ def _load_polars(
     return pl.Series(None, row_ids, dtype=pl.Int64), \
         [
             (
-                pl.Series(name=name, values=data, dtype=POLARS_TYPE_MAP[dtype]),
+                pl.Series(
+                    name=name,
+                    values=data,
+                    # We have to use the TEXT type for JSON objects at the moment,
+                    # so don't explicitly cast the dtypes for a db type of 254.
+                    dtype=POLARS_TYPE_MAP[dtype] if dtype != 254 else None,
+                ),
                 pl.Series(values=mask, dtype=pl.Boolean),
             )
-            for (data, mask), (name, dtype) in zip(cols, colspec)
+            for (data, mask), (name, dtype, transformer) in zip(cols, colspec)
         ]
 
 
 def _load_numpy(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     data: bytes,
 ) -> Tuple[
     'np.typing.NDArray[np.int64]',
@@ -285,12 +299,12 @@ def _load_numpy(
                 np.asarray(data, dtype=NUMPY_TYPE_MAP[dtype]),  # type: ignore
                 np.asarray(mask, dtype=np.bool_),  # type: ignore
             )
-            for (data, mask), (name, dtype) in zip(cols, colspec)
+            for (data, mask), (name, dtype, transformer) in zip(cols, colspec)
         ]
 
 
 def _load_arrow(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     data: bytes,
 ) -> Tuple[
     'pa.Array[pa.int64]',
@@ -323,12 +337,12 @@ def _load_arrow(
                 ),
                 pa.array(mask, type=pa.bool_()),
             )
-            for (data, mask), (name, dtype) in zip(cols, colspec)
+            for (data, mask), (name, dtype, transformer) in zip(cols, colspec)
         ]
 
 
 def _dump(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     row_ids: List[int],
     rows: List[List[Any]],
 ) -> bytes:
@@ -337,7 +351,7 @@ def _dump(
 
     Parameters
     ----------
-    returns : List[int]
+    returns : List[Tuple[str, int, Callable[..., Any]]]
         The returned data type
     row_ids : List[int]
         The row IDs
@@ -356,8 +370,9 @@ def _dump(
 
     for row_id, *values in zip(row_ids, *list(zip(*rows))):
         out.write(struct.pack('<q', row_id))
-        for rtype, value in zip(returns, values):
+        for (name, rtype, transformer), value in zip(returns, values):
             out.write(b'\x01' if value is None else b'\x00')
+            value = apply_transformer(transformer, value)
             default = DEFAULT_VALUES[rtype]
             if rtype in numeric_formats:
                 if value is None:
@@ -397,7 +412,7 @@ def _dump(
 
 
 def _dump_vectors(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     row_ids: List[int],
     cols: List[Tuple[Sequence[Any], Optional[Sequence[Any]]]],
 ) -> bytes:
@@ -406,7 +421,7 @@ def _dump_vectors(
 
     Parameters
     ----------
-    returns : List[int]
+    returns : List[Tuple[str, int, Callable[..., Any]]]
         The returned data type
     row_ids : List[int]
         The row IDs
@@ -427,8 +442,8 @@ def _dump_vectors(
 
         out.write(struct.pack('<q', row_id))
 
-        for i, rtype in enumerate(returns):
-            value = cols[i][0][j]
+        for i, (name, rtype, transformer) in enumerate(returns):
+            value = apply_transformer(transformer, cols[i][0][j])
             if cols[i][1] is not None:
                 is_null = cols[i][1][j]  # type: ignore
             else:
@@ -478,7 +493,7 @@ def _dump_vectors(
 
 
 def _dump_arrow(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     row_ids: 'pa.Array[int]',
     cols: List[Tuple['pa.Array[Any]', 'pa.Array[bool]']],
 ) -> bytes:
@@ -490,7 +505,7 @@ def _dump_arrow(
 
 
 def _dump_numpy(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     row_ids: 'np.typing.NDArray[np.int64]',
     cols: List[Tuple['np.typing.NDArray[Any]', 'np.typing.NDArray[np.bool_]']],
 ) -> bytes:
@@ -502,7 +517,7 @@ def _dump_numpy(
 
 
 def _dump_pandas(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     row_ids: 'pd.Series[np.int64]',
     cols: List[Tuple['pd.Series[Any]', 'pd.Series[np.bool_]']],
 ) -> bytes:
@@ -514,7 +529,7 @@ def _dump_pandas(
 
 
 def _dump_polars(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     row_ids: 'pl.Series[pl.Int64]',
     cols: List[Tuple['pl.Series[Any]', 'pl.Series[pl.Boolean]']],
 ) -> bytes:
@@ -526,7 +541,7 @@ def _dump_polars(
 
 
 def _load_numpy_accel(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     data: bytes,
 ) -> Tuple[
     'np.typing.NDArray[np.int64]',
@@ -535,22 +550,43 @@ def _load_numpy_accel(
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
-    return _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
+    import numpy as np
+
+    row_ids, cols = _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
+    cols = list(cols)
+    for i, (d, mask) in enumerate(cols):
+        transformer = colspec[i][2]
+        if transformer is not None:
+            d = np.vectorize(lambda x: apply_transformer(transformer, x))(d)
+            cols[i] = (d, mask)
+
+    return row_ids, cols
 
 
 def _dump_numpy_accel(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     row_ids: 'np.typing.NDArray[np.int64]',
     cols: List[Tuple['np.typing.NDArray[Any]', 'np.typing.NDArray[np.bool_]']],
 ) -> bytes:
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
-    return _singlestoredb_accel.dump_rowdat_1_numpy(returns, row_ids, cols)
+    import numpy as np
+
+    cols = list(cols)
+    for i, (d, mask) in enumerate(cols):
+        transformer = returns[i][2]
+        if transformer is not None:
+            d = np.vectorize(lambda x: apply_transformer(transformer, x))(d)
+            cols[i] = (d, mask)
+
+    return _singlestoredb_accel.dump_rowdat_1_numpy(
+        [x[1] for x in returns], row_ids, cols,
+    )
 
 
 def _load_pandas_accel(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     data: bytes,
 ) -> Tuple[
     'pd.Series[np.int64]',
@@ -562,26 +598,25 @@ def _load_pandas_accel(
     import numpy as np
     import pandas as pd
 
-    numpy_ids, numpy_cols = _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
+    numpy_ids, numpy_cols = _load_numpy_accel(colspec, data)
     cols = [
         (
             pd.Series(data, name=name, dtype=PANDAS_TYPE_MAP[dtype]),
             pd.Series(mask, dtype=np.bool_),
         )
-        for (name, dtype), (data, mask) in zip(colspec, numpy_cols)
+        for (name, dtype, transformer), (data, mask) in zip(colspec, numpy_cols)
     ]
     return pd.Series(numpy_ids, dtype=np.int64), cols
 
 
 def _dump_pandas_accel(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     row_ids: 'pd.Series[np.int64]',
     cols: List[Tuple['pd.Series[Any]', 'pd.Series[np.bool_]']],
 ) -> bytes:
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
-    numpy_ids = row_ids.to_numpy()
     numpy_cols = [
         (
             data.to_numpy(),
@@ -589,11 +624,12 @@ def _dump_pandas_accel(
         )
         for data, mask in cols
     ]
-    return _singlestoredb_accel.dump_rowdat_1_numpy(returns, numpy_ids, numpy_cols)
+
+    return _dump_numpy_accel(returns, row_ids.to_numpy(), numpy_cols)
 
 
 def _load_polars_accel(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     data: bytes,
 ) -> Tuple[
     'pl.Series[pl.Int64]',
@@ -604,7 +640,7 @@ def _load_polars_accel(
 
     import polars as pl
 
-    numpy_ids, numpy_cols = _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
+    numpy_ids, numpy_cols = _load_numpy_accel(colspec, data)
     cols = [
         (
             pl.Series(
@@ -614,13 +650,13 @@ def _load_polars_accel(
             ),
             pl.Series(values=mask, dtype=pl.Boolean),
         )
-        for (name, dtype), (data, mask) in zip(colspec, numpy_cols)
+        for (name, dtype, transformer), (data, mask) in zip(colspec, numpy_cols)
     ]
     return pl.Series(values=numpy_ids, dtype=pl.Int64), cols
 
 
 def _dump_polars_accel(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     row_ids: 'pl.Series[pl.Int64]',
     cols: List[Tuple['pl.Series[Any]', 'pl.Series[pl.Boolean]']],
 ) -> bytes:
@@ -635,11 +671,12 @@ def _dump_polars_accel(
         )
         for data, mask in cols
     ]
-    return _singlestoredb_accel.dump_rowdat_1_numpy(returns, numpy_ids, numpy_cols)
+
+    return _dump_numpy_accel(returns, numpy_ids, numpy_cols)
 
 
 def _load_arrow_accel(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     data: bytes,
 ) -> Tuple[
     'pa.Array[pa.int64]',
@@ -650,13 +687,13 @@ def _load_arrow_accel(
 
     import pyarrow as pa
 
-    numpy_ids, numpy_cols = _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
+    numpy_ids, numpy_cols = _load_numpy_accel(colspec, data)
     cols = [
         (
             pa.array(data, type=PYARROW_TYPE_MAP[dtype], mask=mask),
             pa.array(mask, type=pa.bool_()),
         )
-        for (data, mask), (name, dtype) in zip(numpy_cols, colspec)
+        for (data, mask), (name, dtype, transformer) in zip(numpy_cols, colspec)
     ]
     return pa.array(numpy_ids, type=pa.int64()), cols
 
@@ -674,7 +711,7 @@ def _create_arrow_mask(
 
 
 def _dump_arrow_accel(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Callable[..., Any]]]],
     row_ids: 'pa.Array[pa.int64]',
     cols: List[Tuple['pa.Array[Any]', 'pa.Array[pa.bool_]']],
 ) -> bytes:
@@ -686,16 +723,34 @@ def _dump_arrow_accel(
             data.fill_null(DEFAULT_VALUES[dtype]).to_numpy(zero_copy_only=False),
             _create_arrow_mask(data, mask),
         )
-        for (data, mask), dtype in zip(cols, returns)
+        for (data, mask), (name, dtype, transformer) in zip(cols, returns)
     ]
-    return _singlestoredb_accel.dump_rowdat_1_numpy(
-        returns, row_ids.to_numpy(), numpy_cols,
-    )
+
+    return _dump_numpy_accel(returns, row_ids.to_numpy(), numpy_cols)
+
+
+def _load_accel(
+    colspec: List[Tuple[str, int, Optional[Callable[..., Any]]]],
+    data: bytes,
+) -> Tuple[List[int], List[Any]]:
+    if not has_accel:
+        raise RuntimeError('could not load SingleStoreDB extension')
+    return _singlestoredb_accel.load_rowdat_1(colspec, data)
+
+
+def _dump_accel(
+    returns: List[Tuple[str, int, Optional[Callable[..., Any]]]],
+    row_ids: List[int],
+    rows: List[List[Any]],
+) -> bytes:
+    if not has_accel:
+        raise RuntimeError('could not load SingleStoreDB extension')
+    return _singlestoredb_accel.dump_rowdat_1(returns, row_ids, rows)
 
 
 if not has_accel:
-    load = _load_accel = _load
-    dump = _dump_accel = _dump
+    load = _load_accel = _load  # noqa: F811
+    dump = _dump_accel = _dump  # noqa: F811
     load_list = _load_vectors  # noqa: F811
     dump_list = _dump_vectors  # noqa: F811
     load_pandas = _load_pandas_accel = _load_pandas  # noqa: F811
@@ -708,8 +763,6 @@ if not has_accel:
     dump_polars = _dump_polars_accel = _dump_polars  # noqa: F811
 
 else:
-    _load_accel = _singlestoredb_accel.load_rowdat_1
-    _dump_accel = _singlestoredb_accel.dump_rowdat_1
     load = _load_accel
     dump = _dump_accel
     load_list = _load_vectors

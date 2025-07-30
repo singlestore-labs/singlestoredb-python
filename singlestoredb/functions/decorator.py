@@ -23,7 +23,7 @@ ReturnType = ParameterType
 UDFType = Callable[..., Any]
 
 
-def is_valid_type(obj: Any) -> bool:
+def is_valid_object_type(obj: Any) -> bool:
     """Check if the object is a valid type for a schema definition."""
     if not inspect.isclass(obj):
         return False
@@ -52,48 +52,34 @@ def is_valid_callable(obj: Any) -> bool:
 
     returns = utils.get_annotations(obj).get('return', None)
 
-    if inspect.isclass(returns) and issubclass(returns, str):
+    if inspect.isclass(returns) and issubclass(returns, SQLString):
         return True
 
-    raise TypeError(
-        f'callable {obj} must return a str, '
-        f'but got {returns}',
-    )
+    return False
 
 
-def expand_types(args: Any) -> Optional[Union[List[str], Type[Any]]]:
+def expand_types(args: Any) -> Any:
     """Expand the types for the function arguments / return values."""
     if args is None:
-        return None
+        return []
 
-    # SQL string
-    if isinstance(args, str):
-        return [args]
+    is_list = True
+    if not isinstance(args, list):
+        is_list = False
+        args = [args]
 
-    # General way of accepting pydantic.BaseModel, NamedTuple, TypedDict
-    elif is_valid_type(args):
-        return args
+    new_args = []
+    for arg in args:
+        if isinstance(arg, str):
+            new_args.append(arg)
+        elif is_valid_callable(arg):
+            new_args.append(arg())
+        else:
+            new_args.append(arg)
 
-    # List of SQL strings or callables
-    elif isinstance(args, list):
-        new_args = []
-        for arg in args:
-            if isinstance(arg, str):
-                new_args.append(arg)
-            elif callable(arg):
-                new_args.append(arg())
-            else:
-                raise TypeError(f'unrecognized type for parameter: {arg}')
-        return new_args
-
-    # Callable that returns a SQL string
-    elif is_valid_callable(args):
-        out = args()
-        if not isinstance(out, str):
-            raise TypeError(f'unrecognized type for parameter: {args}')
-        return [out]
-
-    raise TypeError(f'unrecognized type for parameter: {args}')
+    if not is_list:
+        return new_args[0]
+    return new_args
 
 
 def _func(
@@ -105,6 +91,15 @@ def _func(
     timeout: Optional[int] = None,
 ) -> UDFType:
     """Generic wrapper for UDF and TVF decorators."""
+
+    if isinstance(args, dict):
+        raise TypeError(
+            'The `args` parameter must be a list of data types, not a dict.',
+        )
+    if isinstance(returns, dict):
+        raise TypeError(
+            'The `returns` parameter must be a list of data types, not a dict.',
+        )
 
     _singlestoredb_attrs = {  # type: ignore
         k: v for k, v in dict(
