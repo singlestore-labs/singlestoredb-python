@@ -25,6 +25,11 @@ def clean_name(s):
     return re.sub(r'[^\w]', r'-', s).replace('_', '-').lower()
 
 
+def shared_database_name(s):
+    """Return a shared database name. Cannot contain special characters except -"""
+    return re.sub(r'[^\w]', '', s).replace('-', '_').lower()
+
+
 @pytest.mark.management
 class TestCluster(unittest.TestCase):
 
@@ -370,39 +375,31 @@ class TestStarterWorkspace(unittest.TestCase):
 
     manager = None
     starter_workspace = None
-    starter_workspace_user = {
-        'username': 'starter_user',
-        'password': None,
-    }
-
-    @property
-    def starter_username(self):
-        """Return the username for the starter workspace user."""
-        return self.starter_workspace_user['username']
-
-    @property
-    def password(self):
-        """Return the password for the starter workspace user."""
-        return self.starter_workspace_user['password']
 
     @classmethod
     def setUpClass(cls):
         cls.manager = s2.manage_workspaces()
 
-        shared_tier_regions = [
+        shared_tier_regions: NamedList[Region] = [
             x for x in cls.manager.shared_tier_regions if 'US' in x.name
         ]
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
+        cls.starter_username = 'starter_user'
+        cls.password = secrets.token_urlsafe(20)
 
-        name = clean_name(secrets.token_urlsafe(20)[:20])
+        name = shared_database_name(secrets.token_urlsafe(20)[:20])
+
+        cls.database_name = f'starter_db_{name}'
+
+        shared_tier_region: Region = random.choice(shared_tier_regions)
+
+        if not shared_tier_region:
+            raise ValueError('No shared tier regions found')
 
         cls.starter_workspace = cls.manager.create_starter_workspace(
             f'starter-ws-test-{name}',
-            database_name=f'starter_db_{name}',
-            workspace_group={
-                'name': f'starter-wg-test-{name}',
-                'cell_id': random.choice(shared_tier_regions).id,
-            },
+            database_name=cls.database_name,
+            provider=shared_tier_region.provider,
+            region_name=shared_tier_region.region_name,
         )
 
         cls.starter_workspace.create_user(
@@ -470,14 +467,14 @@ class TestStarterWorkspace(unittest.TestCase):
         ) as conn:
             with conn.cursor() as cur:
                 cur.execute('show databases')
-                assert 'starter_db' in [x[0] for x in list(cur)]
+                assert self.database_name in [x[0] for x in list(cur)]
 
         # Test missing endpoint
         workspace = self.manager.get_starter_workspace(self.starter_workspace.id)
         workspace.endpoint = None
 
         with self.assertRaises(s2.ManagementError) as cm:
-            workspace.connect(user='admin', password=self.password)
+            workspace.connect(user=self.starter_username, password=self.password)
 
         assert 'endpoint' in cm.exception.msg, cm.exception.msg
 
