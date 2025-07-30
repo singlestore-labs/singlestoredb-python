@@ -1391,13 +1391,10 @@ class StarterWorkspace(object):
                 msg='An endpoint has not been set in this '
                     'starter workspace configuration',
             )
-        # Parse endpoint as host:port
-        if ':' in self.endpoint:
-            host, port = self.endpoint.split(':', 1)
-            kwargs['host'] = host
-            kwargs['port'] = int(port)
-        else:
-            kwargs['host'] = self.endpoint
+
+        kwargs['host'] = self.endpoint
+        kwargs['database'] = self.database_name
+
         return connection.connect(**kwargs)
 
     def terminate(self) -> None:
@@ -1455,7 +1452,7 @@ class StarterWorkspace(object):
 
     def create_user(
         self,
-        user_name: str,
+        username: str,
         password: Optional[str] = None,
     ) -> Dict[str, str]:
         """
@@ -1463,7 +1460,7 @@ class StarterWorkspace(object):
 
         Parameters
         ----------
-        user_name : str
+        username : str
             The starter workspace user name to connect the new user to the database
         password : str, optional
             Password for the new user. If not provided, a password will be
@@ -1485,7 +1482,7 @@ class StarterWorkspace(object):
             )
 
         payload = {
-            'userName': user_name,
+            'userName': username,
         }
         if password is not None:
             payload['password'] = password
@@ -1854,7 +1851,8 @@ class WorkspaceManager(Manager):
         self,
         name: str,
         database_name: str,
-        workspace_group: dict[str, str],
+        provider: str,
+        region_name: str,
     ) -> 'StarterWorkspace':
         """
         Create a new starter (shared tier) workspace.
@@ -1865,28 +1863,21 @@ class WorkspaceManager(Manager):
             Name of the starter workspace
         database_name : str
             Name of the database for the starter workspace
-        workspace_group : dict[str, str]
-            Workspace group input (dict with keys: 'cell_id' and 'name').
+        provider : str
+            Cloud provider for the starter workspace (e.g., 'aws', 'gcp', 'azure')
+        region_name : str
+            Cloud provider region for the starter workspace (e.g., 'us-east-1')
 
         Returns
         -------
         :class:`StarterWorkspace`
         """
-        if not workspace_group or not isinstance(workspace_group, dict):
-            raise ValueError(
-                'workspace_group must be a dict with keys: '
-                "'cell_id' and 'name'",
-            )
-        if set(workspace_group.keys()) != {'cell_id', 'name'}:
-            raise ValueError("workspace_group must contain only 'cell_id' and 'name'")
 
         payload = {
             'name': name,
             'databaseName': database_name,
-            'workspaceGroup': {
-                'name': workspace_group['name'],
-                'cellID': workspace_group['cell_id'],
-            },
+            'provider': provider,
+            'regionName': region_name,
         }
 
         res = self._post('sharedtier/virtualWorkspaces', json=payload)
