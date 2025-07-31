@@ -6,9 +6,8 @@ import inspect
 import itertools
 import re
 import typing as T
+from abc import abstractmethod
 from textwrap import dedent
-
-from sklearn.naive_bayes import abstractmethod
 
 from .common import Docstring
 from .common import DocstringDeprecated
