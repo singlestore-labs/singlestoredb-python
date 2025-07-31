@@ -319,7 +319,7 @@ Stage Files
 ...........
 
 To interact with files in your Stage, use the
-:attr:`WorkspaceManager.stage` attribute.
+:attr:`WorkspaceGroup.stage` attribute.
 It will return a :class:`Stage` object which defines the following
 methods and attributes.
 

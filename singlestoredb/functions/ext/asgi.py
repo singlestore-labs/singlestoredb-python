@@ -73,6 +73,8 @@ from ..signature import signature_to_sql
 from ..typing import Masked
 from ..typing import Table
 from .timer import Timer
+from singlestoredb.docstring.parser import parse
+from singlestoredb.functions.dtypes import escape_name
 
 try:
     import cloudpickle
@@ -538,6 +540,8 @@ def make_func(
         Name of the function to create
     func : Callable
         The function to call as the endpoint
+    database : str, optional
+        The database to use for the function definition
 
     Returns
     -------
@@ -615,7 +619,7 @@ async def cancel_on_disconnect(
     """Cancel request if client disconnects."""
     while True:
         message = await receive()
-        if message['type'] == 'http.disconnect':
+        if message.get('type', '') == 'http.disconnect':
             raise asyncio.CancelledError(
                 'Function call was cancelled by client',
             )
@@ -674,6 +678,8 @@ class Application(object):
     link_credentials : Dict[str, Any], optional
         The CREDENTIALS section of a LINK definition. This dictionary gets
         converted to JSON for the CREATE LINK call.
+    function_database : str, optional
+        The database to use for external function definitions.
 
     """
 
@@ -816,6 +822,7 @@ class Application(object):
     invoke_path = ('invoke',)
     show_create_function_path = ('show', 'create_function')
     show_function_info_path = ('show', 'function_info')
+    status = ('status',)
 
     def __init__(
         self,
@@ -838,6 +845,7 @@ class Application(object):
         link_credentials: Optional[Dict[str, Any]] = None,
         name_prefix: str = get_option('external_function.name_prefix'),
         name_suffix: str = get_option('external_function.name_suffix'),
+        function_database: Optional[str] = None,
     ) -> None:
         if link_name and (link_config or link_credentials):
             raise ValueError(
@@ -944,6 +952,7 @@ class Application(object):
         self.link_credentials = link_credentials
         self.endpoints = endpoints
         self.external_functions = external_functions
+        self.function_database = function_database
 
     async def __call__(
         self,
@@ -992,6 +1001,7 @@ class Application(object):
         accepts = headers.get(b'accepts', content_type)
         func_name = headers.get(b's2-ef-name', b'')
         func_endpoint = self.endpoints.get(func_name)
+        ignore_cancel = headers.get(b's2-ef-ignore-cancel', b'false') == b'true'
 
         timer.metadata['function'] = func_name.decode('utf-8') if func_name else ''
         call_timer.metadata['function'] = timer.metadata['function']
@@ -1021,7 +1031,7 @@ class Application(object):
             with timer('receive_data'):
                 while more_body:
                     request = await receive()
-                    if request['type'] == 'http.disconnect':
+                    if request.get('type', '') == 'http.disconnect':
                         raise RuntimeError('client disconnected')
                     data.append(request['body'])
                     more_body = request.get('more_body', False)
@@ -1051,7 +1061,8 @@ class Application(object):
                     ),
                 )
                 disconnect_task = asyncio.create_task(
-                    cancel_on_disconnect(receive),
+                    asyncio.sleep(int(1e9))
+                    if ignore_cancel else cancel_on_disconnect(receive),
                 )
                 timeout_task = asyncio.create_task(
                     cancel_on_timeout(func_info['timeout']),
@@ -1130,6 +1141,7 @@ class Application(object):
                             endpoint_info['signature'],
                             url=self.url or reflected_url,
                             data_format=self.data_format,
+                            database=self.function_database or None,
                         ),
                     )
             body = '\n'.join(syntax).encode('utf-8')
@@ -1140,6 +1152,11 @@ class Application(object):
         elif method == 'GET' and (path == self.show_function_info_path or not path):
             functions = self.get_function_info()
             body = json.dumps(dict(functions=functions)).encode('utf-8')
+            await send(self.text_response_dict)
+
+        # Return status
+        elif method == 'GET' and path == self.status:
+            body = json.dumps(dict(status='ok')).encode('utf-8')
             await send(self.text_response_dict)
 
         # Path not found
@@ -1184,20 +1201,27 @@ class Application(object):
     def _locate_app_functions(self, cur: Any) -> Tuple[Set[str], Set[str]]:
         """Locate all current functions and links belonging to this app."""
         funcs, links = set(), set()
-        cur.execute('SHOW FUNCTIONS')
+        if self.function_database:
+            database_prefix = escape_name(self.function_database) + '.'
+            cur.execute(f'SHOW FUNCTIONS IN {escape_name(self.function_database)}')
+        else:
+            database_prefix = ''
+            cur.execute('SHOW FUNCTIONS')
+
         for row in list(cur):
             name, ftype, link = row[0], row[1], row[-1]
             # Only look at external functions
             if 'external' not in ftype.lower():
                 continue
             # See if function URL matches url
-            cur.execute(f'SHOW CREATE FUNCTION `{name}`')
+            cur.execute(f'SHOW CREATE FUNCTION {database_prefix}{escape_name(name)}')
             for fname, _, code, *_ in list(cur):
                 m = re.search(r" (?:\w+) (?:SERVICE|MANAGED) '([^']+)'", code)
                 if m and m.group(1) == self.url:
-                    funcs.add(fname)
+                    funcs.add(f'{database_prefix}{escape_name(fname)}')
                     if link and re.match(r'^py_ext_func_link_\S{14}$', link):
                         links.add(link)
+
         return funcs, links
 
     def get_function_info(
@@ -1220,20 +1244,54 @@ class Application(object):
             sig = info['signature']
             sql_map[sig['name']] = sql
 
-        for key, (_, info) in self.endpoints.items():
+        for key, (func, info) in self.endpoints.items():
+            # Get info from docstring
+            doc_summary = ''
+            doc_long_description = ''
+            doc_params = {}
+            doc_returns = None
+            doc_examples = []
+            if func.__doc__:
+                try:
+                    docs = parse(func.__doc__)
+                    doc_params = {p.arg_name: p for p in docs.params}
+                    doc_returns = docs.returns
+                    if not docs.short_description and docs.long_description:
+                        doc_summary = docs.long_description or ''
+                    else:
+                        doc_summary = docs.short_description or ''
+                        doc_long_description = docs.long_description or ''
+                    for ex in docs.examples:
+                        out = []
+                        if ex.description:
+                            out.append(ex.description)
+                        if ex.snippet:
+                            out.append(ex.snippet)
+                        if ex.post_snippet:
+                            out.append(ex.post_snippet)
+                        doc_examples.append('\n'.join(out))
+
+                except Exception as e:
+                    logger.warning(
+                        f'Could not parse docstring for function {key}: {e}',
+                    )
+
             if not func_name or key == func_name:
                 sig = info['signature']
                 args = []
 
                 # Function arguments
-                for a in sig.get('args', []):
+                for i, a in enumerate(sig.get('args', [])):
+                    name = a['name']
                     dtype = a['dtype']
                     nullable = '?' in dtype
                     args.append(
                         dict(
-                            name=a['name'],
+                            name=name,
                             dtype=dtype.replace('?', ''),
                             nullable=nullable,
+                            description=(doc_params[name].description or '')
+                            if name in doc_params else '',
                         ),
                     )
                     if a.get('default', no_default) is not no_default:
@@ -1250,6 +1308,8 @@ class Application(object):
                         dict(
                             dtype=dtype.replace('?', ''),
                             nullable=nullable,
+                            description=doc_returns.description
+                            if doc_returns else '',
                         ),
                     )
                     if a.get('name', None):
@@ -1263,6 +1323,9 @@ class Application(object):
                     returns=returns,
                     function_type=info['function_type'],
                     sql_statement=sql,
+                    summary=doc_summary,
+                    long_description=doc_long_description,
+                    examples=doc_examples,
                 )
 
         return functions
@@ -1303,6 +1366,7 @@ class Application(object):
                     app_mode=self.app_mode,
                     replace=replace,
                     link=link or None,
+                    database=self.function_database or None,
                 ),
             )
 
@@ -1332,7 +1396,7 @@ class Application(object):
                 if replace:
                     funcs, links = self._locate_app_functions(cur)
                     for fname in funcs:
-                        cur.execute(f'DROP FUNCTION IF EXISTS `{fname}`')
+                        cur.execute(f'DROP FUNCTION IF EXISTS {fname}')
                     for link in links:
                         cur.execute(f'DROP LINK {link}')
                 for func in self.get_create_functions(replace=replace):
@@ -1358,7 +1422,7 @@ class Application(object):
             with conn.cursor() as cur:
                 funcs, links = self._locate_app_functions(cur)
                 for fname in funcs:
-                    cur.execute(f'DROP FUNCTION IF EXISTS `{fname}`')
+                    cur.execute(f'DROP FUNCTION IF EXISTS {fname}')
                 for link in links:
                     cur.execute(f'DROP LINK {link}')
 
@@ -1415,6 +1479,7 @@ class Application(object):
                 b'accepts': accepts[data_format.lower()],
                 b's2-ef-name': name.encode('utf-8'),
                 b's2-ef-version': data_version.encode('utf-8'),
+                b's2-ef-ignore-cancel': b'true',
             },
         )
 
@@ -1680,6 +1745,14 @@ def main(argv: Optional[List[str]] = None) -> None:
             help='Suffix to add to function names',
         )
         parser.add_argument(
+            '--function-database', metavar='function_database',
+            default=defaults.get(
+                'function_database',
+                get_option('external_function.function_database'),
+            ),
+            help='Database to use for the function definition',
+        )
+        parser.add_argument(
             'functions', metavar='module.or.func.path', nargs='*',
             help='functions or modules to export in UDF server',
         )
@@ -1778,6 +1851,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         app_mode='remote',
         name_prefix=args.name_prefix,
         name_suffix=args.name_suffix,
+        function_database=args.function_database or None,
     )
 
     funcs = app.get_create_functions(replace=args.replace_existing)

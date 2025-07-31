@@ -420,6 +420,12 @@ register_option(
 )
 
 register_option(
+    'external_function.function_database', 'string', check_str, '',
+    'Database to use for the function definitions.',
+    environ=['SINGLESTOREDB_EXT_FUNC_FUNCTION_DATABASE'],
+)
+
+register_option(
     'external_function.connection', 'string', check_str,
     os.environ.get('SINGLESTOREDB_URL') or None,
     'Specifies the connection string for the database to register functions with.',

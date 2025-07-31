@@ -36,6 +36,32 @@ def to_sql(x):
 
 class TestUDF(unittest.TestCase):
 
+    def test_invalid_signature(self):
+
+        def foo(x: np.ndarray, y: np.ndarray) -> str: ...
+        with self.assertRaises(TypeError):
+            to_sql(foo)
+
+        def foo(x: str, y: str) -> np.ndarray: ...
+        with self.assertRaises(TypeError):
+            to_sql(foo)
+
+        def foo(x: str, y: np.ndarray) -> np.ndarray: ...
+        with self.assertRaises(TypeError):
+            to_sql(foo)
+
+        def foo(x: np.ndarray, y: str) -> np.ndarray: ...
+        with self.assertRaises(TypeError):
+            to_sql(foo)
+
+        def foo(x: str, y: np.ndarray) -> str: ...
+        with self.assertRaises(TypeError):
+            to_sql(foo)
+
+        def foo(x: np.ndarray, y: str) -> str: ...
+        with self.assertRaises(TypeError):
+            to_sql(foo)
+
     def test_return_annotations(self):
 
         # No annotations
