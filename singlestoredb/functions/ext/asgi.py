@@ -1060,15 +1060,10 @@ class Application(object):
                         ),
                     ),
                 )
-                if ignore_cancel:
-                    print('Ignoring client disconnects')
-                    disconnect_task = asyncio.create_task(
-                        asyncio.sleep(int(1e9)),
-                    )
-                else:
-                    disconnect_task = asyncio.create_task(
-                        cancel_on_disconnect(receive),
-                    )
+                disconnect_task = asyncio.create_task(
+                    asyncio.sleep(int(1e9))
+                    if ignore_cancel else cancel_on_disconnect(receive),
+                )
                 timeout_task = asyncio.create_task(
                     cancel_on_timeout(func_info['timeout']),
                 )
@@ -1281,7 +1276,6 @@ class Application(object):
                         f'Could not parse docstring for function {key}: {e}',
                     )
 
-            print(doc_params)
             if not func_name or key == func_name:
                 sig = info['signature']
                 args = []
