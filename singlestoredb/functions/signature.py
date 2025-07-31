@@ -1203,7 +1203,8 @@ def get_signature(
             f'{", ".join(args_data_formats)}',
         )
 
-    out['args_data_format'] = args_data_formats[0] if args_data_formats else 'scalar'
+    adf = out['args_data_format'] = args_data_formats[0] \
+        if args_data_formats else 'scalar'
 
     # Generate the return types and the corresponding SQL code for those values
     ret_schema, out['returns_data_format'], function_type = get_schema(
@@ -1212,8 +1213,18 @@ def get_signature(
         mode='return',
     )
 
-    out['returns_data_format'] = out['returns_data_format'] or 'scalar'
+    rdf = out['returns_data_format'] = out['returns_data_format'] or 'scalar'
     out['function_type'] = function_type
+
+    # Reality check the input and output data formats
+    if function_type == 'udf':
+        if (adf == 'scalar' and rdf != 'scalar') or \
+           (adf != 'scalar' and rdf == 'scalar'):
+            raise TypeError(
+                'Function can not have scalar arguments and a vector return type, '
+                'or vice versa. Parameters and return values must all be either ',
+                'scalar or vector types.',
+            )
 
     # All functions have to return a value, so if none was specified try to
     # insert a reasonable default that includes NULLs.
@@ -1370,6 +1381,7 @@ def signature_to_sql(
     app_mode: str = 'remote',
     link: Optional[str] = None,
     replace: bool = False,
+    database: Optional[str] = None,
 ) -> str:
     '''
     Convert a dictionary function signature into SQL.
@@ -1424,9 +1436,11 @@ def signature_to_sql(
     elif url is None:
         raise ValueError('url can not be `None`')
 
-    database = ''
+    database_prefix = ''
     if signature.get('database'):
-        database = escape_name(signature['database']) + '.'
+        database_prefix = escape_name(signature['database']) + '.'
+    elif database is not None:
+        database_prefix = escape_name(database) + '.'
 
     or_replace = 'OR REPLACE ' if (bool(signature.get('replace')) or replace) else ''
 
@@ -1438,7 +1452,7 @@ def signature_to_sql(
 
     return (
         f'CREATE {or_replace}EXTERNAL FUNCTION ' +
-        f'{database}{escape_name(signature["name"])}' +
+        f'{database_prefix}{escape_name(signature["name"])}' +
         '(' + ', '.join(args) + ')' + returns +
         f' AS {app_mode.upper()} SERVICE "{url}" FORMAT {data_format.upper()}'
         f'{link_str};'
