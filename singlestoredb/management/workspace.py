@@ -2055,17 +2055,20 @@ class WorkspaceManager(Manager):
             f'sharedtier/virtualWorkspaces/{virtual_workspace_id}/users/{user_id}',
         )
 
+    def _get_auth_token(self) -> Optional[str]:
+        """Extract and decode the authorization token from session headers."""
+        auth_header = self._sess.headers.get('Authorization', '')
+        if isinstance(auth_header, bytes):
+            auth_header = auth_header.decode('utf-8')
+        return auth_header.replace('Bearer ', '') if auth_header else None
+
     # Add properties for new managers
     @property
     def teams(self) -> 'TeamsManager':
         """Return the teams manager."""
         from .teams import TeamsManager
-        auth_header = self._sess.headers.get('Authorization', '')
-        if isinstance(auth_header, bytes):
-            auth_header = auth_header.decode('utf-8')
-        token = auth_header.replace('Bearer ', '') if auth_header else None
         return TeamsManager(
-            access_token=token,
+            access_token=self._get_auth_token(),
             base_url=self._base_url.rstrip('/v1/'),
             version='v1',
             organization_id=self._params.get('organizationID'),
@@ -2075,12 +2078,8 @@ class WorkspaceManager(Manager):
     def private_connections(self) -> 'PrivateConnectionsManager':
         """Return the private connections manager."""
         from .private_connections import PrivateConnectionsManager
-        auth_header = self._sess.headers.get('Authorization', '')
-        if isinstance(auth_header, bytes):
-            auth_header = auth_header.decode('utf-8')
-        token = auth_header.replace('Bearer ', '') if auth_header else None
         return PrivateConnectionsManager(
-            access_token=token,
+            access_token=self._get_auth_token(),
             base_url=self._base_url.rstrip('/v1/'),
             version='v1',
             organization_id=self._params.get('organizationID'),
@@ -2090,12 +2089,8 @@ class WorkspaceManager(Manager):
     def audit_logs(self) -> 'AuditLogsManager':
         """Return the audit logs manager."""
         from .audit_logs import AuditLogsManager
-        auth_header = self._sess.headers.get('Authorization', '')
-        if isinstance(auth_header, bytes):
-            auth_header = auth_header.decode('utf-8')
-        token = auth_header.replace('Bearer ', '') if auth_header else None
         return AuditLogsManager(
-            access_token=token,
+            access_token=self._get_auth_token(),
             base_url=self._base_url.rstrip('/v1/'),
             version='v1',
             organization_id=self._params.get('organizationID'),
@@ -2105,12 +2100,8 @@ class WorkspaceManager(Manager):
     def users(self) -> 'UsersManager':
         """Return the users manager."""
         from .users import UsersManager
-        auth_header = self._sess.headers.get('Authorization', '')
-        if isinstance(auth_header, bytes):
-            auth_header = auth_header.decode('utf-8')
-        token = auth_header.replace('Bearer ', '') if auth_header else None
         return UsersManager(
-            access_token=token,
+            access_token=self._get_auth_token(),
             base_url=self._base_url.rstrip('/v1/'),
             version='v1',
             organization_id=self._params.get('organizationID'),
@@ -2120,12 +2111,8 @@ class WorkspaceManager(Manager):
     def metrics(self) -> 'MetricsManager':
         """Return the metrics manager."""
         from .metrics import MetricsManager
-        auth_header = self._sess.headers.get('Authorization', '')
-        if isinstance(auth_header, bytes):
-            auth_header = auth_header.decode('utf-8')
-        token = auth_header.replace('Bearer ', '') if auth_header else None
         return MetricsManager(
-            access_token=token,
+            access_token=self._get_auth_token(),
             base_url=self._base_url.rstrip('/v1/'),
             version='v2',  # Metrics use v2 API
             organization_id=self._params.get('organizationID'),
@@ -2135,12 +2122,8 @@ class WorkspaceManager(Manager):
     def storage_dr(self) -> 'StorageDRManager':
         """Return the storage DR manager."""
         from .storage_dr import StorageDRManager
-        auth_header = self._sess.headers.get('Authorization', '')
-        if isinstance(auth_header, bytes):
-            auth_header = auth_header.decode('utf-8')
-        token = auth_header.replace('Bearer ', '') if auth_header else None
         return StorageDRManager(
-            access_token=token,
+            access_token=self._get_auth_token(),
             base_url=self._base_url.rstrip('/v1/'),
             version='v1',
             organization_id=self._params.get('organizationID'),
