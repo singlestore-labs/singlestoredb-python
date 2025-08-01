@@ -1562,3 +1562,467 @@ class TestRegions(unittest.TestCase):
 
         # Test __repr__
         assert repr(region) == str(region)
+
+
+@pytest.mark.management
+class TestTeams(unittest.TestCase):
+    """Test cases for teams management."""
+
+    manager = None
+    team = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_teams()
+
+        # Create a test team
+        name = clean_name(f'test-team-{secrets.token_urlsafe(10)}')
+        cls.team = cls.manager.create_team(
+            name=name,
+            description='Test team for unit tests',
+            members=[],
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        if cls.team is not None:
+            try:
+                cls.team.delete()
+            except Exception:
+                pass
+        cls.manager = None
+        cls.team = None
+
+    def test_create_team(self):
+        """Test creating a team."""
+        assert self.team is not None
+        assert self.team.name.startswith('test-team-')
+        assert self.team.description == 'Test team for unit tests'
+        assert isinstance(self.team.members, list)
+
+    def test_get_team(self):
+        """Test getting a team by ID."""
+        team = self.manager.get_team(self.team.id)
+        assert team.id == self.team.id
+        assert team.name == self.team.name
+
+    def test_list_teams(self):
+        """Test listing teams."""
+        teams = self.manager.list_teams()
+        team_ids = [t.id for t in teams]
+        assert self.team.id in team_ids
+
+    def test_update_team(self):
+        """Test updating a team."""
+        new_description = 'Updated test team description'
+        self.team.update(description=new_description)
+
+        # Verify update
+        updated_team = self.manager.get_team(self.team.id)
+        assert updated_team.description == new_description
+
+    def test_str_repr(self):
+        """Test string representation of team."""
+        s = str(self.team)
+        assert self.team.name in s
+        assert repr(self.team) == str(self.team)
+
+    def test_no_manager_error(self):
+        """Test error when no manager is associated."""
+        team = self.manager.get_team(self.team.id)
+        team._manager = None
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            team.update()
+        assert 'No teams manager' in cm.exception.msg
+
+
+@pytest.mark.management
+class TestPrivateConnections(unittest.TestCase):
+    """Test cases for private connections management."""
+
+    manager = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_private_connections()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        cls.manager = None
+
+    def test_list_private_connections(self):
+        """Test listing private connections."""
+        connections = self.manager.list_private_connections()
+        # Should return a NamedList (may be empty)
+        assert hasattr(connections, '__iter__')
+
+    def test_manager_properties(self):
+        """Test that manager has expected properties."""
+        assert hasattr(self.manager, 'create_private_connection')
+        assert hasattr(self.manager, 'get_private_connection')
+        assert hasattr(self.manager, 'list_private_connections')
+        assert hasattr(self.manager, 'delete_private_connection')
+
+
+@pytest.mark.management
+class TestAuditLogs(unittest.TestCase):
+    """Test cases for audit logs management."""
+
+    manager = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_audit_logs()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        cls.manager = None
+
+    def test_list_audit_logs(self):
+        """Test listing audit logs."""
+        logs = self.manager.list_audit_logs(limit=10)
+        # Should return a list (may be empty)
+        assert isinstance(logs, list)
+
+    def test_manager_properties(self):
+        """Test that manager has expected properties."""
+        assert hasattr(self.manager, 'list_audit_logs')
+        assert hasattr(self.manager, 'get_audit_logs_for_user')
+        assert hasattr(self.manager, 'get_failed_actions')
+        assert hasattr(self.manager, 'get_actions_by_type')
+
+
+@pytest.mark.management
+class TestUsers(unittest.TestCase):
+    """Test cases for users management."""
+
+    manager = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_users()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        cls.manager = None
+
+    def test_get_user(self):
+        """Test getting a user object."""
+        # Create a basic user object (no actual API call since user ID is arbitrary)
+        user = self.manager.get_user('test-user-123')
+        assert user.id == 'test-user-123'
+        assert user._manager is not None
+
+    def test_manager_properties(self):
+        """Test that manager has expected properties."""
+        assert hasattr(self.manager, 'get_user')
+        assert hasattr(self.manager, 'get_user_identity_roles')
+
+
+@pytest.mark.management
+class TestMetrics(unittest.TestCase):
+    """Test cases for metrics management."""
+
+    manager = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_metrics()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        cls.manager = None
+
+    def test_manager_properties(self):
+        """Test that manager has expected properties."""
+        assert hasattr(self.manager, 'get_workspace_group_metrics')
+        assert hasattr(self.manager, 'get_cpu_metrics')
+        assert hasattr(self.manager, 'get_memory_metrics')
+        assert hasattr(self.manager, 'get_storage_metrics')
+
+    def test_manager_version(self):
+        """Test that metrics manager uses v2 API."""
+        # Metrics should use v2 API by default
+        assert self.manager.default_version == 'v2'
+
+
+@pytest.mark.management
+class TestStorageDR(unittest.TestCase):
+    """Test cases for storage DR management."""
+
+    manager = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_storage_dr()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        cls.manager = None
+
+    def test_manager_properties(self):
+        """Test that manager has expected properties."""
+        assert hasattr(self.manager, 'get_storage_dr_status')
+        assert hasattr(self.manager, 'get_available_dr_regions')
+        assert hasattr(self.manager, 'setup_storage_dr')
+        assert hasattr(self.manager, 'start_failover')
+        assert hasattr(self.manager, 'start_failback')
+
+
+@pytest.mark.management
+class TestWorkspaceManagerIntegration(unittest.TestCase):
+    """Test cases for workspace manager integration with new modules."""
+
+    manager = None
+    workspace_group = None
+    password = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_workspaces()
+
+        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
+        cls.password = secrets.token_urlsafe(20) + '-x&$'
+
+        name = clean_name(secrets.token_urlsafe(20)[:20])
+
+        cls.workspace_group = cls.manager.create_workspace_group(
+            f'wg-integration-test-{name}',
+            region=random.choice(us_regions).id,
+            admin_password=cls.password,
+            firewall_ranges=['0.0.0.0/0'],
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        if cls.workspace_group is not None:
+            cls.workspace_group.terminate(force=True)
+        cls.workspace_group = None
+        cls.manager = None
+        cls.password = None
+
+    def test_workspace_manager_has_new_properties(self):
+        """Test that workspace manager has new manager properties."""
+        assert hasattr(self.manager, 'teams')
+        assert hasattr(self.manager, 'private_connections')
+        assert hasattr(self.manager, 'audit_logs')
+        assert hasattr(self.manager, 'users')
+        assert hasattr(self.manager, 'metrics')
+        assert hasattr(self.manager, 'storage_dr')
+
+    def test_teams_property(self):
+        """Test accessing teams through workspace manager."""
+        teams_mgr = self.manager.teams
+        assert teams_mgr is not None
+        assert hasattr(teams_mgr, 'list_teams')
+
+        # Should be able to list teams
+        teams = teams_mgr.list_teams()
+        assert hasattr(teams, '__iter__')
+
+    def test_private_connections_property(self):
+        """Test accessing private connections through workspace manager."""
+        pc_mgr = self.manager.private_connections
+        assert pc_mgr is not None
+        assert hasattr(pc_mgr, 'list_private_connections')
+
+    def test_audit_logs_property(self):
+        """Test accessing audit logs through workspace manager."""
+        audit_mgr = self.manager.audit_logs
+        assert audit_mgr is not None
+        assert hasattr(audit_mgr, 'list_audit_logs')
+
+    def test_users_property(self):
+        """Test accessing users through workspace manager."""
+        users_mgr = self.manager.users
+        assert users_mgr is not None
+        assert hasattr(users_mgr, 'get_user_identity_roles')
+
+    def test_metrics_property(self):
+        """Test accessing metrics through workspace manager."""
+        metrics_mgr = self.manager.metrics
+        assert metrics_mgr is not None
+        assert hasattr(metrics_mgr, 'get_workspace_group_metrics')
+
+    def test_storage_dr_property(self):
+        """Test accessing storage DR through workspace manager."""
+        dr_mgr = self.manager.storage_dr
+        assert dr_mgr is not None
+        assert hasattr(dr_mgr, 'get_storage_dr_status')
+
+    def test_workspace_private_connections_methods(self):
+        """Test new workspace private connection methods."""
+        # These methods should exist and be callable
+        assert hasattr(self.manager, 'get_workspace_private_connections')
+        assert hasattr(self.manager, 'get_workspace_group_private_connections')
+        assert hasattr(self.manager, 'get_workspace_kai_info')
+        assert hasattr(self.manager, 'get_workspace_outbound_allowlist')
+
+    def test_starter_workspace_user_methods(self):
+        """Test new starter workspace user management methods."""
+        assert hasattr(self.manager, 'update_starter_workspace_user')
+        assert hasattr(self.manager, 'delete_starter_workspace_user')
+
+
+@pytest.mark.management
+class TestNewManagerFunctions(unittest.TestCase):
+    """Test cases for new management functions."""
+
+    def test_manage_teams_function(self):
+        """Test manage_teams function."""
+        teams_mgr = s2.manage_teams()
+        assert teams_mgr is not None
+        assert hasattr(teams_mgr, 'create_team')
+        assert hasattr(teams_mgr, 'list_teams')
+
+    def test_manage_private_connections_function(self):
+        """Test manage_private_connections function."""
+        pc_mgr = s2.manage_private_connections()
+        assert pc_mgr is not None
+        assert hasattr(pc_mgr, 'create_private_connection')
+        assert hasattr(pc_mgr, 'list_private_connections')
+
+    def test_manage_audit_logs_function(self):
+        """Test manage_audit_logs function."""
+        audit_mgr = s2.manage_audit_logs()
+        assert audit_mgr is not None
+        assert hasattr(audit_mgr, 'list_audit_logs')
+
+    def test_manage_users_function(self):
+        """Test manage_users function."""
+        users_mgr = s2.manage_users()
+        assert users_mgr is not None
+        assert hasattr(users_mgr, 'get_user_identity_roles')
+
+    def test_manage_metrics_function(self):
+        """Test manage_metrics function."""
+        metrics_mgr = s2.manage_metrics()
+        assert metrics_mgr is not None
+        assert hasattr(metrics_mgr, 'get_workspace_group_metrics')
+
+    def test_manage_storage_dr_function(self):
+        """Test manage_storage_dr function."""
+        dr_mgr = s2.manage_storage_dr()
+        assert dr_mgr is not None
+        assert hasattr(dr_mgr, 'get_storage_dr_status')
+
+
+@pytest.mark.management
+class TestDataClasses(unittest.TestCase):
+    """Test cases for data classes and object conversion."""
+
+    def test_team_from_dict(self):
+        """Test Team.from_dict conversion."""
+        from singlestoredb.management.teams import Team, TeamsManager
+
+        manager = TeamsManager()
+        data = {
+            'teamID': 'team-123',
+            'name': 'Test Team',
+            'description': 'Test Description',
+            'members': ['user1', 'user2'],
+            'createdAt': '2023-01-01T00:00:00Z',
+            'updatedAt': '2023-01-02T00:00:00Z',
+        }
+
+        team = Team.from_dict(data, manager)
+        assert team.id == 'team-123'
+        assert team.name == 'Test Team'
+        assert team.description == 'Test Description'
+        assert team.members == ['user1', 'user2']
+        assert team._manager is manager
+
+    def test_private_connection_from_dict(self):
+        """Test PrivateConnection.from_dict conversion."""
+        from singlestoredb.management.private_connections import (
+            PrivateConnection,
+            PrivateConnectionsManager,
+        )
+
+        manager = PrivateConnectionsManager()
+        data = {
+            'connectionID': 'conn-123',
+            'name': 'Test Connection',
+            'serviceType': 'aws-privatelink',
+            'createdAt': '2023-01-01T00:00:00Z',
+            'status': 'active',
+        }
+
+        conn = PrivateConnection.from_dict(data, manager)
+        assert conn.id == 'conn-123'
+        assert conn.name == 'Test Connection'
+        assert conn.service_type == 'aws-privatelink'
+        assert conn.status == 'active'
+        assert conn._manager is manager
+
+    def test_audit_log_from_dict(self):
+        """Test AuditLog.from_dict conversion."""
+        from singlestoredb.management.audit_logs import AuditLog
+
+        data = {
+            'logID': 'log-123',
+            'timestamp': '2023-01-01T00:00:00Z',
+            'userID': 'user-123',
+            'userEmail': 'test@example.com',
+            'action': 'CREATE_WORKSPACE',
+            'success': True,
+        }
+
+        log = AuditLog.from_dict(data)
+        assert log.id == 'log-123'
+        assert log.user_id == 'user-123'
+        assert log.user_email == 'test@example.com'
+        assert log.action == 'CREATE_WORKSPACE'
+        assert log.success is True
+
+    def test_metric_data_point_from_dict(self):
+        """Test MetricDataPoint.from_dict conversion."""
+        from singlestoredb.management.metrics import MetricDataPoint
+
+        data = {
+            'timestamp': '2023-01-01T00:00:00Z',
+            'value': 85.5,
+            'unit': 'percent',
+        }
+
+        dp = MetricDataPoint.from_dict(data)
+        assert dp.value == 85.5
+        assert dp.unit == 'percent'
+
+    def test_storage_dr_status_from_dict(self):
+        """Test StorageDRStatus.from_dict conversion."""
+        from singlestoredb.management.storage_dr import StorageDRStatus
+
+        data = {
+            'workspaceGroupID': 'wg-123',
+            'drEnabled': True,
+            'primaryRegion': 'us-east-1',
+            'backupRegion': 'us-west-2',
+            'status': 'active',
+            'replicatedDatabases': [
+                {'databaseName': 'test_db', 'replicationEnabled': True},
+            ],
+        }
+
+        status = StorageDRStatus.from_dict(data)
+        assert status.workspace_group_id == 'wg-123'
+        assert status.dr_enabled is True
+        assert status.primary_region == 'us-east-1'
+        assert status.backup_region == 'us-west-2'
+        assert len(status.replicated_databases) == 1
+        assert status.replicated_databases[0].database_name == 'test_db'

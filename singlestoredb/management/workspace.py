@@ -13,7 +13,16 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import TYPE_CHECKING
 from typing import Union
+
+if TYPE_CHECKING:
+    from .audit_logs import AuditLogsManager
+    from .metrics import MetricsManager
+    from .private_connections import PrivateConnectionsManager
+    from .storage_dr import StorageDRManager
+    from .teams import TeamsManager
+    from .users import UsersManager
 
 from .. import config
 from .. import connection
@@ -1887,6 +1896,255 @@ class WorkspaceManager(Manager):
 
         res = self._get(f'sharedtier/virtualWorkspaces/{virtual_workspace_id}')
         return StarterWorkspace.from_dict(res.json(), self)
+
+    def get_workspace_private_connections(
+        self, workspace_id: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get private connection information for a workspace.
+
+        Parameters
+        ----------
+        workspace_id : str
+            ID of the workspace
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            Private connection information for the workspace
+
+        Examples
+        --------
+        >>> mgr = singlestoredb.manage_workspaces()
+        >>> connections = mgr.get_workspace_private_connections("workspace-123")
+        """
+        res = self._get(f'workspaces/{workspace_id}/privateConnections')
+        return res.json()
+
+    def get_workspace_group_private_connections(
+        self, workspace_group_id: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get private connection information for a workspace group.
+
+        Parameters
+        ----------
+        workspace_group_id : str
+            ID of the workspace group
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            Private connection information for the workspace group
+
+        Examples
+        --------
+        >>> mgr = singlestoredb.manage_workspaces()
+        >>> connections = mgr.get_workspace_group_private_connections("wg-123")
+        """
+        res = self._get(f'workspaceGroups/{workspace_group_id}/privateConnections')
+        return res.json()
+
+    def get_workspace_kai_info(self, workspace_id: str) -> Dict[str, Any]:
+        """
+        Get information to create private connection to SingleStore Kai for a workspace.
+
+        Parameters
+        ----------
+        workspace_id : str
+            ID of the workspace
+
+        Returns
+        -------
+        Dict[str, Any]
+            Information needed to create Kai private connection
+
+        Examples
+        --------
+        >>> mgr = singlestoredb.manage_workspaces()
+        >>> kai_info = mgr.get_workspace_kai_info("workspace-123")
+        >>> print(kai_info["endpointServiceID"])
+        """
+        res = self._get(f'workspaces/{workspace_id}/privateConnections/kai')
+        return res.json()
+
+    def get_workspace_outbound_allowlist(self, workspace_id: str) -> Dict[str, Any]:
+        """
+        Get the outbound allow list for a workspace.
+
+        Parameters
+        ----------
+        workspace_id : str
+            ID of the workspace
+
+        Returns
+        -------
+        Dict[str, Any]
+            Outbound allow list for the workspace
+
+        Examples
+        --------
+        >>> mgr = singlestoredb.manage_workspaces()
+        >>> allowlist = mgr.get_workspace_outbound_allowlist("workspace-123")
+        >>> print(allowlist["allowedEndpoints"])
+        """
+        res = self._get(f'workspaces/{workspace_id}/privateConnections/outboundAllowList')
+        return res.json()
+
+    def update_starter_workspace_user(
+        self,
+        virtual_workspace_id: str,
+        user_id: str,
+        password: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """
+        Update a user in a starter workspace.
+
+        Parameters
+        ----------
+        virtual_workspace_id : str
+            ID of the starter workspace
+        user_id : str
+            ID of the user to update
+        password : str, optional
+            New password for the user
+
+        Returns
+        -------
+        Dict[str, str]
+            Updated user information
+
+        Examples
+        --------
+        >>> mgr = singlestoredb.manage_workspaces()
+        >>> result = mgr.update_starter_workspace_user(
+        ...     "vw-123", "user-456", password="newpassword"
+        ... )
+        """
+        data = {}
+        if password is not None:
+            data['password'] = password
+
+        res = self._patch(
+            f'sharedtier/virtualWorkspaces/{virtual_workspace_id}/users/{user_id}',
+            json=data,
+        )
+        return res.json()
+
+    def delete_starter_workspace_user(
+        self,
+        virtual_workspace_id: str,
+        user_id: str,
+    ) -> None:
+        """
+        Delete a user from a starter workspace.
+
+        Parameters
+        ----------
+        virtual_workspace_id : str
+            ID of the starter workspace
+        user_id : str
+            ID of the user to delete
+
+        Examples
+        --------
+        >>> mgr = singlestoredb.manage_workspaces()
+        >>> mgr.delete_starter_workspace_user("vw-123", "user-456")
+        """
+        self._delete(
+            f'sharedtier/virtualWorkspaces/{virtual_workspace_id}/users/{user_id}',
+        )
+
+    # Add properties for new managers
+    @property
+    def teams(self) -> 'TeamsManager':
+        """Return the teams manager."""
+        from .teams import TeamsManager
+        auth_header = self._sess.headers.get('Authorization', '')
+        if isinstance(auth_header, bytes):
+            auth_header = auth_header.decode('utf-8')
+        token = auth_header.replace('Bearer ', '') if auth_header else None
+        return TeamsManager(
+            access_token=token,
+            base_url=self._base_url.rstrip('/v1/'),
+            version='v1',
+            organization_id=self._params.get('organizationID'),
+        )
+
+    @property
+    def private_connections(self) -> 'PrivateConnectionsManager':
+        """Return the private connections manager."""
+        from .private_connections import PrivateConnectionsManager
+        auth_header = self._sess.headers.get('Authorization', '')
+        if isinstance(auth_header, bytes):
+            auth_header = auth_header.decode('utf-8')
+        token = auth_header.replace('Bearer ', '') if auth_header else None
+        return PrivateConnectionsManager(
+            access_token=token,
+            base_url=self._base_url.rstrip('/v1/'),
+            version='v1',
+            organization_id=self._params.get('organizationID'),
+        )
+
+    @property
+    def audit_logs(self) -> 'AuditLogsManager':
+        """Return the audit logs manager."""
+        from .audit_logs import AuditLogsManager
+        auth_header = self._sess.headers.get('Authorization', '')
+        if isinstance(auth_header, bytes):
+            auth_header = auth_header.decode('utf-8')
+        token = auth_header.replace('Bearer ', '') if auth_header else None
+        return AuditLogsManager(
+            access_token=token,
+            base_url=self._base_url.rstrip('/v1/'),
+            version='v1',
+            organization_id=self._params.get('organizationID'),
+        )
+
+    @property
+    def users(self) -> 'UsersManager':
+        """Return the users manager."""
+        from .users import UsersManager
+        auth_header = self._sess.headers.get('Authorization', '')
+        if isinstance(auth_header, bytes):
+            auth_header = auth_header.decode('utf-8')
+        token = auth_header.replace('Bearer ', '') if auth_header else None
+        return UsersManager(
+            access_token=token,
+            base_url=self._base_url.rstrip('/v1/'),
+            version='v1',
+            organization_id=self._params.get('organizationID'),
+        )
+
+    @property
+    def metrics(self) -> 'MetricsManager':
+        """Return the metrics manager."""
+        from .metrics import MetricsManager
+        auth_header = self._sess.headers.get('Authorization', '')
+        if isinstance(auth_header, bytes):
+            auth_header = auth_header.decode('utf-8')
+        token = auth_header.replace('Bearer ', '') if auth_header else None
+        return MetricsManager(
+            access_token=token,
+            base_url=self._base_url.rstrip('/v1/'),
+            version='v2',  # Metrics use v2 API
+            organization_id=self._params.get('organizationID'),
+        )
+
+    @property
+    def storage_dr(self) -> 'StorageDRManager':
+        """Return the storage DR manager."""
+        from .storage_dr import StorageDRManager
+        auth_header = self._sess.headers.get('Authorization', '')
+        if isinstance(auth_header, bytes):
+            auth_header = auth_header.decode('utf-8')
+        token = auth_header.replace('Bearer ', '') if auth_header else None
+        return StorageDRManager(
+            access_token=token,
+            base_url=self._base_url.rstrip('/v1/'),
+            version='v1',
+            organization_id=self._params.get('organizationID'),
+        )
 
 
 def manage_workspaces(
