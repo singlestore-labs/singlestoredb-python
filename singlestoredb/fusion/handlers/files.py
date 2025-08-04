@@ -89,7 +89,7 @@ class ShowPersonalFilesHandler(ShowFilesHandler):
       specified number.
     * Use the ``ORDER BY`` clause to sort the results by the specified
       key. By default, the results are sorted in the ascending order.
-    * The ``AT PATH`` clause specifies the path in the personal/shared
+    * The ``AT`` clause specifies the path in the personal/shared
       space to list the files from.
     * Use the ``RECURSIVE`` clause to list the files recursively.
     * To return more information about the files, use the ``EXTENDED``
@@ -99,7 +99,7 @@ class ShowPersonalFilesHandler(ShowFilesHandler):
     --------
     The following command lists the files at a specific path::
 
-        SHOW PERSONAL FILES AT PATH "/data/";
+        SHOW PERSONAL FILES AT "/data/";
 
     The following command lists the files recursively with
     additional information::
@@ -154,7 +154,7 @@ class ShowSharedFilesHandler(ShowFilesHandler):
       specified number.
     * Use the ``ORDER BY`` clause to sort the results by the specified
       key. By default, the results are sorted in the ascending order.
-    * The ``AT PATH`` clause specifies the path in the personal/shared
+    * The ``AT`` clause specifies the path in the personal/shared
       space to list the files from.
     * Use the ``RECURSIVE`` clause to list the files recursively.
     * To return more information about the files, use the ``EXTENDED``
@@ -164,7 +164,7 @@ class ShowSharedFilesHandler(ShowFilesHandler):
     --------
     The following command lists the files at a specific path::
 
-        SHOW SHARED FILES AT PATH "/data/";
+        SHOW SHARED FILES AT "/data/";
 
     The following command lists the files recursively with
     additional information::

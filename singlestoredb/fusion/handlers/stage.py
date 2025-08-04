@@ -62,7 +62,7 @@ class ShowStageFilesHandler(SQLHandler):
       specified number.
     * Use the ``ORDER BY`` clause to sort the results by the specified
       key. By default, the results are sorted in the ascending order.
-    * The ``AT PATH`` clause specifies the path in the Stage to list
+    * The ``AT`` clause specifies the path in the Stage to list
       the files from.
     * The ``IN`` clause specifies the ID or the name of the
       deployment in which the Stage is attached.
@@ -74,7 +74,7 @@ class ShowStageFilesHandler(SQLHandler):
     --------
     The following command lists the files at a specific path::
 
-        SHOW STAGE FILES IN 'wsg1' AT PATH "/data/";
+        SHOW STAGE FILES IN 'wsg1' AT "/data/";
 
     The following command lists the files recursively with
     additional information::
@@ -393,7 +393,7 @@ class DropStageFolderHandler(SQLHandler):
     # Name of deployment
     deployment_name = '<deployment-name>'
 
-    # Should folers be deleted recursively?
+    # Should folders be deleted recursively?
     recursive = RECURSIVE
 
     Description
@@ -474,7 +474,7 @@ class CreateStageFolderHandler(SQLHandler):
       is created. The path must end with a trailing slash (/).
     * ``<deployment-id>``: The ID of the deployment in which
       the Stage is attached.
-    * ``<deployment-name>``: The name of the deployment in which
+    * ``<deployment-name>``: The name of the deployment in
       which the Stage is attached.
 
     Remarks

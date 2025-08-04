@@ -44,7 +44,7 @@ class ShowModelsHandler(ShowFilesHandler):
       specified number.
     * Use the ``ORDER BY`` clause to sort the results by the specified
       key. By default, the results are sorted in the ascending order.
-    * The ``AT PATH`` clause specifies the path in the models
+    * The ``AT`` clause specifies the path in the models
       space to list the files from.
     * To return more information about the files, use the ``EXTENDED``
       clause.
