@@ -327,7 +327,7 @@ class MetricsManager(Manager):
 
         """
         url = (
-            f'v2/organizations/{organization_id}/'
+            f'organizations/{organization_id}/'
             f'workspaceGroups/{workspace_group_id}/metrics'
         )
         res = self._get(url)
