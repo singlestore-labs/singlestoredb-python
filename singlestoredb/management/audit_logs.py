@@ -25,6 +25,7 @@ class AuditLog(object):
     --------
     :meth:`AuditLogsManager.list_audit_logs`
     :attr:`AuditLogsManager.audit_logs`
+
     """
 
     def __init__(
@@ -107,6 +108,7 @@ class AuditLog(object):
         Returns
         -------
         :class:`AuditLog`
+
         """
         return cls(
             log_id=obj['logID'],
@@ -141,6 +143,7 @@ class AuditLogsManager(Manager):
         Version of the API to use
     base_url : str, optional
         Base URL of the management API
+
     """
 
     #: Object type
@@ -196,11 +199,12 @@ class AuditLogsManager(Manager):
         ... )
         >>> for log in logs:
         ...     print(f"{log.timestamp}: {log.action} by {log.user_email}")
-
+        >>>
         >>> # Filter by time range
         >>> import datetime
         >>> start = datetime.datetime.now() - datetime.timedelta(days=7)
         >>> recent_logs = audit_mgr.list_audit_logs(start_time=start)
+
         """
         params = {}
 
@@ -262,6 +266,7 @@ class AuditLogsManager(Manager):
         >>> audit_mgr = singlestoredb.manage_audit_logs()
         >>> user_logs = audit_mgr.get_audit_logs_for_user("user-123")
         >>> print(f"Found {len(user_logs)} log entries for user")
+
         """
         return self.list_audit_logs(
             user_id=user_id,
@@ -306,6 +311,7 @@ class AuditLogsManager(Manager):
         ...     "workspace", "ws-123"
         ... )
         >>> print(f"Found {len(workspace_logs)} log entries for workspace")
+
         """
         return self.list_audit_logs(
             resource_type=resource_type,
@@ -344,6 +350,7 @@ class AuditLogsManager(Manager):
         >>> failed_logs = audit_mgr.get_failed_actions(limit=50)
         >>> for log in failed_logs:
         ...     print(f"{log.timestamp}: {log.action} failed - {log.error_message}")
+
         """
         return self.list_audit_logs(
             success=False,
@@ -383,6 +390,7 @@ class AuditLogsManager(Manager):
         >>> audit_mgr = singlestoredb.manage_audit_logs()
         >>> create_logs = audit_mgr.get_actions_by_type("CREATE_WORKSPACE")
         >>> print(f"Found {len(create_logs)} workspace creation events")
+
         """
         return self.list_audit_logs(
             action=action,
@@ -423,6 +431,7 @@ def manage_audit_logs(
     >>> audit_mgr = s2.manage_audit_logs()
     >>> logs = audit_mgr.audit_logs
     >>> print(f"Found {len(logs)} recent audit log entries")
+
     """
     return AuditLogsManager(
         access_token=access_token,

@@ -17,12 +17,11 @@ from typing import TYPE_CHECKING
 from typing import Union
 
 if TYPE_CHECKING:
-    from .audit_logs import AuditLogsManager
-    from .metrics import MetricsManager
-    from .private_connections import PrivateConnectionsManager
-    from .storage_dr import StorageDRManager
-    from .teams import TeamsManager
-    from .users import UsersManager
+    from .metrics import WorkspaceGroupMetric
+    from .storage_dr import ReplicatedDatabase, StorageDRRegion, StorageDRStatus
+    from .private_connections import PrivateConnection
+    from .private_connections import PrivateConnectionKaiInfo
+    from .private_connections import PrivateConnectionOutboundAllowList
 
 from .. import config
 from .. import connection
@@ -993,6 +992,183 @@ class Workspace(object):
             )
             self.refresh()
 
+    @property
+    def private_connections(self) -> List['PrivateConnection']:
+        """Return a list of private connections for this workspace."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get(f'workspaces/{self.id}/privateConnections')
+        from .private_connections import PrivateConnection
+        return [
+            PrivateConnection.from_dict(item, None)  # type: ignore
+            for item in res.json()
+        ]
+
+    @property
+    def kai_info(self) -> 'PrivateConnectionKaiInfo':
+        """Get information to create private connection to SingleStore Kai."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get(f'workspaces/{self.id}/privateConnections/kai')
+        return PrivateConnectionKaiInfo.from_dict(res.json())
+
+    @property
+    def outbound_allowlist(self) -> 'PrivateConnectionOutboundAllowList':
+        """Get the outbound allow list for this workspace."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get(
+            f'workspaces/{self.id}/privateConnections/outboundAllowList',
+        )
+        return PrivateConnectionOutboundAllowList.from_dict(res.json())
+
+    def get_cpu_metrics(
+        self,
+        start_time: Optional[datetime.datetime] = None,
+        end_time: Optional[datetime.datetime] = None,
+    ) -> Optional['WorkspaceGroupMetric']:
+        """
+        Get CPU usage metrics for this workspace.
+
+        Parameters
+        ----------
+        start_time : datetime.datetime, optional
+            Start time for metrics data
+        end_time : datetime.datetime, optional
+            End time for metrics data
+
+        Returns
+        -------
+        WorkspaceGroupMetric or None
+            CPU usage metric, or None if not available
+
+        Examples
+        --------
+        >>> workspace = manager.get_workspace('workspace-id')
+        >>> cpu_metric = workspace.get_cpu_metrics()
+        >>> if cpu_metric:
+        ...     print(f"Current CPU usage: {cpu_metric.get_latest_value()}%")
+        """
+        # Get the workspace group to access metrics
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        workspace_group = self._manager.get_workspace_group(self.group_id)
+        metrics = workspace_group.get_metrics(
+            start_time=start_time,
+            end_time=end_time,
+            metric_names=['cpu_usage', 'cpu_utilization'],
+            workspace_id=self.id,
+        )
+
+        # Try common CPU metric names
+        for name in ['cpu_usage', 'cpu_utilization', 'cpu']:
+            if name in metrics:
+                return metrics[name]
+
+        return None
+
+    def get_memory_metrics(
+        self,
+        start_time: Optional[datetime.datetime] = None,
+        end_time: Optional[datetime.datetime] = None,
+    ) -> Optional['WorkspaceGroupMetric']:
+        """
+        Get memory usage metrics for this workspace.
+
+        Parameters
+        ----------
+        start_time : datetime.datetime, optional
+            Start time for metrics data
+        end_time : datetime.datetime, optional
+            End time for metrics data
+
+        Returns
+        -------
+        WorkspaceGroupMetric or None
+            Memory usage metric, or None if not available
+
+        Examples
+        --------
+        >>> workspace = manager.get_workspace('workspace-id')
+        >>> memory_metric = workspace.get_memory_metrics()
+        >>> if memory_metric:
+        ...     print(f"Current memory usage: {memory_metric.get_latest_value()} MB")
+        """
+        # Get the workspace group to access metrics
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        workspace_group = self._manager.get_workspace_group(self.group_id)
+        metrics = workspace_group.get_metrics(
+            start_time=start_time,
+            end_time=end_time,
+            metric_names=['memory_usage', 'memory_utilization'],
+            workspace_id=self.id,
+        )
+
+        # Try common memory metric names
+        for name in ['memory_usage', 'memory_utilization', 'memory']:
+            if name in metrics:
+                return metrics[name]
+
+        return None
+
+    def get_storage_metrics(
+        self,
+        start_time: Optional[datetime.datetime] = None,
+        end_time: Optional[datetime.datetime] = None,
+    ) -> Optional['WorkspaceGroupMetric']:
+        """
+        Get storage usage metrics for this workspace.
+
+        Parameters
+        ----------
+        start_time : datetime.datetime, optional
+            Start time for metrics data
+        end_time : datetime.datetime, optional
+            End time for metrics data
+
+        Returns
+        -------
+        WorkspaceGroupMetric or None
+            Storage usage metric, or None if not available
+
+        Examples
+        --------
+        >>> workspace = manager.get_workspace('workspace-id')
+        >>> storage_metric = workspace.get_storage_metrics()
+        >>> if storage_metric:
+        ...     print(f"Current storage usage: {storage_metric.get_latest_value()} GB")
+        """
+        # Get the workspace group to access metrics
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        workspace_group = self._manager.get_workspace_group(self.group_id)
+        metrics = workspace_group.get_metrics(
+            start_time=start_time,
+            end_time=end_time,
+            metric_names=['storage_usage', 'disk_usage'],
+            workspace_id=self.id,
+        )
+
+        # Try common storage metric names
+        for name in ['storage_usage', 'disk_usage', 'storage']:
+            if name in metrics:
+                return metrics[name]
+
+        return None
+
 
 class WorkspaceGroup(object):
     """
@@ -1295,6 +1471,414 @@ class WorkspaceGroup(object):
         res = self._manager._get('workspaces', params=dict(workspaceGroupID=self.id))
         return NamedList(
             [Workspace.from_dict(item, self._manager) for item in res.json()],
+        )
+
+    @property
+    def private_connections(self) -> List['PrivateConnection']:
+        """Return a list of private connections for this workspace group."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get(f'workspaceGroups/{self.id}/privateConnections')
+        from .private_connections import PrivateConnection
+        return [
+            PrivateConnection.from_dict(item, None)  # type: ignore
+            for item in res.json()
+        ]
+
+    def get_metrics(
+        self,
+        start_time: Optional[datetime.datetime] = None,
+        end_time: Optional[datetime.datetime] = None,
+        metric_names: Optional[List[str]] = None,
+        workspace_id: Optional[Union[str, 'Workspace']] = None,
+        aggregation_type: Optional[str] = None,
+        resolution: Optional[str] = None,
+    ) -> Dict[str, 'WorkspaceGroupMetric']:
+        """
+        Get metrics for this workspace group.
+
+        Parameters
+        ----------
+        start_time : datetime.datetime, optional
+            Start time for metrics data
+        end_time : datetime.datetime, optional
+            End time for metrics data
+        metric_names : List[str], optional
+            List of specific metric names to retrieve
+        workspace_id : str or Workspace, optional
+            ID of specific workspace to get metrics for, or a Workspace instance
+        aggregation_type : str, optional
+            Type of aggregation ('avg', 'sum', 'max', 'min')
+        resolution : str, optional
+            Time resolution for data points ('1m', '5m', '1h', '1d')
+
+        Returns
+        -------
+        Dict[str, WorkspaceGroupMetric]
+            Dictionary mapping metric names to metric objects
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        params = {}
+        if start_time:
+            params['startTime'] = start_time.isoformat()
+        if end_time:
+            params['endTime'] = end_time.isoformat()
+        if metric_names:
+            params['metricNames'] = ','.join(metric_names)
+        if workspace_id:
+            # Handle both string IDs and Workspace instances
+            if hasattr(workspace_id, 'id'):
+                params['workspaceID'] = workspace_id.id
+            else:
+                params['workspaceID'] = workspace_id
+        if aggregation_type:
+            params['aggregationType'] = aggregation_type
+        if resolution:
+            params['resolution'] = resolution
+
+        path = (
+            f'organizations/{self._manager.organization.id}/workspaceGroups/'
+            f'{self.id}/metrics'
+        )
+        res = self._manager._get(path, params=params if params else None)
+
+        metrics_data = res.json()
+        metrics_dict = {}
+
+        # Handle different possible response structures
+        if isinstance(metrics_data, list):
+            for metric_obj in metrics_data:
+                metric = WorkspaceGroupMetric.from_dict(metric_obj)
+                metrics_dict[metric.metric_name] = metric
+        elif isinstance(metrics_data, dict):
+            if 'metrics' in metrics_data:
+                for metric_obj in metrics_data['metrics']:
+                    metric = WorkspaceGroupMetric.from_dict(metric_obj)
+                    metrics_dict[metric.metric_name] = metric
+            else:
+                # Assume the dict itself contains metric data
+                for name, data in metrics_data.items():
+                    if isinstance(data, dict):
+                        data['metricName'] = name
+                        metric = WorkspaceGroupMetric.from_dict(data)
+                        metrics_dict[name] = metric
+
+        return metrics_dict
+
+    @property
+    def storage_dr_status(self) -> Optional['StorageDRStatus']:
+        """
+        Get Storage DR status for this workspace group.
+
+        Returns
+        -------
+        StorageDRStatus or None
+            Storage DR status information, or None if no manager is associated
+
+        Examples
+        --------
+        >>> wg = workspace_mgr.get_workspace_group("wg-123")
+        >>> status = wg.storage_dr_status
+        >>> if status:
+        ...     print(f"DR enabled: {status.dr_enabled}")
+        ...     print(f"Primary region: {status.primary_region}")
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        try:
+            path = f'workspaceGroups/{self.id}/storage/DR/status'
+            res = self._manager._get(path)
+            from .storage_dr import StorageDRStatus
+            return StorageDRStatus.from_dict(res.json())
+        except Exception:
+            return None
+
+    @property
+    def available_dr_regions(self) -> List['StorageDRRegion']:
+        """
+        Get available regions for Storage DR setup for this workspace group.
+
+        Returns
+        -------
+        List[StorageDRRegion]
+            List of available DR regions
+
+        Examples
+        --------
+        >>> wg = workspace_mgr.get_workspace_group("wg-123")
+        >>> regions = wg.available_dr_regions
+        >>> for region in regions:
+        ...     print(f"{region.region_name} ({region.provider})")
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        path = f'workspaceGroups/{self.id}/storage/DR/regions'
+        res = self._manager._get(path)
+        from .storage_dr import StorageDRRegion
+        return [StorageDRRegion.from_dict(item) for item in res.json()]
+
+    def setup_storage_dr(
+        self,
+        backup_region: str,
+        replicated_databases: List[Union[str, 'ReplicatedDatabase']],
+    ) -> Optional['StorageDRStatus']:
+        """
+        Set up Storage DR for this workspace group.
+
+        Parameters
+        ----------
+        backup_region : str
+            ID of the backup region
+        replicated_databases : List[str or ReplicatedDatabase]
+            List of database names or ReplicatedDatabase objects to replicate
+
+        Returns
+        -------
+        StorageDRStatus or None
+            Updated Storage DR status
+
+        Examples
+        --------
+        >>> wg = workspace_mgr.get_workspace_group("wg-123")
+        >>> status = wg.setup_storage_dr(
+        ...     backup_region="us-west-2",
+        ...     replicated_databases=["production_db", "analytics_db"]
+        ... )
+        >>> if status:
+        ...     print(f"DR setup status: {status.status}")
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        from .storage_dr import ReplicatedDatabase
+
+        # Convert string database names to ReplicatedDatabase objects
+        db_configs = []
+        for db in replicated_databases:
+            if isinstance(db, str):
+                db_configs.append(ReplicatedDatabase(db).to_dict())
+            else:
+                db_configs.append(db.to_dict())
+
+        data = {
+            'backupRegion': backup_region,
+            'replicatedDatabases': db_configs,
+        }
+
+        path = f'workspaceGroups/{self.id}/storage/DR/setup'
+        self._manager._post(path, json=data)
+
+        # Return updated status
+        return self.storage_dr_status
+
+    def start_failover(self) -> Optional['StorageDRStatus']:
+        """
+        Start failover to the secondary region for this workspace group.
+
+        Returns
+        -------
+        StorageDRStatus or None
+            Updated Storage DR status
+
+        Examples
+        --------
+        >>> wg = workspace_mgr.get_workspace_group("wg-123")
+        >>> status = wg.start_failover()
+        >>> if status:
+        ...     print(f"Failover status: {status.failover_status}")
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        path = f'workspaceGroups/{self.id}/storage/DR/failover'
+        self._manager._patch(path)
+        return self.storage_dr_status
+
+    def start_failback(self) -> Optional['StorageDRStatus']:
+        """
+        Start failback to the primary region for this workspace group.
+
+        Returns
+        -------
+        StorageDRStatus or None
+            Updated Storage DR status
+
+        Examples
+        --------
+        >>> wg = workspace_mgr.get_workspace_group("wg-123")
+        >>> status = wg.start_failback()
+        >>> if status:
+        ...     print(f"Failback status: {status.status}")
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        path = f'workspaceGroups/{self.id}/storage/DR/failback'
+        self._manager._patch(path)
+        return self.storage_dr_status
+
+    def start_pre_provision(self) -> Optional['StorageDRStatus']:
+        """
+        Start pre-provisioning from primary region for this workspace group.
+
+        Returns
+        -------
+        StorageDRStatus or None
+            Updated Storage DR status
+
+        Examples
+        --------
+        >>> wg = workspace_mgr.get_workspace_group("wg-123")
+        >>> status = wg.start_pre_provision()
+        >>> if status:
+        ...     print(f"Pre-provision status: {status.pre_provision_status}")
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        path = f'workspaceGroups/{self.id}/storage/DR/startPreProvision'
+        self._manager._patch(path)
+        return self.storage_dr_status
+
+    def stop_pre_provision(self) -> Optional['StorageDRStatus']:
+        """
+        Stop pre-provisioning from primary region for this workspace group.
+
+        Returns
+        -------
+        StorageDRStatus or None
+            Updated Storage DR status
+
+        Examples
+        --------
+        >>> wg = workspace_mgr.get_workspace_group("wg-123")
+        >>> status = wg.stop_pre_provision()
+        >>> if status:
+        ...     print(f"Pre-provision status: {status.pre_provision_status}")
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        path = f'workspaceGroups/{self.id}/storage/DR/stopPreProvision'
+        self._manager._patch(path)
+        return self.storage_dr_status
+
+    def update_retention_period(self, retention_days: int) -> None:
+        """
+        Update the retention period for continuous backups for this workspace group.
+
+        Parameters
+        ----------
+        retention_days : int
+            Number of days to retain backups
+
+        Examples
+        --------
+        >>> wg = workspace_mgr.get_workspace_group("wg-123")
+        >>> wg.update_retention_period(retention_days=30)
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        data = {
+            'retentionDays': retention_days,
+        }
+
+        path = f'workspaceGroups/{self.id}/storage/retentionPeriod'
+        self._manager._patch(path, json=data)
+
+    def wait_for_dr_operation(
+        self,
+        operation_type: str,
+        target_status: str,
+        interval: int = 30,
+        timeout: int = 3600,
+    ) -> Optional['StorageDRStatus']:
+        """
+        Wait for a DR operation to complete for this workspace group.
+
+        Parameters
+        ----------
+        operation_type : str
+            Type of operation ('failover', 'failback', 'pre_provision')
+        target_status : str
+            Target status to wait for
+        interval : int, optional
+            Polling interval in seconds
+        timeout : int, optional
+            Maximum time to wait in seconds
+
+        Returns
+        -------
+        StorageDRStatus or None
+            Final Storage DR status
+
+        Raises
+        ------
+        ManagementError
+            If timeout is reached
+
+        Examples
+        --------
+        >>> wg = workspace_mgr.get_workspace_group("wg-123")
+        >>> wg.start_failover()
+        >>> final_status = wg.wait_for_dr_operation("failover", "completed")
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        import time
+
+        elapsed = 0
+        while elapsed < timeout:
+            status = self.storage_dr_status
+            if status is None:
+                raise ManagementError(msg='Unable to get storage DR status')
+
+            if operation_type == 'failover' and status.failover_status == target_status:
+                return status
+            elif operation_type == 'failback' and status.status == target_status:
+                return status
+            elif (
+                operation_type == 'pre_provision' and
+                status.pre_provision_status == target_status
+            ):
+                return status
+
+            time.sleep(interval)
+            elapsed += interval
+
+        raise ManagementError(
+            msg=(
+                f'Timeout waiting for {operation_type} operation to '
+                f'reach {target_status}'
+            ),
         )
 
 
@@ -1880,6 +2464,7 @@ class WorkspaceManager(Manager):
         Returns
         -------
         :class:`StarterWorkspace`
+
         """
 
         payload = {
@@ -1896,238 +2481,6 @@ class WorkspaceManager(Manager):
 
         res = self._get(f'sharedtier/virtualWorkspaces/{virtual_workspace_id}')
         return StarterWorkspace.from_dict(res.json(), self)
-
-    def get_workspace_private_connections(
-        self, workspace_id: str,
-    ) -> List[Dict[str, Any]]:
-        """
-        Get private connection information for a workspace.
-
-        Parameters
-        ----------
-        workspace_id : str
-            ID of the workspace
-
-        Returns
-        -------
-        List[Dict[str, Any]]
-            Private connection information for the workspace
-
-        Examples
-        --------
-        >>> mgr = singlestoredb.manage_workspaces()
-        >>> connections = mgr.get_workspace_private_connections("workspace-123")
-        """
-        res = self._get(f'workspaces/{workspace_id}/privateConnections')
-        return res.json()
-
-    def get_workspace_group_private_connections(
-        self, workspace_group_id: str,
-    ) -> List[Dict[str, Any]]:
-        """
-        Get private connection information for a workspace group.
-
-        Parameters
-        ----------
-        workspace_group_id : str
-            ID of the workspace group
-
-        Returns
-        -------
-        List[Dict[str, Any]]
-            Private connection information for the workspace group
-
-        Examples
-        --------
-        >>> mgr = singlestoredb.manage_workspaces()
-        >>> connections = mgr.get_workspace_group_private_connections("wg-123")
-        """
-        res = self._get(f'workspaceGroups/{workspace_group_id}/privateConnections')
-        return res.json()
-
-    def get_workspace_kai_info(self, workspace_id: str) -> Dict[str, Any]:
-        """
-        Get information to create private connection to SingleStore Kai for a workspace.
-
-        Parameters
-        ----------
-        workspace_id : str
-            ID of the workspace
-
-        Returns
-        -------
-        Dict[str, Any]
-            Information needed to create Kai private connection
-
-        Examples
-        --------
-        >>> mgr = singlestoredb.manage_workspaces()
-        >>> kai_info = mgr.get_workspace_kai_info("workspace-123")
-        >>> print(kai_info["endpointServiceID"])
-        """
-        res = self._get(f'workspaces/{workspace_id}/privateConnections/kai')
-        return res.json()
-
-    def get_workspace_outbound_allowlist(self, workspace_id: str) -> Dict[str, Any]:
-        """
-        Get the outbound allow list for a workspace.
-
-        Parameters
-        ----------
-        workspace_id : str
-            ID of the workspace
-
-        Returns
-        -------
-        Dict[str, Any]
-            Outbound allow list for the workspace
-
-        Examples
-        --------
-        >>> mgr = singlestoredb.manage_workspaces()
-        >>> allowlist = mgr.get_workspace_outbound_allowlist("workspace-123")
-        >>> print(allowlist["allowedEndpoints"])
-        """
-        res = self._get(f'workspaces/{workspace_id}/privateConnections/outboundAllowList')
-        return res.json()
-
-    def update_starter_workspace_user(
-        self,
-        virtual_workspace_id: str,
-        user_id: str,
-        password: Optional[str] = None,
-    ) -> Dict[str, str]:
-        """
-        Update a user in a starter workspace.
-
-        Parameters
-        ----------
-        virtual_workspace_id : str
-            ID of the starter workspace
-        user_id : str
-            ID of the user to update
-        password : str, optional
-            New password for the user
-
-        Returns
-        -------
-        Dict[str, str]
-            Updated user information
-
-        Examples
-        --------
-        >>> mgr = singlestoredb.manage_workspaces()
-        >>> result = mgr.update_starter_workspace_user(
-        ...     "vw-123", "user-456", password="newpassword"
-        ... )
-        """
-        data = {}
-        if password is not None:
-            data['password'] = password
-
-        res = self._patch(
-            f'sharedtier/virtualWorkspaces/{virtual_workspace_id}/users/{user_id}',
-            json=data,
-        )
-        return res.json()
-
-    def delete_starter_workspace_user(
-        self,
-        virtual_workspace_id: str,
-        user_id: str,
-    ) -> None:
-        """
-        Delete a user from a starter workspace.
-
-        Parameters
-        ----------
-        virtual_workspace_id : str
-            ID of the starter workspace
-        user_id : str
-            ID of the user to delete
-
-        Examples
-        --------
-        >>> mgr = singlestoredb.manage_workspaces()
-        >>> mgr.delete_starter_workspace_user("vw-123", "user-456")
-        """
-        self._delete(
-            f'sharedtier/virtualWorkspaces/{virtual_workspace_id}/users/{user_id}',
-        )
-
-    def _get_auth_token(self) -> Optional[str]:
-        """Extract and decode the authorization token from session headers."""
-        auth_header = self._sess.headers.get('Authorization', '')
-        if isinstance(auth_header, bytes):
-            auth_header = auth_header.decode('utf-8')
-        return auth_header.replace('Bearer ', '') if auth_header else None
-
-    # Add properties for new managers
-    @property
-    def teams(self) -> 'TeamsManager':
-        """Return the teams manager."""
-        from .teams import TeamsManager
-        return TeamsManager(
-            access_token=self._get_auth_token(),
-            base_url=self._base_url.rstrip('/v1/'),
-            version='v1',
-            organization_id=self._params.get('organizationID'),
-        )
-
-    @property
-    def private_connections(self) -> 'PrivateConnectionsManager':
-        """Return the private connections manager."""
-        from .private_connections import PrivateConnectionsManager
-        return PrivateConnectionsManager(
-            access_token=self._get_auth_token(),
-            base_url=self._base_url.rstrip('/v1/'),
-            version='v1',
-            organization_id=self._params.get('organizationID'),
-        )
-
-    @property
-    def audit_logs(self) -> 'AuditLogsManager':
-        """Return the audit logs manager."""
-        from .audit_logs import AuditLogsManager
-        return AuditLogsManager(
-            access_token=self._get_auth_token(),
-            base_url=self._base_url.rstrip('/v1/'),
-            version='v1',
-            organization_id=self._params.get('organizationID'),
-        )
-
-    @property
-    def users(self) -> 'UsersManager':
-        """Return the users manager."""
-        from .users import UsersManager
-        return UsersManager(
-            access_token=self._get_auth_token(),
-            base_url=self._base_url.rstrip('/v1/'),
-            version='v1',
-            organization_id=self._params.get('organizationID'),
-        )
-
-    @property
-    def metrics(self) -> 'MetricsManager':
-        """Return the metrics manager."""
-        from .metrics import MetricsManager
-        return MetricsManager(
-            access_token=self._get_auth_token(),
-            base_url=self._base_url.rstrip('/v1/'),
-            version='v2',  # Metrics use v2 API
-            organization_id=self._params.get('organizationID'),
-        )
-
-    @property
-    def storage_dr(self) -> 'StorageDRManager':
-        """Return the storage DR manager."""
-        from .storage_dr import StorageDRManager
-        return StorageDRManager(
-            access_token=self._get_auth_token(),
-            base_url=self._base_url.rstrip('/v1/'),
-            version='v1',
-            organization_id=self._params.get('organizationID'),
-        )
 
 
 def manage_workspaces(

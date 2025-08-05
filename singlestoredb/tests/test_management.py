@@ -1655,9 +1655,9 @@ class TestPrivateConnections(unittest.TestCase):
         """Clean up the test environment."""
         cls.manager = None
 
-    def test_list_private_connections(self):
-        """Test listing private connections."""
-        connections = self.manager.list_private_connections()
+    def test_private_connections_property(self):
+        """Test accessing private connections property."""
+        connections = self.manager.private_connections
         # Should return a NamedList (may be empty)
         assert hasattr(connections, '__iter__')
 
@@ -1665,7 +1665,7 @@ class TestPrivateConnections(unittest.TestCase):
         """Test that manager has expected properties."""
         assert hasattr(self.manager, 'create_private_connection')
         assert hasattr(self.manager, 'get_private_connection')
-        assert hasattr(self.manager, 'list_private_connections')
+        assert hasattr(self.manager, 'private_connections')
         assert hasattr(self.manager, 'delete_private_connection')
 
 
@@ -1729,60 +1729,6 @@ class TestUsers(unittest.TestCase):
 
 
 @pytest.mark.management
-class TestMetrics(unittest.TestCase):
-    """Test cases for metrics management."""
-
-    manager = None
-
-    @classmethod
-    def setUpClass(cls):
-        """Set up the test environment."""
-        cls.manager = s2.manage_metrics()
-
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up the test environment."""
-        cls.manager = None
-
-    def test_manager_properties(self):
-        """Test that manager has expected properties."""
-        assert hasattr(self.manager, 'get_workspace_group_metrics')
-        assert hasattr(self.manager, 'get_cpu_metrics')
-        assert hasattr(self.manager, 'get_memory_metrics')
-        assert hasattr(self.manager, 'get_storage_metrics')
-
-    def test_manager_version(self):
-        """Test that metrics manager uses v2 API."""
-        # Metrics should use v2 API by default
-        assert self.manager.default_version == 'v2'
-
-
-@pytest.mark.management
-class TestStorageDR(unittest.TestCase):
-    """Test cases for storage DR management."""
-
-    manager = None
-
-    @classmethod
-    def setUpClass(cls):
-        """Set up the test environment."""
-        cls.manager = s2.manage_storage_dr()
-
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up the test environment."""
-        cls.manager = None
-
-    def test_manager_properties(self):
-        """Test that manager has expected properties."""
-        assert hasattr(self.manager, 'get_storage_dr_status')
-        assert hasattr(self.manager, 'get_available_dr_regions')
-        assert hasattr(self.manager, 'setup_storage_dr')
-        assert hasattr(self.manager, 'start_failover')
-        assert hasattr(self.manager, 'start_failback')
-
-
-@pytest.mark.management
 class TestWorkspaceManagerIntegration(unittest.TestCase):
     """Test cases for workspace manager integration with new modules."""
 
@@ -1822,8 +1768,6 @@ class TestWorkspaceManagerIntegration(unittest.TestCase):
         assert hasattr(self.manager, 'private_connections')
         assert hasattr(self.manager, 'audit_logs')
         assert hasattr(self.manager, 'users')
-        assert hasattr(self.manager, 'metrics')
-        assert hasattr(self.manager, 'storage_dr')
 
     def test_teams_property(self):
         """Test accessing teams through workspace manager."""
@@ -1839,7 +1783,7 @@ class TestWorkspaceManagerIntegration(unittest.TestCase):
         """Test accessing private connections through workspace manager."""
         pc_mgr = self.manager.private_connections
         assert pc_mgr is not None
-        assert hasattr(pc_mgr, 'list_private_connections')
+        assert hasattr(pc_mgr, 'private_connections')
 
     def test_audit_logs_property(self):
         """Test accessing audit logs through workspace manager."""
@@ -1858,12 +1802,6 @@ class TestWorkspaceManagerIntegration(unittest.TestCase):
         metrics_mgr = self.manager.metrics
         assert metrics_mgr is not None
         assert hasattr(metrics_mgr, 'get_workspace_group_metrics')
-
-    def test_storage_dr_property(self):
-        """Test accessing storage DR through workspace manager."""
-        dr_mgr = self.manager.storage_dr
-        assert dr_mgr is not None
-        assert hasattr(dr_mgr, 'get_storage_dr_status')
 
     def test_workspace_private_connections_methods(self):
         """Test new workspace private connection methods."""
@@ -1895,7 +1833,7 @@ class TestNewManagerFunctions(unittest.TestCase):
         pc_mgr = s2.manage_private_connections()
         assert pc_mgr is not None
         assert hasattr(pc_mgr, 'create_private_connection')
-        assert hasattr(pc_mgr, 'list_private_connections')
+        assert hasattr(pc_mgr, 'private_connections')
 
     def test_manage_audit_logs_function(self):
         """Test manage_audit_logs function."""
@@ -1908,18 +1846,6 @@ class TestNewManagerFunctions(unittest.TestCase):
         users_mgr = s2.manage_users()
         assert users_mgr is not None
         assert hasattr(users_mgr, 'get_user_identity_roles')
-
-    def test_manage_metrics_function(self):
-        """Test manage_metrics function."""
-        metrics_mgr = s2.manage_metrics()
-        assert metrics_mgr is not None
-        assert hasattr(metrics_mgr, 'get_workspace_group_metrics')
-
-    def test_manage_storage_dr_function(self):
-        """Test manage_storage_dr function."""
-        dr_mgr = s2.manage_storage_dr()
-        assert dr_mgr is not None
-        assert hasattr(dr_mgr, 'get_storage_dr_status')
 
 
 @pytest.mark.management
