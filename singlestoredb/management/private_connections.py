@@ -32,6 +32,7 @@ class PrivateConnection(object):
     :meth:`PrivateConnectionsManager.create_private_connection`
     :meth:`PrivateConnectionsManager.get_private_connection`
     :attr:`PrivateConnectionsManager.private_connections`
+
     """
 
     def __init__(
@@ -112,6 +113,7 @@ class PrivateConnection(object):
         Returns
         -------
         :class:`PrivateConnection`
+
         """
         out = cls(
             connection_id=obj['connectionID'],
@@ -148,6 +150,7 @@ class PrivateConnection(object):
             Azure Private Link configuration
         gcp_private_service_connect : Dict[str, Any], optional
             GCP Private Service Connect configuration
+
         """
         if self._manager is None:
             raise ManagementError(
@@ -195,6 +198,7 @@ class PrivateConnectionKaiInfo(object):
 
     This object contains information needed to create a private connection
     to SingleStore Kai for a workspace.
+
     """
 
     def __init__(
@@ -244,6 +248,7 @@ class PrivateConnectionKaiInfo(object):
 class PrivateConnectionOutboundAllowList(object):
     """
     Outbound allow list for a workspace.
+
     """
 
     def __init__(
@@ -274,6 +279,7 @@ class PrivateConnectionOutboundAllowList(object):
         Returns
         -------
         :class:`PrivateConnectionOutboundAllowList`
+
         """
         return cls(
             allowed_endpoints=obj.get('allowedEndpoints', []),
@@ -296,6 +302,7 @@ class PrivateConnectionsManager(Manager):
         Version of the API to use
     base_url : str, optional
         Base URL of the management API
+
     """
 
     #: Object type
@@ -340,6 +347,7 @@ class PrivateConnectionsManager(Manager):
         ...         "vpc_endpoint_id": "vpce-123456789abcdef01"
         ...     }
         ... )
+
         """
         data = {
             k: v for k, v in dict(
@@ -371,11 +379,13 @@ class PrivateConnectionsManager(Manager):
         --------
         >>> pc_mgr = singlestoredb.manage_private_connections()
         >>> connection = pc_mgr.get_private_connection("conn-123")
+
         """
         res = self._get(f'privateConnections/{connection_id}')
         return PrivateConnection.from_dict(res.json(), manager=self)
 
-    def list_private_connections(self) -> NamedList[PrivateConnection]:
+    @property
+    def private_connections(self) -> NamedList[PrivateConnection]:
         """
         List all private connections.
 
@@ -387,17 +397,13 @@ class PrivateConnectionsManager(Manager):
         Examples
         --------
         >>> pc_mgr = singlestoredb.manage_private_connections()
-        >>> connections = pc_mgr.list_private_connections()
+        >>> connections = pc_mgr.private_connections
         >>> for conn in connections:
         ...     print(f"{conn.name}: {conn.service_type}")
+
         """
         res = self._get('privateConnections')
         return NamedList([PrivateConnection.from_dict(item, self) for item in res.json()])
-
-    @property
-    def private_connections(self) -> NamedList[PrivateConnection]:
-        """Return a list of available private connections."""
-        return self.list_private_connections()
 
     def delete_private_connection(self, connection_id: str) -> None:
         """
@@ -451,6 +457,7 @@ class PrivateConnectionsManager(Manager):
         ...     "conn-123",
         ...     name="Updated Connection Name"
         ... )
+
         """
         data = {
             k: v for k, v in dict(
@@ -466,102 +473,6 @@ class PrivateConnectionsManager(Manager):
 
         self._patch(f'privateConnections/{connection_id}', json=data)
         return self.get_private_connection(connection_id)
-
-    def get_workspace_private_connections(
-            self, workspace_id: str,
-    ) -> List[Dict[str, Any]]:
-        """
-        Get private connection information for a workspace.
-
-        Parameters
-        ----------
-        workspace_id : str
-            ID of the workspace
-
-        Returns
-        -------
-        List[Dict[str, Any]]
-            Private connection information for the workspace
-
-        Examples
-        --------
-        >>> pc_mgr = singlestoredb.manage_private_connections()
-        >>> connections = pc_mgr.get_workspace_private_connections("workspace-123")
-        """
-        res = self._get(f'workspaces/{workspace_id}/privateConnections')
-        return res.json()
-
-    def get_workspace_group_private_connections(
-            self, workspace_group_id: str,
-    ) -> List[Dict[str, Any]]:
-        """
-        Get private connection information for a workspace group.
-
-        Parameters
-        ----------
-        workspace_group_id : str
-            ID of the workspace group
-
-        Returns
-        -------
-        List[Dict[str, Any]]
-            Private connection information for the workspace group
-
-        Examples
-        --------
-        >>> pc_mgr = singlestoredb.manage_private_connections()
-        >>> connections = pc_mgr.get_workspace_group_private_connections("wg-123")
-        """
-        res = self._get(f'workspaceGroups/{workspace_group_id}/privateConnections')
-        return res.json()
-
-    def get_workspace_kai_info(self, workspace_id: str) -> PrivateConnectionKaiInfo:
-        """
-        Get information to create private connection to SingleStore Kai for a workspace.
-
-        Parameters
-        ----------
-        workspace_id : str
-            ID of the workspace
-
-        Returns
-        -------
-        :class:`PrivateConnectionKaiInfo`
-            Information needed to create Kai private connection
-
-        Examples
-        --------
-        >>> pc_mgr = singlestoredb.manage_private_connections()
-        >>> kai_info = pc_mgr.get_workspace_kai_info("workspace-123")
-        >>> print(kai_info.endpoint_service_id)
-        """
-        res = self._get(f'workspaces/{workspace_id}/privateConnections/kai')
-        return PrivateConnectionKaiInfo.from_dict(res.json())
-
-    def get_workspace_outbound_allowlist(
-            self, workspace_id: str,
-    ) -> PrivateConnectionOutboundAllowList:
-        """
-        Get the outbound allow list for a workspace.
-
-        Parameters
-        ----------
-        workspace_id : str
-            ID of the workspace
-
-        Returns
-        -------
-        :class:`PrivateConnectionOutboundAllowList`
-            Outbound allow list for the workspace
-
-        Examples
-        --------
-        >>> pc_mgr = singlestoredb.manage_private_connections()
-        >>> allowlist = pc_mgr.get_workspace_outbound_allowlist("workspace-123")
-        >>> print(allowlist.allowed_endpoints)
-        """
-        res = self._get(f'workspaces/{workspace_id}/privateConnections/outboundAllowList')
-        return PrivateConnectionOutboundAllowList.from_dict(res.json())
 
 
 def manage_private_connections(
@@ -595,6 +506,7 @@ def manage_private_connections(
     >>> pc_mgr = s2.manage_private_connections()
     >>> connections = pc_mgr.private_connections
     >>> print(f"Found {len(connections)} private connections")
+
     """
     return PrivateConnectionsManager(
         access_token=access_token,

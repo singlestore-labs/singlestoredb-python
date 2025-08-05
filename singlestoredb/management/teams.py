@@ -20,6 +20,7 @@ class IdentityRole(object):
 
     This object is not instantiated directly. It is used in results
     of API calls on teams and users.
+
     """
 
     def __init__(
@@ -70,6 +71,7 @@ class IdentityRole(object):
         Returns
         -------
         :class:`IdentityRole`
+
         """
         return cls(
             role_id=obj['roleID'],
@@ -95,6 +97,7 @@ class Team(object):
     :meth:`TeamsManager.create_team`
     :meth:`TeamsManager.get_team`
     :attr:`TeamsManager.teams`
+
     """
 
     def __init__(
@@ -149,6 +152,7 @@ class Team(object):
         Returns
         -------
         :class:`Team`
+
         """
         out = cls(
             team_id=obj['teamID'],
@@ -178,6 +182,7 @@ class Team(object):
             New description for the team
         members : List[str], optional
             New list of member IDs for the team
+
         """
         if self._manager is None:
             raise ManagementError(
@@ -217,7 +222,8 @@ class Team(object):
             setattr(self, name, value)
         return self
 
-    def get_identity_roles(self) -> List[IdentityRole]:
+    @property
+    def identity_roles(self) -> List[IdentityRole]:
         """
         Get identity roles granted to this team.
 
@@ -225,6 +231,7 @@ class Team(object):
         -------
         List[IdentityRole]
             List of identity roles granted to the team
+
         """
         if self._manager is None:
             raise ManagementError(
@@ -249,6 +256,7 @@ class TeamsManager(Manager):
         Version of the API to use
     base_url : str, optional
         Base URL of the management API
+
     """
 
     #: Object type
@@ -286,6 +294,7 @@ class TeamsManager(Manager):
         ... )
         >>> print(team.name)
         Data Science Team
+
         """
         data = {
             k: v for k, v in dict(
@@ -317,6 +326,7 @@ class TeamsManager(Manager):
         >>> team = teams_mgr.get_team("team-123")
         >>> print(team.name)
         My Team
+
         """
         res = self._get(f'teams/{team_id}')
         return Team.from_dict(res.json(), manager=self)
@@ -350,6 +360,7 @@ class TeamsManager(Manager):
 
         >>> # Filter by name
         >>> data_teams = teams_mgr.list_teams(name_filter="data")
+
         """
         params = {
             k: v for k, v in dict(
@@ -379,6 +390,7 @@ class TeamsManager(Manager):
         --------
         >>> teams_mgr = singlestoredb.manage_teams()
         >>> teams_mgr.delete_team("team-123")
+
         """
         self._delete(f'teams/{team_id}')
 
@@ -416,6 +428,7 @@ class TeamsManager(Manager):
         ...     name="Updated Team Name",
         ...     description="Updated description"
         ... )
+
         """
         data = {
             k: v for k, v in dict(
@@ -451,6 +464,7 @@ class TeamsManager(Manager):
         >>> roles = teams_mgr.get_team_identity_roles("team-123")
         >>> for role in roles:
         ...     print(f"{role.role_name} on {role.resource_type}")
+
         """
         res = self._get(f'teams/{team_id}/identityRoles')
         return [IdentityRole.from_dict(item) for item in res.json()]
@@ -487,6 +501,7 @@ def manage_teams(
     >>> teams_mgr = s2.manage_teams()
     >>> teams = teams_mgr.teams
     >>> print(f"Found {len(teams)} teams")
+
     """
     return TeamsManager(
         access_token=access_token,

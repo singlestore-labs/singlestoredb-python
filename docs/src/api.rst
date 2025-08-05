@@ -239,6 +239,10 @@ object that can be used to interact with the Management API.
    :toctree: generated/
 
    manage_workspaces
+   manage_teams
+   manage_users
+   manage_audit_logs
+   manage_private_connections
 
 
 WorkspaceManager
@@ -428,6 +432,198 @@ FilesObject
    FilesObject.remove
    FilesObject.removedirs
    FilesObject.rmdir
+
+
+TeamsManager
+............
+
+TeamsManager objects are returned by the :func:`manage_teams` function.
+They allow you to create, retrieve, and manage teams in your organization.
+
+.. currentmodule:: singlestoredb.management.teams
+
+.. autosummary::
+   :toctree: generated/
+
+   TeamsManager
+   TeamsManager.create_team
+   TeamsManager.get_team
+   TeamsManager.list_teams
+   TeamsManager.teams
+   TeamsManager.delete_team
+   TeamsManager.update_team
+   TeamsManager.get_team_identity_roles
+
+
+Team
+....
+
+Team objects are retrieved from :meth:`TeamsManager.get_team` or by
+retrieving an element from :attr:`TeamsManager.teams`.
+
+.. autosummary::
+   :toctree: generated/
+
+   Team
+   Team.update
+   Team.delete
+   Team.refresh
+   Team.identity_roles
+
+
+UsersManager
+............
+
+UsersManager objects are returned by the :func:`manage_users` function.
+They allow you to retrieve and manage users in your organization.
+
+.. currentmodule:: singlestoredb.management.users
+
+.. autosummary::
+   :toctree: generated/
+
+   UsersManager
+   UsersManager.get_user
+   UsersManager.get_user_identity_roles
+
+
+User
+....
+
+User objects are retrieved from :meth:`UsersManager.get_user`.
+
+.. autosummary::
+   :toctree: generated/
+
+   User
+   User.identity_roles
+
+
+AuditLogsManager
+................
+
+AuditLogsManager objects are returned by the :func:`manage_audit_logs` function.
+They allow you to retrieve and analyze audit logs for your organization.
+
+.. currentmodule:: singlestoredb.management.audit_logs
+
+.. autosummary::
+   :toctree: generated/
+
+   AuditLogsManager
+   AuditLogsManager.list_audit_logs
+   AuditLogsManager.audit_logs
+   AuditLogsManager.get_audit_logs_for_user
+   AuditLogsManager.get_audit_logs_for_resource
+   AuditLogsManager.get_failed_actions
+   AuditLogsManager.get_actions_by_type
+
+
+AuditLog
+........
+
+AuditLog objects are returned by the various AuditLogsManager methods.
+
+.. autosummary::
+   :toctree: generated/
+
+   AuditLog
+
+
+PrivateConnectionsManager
+.........................
+
+PrivateConnectionsManager objects are returned by the :func:`manage_private_connections` function.
+They allow you to create and manage private connections in your organization.
+
+.. currentmodule:: singlestoredb.management.private_connections
+
+.. autosummary::
+   :toctree: generated/
+
+   PrivateConnectionsManager
+   PrivateConnectionsManager.create_private_connection
+   PrivateConnectionsManager.get_private_connection
+   PrivateConnectionsManager.private_connections
+   PrivateConnectionsManager.delete_private_connection
+   PrivateConnectionsManager.update_private_connection
+
+
+PrivateConnection
+.................
+
+PrivateConnection objects are retrieved from :meth:`PrivateConnectionsManager.get_private_connection`
+or by retrieving an element from :attr:`PrivateConnectionsManager.private_connections`.
+
+.. autosummary::
+   :toctree: generated/
+
+   PrivateConnection
+
+
+PrivateConnectionKaiInfo
+........................
+
+PrivateConnectionKaiInfo objects contain KAI-specific information for private connections.
+
+.. autosummary::
+   :toctree: generated/
+
+   PrivateConnectionKaiInfo
+
+
+PrivateConnectionOutboundAllowList
+..................................
+
+PrivateConnectionOutboundAllowList objects contain outbound allow list information for private connections.
+
+.. autosummary::
+   :toctree: generated/
+
+   PrivateConnectionOutboundAllowList
+
+
+IdentityRole
+............
+
+IdentityRole objects are used by both teams and users management for role information.
+
+.. currentmodule:: singlestoredb.management.teams
+
+.. autosummary::
+   :toctree: generated/
+
+   IdentityRole
+
+
+Storage DR
+----------
+
+Storage Disaster Recovery objects provide information about replicated databases
+and disaster recovery regions.
+
+.. currentmodule:: singlestoredb.management.storage_dr
+
+.. autosummary::
+   :toctree: generated/
+
+   ReplicatedDatabase
+   StorageDRStatus
+   StorageDRRegion
+
+
+Metrics
+-------
+
+Metrics objects provide workspace group metrics and data points.
+
+.. currentmodule:: singlestoredb.management.metrics
+
+.. autosummary::
+   :toctree: generated/
+
+   WorkspaceGroupMetric
+   MetricDataPoint
 
 
 Notebook Tools

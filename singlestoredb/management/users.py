@@ -19,6 +19,7 @@ class IdentityRole(object):
 
     This object is not instantiated directly. It is used in results
     of API calls on users and teams.
+
     """
 
     def __init__(
@@ -69,6 +70,7 @@ class IdentityRole(object):
         Returns
         -------
         :class:`IdentityRole`
+
         """
         return cls(
             role_id=obj['roleID'],
@@ -91,6 +93,7 @@ class User(object):
     See Also
     --------
     :meth:`UsersManager.get_user_identity_roles`
+
     """
 
     def __init__(
@@ -157,7 +160,8 @@ class User(object):
         out._manager = manager
         return out
 
-    def get_identity_roles(self) -> List[IdentityRole]:
+    @property
+    def identity_roles(self) -> List[IdentityRole]:
         """
         Get identity roles granted to this user.
 
@@ -169,7 +173,7 @@ class User(object):
         Examples
         --------
         >>> user = users_mgr.get_user("user-123")
-        >>> roles = user.get_identity_roles()
+        >>> roles = user.identity_roles
         >>> for role in roles:
         ...     print(f"{role.role_name} on {role.resource_type}")
         """
@@ -221,6 +225,7 @@ class UsersManager(Manager):
         >>> for role in roles:
         ...     print(f"{role.role_name} on {role.resource_type} ({role.resource_id})")
         ...     print(f"  Granted by {role.granted_by} at {role.granted_at}")
+
         """
         res = self._get(f'users/{user_id}/identityRoles')
         return [IdentityRole.from_dict(item) for item in res.json()]
@@ -246,7 +251,8 @@ class UsersManager(Manager):
         --------
         >>> users_mgr = singlestoredb.manage_users()
         >>> user = users_mgr.get_user("user-123")
-        >>> roles = user.get_identity_roles()
+        >>> roles = user.identity_roles()
+
         """
         # Note: The API doesn't seem to have a direct GET /users/{userID} endpoint
         # based on the documentation provided. We create a basic User object
@@ -254,47 +260,6 @@ class UsersManager(Manager):
         user = User(user_id=user_id)
         user._manager = self
         return user
-
-    def list_user_roles_by_resource(
-        self,
-        resource_type: str,
-        resource_id: str,
-    ) -> Dict[str, List[IdentityRole]]:
-        """
-        Get all user roles for a specific resource.
-
-        This is a convenience method that could be used to understand
-        which users have access to a particular resource.
-
-        Parameters
-        ----------
-        resource_type : str
-            Type of the resource
-        resource_id : str
-            ID of the resource
-
-        Returns
-        -------
-        Dict[str, List[IdentityRole]]
-            Dictionary mapping user IDs to their roles on the resource
-
-        Note
-        ----
-        This method would require additional API endpoints or organization-level
-        access to list all users. Currently it returns an empty dict as a placeholder.
-
-        Examples
-        --------
-        >>> users_mgr = singlestoredb.manage_users()
-        >>> user_roles = users_mgr.list_user_roles_by_resource(
-        ...     "workspace", "ws-123"
-        ... )
-        >>> for user_id, roles in user_roles.items():
-        ...     print(f"User {user_id} has {len(roles)} roles on this workspace")
-        """
-        # This would require additional API endpoints or organization-level access
-        # to list all users and then get their roles. For now, return empty dict.
-        return {}
 
 
 def manage_users(
@@ -329,6 +294,7 @@ def manage_users(
     >>> # Get roles for a specific user
     >>> roles = users_mgr.get_user_identity_roles("user-123")
     >>> print(f"User has {len(roles)} identity roles")
+
     """
     return UsersManager(
         access_token=access_token,
