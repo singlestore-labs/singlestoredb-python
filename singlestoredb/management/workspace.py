@@ -17,8 +17,7 @@ from typing import TYPE_CHECKING
 from typing import Union
 
 if TYPE_CHECKING:
-    from .metrics import WorkspaceGroupMetric
-    from .storage_dr import ReplicatedDatabase, StorageDRRegion, StorageDRStatus
+    from .storage_dr import StorageDRRegion, StorageDRStatus
     from .private_connections import PrivateConnection
     from .private_connections import PrivateConnectionKaiInfo
     from .private_connections import PrivateConnectionOutboundAllowList
@@ -26,6 +25,8 @@ if TYPE_CHECKING:
 from .. import config
 from .. import connection
 from ..exceptions import ManagementError
+from .metrics import WorkspaceGroupMetrics
+from .storage_dr import ReplicatedDatabase
 from .billing_usage import BillingUsageItem
 from .files import FileLocation
 from .files import FilesObject
@@ -1032,7 +1033,7 @@ class Workspace(object):
         self,
         start_time: Optional[datetime.datetime] = None,
         end_time: Optional[datetime.datetime] = None,
-    ) -> Optional['WorkspaceGroupMetric']:
+    ) -> Optional['WorkspaceGroupMetrics']:
         """
         Get CPU usage metrics for this workspace.
 
@@ -1045,7 +1046,7 @@ class Workspace(object):
 
         Returns
         -------
-        WorkspaceGroupMetric or None
+        WorkspaceGroupMetrics or None
             CPU usage metric, or None if not available
 
         Examples
@@ -1079,7 +1080,7 @@ class Workspace(object):
         self,
         start_time: Optional[datetime.datetime] = None,
         end_time: Optional[datetime.datetime] = None,
-    ) -> Optional['WorkspaceGroupMetric']:
+    ) -> Optional['WorkspaceGroupMetrics']:
         """
         Get memory usage metrics for this workspace.
 
@@ -1092,7 +1093,7 @@ class Workspace(object):
 
         Returns
         -------
-        WorkspaceGroupMetric or None
+        WorkspaceGroupMetrics or None
             Memory usage metric, or None if not available
 
         Examples
@@ -1126,7 +1127,7 @@ class Workspace(object):
         self,
         start_time: Optional[datetime.datetime] = None,
         end_time: Optional[datetime.datetime] = None,
-    ) -> Optional['WorkspaceGroupMetric']:
+    ) -> Optional['WorkspaceGroupMetrics']:
         """
         Get storage usage metrics for this workspace.
 
@@ -1139,7 +1140,7 @@ class Workspace(object):
 
         Returns
         -------
-        WorkspaceGroupMetric or None
+        WorkspaceGroupMetrics or None
             Storage usage metric, or None if not available
 
         Examples
@@ -1495,7 +1496,7 @@ class WorkspaceGroup(object):
         workspace_id: Optional[Union[str, 'Workspace']] = None,
         aggregation_type: Optional[str] = None,
         resolution: Optional[str] = None,
-    ) -> Dict[str, 'WorkspaceGroupMetric']:
+    ) -> Dict[str, 'WorkspaceGroupMetrics']:
         """
         Get metrics for this workspace group.
 
@@ -1516,7 +1517,7 @@ class WorkspaceGroup(object):
 
         Returns
         -------
-        Dict[str, WorkspaceGroupMetric]
+        Dict[str, WorkspaceGroupMetrics]
             Dictionary mapping metric names to metric objects
         """
         if self._manager is None:
@@ -1554,19 +1555,19 @@ class WorkspaceGroup(object):
         # Handle different possible response structures
         if isinstance(metrics_data, list):
             for metric_obj in metrics_data:
-                metric = WorkspaceGroupMetric.from_dict(metric_obj)
+                metric = WorkspaceGroupMetrics.from_dict(metric_obj)
                 metrics_dict[metric.metric_name] = metric
         elif isinstance(metrics_data, dict):
             if 'metrics' in metrics_data:
                 for metric_obj in metrics_data['metrics']:
-                    metric = WorkspaceGroupMetric.from_dict(metric_obj)
+                    metric = WorkspaceGroupMetrics.from_dict(metric_obj)
                     metrics_dict[metric.metric_name] = metric
             else:
                 # Assume the dict itself contains metric data
                 for name, data in metrics_data.items():
                     if isinstance(data, dict):
                         data['metricName'] = name
-                        metric = WorkspaceGroupMetric.from_dict(data)
+                        metric = WorkspaceGroupMetrics.from_dict(data)
                         metrics_dict[name] = metric
 
         return metrics_dict
@@ -1664,14 +1665,14 @@ class WorkspaceGroup(object):
                 msg='No workspace manager is associated with this object.',
             )
 
-        from .storage_dr import ReplicatedDatabase
-
-        # Convert string database names to ReplicatedDatabase objects
+        # Convert database names/objects to config dictionaries
         db_configs = []
         for db in replicated_databases:
             if isinstance(db, str):
-                db_configs.append(ReplicatedDatabase(db).to_dict())
+                # For string database names, just pass the name
+                db_configs.append({'databaseName': db})
             else:
+                # For ReplicatedDatabase objects, use their to_dict method
                 db_configs.append(db.to_dict())
 
         data = {
@@ -1861,13 +1862,19 @@ class WorkspaceGroup(object):
             if status is None:
                 raise ManagementError(msg='Unable to get storage DR status')
 
-            if operation_type == 'failover' and status.failover_status == target_status:
+            if (
+                operation_type == 'failover' and
+                status.compute.storage_dr_state == target_status
+            ):
                 return status
-            elif operation_type == 'failback' and status.status == target_status:
+            elif (
+                operation_type == 'failback' and
+                status.compute.storage_dr_state == target_status
+            ):
                 return status
             elif (
                 operation_type == 'pre_provision' and
-                status.pre_provision_status == target_status
+                status.compute.storage_dr_state == target_status
             ):
                 return status
 
@@ -2150,7 +2157,7 @@ class Billing(object):
                     metric=snake_to_camel(metric),
                     startTime=from_datetime(start_time),
                     endTime=from_datetime(end_time),
-                    aggregate_by=aggregate_by.lower() if aggregate_by else None,
+                    aggregateBy=aggregate_by.lower() if aggregate_by else None,
                 ).items() if v is not None
             },
         )

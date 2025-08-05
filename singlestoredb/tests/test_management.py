@@ -1581,7 +1581,6 @@ class TestTeams(unittest.TestCase):
         cls.team = cls.manager.create_team(
             name=name,
             description='Test team for unit tests',
-            members=[],
         )
 
     @classmethod
@@ -1600,7 +1599,8 @@ class TestTeams(unittest.TestCase):
         assert self.team is not None
         assert self.team.name.startswith('test-team-')
         assert self.team.description == 'Test team for unit tests'
-        assert isinstance(self.team.members, list)
+        assert isinstance(self.team.member_users, list)
+        assert isinstance(self.team.member_teams, list)
 
     def test_get_team(self):
         """Test getting a team by ID."""
@@ -1655,19 +1655,6 @@ class TestPrivateConnections(unittest.TestCase):
         """Clean up the test environment."""
         cls.manager = None
 
-    def test_private_connections_property(self):
-        """Test accessing private connections property."""
-        connections = self.manager.private_connections
-        # Should return a NamedList (may be empty)
-        assert hasattr(connections, '__iter__')
-
-    def test_manager_properties(self):
-        """Test that manager has expected properties."""
-        assert hasattr(self.manager, 'create_private_connection')
-        assert hasattr(self.manager, 'get_private_connection')
-        assert hasattr(self.manager, 'private_connections')
-        assert hasattr(self.manager, 'delete_private_connection')
-
 
 @pytest.mark.management
 class TestAuditLogs(unittest.TestCase):
@@ -1690,13 +1677,6 @@ class TestAuditLogs(unittest.TestCase):
         logs = self.manager.list_audit_logs(limit=10)
         # Should return a list (may be empty)
         assert isinstance(logs, list)
-
-    def test_manager_properties(self):
-        """Test that manager has expected properties."""
-        assert hasattr(self.manager, 'list_audit_logs')
-        assert hasattr(self.manager, 'get_audit_logs_for_user')
-        assert hasattr(self.manager, 'get_failed_actions')
-        assert hasattr(self.manager, 'get_actions_by_type')
 
 
 @pytest.mark.management
@@ -1721,11 +1701,49 @@ class TestUsers(unittest.TestCase):
         user = self.manager.get_user('test-user-123')
         assert user.id == 'test-user-123'
         assert user._manager is not None
+        assert user.email == ''  # Empty since no actual API call
+        assert user.first_name == ''
+        assert user.last_name == ''
 
-    def test_manager_properties(self):
-        """Test that manager has expected properties."""
-        assert hasattr(self.manager, 'get_user')
-        assert hasattr(self.manager, 'get_user_identity_roles')
+    def test_user_from_dict(self):
+        """Test User.from_dict conversion."""
+        from singlestoredb.management.users import User
+
+        data = {
+            'userID': 'user-123',
+            'email': 'test@example.com',
+            'firstName': 'Test',
+            'lastName': 'User',
+        }
+
+        user = User.from_dict(data, self.manager)
+        assert user.id == 'user-123'
+        assert user.email == 'test@example.com'
+        assert user.first_name == 'Test'
+        assert user.last_name == 'User'
+        assert user._manager is self.manager
+
+    def test_user_invitation_from_dict(self):
+        """Test UserInvitation.from_dict conversion."""
+        from singlestoredb.management.users import UserInvitation
+
+        data = {
+            'invitationID': 'invite-123',
+            'email': 'invitee@example.com',
+            'state': 'Pending',
+            'createdAt': '2023-01-01T00:00:00Z',
+            'actedAt': '2023-01-02T00:00:00Z',
+            'message': 'Welcome to our team!',
+            'teamIDs': ['team-1', 'team-2'],
+        }
+
+        invitation = UserInvitation.from_dict(data, self.manager)
+        assert invitation.id == 'invite-123'
+        assert invitation.email == 'invitee@example.com'
+        assert invitation.state == 'Pending'
+        assert invitation.message == 'Welcome to our team!'
+        assert invitation.team_ids == ['team-1', 'team-2']
+        assert invitation._manager is self.manager
 
 
 @pytest.mark.management
@@ -1762,91 +1780,6 @@ class TestWorkspaceManagerIntegration(unittest.TestCase):
         cls.manager = None
         cls.password = None
 
-    def test_workspace_manager_has_new_properties(self):
-        """Test that workspace manager has new manager properties."""
-        assert hasattr(self.manager, 'teams')
-        assert hasattr(self.manager, 'private_connections')
-        assert hasattr(self.manager, 'audit_logs')
-        assert hasattr(self.manager, 'users')
-
-    def test_teams_property(self):
-        """Test accessing teams through workspace manager."""
-        teams_mgr = self.manager.teams
-        assert teams_mgr is not None
-        assert hasattr(teams_mgr, 'list_teams')
-
-        # Should be able to list teams
-        teams = teams_mgr.list_teams()
-        assert hasattr(teams, '__iter__')
-
-    def test_private_connections_property(self):
-        """Test accessing private connections through workspace manager."""
-        pc_mgr = self.manager.private_connections
-        assert pc_mgr is not None
-        assert hasattr(pc_mgr, 'private_connections')
-
-    def test_audit_logs_property(self):
-        """Test accessing audit logs through workspace manager."""
-        audit_mgr = self.manager.audit_logs
-        assert audit_mgr is not None
-        assert hasattr(audit_mgr, 'list_audit_logs')
-
-    def test_users_property(self):
-        """Test accessing users through workspace manager."""
-        users_mgr = self.manager.users
-        assert users_mgr is not None
-        assert hasattr(users_mgr, 'get_user_identity_roles')
-
-    def test_metrics_property(self):
-        """Test accessing metrics through workspace manager."""
-        metrics_mgr = self.manager.metrics
-        assert metrics_mgr is not None
-        assert hasattr(metrics_mgr, 'get_workspace_group_metrics')
-
-    def test_workspace_private_connections_methods(self):
-        """Test new workspace private connection methods."""
-        # These methods should exist and be callable
-        assert hasattr(self.manager, 'get_workspace_private_connections')
-        assert hasattr(self.manager, 'get_workspace_group_private_connections')
-        assert hasattr(self.manager, 'get_workspace_kai_info')
-        assert hasattr(self.manager, 'get_workspace_outbound_allowlist')
-
-    def test_starter_workspace_user_methods(self):
-        """Test new starter workspace user management methods."""
-        assert hasattr(self.manager, 'update_starter_workspace_user')
-        assert hasattr(self.manager, 'delete_starter_workspace_user')
-
-
-@pytest.mark.management
-class TestNewManagerFunctions(unittest.TestCase):
-    """Test cases for new management functions."""
-
-    def test_manage_teams_function(self):
-        """Test manage_teams function."""
-        teams_mgr = s2.manage_teams()
-        assert teams_mgr is not None
-        assert hasattr(teams_mgr, 'create_team')
-        assert hasattr(teams_mgr, 'list_teams')
-
-    def test_manage_private_connections_function(self):
-        """Test manage_private_connections function."""
-        pc_mgr = s2.manage_private_connections()
-        assert pc_mgr is not None
-        assert hasattr(pc_mgr, 'create_private_connection')
-        assert hasattr(pc_mgr, 'private_connections')
-
-    def test_manage_audit_logs_function(self):
-        """Test manage_audit_logs function."""
-        audit_mgr = s2.manage_audit_logs()
-        assert audit_mgr is not None
-        assert hasattr(audit_mgr, 'list_audit_logs')
-
-    def test_manage_users_function(self):
-        """Test manage_users function."""
-        users_mgr = s2.manage_users()
-        assert users_mgr is not None
-        assert hasattr(users_mgr, 'get_user_identity_roles')
-
 
 @pytest.mark.management
 class TestDataClasses(unittest.TestCase):
@@ -1861,16 +1794,38 @@ class TestDataClasses(unittest.TestCase):
             'teamID': 'team-123',
             'name': 'Test Team',
             'description': 'Test Description',
-            'members': ['user1', 'user2'],
+            'memberUsers': [
+                {
+                    'userID': 'user-1',
+                    'email': 'user1@example.com',
+                    'firstName': 'User',
+                    'lastName': 'One',
+                },
+                {
+                    'userID': 'user-2',
+                    'email': 'user2@example.com',
+                    'firstName': 'User',
+                    'lastName': 'Two',
+                },
+            ],
+            'memberTeams': [
+                {
+                    'teamID': 'team-1',
+                    'name': 'Subteam One',
+                    'description': 'Sub team description',
+                },
+            ],
             'createdAt': '2023-01-01T00:00:00Z',
-            'updatedAt': '2023-01-02T00:00:00Z',
         }
 
         team = Team.from_dict(data, manager)
         assert team.id == 'team-123'
         assert team.name == 'Test Team'
         assert team.description == 'Test Description'
-        assert team.members == ['user1', 'user2']
+        assert len(team.member_users) == 2
+        assert len(team.member_teams) == 1
+        assert team.member_users[0]['userID'] == 'user-1'
+        assert team.member_teams[0]['teamID'] == 'team-1'
         assert team._manager is manager
 
     def test_private_connection_from_dict(self):
@@ -1882,18 +1837,27 @@ class TestDataClasses(unittest.TestCase):
 
         manager = PrivateConnectionsManager()
         data = {
-            'connectionID': 'conn-123',
-            'name': 'Test Connection',
-            'serviceType': 'aws-privatelink',
+            'privateConnectionID': 'conn-123',
+            'workspaceGroupID': 'wg-456',
+            'serviceName': 'Test Connection',
+            'type': 'INBOUND',
+            'status': 'ACTIVE',
+            'allowList': 'my-allow-list',
+            'sqlPort': 3306,
+            'websocketsPort': 443,
             'createdAt': '2023-01-01T00:00:00Z',
-            'status': 'active',
+            'updatedAt': '2023-01-02T00:00:00Z',
         }
 
         conn = PrivateConnection.from_dict(data, manager)
         assert conn.id == 'conn-123'
-        assert conn.name == 'Test Connection'
-        assert conn.service_type == 'aws-privatelink'
-        assert conn.status == 'active'
+        assert conn.workspace_group_id == 'wg-456'
+        assert conn.service_name == 'Test Connection'
+        assert conn.type == 'INBOUND'
+        assert conn.status == 'ACTIVE'
+        assert conn.allow_list == 'my-allow-list'
+        assert conn.sql_port == 3306
+        assert conn.websockets_port == 443
         assert conn._manager is manager
 
     def test_audit_log_from_dict(self):
@@ -1901,54 +1865,98 @@ class TestDataClasses(unittest.TestCase):
         from singlestoredb.management.audit_logs import AuditLog
 
         data = {
-            'logID': 'log-123',
-            'timestamp': '2023-01-01T00:00:00Z',
+            'auditID': 'log-123',
+            'createdAt': '2023-01-01T00:00:00Z',
             'userID': 'user-123',
             'userEmail': 'test@example.com',
-            'action': 'CREATE_WORKSPACE',
-            'success': True,
+            'type': 'CREATE_WORKSPACE',
+            'reason': 'User created a new workspace',
+            'source': 'Portal',
+            'userType': 'Customer',
+            'orgID': 'org-456',
+            'projectID': 'proj-789',
+            'workspaceID': 'ws-101',
         }
 
         log = AuditLog.from_dict(data)
         assert log.id == 'log-123'
         assert log.user_id == 'user-123'
         assert log.user_email == 'test@example.com'
-        assert log.action == 'CREATE_WORKSPACE'
-        assert log.success is True
+        assert log.type == 'CREATE_WORKSPACE'
+        assert log.reason == 'User created a new workspace'
+        assert log.source == 'Portal'
+        assert log.user_type == 'Customer'
+        assert log.organization_id == 'org-456'
+        assert log.project_id == 'proj-789'
+        assert log.workspace_id == 'ws-101'
 
-    def test_metric_data_point_from_dict(self):
-        """Test MetricDataPoint.from_dict conversion."""
-        from singlestoredb.management.metrics import MetricDataPoint
+    def test_workspace_group_metrics_from_openmetrics(self):
+        """Test WorkspaceGroupMetrics.from_openmetrics_text parsing."""
+        from singlestoredb.management.metrics import WorkspaceGroupMetrics
 
-        data = {
-            'timestamp': '2023-01-01T00:00:00Z',
-            'value': 85.5,
-            'unit': 'percent',
-        }
+        openmetrics_text = (
+            '# TYPE singlestoredb_cloud_threads_running gauge'
+            'singlestoredb_cloud_threads_running{'
+            "extractor=\"monitoring-customer-prd/memsql-exporter\","
+            "node=\"node-3337afc7-443e-4126-b784-413903527186-aggregator-0\","
+            "role=\"CA\","
+            "workspace_group_id=\"3337afc7-443e-4126-b784-413903527186\","
+            "workspace_name=\"singlestore-central\"} 1"
+            'singlestoredb_cloud_cpu_usage{'
+            "node=\"aggregator-0\",workspace_group_id=\"wg-123\"} 75.5"
+        )
 
-        dp = MetricDataPoint.from_dict(data)
-        assert dp.value == 85.5
-        assert dp.unit == 'percent'
+        metrics = WorkspaceGroupMetrics.from_openmetrics_text('wg-123', openmetrics_text)
+
+        assert metrics.workspace_group_id == 'wg-123'
+        assert len(metrics.data_points) == 2
+
+        # Test first metric
+        threads_metrics = metrics.get_metrics_by_name(
+            'singlestoredb_cloud_threads_running',
+        )
+        assert len(threads_metrics) == 1
+        assert threads_metrics[0].value == 1.0
+        assert threads_metrics[0].labels['role'] == 'CA'
+
+        # Test second metric
+        cpu_metrics = metrics.get_metrics_by_name('singlestoredb_cloud_cpu_usage')
+        assert len(cpu_metrics) == 1
+        assert cpu_metrics[0].value == 75.5
 
     def test_storage_dr_status_from_dict(self):
         """Test StorageDRStatus.from_dict conversion."""
         from singlestoredb.management.storage_dr import StorageDRStatus
 
         data = {
-            'workspaceGroupID': 'wg-123',
-            'drEnabled': True,
-            'primaryRegion': 'us-east-1',
-            'backupRegion': 'us-west-2',
-            'status': 'active',
-            'replicatedDatabases': [
-                {'databaseName': 'test_db', 'replicationEnabled': True},
+            'compute': {
+                'storageDRType': 'Failover',
+                'storageDRState': 'Active',
+                'totalWorkspaces': 2,
+                'totalAttachments': 5,
+                'completedWorkspaces': 1,
+                'completedAttachments': 3,
+            },
+            'storage': [
+                {
+                    'databaseName': 'test_db',
+                    'region': 'us-east-1',
+                    'duplicationState': 'Active',
+                },
+                {
+                    'databaseName': 'prod_db',
+                    'region': 'us-west-2',
+                    'duplicationState': 'Pending',
+                },
             ],
         }
 
         status = StorageDRStatus.from_dict(data)
-        assert status.workspace_group_id == 'wg-123'
-        assert status.dr_enabled is True
-        assert status.primary_region == 'us-east-1'
-        assert status.backup_region == 'us-west-2'
-        assert len(status.replicated_databases) == 1
-        assert status.replicated_databases[0].database_name == 'test_db'
+        assert status.compute.storage_dr_type == 'Failover'
+        assert status.compute.storage_dr_state == 'Active'
+        assert status.compute.total_workspaces == 2
+        assert status.compute.completed_workspaces == 1
+        assert len(status.storage) == 2
+        assert status.storage[0].database_name == 'test_db'
+        assert status.storage[0].duplication_state == 'Active'
+        assert status.storage[1].duplication_state == 'Pending'

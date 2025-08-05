@@ -104,10 +104,10 @@ class Team(object):
         self,
         team_id: str,
         name: str,
-        description: Optional[str] = None,
-        members: Optional[List[str]] = None,
+        description: str,
+        member_users: Optional[List[Dict[str, Any]]] = None,
+        member_teams: Optional[List[Dict[str, Any]]] = None,
         created_at: Optional[Union[str, datetime.datetime]] = None,
-        updated_at: Optional[Union[str, datetime.datetime]] = None,
     ):
         #: Unique ID of the team
         self.id = team_id
@@ -118,14 +118,14 @@ class Team(object):
         #: Description of the team
         self.description = description
 
-        #: List of team member IDs
-        self.members = members or []
+        #: List of member users with user info
+        self.member_users = member_users or []
+
+        #: List of member teams with team info
+        self.member_teams = member_teams or []
 
         #: Timestamp of when the team was created
         self.created_at = to_datetime(created_at)
-
-        #: Timestamp of when the team was last updated
-        self.updated_at = to_datetime(updated_at)
 
         self._manager: Optional['TeamsManager'] = None
 
@@ -157,10 +157,10 @@ class Team(object):
         out = cls(
             team_id=obj['teamID'],
             name=obj['name'],
-            description=obj.get('description'),
-            members=obj.get('members', []),
+            description=obj['description'],
+            member_users=obj.get('memberUsers', []),
+            member_teams=obj.get('memberTeams', []),
             created_at=obj.get('createdAt'),
-            updated_at=obj.get('updatedAt'),
         )
         out._manager = manager
         return out
@@ -169,7 +169,12 @@ class Team(object):
         self,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        members: Optional[List[str]] = None,
+        add_member_user_ids: Optional[List[str]] = None,
+        add_member_user_emails: Optional[List[str]] = None,
+        add_member_team_ids: Optional[List[str]] = None,
+        remove_member_user_ids: Optional[List[str]] = None,
+        remove_member_user_emails: Optional[List[str]] = None,
+        remove_member_team_ids: Optional[List[str]] = None,
     ) -> None:
         """
         Update the team definition.
@@ -180,8 +185,18 @@ class Team(object):
             New name for the team
         description : str, optional
             New description for the team
-        members : List[str], optional
-            New list of member IDs for the team
+        add_member_user_ids : List[str], optional
+            List of user IDs to add as members
+        add_member_user_emails : List[str], optional
+            List of user emails to add as members
+        add_member_team_ids : List[str], optional
+            List of team IDs to add as members
+        remove_member_user_ids : List[str], optional
+            List of user IDs to remove from members
+        remove_member_user_emails : List[str], optional
+            List of user emails to remove from members
+        remove_member_team_ids : List[str], optional
+            List of team IDs to remove from members
 
         """
         if self._manager is None:
@@ -193,7 +208,12 @@ class Team(object):
             k: v for k, v in dict(
                 name=name,
                 description=description,
-                members=members,
+                addMemberUserIDs=add_member_user_ids,
+                addMemberUserEmails=add_member_user_emails,
+                addMemberTeamIDs=add_member_team_ids,
+                removeMemberUserIDs=remove_member_user_ids,
+                removeMemberUserEmails=remove_member_user_emails,
+                removeMemberTeamIDs=remove_member_team_ids,
             ).items() if v is not None
         }
 
@@ -266,7 +286,6 @@ class TeamsManager(Manager):
         self,
         name: str,
         description: Optional[str] = None,
-        members: Optional[List[str]] = None,
     ) -> Team:
         """
         Create a new team.
@@ -277,8 +296,6 @@ class TeamsManager(Manager):
             Name of the team
         description : str, optional
             Description of the team
-        members : List[str], optional
-            List of member IDs to add to the team
 
         Returns
         -------
@@ -289,20 +306,17 @@ class TeamsManager(Manager):
         >>> teams_mgr = singlestoredb.manage_teams()
         >>> team = teams_mgr.create_team(
         ...     name="Data Science Team",
-        ...     description="Team for data science projects",
-        ...     members=["user1", "user2"]
+        ...     description="Team for data science projects"
         ... )
         >>> print(team.name)
         Data Science Team
 
         """
         data = {
-            k: v for k, v in dict(
-                name=name,
-                description=description,
-                members=members,
-            ).items() if v is not None
+            'name': name,
         }
+        if description is not None:
+            data['description'] = description
 
         res = self._post('teams', json=data)
         return self.get_team(res.json()['teamID'])
@@ -399,7 +413,12 @@ class TeamsManager(Manager):
         team_id: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        members: Optional[List[str]] = None,
+        add_member_user_ids: Optional[List[str]] = None,
+        add_member_user_emails: Optional[List[str]] = None,
+        add_member_team_ids: Optional[List[str]] = None,
+        remove_member_user_ids: Optional[List[str]] = None,
+        remove_member_user_emails: Optional[List[str]] = None,
+        remove_member_team_ids: Optional[List[str]] = None,
     ) -> Team:
         """
         Update a team.
@@ -412,8 +431,18 @@ class TeamsManager(Manager):
             New name for the team
         description : str, optional
             New description for the team
-        members : List[str], optional
-            New list of member IDs for the team
+        add_member_user_ids : List[str], optional
+            List of user IDs to add as members
+        add_member_user_emails : List[str], optional
+            List of user emails to add as members
+        add_member_team_ids : List[str], optional
+            List of team IDs to add as members
+        remove_member_user_ids : List[str], optional
+            List of user IDs to remove from members
+        remove_member_user_emails : List[str], optional
+            List of user emails to remove from members
+        remove_member_team_ids : List[str], optional
+            List of team IDs to remove from members
 
         Returns
         -------
@@ -426,7 +455,8 @@ class TeamsManager(Manager):
         >>> team = teams_mgr.update_team(
         ...     "team-123",
         ...     name="Updated Team Name",
-        ...     description="Updated description"
+        ...     description="Updated description",
+        ...     add_member_user_emails=["user@example.com"]
         ... )
 
         """
@@ -434,7 +464,12 @@ class TeamsManager(Manager):
             k: v for k, v in dict(
                 name=name,
                 description=description,
-                members=members,
+                addMemberUserIDs=add_member_user_ids,
+                addMemberUserEmails=add_member_user_emails,
+                addMemberTeamIDs=add_member_team_ids,
+                removeMemberUserIDs=remove_member_user_ids,
+                removeMemberUserEmails=remove_member_user_emails,
+                removeMemberTeamIDs=remove_member_team_ids,
             ).items() if v is not None
         }
 

@@ -1,29 +1,35 @@
 #!/usr/bin/env python
 """SingleStoreDB Storage Disaster Recovery Management."""
-import datetime
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Union
 
-from .utils import to_datetime
+from .manager import Manager
 from .utils import vars_to_str
 
 
 class ReplicatedDatabase(object):
-    """Replicated database configuration for Storage DR."""
+    """
+    Replicated database configuration for Storage DR.
+
+    Represents information related to a database's replication status.
+    """
 
     def __init__(
         self,
         database_name: str,
-        replication_enabled: bool = True,
+        region: str,
+        duplication_state: str,
     ):
-        #: Name of the database to replicate
+        #: Name of the database
         self.database_name = database_name
 
-        #: Whether replication is enabled for this database
-        self.replication_enabled = replication_enabled
+        #: Name of the region
+        self.region = region
+
+        #: Duplication state of the database (Pending, Active, Inactive, Error)
+        self.duplication_state = duplication_state
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -32,6 +38,14 @@ class ReplicatedDatabase(object):
     def __repr__(self) -> str:
         """Return string representation."""
         return str(self)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation."""
+        return {
+            'databaseName': self.database_name,
+            'region': self.region,
+            'duplicationState': self.duplication_state,
+        }
 
     @classmethod
     def from_dict(cls, obj: Dict[str, Any]) -> 'ReplicatedDatabase':
@@ -50,58 +64,96 @@ class ReplicatedDatabase(object):
         """
         return cls(
             database_name=obj['databaseName'],
-            replication_enabled=obj.get('replicationEnabled', True),
+            region=obj['region'],
+            duplication_state=obj['duplicationState'],
         )
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary format for API calls."""
-        return {
-            'databaseName': self.database_name,
-            'replicationEnabled': self.replication_enabled,
-        }
 
+class StorageDRCompute(object):
+    """
+    Storage DR compute operation information.
 
-class StorageDRStatus(object):
-    """Storage disaster recovery status information."""
+    Represents information related to a workspace group's latest storage DR operation.
+    """
 
     def __init__(
         self,
-        workspace_group_id: str,
-        dr_enabled: bool,
-        primary_region: Optional[str] = None,
-        backup_region: Optional[str] = None,
-        status: Optional[str] = None,
-        last_backup_time: Optional[Union[str, datetime.datetime]] = None,
-        replicated_databases: Optional[List[ReplicatedDatabase]] = None,
-        failover_status: Optional[str] = None,
-        pre_provision_status: Optional[str] = None,
+        storage_dr_type: str,
+        storage_dr_state: str,
+        total_workspaces: int,
+        total_attachments: int,
+        completed_workspaces: int,
+        completed_attachments: int,
     ):
-        #: Workspace group ID
-        self.workspace_group_id = workspace_group_id
+        #: Name of Storage DR operation (Failover, Failback,
+        #: PreProvisionStart, PreProvisionStop)
+        self.storage_dr_type = storage_dr_type
 
-        #: Whether DR is enabled
-        self.dr_enabled = dr_enabled
+        #: Status of Storage DR operation (Active, Completed, Failed, Expired, Canceled)
+        self.storage_dr_state = storage_dr_state
 
-        #: Primary region
-        self.primary_region = primary_region
+        #: The total number of workspaces to setup
+        self.total_workspaces = total_workspaces
 
-        #: Backup region
-        self.backup_region = backup_region
+        #: The total number of database attachments to setup
+        self.total_attachments = total_attachments
 
-        #: Overall DR status
-        self.status = status
+        #: The number of workspaces that have been setup
+        self.completed_workspaces = completed_workspaces
 
-        #: Last backup timestamp
-        self.last_backup_time = to_datetime(last_backup_time)
+        #: The number of database attachments that have been setup
+        self.completed_attachments = completed_attachments
 
-        #: List of databases being replicated
-        self.replicated_databases = replicated_databases or []
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
 
-        #: Failover status
-        self.failover_status = failover_status
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
 
-        #: Pre-provisioning status
-        self.pre_provision_status = pre_provision_status
+    @classmethod
+    def from_dict(cls, obj: Dict[str, Any]) -> 'StorageDRCompute':
+        """
+        Construct a StorageDRCompute from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+
+        Returns
+        -------
+        :class:`StorageDRCompute`
+
+        """
+        return cls(
+            storage_dr_type=obj['storageDRType'],
+            storage_dr_state=obj['storageDRState'],
+            total_workspaces=obj['totalWorkspaces'],
+            total_attachments=obj['totalAttachments'],
+            completed_workspaces=obj['completedWorkspaces'],
+            completed_attachments=obj['completedAttachments'],
+        )
+
+
+class StorageDRStatus(object):
+    """
+    Storage disaster recovery status information.
+
+    Represents Storage DR status information for a workspace group.
+    """
+
+    def __init__(
+        self,
+        compute: StorageDRCompute,
+        storage: List[ReplicatedDatabase],
+    ):
+        #: Compute operation information
+        self.compute = compute
+
+        #: List of replicated databases
+        self.storage = storage
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -126,23 +178,12 @@ class StorageDRStatus(object):
         :class:`StorageDRStatus`
 
         """
-        replicated_dbs = []
-        if 'replicatedDatabases' in obj:
-            replicated_dbs = [
-                ReplicatedDatabase.from_dict(db)
-                for db in obj['replicatedDatabases']
-            ]
+        compute = StorageDRCompute.from_dict(obj['compute'])
+        storage = [ReplicatedDatabase.from_dict(db) for db in obj['storage']]
 
         return cls(
-            workspace_group_id=obj['workspaceGroupID'],
-            dr_enabled=obj.get('drEnabled', False),
-            primary_region=obj.get('primaryRegion'),
-            backup_region=obj.get('backupRegion'),
-            status=obj.get('status'),
-            last_backup_time=obj.get('lastBackupTime'),
-            replicated_databases=replicated_dbs,
-            failover_status=obj.get('failoverStatus'),
-            pre_provision_status=obj.get('preProvisionStatus'),
+            compute=compute,
+            storage=storage,
         )
 
 
@@ -154,7 +195,6 @@ class StorageDRRegion(object):
         region_id: str,
         region_name: str,
         provider: str,
-        available: bool = True,
     ):
         #: Region ID
         self.region_id = region_id
@@ -164,9 +204,6 @@ class StorageDRRegion(object):
 
         #: Cloud provider
         self.provider = provider
-
-        #: Whether this region is available for DR
-        self.available = available
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -195,5 +232,237 @@ class StorageDRRegion(object):
             region_id=obj['regionID'],
             region_name=obj['regionName'],
             provider=obj['provider'],
-            available=obj.get('available', True),
         )
+
+
+class StorageDRManager(Manager):
+    """
+    SingleStoreDB Storage DR manager.
+
+    This class should be instantiated using
+    :func:`singlestoredb.manage_storage_dr` or accessed via
+    :attr:`WorkspaceGroupManager.storage_dr`.
+
+    Parameters
+    ----------
+    access_token : str, optional
+        The API key or other access token for the management API
+    version : str, optional
+        Version of the API to use
+    base_url : str, optional
+        Base URL of the management API
+
+    """
+
+    #: Object type
+    obj_type = 'storage_dr'
+
+    def get_status(self, workspace_group_id: str) -> StorageDRStatus:
+        """
+        Get Storage DR status for a workspace group.
+
+        Parameters
+        ----------
+        workspace_group_id : str
+            ID of the workspace group
+
+        Returns
+        -------
+        :class:`StorageDRStatus`
+            Storage DR status information
+
+        Examples
+        --------
+        >>> dr_mgr = singlestoredb.manage_storage_dr()
+        >>> status = dr_mgr.get_status("wg-123")
+        >>> print(f"DR State: {status.compute.storage_dr_state}")
+
+        """
+        res = self._get(f'workspaceGroups/{workspace_group_id}/storage/DR/status')
+        return StorageDRStatus.from_dict(res.json())
+
+    def get_available_regions(self, workspace_group_id: str) -> List[StorageDRRegion]:
+        """
+        Get available regions for Storage DR setup.
+
+        Parameters
+        ----------
+        workspace_group_id : str
+            ID of the workspace group
+
+        Returns
+        -------
+        List[StorageDRRegion]
+            List of available regions for DR
+
+        Examples
+        --------
+        >>> dr_mgr = singlestoredb.manage_storage_dr()
+        >>> regions = dr_mgr.get_available_regions("wg-123")
+        >>> for region in regions:
+        ...     print(f"{region.provider}: {region.region_name}")
+
+        """
+        res = self._get(f'workspaceGroups/{workspace_group_id}/storage/DR/regions')
+        return [StorageDRRegion.from_dict(region) for region in res.json()]
+
+    def setup_storage_dr(
+        self,
+        workspace_group_id: str,
+        region_id: str,
+        database_names: List[str],
+        auto_replication: Optional[bool] = None,
+        backup_bucket_kms_key_id: Optional[str] = None,
+        data_bucket_kms_key_id: Optional[str] = None,
+    ) -> None:
+        """
+        Setup Storage DR for a workspace group.
+
+        Parameters
+        ----------
+        workspace_group_id : str
+            ID of the workspace group
+        region_id : str
+            Region ID of the secondary region
+        database_names : List[str]
+            List of database names (can be empty if setting up auto-replication)
+        auto_replication : bool, optional
+            If true, all existing and future databases will be automatically replicated
+        backup_bucket_kms_key_id : str, optional
+            KMS key ID for backup bucket encryption (AWS only)
+        data_bucket_kms_key_id : str, optional
+            KMS key ID for data bucket encryption (AWS only)
+
+        Examples
+        --------
+        >>> dr_mgr = singlestoredb.manage_storage_dr()
+        >>> dr_mgr.setup_storage_dr(
+        ...     "wg-123",
+        ...     "region-456",
+        ...     ["db1", "db2"],
+        ...     auto_replication=True
+        ... )
+
+        """
+        data: Dict[str, Any] = {
+            'regionID': region_id,
+            'databaseNames': database_names,
+        }
+
+        if auto_replication is not None:
+            data['autoReplication'] = auto_replication
+        if backup_bucket_kms_key_id is not None:
+            data['backupBucketKMSKeyID'] = backup_bucket_kms_key_id
+        if data_bucket_kms_key_id is not None:
+            data['dataBucketKMSKeyID'] = data_bucket_kms_key_id
+
+        self._post(f'workspaceGroups/{workspace_group_id}/storage/DR/setup', json=data)
+
+    def start_failover(self, workspace_group_id: str) -> None:
+        """
+        Start failover operation for Storage DR.
+
+        Parameters
+        ----------
+        workspace_group_id : str
+            ID of the workspace group
+
+        Examples
+        --------
+        >>> dr_mgr = singlestoredb.manage_storage_dr()
+        >>> dr_mgr.start_failover("wg-123")
+
+        """
+        self._post(f'workspaceGroups/{workspace_group_id}/storage/DR/failover')
+
+    def start_failback(self, workspace_group_id: str) -> None:
+        """
+        Start failback operation for Storage DR.
+
+        Parameters
+        ----------
+        workspace_group_id : str
+            ID of the workspace group
+
+        Examples
+        --------
+        >>> dr_mgr = singlestoredb.manage_storage_dr()
+        >>> dr_mgr.start_failback("wg-123")
+
+        """
+        self._post(f'workspaceGroups/{workspace_group_id}/storage/DR/failback')
+
+    def start_pre_provision(self, workspace_group_id: str) -> None:
+        """
+        Start pre-provisioning for Storage DR.
+
+        Parameters
+        ----------
+        workspace_group_id : str
+            ID of the workspace group
+
+        Examples
+        --------
+        >>> dr_mgr = singlestoredb.manage_storage_dr()
+        >>> dr_mgr.start_pre_provision("wg-123")
+
+        """
+        self._post(f'workspaceGroups/{workspace_group_id}/storage/DR/startPreProvision')
+
+    def stop_pre_provision(self, workspace_group_id: str) -> None:
+        """
+        Stop pre-provisioning for Storage DR.
+
+        Parameters
+        ----------
+        workspace_group_id : str
+            ID of the workspace group
+
+        Examples
+        --------
+        >>> dr_mgr = singlestoredb.manage_storage_dr()
+        >>> dr_mgr.stop_pre_provision("wg-123")
+
+        """
+        self._post(f'workspaceGroups/{workspace_group_id}/storage/DR/stopPreProvision')
+
+
+def manage_storage_dr(
+    access_token: Optional[str] = None,
+    version: Optional[str] = None,
+    base_url: Optional[str] = None,
+    *,
+    organization_id: Optional[str] = None,
+) -> StorageDRManager:
+    """
+    Retrieve a SingleStoreDB Storage DR manager.
+
+    Parameters
+    ----------
+    access_token : str, optional
+        The API key or other access token for the management API
+    version : str, optional
+        Version of the API to use
+    base_url : str, optional
+        Base URL of the management API
+    organization_id : str, optional
+        ID of organization, if using a JWT for authentication
+
+    Returns
+    -------
+    :class:`StorageDRManager`
+
+    Examples
+    --------
+    >>> import singlestoredb as s2
+    >>> dr_mgr = s2.manage_storage_dr()
+    >>> status = dr_mgr.get_status("wg-123")
+    >>> print(f"DR State: {status.compute.storage_dr_state}")
+
+    """
+    return StorageDRManager(
+        access_token=access_token,
+        base_url=base_url,
+        version=version,
+        organization_id=organization_id,
+    )

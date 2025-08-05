@@ -9,6 +9,7 @@ from typing import Union
 
 from ..exceptions import ManagementError
 from .manager import Manager
+from .utils import NamedList
 from .utils import to_datetime
 from .utils import vars_to_str
 
@@ -82,6 +83,86 @@ class IdentityRole(object):
         )
 
 
+class UserInvitation(object):
+    """
+    SingleStoreDB user invitation definition.
+
+    This object is not instantiated directly. It is used in the results
+    of API calls on the :class:`UsersManager`.
+
+    """
+
+    def __init__(
+        self,
+        invitation_id: str,
+        email: str,
+        state: str,
+        created_at: Union[str, datetime.datetime],
+        acted_at: Optional[Union[str, datetime.datetime]] = None,
+        message: Optional[str] = None,
+        team_ids: Optional[List[str]] = None,
+    ):
+        #: Unique ID of the invitation
+        self.id = invitation_id
+
+        #: Email address of the invited user
+        self.email = email
+
+        #: State of the invitation (Pending, Accepted, Refused, Revoked)
+        self.state = state
+
+        #: Timestamp of when the invitation was created
+        self.created_at = to_datetime(created_at)
+
+        #: Timestamp of most recent state change
+        self.acted_at = to_datetime(acted_at)
+
+        #: Welcome message
+        self.message = message
+
+        #: List of team IDs the user will be added to
+        self.team_ids = team_ids or []
+
+        self._manager: Optional['UsersManager'] = None
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
+    @classmethod
+    def from_dict(cls, obj: Dict[str, Any], manager: 'UsersManager') -> 'UserInvitation':
+        """
+        Construct a UserInvitation from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+        manager : UsersManager
+            The UsersManager the UserInvitation belongs to
+
+        Returns
+        -------
+        :class:`UserInvitation`
+
+        """
+        out = cls(
+            invitation_id=obj['invitationID'],
+            email=obj['email'],
+            state=obj['state'],
+            created_at=obj['createdAt'],
+            acted_at=obj.get('actedAt'),
+            message=obj.get('message'),
+            team_ids=obj.get('teamIDs', []),
+        )
+        out._manager = manager
+        return out
+
+
 class User(object):
     """
     SingleStoreDB user definition.
@@ -99,11 +180,9 @@ class User(object):
     def __init__(
         self,
         user_id: str,
-        email: Optional[str] = None,
-        name: Optional[str] = None,
-        created_at: Optional[Union[str, datetime.datetime]] = None,
-        last_login: Optional[Union[str, datetime.datetime]] = None,
-        status: Optional[str] = None,
+        email: str,
+        first_name: str,
+        last_name: str,
     ):
         #: Unique ID of the user
         self.id = user_id
@@ -111,17 +190,11 @@ class User(object):
         #: Email address of the user
         self.email = email
 
-        #: Display name of the user
-        self.name = name
+        #: First name of the user
+        self.first_name = first_name
 
-        #: Timestamp of when the user was created
-        self.created_at = to_datetime(created_at)
-
-        #: Timestamp of user's last login
-        self.last_login = to_datetime(last_login)
-
-        #: Status of the user account
-        self.status = status
+        #: Last name of the user
+        self.last_name = last_name
 
         self._manager: Optional['UsersManager'] = None
 
@@ -151,11 +224,9 @@ class User(object):
         """
         out = cls(
             user_id=obj['userID'],
-            email=obj.get('email'),
-            name=obj.get('name'),
-            created_at=obj.get('createdAt'),
-            last_login=obj.get('lastLogin'),
-            status=obj.get('status'),
+            email=obj['email'],
+            first_name=obj['firstName'],
+            last_name=obj['lastName'],
         )
         out._manager = manager
         return out
@@ -251,15 +322,126 @@ class UsersManager(Manager):
         --------
         >>> users_mgr = singlestoredb.manage_users()
         >>> user = users_mgr.get_user("user-123")
-        >>> roles = user.identity_roles()
+        >>> roles = user.identity_roles
 
         """
         # Note: The API doesn't seem to have a direct GET /users/{userID} endpoint
         # based on the documentation provided. We create a basic User object
         # that can be used to get identity roles.
-        user = User(user_id=user_id)
+        user = User(
+            user_id=user_id,
+            email='',  # Will be populated if/when user details endpoint is available
+            first_name='',
+            last_name='',
+        )
         user._manager = self
         return user
+
+    def create_user_invitation(
+        self,
+        email: str,
+        team_ids: Optional[List[str]] = None,
+    ) -> UserInvitation:
+        """
+        Create a user invitation.
+
+        Parameters
+        ----------
+        email : str
+            Email address of the user to invite
+        team_ids : List[str], optional
+            List of team IDs to add the user to upon acceptance
+
+        Returns
+        -------
+        :class:`UserInvitation`
+            Created user invitation
+
+        Examples
+        --------
+        >>> users_mgr = singlestoredb.manage_users()
+        >>> invitation = users_mgr.create_user_invitation(
+        ...     email="user@example.com",
+        ...     team_ids=["team-123"]
+        ... )
+        >>> print(invitation.state)
+        Pending
+
+        """
+        data: Dict[str, Any] = {
+            'email': email,
+        }
+        if team_ids is not None:
+            data['teamIDs'] = team_ids
+
+        res = self._post('userInvitations', json=data)
+        return self.get_user_invitation(res.json()['invitationID'])
+
+    def get_user_invitation(self, invitation_id: str) -> UserInvitation:
+        """
+        Get a user invitation.
+
+        Parameters
+        ----------
+        invitation_id : str
+            ID of the invitation
+
+        Returns
+        -------
+        :class:`UserInvitation`
+            User invitation object
+
+        Examples
+        --------
+        >>> users_mgr = singlestoredb.manage_users()
+        >>> invitation = users_mgr.get_user_invitation("invitation-123")
+        >>> print(f"Invitation for {invitation.email} is {invitation.state}")
+
+        """
+        res = self._get(f'userInvitations/{invitation_id}')
+        return UserInvitation.from_dict(res.json(), manager=self)
+
+    def list_user_invitations(self) -> NamedList[UserInvitation]:
+        """
+        List all user invitations for the current organization.
+
+        Returns
+        -------
+        NamedList[UserInvitation]
+            List of user invitations
+
+        Examples
+        --------
+        >>> users_mgr = singlestoredb.manage_users()
+        >>> invitations = users_mgr.list_user_invitations()
+        >>> for invitation in invitations:
+        ...     print(f"{invitation.email}: {invitation.state}")
+
+        """
+        res = self._get('userInvitations')
+        return NamedList([UserInvitation.from_dict(item, self) for item in res.json()])
+
+    def delete_user_invitation(self, invitation_id: str) -> None:
+        """
+        Delete (revoke) a user invitation.
+
+        Parameters
+        ----------
+        invitation_id : str
+            ID of the invitation to delete
+
+        Examples
+        --------
+        >>> users_mgr = singlestoredb.manage_users()
+        >>> users_mgr.delete_user_invitation("invitation-123")
+
+        """
+        self._delete(f'userInvitations/{invitation_id}')
+
+    @property
+    def user_invitations(self) -> NamedList[UserInvitation]:
+        """Return a list of user invitations."""
+        return self.list_user_invitations()
 
 
 def manage_users(

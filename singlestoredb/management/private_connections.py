@@ -9,9 +9,7 @@ from typing import Union
 
 from ..exceptions import ManagementError
 from .manager import Manager
-from .utils import camel_to_snake_dict
 from .utils import NamedList
-from .utils import snake_to_camel_dict
 from .utils import to_datetime
 from .utils import vars_to_str
 
@@ -37,26 +35,63 @@ class PrivateConnection(object):
 
     def __init__(
         self,
-        connection_id: str,
-        name: str,
-        service_type: str,
-        created_at: Union[str, datetime.datetime],
-        updated_at: Optional[Union[str, datetime.datetime]] = None,
+        private_connection_id: str,
+        workspace_group_id: str,
+        service_name: Optional[str] = None,
+        connection_type: Optional[str] = None,
         status: Optional[str] = None,
-        endpoint_service_id: Optional[str] = None,
-        aws_private_link: Optional[Dict[str, Any]] = None,
-        azure_private_link: Optional[Dict[str, Any]] = None,
-        gcp_private_service_connect: Optional[Dict[str, Any]] = None,
+        allow_list: Optional[str] = None,
+        outbound_allow_list: Optional[str] = None,
+        allowed_private_link_ids: Optional[List[str]] = None,
+        kai_endpoint_id: Optional[str] = None,
+        sql_port: Optional[int] = None,
+        websockets_port: Optional[int] = None,
+        endpoint: Optional[str] = None,
+        workspace_id: Optional[str] = None,
+        created_at: Optional[Union[str, datetime.datetime]] = None,
+        updated_at: Optional[Union[str, datetime.datetime]] = None,
+        active_at: Optional[Union[str, datetime.datetime]] = None,
+        deleted_at: Optional[Union[str, datetime.datetime]] = None,
     ):
         #: Unique ID of the private connection
-        self.id = connection_id
+        self.id = private_connection_id
 
-        #: Name of the private connection
-        self.name = name
+        #: ID of the workspace group containing the private connection
+        self.workspace_group_id = workspace_group_id
 
-        #: Service type (e.g., 'aws-privatelink', 'azure-privatelink',
-        #: 'gcp-private-service-connect')
-        self.service_type = service_type
+        #: Name of the private connection service
+        self.service_name = service_name
+
+        #: The private connection type (INBOUND, OUTBOUND)
+        self.type = connection_type
+
+        #: Status of the private connection (PENDING, ACTIVE, DELETED)
+        self.status = status
+
+        #: The private connection allow list (account ID for AWS,
+        #: subscription ID for Azure, project name for GCP)
+        self.allow_list = allow_list
+
+        #: The account ID allowed for outbound connections
+        self.outbound_allow_list = outbound_allow_list
+
+        #: List of allowed Private Link IDs
+        self.allowed_private_link_ids = allowed_private_link_ids or []
+
+        #: VPC Endpoint ID for AWS
+        self.kai_endpoint_id = kai_endpoint_id
+
+        #: The SQL port
+        self.sql_port = sql_port
+
+        #: The websockets port
+        self.websockets_port = websockets_port
+
+        #: The service endpoint
+        self.endpoint = endpoint
+
+        #: ID of the workspace to connect with
+        self.workspace_id = workspace_id
 
         #: Timestamp of when the private connection was created
         self.created_at = to_datetime(created_at)
@@ -64,26 +99,11 @@ class PrivateConnection(object):
         #: Timestamp of when the private connection was last updated
         self.updated_at = to_datetime(updated_at)
 
-        #: Status of the private connection
-        self.status = status
+        #: Timestamp of when the private connection became active
+        self.active_at = to_datetime(active_at)
 
-        #: Endpoint service ID
-        self.endpoint_service_id = endpoint_service_id
-
-        #: AWS PrivateLink configuration
-        self.aws_private_link = camel_to_snake_dict(
-            aws_private_link,
-        ) if aws_private_link else None
-
-        #: Azure Private Link configuration
-        self.azure_private_link = camel_to_snake_dict(
-            azure_private_link,
-        ) if azure_private_link else None
-
-        #: GCP Private Service Connect configuration
-        self.gcp_private_service_connect = camel_to_snake_dict(
-            gcp_private_service_connect,
-        ) if gcp_private_service_connect else None
+        #: Timestamp of when the private connection was deleted
+        self.deleted_at = to_datetime(deleted_at)
 
         self._manager: Optional['PrivateConnectionsManager'] = None
 
@@ -116,40 +136,38 @@ class PrivateConnection(object):
 
         """
         out = cls(
-            connection_id=obj['connectionID'],
-            name=obj['name'],
-            service_type=obj['serviceType'],
-            created_at=obj['createdAt'],
-            updated_at=obj.get('updatedAt'),
+            private_connection_id=obj['privateConnectionID'],
+            workspace_group_id=obj['workspaceGroupID'],
+            service_name=obj.get('serviceName'),
+            connection_type=obj.get('type'),
             status=obj.get('status'),
-            endpoint_service_id=obj.get('endpointServiceID'),
-            aws_private_link=obj.get('awsPrivateLink'),
-            azure_private_link=obj.get('azurePrivateLink'),
-            gcp_private_service_connect=obj.get('gcpPrivateServiceConnect'),
+            allow_list=obj.get('allowList'),
+            outbound_allow_list=obj.get('outboundAllowList'),
+            allowed_private_link_ids=obj.get('allowedPrivateLinkIDs', []),
+            kai_endpoint_id=obj.get('kaiEndpointID'),
+            sql_port=obj.get('sqlPort'),
+            websockets_port=obj.get('websocketsPort'),
+            endpoint=obj.get('endpoint'),
+            workspace_id=obj.get('workspaceID'),
+            created_at=obj.get('createdAt'),
+            updated_at=obj.get('updatedAt'),
+            active_at=obj.get('activeAt'),
+            deleted_at=obj.get('deletedAt'),
         )
         out._manager = manager
         return out
 
     def update(
         self,
-        name: Optional[str] = None,
-        aws_private_link: Optional[Dict[str, Any]] = None,
-        azure_private_link: Optional[Dict[str, Any]] = None,
-        gcp_private_service_connect: Optional[Dict[str, Any]] = None,
+        allow_list: Optional[str] = None,
     ) -> None:
         """
         Update the private connection definition.
 
         Parameters
         ----------
-        name : str, optional
-            New name for the private connection
-        aws_private_link : Dict[str, Any], optional
-            AWS PrivateLink configuration
-        azure_private_link : Dict[str, Any], optional
-            Azure Private Link configuration
-        gcp_private_service_connect : Dict[str, Any], optional
-            GCP Private Service Connect configuration
+        allow_list : str, optional
+            The private connection allow list
 
         """
         if self._manager is None:
@@ -157,14 +175,9 @@ class PrivateConnection(object):
                 msg='No private connections manager is associated with this object.',
             )
 
-        data = {
-            k: v for k, v in dict(
-                name=name,
-                awsPrivateLink=snake_to_camel_dict(aws_private_link),
-                azurePrivateLink=snake_to_camel_dict(azure_private_link),
-                gcpPrivateServiceConnect=snake_to_camel_dict(gcp_private_service_connect),
-            ).items() if v is not None
-        }
+        data = {}
+        if allow_list is not None:
+            data['allowList'] = allow_list
 
         if not data:
             return
@@ -203,18 +216,10 @@ class PrivateConnectionKaiInfo(object):
 
     def __init__(
         self,
-        endpoint_service_id: str,
-        availability_zones: List[str],
-        service_type: str,
+        service_name: str,
     ):
-        #: Endpoint service ID for Kai
-        self.endpoint_service_id = endpoint_service_id
-
-        #: Available zones for the connection
-        self.availability_zones = availability_zones
-
-        #: Service type
-        self.service_type = service_type
+        #: VPC Endpoint Service Name for AWS
+        self.service_name = service_name
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -239,9 +244,7 @@ class PrivateConnectionKaiInfo(object):
         :class:`PrivateConnectionKaiInfo`
         """
         return cls(
-            endpoint_service_id=obj['endpointServiceID'],
-            availability_zones=obj.get('availabilityZones', []),
-            service_type=obj['serviceType'],
+            service_name=obj['serviceName'],
         )
 
 
@@ -253,10 +256,10 @@ class PrivateConnectionOutboundAllowList(object):
 
     def __init__(
         self,
-        allowed_endpoints: List[str],
+        outbound_allow_list: str,
     ):
-        #: List of allowed outbound endpoints
-        self.allowed_endpoints = allowed_endpoints
+        #: The account ID allowed for outbound connections
+        self.outbound_allow_list = outbound_allow_list
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -282,7 +285,7 @@ class PrivateConnectionOutboundAllowList(object):
 
         """
         return cls(
-            allowed_endpoints=obj.get('allowedEndpoints', []),
+            outbound_allow_list=obj['outboundAllowList'],
         )
 
 
@@ -310,28 +313,36 @@ class PrivateConnectionsManager(Manager):
 
     def create_private_connection(
         self,
-        name: str,
-        service_type: str,
-        aws_private_link: Optional[Dict[str, Any]] = None,
-        azure_private_link: Optional[Dict[str, Any]] = None,
-        gcp_private_service_connect: Optional[Dict[str, Any]] = None,
+        workspace_group_id: str,
+        service_name: Optional[str] = None,
+        connection_type: Optional[str] = None,
+        kai_endpoint_id: Optional[str] = None,
+        allow_list: Optional[str] = None,
+        sql_port: Optional[int] = None,
+        websockets_port: Optional[int] = None,
+        workspace_id: Optional[str] = None,
     ) -> PrivateConnection:
         """
         Create a new private connection.
 
         Parameters
         ----------
-        name : str
-            Name of the private connection
-        service_type : str
-            Service type ('aws-privatelink', 'azure-privatelink',
-            'gcp-private-service-connect')
-        aws_private_link : Dict[str, Any], optional
-            AWS PrivateLink configuration
-        azure_private_link : Dict[str, Any], optional
-            Azure Private Link configuration
-        gcp_private_service_connect : Dict[str, Any], optional
-            GCP Private Service Connect configuration
+        workspace_group_id : str
+            The ID of the workspace group containing the private connection
+        service_name : str, optional
+            The name of the private connection service
+        connection_type : str, optional
+            The private connection type ('INBOUND', 'OUTBOUND')
+        kai_endpoint_id : str, optional
+            VPC Endpoint ID for AWS
+        allow_list : str, optional
+            The private connection allow list
+        sql_port : int, optional
+            The SQL port
+        websockets_port : int, optional
+            The websockets port
+        workspace_id : str, optional
+            The ID of the workspace to connect with
 
         Returns
         -------
@@ -341,26 +352,28 @@ class PrivateConnectionsManager(Manager):
         --------
         >>> pc_mgr = singlestoredb.manage_private_connections()
         >>> connection = pc_mgr.create_private_connection(
-        ...     name="My AWS PrivateLink",
-        ...     service_type="aws-privatelink",
-        ...     aws_private_link={
-        ...         "vpc_endpoint_id": "vpce-123456789abcdef01"
-        ...     }
+        ...     workspace_group_id="wg-123",
+        ...     service_name="My PrivateLink",
+        ...     connection_type="INBOUND",
+        ...     kai_endpoint_id="vpce-123456789abcdef01"
         ... )
 
         """
         data = {
             k: v for k, v in dict(
-                name=name,
-                serviceType=service_type,
-                awsPrivateLink=snake_to_camel_dict(aws_private_link),
-                azurePrivateLink=snake_to_camel_dict(azure_private_link),
-                gcpPrivateServiceConnect=snake_to_camel_dict(gcp_private_service_connect),
+                workspaceGroupID=workspace_group_id,
+                serviceName=service_name,
+                type=connection_type,
+                kaiEndpointID=kai_endpoint_id,
+                allowList=allow_list,
+                sqlPort=sql_port,
+                websocketsPort=websockets_port,
+                workspaceID=workspace_id,
             ).items() if v is not None
         }
 
         res = self._post('privateConnections', json=data)
-        return self.get_private_connection(res.json()['connectionID'])
+        return self.get_private_connection(res.json()['privateConnectionID'])
 
     def get_private_connection(self, connection_id: str) -> PrivateConnection:
         """
@@ -399,7 +412,7 @@ class PrivateConnectionsManager(Manager):
         >>> pc_mgr = singlestoredb.manage_private_connections()
         >>> connections = pc_mgr.private_connections
         >>> for conn in connections:
-        ...     print(f"{conn.name}: {conn.service_type}")
+        ...     print(f"{conn.service_name}: {conn.type}")
 
         """
         res = self._get('privateConnections')
@@ -424,10 +437,7 @@ class PrivateConnectionsManager(Manager):
     def update_private_connection(
         self,
         connection_id: str,
-        name: Optional[str] = None,
-        aws_private_link: Optional[Dict[str, Any]] = None,
-        azure_private_link: Optional[Dict[str, Any]] = None,
-        gcp_private_service_connect: Optional[Dict[str, Any]] = None,
+        allow_list: Optional[str] = None,
     ) -> PrivateConnection:
         """
         Update a private connection.
@@ -436,14 +446,8 @@ class PrivateConnectionsManager(Manager):
         ----------
         connection_id : str
             ID of the private connection to update
-        name : str, optional
-            New name for the private connection
-        aws_private_link : Dict[str, Any], optional
-            AWS PrivateLink configuration
-        azure_private_link : Dict[str, Any], optional
-            Azure Private Link configuration
-        gcp_private_service_connect : Dict[str, Any], optional
-            GCP Private Service Connect configuration
+        allow_list : str, optional
+            The private connection allow list
 
         Returns
         -------
@@ -455,18 +459,13 @@ class PrivateConnectionsManager(Manager):
         >>> pc_mgr = singlestoredb.manage_private_connections()
         >>> connection = pc_mgr.update_private_connection(
         ...     "conn-123",
-        ...     name="Updated Connection Name"
+        ...     allow_list="my-allow-list"
         ... )
 
         """
-        data = {
-            k: v for k, v in dict(
-                name=name,
-                awsPrivateLink=snake_to_camel_dict(aws_private_link),
-                azurePrivateLink=snake_to_camel_dict(azure_private_link),
-                gcpPrivateServiceConnect=snake_to_camel_dict(gcp_private_service_connect),
-            ).items() if v is not None
-        }
+        data = {}
+        if allow_list is not None:
+            data['allowList'] = allow_list
 
         if not data:
             return self.get_private_connection(connection_id)
