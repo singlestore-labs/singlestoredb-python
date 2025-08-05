@@ -685,6 +685,9 @@ class Workspace(object):
     resume_attachments: Optional[List[Dict[str, Any]]]
     scaling_progress: Optional[int]
     last_resumed_at: Optional[datetime.datetime]
+    auto_scale: Optional[Dict[str, Any]]
+    kai_enabled: Optional[bool]
+    scale_factor: Optional[int]
 
     def __init__(
         self,
@@ -702,6 +705,9 @@ class Workspace(object):
         resume_attachments: Optional[List[Dict[str, Any]]] = None,
         scaling_progress: Optional[int] = None,
         last_resumed_at: Optional[Union[str, datetime.datetime]] = None,
+        auto_scale: Optional[Dict[str, Any]] = None,
+        kai_enabled: Optional[bool] = None,
+        scale_factor: Optional[int] = None,
     ):
         #: Name of the workspace
         self.name = name
@@ -753,6 +759,15 @@ class Workspace(object):
         #: Timestamp when workspace was last resumed
         self.last_resumed_at = to_datetime(last_resumed_at)
 
+        #: Autoscaling configuration
+        self.auto_scale = camel_to_snake_dict(auto_scale)
+
+        #: Whether SingleStore Kai is enabled
+        self.kai_enabled = kai_enabled
+
+        #: Current scale factor
+        self.scale_factor = scale_factor
+
         self._manager: Optional[WorkspaceManager] = None
 
     def __str__(self) -> str:
@@ -795,6 +810,9 @@ class Workspace(object):
             last_resumed_at=obj.get('lastResumedAt'),
             resume_attachments=obj.get('resumeAttachments'),
             scaling_progress=obj.get('scalingProgress'),
+            auto_scale=obj.get('autoScale'),
+            kai_enabled=obj.get('kaiEnabled'),
+            scale_factor=obj.get('scaleFactor'),
         )
         out._manager = manager
         return out
