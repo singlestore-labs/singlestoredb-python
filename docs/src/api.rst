@@ -243,6 +243,8 @@ object that can be used to interact with the Management API.
    manage_users
    manage_audit_logs
    manage_private_connections
+   manage_storage_dr
+   manage_metrics
 
 
 WorkspaceManager
@@ -485,6 +487,11 @@ They allow you to retrieve and manage users in your organization.
    UsersManager
    UsersManager.get_user
    UsersManager.get_user_identity_roles
+   UsersManager.create_user_invitation
+   UsersManager.get_user_invitation
+   UsersManager.list_user_invitations
+   UsersManager.delete_user_invitation
+   UsersManager.user_invitations
 
 
 User
@@ -497,6 +504,17 @@ User objects are retrieved from :meth:`UsersManager.get_user`.
 
    User
    User.identity_roles
+
+
+UserInvitation
+..............
+
+UserInvitation objects are returned by the various UsersManager invitation methods.
+
+.. autosummary::
+   :toctree: generated/
+
+   UserInvitation
 
 
 AuditLogsManager
@@ -596,13 +614,32 @@ IdentityRole objects are used by both teams and users management for role inform
    IdentityRole
 
 
+StorageDRManager
+................
+
+StorageDRManager objects are returned by the :func:`manage_storage_dr` function.
+They allow you to manage storage disaster recovery for your organization.
+
+.. currentmodule:: singlestoredb.management.storage_dr
+
+.. autosummary::
+   :toctree: generated/
+
+   StorageDRManager
+   StorageDRManager.get_status
+   StorageDRManager.get_available_regions
+   StorageDRManager.setup_storage_dr
+   StorageDRManager.start_failover
+   StorageDRManager.start_failback
+   StorageDRManager.start_pre_provision
+   StorageDRManager.stop_pre_provision
+
+
 Storage DR
 ----------
 
 Storage Disaster Recovery objects provide information about replicated databases
 and disaster recovery regions.
-
-.. currentmodule:: singlestoredb.management.storage_dr
 
 .. autosummary::
    :toctree: generated/
@@ -610,6 +647,22 @@ and disaster recovery regions.
    ReplicatedDatabase
    StorageDRStatus
    StorageDRRegion
+   StorageDRCompute
+
+
+MetricsManager
+..............
+
+MetricsManager objects are returned by the :func:`manage_metrics` function.
+They allow you to retrieve metrics for your organization.
+
+.. currentmodule:: singlestoredb.management.metrics
+
+.. autosummary::
+   :toctree: generated/
+
+   MetricsManager
+   MetricsManager.get_workspace_group_metrics
 
 
 Metrics
@@ -617,13 +670,25 @@ Metrics
 
 Metrics objects provide workspace group metrics and data points.
 
-.. currentmodule:: singlestoredb.management.metrics
+.. autosummary::
+   :toctree: generated/
+
+   WorkspaceGroupMetrics
+   MetricDataPoint
+
+
+Billing Usage
+-------------
+
+Billing Usage objects provide usage and billing information for workspaces.
+
+.. currentmodule:: singlestoredb.management.billing_usage
 
 .. autosummary::
    :toctree: generated/
 
-   WorkspaceGroupMetric
-   MetricDataPoint
+   UsageItem
+   BillingUsageItem
 
 
 Notebook Tools
