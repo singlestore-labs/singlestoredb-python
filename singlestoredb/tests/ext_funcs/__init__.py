@@ -29,6 +29,43 @@ from singlestoredb.functions.typing import pyarrow as pat
 
 
 @udf
+def doc_test(x: int, y: float) -> int:
+    """
+    A simple function to test the decorator and documentation.
+
+    Parameters
+    ----------
+    x : int
+        An integer to be multiplied by 2.
+    y : float
+        A float that is not used in the computation.
+
+    Examples
+    --------
+    Basic usage of the function:
+    >>> doc_test(3, 4.5)
+    6
+
+    Another example with different values:
+    >>> doc_test(5, 2.0)
+    10
+
+    SQL Example
+    sql> SELECT doc_test(3, 4.5);
+    6
+
+    Final text
+
+    Returns
+    -------
+    int
+        The input integer multiplied by 2.
+
+    """
+    return x * 2
+
+
+@udf
 def int_mult(x: int, y: int) -> int:
     return x * y
 

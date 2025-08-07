@@ -1262,14 +1262,26 @@ class Application(object):
                         doc_summary = docs.short_description or ''
                         doc_long_description = docs.long_description or ''
                     for ex in docs.examples:
-                        out = []
+                        ex_dict: Dict[str, Any] = {
+                            'description': None,
+                            'code': None,
+                            'output': None,
+                        }
                         if ex.description:
-                            out.append(ex.description)
+                            ex_dict['description'] = ex.description
                         if ex.snippet:
-                            out.append(ex.snippet)
+                            code, output = [], []
+                            for line in ex.snippet.split('\n'):
+                                line = line.rstrip()
+                                if re.match(r'^(\w+>|>>>|\.\.\.)', line):
+                                    code.append(line)
+                                else:
+                                    output.append(line)
+                            ex_dict['code'] = '\n'.join(code) or None
+                            ex_dict['output'] = '\n'.join(output) or None
                         if ex.post_snippet:
-                            out.append(ex.post_snippet)
-                        doc_examples.append('\n'.join(out))
+                            ex_dict['postscript'] = ex.post_snippet
+                        doc_examples.append(ex_dict)
 
                 except Exception as e:
                     logger.warning(
