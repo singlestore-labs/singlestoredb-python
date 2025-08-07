@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStoreDB 1.15.0 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 1.15.1 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
-        <script src="_static/documentation_options.js?v=70d5d4a5"></script>
+        <script src="_static/documentation_options.js?v=d4ad50bc"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                1.15.0
+                1.15.1
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -694,7 +694,7 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 <p>Region objects are accessed from the <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html#singlestoredb.management.workspace.WorkspaceManager.regions" title="singlestoredb.management.workspace.WorkspaceManager.regions"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a> attribute.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.region.Region.html#singlestoredb.management.region.Region" title="singlestoredb.management.region.Region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Region</span></code></a>(id, name, provider)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.region.Region.html#singlestoredb.management.region.Region" title="singlestoredb.management.region.Region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Region</span></code></a>(name, provider[, id, region_name])</p></td>
 <td><p>Cluster region information.</p></td>
 </tr>
 </tbody>
@@ -702,8 +702,8 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 </section>
 <section id="stage-files">
 <h3>Stage Files<a class="headerlink" href="#stage-files" title="Link to this heading">¶</a></h3>
-<p>To interact with files in your Stage, use the
-<code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.stage</span></code> attribute.
+<p>To interact with files in your Stage, use the<a href="singlestoredb.management.workspace.WorkspaceGroup.stage.html">
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceGroup.stage</span></code></a> attribute.
 It will return a<a href="singlestoredb.management.workspace.Stage.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Stage</span></code></a> object which defines the following
 methods and attributes.</p>
 <table class="autosummary longtable docutils align-default">

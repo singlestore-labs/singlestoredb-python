@@ -12,3 +12,4 @@
       ~Region.id
       ~Region.name
       ~Region.provider
+      ~Region.region_name

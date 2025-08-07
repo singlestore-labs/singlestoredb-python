@@ -43,7 +43,9 @@ def doc_test(x: int, y: float) -> int:
     Examples
     --------
     Basic usage of the function:
-    >>> doc_test(3, 4.5)
+    >>> doc_test(
+    ...     3, 4.5,
+    ... )
     6
 
     Another example with different values:

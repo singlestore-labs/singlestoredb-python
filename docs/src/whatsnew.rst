@@ -8,6 +8,14 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.15.1 - August 7, 2025
+------------------------
+* Add more validation of UDF type parameters in UDF app (experimental)
+* Add docstring information to function information returned by UDF app (experimental)
+* Update OpenAI wrapper
+* Fix starter workspace connections
+* Fix management API HTTP requests with extra parameters
+
 v1.15.0 - July 21, 2025
 -----------------------
 * Fix issues with SQL notebook cells in notebooks called from `%run_shared` or `%run_personal`
