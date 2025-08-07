@@ -148,7 +148,7 @@ class Manager(object):
 
         """
         if self._params:
-            kwargs['params'] = self._params
+            kwargs.setdefault('params', {}).update(self._params)
         set_organization(kwargs)
         return self._check(self._doit('get', path, *args, **kwargs), path, kwargs)
 
@@ -171,7 +171,7 @@ class Manager(object):
 
         """
         if self._params:
-            kwargs['params'] = self._params
+            kwargs.setdefault('params', {}).update(self._params)
         set_organization(kwargs)
         return self._check(self._doit('post', path, *args, **kwargs), path, kwargs)
 
@@ -194,7 +194,7 @@ class Manager(object):
 
         """
         if self._params:
-            kwargs['params'] = self._params
+            kwargs.setdefault('params', {}).update(self._params)
         set_organization(kwargs)
         return self._check(self._doit('put', path, *args, **kwargs), path, kwargs)
 
@@ -217,7 +217,7 @@ class Manager(object):
 
         """
         if self._params:
-            kwargs['params'] = self._params
+            kwargs.setdefault('params', {}).update(self._params)
         set_organization(kwargs)
         return self._check(self._doit('delete', path, *args, **kwargs), path, kwargs)
 
@@ -240,7 +240,7 @@ class Manager(object):
 
         """
         if self._params:
-            kwargs['params'] = self._params
+            kwargs.setdefault('params', {}).update(self._params)
         set_organization(kwargs)
         return self._check(self._doit('patch', path, *args, **kwargs), path, kwargs)
 
