@@ -50,10 +50,10 @@ async def run_udf_app(
     app = Application(url=base_url, app_mode='managed', name_suffix=udf_suffix)
 
     if not app.endpoints:
-        raise ValueError("You must define at least one function.")
+        raise ValueError('You must define at least one function.')
     if len(app.endpoints) > MAX_UDFS_LIMIT:
         raise ValueError(
-            f"You can only define a maximum of {MAX_UDFS_LIMIT} functions."
+            f"You can only define a maximum of {MAX_UDFS_LIMIT} functions.",
         )
 
     config = uvicorn.Config(
