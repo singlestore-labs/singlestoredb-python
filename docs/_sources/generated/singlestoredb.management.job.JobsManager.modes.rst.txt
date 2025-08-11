@@ -1,0 +1,4 @@
+﻿singlestoredb.management.job.JobsManager.modes
+==============================================
+.. currentmodule:: singlestoredb.management.job
+.. automethod:: JobsManager.modes

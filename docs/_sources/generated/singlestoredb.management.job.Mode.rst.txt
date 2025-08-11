@@ -1,0 +1,12 @@
+﻿singlestoredb.management.job.Mode
+=================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: Mode
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~Mode.from_str
+   .. rubric:: Attributes
+   .. autosummary::
+      ~Mode.ONCE
+      ~Mode.RECURRING

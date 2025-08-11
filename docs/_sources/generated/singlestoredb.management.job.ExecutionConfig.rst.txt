@@ -1,0 +1,14 @@
+﻿singlestoredb.management.job.ExecutionConfig
+============================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: ExecutionConfig
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~ExecutionConfig.__init__
+      ~ExecutionConfig.from_dict
+   .. rubric:: Attributes
+   .. autosummary::
+      ~ExecutionConfig.create_snapshot
+      ~ExecutionConfig.max_duration_in_mins
+      ~ExecutionConfig.notebook_path

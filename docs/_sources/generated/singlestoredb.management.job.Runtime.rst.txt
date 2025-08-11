@@ -1,0 +1,13 @@
+﻿singlestoredb.management.job.Runtime
+====================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: Runtime
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~Runtime.__init__
+      ~Runtime.from_dict
+   .. rubric:: Attributes
+   .. autosummary::
+      ~Runtime.name
+      ~Runtime.description

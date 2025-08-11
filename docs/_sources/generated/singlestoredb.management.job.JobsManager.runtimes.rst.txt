@@ -1,0 +1,4 @@
+﻿singlestoredb.management.job.JobsManager.runtimes
+=================================================
+.. currentmodule:: singlestoredb.management.job
+.. automethod:: JobsManager.runtimes

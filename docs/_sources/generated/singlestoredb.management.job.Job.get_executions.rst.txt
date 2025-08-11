@@ -1,0 +1,4 @@
+﻿singlestoredb.management.job.Job.get\_executions
+================================================
+.. currentmodule:: singlestoredb.management.job
+.. automethod:: Job.get_executions

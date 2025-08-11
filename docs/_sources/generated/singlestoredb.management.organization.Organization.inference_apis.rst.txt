@@ -1,0 +1,4 @@
+﻿singlestoredb.management.organization.Organization.inference\_apis
+==================================================================
+.. currentmodule:: singlestoredb.management.organization
+.. autoproperty:: Organization.inference_apis

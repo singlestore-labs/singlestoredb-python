@@ -1,0 +1,4 @@
+﻿singlestoredb.management.job.Job.wait
+=====================================
+.. currentmodule:: singlestoredb.management.job
+.. automethod:: Job.wait

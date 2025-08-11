@@ -1,0 +1,14 @@
+﻿singlestoredb.management.job.Schedule
+=====================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: Schedule
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~Schedule.__init__
+      ~Schedule.from_dict
+   .. rubric:: Attributes
+   .. autosummary::
+      ~Schedule.execution_interval_in_minutes
+      ~Schedule.mode
+      ~Schedule.start_at

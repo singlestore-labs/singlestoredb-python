@@ -1,0 +1,17 @@
+﻿singlestoredb.management.organization.Organization
+==================================================
+.. currentmodule:: singlestoredb.management.organization
+.. autoclass:: Organization
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~Organization.__init__
+      ~Organization.from_dict
+      ~Organization.get_secret
+   .. rubric:: Attributes
+   .. autosummary::
+      ~Organization.inference_apis
+      ~Organization.jobs
+      ~Organization.id
+      ~Organization.name
+      ~Organization.firewall_ranges

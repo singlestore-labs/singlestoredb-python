@@ -1,0 +1,19 @@
+﻿singlestoredb.management.job.Execution
+======================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: Execution
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~Execution.__init__
+      ~Execution.from_dict
+   .. rubric:: Attributes
+   .. autosummary::
+      ~Execution.execution_id
+      ~Execution.job_id
+      ~Execution.status
+      ~Execution.snapshot_notebook_path
+      ~Execution.scheduled_start_time
+      ~Execution.started_at
+      ~Execution.finished_at
+      ~Execution.execution_number

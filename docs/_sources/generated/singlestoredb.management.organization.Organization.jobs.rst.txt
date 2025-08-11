@@ -1,0 +1,4 @@
+﻿singlestoredb.management.organization.Organization.jobs
+=======================================================
+.. currentmodule:: singlestoredb.management.organization
+.. autoproperty:: Organization.jobs

@@ -1,0 +1,13 @@
+﻿singlestoredb.management.job.ExecutionMetadata
+==============================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: ExecutionMetadata
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~ExecutionMetadata.__init__
+      ~ExecutionMetadata.from_dict
+   .. rubric:: Attributes
+   .. autosummary::
+      ~ExecutionMetadata.start_execution_number
+      ~ExecutionMetadata.end_execution_number

@@ -1,0 +1,4 @@
+﻿singlestoredb.management.job.Job.get\_parameters
+================================================
+.. currentmodule:: singlestoredb.management.job
+.. automethod:: Job.get_parameters

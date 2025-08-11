@@ -1,0 +1,13 @@
+﻿singlestoredb.management.job.TargetType
+=======================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: TargetType
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~TargetType.from_str
+   .. rubric:: Attributes
+   .. autosummary::
+      ~TargetType.WORKSPACE
+      ~TargetType.CLUSTER
+      ~TargetType.VIRTUAL_WORKSPACE

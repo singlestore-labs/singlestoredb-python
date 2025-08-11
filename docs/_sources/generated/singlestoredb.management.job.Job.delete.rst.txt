@@ -1,0 +1,4 @@
+﻿singlestoredb.management.job.Job.delete
+=======================================
+.. currentmodule:: singlestoredb.management.job
+.. automethod:: Job.delete

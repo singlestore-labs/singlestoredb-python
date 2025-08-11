@@ -1,0 +1,17 @@
+﻿singlestoredb.management.job.JobsManager
+========================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: JobsManager
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~JobsManager.__init__
+      ~JobsManager.delete
+      ~JobsManager.get
+      ~JobsManager.get_executions
+      ~JobsManager.get_parameters
+      ~JobsManager.modes
+      ~JobsManager.run
+      ~JobsManager.runtimes
+      ~JobsManager.schedule
+      ~JobsManager.wait

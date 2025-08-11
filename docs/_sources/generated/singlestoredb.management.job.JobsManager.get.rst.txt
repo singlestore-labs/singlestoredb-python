@@ -1,0 +1,4 @@
+﻿singlestoredb.management.job.JobsManager.get
+============================================
+.. currentmodule:: singlestoredb.management.job
+.. automethod:: JobsManager.get

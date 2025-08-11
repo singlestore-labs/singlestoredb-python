@@ -151,6 +151,23 @@
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.region.Region.html">region.Region</a></li>
 </ul>
 </li>
+<li class="toctree-l3"><a class="reference internal" href="#organization">Organization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.html">organization.Organization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.get_secret.html">organization.Organization.get_secret</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.jobs.html">organization.Organization.jobs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.inference_apis.html">organization.Organization.inference_apis</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#secret">Secret</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.organization.Secret.html">organization.Secret</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#jobs-management">Jobs Management</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#jobsmanager">JobsManager</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job">Job</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#supporting-classes">Supporting Classes</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="#stage-files">Stage Files</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.html">workspace.Stage</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.open.html">workspace.stage.open</a></li>
@@ -699,6 +716,150 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 </tr>
 </tbody>
 </table>
+</section>
+<section id="organization">
+<h3>Organization<a class="headerlink" href="#organization" title="Link to this heading">¶</a></h3>
+<p>Organization objects are retrieved from<a href="singlestoredb.management.workspace.WorkspaceManager.organization.html"> <code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.organization</span></code></a>.
+They provide access to organization-level resources and operations.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.html#singlestoredb.management.organization.Organization" title="singlestoredb.management.organization.Organization"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Organization</span></code></a>(id, name, firewall_ranges)</p></td>
+<td><p>Organization in SingleStoreDB Cloud portal.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.get_secret.html#singlestoredb.management.organization.Organization.get_secret" title="singlestoredb.management.organization.Organization.get_secret"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Organization.get_secret</span></code></a>(name)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.jobs.html#singlestoredb.management.organization.Organization.jobs" title="singlestoredb.management.organization.Organization.jobs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Organization.jobs</span></code></a></p></td>
+<td><p>Retrieve a SingleStoreDB scheduled job manager.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.inference_apis.html#singlestoredb.management.organization.Organization.inference_apis" title="singlestoredb.management.organization.Organization.inference_apis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Organization.inference_apis</span></code></a></p></td>
+<td><p>Retrieve a SingleStoreDB inference api manager.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="secret">
+<h3>Secret<a class="headerlink" href="#secret" title="Link to this heading">¶</a></h3>
+<p>Secret objects are retrieved from <a class="reference internal" href="generated/singlestoredb.management.organization.Organization.get_secret.html#singlestoredb.management.organization.Organization.get_secret" title="singlestoredb.management.organization.Organization.get_secret"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Organization.get_secret()</span></code></a>.
+They represent organization-wide secrets that can be used in various operations.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.organization.Secret.html#singlestoredb.management.organization.Secret" title="singlestoredb.management.organization.Secret"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Secret</span></code></a>(id, name, created_by, created_at, ...)</p></td>
+<td><p>SingleStoreDB secrets definition.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="jobs-management">
+<h3>Jobs Management<a class="headerlink" href="#jobs-management" title="Link to this heading">¶</a></h3>
+<p>The jobs management functionality allows you to schedule and manage notebook executions.</p>
+<section id="jobsmanager">
+<h4>JobsManager<a class="headerlink" href="#jobsmanager" title="Link to this heading">¶</a></h4>
+<p>JobsManager objects are accessed through <a class="reference internal" href="generated/singlestoredb.management.organization.Organization.jobs.html#singlestoredb.management.organization.Organization.jobs" title="singlestoredb.management.organization.Organization.jobs"><code class="xref py py-attr docutils literal notranslate"><span class="pre">Organization.jobs</span></code></a> and provide
+methods for creating, monitoring, and managing scheduled notebook jobs.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.html#singlestoredb.management.job.JobsManager" title="singlestoredb.management.job.JobsManager"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JobsManager</span></code></a>(manager)</p></td>
+<td><p>SingleStoreDB scheduled notebook jobs manager.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.schedule.html#singlestoredb.management.job.JobsManager.schedule" title="singlestoredb.management.job.JobsManager.schedule"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JobsManager.schedule</span></code></a>(notebook_path, mode, ...)</p></td>
+<td><p>Creates and returns a scheduled notebook job.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.run.html#singlestoredb.management.job.JobsManager.run" title="singlestoredb.management.job.JobsManager.run"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JobsManager.run</span></code></a>(notebook_path[, ...])</p></td>
+<td><p>Creates and returns a scheduled notebook job that runs once immediately.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.wait.html#singlestoredb.management.job.JobsManager.wait" title="singlestoredb.management.job.JobsManager.wait"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JobsManager.wait</span></code></a>(jobs[, timeout])</p></td>
+<td><p>Wait for jobs to finish executing.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.get.html#singlestoredb.management.job.JobsManager.get" title="singlestoredb.management.job.JobsManager.get"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JobsManager.get</span></code></a>(job_id)</p></td>
+<td><p>Get a job by its ID.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.get_executions.html#singlestoredb.management.job.JobsManager.get_executions" title="singlestoredb.management.job.JobsManager.get_executions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JobsManager.get_executions</span></code></a>(job_id, ...)</p></td>
+<td><p>Get executions for a job by its ID.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.get_parameters.html#singlestoredb.management.job.JobsManager.get_parameters" title="singlestoredb.management.job.JobsManager.get_parameters"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JobsManager.get_parameters</span></code></a>(job_id)</p></td>
+<td><p>Get parameters for a job by its ID.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.delete.html#singlestoredb.management.job.JobsManager.delete" title="singlestoredb.management.job.JobsManager.delete"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JobsManager.delete</span></code></a>(job_id)</p></td>
+<td><p>Delete a job by its ID.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.modes.html#singlestoredb.management.job.JobsManager.modes" title="singlestoredb.management.job.JobsManager.modes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JobsManager.modes</span></code></a>()</p></td>
+<td><p>Get all possible job scheduling modes.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.runtimes.html#singlestoredb.management.job.JobsManager.runtimes" title="singlestoredb.management.job.JobsManager.runtimes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JobsManager.runtimes</span></code></a>()</p></td>
+<td><p>Get all available job runtimes.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="job">
+<h4>Job<a class="headerlink" href="#job" title="Link to this heading">¶</a></h4>
+<p>Job objects represent scheduled notebook executions and are returned by
+<a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.schedule.html#singlestoredb.management.job.JobsManager.schedule" title="singlestoredb.management.job.JobsManager.schedule"><code class="xref py py-meth docutils literal notranslate"><span class="pre">JobsManager.schedule()</span></code></a>, <a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.run.html#singlestoredb.management.job.JobsManager.run" title="singlestoredb.management.job.JobsManager.run"><code class="xref py py-meth docutils literal notranslate"><span class="pre">JobsManager.run()</span></code></a>, and <a class="reference internal" href="generated/singlestoredb.management.job.JobsManager.get.html#singlestoredb.management.job.JobsManager.get" title="singlestoredb.management.job.JobsManager.get"><code class="xref py py-meth docutils literal notranslate"><span class="pre">JobsManager.get()</span></code></a>.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Job.html#singlestoredb.management.job.Job" title="singlestoredb.management.job.Job"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Job</span></code></a>(completed_executions_count, created_at, ...)</p></td>
+<td><p>Scheduled Notebook Job definition.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Job.wait.html#singlestoredb.management.job.Job.wait" title="singlestoredb.management.job.Job.wait"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Job.wait</span></code></a>([timeout])</p></td>
+<td><p>Wait for the job to complete.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Job.get_executions.html#singlestoredb.management.job.Job.get_executions" title="singlestoredb.management.job.Job.get_executions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Job.get_executions</span></code></a>(start_execution_number, ...)</p></td>
+<td><p>Get executions for the job.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Job.get_parameters.html#singlestoredb.management.job.Job.get_parameters" title="singlestoredb.management.job.Job.get_parameters"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Job.get_parameters</span></code></a>()</p></td>
+<td><p>Get parameters for the job.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Job.delete.html#singlestoredb.management.job.Job.delete" title="singlestoredb.management.job.Job.delete"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Job.delete</span></code></a>()</p></td>
+<td><p>Delete the job.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="supporting-classes">
+<h4>Supporting Classes<a class="headerlink" href="#supporting-classes" title="Link to this heading">¶</a></h4>
+<p>The following classes are used as parameters and return values in the jobs API.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Mode.html#singlestoredb.management.job.Mode" title="singlestoredb.management.job.Mode"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Mode</span></code></a>(value[, names, module, qualname, type, ...])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.TargetType.html#singlestoredb.management.job.TargetType" title="singlestoredb.management.job.TargetType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TargetType</span></code></a>(value[, names, module, qualname, ...])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Status.html#singlestoredb.management.job.Status" title="singlestoredb.management.job.Status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Status</span></code></a>(value[, names, module, qualname, ...])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Parameter.html#singlestoredb.management.job.Parameter" title="singlestoredb.management.job.Parameter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Parameter</span></code></a>(name, value, type)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Runtime.html#singlestoredb.management.job.Runtime" title="singlestoredb.management.job.Runtime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Runtime</span></code></a>(name, description)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.JobMetadata.html#singlestoredb.management.job.JobMetadata" title="singlestoredb.management.job.JobMetadata"><code class="xref py py-obj docutils literal notranslate"><span class="pre">JobMetadata</span></code></a>(avg_duration_in_seconds, count, ...)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.ExecutionMetadata.html#singlestoredb.management.job.ExecutionMetadata" title="singlestoredb.management.job.ExecutionMetadata"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ExecutionMetadata</span></code></a>(start_execution_number, ...)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Execution.html#singlestoredb.management.job.Execution" title="singlestoredb.management.job.Execution"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Execution</span></code></a>(execution_id, job_id, status, ...)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.ExecutionsData.html#singlestoredb.management.job.ExecutionsData" title="singlestoredb.management.job.ExecutionsData"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ExecutionsData</span></code></a>(executions, metadata)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.ExecutionConfig.html#singlestoredb.management.job.ExecutionConfig" title="singlestoredb.management.job.ExecutionConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ExecutionConfig</span></code></a>(create_snapshot, ...)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Schedule.html#singlestoredb.management.job.Schedule" title="singlestoredb.management.job.Schedule"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Schedule</span></code></a>(execution_interval_in_minutes, ...)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.TargetConfig.html#singlestoredb.management.job.TargetConfig" title="singlestoredb.management.job.TargetConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TargetConfig</span></code></a>(database_name, resume_target, ...)</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</section>
 </section>
 <section id="stage-files">
 <h3>Stage Files<a class="headerlink" href="#stage-files" title="Link to this heading">¶</a></h3>

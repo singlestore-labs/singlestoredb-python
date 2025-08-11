@@ -1,0 +1,26 @@
+﻿singlestoredb.management.job.Job
+================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: Job
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~Job.__init__
+      ~Job.delete
+      ~Job.from_dict
+      ~Job.get_executions
+      ~Job.get_parameters
+      ~Job.wait
+   .. rubric:: Attributes
+   .. autosummary::
+      ~Job.completed_executions_count
+      ~Job.created_at
+      ~Job.description
+      ~Job.enqueued_by
+      ~Job.execution_config
+      ~Job.job_id
+      ~Job.job_metadata
+      ~Job.name
+      ~Job.schedule
+      ~Job.target_config
+      ~Job.terminated_at

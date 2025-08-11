@@ -1,0 +1,13 @@
+﻿singlestoredb.management.job.ExecutionsData
+===========================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: ExecutionsData
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~ExecutionsData.__init__
+      ~ExecutionsData.from_dict
+   .. rubric:: Attributes
+   .. autosummary::
+      ~ExecutionsData.executions
+      ~ExecutionsData.metadata

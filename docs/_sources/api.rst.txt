@@ -229,6 +229,72 @@ Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
 .. autosummary::
    :toctree: generated/
    Region
+Organization
+............
+Organization objects are retrieved from :attr:`WorkspaceManager.organization`.
+They provide access to organization-level resources and operations.
+.. currentmodule:: singlestoredb.management.organization
+.. autosummary::
+   :toctree: generated/
+   Organization
+   Organization.get_secret
+   Organization.jobs
+   Organization.inference_apis
+Secret
+......
+Secret objects are retrieved from :meth:`Organization.get_secret`.
+They represent organization-wide secrets that can be used in various operations.
+.. autosummary::
+   :toctree: generated/
+   Secret
+Jobs Management
+...............
+The jobs management functionality allows you to schedule and manage notebook executions.
+JobsManager
+^^^^^^^^^^^
+JobsManager objects are accessed through :attr:`Organization.jobs` and provide
+methods for creating, monitoring, and managing scheduled notebook jobs.
+.. currentmodule:: singlestoredb.management.job
+.. autosummary::
+   :toctree: generated/
+   JobsManager
+   JobsManager.schedule
+   JobsManager.run
+   JobsManager.wait
+   JobsManager.get
+   JobsManager.get_executions
+   JobsManager.get_parameters
+   JobsManager.delete
+   JobsManager.modes
+   JobsManager.runtimes
+Job
+^^^
+Job objects represent scheduled notebook executions and are returned by
+:meth:`JobsManager.schedule`, :meth:`JobsManager.run`, and :meth:`JobsManager.get`.
+.. autosummary::
+   :toctree: generated/
+   Job
+   Job.wait
+   Job.get_executions
+   Job.get_parameters
+   Job.delete
+Supporting Classes
+^^^^^^^^^^^^^^^^^^
+The following classes are used as parameters and return values in the jobs API.
+.. autosummary::
+   :toctree: generated/
+   Mode
+   TargetType
+   Status
+   Parameter
+   Runtime
+   JobMetadata
+   ExecutionMetadata
+   Execution
+   ExecutionsData
+   ExecutionConfig
+   Schedule
+   TargetConfig
 Stage Files
 ...........
 To interact with files in your Stage, use the

@@ -1,0 +1,15 @@
+﻿singlestoredb.management.job.TargetConfig
+=========================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: TargetConfig
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~TargetConfig.__init__
+      ~TargetConfig.from_dict
+   .. rubric:: Attributes
+   .. autosummary::
+      ~TargetConfig.database_name
+      ~TargetConfig.resume_target
+      ~TargetConfig.target_id
+      ~TargetConfig.target_type

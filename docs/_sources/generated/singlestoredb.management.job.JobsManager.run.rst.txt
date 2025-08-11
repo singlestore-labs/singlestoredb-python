@@ -1,0 +1,4 @@
+﻿singlestoredb.management.job.JobsManager.run
+============================================
+.. currentmodule:: singlestoredb.management.job
+.. automethod:: JobsManager.run

@@ -1,0 +1,17 @@
+﻿singlestoredb.management.job.Status
+===================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: Status
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~Status.from_str
+   .. rubric:: Attributes
+   .. autosummary::
+      ~Status.UNKNOWN
+      ~Status.SCHEDULED
+      ~Status.RUNNING
+      ~Status.COMPLETED
+      ~Status.FAILED
+      ~Status.ERROR
+      ~Status.CANCELED

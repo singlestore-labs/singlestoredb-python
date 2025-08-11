@@ -1,0 +1,15 @@
+﻿singlestoredb.management.job.JobMetadata
+========================================
+.. currentmodule:: singlestoredb.management.job
+.. autoclass:: JobMetadata
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~JobMetadata.__init__
+      ~JobMetadata.from_dict
+   .. rubric:: Attributes
+   .. autosummary::
+      ~JobMetadata.avg_duration_in_seconds
+      ~JobMetadata.count
+      ~JobMetadata.max_duration_in_seconds
+      ~JobMetadata.status
