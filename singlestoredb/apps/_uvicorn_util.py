@@ -30,3 +30,7 @@ class AwaitableUvicornServer(uvicorn.Server):
 
     async def wait_for_startup(self) -> None:
         await self._startup_future
+
+    async def shutdown(self, sockets: Optional[list[socket.socket]] = None) -> None:
+        if self.started:
+            await super().shutdown(sockets)

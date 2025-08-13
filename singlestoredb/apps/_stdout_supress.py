@@ -9,7 +9,7 @@ class StdoutSuppressor:
     This should not be used for asynchronous or threaded executions.
 
     ```py
-    with Supressor():
+    with StdoutSupressor():
         print("This won't be printed")
     ```
 

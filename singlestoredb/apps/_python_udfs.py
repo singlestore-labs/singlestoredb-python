@@ -52,12 +52,12 @@ async def run_udf_app(
         port=app_config.listen_port,
         log_level=log_level,
     )
-    _running_server = AwaitableUvicornServer(config)
 
     # Register the functions only if the app is running interactively.
     if app_config.running_interactively:
         app.register_functions(replace=True)
 
+    _running_server = AwaitableUvicornServer(config)
     asyncio.create_task(_running_server.serve())
     await _running_server.wait_for_startup()
 
