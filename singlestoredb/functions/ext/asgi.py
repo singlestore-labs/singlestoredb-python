@@ -678,8 +678,23 @@ class Application(object):
     link_credentials : Dict[str, Any], optional
         The CREDENTIALS section of a LINK definition. This dictionary gets
         converted to JSON for the CREATE LINK call.
+    name_prefix : str, optional
+        Prefix to add to function names when registering with the database
+    name_suffix : str, optional
+        Suffix to add to function names when registering with the database
     function_database : str, optional
         The database to use for external function definitions.
+    log_file : str, optional
+        File path to write logs to instead of console. If None, logs are
+        written to console. When specified, application logger handlers
+        are replaced with a file handler.
+    log_format : str, optional
+        Log format string for formatting log messages. Defaults to
+        '%(levelprefix)s %(message)s'. Uses the DefaultFormatter which
+        supports the %(levelprefix)s field.
+    log_level : str, optional
+        Logging level for the application logger. Valid values are 'info',
+        'debug', 'warning', 'error'. Defaults to 'info'.
 
     """
 
@@ -846,6 +861,9 @@ class Application(object):
         name_prefix: str = get_option('external_function.name_prefix'),
         name_suffix: str = get_option('external_function.name_suffix'),
         function_database: Optional[str] = None,
+        log_file: Optional[str] = get_option('external_function.log_file'),
+        log_format: str = get_option('external_function.log_format'),
+        log_level: str = get_option('external_function.log_level'),
     ) -> None:
         if link_name and (link_config or link_credentials):
             raise ValueError(
@@ -953,6 +971,33 @@ class Application(object):
         self.endpoints = endpoints
         self.external_functions = external_functions
         self.function_database = function_database
+        self.log_file = log_file
+        self.log_format = log_format
+        self.log_level = log_level
+
+        # Configure logging
+        self._configure_logging()
+
+    def _configure_logging(self) -> None:
+        """Configure logging based on the log_file and log_format settings."""
+        # Set logger level
+        logger.setLevel(getattr(logging, self.log_level.upper()))
+
+        # Configure log file if specified
+        if self.log_file:
+            # Remove existing handlers
+            logger.handlers.clear()
+
+            # Create file handler
+            file_handler = logging.FileHandler(self.log_file)
+            file_handler.setLevel(getattr(logging, self.log_level.upper()))
+
+            # Create formatter
+            formatter = utils.DefaultFormatter(self.log_format)
+            file_handler.setFormatter(formatter)
+
+            # Add the handler to the logger
+            logger.addHandler(file_handler)
 
     async def __call__(
         self,
@@ -1101,7 +1146,7 @@ class Application(object):
                 await send(output_handler['response'])
 
             except asyncio.TimeoutError:
-                logging.exception(
+                logger.exception(
                     'Timeout in function call: ' + func_name.decode('utf-8'),
                 )
                 body = (
@@ -1112,14 +1157,14 @@ class Application(object):
                 await send(self.error_response_dict)
 
             except asyncio.CancelledError:
-                logging.exception(
+                logger.exception(
                     'Function call cancelled: ' + func_name.decode('utf-8'),
                 )
                 body = b'[CancelledError] Function call was cancelled'
                 await send(self.error_response_dict)
 
             except Exception as e:
-                logging.exception(
+                logger.exception(
                     'Error in function call: ' + func_name.decode('utf-8'),
                 )
                 body = f'[{type(e).__name__}] {str(e).strip()}'.encode('utf-8')
@@ -1173,7 +1218,7 @@ class Application(object):
         for k, v in call_timer.metrics.items():
             timer.metrics[k] = v
 
-        timer.finish()
+        logger.info(json.dumps(timer.finish()))
 
     def _create_link(
         self,
@@ -1741,6 +1786,22 @@ def main(argv: Optional[List[str]] = None) -> None:
             help='logging level',
         )
         parser.add_argument(
+            '--log-file', metavar='filepath',
+            default=defaults.get(
+                'log_file',
+                get_option('external_function.log_file'),
+            ),
+            help='File path to write logs to instead of console',
+        )
+        parser.add_argument(
+            '--log-format', metavar='format',
+            default=defaults.get(
+                'log_format',
+                get_option('external_function.log_format'),
+            ),
+            help='Log format string for formatting log messages',
+        )
+        parser.add_argument(
             '--name-prefix', metavar='name_prefix',
             default=defaults.get(
                 'name_prefix',
@@ -1770,8 +1831,6 @@ def main(argv: Optional[List[str]] = None) -> None:
         )
 
         args = parser.parse_args(argv)
-
-        logger.setLevel(getattr(logging, args.log_level.upper()))
 
         if i > 0:
             break
@@ -1864,6 +1923,9 @@ def main(argv: Optional[List[str]] = None) -> None:
         name_prefix=args.name_prefix,
         name_suffix=args.name_suffix,
         function_database=args.function_database or None,
+        log_file=args.log_file,
+        log_format=args.log_format,
+        log_level=args.log_level,
     )
 
     funcs = app.get_create_functions(replace=args.replace_existing)
@@ -1889,6 +1951,44 @@ def main(argv: Optional[List[str]] = None) -> None:
                 lifespan='off',
             ).items() if v is not None
         }
+
+        # Configure uvicorn logging to use the same log file if specified
+        if args.log_file:
+            log_config = {
+                'version': 1,
+                'disable_existing_loggers': False,
+                'formatters': {
+                    'default': {
+                        '()': 'singlestoredb.functions.ext.utils.DefaultFormatter',
+                        'fmt': args.log_format,
+                    },
+                },
+                'handlers': {
+                    'file': {
+                        'class': 'logging.FileHandler',
+                        'formatter': 'default',
+                        'filename': args.log_file,
+                    },
+                },
+                'loggers': {
+                    'uvicorn': {
+                        'handlers': ['file'],
+                        'level': args.log_level.upper(),
+                        'propagate': False,
+                    },
+                    'uvicorn.error': {
+                        'handlers': ['file'],
+                        'level': args.log_level.upper(),
+                        'propagate': False,
+                    },
+                    'uvicorn.access': {
+                        'handlers': ['file'],
+                        'level': args.log_level.upper(),
+                        'propagate': False,
+                    },
+                },
+            }
+            app_args['log_config'] = log_config
 
         if use_async:
             asyncio.create_task(_run_uvicorn(uvicorn, app, app_args, db=args.db))
