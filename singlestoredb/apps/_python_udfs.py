@@ -47,7 +47,12 @@ async def run_udf_app(
     udf_suffix = ''
     if app_config.running_interactively:
         udf_suffix = '_test'
-    app = Application(url=base_url, app_mode='managed', name_suffix=udf_suffix)
+    app = Application(
+        url=base_url,
+        app_mode='managed',
+        name_suffix=udf_suffix,
+        log_level=log_level,
+    )
 
     if not app.endpoints:
         raise ValueError('You must define at least one function.')

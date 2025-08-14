@@ -862,7 +862,6 @@ class Application(object):
         name_suffix: str = get_option('external_function.name_suffix'),
         function_database: Optional[str] = None,
         log_file: Optional[str] = get_option('external_function.log_file'),
-
         log_level: str = get_option('external_function.log_level'),
         disable_metrics: bool = get_option('external_function.disable_metrics'),
         app_name: Optional[str] = get_option('external_function.app_name'),
@@ -1326,9 +1325,11 @@ class Application(object):
     ) -> Dict[str, Any]:
         """
         Return the functions and function signature information.
+
         Returns
         -------
         Dict[str, Any]
+
         """
         functions = {}
         no_default = object()
@@ -1849,7 +1850,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             ),
             help='File path to write logs to instead of console',
         )
-
         parser.add_argument(
             '--disable-metrics', action='store_true',
             default=defaults.get(
@@ -1999,11 +1999,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         raise RuntimeError('no functions specified')
 
     for f in funcs:
-        logger.info(f)
+        app.logger.info(f)
 
     try:
         if args.db:
-            logger.info('Registering functions with database')
+            app.logger.info('Registering functions with database')
             app.register_functions(
                 args.db,
                 replace=args.replace_existing,
@@ -2068,7 +2068,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     finally:
         if not use_async and args.db:
-            logger.info('Dropping functions from database')
+            app.logger.info('Dropping functions from database')
             app.drop_functions(args.db)
 
 
@@ -2081,7 +2081,7 @@ async def _run_uvicorn(
     """Run uvicorn server and clean up functions after shutdown."""
     await uvicorn.Server(uvicorn.Config(app, **app_args)).serve()
     if db:
-        logger.info('Dropping functions from database')
+        app.logger.info('Dropping functions from database')
         app.drop_functions(db)
 
 
