@@ -414,12 +414,6 @@ register_option(
 )
 
 register_option(
-    'external_function.log_format', 'string', check_str, '%(levelprefix)s %(message)s',
-    'Log format string for formatting log messages.',
-    environ=['SINGLESTOREDB_EXT_FUNC_LOG_FORMAT'],
-)
-
-register_option(
     'external_function.name_prefix', 'string', check_str, '',
     'Prefix to add to external function names.',
     environ=['SINGLESTOREDB_EXT_FUNC_NAME_PREFIX'],
@@ -466,6 +460,12 @@ register_option(
     'external_function.disable_metrics', 'bool', check_bool, False,
     'Disable logging of function call metrics.',
     environ=['SINGLESTOREDB_EXT_FUNC_DISABLE_METRICS'],
+)
+
+register_option(
+    'external_function.app_name', 'string', check_str, None,
+    'Name for the external function application instance.',
+    environ=['SINGLESTOREDB_EXT_FUNC_APP_NAME'],
 )
 
 #

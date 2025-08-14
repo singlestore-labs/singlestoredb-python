@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import datetime
 import json
 import logging
 import re
@@ -30,14 +31,62 @@ except ImportError:
             return super().formatMessage(recordcopy)
 
 
+class JSONFormatter(logging.Formatter):
+    """Custom JSON formatter for structured logging."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        # Create proper ISO timestamp with microseconds
+        timestamp = datetime.datetime.fromtimestamp(
+            record.created, tz=datetime.timezone.utc,
+        )
+        # Keep only 3 digits for milliseconds
+        iso_timestamp = timestamp.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+
+        log_entry = {
+            'timestamp': iso_timestamp,
+            'level': record.levelname,
+            'logger': record.name,
+            'message': record.getMessage(),
+        }
+
+        # Add extra fields if present
+        allowed_fields = [
+            'app_name', 'request_id', 'function_name',
+            'content_type', 'accepts', 'metrics',
+        ]
+        for field in allowed_fields:
+            if hasattr(record, field):
+                log_entry[field] = getattr(record, field)
+
+        # Add exception info if present
+        if record.exc_info:
+            log_entry['exception'] = self.formatException(record.exc_info)
+
+        return json.dumps(log_entry)
+
+
 def get_logger(name: str) -> logging.Logger:
-    """Return a new logger."""
+    """Return a logger with JSON formatting."""
     logger = logging.getLogger(name)
-    handler = logging.StreamHandler()
-    formatter = DefaultFormatter('%(levelprefix)s %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+
+    # Only configure if not already configured with JSON formatter
+    has_json_formatter = any(
+        isinstance(getattr(handler, 'formatter', None), JSONFormatter)
+        for handler in logger.handlers
+    )
+
+    if not logger.handlers or not has_json_formatter:
+        # Clear handlers only if we need to reconfigure
+        logger.handlers.clear()
+        handler = logging.StreamHandler()
+        formatter = JSONFormatter()
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+
+    # Prevent propagation to avoid duplicate messages or different formatting
+    logger.propagate = False
+
     return logger
 
 
