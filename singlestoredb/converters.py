@@ -23,7 +23,7 @@ except ImportError:
 try:
     import pygeos
     has_pygeos = True
-except ImportError:
+except (AttributeError, ImportError):
     has_pygeos = False
 
 try:
