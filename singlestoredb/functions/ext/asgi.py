@@ -1018,6 +1018,61 @@ class Application(object):
         # Prevent propagation to avoid duplicate or differently formatted messages
         self.logger.propagate = False
 
+    def get_uvicorn_log_config(self) -> Dict[str, Any]:
+        """
+        Create uvicorn log config that matches the Application's logging format.
+
+        This method returns the log configuration used by uvicorn, allowing external
+        users to match the logging format of the Application class.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Log configuration dictionary compatible with uvicorn's log_config parameter
+
+        """
+        log_config = {
+            'version': 1,
+            'disable_existing_loggers': False,
+            'formatters': {
+                'json': {
+                    '()': 'singlestoredb.functions.ext.utils.JSONFormatter',
+                },
+            },
+            'handlers': {
+                'default': {
+                    'class': (
+                        'logging.FileHandler' if self.log_file
+                        else 'logging.StreamHandler'
+                    ),
+                    'formatter': 'json',
+                },
+            },
+            'loggers': {
+                'uvicorn': {
+                    'handlers': ['default'],
+                    'level': self.log_level.upper(),
+                    'propagate': False,
+                },
+                'uvicorn.error': {
+                    'handlers': ['default'],
+                    'level': self.log_level.upper(),
+                    'propagate': False,
+                },
+                'uvicorn.access': {
+                    'handlers': ['default'],
+                    'level': self.log_level.upper(),
+                    'propagate': False,
+                },
+            },
+        }
+
+        # Add filename to file handler if log file is specified
+        if self.log_file:
+            log_config['handlers']['default']['filename'] = self.log_file  # type: ignore
+
+        return log_config
+
     async def __call__(
         self,
         scope: Dict[str, Any],
@@ -2018,48 +2073,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             ).items() if v is not None
         }
 
-        # Configure uvicorn logging to use JSON format
-        log_config = {
-            'version': 1,
-            'disable_existing_loggers': False,
-            'formatters': {
-                'json': {
-                    '()': 'singlestoredb.functions.ext.utils.JSONFormatter',
-                },
-            },
-            'handlers': {
-                'default': {
-                    'class': (
-                        'logging.FileHandler' if args.log_file
-                        else 'logging.StreamHandler'
-                    ),
-                    'formatter': 'json',
-                },
-            },
-            'loggers': {
-                'uvicorn': {
-                    'handlers': ['default'],
-                    'level': args.log_level.upper(),
-                    'propagate': False,
-                },
-                'uvicorn.error': {
-                    'handlers': ['default'],
-                    'level': args.log_level.upper(),
-                    'propagate': False,
-                },
-                'uvicorn.access': {
-                    'handlers': ['default'],
-                    'level': args.log_level.upper(),
-                    'propagate': False,
-                },
-            },
-        }
-
-        # Add filename to file handler if log file is specified
-        if args.log_file:
-            log_config['handlers']['default']['filename'] = args.log_file  # type: ignore
-
-        app_args['log_config'] = log_config
+        # Configure uvicorn logging to use JSON format matching Application's format
+        app_args['log_config'] = app.get_uvicorn_log_config()
 
         if use_async:
             asyncio.create_task(_run_uvicorn(uvicorn, app, app_args, db=args.db))

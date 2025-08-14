@@ -65,7 +65,7 @@ async def run_udf_app(
         app,
         host='0.0.0.0',
         port=app_config.listen_port,
-        log_level=log_level,
+        log_config=app.get_uvicorn_log_config(),
     )
     _running_server = AwaitableUvicornServer(config)
 
