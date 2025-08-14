@@ -408,6 +408,12 @@ register_option(
 )
 
 register_option(
+    'external_function.log_file', 'string', check_str, None,
+    'File path to write logs to instead of console.',
+    environ=['SINGLESTOREDB_EXT_FUNC_LOG_FILE'],
+)
+
+register_option(
     'external_function.name_prefix', 'string', check_str, '',
     'Prefix to add to external function names.',
     environ=['SINGLESTOREDB_EXT_FUNC_NAME_PREFIX'],
@@ -448,6 +454,18 @@ register_option(
     'external_function.timeout', 'int', check_int, 24*60*60,
     'Specifies the timeout in seconds for processing a batch of rows.',
     environ=['SINGLESTOREDB_EXT_FUNC_TIMEOUT'],
+)
+
+register_option(
+    'external_function.disable_metrics', 'bool', check_bool, False,
+    'Disable logging of function call metrics.',
+    environ=['SINGLESTOREDB_EXT_FUNC_DISABLE_METRICS'],
+)
+
+register_option(
+    'external_function.app_name', 'string', check_str, None,
+    'Name for the external function application instance.',
+    environ=['SINGLESTOREDB_EXT_FUNC_APP_NAME'],
 )
 
 #

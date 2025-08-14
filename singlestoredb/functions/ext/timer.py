@@ -4,10 +4,6 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
-from . import utils
-
-logger = utils.get_logger('singlestoredb.functions.ext.metrics')
-
 
 class RoundedFloatEncoder(json.JSONEncoder):
 
@@ -87,12 +83,7 @@ class Timer:
         self.entries.clear()
         self._current_key = None
 
-    def finish(self) -> None:
+    def finish(self) -> Dict[str, Any]:
         """Finish the current timing context and store the elapsed time."""
         self.metrics['total'] = time.perf_counter() - self.start_time
-        self.log_metrics()
-
-    def log_metrics(self) -> None:
-        if self.metadata.get('function'):
-            result = dict(type='function_metrics', **self.metadata, **self.metrics)
-            logger.info(json.dumps(result, cls=RoundedFloatEncoder))
+        return dict(type='function_metrics', **self.metadata, **self.metrics)
