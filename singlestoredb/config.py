@@ -462,6 +462,12 @@ register_option(
     environ=['SINGLESTOREDB_EXT_FUNC_TIMEOUT'],
 )
 
+register_option(
+    'external_function.disable_metrics', 'bool', check_bool, False,
+    'Disable logging of function call metrics.',
+    environ=['SINGLESTOREDB_EXT_FUNC_DISABLE_METRICS'],
+)
+
 #
 # Debugging options
 #

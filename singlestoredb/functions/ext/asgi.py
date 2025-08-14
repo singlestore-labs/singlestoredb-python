@@ -695,6 +695,11 @@ class Application(object):
     log_level : str, optional
         Logging level for the application logger. Valid values are 'info',
         'debug', 'warning', 'error'. Defaults to 'info'.
+    disable_metrics : bool, optional
+        Disable logging of function call metrics. Defaults to False.
+    name : str, optional
+        Name for the application instance. Used to create a logger-specific
+        name. If not provided, a random name will be generated.
 
     """
 
@@ -864,6 +869,8 @@ class Application(object):
         log_file: Optional[str] = get_option('external_function.log_file'),
         log_format: str = get_option('external_function.log_format'),
         log_level: str = get_option('external_function.log_level'),
+        disable_metrics: bool = get_option('external_function.disable_metrics'),
+        name: Optional[str] = None,
     ) -> None:
         if link_name and (link_config or link_credentials):
             raise ValueError(
@@ -879,6 +886,15 @@ class Application(object):
             link_credentials = json.loads(
                 get_option('external_function.link_credentials') or '{}',
             ) or None
+
+        # Generate application name if not provided
+        if name is None:
+            name = f'ext_app_{secrets.token_hex(4)}'
+
+        self.name = name
+
+        # Create logger instance specific to this application
+        self.logger = utils.get_logger(f'singlestoredb.functions.ext.asgi.{self.name}')
 
         # List of functions specs
         specs: List[Union[str, Callable[..., Any], ModuleType]] = []
@@ -974,6 +990,7 @@ class Application(object):
         self.log_file = log_file
         self.log_format = log_format
         self.log_level = log_level
+        self.disable_metrics = disable_metrics
 
         # Configure logging
         self._configure_logging()
@@ -981,12 +998,12 @@ class Application(object):
     def _configure_logging(self) -> None:
         """Configure logging based on the log_file and log_format settings."""
         # Set logger level
-        logger.setLevel(getattr(logging, self.log_level.upper()))
+        self.logger.setLevel(getattr(logging, self.log_level.upper()))
 
         # Configure log file if specified
         if self.log_file:
             # Remove existing handlers
-            logger.handlers.clear()
+            self.logger.handlers.clear()
 
             # Create file handler
             file_handler = logging.FileHandler(self.log_file)
@@ -997,7 +1014,7 @@ class Application(object):
             file_handler.setFormatter(formatter)
 
             # Add the handler to the logger
-            logger.addHandler(file_handler)
+            self.logger.addHandler(file_handler)
 
     async def __call__(
         self,
@@ -1059,7 +1076,7 @@ class Application(object):
         # Call the endpoint
         if method == 'POST' and func is not None and path == self.invoke_path:
 
-            logger.info(
+            self.logger.info(
                 json.dumps({
                     'type': 'function_call',
                     'id': request_id,
@@ -1146,7 +1163,7 @@ class Application(object):
                 await send(output_handler['response'])
 
             except asyncio.TimeoutError:
-                logger.exception(
+                self.logger.exception(
                     'Timeout in function call: ' + func_name.decode('utf-8'),
                 )
                 body = (
@@ -1157,14 +1174,14 @@ class Application(object):
                 await send(self.error_response_dict)
 
             except asyncio.CancelledError:
-                logger.exception(
+                self.logger.exception(
                     'Function call cancelled: ' + func_name.decode('utf-8'),
                 )
                 body = b'[CancelledError] Function call was cancelled'
                 await send(self.error_response_dict)
 
             except Exception as e:
-                logger.exception(
+                self.logger.exception(
                     'Error in function call: ' + func_name.decode('utf-8'),
                 )
                 body = f'[{type(e).__name__}] {str(e).strip()}'.encode('utf-8')
@@ -1218,7 +1235,8 @@ class Application(object):
         for k, v in call_timer.metrics.items():
             timer.metrics[k] = v
 
-        logger.info(json.dumps(timer.finish()))
+        if not self.disable_metrics:
+            self.logger.info(json.dumps(timer.finish()))
 
     def _create_link(
         self,
@@ -1329,8 +1347,9 @@ class Application(object):
                         doc_examples.append(ex_dict)
 
                 except Exception as e:
-                    logger.warning(
-                        f'Could not parse docstring for function {key}: {e}',
+                    self.logger.warning(
+                        f'Could not parse docstring for function '
+                        f'{key.decode("utf-8")}: {e}',
                     )
 
             if not func_name or key == func_name:
@@ -1802,6 +1821,14 @@ def main(argv: Optional[List[str]] = None) -> None:
             help='Log format string for formatting log messages',
         )
         parser.add_argument(
+            '--disable-metrics', action='store_true',
+            default=defaults.get(
+                'disable_metrics',
+                get_option('external_function.disable_metrics'),
+            ),
+            help='Disable logging of function call metrics',
+        )
+        parser.add_argument(
             '--name-prefix', metavar='name_prefix',
             default=defaults.get(
                 'name_prefix',
@@ -1926,6 +1953,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         log_file=args.log_file,
         log_format=args.log_format,
         log_level=args.log_level,
+        disable_metrics=args.disable_metrics,
     )
 
     funcs = app.get_create_functions(replace=args.replace_existing)
