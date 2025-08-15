@@ -200,12 +200,14 @@ class SSMLFunctionMagics(Magics):
 
     @magic_arguments()
     @argument('--job_name',            type=str, required=True, help="Job name")
+    @argument('--model_name',          type=str, required=True, help="Model filename")
     @argument('--workspace',           type=str, required=True, help="Workspace identifier")
     @argument('--db',                  type=str, required=True, help="Database/schema name")
     @argument('--input_table',         type=str, required=True, help="Source table")
     @argument('--target_column',       type=str, required=True, help="Target column")
     @argument('--model',               type=str, default='auto', help="Model to train")
     @argument('--evaluation_criteria', type=str, required=True, help="Metric (roc_auc, etc.)")
+    @argument('--version', type=str, default="1", help="default version")
     @argument('--selected_features',   type=str, nargs='+', help="List of features")
     @line_magic
     def SS_ML_FUNCTION_CLASSIFICATION_TRAIN(self, line: str):
@@ -233,7 +235,7 @@ class SSMLFunctionMagics(Magics):
 
         # 3) Build parameters payload
         params: List[Dict[str, Any]] = []
-        for key in ('job_name','workspace','db','input_table','target_column','model','evaluation_criteria'):
+        for key in ('job_name','workspace','db','input_table','target_column','model','model_name','evaluation_criteria','version'):
             params.append({
                 "name": key,
                 "type": "string",
