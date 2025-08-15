@@ -26,6 +26,8 @@ from .exceptions import (
 )
 from .management import (
     manage_cluster, manage_workspaces, manage_files, manage_regions,
+    manage_teams, manage_private_connections, manage_audit_logs,
+    manage_users,
 )
 from .types import (
     Date, Time, Timestamp, DateFromTicks, TimeFromTicks, TimestampFromTicks,
