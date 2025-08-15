@@ -167,9 +167,9 @@ class SingleStoreJobsClient:
             },
             "targetConfig": target_config,
         }
-        org_id =   os.environ.get("SINGLESTOREDB_ORG_ID")
+        org_id =   os.environ.get("SINGLESTOREDB_ORGANIZATION")
         if not org_id:
-            raise ValueError("Please set SINGLESTOREDB_ORG_ID in your env.")
+            raise ValueError("Please set SINGLESTOREDB_ORGANIZATION in your env.")
         url = f"{self.base_url}/jobs?organizationID={org_id}"
         resp = self.session.post(url, json=payload)
         if not resp.ok:
