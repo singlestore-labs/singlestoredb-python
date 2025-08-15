@@ -115,10 +115,8 @@ class SingleStoreJobsClient:
         jwt_token: Optional[str] = None,
         base_url: str = "https://api.singlestore.com/v1",
     ):
-        token = jwt_token or "09f75c43e5ed6ceb1cdf34ea35ced436599450967e3772a34f774f4f36a49945"
-        # token = jwt_token or os.environ.get("SINGLESTOREDB_USER_TOKEN")
+        token = jwt_token or os.environ.get("SINGLESTOREDB_USER_TOKEN")
         # token = jwt_token or os.environ.get("SINGLESTOREDB_APP_TOKEN")
-
 
         if not token:
             raise ValueError("Set your JWT in SINGLESTORE_JWT or pass it in.")
@@ -129,6 +127,8 @@ class SingleStoreJobsClient:
             "Content-Type": "application/json",
             "Accept": "application/json",
         })
+
+
 
     def list_jobs(self) -> List[Dict[str, Any]]:
         """Fetch all jobs; filter client‑side by name."""
@@ -167,7 +167,10 @@ class SingleStoreJobsClient:
             },
             "targetConfig": target_config,
         }
-        url = f"{self.base_url}/jobs"
+        org_id =   os.environ.get("SINGLESTOREDB_ORG_ID")
+        if not org_id:
+            raise ValueError("Please set SINGLESTOREDB_ORG_ID in your env.")
+        url = f"{self.base_url}/jobs?organizationID={org_id}"
         resp = self.session.post(url, json=payload)
         if not resp.ok:
             raise SingleStoreAPIError(resp.status_code, resp.text, resp)
