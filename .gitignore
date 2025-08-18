@@ -72,6 +72,20 @@ ehthumbs.db
 Icon?
 Thumbs.db
 
+**/CLAUDE.md
+.claude
+.serena
+.vscode
+.venv
+**/.hypothesis
+dev-docs
+**/.ipynb_checkpoints
+**/.benchmarks
+*.ipynb
+certs
+**/*.prof
+**/*.pprof
+
 ## Documentation generated files
 docs/src/_build/doctrees
 docs/src/generated
