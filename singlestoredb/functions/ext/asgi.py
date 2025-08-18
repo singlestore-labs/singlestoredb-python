@@ -91,7 +91,6 @@ except ImportError:
 
 logger = utils.get_logger('singlestoredb.functions.ext.asgi')
 
-
 # If a number of processes is specified, create a pool of workers
 num_processes = max(0, int(os.environ.get('SINGLESTOREDB_EXT_NUM_PROCESSES', 0)))
 if num_processes > 1:
@@ -678,8 +677,24 @@ class Application(object):
     link_credentials : Dict[str, Any], optional
         The CREDENTIALS section of a LINK definition. This dictionary gets
         converted to JSON for the CREATE LINK call.
+    name_prefix : str, optional
+        Prefix to add to function names when registering with the database
+    name_suffix : str, optional
+        Suffix to add to function names when registering with the database
     function_database : str, optional
         The database to use for external function definitions.
+    log_file : str, optional
+        File path to write logs to instead of console. If None, logs are
+        written to console. When specified, application logger handlers
+        are replaced with a file handler.
+    log_level : str, optional
+        Logging level for the application logger. Valid values are 'info',
+        'debug', 'warning', 'error'. Defaults to 'info'.
+    disable_metrics : bool, optional
+        Disable logging of function call metrics. Defaults to False.
+    app_name : str, optional
+        Name for the application instance. Used to create a logger-specific
+        name. If not provided, a random name will be generated.
 
     """
 
@@ -846,6 +861,10 @@ class Application(object):
         name_prefix: str = get_option('external_function.name_prefix'),
         name_suffix: str = get_option('external_function.name_suffix'),
         function_database: Optional[str] = None,
+        log_file: Optional[str] = get_option('external_function.log_file'),
+        log_level: str = get_option('external_function.log_level'),
+        disable_metrics: bool = get_option('external_function.disable_metrics'),
+        app_name: Optional[str] = get_option('external_function.app_name'),
     ) -> None:
         if link_name and (link_config or link_credentials):
             raise ValueError(
@@ -861,6 +880,15 @@ class Application(object):
             link_credentials = json.loads(
                 get_option('external_function.link_credentials') or '{}',
             ) or None
+
+        # Generate application name if not provided
+        if app_name is None:
+            app_name = f'udf_app_{secrets.token_hex(4)}'
+
+        self.name = app_name
+
+        # Create logger instance specific to this application
+        self.logger = utils.get_logger(f'singlestoredb.functions.ext.asgi.{self.name}')
 
         # List of functions specs
         specs: List[Union[str, Callable[..., Any], ModuleType]] = []
@@ -953,6 +981,97 @@ class Application(object):
         self.endpoints = endpoints
         self.external_functions = external_functions
         self.function_database = function_database
+        self.log_file = log_file
+        self.log_level = log_level
+        self.disable_metrics = disable_metrics
+
+        # Configure logging
+        self._configure_logging()
+
+    def _configure_logging(self) -> None:
+        """Configure logging based on the log_file settings."""
+        # Set logger level
+        self.logger.setLevel(getattr(logging, self.log_level.upper()))
+
+        # Remove all existing handlers to ensure clean configuration
+        self.logger.handlers.clear()
+
+        # Configure log file if specified
+        if self.log_file:
+            # Create file handler
+            file_handler = logging.FileHandler(self.log_file)
+            file_handler.setLevel(getattr(logging, self.log_level.upper()))
+
+            # Use JSON formatter for file logging
+            formatter = utils.JSONFormatter()
+            file_handler.setFormatter(formatter)
+
+            # Add the handler to the logger
+            self.logger.addHandler(file_handler)
+        else:
+            # For console logging, create a new stream handler with JSON formatter
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(getattr(logging, self.log_level.upper()))
+            console_handler.setFormatter(utils.JSONFormatter())
+            self.logger.addHandler(console_handler)
+
+        # Prevent propagation to avoid duplicate or differently formatted messages
+        self.logger.propagate = False
+
+    def get_uvicorn_log_config(self) -> Dict[str, Any]:
+        """
+        Create uvicorn log config that matches the Application's logging format.
+
+        This method returns the log configuration used by uvicorn, allowing external
+        users to match the logging format of the Application class.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Log configuration dictionary compatible with uvicorn's log_config parameter
+
+        """
+        log_config = {
+            'version': 1,
+            'disable_existing_loggers': False,
+            'formatters': {
+                'json': {
+                    '()': 'singlestoredb.functions.ext.utils.JSONFormatter',
+                },
+            },
+            'handlers': {
+                'default': {
+                    'class': (
+                        'logging.FileHandler' if self.log_file
+                        else 'logging.StreamHandler'
+                    ),
+                    'formatter': 'json',
+                },
+            },
+            'loggers': {
+                'uvicorn': {
+                    'handlers': ['default'],
+                    'level': self.log_level.upper(),
+                    'propagate': False,
+                },
+                'uvicorn.error': {
+                    'handlers': ['default'],
+                    'level': self.log_level.upper(),
+                    'propagate': False,
+                },
+                'uvicorn.access': {
+                    'handlers': ['default'],
+                    'level': self.log_level.upper(),
+                    'propagate': False,
+                },
+            },
+        }
+
+        # Add filename to file handler if log file is specified
+        if self.log_file:
+            log_config['handlers']['default']['filename'] = self.log_file  # type: ignore
+
+        return log_config
 
     async def __call__(
         self,
@@ -976,19 +1095,22 @@ class Application(object):
         request_id = str(uuid.uuid4())
 
         timer = Timer(
+            app_name=self.name,
             id=request_id,
             timestamp=datetime.datetime.now(
                 datetime.timezone.utc,
             ).strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         )
         call_timer = Timer(
+            app_name=self.name,
             id=request_id,
             timestamp=datetime.datetime.now(
                 datetime.timezone.utc,
             ).strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         )
 
-        assert scope['type'] == 'http'
+        if scope['type'] != 'http':
+            raise ValueError(f"Expected HTTP scope, got {scope['type']}")
 
         method = scope['method']
         path = tuple(x for x in scope['path'].split('/') if x)
@@ -1014,14 +1136,15 @@ class Application(object):
         # Call the endpoint
         if method == 'POST' and func is not None and path == self.invoke_path:
 
-            logger.info(
-                json.dumps({
-                    'type': 'function_call',
-                    'id': request_id,
-                    'name': func_name.decode('utf-8'),
+            self.logger.info(
+                'Function call initiated',
+                extra={
+                    'app_name': self.name,
+                    'request_id': request_id,
+                    'function_name': func_name.decode('utf-8'),
                     'content_type': content_type.decode('utf-8'),
                     'accepts': accepts.decode('utf-8'),
-                }),
+                },
             )
 
             args_data_format = func_info['args_data_format']
@@ -1101,8 +1224,14 @@ class Application(object):
                 await send(output_handler['response'])
 
             except asyncio.TimeoutError:
-                logging.exception(
-                    'Timeout in function call: ' + func_name.decode('utf-8'),
+                self.logger.exception(
+                    'Function call timeout',
+                    extra={
+                        'app_name': self.name,
+                        'request_id': request_id,
+                        'function_name': func_name.decode('utf-8'),
+                        'timeout': func_info['timeout'],
+                    },
                 )
                 body = (
                     '[TimeoutError] Function call timed out after ' +
@@ -1112,15 +1241,26 @@ class Application(object):
                 await send(self.error_response_dict)
 
             except asyncio.CancelledError:
-                logging.exception(
-                    'Function call cancelled: ' + func_name.decode('utf-8'),
+                self.logger.exception(
+                    'Function call cancelled',
+                    extra={
+                        'app_name': self.name,
+                        'request_id': request_id,
+                        'function_name': func_name.decode('utf-8'),
+                    },
                 )
                 body = b'[CancelledError] Function call was cancelled'
                 await send(self.error_response_dict)
 
             except Exception as e:
-                logging.exception(
-                    'Error in function call: ' + func_name.decode('utf-8'),
+                self.logger.exception(
+                    'Function call error',
+                    extra={
+                        'app_name': self.name,
+                        'request_id': request_id,
+                        'function_name': func_name.decode('utf-8'),
+                        'exception_type': type(e).__name__,
+                    },
                 )
                 body = f'[{type(e).__name__}] {str(e).strip()}'.encode('utf-8')
                 await send(self.error_response_dict)
@@ -1173,7 +1313,17 @@ class Application(object):
         for k, v in call_timer.metrics.items():
             timer.metrics[k] = v
 
-        timer.finish()
+        if not self.disable_metrics:
+            metrics = timer.finish()
+            self.logger.info(
+                'Function call metrics',
+                extra={
+                    'app_name': self.name,
+                    'request_id': request_id,
+                    'function_name': timer.metadata.get('function', ''),
+                    'metrics': metrics,
+                },
+            )
 
     def _create_link(
         self,
@@ -1230,9 +1380,11 @@ class Application(object):
     ) -> Dict[str, Any]:
         """
         Return the functions and function signature information.
+
         Returns
         -------
         Dict[str, Any]
+
         """
         functions = {}
         no_default = object()
@@ -1284,8 +1436,13 @@ class Application(object):
                         doc_examples.append(ex_dict)
 
                 except Exception as e:
-                    logger.warning(
-                        f'Could not parse docstring for function {key}: {e}',
+                    self.logger.warning(
+                        'Could not parse docstring for function',
+                        extra={
+                            'app_name': self.name,
+                            'function_name': key.decode('utf-8'),
+                            'error': str(e),
+                        },
                     )
 
             if not func_name or key == func_name:
@@ -1741,6 +1898,22 @@ def main(argv: Optional[List[str]] = None) -> None:
             help='logging level',
         )
         parser.add_argument(
+            '--log-file', metavar='filepath',
+            default=defaults.get(
+                'log_file',
+                get_option('external_function.log_file'),
+            ),
+            help='File path to write logs to instead of console',
+        )
+        parser.add_argument(
+            '--disable-metrics', action='store_true',
+            default=defaults.get(
+                'disable_metrics',
+                get_option('external_function.disable_metrics'),
+            ),
+            help='Disable logging of function call metrics',
+        )
+        parser.add_argument(
             '--name-prefix', metavar='name_prefix',
             default=defaults.get(
                 'name_prefix',
@@ -1765,13 +1938,19 @@ def main(argv: Optional[List[str]] = None) -> None:
             help='Database to use for the function definition',
         )
         parser.add_argument(
+            '--app-name', metavar='app_name',
+            default=defaults.get(
+                'app_name',
+                get_option('external_function.app_name'),
+            ),
+            help='Name for the application instance',
+        )
+        parser.add_argument(
             'functions', metavar='module.or.func.path', nargs='*',
             help='functions or modules to export in UDF server',
         )
 
         args = parser.parse_args(argv)
-
-        logger.setLevel(getattr(logging, args.log_level.upper()))
 
         if i > 0:
             break
@@ -1864,6 +2043,10 @@ def main(argv: Optional[List[str]] = None) -> None:
         name_prefix=args.name_prefix,
         name_suffix=args.name_suffix,
         function_database=args.function_database or None,
+        log_file=args.log_file,
+        log_level=args.log_level,
+        disable_metrics=args.disable_metrics,
+        app_name=args.app_name,
     )
 
     funcs = app.get_create_functions(replace=args.replace_existing)
@@ -1871,11 +2054,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         raise RuntimeError('no functions specified')
 
     for f in funcs:
-        logger.info(f)
+        app.logger.info(f)
 
     try:
         if args.db:
-            logger.info('registering functions with database')
+            app.logger.info('Registering functions with database')
             app.register_functions(
                 args.db,
                 replace=args.replace_existing,
@@ -1890,6 +2073,9 @@ def main(argv: Optional[List[str]] = None) -> None:
             ).items() if v is not None
         }
 
+        # Configure uvicorn logging to use JSON format matching Application's format
+        app_args['log_config'] = app.get_uvicorn_log_config()
+
         if use_async:
             asyncio.create_task(_run_uvicorn(uvicorn, app, app_args, db=args.db))
         else:
@@ -1897,7 +2083,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     finally:
         if not use_async and args.db:
-            logger.info('dropping functions from database')
+            app.logger.info('Dropping functions from database')
             app.drop_functions(args.db)
 
 
@@ -1910,7 +2096,7 @@ async def _run_uvicorn(
     """Run uvicorn server and clean up functions after shutdown."""
     await uvicorn.Server(uvicorn.Config(app, **app_args)).serve()
     if db:
-        logger.info('dropping functions from database')
+        app.logger.info('Dropping functions from database')
         app.drop_functions(db)
 
 

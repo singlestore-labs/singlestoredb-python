@@ -47,7 +47,12 @@ async def run_udf_app(
     udf_suffix = ''
     if app_config.running_interactively:
         udf_suffix = '_test'
-    app = Application(url=base_url, app_mode='managed', name_suffix=udf_suffix)
+    app = Application(
+        url=base_url,
+        app_mode='managed',
+        name_suffix=udf_suffix,
+        log_level=log_level,
+    )
 
     if not app.endpoints:
         raise ValueError('You must define at least one function.')
@@ -60,7 +65,7 @@ async def run_udf_app(
         app,
         host='0.0.0.0',
         port=app_config.listen_port,
-        log_level=log_level,
+        log_config=app.get_uvicorn_log_config(),
     )
 
     # Register the functions only if the app is running interactively.
