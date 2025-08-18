@@ -8,6 +8,14 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.15.2 - August 18, 2025
+-------------------------
+* Fixed object attribute 'servers' error (#87)
+* Added enforcement for function definition limits (#86)
+* Improved error handling for mismatched numpy versions
+* Updated documentation with scheduled jobs information
+* Added ignore patterns for better code organization
+
 v1.15.1 - August 7, 2025
 ------------------------
 * Add more validation of UDF type parameters in UDF app (experimental)
