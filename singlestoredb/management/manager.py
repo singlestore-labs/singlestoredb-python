@@ -20,7 +20,8 @@ from .utils import get_token
 
 def set_organization(kwargs: Dict[str, Any]) -> None:
     """Set the organization ID in the dictionary."""
-    if kwargs.get('params', {}).get('organizationID', None):
+    params = kwargs.get('params') or {}
+    if params.get('organizationID', None):
         return
 
     org = os.environ.get('SINGLESTOREDB_ORGANIZATION')
