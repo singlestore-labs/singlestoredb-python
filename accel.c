@@ -2678,8 +2678,19 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
 exit:
     if (ctypes) free(ctypes);
-    if (out_cols) free(out_cols);
-    if (mask_cols) free(mask_cols);
+    if (out_cols) {
+        for (i = 0; i < n_cols; i++) {
+            if (out_cols[i]) free(out_cols[i]);
+        }
+        free(out_cols);
+    }
+    if (mask_cols) {
+        for (i = 0; i < n_cols; i++) {
+            if (mask_cols[i]) free(mask_cols[i]);
+        }
+        free(mask_cols);
+    }
+    if (out_row_ids) free(out_row_ids);
     if (data_formats) free(data_formats);
     if (item_sizes) free(item_sizes);
 
@@ -2943,11 +2954,17 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
     out_l = 256 * n_cols;
     out_idx = 0;
     out = malloc(out_l);
-    if (!out) goto error;
+    if (!out) {
+        PyErr_SetString(PyExc_MemoryError, "failed to allocate output buffer");
+        goto error;
+    }
 
     // Get return types
     returns = malloc(sizeof(int) * n_cols);
-    if (!returns) goto error;
+    if (!returns) {
+        PyErr_SetString(PyExc_MemoryError, "failed to allocate returns array");
+        goto error;
+    }
 
     for (i = 0; i < n_cols; i++) {
         PyObject *py_item = PySequence_GetItem(py_returns, i);
@@ -2959,11 +2976,20 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
     // Get column array memory
     cols = calloc(sizeof(char*), n_cols);
-    if (!cols) goto error;
+    if (!cols) {
+        PyErr_SetString(PyExc_MemoryError, "failed to allocate cols array");
+        goto error;
+    }
     col_types = calloc(sizeof(NumpyColType), n_cols);
-    if (!col_types) goto error;
+    if (!col_types) {
+        PyErr_SetString(PyExc_MemoryError, "failed to allocate col_types array");
+        goto error;
+    }
     masks = calloc(sizeof(char*), n_cols);
-    if (!masks) goto error;
+    if (!masks) {
+        PyErr_SetString(PyExc_MemoryError, "failed to allocate masks array");
+        goto error;
+    }
     for (i = 0; i < n_cols; i++) {
         PyObject *py_item = PyList_GetItem(py_cols, i);
         if (!py_item) goto error;
@@ -2996,8 +3022,12 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 #define CHECKMEM(x) \
     if ((out_idx + x) > out_l) { \
         out_l = out_l * 2 + x; \
-        out = realloc(out, out_l); \
-        if (!out) goto error; \
+        char *new_out = realloc(out, out_l); \
+        if (!new_out) { \
+            PyErr_SetString(PyExc_MemoryError, "failed to reallocate output buffer"); \
+            goto error; \
+        } \
+        out = new_out; \
     }
 
     for (j = 0; j < n_rows; j++) {
@@ -4079,10 +4109,10 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
         }
     }
 
-    py_out = PyMemoryView_FromMemory(out, out_idx, PyBUF_WRITE);
-    if (!py_out) goto error;
+    py_out = PyBytes_FromStringAndSize(out, out_idx);
 
 exit:
+    if (out) free(out);
     if (returns) free(returns);
     if (masks) free(masks);
     if (cols) free(cols);
@@ -4091,7 +4121,6 @@ exit:
     return py_out;
 
 error:
-    if (!py_out && out) free(out);
     Py_XDECREF(py_out);
     py_out = NULL;
 
@@ -4471,8 +4500,12 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 #define CHECKMEM(x) \
     if ((out_idx + x) > out_l) { \
         out_l = out_l * 2 + x; \
-        out = realloc(out, out_l); \
-        if (!out) goto error; \
+        char *new_out = realloc(out, out_l); \
+        if (!new_out) { \
+            PyErr_SetString(PyExc_MemoryError, "failed to reallocate output buffer"); \
+            goto error; \
+        } \
+        out = new_out; \
     }
 
     py_rows_iter = PyObject_GetIter(py_rows);
@@ -4483,12 +4516,20 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
     while ((py_row = PyIter_Next(py_rows_iter))) {
         py_row_iter = PyObject_GetIter(py_row);
-        if (!py_row_iter) goto error;
+        if (!py_row_iter) {
+            Py_DECREF(py_row);
+            goto error;
+        }
 
         // First item is always a row ID
         py_item = PyIter_Next(py_row_ids_iter);
-        if (!py_item) goto error;
+        if (!py_item) {
+            Py_DECREF(py_row_iter);
+            Py_DECREF(py_row);
+            goto error;
+        }
         row_id = (int64_t)PyLong_AsLongLong(py_item);
+        Py_DECREF(py_item);
 
         CHECKMEM(8);
         memcpy(out+out_idx, &row_id, 8);
@@ -4631,12 +4672,16 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                     out_idx += 8;
                 } else {
                     PyObject *py_bytes = PyUnicode_AsEncodedString(py_item, "utf-8", "strict");
-                    if (!py_bytes) goto error;
+                    if (!py_bytes) {
+                        Py_DECREF(py_item);
+                        goto error;
+                    }
 
                     char *str = NULL;
                     Py_ssize_t str_l = 0;
                     if (PyBytes_AsStringAndSize(py_bytes, &str, &str_l) < 0) {
                         Py_DECREF(py_bytes);
+                        Py_DECREF(py_item);
                         goto error;
                     }
 
@@ -4671,6 +4716,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                     char *str = NULL;
                     Py_ssize_t str_l = 0;
                     if (PyBytes_AsStringAndSize(py_item, &str, &str_l) < 0) {
+                        Py_DECREF(py_item);
                         goto error;
                     }
 
@@ -4684,6 +4730,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 break;
 
             default:
+                Py_DECREF(py_item);
                 goto error;
             }
 
@@ -4693,14 +4740,17 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
             i++;
         }
 
+        Py_DECREF(py_row_iter);
         Py_DECREF(py_row);
+        py_row_iter = NULL;
         py_row = NULL;
     }
 
-    py_out = PyMemoryView_FromMemory(out, out_idx, PyBUF_WRITE);
-    if (!py_out) goto error;
+    // Convert the output buffer to a Python bytes object and free the buffer
+    py_out = PyBytes_FromStringAndSize(out, out_idx);
 
 exit:
+    if (out) free(out);
     if (returns) free(returns);
 
     Py_XDECREF(py_item);
@@ -4712,7 +4762,6 @@ exit:
     return py_out;
 
 error:
-    if (!py_out && out) free(out);
     Py_XDECREF(py_out);
     py_out = NULL;
 
@@ -4839,7 +4888,7 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
 
     PyObj.create_numpy_array_kwargs = PyDict_New();
     if (!PyObj.create_numpy_array_kwargs) goto error;
-    if (PyDict_SetItemString(PyObj.create_numpy_array_kwargs, "copy", Py_False)) {
+    if (PyDict_SetItemString(PyObj.create_numpy_array_kwargs, "copy", Py_True)) {
         goto error;
     }
 
