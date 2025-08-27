@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.15.3 - August 27, 2025
+-------------------------
+* Fix error and memory handling in the C extension
+
 v1.15.2 - August 18, 2025
 -------------------------
 * Fixed object attribute 'servers' error in UDF application (#87) (experimental)
