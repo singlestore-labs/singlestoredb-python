@@ -21,6 +21,7 @@ class CreateIcebergMaterializedView(SQLHandler):
         ON iceberg_table
         [ catalog ]
         [ storage ]
+        [ where ]
     ;
 
     # If not exists
@@ -41,6 +42,9 @@ class CreateIcebergMaterializedView(SQLHandler):
     storage = LINK [ _link_config ] [ _link_creds ]
     _link_config = S3 CONFIG '<link-config>'
     _link_creds = CREDENTIALS '<link-creds>'
+
+    # Where clause
+    where = WHERE <expr>
 
     Description
     -----------
@@ -106,6 +110,10 @@ class CreateIcebergMaterializedView(SQLHandler):
                 'Iceberg table reference must be in format: '
                 '[catalog.]database.table',
             )
+
+        where = ''
+        if params.get('where'):
+            where = f' WHERE {params["where"]}'
 
         # Iceberg expects lowercase
         if iceberg_database:
@@ -180,7 +188,8 @@ class CreateIcebergMaterializedView(SQLHandler):
         with connect() as conn:
             with conn.cursor() as cur:
                 # Infer and create the pipeline.
-                # It also creates a table (and optionally a view in case of merge pipeline) with the same name
+                # It also creates a table (and optionally a view in case of
+                # merge pipeline) with the same name
                 cur.execute(rf'''
                     CREATE INFERRED PIPELINE `{pipeline_name}` AS
                         LOAD DATA S3 '{table_id}'
@@ -188,13 +197,17 @@ class CreateIcebergMaterializedView(SQLHandler):
                         CREDENTIALS '{creds_json}'
                         FORMAT ICEBERG
                         OPTIONS = 'merge'
+                        {where}
                 ''')
 
                 # Start the pipeline
                 cur.execute(rf'START PIPELINE `{pipeline_name}`')
 
                 # Create view with user-provided name
-                cur.execute(rf'CREATE VIEW `{view_database}`.`{view_table}` AS SELECT * FROM `{pipeline_name}`')
+                cur.execute(rf'''
+                    CREATE VIEW `{view_database}`.`{view_table}`
+                        AS SELECT * FROM `{pipeline_name}`
+                ''')
 
         # Return result
         res = result.FusionSQLResult()
