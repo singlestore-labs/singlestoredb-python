@@ -160,7 +160,6 @@ class CreateIcebergMaterializedView(SQLHandler):
         config = {}
         config.update(catalog_config)
         config.update(storage_config)
-        config['table_id'] = f'{iceberg_database}.{iceberg_table}'
         config_json = json.dumps(config)
 
         creds = {}
@@ -170,6 +169,7 @@ class CreateIcebergMaterializedView(SQLHandler):
 
         # Create a unique pipeline name
         pipeline_name = f'iceberg_mv_{view_database}_{view_table}_{uuid.uuid4().hex[:8]}'
+        table_id = f'{iceberg_database}.{iceberg_table}'
 
         print('ICEBERG TABLE', iceberg_database, iceberg_table)
         print('DB TABLE', view_database, view_table)
@@ -179,19 +179,22 @@ class CreateIcebergMaterializedView(SQLHandler):
         # Create and start the pipeline
         with connect() as conn:
             with conn.cursor() as cur:
-                # Create the pipeline
+                # Infer and create the pipeline.
+                # It also creates a table (and optionally a view in case of merge pipeline) with the same name
                 cur.execute(rf'''
-                    CREATE PIPELINE `{pipeline_name}` AS
-                        LOAD DATA S3 ''
+                    CREATE INFERRED PIPELINE `{pipeline_name}` AS
+                        LOAD DATA S3 '{table_id}'
                         CONFIG '{config_json}'
                         CREDENTIALS '{creds_json}'
-                        REPLACE INTO TABLE
-                            `{view_database}`.`{view_table}`
                         FORMAT ICEBERG
+                        OPTIONS = 'merge'
                 ''')
 
                 # Start the pipeline
                 cur.execute(rf'START PIPELINE `{pipeline_name}`')
+
+                # Create view with user-provided name
+                cur.execute(rf'CREATE VIEW `{view_database}`.`{view_table}` AS SELECT * FROM `{pipeline_name}`')
 
         # Return result
         res = result.FusionSQLResult()
