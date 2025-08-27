@@ -1950,7 +1950,6 @@ static PyObject *read_row_from_packet(
         case ACCEL_OUT_DICTS:
         case ACCEL_OUT_ARROW:
             PyDict_SetItem(py_result, py_state->py_names[i], py_item);
-            Py_INCREF(py_state->py_names[i]);
             Py_DECREF(py_item);
             break;
         default:
