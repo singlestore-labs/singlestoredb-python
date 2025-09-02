@@ -85,6 +85,7 @@ dev-docs
 certs
 **/*.prof
 **/*.pprof
+work
 
 ## Documentation generated files
 docs/src/_build/doctrees
