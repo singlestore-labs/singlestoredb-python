@@ -44,7 +44,7 @@ class CreateIcebergMaterializedView(SQLHandler):
     _link_creds = CREDENTIALS '<link-creds>'
 
     # Where clause
-    where = WHERE <expr>
+    where = WHERE <statement>
 
     Description
     -----------
