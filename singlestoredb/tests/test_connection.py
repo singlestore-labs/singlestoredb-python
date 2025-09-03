@@ -1446,7 +1446,7 @@ class TestConnection(unittest.TestCase):
         # Recent versions of polars have a problem with decimals
         class FixCompare(str):
             def __eq__(self, other):
-                return super().__eq__(other.replace('precision=None', 'precision=22'))
+                return super().__eq__(other.replace('precision=None', 'precision=20'))
 
         dtypes = [
             ('id', 'Int32'),
@@ -1469,10 +1469,10 @@ class TestConnection(unittest.TestCase):
             ('float', 'Float32'),
             ('double', 'Float64'),
             ('real', 'Float64'),
-            ('decimal', FixCompare('Decimal(precision=22, scale=6)')),
-            ('dec', FixCompare('Decimal(precision=22, scale=6)')),
-            ('fixed', FixCompare('Decimal(precision=22, scale=6)')),
-            ('numeric', FixCompare('Decimal(precision=22, scale=6)')),
+            ('decimal', FixCompare('Decimal(precision=20, scale=6)')),
+            ('dec', FixCompare('Decimal(precision=20, scale=6)')),
+            ('fixed', FixCompare('Decimal(precision=20, scale=6)')),
+            ('numeric', FixCompare('Decimal(precision=20, scale=6)')),
             ('date', 'Date'),
             ('time', "Duration(time_unit='us')"),
             ('time_6', "Duration(time_unit='us')"),
@@ -1593,7 +1593,7 @@ class TestConnection(unittest.TestCase):
         # Recent versions of polars have a problem with decimals
         class FixCompare(str):
             def __eq__(self, other):
-                return super().__eq__(other.replace('precision=None', 'precision=22'))
+                return super().__eq__(other.replace('precision=None', 'precision=20'))
 
         dtypes = [
             ('id', 'Int32'),
@@ -1616,10 +1616,10 @@ class TestConnection(unittest.TestCase):
             ('float', 'Float32'),
             ('double', 'Float64'),
             ('real', 'Float64'),
-            ('decimal', FixCompare('Decimal(precision=22, scale=6)')),
-            ('dec', FixCompare('Decimal(precision=22, scale=6)')),
-            ('fixed', FixCompare('Decimal(precision=22, scale=6)')),
-            ('numeric', FixCompare('Decimal(precision=22, scale=6)')),
+            ('decimal', FixCompare('Decimal(precision=20, scale=6)')),
+            ('dec', FixCompare('Decimal(precision=20, scale=6)')),
+            ('fixed', FixCompare('Decimal(precision=20, scale=6)')),
+            ('numeric', FixCompare('Decimal(precision=20, scale=6)')),
             ('date', 'Date'),
             ('time', "Duration(time_unit='us')"),
             ('time_6', "Duration(time_unit='us')"),
@@ -1825,10 +1825,10 @@ class TestConnection(unittest.TestCase):
             ('float', 'float'),
             ('double', 'double'),
             ('real', 'double'),
-            ('decimal', 'decimal128(22, 6)'),
-            ('dec', 'decimal128(22, 6)'),
-            ('fixed', 'decimal128(22, 6)'),
-            ('numeric', 'decimal128(22, 6)'),
+            ('decimal', 'decimal128(20, 6)'),
+            ('dec', 'decimal128(20, 6)'),
+            ('fixed', 'decimal128(20, 6)'),
+            ('numeric', 'decimal128(20, 6)'),
             ('date', 'date64[ms]'),
             ('time', 'duration[us]'),
             ('time_6', 'duration[us]'),
@@ -1964,10 +1964,10 @@ class TestConnection(unittest.TestCase):
             ('float', 'float'),
             ('double', 'double'),
             ('real', 'double'),
-            ('decimal', 'decimal128(22, 6)'),
-            ('dec', 'decimal128(22, 6)'),
-            ('fixed', 'decimal128(22, 6)'),
-            ('numeric', 'decimal128(22, 6)'),
+            ('decimal', 'decimal128(20, 6)'),
+            ('dec', 'decimal128(20, 6)'),
+            ('fixed', 'decimal128(20, 6)'),
+            ('numeric', 'decimal128(20, 6)'),
             ('date', 'date64[ms]'),
             ('time', 'duration[us]'),
             ('time_6', 'duration[us]'),

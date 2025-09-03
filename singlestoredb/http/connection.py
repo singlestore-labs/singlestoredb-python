@@ -647,23 +647,24 @@ class Cursor(connection.Cursor):
                         type_code = types.ColumnType.get_code(data_type)
                         prec, scale = get_precision_scale(col['dataType'])
                         converter = http_converters.get(type_code, None)
+
                         if 'UNSIGNED' in data_type:
                             flags = 32
+
                         if data_type.endswith('BLOB') or data_type.endswith('BINARY'):
                             converter = functools.partial(
                                 b64decode_converter, converter,  # type: ignore
                             )
                             charset = 63  # BINARY
+
                         if type_code == 0:  # DECIMAL
                             type_code = types.ColumnType.get_code('NEWDECIMAL')
                         elif type_code == 15:  # VARCHAR / VARBINARY
                             type_code = types.ColumnType.get_code('VARSTRING')
-                        if type_code == 246 and prec is not None:  # NEWDECIMAL
-                            prec += 1  # for sign
-                            if scale is not None and scale > 0:
-                                prec += 1  # for decimal
+
                         if converter is not None:
                             convs.append((i, None, converter))
+
                         description.append(
                             Description(
                                 str(col['name']), type_code,
@@ -673,6 +674,7 @@ class Cursor(connection.Cursor):
                             ),
                         )
                         pymy_res.append(PyMyField(col['name'], flags, charset))
+
                     self._descriptions.append(description)
                     self._schemas.append(get_schema(self._results_type, description))
 
@@ -936,7 +938,7 @@ class Cursor(connection.Cursor):
 
     def __iter__(self) -> Iterable[Tuple[Any, ...]]:
         """Return result iterator."""
-        return iter(self._rows)
+        return iter(self._rows[self._row_idx:])
 
     def __enter__(self) -> 'Cursor':
         """Enter a context."""
