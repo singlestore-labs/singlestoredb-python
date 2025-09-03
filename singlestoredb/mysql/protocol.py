@@ -324,13 +324,26 @@ class FieldDescriptorPacket(MysqlPacket):
                 raise TypeError(f'unrecognized extended data type: {ext_type_code}')
 
     def description(self):
-        """Provides a 7-item tuple compatible with the Python PEP249 DB Spec."""
+        """
+        Provides a 9-item tuple.
+
+        Standard descriptions only have 7 fields according to the Python
+        PEP249 DB Spec, but we need to surface information about unsigned
+        types and charsetnr for proper type handling.
+
+        """
+        precision = self.get_column_length()
+        if self.type_code in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
+            if precision:
+                precision -= 1  # for the sign
+                if self.scale > 0:
+                    precision -= 1  # for the decimal point
         return Description(
             self.name,
             self.type_code,
             None,  # TODO: display_length; should this be self.length?
             self.get_column_length(),  # 'internal_size'
-            self.get_column_length(),  # 'precision'  # TODO: why!?!?
+            precision,  # 'precision'
             self.scale,
             self.flags % 2 == 0,
             self.flags,
