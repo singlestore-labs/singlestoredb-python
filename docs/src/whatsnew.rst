@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.15.4 - September 4, 2025
+---------------------------
+* Fix precision values for decimals (#91)
+
 v1.15.3 - August 27, 2025
 -------------------------
 * Fix error and memory handling in the C extension
