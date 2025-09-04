@@ -708,8 +708,22 @@ class Application(object):
     # Error response start
     error_response_dict: Dict[str, Any] = dict(
         type='http.response.start',
-        status=401,
-        headers=[(b'content-type', b'text/plain')],
+        status=500,
+        headers=[(b'content-type', b'application/json')],
+    )
+
+    # Timeout response start
+    timeout_response_dict: Dict[str, Any] = dict(
+        type='http.response.start',
+        status=504,
+        headers=[(b'content-type', b'application/json')],
+    )
+
+    # Cancel response start
+    cancel_response_dict: Dict[str, Any] = dict(
+        type='http.response.start',
+        status=503,
+        headers=[(b'content-type', b'application/json')],
     )
 
     # JSON response start
@@ -1233,12 +1247,14 @@ class Application(object):
                         'timeout': func_info['timeout'],
                     },
                 )
-                body = (
-                    '[TimeoutError] Function call timed out after ' +
-                    str(func_info['timeout']) +
-                    ' seconds'
+                body = json.dumps(
+                    dict(
+                        error='[TimeoutError] Function call timed out after ' +
+                        str(func_info['timeout']) +
+                        ' seconds',
+                    ),
                 ).encode('utf-8')
-                await send(self.error_response_dict)
+                await send(self.timeout_response_dict)
 
             except asyncio.CancelledError:
                 self.logger.exception(
@@ -1249,8 +1265,12 @@ class Application(object):
                         'function_name': func_name.decode('utf-8'),
                     },
                 )
-                body = b'[CancelledError] Function call was cancelled'
-                await send(self.error_response_dict)
+                body = json.dumps(
+                    dict(
+                        error='[CancelledError] Function call was cancelled',
+                    ),
+                ).encode('utf-8')
+                await send(self.cancel_response_dict)
 
             except Exception as e:
                 self.logger.exception(
@@ -1262,7 +1282,11 @@ class Application(object):
                         'exception_type': type(e).__name__,
                     },
                 )
-                body = f'[{type(e).__name__}] {str(e).strip()}'.encode('utf-8')
+                body = json.dumps(
+                    dict(
+                        error=f'[{type(e).__name__}] {str(e).strip()}',
+                    ),
+                ).encode('utf-8')
                 await send(self.error_response_dict)
 
             finally:
