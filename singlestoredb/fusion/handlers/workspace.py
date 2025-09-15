@@ -109,15 +109,30 @@ class UseWorkspaceHandler(SQLHandler):
 
         # Set workspace and database
         if params.get('with_database'):
-            if workspace_name and not params.get('in_group'):
-                portal.connection = workspace_name, params['with_database']
+            if params.get('in_group'):
+                # Use 3-element tuple: (workspace_group_id, workspace_name_or_id,
+                # database)
+                portal.connection = (  # type: ignore[assignment]
+                    workspace_group.id,
+                    workspace_name or workspace_id,
+                    params['with_database'],
+                )
             else:
-                portal.connection = workspace_id, params['with_database']
+                # Use 2-element tuple: (workspace_name_or_id, database)
+                portal.connection = (
+                    workspace_name or workspace_id,
+                    params['with_database'],
+                )
         else:
-            if workspace_name and not params.get('in_group'):
-                portal.workspace = workspace_name
+            if params.get('in_group'):
+                # Use 2-element tuple: (workspace_group_id, workspace_name_or_id)
+                portal.workspace = (  # type: ignore[assignment]
+                    workspace_group.id,
+                    workspace_name or workspace_id,
+                )
             else:
-                portal.workspace = workspace_id
+                # Use string: workspace_name_or_id
+                portal.workspace = workspace_name or workspace_id
 
         return None
 
