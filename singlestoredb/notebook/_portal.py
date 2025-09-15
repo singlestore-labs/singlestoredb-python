@@ -10,6 +10,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
+from typing import Union
 
 from . import _objects as obj
 from ..management import workspace as mgr
@@ -167,15 +168,32 @@ class Portal(object):
         return obj.workspace
 
     @workspace.setter
-    def workspace(self, name_or_id: str) -> None:
+    def workspace(self, workspace_spec: Union[str, Tuple[str, str]]) -> None:
         """Set workspace."""
-        if re.match(
-            r'[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}',
-            name_or_id, flags=re.I,
-        ):
-            w = mgr.get_workspace(name_or_id)
+        if isinstance(workspace_spec, tuple):
+            # 2-element tuple: (workspace_group_id, workspace_name_or_id)
+            workspace_group_id, name_or_id = workspace_spec
+            uuid_pattern = (
+                r'[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}'
+            )
+            if re.match(uuid_pattern, name_or_id, flags=re.I):
+                w = mgr.get_workspace(name_or_id)
+            else:
+                w = mgr.get_workspace_group(workspace_group_id).workspaces[
+                    name_or_id
+                ]
         else:
-            w = mgr.get_workspace_group(self.workspace_group_id).workspaces[name_or_id]
+            # String: workspace_name_or_id (existing behavior)
+            name_or_id = workspace_spec
+            uuid_pattern = (
+                r'[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}'
+            )
+            if re.match(uuid_pattern, name_or_id, flags=re.I):
+                w = mgr.get_workspace(name_or_id)
+            else:
+                w = mgr.get_workspace_group(
+                    self.workspace_group_id,
+                ).workspaces[name_or_id]
 
         if w.state and w.state.lower() not in ['active', 'resumed']:
             raise RuntimeError('workspace is not active')
@@ -196,16 +214,37 @@ class Portal(object):
         return self.workspace, self.default_database
 
     @connection.setter
-    def connection(self, workspace_and_default_database: Tuple[str, str]) -> None:
+    def connection(
+        self,
+        connection_spec: Union[Tuple[str, str], Tuple[str, str, str]],
+    ) -> None:
         """Set workspace and default database name."""
-        name_or_id, default_database = workspace_and_default_database
-        if re.match(
-            r'[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}',
-            name_or_id, flags=re.I,
-        ):
-            w = mgr.get_workspace(name_or_id)
+        if len(connection_spec) == 3:
+            # 3-element tuple: (workspace_group_id, workspace_name_or_id,
+            # default_database)
+            workspace_group_id, name_or_id, default_database = connection_spec
+            uuid_pattern = (
+                r'[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}'
+            )
+            if re.match(uuid_pattern, name_or_id, flags=re.I):
+                w = mgr.get_workspace(name_or_id)
+            else:
+                w = mgr.get_workspace_group(workspace_group_id).workspaces[
+                    name_or_id
+                ]
         else:
-            w = mgr.get_workspace_group(self.workspace_group_id).workspaces[name_or_id]
+            # 2-element tuple: (workspace_name_or_id, default_database)
+            # existing behavior
+            name_or_id, default_database = connection_spec
+            uuid_pattern = (
+                r'[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}'
+            )
+            if re.match(uuid_pattern, name_or_id, flags=re.I):
+                w = mgr.get_workspace(name_or_id)
+            else:
+                w = mgr.get_workspace_group(
+                    self.workspace_group_id,
+                ).workspaces[name_or_id]
 
         if w.state and w.state.lower() not in ['active', 'resumed']:
             raise RuntimeError('workspace is not active')
