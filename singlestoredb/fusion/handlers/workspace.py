@@ -15,7 +15,7 @@ from .utils import get_workspace_manager
 
 class UseWorkspaceHandler(SQLHandler):
     """
-    USE WORKSPACE workspace [ with_database ];
+    USE WORKSPACE workspace [ in_group ] [ with_database ];
 
     # Workspace
     workspace = { workspace_id | workspace_name | current_workspace }
@@ -29,6 +29,15 @@ class UseWorkspaceHandler(SQLHandler):
     # Current workspace
     current_workspace = @@CURRENT
 
+    # Workspace group specification
+    in_group = IN GROUP { group_id | group_name }
+
+    # ID of workspace group
+    group_id = ID '<group-id>'
+
+    # Name of workspace group
+    group_name = '<group-name>'
+
     # Name of database
     with_database = WITH DATABASE 'database-name'
 
@@ -38,13 +47,18 @@ class UseWorkspaceHandler(SQLHandler):
 
     Arguments
     ---------
-    * ``<workspace-id>``: The ID of the workspace to delete.
-    * ``<workspace-name>``: The name of the workspace to delete.
+    * ``<workspace-id>``: The ID of the workspace to use.
+    * ``<workspace-name>``: The name of the workspace to use.
+    * ``<group-id>``: The ID of the workspace group to search in.
+    * ``<group-name>``: The name of the workspace group to search in.
 
     Remarks
     -------
     * If you want to specify a database in the current workspace,
       the workspace name can be specified as ``@@CURRENT``.
+    * Use the ``IN GROUP`` clause to specify the ID or name of the workspace
+      group where the workspace should be found. If not specified, the current
+      workspace group will be used.
     * Specify the ``WITH DATABASE`` clause to select a default
       database for the session.
     * This command only works in a notebook session in the
@@ -57,23 +71,54 @@ class UseWorkspaceHandler(SQLHandler):
 
         USE WORKSPACE 'examplews' WITH DATABASE 'dbname';
 
+    The following command sets the workspace to ``examplews`` from a specific
+    workspace group::
+
+        USE WORKSPACE 'examplews' IN GROUP 'my-workspace-group';
+
     """
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         from singlestoredb.notebook import portal
+
+        # Handle current workspace case
         if params['workspace'].get('current_workspace'):
             if params.get('with_database'):
                 portal.default_database = params['with_database']
-        elif params.get('with_database'):
-            if params['workspace'].get('workspace_name'):
-                portal.connection = params['workspace']['workspace_name'], \
-                                    params['with_database']
+            return None
+
+        # Get workspace name or ID
+        workspace_name = params['workspace'].get('workspace_name')
+        workspace_id = params['workspace'].get('workspace_id')
+
+        # If IN GROUP is specified, look up workspace in that group
+        if params.get('in_group'):
+            workspace_group = get_workspace_group(params)
+
+            if workspace_name:
+                workspace = workspace_group.workspaces[workspace_name]
+            elif workspace_id:
+                # Find workspace by ID in the specified group
+                workspace = next(
+                    (w for w in workspace_group.workspaces if w.id == workspace_id),
+                    None,
+                )
+                if workspace is None:
+                    raise KeyError(f'no workspace found with ID: {workspace_id}')
+
+            workspace_id = workspace.id
+
+        # Set workspace and database
+        if params.get('with_database'):
+            if workspace_name and not params.get('in_group'):
+                portal.connection = workspace_name, params['with_database']
             else:
-                portal.connection = params['workspace']['workspace_id'], \
-                                    params['with_database']
-        elif params['workspace'].get('workspace_name'):
-            portal.workspace = params['workspace']['workspace_name']
+                portal.connection = workspace_id, params['with_database']
         else:
-            portal.workspace = params['workspace']['workspace_id']
+            if workspace_name and not params.get('in_group'):
+                portal.workspace = workspace_name
+            else:
+                portal.workspace = workspace_id
+
         return None
 
 
