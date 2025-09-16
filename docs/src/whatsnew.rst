@@ -10,11 +10,8 @@ This document outlines features and improvements from each release.
 
 v1.15.5 - September 16, 2025
 ----------------------------
-**New Features:**
 * Add IN GROUP clause to USE WORKSPACE Fusion SQL command (#93)
-
-**Other Changes:**
-* Remove extra / at end of path
+* Remove extra / at end of path in Stages.listdir
 * Improve errors in UDF app (#92)
 
 v1.15.4 - September 4, 2025
