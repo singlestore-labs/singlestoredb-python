@@ -460,7 +460,7 @@ class Stage(FileLocation):
 
         """
         res = self._manager._get(
-            f'stage/{self._deployment_id}/fs/{stage_path}',
+            re.sub(r'/+$', r'/', f'stage/{self._deployment_id}/fs/{stage_path}'),
         ).json()
         if recursive:
             out = []
