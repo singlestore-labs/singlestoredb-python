@@ -82,6 +82,7 @@ dev-docs
 **/.ipynb_checkpoints
 **/.benchmarks
 *.ipynb
+test*.py
 certs
 **/*.prof
 **/*.pprof
@@ -95,3 +96,5 @@ dask-worker-space
 
 ## Test configuration
 singlestoredb/mysql/tests/databases.json
+
+trees
