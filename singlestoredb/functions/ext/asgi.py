@@ -42,6 +42,7 @@ import tempfile
 import textwrap
 import threading
 import time
+import traceback
 import typing
 import urllib
 import uuid
@@ -709,21 +710,21 @@ class Application(object):
     error_response_dict: Dict[str, Any] = dict(
         type='http.response.start',
         status=500,
-        headers=[(b'content-type', b'application/json')],
+        headers=[(b'content-type', b'text/plain')],
     )
 
     # Timeout response start
     timeout_response_dict: Dict[str, Any] = dict(
         type='http.response.start',
         status=504,
-        headers=[(b'content-type', b'application/json')],
+        headers=[(b'content-type', b'text/plain')],
     )
 
     # Cancel response start
     cancel_response_dict: Dict[str, Any] = dict(
         type='http.response.start',
         status=503,
-        headers=[(b'content-type', b'application/json')],
+        headers=[(b'content-type', b'text/plain')],
     )
 
     # JSON response start
@@ -1247,12 +1248,10 @@ class Application(object):
                         'timeout': func_info['timeout'],
                     },
                 )
-                body = json.dumps(
-                    dict(
-                        error='[TimeoutError] Function call timed out after ' +
-                        str(func_info['timeout']) +
-                        ' seconds',
-                    ),
+                body = (
+                    'TimeoutError: Function call timed out after ' +
+                    str(func_info['timeout']) +
+                    ' seconds'
                 ).encode('utf-8')
                 await send(self.timeout_response_dict)
 
@@ -1265,11 +1264,7 @@ class Application(object):
                         'function_name': func_name.decode('utf-8'),
                     },
                 )
-                body = json.dumps(
-                    dict(
-                        error='[CancelledError] Function call was cancelled',
-                    ),
-                ).encode('utf-8')
+                body = b'CancelledError: Function call was cancelled'
                 await send(self.cancel_response_dict)
 
             except Exception as e:
@@ -1282,11 +1277,12 @@ class Application(object):
                         'exception_type': type(e).__name__,
                     },
                 )
-                body = json.dumps(
-                    dict(
-                        error=f'[{type(e).__name__}] {str(e).strip()}',
-                    ),
-                ).encode('utf-8')
+                msg = traceback.format_exc().strip().split(' File ')[-1]
+                if msg.startswith('"/tmp/ipykernel_'):
+                    msg = 'Line ' + msg.split(', line ')[-1]
+                else:
+                    msg = 'File ' + msg
+                body = msg.encode('utf-8')
                 await send(self.error_response_dict)
 
             finally:
