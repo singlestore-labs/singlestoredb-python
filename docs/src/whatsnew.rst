@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.15.6 - September 16, 2025
+----------------------------
+* Add / update release utilities
+* Improve UDF error messages
+
 v1.15.5 - September 16, 2025
 ----------------------------
 * Add IN GROUP clause to USE WORKSPACE Fusion SQL command (#93)

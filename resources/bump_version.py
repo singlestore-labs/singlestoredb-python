@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -173,10 +174,84 @@ def summarize_changes(git_log: str) -> str:
     return '\n'.join(summary) if summary else '* Various improvements and updates'
 
 
-def update_whatsnew(new_version: str, summary: str) -> None:
-    """Update the whatsnew.rst file with the new release."""
+def edit_content(content: str, description: str = 'content') -> str | None:
+    """Open the default editor to edit content and return the edited result.
+
+    Args:
+        content: The initial content to edit
+        description: Description of what's being edited (for messages)
+
+    Returns:
+        The edited content, or None if the user cancelled (empty content)
+    """
+    # Get the editor from environment variables
+    editor = os.environ.get('EDITOR') or os.environ.get('VISUAL') or 'vi'
+
+    # Create a temporary file with the content
+    with tempfile.NamedTemporaryFile(mode='w+', suffix='.txt', delete=False) as tmp_file:
+        tmp_file.write(content)
+        tmp_file.flush()
+        tmp_path = tmp_file.name
+
+    try:
+        print(f'\nOpening editor to edit {description}...')
+        print(f'Editor: {editor}')
+        print('Save and exit to continue, or clear all content to cancel.')
+
+        # Open the editor
+        result = subprocess.run([editor, tmp_path])
+
+        if result.returncode != 0:
+            print(f'Editor exited with non-zero status: {result.returncode}')
+            return None
+
+        # Read the edited content
+        with open(tmp_path, 'r') as f:
+            edited_content = f.read().strip()
+
+        if not edited_content:
+            print('Content is empty - cancelling operation.')
+            return None
+
+        return edited_content
+
+    finally:
+        # Clean up the temporary file
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
+def prepare_whatsnew_content(new_version: str, summary: str) -> str:
+    """Prepare the content for the new release section."""
+    today = datetime.date.today()
+    date_str = today.strftime('%B %d, %Y').replace(' 0', ' ')  # Remove leading zero
+
+    new_section = f'v{new_version} - {date_str}\n'
+    new_section += '-' * len(new_section.strip()) + '\n'
+    new_section += summary.strip()
+
+    return new_section
+
+
+def update_whatsnew_with_editor(new_version: str, summary: str) -> bool:
+    """Update the whatsnew.rst file with the new release, allowing user to edit content.
+
+    Returns:
+        True if successful, False if cancelled by user
+    """
     whatsnew_path = Path(__file__).parent.parent / 'docs' / 'src' / 'whatsnew.rst'
 
+    # Prepare the initial content for the new release
+    new_release_content = prepare_whatsnew_content(new_version, summary)
+
+    # Let the user edit the content
+    edited_content = edit_content(new_release_content, 'release notes')
+    if edited_content is None:
+        return False
+
+    # Read the current whatsnew.rst file
     with open(whatsnew_path, 'r') as f:
         content = f.read()
 
@@ -186,19 +261,13 @@ def update_whatsnew(new_version: str, summary: str) -> None:
         # If no versions found, add after the document description
         note_end = content.find('changes to the API.\n') + len('changes to the API.\n')
 
-    # Create new release section
-    today = datetime.date.today()
-    date_str = today.strftime('%B %d, %Y').replace(' 0', ' ')  # Remove leading zero
-
-    new_section = f'\n\nv{new_version} - {date_str}\n'
-    new_section += '-' * (len(new_section) - 3) + '\n'
-    new_section += summary.strip()
-
     # Insert the new section
-    content = content[:note_end] + new_section + content[note_end:]
+    content = content[:note_end] + '\n\n' + edited_content + content[note_end:]
 
     with open(whatsnew_path, 'w') as f:
         f.write(content)
+
+    return True
 
 
 def build_docs() -> None:
@@ -285,9 +354,22 @@ def main() -> None:
         git_log = get_git_log_since_last_release(current_version)
         summary = summarize_changes(git_log)
 
-    # Update whatsnew.rst
+    # Update whatsnew.rst with editor
     print('\nUpdating whatsnew.rst...')
-    update_whatsnew(new_version, summary)
+    if not update_whatsnew_with_editor(new_version, summary):
+        print('\n❌ Operation cancelled by user')
+        print('Reverting version changes...')
+
+        # Revert version changes
+        update_version_in_file(Path(__file__).parent.parent / 'setup.cfg', new_version, current_version)
+        update_version_in_file(
+            Path(__file__).parent.parent / 'singlestoredb' / '__init__.py',
+            new_version,
+            current_version,
+        )
+
+        print('Version changes reverted.')
+        sys.exit(1)
 
     # Build documentation
     print('\nBuilding documentation...')
