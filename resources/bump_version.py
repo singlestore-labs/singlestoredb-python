@@ -148,23 +148,23 @@ def summarize_changes(git_log: str) -> str:
     summary = []
 
     if features:
-        summary.append('**New Features:**')
+        # summary.append('**New Features:**')
         for feat in features[:5]:  # Limit to 5 most recent
             summary.append(f'* {feat}')
         if len(features) > 5:
             summary.append(f'* ...and {len(features) - 5} more features')
-        summary.append('')
+        # summary.append('')
 
     if fixes:
-        summary.append('**Bug Fixes:**')
+        # summary.append('**Bug Fixes:**')
         for fix in fixes[:5]:  # Limit to 5 most recent
             summary.append(f'* {fix}')
         if len(fixes) > 5:
             summary.append(f'* ...and {len(fixes) - 5} more fixes')
-        summary.append('')
+        # summary.append('')
 
     if other:
-        summary.append('**Other Changes:**')
+        # summary.append('**Other Changes:**')
         for change in other[:3]:  # Limit to 3 most recent
             summary.append(f'* {change}')
         if len(other) > 3:
