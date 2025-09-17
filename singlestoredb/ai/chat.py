@@ -1,5 +1,4 @@
 import os
-import uuid
 from typing import Any
 from typing import AsyncIterator
 from typing import Callable
@@ -94,6 +93,7 @@ class SingleStoreExperimentalChat:
         http_client: Optional[httpx.Client] = None,
         api_key: Optional[str] = None,
         obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
+        streaming: bool = False,
         **kwargs: Any,
     ) -> None:
         prefix, actual_model = self._parse_identifier(model_name)
@@ -131,11 +131,10 @@ class SingleStoreExperimentalChat:
 
             token_env = os.environ.get('SINGLESTOREDB_USER_TOKEN')
             token = api_key if api_key is not None else token_env
-            # Generate a per-instance client ID for tracing Bedrock calls.
-            self._client_id = str(uuid.uuid4())
             self._client = ChatBedrockConverse(
                 base_url=info.connection_url,
                 model=actual_model,
+                streaming=streaming,
                 **kwargs,
             )
 
@@ -148,8 +147,11 @@ class SingleStoreExperimentalChat:
                 merged_headers.update({k: v for k, v in provided_headers.items()})
             if token:
                 merged_headers.setdefault('Authorization', f'Bearer {token}')
-            # Always include X-ClientID for Bedrock path
-            merged_headers.setdefault('X-ClientID', self._client_id)
+            # Add Bedrock converse headers based on streaming flag
+            if streaming:
+                merged_headers.setdefault('X-BEDROCK-CONVERSE-STREAMING', 'true')
+            else:
+                merged_headers.setdefault('X-BEDROCK-CONVERSE', 'true')
             if merged_headers:
                 # Try to set directly if backend exposes default_headers
                 if (
@@ -180,6 +182,7 @@ class SingleStoreExperimentalChat:
                 base_url=info.connection_url,
                 api_key=token,
                 model=actual_model,
+                streaming=streaming,
             )
             if http_client is not None:
                 # Some versions accept 'http_client' parameter for custom transport.
@@ -198,6 +201,7 @@ class SingleStoreExperimentalChat:
         # If supplied, a new token will be fetched and injected into the
         # 'X-S2-OBO' header for every Bedrock request made via this wrapper.
         self._obo_token_getter = obo_token_getter
+        self._streaming = streaming
 
     @classmethod
     def _parse_identifier(cls, identifier: str) -> tuple[str, str]:
