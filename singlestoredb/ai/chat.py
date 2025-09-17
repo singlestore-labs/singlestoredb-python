@@ -257,6 +257,31 @@ class SingleStoreExperimentalChat:
         if call_headers:
             kwargs['headers'] = call_headers
 
+    # ------------------------------------------------------------------
+    # Bedrock kwargs sanitation
+    # ------------------------------------------------------------------
+    def _sanitize_bedrock_kwargs(self, kwargs: dict[str, Any]) -> None:
+        """Remove or adapt kwargs not supported by ChatBedrockConverse.
+
+        Currently strips keys that would raise TypeError in
+        ChatBedrockConverse._converse_params (e.g. 'parallelToolCalls').
+        This guards against passing OpenAI/other provider specific
+        parameters straight through to Bedrock.
+        """
+        if self._backend_type != 'bedrock':  # only relevant for bedrock backend
+            return
+        unsupported = {'parallelToolCalls', 'parallel_tool_calls'}
+        # Direct kwargs
+        for key in list(kwargs.keys()):
+            if key in unsupported:
+                kwargs.pop(key)
+        # Nested model_kwargs if present
+        mk = kwargs.get('model_kwargs')
+        if isinstance(mk, dict):
+            for key in list(mk.keys()):
+                if key in unsupported:
+                    mk.pop(key)
+
     def as_base(self) -> Any:
         """Return the underlying backend client instance.
 
@@ -267,14 +292,17 @@ class SingleStoreExperimentalChat:
 
     def invoke(self, *args: Any, **kwargs: Any) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return self._client.invoke(*args, **kwargs)
 
     async def ainvoke(self, *args: Any, **kwargs: Any) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return await self._client.ainvoke(*args, **kwargs)
 
     def stream(self, *args: Any, **kwargs: Any) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return self._client.stream(*args, **kwargs)
 
     async def astream(
@@ -283,6 +311,7 @@ class SingleStoreExperimentalChat:
         **kwargs: Any,
     ) -> AsyncIterator[Any]:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         async for chunk in self._client.astream(*args, **kwargs):
             yield chunk
 
@@ -292,14 +321,17 @@ class SingleStoreExperimentalChat:
     # ------------------------------------------------------------------
     def generate(self, *args: Any, **kwargs: Any) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return self._client.generate(*args, **kwargs)
 
     async def agenerate(self, *args: Any, **kwargs: Any) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return await self._client.agenerate(*args, **kwargs)
 
     def predict(self, *args: Any, **kwargs: Any) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return self._client.predict(*args, **kwargs)
 
     async def apredict(
@@ -308,6 +340,7 @@ class SingleStoreExperimentalChat:
         **kwargs: Any,
     ) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return await self._client.apredict(*args, **kwargs)
 
     def predict_messages(
@@ -316,6 +349,7 @@ class SingleStoreExperimentalChat:
         **kwargs: Any,
     ) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return self._client.predict_messages(*args, **kwargs)
 
     async def apredict_messages(
@@ -324,18 +358,22 @@ class SingleStoreExperimentalChat:
         **kwargs: Any,
     ) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return await self._client.apredict_messages(*args, **kwargs)
 
     def batch(self, *args: Any, **kwargs: Any) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return self._client.batch(*args, **kwargs)
 
     async def abatch(self, *args: Any, **kwargs: Any) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return await self._client.abatch(*args, **kwargs)
 
     def apply(self, *args: Any, **kwargs: Any) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return self._client.apply(*args, **kwargs)
 
     async def aapply(
@@ -344,6 +382,7 @@ class SingleStoreExperimentalChat:
         **kwargs: Any,
     ) -> Any:
         self._maybe_inject_headers(kwargs)
+        self._sanitize_bedrock_kwargs(kwargs)
         return await self._client.aapply(*args, **kwargs)
 
     def __repr__(self) -> str:
