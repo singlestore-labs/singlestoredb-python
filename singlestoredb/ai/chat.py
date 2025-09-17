@@ -120,21 +120,16 @@ class SingleStoreExperimentalChat:
                 provided_headers = {}
 
         if backend_type == 'bedrock':
-            self._removed_aws_env: dict[str, str] = {}
-            for _v in (
-                'AWS_ACCESS_KEY_ID',
-                'AWS_SECRET_ACCESS_KEY',
-                'AWS_SESSION_TOKEN',
-            ):
-                if _v in os.environ:
-                    self._removed_aws_env[_v] = os.environ.pop(_v)
-
             token_env = os.environ.get('SINGLESTOREDB_USER_TOKEN')
             token = api_key if api_key is not None else token_env
             self._client = ChatBedrockConverse(
                 base_url=info.connection_url,
                 model=actual_model,
                 streaming=streaming,
+                region='us-east-1',  # dummy value; UMG does not use this
+                aws_access_key_id='placeholder',  # dummy value; UMG does not use this
+                aws_secret_access_key='placeholder',  # dummy value; UMG does not use this
+                cache=True,
                 **kwargs,
             )
 
