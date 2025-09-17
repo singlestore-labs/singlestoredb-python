@@ -125,7 +125,7 @@ class SingleStoreExperimentalChat:
             self._client = ChatBedrockConverse(
                 base_url=info.connection_url,
                 model=actual_model,
-                streaming=streaming,
+                disable_streaming=not streaming,
                 region_name='us-east-1',  # dummy value; UMG does not use this
                 aws_access_key_id='placeholder',  # dummy value; UMG does not use this
                 aws_secret_access_key='placeholder',  # dummy value; UMG does not use this
