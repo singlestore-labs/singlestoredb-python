@@ -2,6 +2,7 @@ import os
 import uuid
 from typing import Any
 from typing import AsyncIterator
+from typing import Callable
 from typing import Optional
 
 import httpx
@@ -92,6 +93,7 @@ class SingleStoreExperimentalChat:
         model_name: str,
         http_client: Optional[httpx.Client] = None,
         api_key: Optional[str] = None,
+        obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
         **kwargs: Any,
     ) -> None:
         prefix, actual_model = self._parse_identifier(model_name)
@@ -192,6 +194,10 @@ class SingleStoreExperimentalChat:
         self.actual_model = actual_model     # model portion after prefix
         self.prefix = prefix                 # normalized prefix
         self.connection_url = info.connection_url
+        # Optional callable returning a fresh OBO token each request (Bedrock only).
+        # If supplied, a new token will be fetched and injected into the
+        # 'X-S2-OBO' header for every Bedrock request made via this wrapper.
+        self._obo_token_getter = obo_token_getter
 
     @classmethod
     def _parse_identifier(cls, identifier: str) -> tuple[str, str]:
@@ -223,16 +229,35 @@ class SingleStoreExperimentalChat:
         call that allows a `headers` kwarg and has not already provided
         its own.
         """
-        if (
-            self._backend_type == 'bedrock'
-            and hasattr(self, '_auth_header')
+        if self._backend_type != 'bedrock':
+            return
+
+    # Start from existing headers in the call.
+    # Copy to avoid mutating caller-provided dict in-place.
+        call_headers: dict[str, str] = {}
+        if 'headers' in kwargs and isinstance(kwargs['headers'], dict):
+            call_headers = dict(kwargs['headers'])
+        elif (
+            hasattr(self, '_auth_header')
             and getattr(self, '_auth_header')
             and 'headers' not in kwargs
         ):
-            kwargs['headers'] = getattr(
-                self,
-                '_auth_header',
-            )
+            # Use fallback auth header if user did not pass any.
+            call_headers = dict(getattr(self, '_auth_header'))
+
+        # Dynamic OBO token injection (always fresh per request if getter provided)
+        getter = getattr(self, '_obo_token_getter', None)
+        if getter is not None:
+            try:
+                obo_token = getter()
+            except Exception:
+                obo_token = None
+            if obo_token:
+                # Overwrite any stale value.
+                call_headers['X-S2-OBO'] = obo_token
+
+        if call_headers:
+            kwargs['headers'] = call_headers
 
     def as_base(self) -> Any:
         """Return the underlying backend client instance.
