@@ -126,7 +126,7 @@ class SingleStoreExperimentalChat:
                 base_url=info.connection_url,
                 model=actual_model,
                 streaming=streaming,
-                region='us-east-1',  # dummy value; UMG does not use this
+                region_name='us-east-1',  # dummy value; UMG does not use this
                 aws_access_key_id='placeholder',  # dummy value; UMG does not use this
                 aws_secret_access_key='placeholder',  # dummy value; UMG does not use this
                 cache=True,
