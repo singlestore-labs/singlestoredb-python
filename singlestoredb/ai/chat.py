@@ -129,7 +129,6 @@ class SingleStoreExperimentalChat:
                 region_name='us-east-1',  # dummy value; UMG does not use this
                 aws_access_key_id='placeholder',  # dummy value; UMG does not use this
                 aws_secret_access_key='placeholder',  # dummy value; UMG does not use this
-                cache=True,
                 **kwargs,
             )
 
