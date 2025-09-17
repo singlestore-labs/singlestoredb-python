@@ -93,7 +93,7 @@ class SingleStoreExperimentalChat:
         http_client: Optional[httpx.Client] = None,
         api_key: Optional[str] = None,
         obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
-        streaming: bool = False,
+        streaming: bool = True,
         **kwargs: Any,
     ) -> None:
         prefix, actual_model = self._parse_identifier(model_name)
