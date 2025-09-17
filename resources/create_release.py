@@ -25,7 +25,18 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
+
+
+def status(message: str) -> None:
+    """Show status messages to indicate progress."""
+    print(f'📋 {message}', file=sys.stderr)
+
+
+def step(step_num: int, total_steps: int, message: str) -> None:
+    """Show a numbered step with progress."""
+    print(f'📍 Step {step_num}/{total_steps}: {message}', file=sys.stderr)
 
 
 def get_version_from_setup_cfg() -> str:
@@ -109,6 +120,9 @@ def extract_release_notes(version: str) -> str:
 
 def create_release(version: str, notes: str, dry_run: bool = False) -> None:
     """Create a GitHub release using gh CLI."""
+    tag = f'v{version}'
+    title = f'SingleStoreDB v{version}'
+
     # Create temporary file for release notes
     with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
         f.write(notes)
@@ -116,9 +130,6 @@ def create_release(version: str, notes: str, dry_run: bool = False) -> None:
 
     try:
         # Construct the gh release create command
-        tag = f'v{version}'
-        title = f'SingleStoreDB v{version}'
-
         cmd = [
             'gh', 'release', 'create', tag,
             '--title', title,
@@ -126,30 +137,38 @@ def create_release(version: str, notes: str, dry_run: bool = False) -> None:
         ]
 
         if dry_run:
-            print('DRY RUN: Would execute the following command:')
-            print(' '.join(cmd))
-            print(f'\nRelease notes file content:')
-            print(f"{'='*50}")
-            print(notes)
-            print(f"{'='*50}")
+            status('🔍 DRY RUN - Preview mode')
+            print('=' * 50, file=sys.stderr)
+            print(f'Command: {" ".join(cmd)}', file=sys.stderr)
+            print(f'Tag: {tag}', file=sys.stderr)
+            print(f'Title: {title}', file=sys.stderr)
+            print(f'Notes file: {notes_file}', file=sys.stderr)
+            print('=' * 50, file=sys.stderr)
+            print('Release notes content:', file=sys.stderr)
+            print(notes, file=sys.stderr)
+            print('=' * 50, file=sys.stderr)
             return
 
-        print(f'Creating GitHub release for version {version}...')
-        print(f'Tag: {tag}')
-        print(f'Title: {title}')
-        print(f'Notes file: {notes_file}')
+        status(f'🚀 Creating GitHub release for v{version}...')
+        status(f'   📎 Tag: {tag}')
+        status(f'   📝 Title: {title}')
+
+        start_time = time.time()
 
         # Execute the command
         result = subprocess.run(cmd, capture_output=True, text=True)
 
+        elapsed = time.time() - start_time
+
         if result.returncode != 0:
-            print('Error creating GitHub release:')
-            print(f'STDOUT: {result.stdout}')
-            print(f'STDERR: {result.stderr}')
+            print(f'❌ Error creating GitHub release (after {elapsed:.1f}s):', file=sys.stderr)
+            print(f'   STDOUT: {result.stdout}', file=sys.stderr)
+            print(f'   STDERR: {result.stderr}', file=sys.stderr)
             sys.exit(1)
 
-        print('✅ GitHub release created successfully!')
-        print(f'Output: {result.stdout}')
+        status(f'✅ GitHub release created successfully in {elapsed:.1f}s!')
+        if result.stdout.strip():
+            status(f'   🔗 {result.stdout.strip()}')
 
     finally:
         # Clean up temporary file
@@ -161,32 +180,47 @@ def create_release(version: str, notes: str, dry_run: bool = False) -> None:
 
 def check_prerequisites() -> None:
     """Check that required tools are available."""
+    status('🔍 Checking prerequisites...')
+
     # Check if gh CLI is available
     try:
         result = subprocess.run(['gh', '--version'], capture_output=True, text=True, check=True)
-        print(f'GitHub CLI found: {result.stdout.strip().split()[2]}')
+        version = result.stdout.strip().split()[2]
+        status(f'   ✓ GitHub CLI found: v{version}')
     except (subprocess.CalledProcessError, FileNotFoundError):
-        print('Error: GitHub CLI (gh) is not installed or not in PATH')
-        print('Please install it from https://cli.github.com/')
+        print('❌ GitHub CLI (gh) is not installed or not in PATH', file=sys.stderr)
+        print('   Please install it from https://cli.github.com/', file=sys.stderr)
         sys.exit(1)
 
     # Check if we're in a git repository
     try:
         subprocess.run(['git', 'rev-parse', '--git-dir'], capture_output=True, check=True)
+        status('   ✓ Git repository detected')
     except subprocess.CalledProcessError:
-        print('Error: Not in a git repository')
+        print('❌ Not in a git repository', file=sys.stderr)
         sys.exit(1)
 
     # Check if we're authenticated with GitHub
     try:
         result = subprocess.run(['gh', 'auth', 'status'], capture_output=True, text=True)
         if result.returncode != 0:
-            print('Error: Not authenticated with GitHub')
-            print('Please run: gh auth login')
+            print('❌ Not authenticated with GitHub', file=sys.stderr)
+            print('   Please run: gh auth login', file=sys.stderr)
             sys.exit(1)
+        else:
+            # Extract username from output
+            lines = result.stderr.split('\n')
+            username = 'unknown'
+            for line in lines:
+                if 'Logged in to github.com as' in line:
+                    username = line.split()[-1]
+                    break
+            status(f'   ✓ GitHub authenticated as {username}')
     except subprocess.CalledProcessError:
-        print('Error: Could not check GitHub authentication status')
+        print('❌ Could not check GitHub authentication status', file=sys.stderr)
         sys.exit(1)
+
+    status('✅ All prerequisites satisfied')
 
 
 def main() -> None:
@@ -213,30 +247,57 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        # Check prerequisites
-        if not args.dry_run:
-            check_prerequisites()
+        total_start_time = time.time()
 
-        # Get version
+        print('🚀 Starting GitHub release creation', file=sys.stderr)
+        print('=' * 50, file=sys.stderr)
+
+        # Step 1: Check prerequisites (unless dry run)
+        if not args.dry_run:
+            step(1, 4, 'Checking prerequisites')
+            check_prerequisites()
+        else:
+            step(1, 4, 'Skipping prerequisites check (dry-run)')
+
+        # Step 2: Get version
+        step(2, 4, 'Determining version')
+        start_time = time.time()
+
         if args.version:
             version = args.version
-            print(f'Using specified version: {version}')
+            status(f'Using specified version: {version}')
         else:
             version = get_version_from_setup_cfg()
-            print(f'Extracted version from setup.cfg: {version}')
+            status(f'Extracted from setup.cfg: {version}')
 
-        # Extract release notes
-        print(f'Extracting release notes for version {version}...')
+        elapsed = time.time() - start_time
+        status(f'✅ Version determined in {elapsed:.1f}s')
+
+        # Step 3: Extract release notes
+        step(3, 4, 'Extracting release notes')
+        start_time = time.time()
+
+        status(f'📄 Reading release notes for v{version}...')
         notes = extract_release_notes(version)
+        lines_count = len(notes.split('\n'))
 
-        # Create the release
+        elapsed = time.time() - start_time
+        status(f'✅ Extracted {lines_count} lines of release notes in {elapsed:.1f}s')
+
+        # Step 4: Create the release
+        step(4, 4, 'Creating GitHub release')
         create_release(version, notes, dry_run=args.dry_run)
 
-        if not args.dry_run:
-            print(f'\n✅ Successfully created GitHub release for v{version}')
+        total_elapsed = time.time() - total_start_time
+        print('=' * 50, file=sys.stderr)
+        if args.dry_run:
+            print(f'🔍 Dry run completed in {total_elapsed:.1f}s', file=sys.stderr)
+        else:
+            print(f'🎉 GitHub release created successfully in {total_elapsed:.1f}s!', file=sys.stderr)
+            print(f'🏷️  Version: v{version}', file=sys.stderr)
 
     except Exception as e:
-        print(f'Error: {e}')
+        print(f'❌ Error: {e}', file=sys.stderr)
         sys.exit(1)
 
 

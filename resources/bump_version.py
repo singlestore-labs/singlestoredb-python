@@ -21,7 +21,18 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
+
+
+def status(message: str) -> None:
+    """Show status messages to indicate progress."""
+    print(f'📋 {message}', file=sys.stderr)
+
+
+def step(step_num: int, total_steps: int, message: str) -> None:
+    """Show a numbered step with progress."""
+    print(f'📍 Step {step_num}/{total_steps}: {message}', file=sys.stderr)
 
 
 def get_current_version() -> str:
@@ -271,38 +282,42 @@ def update_whatsnew_with_editor(new_version: str, summary: str) -> bool:
 
 
 def build_docs() -> None:
-    """Build the documentation."""
-    docs_src_path = Path(__file__).parent.parent / 'docs' / 'src'
+    """Build the documentation using the unified build script."""
+    build_script = Path(__file__).parent / 'build_docs.py'
 
-    # Change to docs/src directory
-    original_dir = os.getcwd()
-    os.chdir(docs_src_path)
+    if build_script.exists():
+        # Use the new unified build script
+        status('📚 Building documentation with unified script...')
+        result = subprocess.run([sys.executable, str(build_script), 'html'])
+    else:
+        # Fallback to make html if build script doesn't exist
+        docs_src_path = Path(__file__).parent.parent / 'docs' / 'src'
+        status('📚 Building documentation with make...')
+        result = subprocess.run(['make', 'html'], cwd=docs_src_path)
 
-    try:
-        # Run make html
-        result = subprocess.run(['make', 'html'], capture_output=True, text=True)
-        if result.returncode != 0:
-            print('Error building documentation:')
-            print(result.stderr)
-            sys.exit(1)
-        print('Documentation built successfully')
-    finally:
-        # Change back to original directory
-        os.chdir(original_dir)
+    if result.returncode != 0:
+        print('❌ Error building documentation', file=sys.stderr)
+        sys.exit(1)
+
+    status('✅ Documentation built successfully')
 
 
 def stage_files() -> None:
     """Stage all modified files for commit."""
-    # Stage version files
-    subprocess.run(['git', 'add', 'setup.cfg'], check=True)
-    subprocess.run(['git', 'add', 'singlestoredb/__init__.py'], check=True)
-    subprocess.run(['git', 'add', 'docs/src/whatsnew.rst'], check=True)
+    status('📦 Staging files for commit...')
 
-    # Stage any generated documentation files
-    subprocess.run(['git', 'add', 'docs/'], check=True)
+    files_to_stage = [
+        'setup.cfg',
+        'singlestoredb/__init__.py',
+        'docs/src/whatsnew.rst',
+        'docs/',  # All generated documentation files
+    ]
 
-    print('\nAll modified files have been staged for commit.')
-    print("You can now commit with: git commit -m 'Bump version to X.Y.Z'")
+    for file_path in files_to_stage:
+        subprocess.run(['git', 'add', file_path], check=True)
+        status(f'   ✓ Staged {file_path}')
+
+    status('✅ All modified files staged for commit')
 
 
 def main() -> None:
@@ -327,38 +342,61 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Get current version
+    total_start_time = time.time()
+
+    print('🚀 Starting version bump process', file=sys.stderr)
+    print('=' * 50, file=sys.stderr)
+
+    # Step 1: Get current version
+    step(1, 6, 'Reading current version')
     current_version = get_current_version()
-    print(f'Current version: {current_version}')
+    status(f'Current version: {current_version}')
 
     # Calculate new version
     new_version = bump_version(current_version, args.bump_type)
-    print(f'New version: {new_version}')
+    status(f'New version will be: {new_version}')
 
-    # Update version in files
-    print('\nUpdating version in files...')
+    # Step 2: Update version in files
+    step(2, 6, 'Updating version in files')
+    start_time = time.time()
+
     update_version_in_file(Path(__file__).parent.parent / 'setup.cfg', current_version, new_version)
+    status('   ✓ Updated setup.cfg')
+
     update_version_in_file(
         Path(__file__).parent.parent / 'singlestoredb' / '__init__.py',
         current_version,
         new_version,
     )
+    status('   ✓ Updated singlestoredb/__init__.py')
 
-    # Get summary - either from argument or from git history
+    elapsed = time.time() - start_time
+    status(f'✅ Version files updated in {elapsed:.1f}s')
+
+    # Step 3: Generate release summary
+    step(3, 6, 'Generating release summary')
+    start_time = time.time()
+
     if args.summary:
-        print('\nUsing provided summary...')
+        status('Using provided summary')
         # Replace literal \n with actual newlines
         summary = args.summary.replace('\\n', '\n')
     else:
-        print('\nAnalyzing git history...')
+        status('🔍 Analyzing git history...')
         git_log = get_git_log_since_last_release(current_version)
         summary = summarize_changes(git_log)
 
-    # Update whatsnew.rst with editor
-    print('\nUpdating whatsnew.rst...')
+    elapsed = time.time() - start_time
+    status(f'✅ Release summary generated in {elapsed:.1f}s')
+
+    # Step 4: Update whatsnew.rst with editor
+    step(4, 6, 'Updating release notes')
+    start_time = time.time()
+
+    status('📝 Opening editor for release notes...')
     if not update_whatsnew_with_editor(new_version, summary):
-        print('\n❌ Operation cancelled by user')
-        print('Reverting version changes...')
+        print('\n❌ Operation cancelled by user', file=sys.stderr)
+        status('🔄 Reverting version changes...')
 
         # Revert version changes
         update_version_in_file(Path(__file__).parent.parent / 'setup.cfg', new_version, current_version)
@@ -368,20 +406,25 @@ def main() -> None:
             current_version,
         )
 
-        print('Version changes reverted.')
+        status('✅ Version changes reverted')
         sys.exit(1)
 
-    # Build documentation
-    print('\nBuilding documentation...')
+    elapsed = time.time() - start_time
+    status(f'✅ Release notes updated in {elapsed:.1f}s')
+
+    # Step 5: Build documentation
+    step(5, 6, 'Building documentation')
     build_docs()
 
-    # Stage files
-    print('\nStaging files for commit...')
+    # Step 6: Stage files
+    step(6, 6, 'Staging files for commit')
     stage_files()
 
-    print(f'\n✅ Version bumped from {current_version} to {new_version}')
-    print('✅ Documentation updated and built')
-    print('✅ Files staged for commit')
+    total_elapsed = time.time() - total_start_time
+    print('=' * 50, file=sys.stderr)
+    print(f'🎉 Version bump completed successfully in {total_elapsed:.1f}s!', file=sys.stderr)
+    print(f'📝 Version: {current_version} → {new_version}', file=sys.stderr)
+    print('📄 Next step: git commit -m "Bump version to {}"'.format(new_version), file=sys.stderr)
 
 
 if __name__ == '__main__':
