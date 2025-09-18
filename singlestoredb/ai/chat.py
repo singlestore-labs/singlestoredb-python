@@ -24,6 +24,7 @@ except ImportError:
     )
 
 import boto3
+from botocore import UNSIGNED
 from botocore.config import Config
 
 
@@ -108,7 +109,7 @@ def SingleStoreChatFactory(
 
     if prefix == 'aura-amz':
         # Instantiate Bedrock client
-        cfg = Config()
+        cfg = Config(signature_version=UNSIGNED)
         if http_client is not None and http_client.timeout is not None:
             cfg.timeout = http_client.timeout
             cfg.connect_timeout = http_client.timeout
@@ -128,26 +129,30 @@ def SingleStoreChatFactory(
                     request.headers['X-S2-OBO'] = obo_val
                 if token:
                     request.headers['Authorization'] = f'Bearer {token}'
-                if streaming:
-                    request.headers['X-BEDROCK-CONVERSE-STREAMING'] = 'true'
-                else:
-                    request.headers['X-BEDROCK-CONVERSE'] = 'true'
+                # if streaming:
+                #     request.headers['X-BEDROCK-CONVERSE-STREAMING'] = 'true'
+                # else:
+                #     request.headers['X-BEDROCK-CONVERSE'] = 'true'
+                request.headers.pop('X-Amz-Date', None)
+                request.headers.pop('X-Amz-Security-Token', None)
+                # request.headers.pop('Amz-Sdk-Request', None)
+                # request.headers.pop('Amz-Sdk-Invocation-Id', None)
 
             emitter = client._endpoint._event_emitter
             emitter.register_first(
-                'before-sign.bedrock-runtime.Converse',
+                'before-send.bedrock-runtime.Converse',
                 _inject_headers,
             )
             emitter.register_first(
-                'before-sign.bedrock-runtime.ConverseStream',
+                'before-send.bedrock-runtime.ConverseStream',
                 _inject_headers,
             )
             emitter.register_first(
-                'before-sign.bedrock-runtime.InvokeModel',
+                'before-send.bedrock-runtime.InvokeModel',
                 _inject_headers,
             )
             emitter.register_first(
-                'before-sign.bedrock-runtime.InvokeModelWithResponseStream',
+                'before-send.bedrock-runtime.InvokeModelWithResponseStream',
                 _inject_headers,
             )
         return ChatBedrockConverse(
