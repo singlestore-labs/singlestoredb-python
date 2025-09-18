@@ -111,6 +111,7 @@ def SingleStoreChatFactory(
         cfg = Config()
         if http_client is not None and http_client.timeout is not None:
             cfg.timeout = http_client.timeout
+            cfg.connect_timeout = http_client.timeout
         client = boto3.client(
             'bedrock-runtime',
             endpoint_url=info.connection_url,  # redirect requests to UMG
@@ -127,6 +128,10 @@ def SingleStoreChatFactory(
                     request.headers['X-S2-OBO'] = obo_val
                 if token:
                     request.headers['Authorization'] = f'Bearer {token}'
+                if streaming:
+                    request.headers['X-BEDROCK-CONVERSE-STREAMING'] = 'true'
+                else:
+                    request.headers['X-BEDROCK-CONVERSE'] = 'true'
 
             emitter = client._endpoint._event_emitter
             emitter.register_first(
