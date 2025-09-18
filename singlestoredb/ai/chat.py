@@ -147,8 +147,12 @@ def SingleStoreChatFactory(
             )
         return ChatBedrockConverse(
             model=actual_model,
+            endpoint_url=info.connection_url,  # redirect requests to UMG
+            region_name='us-east-1',  # dummy value; UMG does not use this
+            aws_access_key_id='placeholder',  # dummy value; UMG does not use this
+            aws_secret_access_key='placeholder',  # dummy value; UMG does not use this
             disable_streaming=not streaming,
-            bedrock_runtime_client=client,
+            client=client,
             **kwargs,
         )
 
