@@ -146,6 +146,7 @@ sql_type_map = {
     'date': 'DATE',
     'time': 'TIME',
     'time6': 'TIME(6)',
+    'json': 'JSON',
 }
 
 sql_to_type_map = {
@@ -187,6 +188,7 @@ sql_to_type_map = {
     'TINYBLOB': 'bytes',
     'MEDIUMBLOB': 'bytes',
     'LONGBLOB': 'bytes',
+    'JSON': 'json',
 }
 
 
@@ -380,14 +382,28 @@ def normalize_dtype(dtype: Any) -> str:
         origin = typing.get_origin(dtype)
         if origin is not None:
 
+            # Dict type (for JSON support)
+            if origin is dict:
+                args = typing.get_args(dtype)
+                # Check if it's Dict[str, Any] which maps to JSON
+                if len(args) == 2 and args[0] is str and args[1] is Any:
+                    return 'json'
+                else:
+                    raise TypeError(
+                        f'only Dict[str, Any] is supported for JSON, got {dtype}',
+                    )
+
             # Tuple type
-            if origin is Tuple:
+            elif origin is Tuple:
                 args = typing.get_args(dtype)
                 item_dtypes = ','.join(normalize_dtype(x) for x in args)
                 return f'tuple[{item_dtypes}]'
 
             # Array types
             elif inspect.isclass(origin) and issubclass(origin, array_types):
+                # Special case for JSONArray (List[Dict[str, Any]])
+                if is_json_array_type(dtype):
+                    return 'array[json]'
                 args = typing.get_args(dtype)
                 item_dtype = normalize_dtype(args[0])
                 return f'array[{item_dtype}]'
@@ -787,6 +803,100 @@ def unwrap_optional(annotation: Any) -> Tuple[Any, bool]:
     return annotation, is_optional
 
 
+def is_json_type(spec: Any) -> bool:
+    """
+    Check if the object is a valid JSON type (Dict[str, Any]).
+
+    Parameters
+    ----------
+    spec : Any
+        The object to check
+
+    Returns
+    -------
+    bool
+        True if the object is Dict[str, Any], False otherwise
+
+    """
+    origin = typing.get_origin(spec)
+    if origin is dict:
+        args = typing.get_args(spec)
+        return len(args) == 2 and args[0] is str and args[1] is Any
+    return False
+
+
+def is_json_array_type(spec: Any) -> bool:
+    """
+    Check if the object is a valid JSONArray type (List[Dict[str, Any]]).
+
+    Parameters
+    ----------
+    spec : Any
+        The object to check
+
+    Returns
+    -------
+    bool
+        True if the object is List[Dict[str, Any]], False otherwise
+
+    """
+    origin = typing.get_origin(spec)
+    if origin is list:
+        args = typing.get_args(spec)
+        if len(args) == 1:
+            # Check if the list element is Dict[str, Any]
+            return is_json_type(args[0])
+    return False
+
+
+def validate_udf_type(spec: Any, origin: Any, args_origins: List[Any], mode: str) -> None:
+    """
+    Validate that a type specification is valid for UDF parameters or returns.
+
+    Parameters
+    ----------
+    spec : Any
+        The type specification to validate
+    origin : Any
+        The origin type from typing.get_origin()
+    args_origins : List[Any]
+        List of origins from the type arguments
+    mode : str
+        Either 'parameter' or 'return'
+
+    Raises
+    ------
+    TypeError
+        If the type is not valid for UDF usage
+
+    """
+    # Short circuit check for common valid types
+    if (
+        utils.is_vector(spec) or spec in {str, float, int, bytes}
+        or is_json_type(spec) or is_json_array_type(spec)
+    ):
+        return
+
+    # Try to catch some common mistakes
+    if origin in [tuple, dict] or tuple in args_origins or is_composite_type(spec):
+        # Allow JSON types even if they're dict-based
+        if origin is dict and not is_json_type(spec):
+            type_desc = 'return type' if mode == 'return' else 'parameter types'
+            usage_desc = 'scalar or vector' if mode == 'return' else 'scalar or vector'
+            raise TypeError(
+                f'invalid {type_desc} for a UDF; expecting a {usage_desc}, '
+                f'got {getattr(spec, "__name__", spec)}. For JSON support, '
+                'use Dict[str, Any]',
+            )
+        elif origin is not dict:
+            type_desc = 'return type' if mode == 'return' else 'parameter types'
+            usage_desc = 'scalar or vector' if mode == 'return' else 'scalar or vector'
+            raise TypeError(
+                f'invalid {type_desc} for a UDF; expecting a {usage_desc}, '
+                f'got {getattr(spec, "__name__", spec)}',
+            )
+
+
 def is_composite_type(spec: Any) -> bool:
     """
     Check if the object is a composite type (e.g., dataclass, TypedDict, etc.).
@@ -923,27 +1033,13 @@ def get_schema(
                     'or tuple of vectors',
                 )
 
-        # Short circuit check for common valid types
-        elif utils.is_vector(spec) or spec in {str, float, int, bytes}:
-            pass
+        # Validate the return type
+        else:
+            validate_udf_type(spec, origin, args_origins, mode)
 
-        # Try to catch some common mistakes
-        elif origin in [tuple, dict] or tuple in args_origins or is_composite_type(spec):
-            raise TypeError(
-                'invalid return type for a UDF; expecting a scalar or vector, '
-                f'but got {getattr(spec, "__name__", spec)}',
-            )
-
-    # Short circuit check for common valid types
-    elif utils.is_vector(spec) or spec in {str, float, int, bytes}:
-        pass
-
-    # Error out for incorrect parameter types
-    elif origin in [tuple, dict] or tuple in args_origins or is_composite_type(spec):
-        raise TypeError(
-            'parameter types must be scalar or vector, '
-            f'got {getattr(spec, "__name__", spec)}',
-        )
+    # Validate parameter types
+    else:
+        validate_udf_type(spec, origin, args_origins, mode)
 
     #
     # Process each parameter / return type into a colspec
@@ -1033,8 +1129,18 @@ def get_schema(
 
         # Plain list vector
         elif typing.get_origin(spec) is list:
-            data_format = 'list'
-            colspec = [ParamSpec(dtype=typing.get_args(spec)[0], is_optional=is_optional)]
+            # Special case for JSONArray (List[Dict[str, Any]])
+            if is_json_array_type(spec):
+                data_format = 'list'
+                colspec = [ParamSpec(dtype='json', is_optional=is_optional)]
+            else:
+                data_format = 'list'
+                colspec = [
+                    ParamSpec(
+                        dtype=typing.get_args(spec)[0],
+                        is_optional=is_optional,
+                    ),
+                ]
 
         # Multiple return values
         elif inspect.isclass(typing.get_origin(spec)) \

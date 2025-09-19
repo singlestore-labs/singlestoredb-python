@@ -1,5 +1,7 @@
 from collections.abc import Iterable
 from typing import Any
+from typing import Dict
+from typing import List
 from typing import Tuple
 from typing import TypeVar
 
@@ -39,3 +41,8 @@ class Table(Tuple[Unpack[Ts]]):
 
     def __new__(cls, *args: Unpack[Ts]) -> 'Table[Tuple[Unpack[Ts]]]':  # type: ignore
         return tuple.__new__(cls, args)  # type: ignore
+
+
+# JSON type aliases
+JSON = Dict[str, Any]
+JSONArray = List[Dict[str, Any]]
