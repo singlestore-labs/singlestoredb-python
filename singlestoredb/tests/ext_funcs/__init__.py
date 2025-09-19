@@ -3,6 +3,8 @@
 import asyncio
 import time
 import typing
+from typing import Any
+from typing import Dict
 from typing import List
 from typing import NamedTuple
 from typing import Optional
@@ -23,6 +25,8 @@ from singlestoredb.functions.dtypes import MEDIUMINT
 from singlestoredb.functions.dtypes import SMALLINT
 from singlestoredb.functions.dtypes import TEXT
 from singlestoredb.functions.dtypes import TINYINT
+from singlestoredb.functions.typing import JSON
+from singlestoredb.functions.typing import JSONArray
 from singlestoredb.functions.typing import numpy as npt
 from singlestoredb.functions.typing import pandas as pdt
 from singlestoredb.functions.typing import polars as plt
@@ -887,3 +891,115 @@ def vec_function_ints_masked2(
         Masked(x_data * y_data, x_nulls | y_nulls),
         Masked(x_data * y_data, x_nulls | y_nulls),
     )
+
+
+# JSON Test Functions
+
+@udf
+def json_echo(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Echo a JSON object back."""
+    return data
+
+
+@udf
+def json_get_value(data: Dict[str, Any], key: str) -> str:
+    """Get a value from a JSON object by key."""
+    return str(data.get(key, ''))
+
+
+@udf
+def json_add_field(data: Dict[str, Any], key: str, value: str) -> Dict[str, Any]:
+    """Add a field to a JSON object."""
+    result = data.copy()
+    result[key] = value
+    return result
+
+
+@udf
+def json_count_keys(data: Dict[str, Any]) -> int:
+    """Count the number of keys in a JSON object."""
+    return len(data)
+
+
+@udf
+def json_optional_input(data: Optional[Dict[str, Any]]) -> str:
+    """Handle optional JSON input."""
+    if data is None:
+        return 'null'
+    return f'keys: {len(data)}'
+
+
+@udf
+def json_array_echo(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Echo a JSON array back."""
+    return data
+
+
+@udf
+def json_array_sum_field(data: List[Dict[str, Any]], field: str) -> float:
+    """Sum a numeric field across all objects in a JSON array."""
+    total = 0.0
+    for obj in data:
+        if field in obj:
+            try:
+                total += float(obj[field])
+            except (ValueError, TypeError):
+                pass
+    return total
+
+
+@udf
+def json_array_count(data: List[Dict[str, Any]]) -> int:
+    """Count the number of objects in a JSON array."""
+    return len(data)
+
+
+@udf
+def json_nested_access(data: Dict[str, Any]) -> str:
+    """Access nested JSON structure."""
+    try:
+        nested = data.get('nested', {})
+        if isinstance(nested, dict):
+            return str(nested.get('value', 'not found'))
+        return 'not a dict'
+    except Exception as e:
+        return f'error: {str(e)}'
+
+
+@udf
+def json_create_object() -> Dict[str, Any]:
+    """Create a JSON object with various data types."""
+    return {
+        'string': 'hello',
+        'number': 42,
+        'float': 3.14,
+        'boolean': True,
+        'array': [1, 2, 3],
+        'nested': {
+            'inner': 'value',
+        },
+    }
+
+
+# Test type aliases from typing module
+
+
+@udf
+def json_alias_echo(data: JSON) -> JSON:
+    """Echo JSON using type alias."""
+    return data
+
+
+@udf
+def json_array_alias_echo(data: JSONArray) -> JSONArray:
+    """Echo JSON array using type alias."""
+    return data
+
+
+@udf
+def json_alias_transform(data: JSON) -> JSON:
+    """Transform JSON using type alias."""
+    result = data.copy()
+    result['processed'] = True
+    result['original_keys'] = len(data)
+    return result
