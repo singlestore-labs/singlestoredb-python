@@ -2,6 +2,7 @@ import os
 from typing import Any
 from typing import Callable
 from typing import Optional
+from typing import Union
 
 import httpx
 
@@ -73,7 +74,7 @@ def SingleStoreChatFactory(
     http_client: Optional[httpx.Client] = None,
     obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
     **kwargs: Any,
-) -> ChatOpenAI | ChatBedrockConverse:
+) -> Union[ChatOpenAI, ChatBedrockConverse]:
     """Return a chat model instance (ChatOpenAI or ChatBedrockConverse) based on prefix.
 
     The fully-qualified model name is expected to contain a prefix followed by
