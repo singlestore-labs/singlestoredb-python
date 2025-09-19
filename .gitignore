@@ -23,6 +23,7 @@
 .tags
 .vscode
 .venv
+.env.local
 
 ## Compiled source
 *.com

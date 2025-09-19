@@ -873,12 +873,20 @@ class TestStage(unittest.TestCase):
     def test_file_object(self):
         st = self.wg.stage
 
-        st.mkdir('obj_test')
-        st.mkdir('obj_test/nest_1')
+        obj_test_dir = f'obj_test_{id(self)}'
 
-        f1 = st.upload_file(TEST_DIR / 'test.sql', 'obj_test.sql')
-        f2 = st.upload_file(TEST_DIR / 'test.sql', 'obj_test/nest_1/obj_test.sql')
-        d2 = st.info('obj_test/nest_1/')
+        st.mkdir(obj_test_dir)
+        st.mkdir(f'{obj_test_dir}/nest_1')
+
+        obj_test_sql = f'obj_test_{id(self)}.sql'
+        obj_test_2_sql = f'obj_test_2_{id(self)}.sql'
+
+        f1 = st.upload_file(TEST_DIR / 'test.sql', obj_test_sql)
+        f2 = st.upload_file(
+            TEST_DIR / 'test.sql',
+            f'{obj_test_dir}/nest_1/{obj_test_sql}',
+        )
+        d2 = st.info(f'{obj_test_dir}/nest_1/')
 
         # is_file / is_dir
         assert not f1.is_dir()
@@ -889,17 +897,17 @@ class TestStage(unittest.TestCase):
         assert not d2.is_file()
 
         # abspath / basename / dirname / exists
-        assert f1.abspath() == 'obj_test.sql'
-        assert f1.basename() == 'obj_test.sql'
+        assert f1.abspath() == obj_test_sql
+        assert f1.basename() == obj_test_sql
         assert f1.dirname() == '/'
         assert f1.exists()
-        assert f2.abspath() == 'obj_test/nest_1/obj_test.sql'
-        assert f2.basename() == 'obj_test.sql'
-        assert f2.dirname() == 'obj_test/nest_1/'
+        assert f2.abspath() == f'{obj_test_dir}/nest_1/{obj_test_sql}'
+        assert f2.basename() == obj_test_sql
+        assert f2.dirname() == f'{obj_test_dir}/nest_1/'
         assert f2.exists()
-        assert d2.abspath() == 'obj_test/nest_1/'
+        assert d2.abspath() == f'{obj_test_dir}/nest_1/'
         assert d2.basename() == 'nest_1'
-        assert d2.dirname() == 'obj_test/'
+        assert d2.dirname() == f'{obj_test_dir}/'
         assert d2.exists()
 
         # download
@@ -910,9 +918,9 @@ class TestStage(unittest.TestCase):
         with self.assertRaises(IsADirectoryError):
             d2.remove()
 
-        assert st.is_file('obj_test.sql')
+        assert st.is_file(obj_test_sql)
         f1.remove()
-        assert not st.is_file('obj_test.sql')
+        assert not st.is_file(obj_test_sql)
 
         # removedirs
         with self.assertRaises(NotADirectoryError):
@@ -923,8 +931,8 @@ class TestStage(unittest.TestCase):
         assert not st.exists(d2.path)
 
         # rmdir
-        f1 = st.upload_file(TEST_DIR / 'test.sql', 'obj_test.sql')
-        d2 = st.mkdir('obj_test/nest_1')
+        f1 = st.upload_file(TEST_DIR / 'test.sql', obj_test_sql)
+        d2 = st.mkdir(f'{obj_test_dir}/nest_1')
 
         assert st.exists(f1.path)
         assert st.exists(d2.path)
@@ -937,20 +945,20 @@ class TestStage(unittest.TestCase):
 
         d2.rmdir()
 
-        assert not st.exists('obj_test/nest_1/')
-        assert not st.exists('obj_test')
+        assert not st.exists(f'{obj_test_dir}/nest_1/')
+        assert not st.exists(obj_test_dir)
 
         # mtime / ctime
         assert f1.getmtime() > 0
         assert f1.getctime() > 0
 
         # rename
-        assert st.exists('obj_test.sql')
-        assert not st.exists('obj_test_2.sql')
-        f1.rename('obj_test_2.sql')
-        assert not st.exists('obj_test.sql')
-        assert st.exists('obj_test_2.sql')
-        assert f1.abspath() == 'obj_test_2.sql'
+        assert st.exists(obj_test_sql)
+        assert not st.exists(obj_test_2_sql)
+        f1.rename(obj_test_2_sql)
+        assert not st.exists(obj_test_sql)
+        assert st.exists(obj_test_2_sql)
+        assert f1.abspath() == obj_test_2_sql
 
 
 @pytest.mark.management
