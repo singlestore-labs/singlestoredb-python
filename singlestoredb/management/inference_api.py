@@ -23,6 +23,7 @@ class InferenceAPIInfo(object):
     name: str
     connection_url: str
     project_id: str
+    hosting_platform: str
 
     def __init__(
         self,
@@ -31,12 +32,14 @@ class InferenceAPIInfo(object):
         name: str,
         connection_url: str,
         project_id: str,
+        hosting_platform: str,
     ):
         self.service_id = service_id
         self.connection_url = connection_url
         self.model_name = model_name
         self.name = name
         self.project_id = project_id
+        self.hosting_platform = hosting_platform
 
     @classmethod
     def from_dict(
@@ -62,6 +65,7 @@ class InferenceAPIInfo(object):
             model_name=obj['modelName'],
             name=obj['name'],
             connection_url=obj['connectionURL'],
+            hosting_platform=obj['hostingPlatform'],
         )
         return out
 
