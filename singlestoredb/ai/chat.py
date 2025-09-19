@@ -109,7 +109,13 @@ def SingleStoreChatFactory(
 
     if prefix == 'aura-amz':
         # Instantiate Bedrock client
-        cfg = Config(signature_version=UNSIGNED)
+        cfg = Config(
+            signature_version=UNSIGNED,
+            retries={
+                'max_attempts': 1,
+                'mode': 'standard',
+            },
+        )
         if http_client is not None and http_client.timeout is not None:
             cfg.timeout = http_client.timeout
             cfg.connect_timeout = http_client.timeout
@@ -129,14 +135,8 @@ def SingleStoreChatFactory(
                     request.headers['X-S2-OBO'] = obo_val
                 if token:
                     request.headers['Authorization'] = f'Bearer {token}'
-                # if streaming:
-                #     request.headers['X-BEDROCK-CONVERSE-STREAMING'] = 'true'
-                # else:
-                #     request.headers['X-BEDROCK-CONVERSE'] = 'true'
                 request.headers.pop('X-Amz-Date', None)
                 request.headers.pop('X-Amz-Security-Token', None)
-                # request.headers.pop('Amz-Sdk-Request', None)
-                # request.headers.pop('Amz-Sdk-Invocation-Id', None)
 
             emitter = client._endpoint._event_emitter
             emitter.register_first(
