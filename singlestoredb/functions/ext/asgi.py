@@ -128,6 +128,7 @@ rowdat_1_type_map = {
     'float64': ft.DOUBLE,
     'str': ft.STRING,
     'bytes': -ft.STRING,
+    'json': ft.JSON,
 }
 
 
@@ -590,7 +591,7 @@ def make_func(
         dtype = x['dtype'].replace('?', '')
         if dtype not in rowdat_1_type_map:
             raise TypeError(f'no data type mapping for {dtype}')
-        colspec.append((x['name'], rowdat_1_type_map[dtype]))
+        colspec.append((x['name'], rowdat_1_type_map[dtype], x['transformer']))
     info['colspec'] = colspec
 
     # Setup return type
@@ -599,7 +600,7 @@ def make_func(
         dtype = x['dtype'].replace('?', '')
         if dtype not in rowdat_1_type_map:
             raise TypeError(f'no data type mapping for {dtype}')
-        returns.append((x['name'], rowdat_1_type_map[dtype]))
+        returns.append((x['name'], rowdat_1_type_map[dtype], x['transformer']))
     info['returns'] = returns
 
     return do_func, info
@@ -1233,7 +1234,7 @@ class Application(object):
 
                 with timer('format_output'):
                     body = output_handler['dump'](
-                        [x[1] for x in func_info['returns']], *result,  # type: ignore
+                        func_info['returns'], *result,  # type: ignore
                     )
 
                 await send(output_handler['response'])

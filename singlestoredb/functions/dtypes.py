@@ -117,6 +117,7 @@ PYTHON_CONVERTERS = {
     -9: converters[9],
     15: utf8str,
     -15: bytestr,
+    245: utf8str,
     249: utf8str,
     -249: bytestr,
     250: utf8str,
