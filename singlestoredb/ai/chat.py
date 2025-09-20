@@ -75,40 +75,16 @@ def SingleStoreChatFactory(
     obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
     **kwargs: Any,
 ) -> Union[ChatOpenAI, ChatBedrockConverse]:
-    """Return a chat model instance (ChatOpenAI or ChatBedrockConverse) based on prefix.
-
-    The fully-qualified model name is expected to contain a prefix followed by
-    a delimiter (one of '.', ':', '/'). Supported prefixes:
-      * aura -> OpenAI style (ChatOpenAI backend)
-      * aura-azr -> Azure OpenAI style (still ChatOpenAI backend)
-      * aura-amz -> Amazon Bedrock (ChatBedrockConverse backend)
-
-    If no supported prefix is detected the entire value is treated as an
-    OpenAI-style model routed through the SingleStore Fusion gateway.
+    """Return a chat model instance (ChatOpenAI or ChatBedrockConverse).
     """
-    # Parse identifier
-    prefix = 'aura'
-    actual_model = model_name
-    for sep in ('.', ':', '/'):
-        if sep in model_name:
-            head, tail = model_name.split(sep, 1)
-            candidate = head.strip().lower()
-            if candidate in {'aura', 'aura-azr', 'aura-amz'}:
-                prefix = candidate
-                actual_model = tail.strip()
-            else:
-                # Unsupported prefix; treat whole string as model for OpenAI path
-                actual_model = model_name
-            break
-
     inference_api_manager = (
         get_workspace_manager().organizations.current.inference_apis
     )
-    info = inference_api_manager.get(model_name=actual_model)
+    info = inference_api_manager.get(model_name=model_name)
     token_env = os.environ.get('SINGLESTOREDB_USER_TOKEN')
     token = api_key if api_key is not None else token_env
 
-    if prefix == 'aura-amz':
+    if info.hosting_platform == 'Amazon':
         # Instantiate Bedrock client
         cfg = Config(
             signature_version=UNSIGNED,
@@ -157,7 +133,7 @@ def SingleStoreChatFactory(
                 _inject_headers,
             )
         return ChatBedrockConverse(
-            model=actual_model,
+            model=model_name,
             endpoint_url=info.connection_url,  # redirect requests to UMG
             region_name='us-east-1',  # dummy value; UMG does not use this
             aws_access_key_id='placeholder',  # dummy value; UMG does not use this
@@ -171,7 +147,7 @@ def SingleStoreChatFactory(
     openai_kwargs = dict(
         base_url=info.connection_url,
         api_key=token,
-        model=actual_model,
+        model=model_name,
         streaming=streaming,
     )
     if http_client is not None:
