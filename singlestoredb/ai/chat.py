@@ -86,16 +86,15 @@ def SingleStoreChatFactory(
 
     if info.hosting_platform == 'Amazon':
         # Instantiate Bedrock client
-        cfg = Config(
-            signature_version=UNSIGNED,
-            retries={
-                'max_attempts': 1,
-                'mode': 'standard',
-            },
-        )
+        cfg_kwargs = {
+            'signature_version': UNSIGNED,
+            'retries': {'max_attempts': 1, 'mode': 'standard'},
+        }
         if http_client is not None and http_client.timeout is not None:
-            cfg.timeout = http_client.timeout
-            cfg.connect_timeout = http_client.timeout
+            cfg_kwargs['read_timeout'] = http_client.timeout
+            cfg_kwargs['connect_timeout'] = http_client.timeout
+
+        cfg = Config(**cfg_kwargs)
         client = boto3.client(
             'bedrock-runtime',
             endpoint_url=info.connection_url,  # redirect requests to UMG
@@ -104,36 +103,38 @@ def SingleStoreChatFactory(
             aws_secret_access_key='placeholder',  # dummy value; UMG does not use this
             config=cfg,
         )
-        if obo_token_getter is not None:
-            def _inject_headers(request: Any, **_ignored: Any) -> None:
-                """Inject dynamic auth/OBO headers prior to Bedrock signing."""
+
+        def _inject_headers(request: Any, **_ignored: Any) -> None:
+            """Inject dynamic auth/OBO headers prior to Bedrock sending."""
+            if obo_token_getter is not None:
                 obo_val = obo_token_getter()
                 if obo_val:
                     request.headers['X-S2-OBO'] = obo_val
-                if token:
-                    request.headers['Authorization'] = f'Bearer {token}'
-                request.headers.pop('X-Amz-Date', None)
-                request.headers.pop('X-Amz-Security-Token', None)
+            if token:
+                request.headers['Authorization'] = f'Bearer {token}'
+            request.headers.pop('X-Amz-Date', None)
+            request.headers.pop('X-Amz-Security-Token', None)
 
-            emitter = client._endpoint._event_emitter
-            emitter.register_first(
-                'before-send.bedrock-runtime.Converse',
-                _inject_headers,
-            )
-            emitter.register_first(
-                'before-send.bedrock-runtime.ConverseStream',
-                _inject_headers,
-            )
-            emitter.register_first(
-                'before-send.bedrock-runtime.InvokeModel',
-                _inject_headers,
-            )
-            emitter.register_first(
-                'before-send.bedrock-runtime.InvokeModelWithResponseStream',
-                _inject_headers,
-            )
+        emitter = client._endpoint._event_emitter
+        emitter.register_first(
+            'before-send.bedrock-runtime.Converse',
+            _inject_headers,
+        )
+        emitter.register_first(
+            'before-send.bedrock-runtime.ConverseStream',
+            _inject_headers,
+        )
+        emitter.register_first(
+            'before-send.bedrock-runtime.InvokeModel',
+            _inject_headers,
+        )
+        emitter.register_first(
+            'before-send.bedrock-runtime.InvokeModelWithResponseStream',
+            _inject_headers,
+        )
+
         return ChatBedrockConverse(
-            model=model_name,
+            model_id=model_name,
             endpoint_url=info.connection_url,  # redirect requests to UMG
             region_name='us-east-1',  # dummy value; UMG does not use this
             aws_access_key_id='placeholder',  # dummy value; UMG does not use this
