@@ -6,7 +6,7 @@ from typing import Union
 
 import httpx
 
-from singlestoredb.fusion.handlers.utils import get_workspace_manager
+from singlestoredb import manage_workspaces
 
 try:
     from langchain_openai import ChatOpenAI
@@ -32,7 +32,7 @@ from botocore.config import Config
 class SingleStoreChatOpenAI(ChatOpenAI):
     def __init__(self, model_name: str, api_key: Optional[str] = None, **kwargs: Any):
         inference_api_manger = (
-            get_workspace_manager().organizations.current.inference_apis
+            manage_workspaces().organizations.current.inference_apis
         )
         info = inference_api_manger.get(model_name=model_name)
         token = (
@@ -51,7 +51,7 @@ class SingleStoreChatOpenAI(ChatOpenAI):
 class SingleStoreChat(ChatOpenAI):
     def __init__(self, model_name: str, api_key: Optional[str] = None, **kwargs: Any):
         inference_api_manger = (
-            get_workspace_manager().organizations.current.inference_apis
+            manage_workspaces().organizations.current.inference_apis
         )
         info = inference_api_manger.get(model_name=model_name)
         token = (
@@ -78,7 +78,7 @@ def SingleStoreChatFactory(
     """Return a chat model instance (ChatOpenAI or ChatBedrockConverse).
     """
     inference_api_manager = (
-        get_workspace_manager().organizations.current.inference_apis
+        manage_workspaces().organizations.current.inference_apis
     )
     info = inference_api_manager.get(model_name=model_name)
     token_env = os.environ.get('SINGLESTOREDB_USER_TOKEN')

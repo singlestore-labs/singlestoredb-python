@@ -6,7 +6,7 @@ from typing import Union
 
 import httpx
 
-from singlestoredb.fusion.handlers.utils import get_workspace_manager
+from singlestoredb import manage_workspaces
 
 try:
     from langchain_openai import OpenAIEmbeddings
@@ -33,7 +33,7 @@ class SingleStoreEmbeddings(OpenAIEmbeddings):
 
     def __init__(self, model_name: str, **kwargs: Any):
         inference_api_manger = (
-            get_workspace_manager().organizations.current.inference_apis
+            manage_workspaces().organizations.current.inference_apis
         )
         info = inference_api_manger.get(model_name=model_name)
         super().__init__(
@@ -54,7 +54,7 @@ def SingleStoreEmbeddingsFactory(
     """Return an embeddings model instance (OpenAIEmbeddings or BedrockEmbeddings).
     """
     inference_api_manager = (
-        get_workspace_manager().organizations.current.inference_apis
+        manage_workspaces().organizations.current.inference_apis
     )
     info = inference_api_manager.get(model_name=model_name)
     token_env = os.environ.get('SINGLESTOREDB_USER_TOKEN')
