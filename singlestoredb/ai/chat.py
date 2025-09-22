@@ -13,7 +13,7 @@ try:
 except ImportError:
     raise ImportError(
         'Could not import langchain_openai python package. '
-        'Please install it with `pip install langchain-openai`.',
+        'Please install it with `pip install langchain_openai`.',
     )
 
 try:
