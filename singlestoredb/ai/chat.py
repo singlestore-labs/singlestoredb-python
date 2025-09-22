@@ -97,10 +97,10 @@ def SingleStoreChatFactory(
         cfg = Config(**cfg_kwargs)
         client = boto3.client(
             'bedrock-runtime',
-            endpoint_url=info.connection_url,  # redirect requests to UMG
-            region_name='us-east-1',  # dummy value; UMG does not use this
-            aws_access_key_id='placeholder',  # dummy value; UMG does not use this
-            aws_secret_access_key='placeholder',  # dummy value; UMG does not use this
+            endpoint_url=info.connection_url,
+            region_name='us-east-1',
+            aws_access_key_id='placeholder',
+            aws_secret_access_key='placeholder',
             config=cfg,
         )
 
@@ -135,10 +135,10 @@ def SingleStoreChatFactory(
 
         return ChatBedrockConverse(
             model_id=model_name,
-            endpoint_url=info.connection_url,  # redirect requests to UMG
-            region_name='us-east-1',  # dummy value; UMG does not use this
-            aws_access_key_id='placeholder',  # dummy value; UMG does not use this
-            aws_secret_access_key='placeholder',  # dummy value; UMG does not use this
+            endpoint_url=info.connection_url,
+            region_name='us-east-1',
+            aws_access_key_id='placeholder',
+            aws_secret_access_key='placeholder',
             disable_streaming=not streaming,
             client=client,
             **kwargs,
