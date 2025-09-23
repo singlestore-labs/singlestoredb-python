@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.15.7 - September 23, 2025
+----------------------------
+* Add multi-backendchat factory (`SingleStoreChatFactory`) initilizing various flavors of langchain chat clients.
+* Enhance headers injection (Authorization and Impersonating JWT) across Azure and Amazon Bedrock models.
+
 v1.15.6 - September 16, 2025
 ----------------------------
 * Add / update release utilities
