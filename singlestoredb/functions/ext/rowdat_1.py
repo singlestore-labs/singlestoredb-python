@@ -351,7 +351,7 @@ def _load_arrow(
 
 
 def _dump(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: List[int],
     rows: List[List[Any]],
 ) -> bytes:
@@ -360,7 +360,7 @@ def _dump(
 
     Parameters
     ----------
-    returns : List[Tuple[int, Optional[Transformer]]]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : List[int]
         The row IDs
@@ -379,7 +379,7 @@ def _dump(
 
     for row_id, *values in zip(row_ids, *list(zip(*rows))):
         out.write(struct.pack('<q', row_id))
-        for (rtype, transformer), value in zip(returns, values):
+        for (_, rtype, transformer), value in zip(returns, values):
             out.write(b'\x01' if value is None else b'\x00')
             default = DEFAULT_VALUES[rtype]
             value = apply_transformer(transformer, value)
@@ -421,7 +421,7 @@ def _dump(
 
 
 def _dump_vectors(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: List[int],
     cols: List[Tuple[Sequence[Any], Optional[Sequence[Any]]]],
 ) -> bytes:
@@ -430,7 +430,7 @@ def _dump_vectors(
 
     Parameters
     ----------
-    returns : List[Tuple[int, Optional[Transformer]]]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : List[int]
         The row IDs
@@ -451,7 +451,7 @@ def _dump_vectors(
 
         out.write(struct.pack('<q', row_id))
 
-        for i, (rtype, transformer) in enumerate(returns):
+        for i, (_, rtype, transformer) in enumerate(returns):
             value = apply_transformer(transformer, cols[i][0][j])
             if cols[i][1] is not None:
                 is_null = cols[i][1][j]  # type: ignore
@@ -476,17 +476,19 @@ def _dump_vectors(
                                     raise ValueError(
                                         'value is outside range of UNSIGNED MEDIUMINT',
                                     )
-                            out.write(struct.pack(numeric_formats[rtype], int(value)))
+                            out.write(
+                                struct.pack(numeric_formats[rtype], int(value)),
+                            )
                         else:
-                            out.write(struct.pack(numeric_formats[rtype], float(value)))
+                            out.write(
+                                struct.pack(
+                                    numeric_formats[rtype], float(value),
+                                ),
+                            )
                 elif rtype in string_types:
                     if value is None:
                         out.write(struct.pack('<q', 0))
                     else:
-                        # Handle JSON type (245) - convert dict to JSON string
-                        if rtype == 245 and isinstance(value, dict):
-                            import json
-                            value = json.dumps(value)
                         sval = value.encode('utf-8')
                         out.write(struct.pack('<q', len(sval)))
                         out.write(sval)
@@ -506,7 +508,7 @@ def _dump_vectors(
 
 
 def _dump_arrow(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pa.Array[int]',
     cols: List[Tuple['pa.Array[Any]', 'pa.Array[bool]']],
 ) -> bytes:
@@ -518,7 +520,7 @@ def _dump_arrow(
 
 
 def _dump_numpy(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'np.typing.NDArray[np.int64]',
     cols: List[Tuple['np.typing.NDArray[Any]', 'np.typing.NDArray[np.bool_]']],
 ) -> bytes:
@@ -530,7 +532,7 @@ def _dump_numpy(
 
 
 def _dump_pandas(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pd.Series[np.int64]',
     cols: List[Tuple['pd.Series[Any]', 'pd.Series[np.bool_]']],
 ) -> bytes:
@@ -542,7 +544,7 @@ def _dump_pandas(
 
 
 def _dump_polars(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pl.Series[pl.Int64]',
     cols: List[Tuple['pl.Series[Any]', 'pl.Series[pl.Boolean]']],
 ) -> bytes:
@@ -570,14 +572,14 @@ def _load_numpy_accel(
     for i, ((name, dtype, transformer), col) in enumerate(zip(colspec, cols)):
         if transformer is not None:
             import numpy as np
-            vectorized_transformer = np.vectorize(transformer, otypes=[object])
+            vectorized_transformer = np.vectorize(transformer)
             cols[i] = (vectorized_transformer(col[0]), col[1])
 
     return row_ids, cols
 
 
 def _dump_numpy_accel(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'np.typing.NDArray[np.int64]',
     cols: List[Tuple['np.typing.NDArray[Any]', 'np.typing.NDArray[np.bool_]']],
 ) -> bytes:
@@ -586,13 +588,15 @@ def _dump_numpy_accel(
 
     cols = list(cols)
 
-    for i, ((rtype, transformer), (data, mask)) in enumerate(zip(returns, cols)):
+    for i, (_, rtype, transformer), (data, mask) in zip(range(len(cols)), returns, cols):
         if transformer is not None:
             import numpy as np
-            vectorized_transformer = np.vectorize(transformer, otypes=[object])
+            vectorized_transformer = np.vectorize(transformer)
             cols[i] = (vectorized_transformer(data), mask)
 
-    return _singlestoredb_accel.dump_rowdat_1_numpy(returns, row_ids, cols)
+    return _singlestoredb_accel.dump_rowdat_1_numpy(
+        [x[1] for x in returns], row_ids, cols,
+    )
 
 
 def _load_pandas_accel(
@@ -605,6 +609,7 @@ def _load_pandas_accel(
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
+    import numpy as np
     import pandas as pd
 
     numpy_ids, numpy_cols = _load_numpy_accel(colspec, data)
@@ -621,7 +626,7 @@ def _load_pandas_accel(
 
 
 def _dump_pandas_accel(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pd.Series[np.int64]',
     cols: List[Tuple['pd.Series[Any]', 'pd.Series[np.bool_]']],
 ) -> bytes:
@@ -637,13 +642,16 @@ def _dump_pandas_accel(
         for data, mask in cols
     ]
 
-    for i, ((rtype, transformer), (data, mask)) in enumerate(zip(returns, numpy_cols)):
+    for i, (_, rtype, transformer), (data, mask)\
+            in zip(range(len(numpy_cols)), returns, numpy_cols):
         if transformer is not None:
             import numpy as np
             vectorized_transformer = np.vectorize(transformer, otypes=[object])
             numpy_cols[i] = (vectorized_transformer(data), mask)
 
-    return _singlestoredb_accel.dump_rowdat_1_numpy(returns, numpy_ids, numpy_cols)
+    return _singlestoredb_accel.dump_rowdat_1_numpy(
+        [x[1] for x in returns], numpy_ids, numpy_cols,
+    )
 
 
 def _load_polars_accel(
@@ -676,7 +684,7 @@ def _load_polars_accel(
 
 
 def _dump_polars_accel(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pl.Series[pl.Int64]',
     cols: List[Tuple['pl.Series[Any]', 'pl.Series[pl.Boolean]']],
 ) -> bytes:
@@ -692,13 +700,16 @@ def _dump_polars_accel(
         for data, mask in cols
     ]
 
-    for i, ((rtype, transformer), (data, mask)) in enumerate(zip(returns, numpy_cols)):
+    for i, (_, rtype, transformer), (data, mask)\
+            in zip(range(len(numpy_cols)), returns, numpy_cols):
         if transformer is not None:
             import numpy as np
             vectorized_transformer = np.vectorize(transformer, otypes=[object])
             numpy_cols[i] = (vectorized_transformer(data), mask)
 
-    return _singlestoredb_accel.dump_rowdat_1_numpy(returns, numpy_ids, numpy_cols)
+    return _singlestoredb_accel.dump_rowdat_1_numpy(
+        [x[1] for x in returns], numpy_ids, numpy_cols,
+    )
 
 
 def _load_arrow_accel(
@@ -737,7 +748,7 @@ def _create_arrow_mask(
 
 
 def _dump_arrow_accel(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pa.Array[pa.int64]',
     cols: List[Tuple['pa.Array[Any]', 'pa.Array[pa.bool_]']],
 ) -> bytes:
@@ -749,18 +760,52 @@ def _dump_arrow_accel(
             data.fill_null(DEFAULT_VALUES[dtype]).to_numpy(zero_copy_only=False),
             _create_arrow_mask(data, mask),
         )
-        for (data, mask), (dtype, transformer) in zip(cols, returns)
+        for (data, mask), (_, dtype, _) in zip(cols, returns)
     ]
 
-    for i, ((rtype, transformer), (data, mask)) in enumerate(zip(returns, numpy_cols)):
+    for i, (_, rtype, transformer), (data, mask) in zip(
+        range(len(numpy_cols)), returns,
+        numpy_cols,
+    ):
         if transformer is not None:
             import numpy as np
             vectorized_transformer = np.vectorize(transformer, otypes=[object])
             numpy_cols[i] = (vectorized_transformer(data), mask)
 
     return _singlestoredb_accel.dump_rowdat_1_numpy(
-        returns, row_ids.to_numpy(), numpy_cols,
+        [x[1] for x in returns], row_ids.to_numpy(), numpy_cols,
     )
+
+
+def _dump_rowdat_1_accel(
+    returns: List[Tuple[str, int, Optional[Transformer]]],
+    row_ids: List[int],
+    rows: List[List[Any]],
+) -> bytes:
+    rows = list(rows)
+
+    for i, (name, dtype, transformer), row in zip(range(len(returns)), returns, rows):
+        if transformer is not None:
+            for j in range(len(row)):
+                rows[j][i] = transformer(row[i])
+
+    return _singlestoredb_accel.dump_rowdat_1(
+        [x[1] for x in returns], row_ids, rows,
+    )
+
+
+def _load_rowdat_1_accel(
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
+    data: bytes,
+) -> Tuple[List[int], List[Any]]:
+    row_ids, rows = _singlestoredb_accel.load_rowdat_1(colspec, data)
+
+    for i, (name, dtype, transformer), _ in zip(range(len(colspec)), colspec, rows):
+        if transformer is not None:
+            for j in range(len(rows)):
+                rows[j][i] = transformer(rows[j][i])
+
+    return row_ids, rows
 
 
 if not has_accel:
@@ -778,8 +823,8 @@ if not has_accel:
     dump_polars = _dump_polars_accel = _dump_polars  # noqa: F811
 
 else:
-    _load_accel = _singlestoredb_accel.load_rowdat_1
-    _dump_accel = _singlestoredb_accel.dump_rowdat_1
+    _load_accel = _load_rowdat_1_accel
+    _dump_accel = _dump_rowdat_1_accel
     load = _load_accel
     dump = _dump_accel
     load_list = _load_vectors

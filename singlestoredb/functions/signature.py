@@ -2,6 +2,7 @@
 import dataclasses
 import datetime
 import inspect
+import json
 import numbers
 import os
 import re
@@ -189,6 +190,14 @@ sql_to_type_map = {
     'MEDIUMBLOB': 'bytes',
     'LONGBLOB': 'bytes',
     'JSON': 'json',
+}
+
+input_transformers = {
+    'json': json.loads,
+}
+
+output_transformers = {
+    'json': json.dumps,
 }
 
 
@@ -384,14 +393,7 @@ def normalize_dtype(dtype: Any) -> str:
 
             # Dict type (for JSON support)
             if origin is dict:
-                args = typing.get_args(dtype)
-                # Check if it's Dict[str, Any] which maps to JSON
-                if len(args) == 2 and args[0] is str and args[1] is Any:
-                    return 'json'
-                else:
-                    raise TypeError(
-                        f'only Dict[str, Any] is supported for JSON, got {dtype}',
-                    )
+                return 'json'
 
             # Tuple type
             elif origin is Tuple:
@@ -820,8 +822,7 @@ def is_json_type(spec: Any) -> bool:
     """
     origin = typing.get_origin(spec)
     if origin is dict:
-        args = typing.get_args(spec)
-        return len(args) == 2 and args[0] is str and args[1] is Any
+        return True
     return False
 
 
@@ -1132,7 +1133,13 @@ def get_schema(
             # Special case for JSONArray (List[Dict[str, Any]])
             if is_json_array_type(spec):
                 data_format = 'list'
-                colspec = [ParamSpec(dtype='json', is_optional=is_optional)]
+                colspec = [
+                    ParamSpec(
+                        dtype='json',
+                        is_optional=is_optional,
+                        transformer=lambda x: json.dumps(x) if x is not None else None,
+                    ),
+                ]
             else:
                 data_format = 'list'
                 colspec = [
@@ -1141,6 +1148,17 @@ def get_schema(
                         is_optional=is_optional,
                     ),
                 ]
+
+        # JSON
+        elif is_json_type(spec):
+            data_format = 'scalar'
+            colspec = [
+                ParamSpec(
+                    dtype='json',
+                    is_optional=is_optional,
+                    transformer=lambda x: json.dumps(x) if x is not None else None,
+                ),
+            ]
 
         # Multiple return values
         elif inspect.isclass(typing.get_origin(spec)) \
@@ -1395,7 +1413,9 @@ def get_signature(
                 dtype=pspec.dtype,
                 sql=sql,
                 **default_option,
-                transformer=pspec.transformer,
+                transformer=pspec.transformer
+                if pspec.transformer is not None
+                else input_transformers.get(pspec.dtype),
             ),
         )
 
@@ -1470,7 +1490,9 @@ def get_signature(
                 name=rspec.name,
                 dtype=rspec.dtype,
                 sql=sql,
-                transformer=rspec.transformer,
+                transformer=rspec.transformer
+                if rspec.transformer is not None
+                else output_transformers.get(rspec.dtype),
             ),
         )
 
