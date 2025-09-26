@@ -90,9 +90,27 @@ def SingleStoreChatFactory(
             'signature_version': UNSIGNED,
             'retries': {'max_attempts': 1, 'mode': 'standard'},
         }
-        if http_client is not None and http_client.timeout is not None:
-            cfg_kwargs['read_timeout'] = http_client.timeout
-            cfg_kwargs['connect_timeout'] = http_client.timeout
+        # Extract timeouts from http_client if provided
+        t = http_client.timeout if http_client is not None else None
+        connect_timeout = None
+        read_timeout = None
+        if t is not None:
+            if isinstance(t, httpx.Timeout):
+                if t.connect is not None:
+                    connect_timeout = float(t.connect)
+                if t.read is not None:
+                    read_timeout = float(t.read)
+                if connect_timeout is None and read_timeout is not None:
+                    connect_timeout = read_timeout
+                if read_timeout is None and connect_timeout is not None:
+                    read_timeout = connect_timeout
+            elif isinstance(t, (int, float)):
+                connect_timeout = float(t)
+                read_timeout = float(t)
+        if read_timeout is not None:
+            cfg_kwargs['read_timeout'] = read_timeout
+        if connect_timeout is not None:
+            cfg_kwargs['connect_timeout'] = connect_timeout
 
         cfg = Config(**cfg_kwargs)
         client = boto3.client(
