@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.15.8 - September 26, 2025
+----------------------------
+* Mcdb 80886 fix httpx timeout (#97)
+
 v1.15.7 - September 23, 2025
 ----------------------------
 * Add multi-backendchat factory (`SingleStoreChatFactory`) initilizing various flavors of langchain chat clients.
