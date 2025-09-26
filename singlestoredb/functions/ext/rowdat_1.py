@@ -565,17 +565,16 @@ def _load_numpy_accel(
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
-    row_ids, cols = _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
+    import numpy as np
 
-    cols = list(cols)
+    numpy_ids, numpy_cols = _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
 
-    for i, ((name, dtype, transformer), col) in enumerate(zip(colspec, cols)):
+    for i, (_, dtype, transformer) in enumerate(colspec):
         if transformer is not None:
-            import numpy as np
-            vectorized_transformer = np.vectorize(transformer)
-            cols[i] = (vectorized_transformer(col[0]), col[1])
+            t = np.vectorize(transformer)
+            numpy_cols[i] = (t(numpy_cols[i][0]), numpy_cols[i][1])
 
-    return row_ids, cols
+    return numpy_ids, numpy_cols
 
 
 def _dump_numpy_accel(
@@ -586,17 +585,14 @@ def _dump_numpy_accel(
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
-    cols = list(cols)
+    import numpy as np
 
-    for i, (_, rtype, transformer), (data, mask) in zip(range(len(cols)), returns, cols):
+    for i, (_, dtype, transformer) in enumerate(returns):
         if transformer is not None:
-            import numpy as np
-            vectorized_transformer = np.vectorize(transformer)
-            cols[i] = (vectorized_transformer(data), mask)
+            t = np.vectorize(transformer)
+            cols[i] = (t(cols[i][0]), cols[i][1])
 
-    return _singlestoredb_accel.dump_rowdat_1_numpy(
-        [x[1] for x in returns], row_ids, cols,
-    )
+    return _singlestoredb_accel.dump_rowdat_1_numpy(returns, row_ids, cols)
 
 
 def _load_pandas_accel(
@@ -642,16 +638,7 @@ def _dump_pandas_accel(
         for data, mask in cols
     ]
 
-    for i, (_, rtype, transformer), (data, mask)\
-            in zip(range(len(numpy_cols)), returns, numpy_cols):
-        if transformer is not None:
-            import numpy as np
-            vectorized_transformer = np.vectorize(transformer, otypes=[object])
-            numpy_cols[i] = (vectorized_transformer(data), mask)
-
-    return _singlestoredb_accel.dump_rowdat_1_numpy(
-        [x[1] for x in returns], numpy_ids, numpy_cols,
-    )
+    return _dump_numpy_accel(returns, numpy_ids, numpy_cols)
 
 
 def _load_polars_accel(
@@ -700,16 +687,7 @@ def _dump_polars_accel(
         for data, mask in cols
     ]
 
-    for i, (_, rtype, transformer), (data, mask)\
-            in zip(range(len(numpy_cols)), returns, numpy_cols):
-        if transformer is not None:
-            import numpy as np
-            vectorized_transformer = np.vectorize(transformer, otypes=[object])
-            numpy_cols[i] = (vectorized_transformer(data), mask)
-
-    return _singlestoredb_accel.dump_rowdat_1_numpy(
-        [x[1] for x in returns], numpy_ids, numpy_cols,
-    )
+    return _dump_numpy_accel(returns, numpy_ids, numpy_cols)
 
 
 def _load_arrow_accel(
@@ -763,18 +741,7 @@ def _dump_arrow_accel(
         for (data, mask), (_, dtype, _) in zip(cols, returns)
     ]
 
-    for i, (_, rtype, transformer), (data, mask) in zip(
-        range(len(numpy_cols)), returns,
-        numpy_cols,
-    ):
-        if transformer is not None:
-            import numpy as np
-            vectorized_transformer = np.vectorize(transformer, otypes=[object])
-            numpy_cols[i] = (vectorized_transformer(data), mask)
-
-    return _singlestoredb_accel.dump_rowdat_1_numpy(
-        [x[1] for x in returns], row_ids.to_numpy(), numpy_cols,
-    )
+    return _dump_numpy_accel(returns, row_ids.to_numpy(), numpy_cols)
 
 
 def _dump_rowdat_1_accel(
@@ -782,30 +749,16 @@ def _dump_rowdat_1_accel(
     row_ids: List[int],
     rows: List[List[Any]],
 ) -> bytes:
-    rows = list(rows)
-
-    for i, (name, dtype, transformer), row in zip(range(len(returns)), returns, rows):
-        if transformer is not None:
-            for j in range(len(row)):
-                rows[j][i] = transformer(row[i])
-
-    return _singlestoredb_accel.dump_rowdat_1(
-        [x[1] for x in returns], row_ids, rows,
-    )
+    # C function now handles transformers internally
+    return _singlestoredb_accel.dump_rowdat_1(returns, row_ids, rows)
 
 
 def _load_rowdat_1_accel(
     colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[List[int], List[Any]]:
-    row_ids, rows = _singlestoredb_accel.load_rowdat_1(colspec, data)
-
-    for i, (name, dtype, transformer), _ in zip(range(len(colspec)), colspec, rows):
-        if transformer is not None:
-            for j in range(len(rows)):
-                rows[j][i] = transformer(rows[j][i])
-
-    return row_ids, rows
+    # C function now handles transformers internally
+    return _singlestoredb_accel.load_rowdat_1(colspec, data)
 
 
 if not has_accel:
