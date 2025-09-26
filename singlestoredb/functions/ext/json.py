@@ -262,7 +262,7 @@ def load_arrow(
 
 
 def dump(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: List[int],
     rows: List[List[Any]],
 ) -> bytes:
@@ -271,7 +271,7 @@ def dump(
 
     Parameters
     ----------
-    returns : List[Tuple[int, Optional[Transformer]]]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : List[int]
         Row IDs
@@ -284,16 +284,19 @@ def dump(
 
     '''
     rows = list(rows)
-    for i, (_, transformer) in enumerate(returns):
+    transformers = []
+    for i, (_, _, transformer) in enumerate(returns):
         if transformer is not None:
-            for row in rows:
-                row[i] = apply_transformer(transformer, row[i])
+            transformers.append((i, transformer))
+    for (i, transformer) in transformers:
+        for row in rows:
+            row[i] = apply_transformer(transformer, row[i])
     data = list(zip(row_ids, *list(zip(*rows))))
     return json.dumps(dict(data=data), cls=JSONEncoder).encode('utf-8')
 
 
 def _dump_vectors(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: List[int],
     cols: List[Tuple[Any, Any]],
 ) -> bytes:
@@ -319,13 +322,13 @@ def _dump_vectors(
         if mask is not None:
             masked_cols.append([
                 apply_transformer(
-                    returns[i][1], d,
+                    returns[i][2], d,
                 ) if m is not None else None for d, m in zip(data, mask)
             ])
         else:
             masked_cols.append(
                 apply_transformer(
-                    returns[i][1],
+                    returns[i][2],
                     cols[i][0],
                 ),
             )
@@ -338,7 +341,7 @@ dump_list = _dump_vectors
 
 
 def dump_pandas(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pd.Series[int]',
     cols: List[Tuple['pd.Series[int]', 'pd.Series[bool]']],
 ) -> bytes:
@@ -347,7 +350,7 @@ def dump_pandas(
 
     Parameters
     ----------
-    returns : List[Tuple[int, Optional[Transformer]]]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : pd.Series[int]
         Row IDs
@@ -363,7 +366,7 @@ def dump_pandas(
 
     row_ids.index = row_ids
 
-    for i, ((data, mask), (dtype, transformer)) in enumerate(zip(cols, returns)):
+    for i, ((data, mask), (_, dtype, transformer)) in enumerate(zip(cols, returns)):
         data.index = row_ids.index
         if mask is not None:
             mask.index = row_ids.index
@@ -387,7 +390,7 @@ def dump_pandas(
 
 
 def dump_polars(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pl.Series[int]',
     cols: List[Tuple['pl.Series[Any]', 'pl.Series[int]']],
 ) -> bytes:
@@ -396,7 +399,7 @@ def dump_polars(
 
     Parameters
     ----------
-    returns : List[Tuple[int, Optional[Transformer]]]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : List[int]
     cols : List[Tuple[polars.Series[Any], polars.Series[bool]]
@@ -415,7 +418,7 @@ def dump_polars(
 
 
 def dump_numpy(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'np.typing.NDArray[np.int64]',
     cols: List[Tuple['np.typing.NDArray[Any]', 'np.typing.NDArray[np.bool_]']],
 ) -> bytes:
@@ -424,7 +427,7 @@ def dump_numpy(
 
     Parameters
     ----------
-    returns : List[Tuple[int, Optional[Transformer]]]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : List[int]
         Row IDs
@@ -444,7 +447,7 @@ def dump_numpy(
 
 
 def dump_arrow(
-    returns: List[Tuple[int, Optional[Transformer]]],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pa.Array[int]',
     cols: List[Tuple['pa.Array[int]', 'pa.Array[bool]']],
 ) -> bytes:
@@ -453,7 +456,7 @@ def dump_arrow(
 
     Parameters
     ----------
-    returns : List[Tuple[int, Optional[Transformer]]]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : pyarrow.Array[int]
         Row IDs
