@@ -3,8 +3,6 @@
 import asyncio
 import time
 import typing
-from typing import Any
-from typing import Dict
 from typing import List
 from typing import NamedTuple
 from typing import Optional
@@ -26,7 +24,6 @@ from singlestoredb.functions.dtypes import SMALLINT
 from singlestoredb.functions.dtypes import TEXT
 from singlestoredb.functions.dtypes import TINYINT
 from singlestoredb.functions.typing import JSON
-from singlestoredb.functions.typing import JSONArray
 from singlestoredb.functions.typing import numpy as npt
 from singlestoredb.functions.typing import pandas as pdt
 from singlestoredb.functions.typing import polars as plt
@@ -895,33 +892,12 @@ def vec_function_ints_masked2(
 
 # JSON Test Functions
 
-@udf
-def json_echo(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Echo a JSON object back."""
-    return data
-
-
-@udf
-def json_array_echo(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Echo a JSON array back."""
-    return data
-
-
-def json_alias_echo(data: JSON) -> JSON:
+def json_echo(data: JSON) -> JSON:
     """Echo JSON using type alias."""
     return data
 
 
 @udf
-def json_array_alias_echo(data: JSONArray) -> JSONArray:
+def json_list_echo(data: List[JSON]) -> List[JSON]:
     """Echo JSON array using type alias."""
     return data
-
-
-@udf
-def json_alias_transform(data: JSON) -> JSON:
-    """Transform JSON using type alias."""
-    result = data.copy()
-    result['processed'] = True
-    result['original_keys'] = len(data)
-    return result

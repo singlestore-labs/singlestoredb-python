@@ -198,8 +198,8 @@ class _TestContainerManager():
         command = ' '.join(self._start_command())
 
         logger.info(
-            f'Starting container {self.container_name} on ports {self.mysql_port}, '
-            f'{self.http_port}, {self.studio_port}',
+            f'Starting container {self.container_name} on ports '
+            f'{self.mysql_port}, {self.http_port}, {self.studio_port}',
         )
         try:
             license = os.environ.get('SINGLESTORE_LICENSE', '')
