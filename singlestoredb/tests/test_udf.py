@@ -5,8 +5,6 @@ import dataclasses
 import datetime
 import re
 import unittest
-from typing import Any
-from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -788,31 +786,8 @@ class TestUDF(unittest.TestCase):
     def test_json_types(self):
         """Test JSON type handling for parameters and returns."""
 
-        # Test scalar JSON parameter and return
-        def scalar_json_func(data: Dict[str, Any]) -> Dict[str, Any]:
-            return data
-
-        sql = to_sql(scalar_json_func)
-        self.assertIn('JSON NOT NULL', sql)
-        self.assertIn('RETURNS JSON NOT NULL', sql)
-
-        # Test optional JSON parameter
-        def optional_json_func(data: Optional[Dict[str, Any]]) -> str:
-            return str(data)
-
-        sql = to_sql(optional_json_func)
-        self.assertIn('JSON NULL', sql)
-
-        # Test vector JSON parameter and return
-        def vector_json_func(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-            return data
-
-        sql = to_sql(vector_json_func)
-        self.assertIn('JSON NOT NULL', sql)
-        self.assertIn('RETURNS JSON NOT NULL', sql)
-
         # Test JSON type aliases
-        from ..functions.typing import JSON, JSONArray
+        from ..functions.typing import JSON
 
         def alias_json_func(data: JSON) -> JSON:
             return data
@@ -820,7 +795,7 @@ class TestUDF(unittest.TestCase):
         sql = to_sql(alias_json_func)
         self.assertIn('JSON NOT NULL', sql)
 
-        def alias_vector_json_func(data: JSONArray) -> JSONArray:
+        def alias_vector_json_func(data: List[JSON]) -> List[JSON]:
             return data
 
         sql = to_sql(alias_vector_json_func)

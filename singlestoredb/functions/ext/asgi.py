@@ -194,6 +194,10 @@ def as_list_of_tuples(x: Any) -> Any:
     return x
 
 
+def transpose(data: Sequence[Sequence[Any]]) -> List[Tuple[Any]]:
+    return [tuple(row) for row in zip(*data)]
+
+
 def get_dataframe_columns(df: Any) -> List[Any]:
     """Return columns of data from a dataframe/table."""
     if isinstance(df, Table):
@@ -209,16 +213,25 @@ def get_dataframe_columns(df: Any) -> List[Any]:
         return list(df)
 
     rtype = str(type(df)).lower()
+
+    # Pandas or polars type of dataframe
     if 'dataframe' in rtype:
         return [df[x] for x in df.columns]
+    # PyArrow table
     elif 'table' in rtype:
         return df.columns
+    # Pandas or polars series
     elif 'series' in rtype:
         return [df]
+    # Numpy array
     elif 'array' in rtype:
         return [df]
+    # List of objects
+    elif 'list' in rtype:
+        return transpose(as_list_of_tuples(df))
+    # Tuple of objects
     elif 'tuple' in rtype:
-        return list(df)
+        return transpose(as_list_of_tuples(df))
 
     raise TypeError(
         'Unsupported data type for dataframe columns: '
@@ -316,7 +329,7 @@ def build_udf_endpoint(
         The function endpoint
 
     """
-    if returns_data_format in ['scalar', 'list']:
+    if returns_data_format in ['scalar']:
 
         is_async = asyncio.iscoroutinefunction(func)
 
@@ -427,7 +440,7 @@ def build_tvf_endpoint(
         The function endpoint
 
     """
-    if returns_data_format in ['scalar', 'list']:
+    if returns_data_format in ['scalar']:
 
         is_async = asyncio.iscoroutinefunction(func)
 
@@ -768,8 +781,8 @@ class Application(object):
             response=rowdat_1_response_dict,
         ),
         (b'application/octet-stream', b'1.0', 'list'): dict(
-            load=rowdat_1.load,
-            dump=rowdat_1.dump,
+            load=rowdat_1.load_list,
+            dump=rowdat_1.dump_list,
             response=rowdat_1_response_dict,
         ),
         (b'application/octet-stream', b'1.0', 'pandas'): dict(
@@ -798,8 +811,8 @@ class Application(object):
             response=json_response_dict,
         ),
         (b'application/json', b'1.0', 'list'): dict(
-            load=jdata.load,
-            dump=jdata.dump,
+            load=jdata.load_list,
+            dump=jdata.dump_list,
             response=json_response_dict,
         ),
         (b'application/json', b'1.0', 'pandas'): dict(

@@ -10,8 +10,6 @@ from typing import Union
 
 from . import utils
 from .dtypes import SQLString
-from .typing import JSON
-from .typing import JSONArray
 
 
 ParameterType = Union[
@@ -74,8 +72,6 @@ def expand_types(args: Any) -> Optional[List[Any]]:
         new_args: List[Any] = []
         for arg in args:
             if isinstance(arg, str):
-                new_args.append(arg)
-            elif arg in [JSON, JSONArray]:
                 new_args.append(arg)
             elif is_sqlstr_callable(arg):
                 new_args.append(arg())
