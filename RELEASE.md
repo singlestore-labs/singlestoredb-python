@@ -2,48 +2,49 @@
 
 ## Bump the package version and build documentation
 
-Bump the version number in `setup.cfg` and `singlestoredb/__init__.py` using
-semantic versioning rules: minor bump for new features, patch bump for
-bug fixes. Add release notes to `docs/src/whatsnew.rst`. Run `make html` in
-`docs/src` to generate documentation.
-
-You will need `sphinx` and `sphinx_rtd_theme` installed for this step. You
-also need a SingleStoreDB server running at the given IP and port to run
-samples against.
-
-There is a utility to do this process for you, but you should check the
-`docs/src/whatsnew.rst` to verify the release summary. Use the following
-to run it:
+Run the following command:
 ```
 resources/bump_version.py < major | minor | patch >
 
 ```
 
+This will bump the version number in `setup.cfg` and `singlestoredb/__init__.py`
+using semantic versioning rules: minor bump for new features, patch bump for
+bug fixes. It will genarete a list of changes since the last version and
+ask for confirmation of the release notes in `docs/src/whatsnew.rst`.
+It will then run `make html` in `docs/src` to generate documentation.
+You will need `sphinx` and `sphinx_rtd_theme` installed for this step.
+The documentation contains source which runs against a live server that is
+created using Docker.
+
+
 ## Commit and push the changes
 
-After verifying the release summary in the documentation, commit the changes:
+After verifying the release summary in the documentation, commit the changes.
+All modified files should be staged by `bump_version.py` already.
 ```
-# Make sure newly generated docs get added
-git add docs
-
-# Commit changes
-git commit -am "Prepare for vX.X.X release".
-
-git push
+git commit -m "Prepare for vX.X.X release" && git push
 
 ```
 
-## Run smoke tests
+## Final testing
 
-The coverage tests will be triggered by the push, but you should also run
-[Smoke test](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml)
-workflow manually which does basic tests on all supported versions of Python.
+The coverage tests will be triggered by the push, but it will likely only
+be a subset since Management API tests only get executed if the Management API
+source files are changed. You should run the full set of [
+Coverage tests at](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml)
+and then run the Smoke tests which verify the code works at all of the advertised Python versions:
+[Smoke test](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml).
+
 
 ## Create the release on Github
 
-Once all workflows are clean, create a new Github release with the name
-"SingleStoreDB vX.X.X" at <https://github.com/singlestore-labs/singlestoredb-python/releases>
-and set the generated tag to the matching version
-number. Add the release notes from the `whatsnew.rst` file to the release
-notes. Creating the release will run the [Publish packages](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/publish.yml)
-workflow which builds the packages and pubsishes them to PyPI.
+To create the release, run:
+```
+resources/create_release.py
+
+```
+
+This will generate a tag and start the release process in the
+[Publish packages](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/publish.yml)
+Github workflow.

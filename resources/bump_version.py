@@ -424,7 +424,11 @@ def main() -> None:
     print('=' * 50, file=sys.stderr)
     print(f'🎉 Version bump completed successfully in {total_elapsed:.1f}s!', file=sys.stderr)
     print(f'📝 Version: {current_version} → {new_version}', file=sys.stderr)
-    print('📄 Next step: git commit -m "Bump version to {}"'.format(new_version), file=sys.stderr)
+    print('🚀 Next steps:', file=sys.stderr)
+    print('    📄 git commit -m "Prepare for v{} release" && git push'.format(new_version), file=sys.stderr)
+    print('    📄 Run Coverage tests <https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml>', file=sys.stderr)
+    print('    📄 Run Smoke test <https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml>', file=sys.stderr)
+    print('    📄 Run resources/create_release.py', file=sys.stderr)
 
 
 if __name__ == '__main__':

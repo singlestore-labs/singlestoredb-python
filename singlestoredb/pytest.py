@@ -2,8 +2,10 @@
 """Pytest plugin"""
 import logging
 import os
+import socket
 import subprocess
 import time
+import uuid
 from enum import Enum
 from typing import Iterator
 from typing import Optional
@@ -26,6 +28,14 @@ STARTUP_CONNECT_TIMEOUT_SECONDS = 2
 TEARDOWN_WAIT_ATTEMPTS = 20
 # How long to wait between checking connections
 TEARDOWN_WAIT_SECONDS = 2
+
+
+def _find_free_port() -> int:
+    """Find a free port by binding to port 0 and getting the assigned port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', 0))
+        s.listen(1)
+        return s.getsockname()[1]
 
 
 class ExecutionMode(Enum):
@@ -79,7 +89,11 @@ class _TestContainerManager():
     """Manages the setup and teardown of a SingleStoreDB Dev Container"""
 
     def __init__(self) -> None:
-        self.container_name = 'singlestoredb-test-container'
+        # Generate unique container name using UUID and worker ID
+        worker = os.environ.get('PYTEST_XDIST_WORKER', 'master')
+        unique_id = uuid.uuid4().hex[:8]
+        self.container_name = f'singlestoredb-test-{worker}-{unique_id}'
+
         self.dev_image_name = 'ghcr.io/singlestore-labs/singlestoredb-dev'
 
         assert 'SINGLESTORE_LICENSE' in os.environ, 'SINGLESTORE_LICENSE not set'
@@ -91,14 +105,69 @@ class _TestContainerManager():
             'SINGLESTORE_SET_GLOBAL_DEFAULT_PARTITIONS_PER_LEAF': '1',
         }
 
-        self.ports = ['3306', '8080', '9000']
+        # Use dynamic port allocation to avoid conflicts
+        self.mysql_port = _find_free_port()
+        self.http_port = _find_free_port()
+        self.studio_port = _find_free_port()
+        self.ports = [
+            (self.mysql_port, '3306'),    # External port -> Internal port
+            (self.http_port, '8080'),
+            (self.studio_port, '9000'),
+        ]
 
-        self.url = f'root:{self.root_password}@127.0.0.1:3306'
+        self.url = f'root:{self.root_password}@127.0.0.1:{self.mysql_port}'
+
+    def _container_exists(self) -> bool:
+        """Check if a container with this name already exists."""
+        try:
+            result = subprocess.run(
+                [
+                    'docker', 'ps', '-a', '--filter',
+                    f'name={self.container_name}',
+                    '--format', '{{.Names}}',
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return self.container_name in result.stdout
+        except subprocess.CalledProcessError:
+            return False
+
+    def _cleanup_existing_container(self) -> None:
+        """Stop and remove any existing container with the same name."""
+        if not self._container_exists():
+            return
+
+        logger.info(f'Found existing container {self.container_name}, cleaning up')
+        try:
+            # Try to stop the container (ignore if it's already stopped)
+            subprocess.run(
+                ['docker', 'stop', self.container_name],
+                capture_output=True,
+                check=False,
+            )
+            # Remove the container
+            subprocess.run(
+                ['docker', 'rm', self.container_name],
+                capture_output=True,
+                check=True,
+            )
+            logger.debug(f'Cleaned up existing container {self.container_name}')
+        except subprocess.CalledProcessError as e:
+            logger.warning(f'Failed to cleanup existing container: {e}')
+            # Continue anyway - the unique name should prevent most conflicts
 
     def start(self) -> None:
+        # Clean up any existing container with the same name
+        self._cleanup_existing_container()
+
         command = ' '.join(self._start_command())
 
-        logger.info(f'Starting container {self.container_name}')
+        logger.info(
+            f'Starting container {self.container_name} on ports {self.mysql_port}, '
+            f'{self.http_port}, {self.studio_port}',
+        )
         try:
             license = os.environ['SINGLESTORE_LICENSE']
             env = {
@@ -108,8 +177,8 @@ class _TestContainerManager():
         except Exception as e:
             logger.exception(e)
             raise RuntimeError(
-                'Failed to start container. '
-                'Is one already running?',
+                f'Failed to start container {self.container_name}. '
+                f'Command: {command}',
             ) from e
         logger.debug('Container started')
 
@@ -123,9 +192,9 @@ class _TestContainerManager():
             else:
                 yield f'{key}={value}'
 
-        for port in self.ports:
+        for external_port, internal_port in self.ports:
             yield '-p'
-            yield f'{port}:{port}'
+            yield f'{external_port}:{internal_port}'
 
         yield self.dev_image_name
 

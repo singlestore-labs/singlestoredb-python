@@ -675,184 +675,201 @@ class TestStage(unittest.TestCase):
     def test_os_directories(self):
         st = self.wg.stage
 
-        # mkdir
-        st.mkdir('mkdir_test_1')
-        st.mkdir('mkdir_test_2')
-        with self.assertRaises(s2.ManagementError):
-            st.mkdir('mkdir_test_2/nest_1/nest_2')
-        st.mkdir('mkdir_test_2/nest_1')
-        st.mkdir('mkdir_test_2/nest_1/nest_2')
-        st.mkdir('mkdir_test_3')
+        mkdir_test_1 = f'mkdir_test_1_{id(self)}'
+        mkdir_test_2 = f'mkdir_test_2_{id(self)}'
+        mkdir_test_3 = f'mkdir_test_3_{id(self)}'
 
-        assert st.exists('mkdir_test_1/')
-        assert st.exists('mkdir_test_2/')
-        assert st.exists('mkdir_test_2/nest_1/')
-        assert st.exists('mkdir_test_2/nest_1/nest_2/')
+        # mkdir
+        st.mkdir(mkdir_test_1)
+        st.mkdir(mkdir_test_2)
+        with self.assertRaises(s2.ManagementError):
+            st.mkdir(f'{mkdir_test_2}/nest_1/nest_2')
+        st.mkdir(f'{mkdir_test_2}/nest_1')
+        st.mkdir(f'{mkdir_test_2}/nest_1/nest_2')
+        st.mkdir(f'{mkdir_test_3}')
+
+        assert st.exists(f'{mkdir_test_1}/')
+        assert st.exists(f'{mkdir_test_2}/')
+        assert st.exists(f'{mkdir_test_2}/nest_1/')
+        assert st.exists(f'{mkdir_test_2}/nest_1/nest_2/')
         assert not st.exists('foo/')
         assert not st.exists('foo/bar/')
 
-        assert st.is_dir('mkdir_test_1/')
-        assert st.is_dir('mkdir_test_2/')
-        assert st.is_dir('mkdir_test_2/nest_1/')
-        assert st.is_dir('mkdir_test_2/nest_1/nest_2/')
+        assert st.is_dir(f'{mkdir_test_1}/')
+        assert st.is_dir(f'{mkdir_test_2}/')
+        assert st.is_dir(f'{mkdir_test_2}/nest_1/')
+        assert st.is_dir(f'{mkdir_test_2}/nest_1/nest_2/')
 
-        assert not st.is_file('mkdir_test_1/')
-        assert not st.is_file('mkdir_test_2/')
-        assert not st.is_file('mkdir_test_2/nest_1/')
-        assert not st.is_file('mkdir_test_2/nest_1/nest_2/')
+        assert not st.is_file(f'{mkdir_test_1}/')
+        assert not st.is_file(f'{mkdir_test_2}/')
+        assert not st.is_file(f'{mkdir_test_2}/nest_1/')
+        assert not st.is_file(f'{mkdir_test_2}/nest_1/nest_2/')
 
         out = st.listdir('/')
-        assert 'mkdir_test_1/' in out
-        assert 'mkdir_test_2/' in out
-        assert 'mkdir_test_2/nest_1/nest_2/' not in out
+        assert f'{mkdir_test_1}/' in out
+        assert f'{mkdir_test_2}/' in out
+        assert f'{mkdir_test_2}/nest_1/nest_2/' not in out
 
         out = st.listdir('/', recursive=True)
-        assert 'mkdir_test_1/' in out
-        assert 'mkdir_test_2/' in out
-        assert 'mkdir_test_2/nest_1/nest_2/' in out
+        assert f'{mkdir_test_1}/' in out
+        assert f'{mkdir_test_2}/' in out
+        assert f'{mkdir_test_2}/nest_1/nest_2/' in out
 
-        out = st.listdir('mkdir_test_2')
-        assert 'mkdir_test_1/' not in out
+        out = st.listdir(mkdir_test_2)
+        assert f'{mkdir_test_1}/' not in out
         assert 'nest_1/' in out
         assert 'nest_2/' not in out
         assert 'nest_1/nest_2/' not in out
 
-        out = st.listdir('mkdir_test_2', recursive=True)
-        assert 'mkdir_test_1/' not in out
+        out = st.listdir(mkdir_test_2, recursive=True)
+        assert f'{mkdir_test_1}/' not in out
         assert 'nest_1/' in out
         assert 'nest_2/' not in out
         assert 'nest_1/nest_2/' in out
 
         # rmdir
         before = st.listdir('/', recursive=True)
-        st.rmdir('mkdir_test_1/')
+        st.rmdir(f'{mkdir_test_1}/')
         after = st.listdir('/', recursive=True)
-        assert 'mkdir_test_1/' in before
-        assert 'mkdir_test_1/' not in after
-        assert list(sorted(before)) == list(sorted(after + ['mkdir_test_1/']))
+        assert f'{mkdir_test_1}/' in before
+        assert f'{mkdir_test_1}/' not in after
+        assert list(sorted(before)) == list(sorted(after + [f'{mkdir_test_1}/']))
 
         with self.assertRaises(OSError):
-            st.rmdir('mkdir_test_2/')
+            st.rmdir(f'{mkdir_test_2}/')
 
-        st.upload_file(TEST_DIR / 'test.sql', 'mkdir_test.sql')
+        mkdir_test_sql = f'mkdir_test_{id(self)}.sql'
+
+        st.upload_file(TEST_DIR / 'test.sql', mkdir_test_sql)
 
         with self.assertRaises(NotADirectoryError):
-            st.rmdir('mkdir_test.sql')
+            st.rmdir(mkdir_test_sql)
 
         # removedirs
         before = st.listdir('/')
-        st.removedirs('mkdir_test_2/')
+        st.removedirs(f'{mkdir_test_2}/')
         after = st.listdir('/')
-        assert 'mkdir_test_2/' in before
-        assert 'mkdir_test_2/' not in after
-        assert list(sorted(before)) == list(sorted(after + ['mkdir_test_2/']))
+        assert f'{mkdir_test_2}/' in before
+        assert f'{mkdir_test_2}/' not in after
+        assert list(sorted(before)) == list(sorted(after + [f'{mkdir_test_2}/']))
 
         with self.assertRaises(s2.ManagementError):
-            st.removedirs('mkdir_test.sql')
+            st.removedirs(mkdir_test_sql)
 
     def test_os_files(self):
         st = self.wg.stage
 
-        st.mkdir('files_test_1')
-        st.mkdir('files_test_1/nest_1')
+        files_test_sql = f'files_test_{id(self)}.sql'
+        files_test_1_dir = f'files_test_1_{id(self)}'
 
-        st.upload_file(TEST_DIR / 'test.sql', 'files_test.sql')
-        st.upload_file(TEST_DIR / 'test.sql', 'files_test_1/nest_1/nested_files_test.sql')
+        st.mkdir(files_test_1_dir)
+        st.mkdir(f'{files_test_1_dir}/nest_1')
+
+        st.upload_file(TEST_DIR / 'test.sql', files_test_sql)
         st.upload_file(
             TEST_DIR / 'test.sql',
-            'files_test_1/nest_1/nested_files_test_2.sql',
+            f'{files_test_1_dir}/nest_1/nested_files_test.sql',
+        )
+        st.upload_file(
+            TEST_DIR / 'test.sql',
+            f'{files_test_1_dir}/nest_1/nested_files_test_2.sql',
         )
 
         # remove
         with self.assertRaises(IsADirectoryError):
-            st.remove('files_test_1/')
+            st.remove(f'{files_test_1_dir}/')
 
         before = st.listdir('/')
-        st.remove('files_test.sql')
+        st.remove(files_test_sql)
         after = st.listdir('/')
-        assert 'files_test.sql' in before
-        assert 'files_test.sql' not in after
-        assert list(sorted(before)) == list(sorted(after + ['files_test.sql']))
+        assert files_test_sql in before
+        assert files_test_sql not in after
+        assert list(sorted(before)) == list(sorted(after + [files_test_sql]))
 
-        before = st.listdir('files_test_1/nest_1/')
-        st.remove('files_test_1/nest_1/nested_files_test.sql')
-        after = st.listdir('files_test_1/nest_1/')
+        before = st.listdir(f'{files_test_1_dir}/nest_1/')
+        st.remove(f'{files_test_1_dir}/nest_1/nested_files_test.sql')
+        after = st.listdir(f'{files_test_1_dir}/nest_1/')
         assert 'nested_files_test.sql' in before
         assert 'nested_files_test.sql' not in after
-        assert st.is_dir('files_test_1/nest_1/')
+        assert st.is_dir(f'{files_test_1_dir}/nest_1/')
 
         # Removing the last file does not remove empty directories
-        st.remove('files_test_1/nest_1/nested_files_test_2.sql')
-        assert not st.is_file('files_test_1/nest_1/nested_files_test_2.sql')
-        assert st.is_dir('files_test_1/nest_1/')
-        assert st.is_dir('files_test_1/')
+        st.remove(f'{files_test_1_dir}/nest_1/nested_files_test_2.sql')
+        assert not st.is_file(f'{files_test_1_dir}/nest_1/nested_files_test_2.sql')
+        assert st.is_dir(f'{files_test_1_dir}/nest_1/')
+        assert st.is_dir(f'{files_test_1_dir}/')
 
-        st.removedirs('files_test_1')
-        assert not st.is_dir('files_test_1/nest_1/')
-        assert not st.is_dir('files_test_1/')
+        st.removedirs(files_test_1_dir)
+        assert not st.is_dir(f'{files_test_1_dir}/nest_1/')
+        assert not st.is_dir(f'{files_test_1_dir}/')
 
     def test_os_rename(self):
         st = self.wg.stage
 
-        st.upload_file(TEST_DIR / 'test.sql', 'rename_test.sql')
+        rename_test_sql = f'rename_test_{id(self)}.sql'
+        rename_test_2_sql = f'rename_test_2_{id(self)}.sql'
+        rename_test_1_dir = f'rename_test_1_{id(self)}'
+        rename_test_2_dir = f'rename_test_2_{id(self)}'
+
+        st.upload_file(TEST_DIR / 'test.sql', rename_test_sql)
 
         with self.assertRaises(s2.ManagementError):
             st.upload_file(
                 TEST_DIR / 'test.sql',
-                'rename_test_1/nest_1/nested_rename_test.sql',
+                f'{rename_test_1_dir}/nest_1/nested_rename_test.sql',
             )
 
-        st.mkdir('rename_test_1')
-        st.mkdir('rename_test_1/nest_1')
+        st.mkdir(rename_test_1_dir)
+        st.mkdir(f'{rename_test_1_dir}/nest_1')
 
-        assert st.exists('/rename_test_1/nest_1/')
+        assert st.exists(f'/{rename_test_1_dir}/nest_1/')
 
         st.upload_file(
             TEST_DIR / 'test.sql',
-            'rename_test_1/nest_1/nested_rename_test.sql',
+            f'{rename_test_1_dir}/nest_1/nested_rename_test.sql',
         )
 
         st.upload_file(
             TEST_DIR / 'test.sql',
-            'rename_test_1/nest_1/nested_rename_test_2.sql',
+            f'{rename_test_1_dir}/nest_1/nested_rename_test_2.sql',
         )
 
         # rename file
-        assert 'rename_test.sql' in st.listdir('/')
-        assert 'rename_test_2.sql' not in st.listdir('/')
-        st.rename('rename_test.sql', 'rename_test_2.sql')
-        assert 'rename_test.sql' not in st.listdir('/')
-        assert 'rename_test_2.sql' in st.listdir('/')
+        assert rename_test_sql in st.listdir('/')
+        assert rename_test_2_sql not in st.listdir('/')
+        st.rename(rename_test_sql, rename_test_2_sql)
+        assert rename_test_sql not in st.listdir('/')
+        assert rename_test_2_sql in st.listdir('/')
 
         # rename directory
-        assert 'rename_test_1/' in st.listdir('/')
-        assert 'rename_test_2/' not in st.listdir('/')
-        st.rename('rename_test_1/', 'rename_test_2/')
-        assert 'rename_test_1/' not in st.listdir('/')
-        assert 'rename_test_2/' in st.listdir('/')
-        assert st.is_file('rename_test_2/nest_1/nested_rename_test.sql')
-        assert st.is_file('rename_test_2/nest_1/nested_rename_test_2.sql')
+        assert f'{rename_test_1_dir}/' in st.listdir('/')
+        assert f'{rename_test_2_dir}/' not in st.listdir('/')
+        st.rename(f'{rename_test_1_dir}/', f'{rename_test_2_dir}/')
+        assert f'{rename_test_1_dir}/' not in st.listdir('/')
+        assert f'{rename_test_2_dir}/' in st.listdir('/')
+        assert st.is_file(f'{rename_test_2_dir}/nest_1/nested_rename_test.sql')
+        assert st.is_file(f'{rename_test_2_dir}/nest_1/nested_rename_test_2.sql')
 
         # rename nested
-        assert 'rename_test_2/nest_1/nested_rename_test.sql' in st.listdir(
+        assert f'{rename_test_2_dir}/nest_1/nested_rename_test.sql' in st.listdir(
             '/', recursive=True,
         )
-        assert 'rename_test_2/nest_1/nested_rename_test_3.sql' not in st.listdir(
+        assert f'{rename_test_2_dir}/nest_1/nested_rename_test_3.sql' not in st.listdir(
             '/', recursive=True,
         )
         st.rename(
-            'rename_test_2/nest_1/nested_rename_test.sql',
-            'rename_test_2/nest_1/nested_rename_test_3.sql',
+            f'{rename_test_2_dir}/nest_1/nested_rename_test.sql',
+            f'{rename_test_2_dir}/nest_1/nested_rename_test_3.sql',
         )
-        assert 'rename_test_2/nest_1/nested_rename_test.sql' not in st.listdir(
+        assert f'{rename_test_2_dir}/nest_1/nested_rename_test.sql' not in st.listdir(
             '/', recursive=True,
         )
-        assert 'rename_test_2/nest_1/nested_rename_test_3.sql' in st.listdir(
+        assert f'{rename_test_2_dir}/nest_1/nested_rename_test_3.sql' in st.listdir(
             '/', recursive=True,
         )
-        assert not st.is_file('rename_test_2/nest_1/nested_rename_test.sql')
-        assert st.is_file('rename_test_2/nest_1/nested_rename_test_2.sql')
-        assert st.is_file('rename_test_2/nest_1/nested_rename_test_3.sql')
+        assert not st.is_file(f'{rename_test_2_dir}/nest_1/nested_rename_test.sql')
+        assert st.is_file(f'{rename_test_2_dir}/nest_1/nested_rename_test_2.sql')
+        assert st.is_file(f'{rename_test_2_dir}/nest_1/nested_rename_test_3.sql')
 
         # non-existent file
         with self.assertRaises(OSError):
@@ -861,13 +878,13 @@ class TestStage(unittest.TestCase):
         # overwrite
         with self.assertRaises(OSError):
             st.rename(
-                'rename_test_2.sql',
-                'rename_test_2/nest_1/nested_rename_test_3.sql',
+                rename_test_2_sql,
+                f'{rename_test_2_dir}/nest_1/nested_rename_test_3.sql',
             )
 
         st.rename(
-            'rename_test_2.sql',
-            'rename_test_2/nest_1/nested_rename_test_3.sql', overwrite=True,
+            rename_test_2_sql,
+            f'{rename_test_2_dir}/nest_1/nested_rename_test_3.sql', overwrite=True,
         )
 
     def test_file_object(self):
@@ -1399,35 +1416,41 @@ class TestFileSpaces(unittest.TestCase):
             space.remove(obj_open_test_ipynb)
 
     def test_os_directories(self):
+        mkdir_test_1_dir = f'mkdir_test_1_{id(self)}'
+
         for space in [self.personal_space, self.shared_space]:
             # Make sure directories error out
             with self.assertRaises(s2.ManagementError):
-                space.mkdir('mkdir_test_1')
+                space.mkdir(mkdir_test_1_dir)
 
             with self.assertRaises(s2.ManagementError):
-                space.exists('mkdir_test_1/')
+                space.exists(f'{mkdir_test_1_dir}/')
 
             out = space.listdir('/')
-            assert 'mkdir_test_1/' not in out
+            assert f'{mkdir_test_1_dir}/' not in out
 
             with self.assertRaises(s2.ManagementError):
-                space.rmdir('mkdir_test_1/')
+                space.rmdir(f'{mkdir_test_1_dir}/')
 
     def test_os_rename(self):
+        rename_test_ipynb = f'rename_test_{id(self)}.ipynb'
+        rename_test_2_ipynb = f'rename_test_2_{id(self)}.ipynb'
+        rename_test_3_ipynb = f'rename_test_3_{id(self)}.ipynb'
+
         for space in [self.personal_space, self.shared_space]:
             space.upload_file(
                 TEST_DIR / 'test.ipynb',
-                'rename_test.ipynb',
+                rename_test_ipynb,
             )
-            assert 'rename_test.ipynb' in space.listdir('/')
-            assert 'rename_test_2.ipynb' not in space.listdir('/')
+            assert rename_test_ipynb in space.listdir('/')
+            assert rename_test_2_ipynb not in space.listdir('/')
 
             space.rename(
-                'rename_test.ipynb',
-                'rename_test_2.ipynb',
+                rename_test_ipynb,
+                rename_test_2_ipynb,
             )
-            assert 'rename_test.ipynb' not in space.listdir('/')
-            assert 'rename_test_2.ipynb' in space.listdir('/')
+            assert rename_test_ipynb not in space.listdir('/')
+            assert rename_test_2_ipynb in space.listdir('/')
 
             # non-existent file
             with self.assertRaises(OSError):
@@ -1435,37 +1458,40 @@ class TestFileSpaces(unittest.TestCase):
 
             space.upload_file(
                 TEST_DIR / 'test.ipynb',
-                'rename_test_3.ipynb',
+                rename_test_3_ipynb,
             )
 
             # overwrite
             with self.assertRaises(OSError):
                 space.rename(
-                    'rename_test_2.ipynb',
-                    'rename_test_3.ipynb',
+                    rename_test_2_ipynb,
+                    rename_test_3_ipynb,
                 )
 
             space.rename(
-                'rename_test_2.ipynb',
-                'rename_test_3.ipynb', overwrite=True,
+                rename_test_2_ipynb,
+                rename_test_3_ipynb, overwrite=True,
             )
 
             # Cleanup
-            space.remove('rename_test_3.ipynb')
+            space.remove(rename_test_3_ipynb)
 
     def test_file_object(self):
+        obj_test_ipynb = f'obj_test_{id(self)}.ipynb'
+        obj_test_2_ipynb = f'obj_test_2_{id(self)}.ipynb'
+
         for space in [self.personal_space, self.shared_space]:
             f = space.upload_file(
                 TEST_DIR / 'test.ipynb',
-                'obj_test.ipynb',
+                obj_test_ipynb,
             )
 
             assert not f.is_dir()
             assert f.is_file()
 
             # abspath / basename / dirname / exists
-            assert f.abspath() == 'obj_test.ipynb'
-            assert f.basename() == 'obj_test.ipynb'
+            assert f.abspath() == obj_test_ipynb
+            assert f.basename() == obj_test_ipynb
             assert f.dirname() == '/'
             assert f.exists()
 
@@ -1474,9 +1500,9 @@ class TestFileSpaces(unittest.TestCase):
                 open(TEST_DIR / 'test.ipynb', 'r').read()
             assert f.download() == open(TEST_DIR / 'test.ipynb', 'rb').read()
 
-            assert space.is_file('obj_test.ipynb')
+            assert space.is_file(obj_test_ipynb)
             f.remove()
-            assert not space.is_file('obj_test.ipynb')
+            assert not space.is_file(obj_test_ipynb)
 
             # mtime / ctime
             assert f.getmtime() > 0
@@ -1485,17 +1511,17 @@ class TestFileSpaces(unittest.TestCase):
             # rename
             f = space.upload_file(
                 TEST_DIR / 'test.ipynb',
-                'obj_test.ipynb',
+                obj_test_ipynb,
             )
-            assert space.exists('obj_test.ipynb')
-            assert not space.exists('obj_test_2.ipynb')
-            f.rename('obj_test_2.ipynb')
-            assert not space.exists('obj_test.ipynb')
-            assert space.exists('obj_test_2.ipynb')
-            assert f.abspath() == 'obj_test_2.ipynb'
+            assert space.exists(obj_test_ipynb)
+            assert not space.exists(obj_test_2_ipynb)
+            f.rename(obj_test_2_ipynb)
+            assert not space.exists(obj_test_ipynb)
+            assert space.exists(obj_test_2_ipynb)
+            assert f.abspath() == obj_test_2_ipynb
 
             # Cleanup
-            space.remove('obj_test_2.ipynb')
+            space.remove(obj_test_2_ipynb)
 
 
 @pytest.mark.management

@@ -300,9 +300,9 @@ def results_to_polars(
     if has_polars:
         schema = _description_to_polars_schema(desc) if schema is None else schema
         if single:
-            out = pl.DataFrame([res], **schema.get('schema', {}))
+            out = pl.DataFrame([res], orient='row', **schema.get('schema', {}))
         else:
-            out = pl.DataFrame(res, **schema.get('schema', {}))
+            out = pl.DataFrame(res, orient='row', **schema.get('schema', {}))
         with_columns = schema.get('with_columns')
         if with_columns:
             return out.with_columns(**with_columns)
