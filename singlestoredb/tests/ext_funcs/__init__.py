@@ -12,18 +12,18 @@ from typing import Tuple
 import numpy as np
 import pyarrow.compute as pc
 
-import singlestoredb.functions.dtypes as dt
+import singlestoredb.functions.sql_types as dt
 from singlestoredb.functions import Masked
 from singlestoredb.functions import Table
 from singlestoredb.functions import udf
-from singlestoredb.functions.dtypes import BIGINT
-from singlestoredb.functions.dtypes import BLOB
-from singlestoredb.functions.dtypes import DOUBLE
-from singlestoredb.functions.dtypes import FLOAT
-from singlestoredb.functions.dtypes import MEDIUMINT
-from singlestoredb.functions.dtypes import SMALLINT
-from singlestoredb.functions.dtypes import TEXT
-from singlestoredb.functions.dtypes import TINYINT
+from singlestoredb.functions.sql_types import BIGINT
+from singlestoredb.functions.sql_types import BLOB
+from singlestoredb.functions.sql_types import DOUBLE
+from singlestoredb.functions.sql_types import FLOAT
+from singlestoredb.functions.sql_types import MEDIUMINT
+from singlestoredb.functions.sql_types import SMALLINT
+from singlestoredb.functions.sql_types import TEXT
+from singlestoredb.functions.sql_types import TINYINT
 from singlestoredb.functions.typing import JSON
 from singlestoredb.functions.typing import numpy as npt
 from singlestoredb.functions.typing import pandas as pdt

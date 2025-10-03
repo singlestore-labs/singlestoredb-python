@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING
 
 from ...config import get_option
 from ...mysql.constants import FIELD_TYPE as ft
-from ..dtypes import DEFAULT_VALUES
-from ..dtypes import NUMPY_TYPE_MAP
-from ..dtypes import PANDAS_TYPE_MAP
-from ..dtypes import POLARS_TYPE_MAP
-from ..dtypes import PYARROW_TYPE_MAP
+from ..sql_types import DEFAULT_VALUES
+from ..sql_types import NUMPY_TYPE_MAP
+from ..sql_types import PANDAS_TYPE_MAP
+from ..sql_types import POLARS_TYPE_MAP
+from ..sql_types import PYARROW_TYPE_MAP
 from .utils import apply_transformer
 from .utils import Transformer
 

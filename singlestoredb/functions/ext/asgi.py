@@ -75,7 +75,7 @@ from ..typing import Masked
 from ..typing import Table
 from .timer import Timer
 from singlestoredb.docstring.parser import parse
-from singlestoredb.functions.dtypes import escape_name
+from singlestoredb.functions.sql_types import escape_name
 
 try:
     import cloudpickle

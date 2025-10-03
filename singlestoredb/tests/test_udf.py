@@ -14,8 +14,8 @@ from typing import Union
 import numpy as np
 import pydantic
 
-from ..functions import dtypes as dt
 from ..functions import signature as sig
+from ..functions import sql_types as dt
 from ..functions import Table
 from ..functions import udf
 
