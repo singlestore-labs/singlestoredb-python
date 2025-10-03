@@ -12,7 +12,7 @@ from typing import Tuple
 import numpy as np
 import pyarrow.compute as pc
 
-import singlestoredb.functions.dtypes as dt
+import singlestoredb.functions.sql_types as dt
 from singlestoredb.functions import Masked
 from singlestoredb.functions import Table
 from singlestoredb.functions import udf
