@@ -75,7 +75,7 @@ from ..typing import Masked
 from ..typing import Table
 from .timer import Timer
 from singlestoredb.docstring.parser import parse
-from singlestoredb.functions.dtypes import escape_name
+from singlestoredb.functions.sql_types import escape_name
 
 try:
     import cloudpickle
@@ -128,6 +128,7 @@ rowdat_1_type_map = {
     'float64': ft.DOUBLE,
     'str': ft.STRING,
     'bytes': -ft.STRING,
+    'json': ft.JSON,
 }
 
 
@@ -193,6 +194,10 @@ def as_list_of_tuples(x: Any) -> Any:
     return x
 
 
+def transpose(data: Sequence[Sequence[Any]]) -> List[Tuple[Any]]:
+    return [tuple(row) for row in zip(*data)]
+
+
 def get_dataframe_columns(df: Any) -> List[Any]:
     """Return columns of data from a dataframe/table."""
     if isinstance(df, Table):
@@ -208,16 +213,25 @@ def get_dataframe_columns(df: Any) -> List[Any]:
         return list(df)
 
     rtype = str(type(df)).lower()
+
+    # Pandas or polars type of dataframe
     if 'dataframe' in rtype:
         return [df[x] for x in df.columns]
+    # PyArrow table
     elif 'table' in rtype:
         return df.columns
+    # Pandas or polars series
     elif 'series' in rtype:
         return [df]
+    # Numpy array
     elif 'array' in rtype:
         return [df]
+    # List of objects
+    elif 'list' in rtype:
+        return transpose(as_list_of_tuples(df))
+    # Tuple of objects
     elif 'tuple' in rtype:
-        return list(df)
+        return transpose(as_list_of_tuples(df))
 
     raise TypeError(
         'Unsupported data type for dataframe columns: '
@@ -297,6 +311,7 @@ def cancel_on_event(
 
 def build_udf_endpoint(
     func: Callable[..., Any],
+    args_data_format: str,
     returns_data_format: str,
 ) -> Callable[..., Any]:
     """
@@ -315,7 +330,7 @@ def build_udf_endpoint(
         The function endpoint
 
     """
-    if returns_data_format in ['scalar', 'list']:
+    if returns_data_format in ['scalar']:
 
         is_async = asyncio.iscoroutinefunction(func)
 
@@ -338,11 +353,12 @@ def build_udf_endpoint(
 
         return do_func
 
-    return build_vector_udf_endpoint(func, returns_data_format)
+    return build_vector_udf_endpoint(func, args_data_format, returns_data_format)
 
 
 def build_vector_udf_endpoint(
     func: Callable[..., Any],
+    args_data_format: str,
     returns_data_format: str,
 ) -> Callable[..., Any]:
     """
@@ -408,6 +424,7 @@ def build_vector_udf_endpoint(
 
 def build_tvf_endpoint(
     func: Callable[..., Any],
+    args_data_format: str,
     returns_data_format: str,
 ) -> Callable[..., Any]:
     """
@@ -426,7 +443,7 @@ def build_tvf_endpoint(
         The function endpoint
 
     """
-    if returns_data_format in ['scalar', 'list']:
+    if returns_data_format in ['scalar']:
 
         is_async = asyncio.iscoroutinefunction(func)
 
@@ -437,10 +454,10 @@ def build_tvf_endpoint(
             rows: Sequence[Sequence[Any]],
         ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
             '''Call function on given rows of data.'''
-            out_ids: List[int] = []
-            out = []
+            out: List[Tuple[Any, ...]] = []
             # Call function on each row of data
             async with timer('call_function'):
+                out = []
                 for i, row in zip(row_ids, rows):
                     cancel_on_event(cancel_event)
                     if is_async:
@@ -448,16 +465,16 @@ def build_tvf_endpoint(
                     else:
                         res = func(*row)
                     out.extend(as_list_of_tuples(res))
-                    out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
-            return out_ids, out
+            return [row_ids[0]] * len(out), out
 
         return do_func
 
-    return build_vector_tvf_endpoint(func, returns_data_format)
+    return build_vector_tvf_endpoint(func, args_data_format, returns_data_format)
 
 
 def build_vector_tvf_endpoint(
     func: Callable[..., Any],
+    args_data_format: str,
     returns_data_format: str,
 ) -> Callable[..., Any]:
     """
@@ -561,9 +578,9 @@ def make_func(
     )
 
     if function_type == 'tvf':
-        do_func = build_tvf_endpoint(func, returns_data_format)
+        do_func = build_tvf_endpoint(func, args_data_format, returns_data_format)
     else:
-        do_func = build_udf_endpoint(func, returns_data_format)
+        do_func = build_udf_endpoint(func, args_data_format, returns_data_format)
 
     do_func.__name__ = name
     do_func.__doc__ = func.__doc__
@@ -590,7 +607,7 @@ def make_func(
         dtype = x['dtype'].replace('?', '')
         if dtype not in rowdat_1_type_map:
             raise TypeError(f'no data type mapping for {dtype}')
-        colspec.append((x['name'], rowdat_1_type_map[dtype]))
+        colspec.append((x['name'], rowdat_1_type_map[dtype], x['transformer']))
     info['colspec'] = colspec
 
     # Setup return type
@@ -599,7 +616,7 @@ def make_func(
         dtype = x['dtype'].replace('?', '')
         if dtype not in rowdat_1_type_map:
             raise TypeError(f'no data type mapping for {dtype}')
-        returns.append((x['name'], rowdat_1_type_map[dtype]))
+        returns.append((x['name'], rowdat_1_type_map[dtype], x['transformer']))
     info['returns'] = returns
 
     return do_func, info
@@ -767,8 +784,8 @@ class Application(object):
             response=rowdat_1_response_dict,
         ),
         (b'application/octet-stream', b'1.0', 'list'): dict(
-            load=rowdat_1.load,
-            dump=rowdat_1.dump,
+            load=rowdat_1.load_list,
+            dump=rowdat_1.dump_list,
             response=rowdat_1_response_dict,
         ),
         (b'application/octet-stream', b'1.0', 'pandas'): dict(
@@ -797,8 +814,8 @@ class Application(object):
             response=json_response_dict,
         ),
         (b'application/json', b'1.0', 'list'): dict(
-            load=jdata.load,
-            dump=jdata.dump,
+            load=jdata.load_list,
+            dump=jdata.dump_list,
             response=json_response_dict,
         ),
         (b'application/json', b'1.0', 'pandas'): dict(
@@ -1233,7 +1250,7 @@ class Application(object):
 
                 with timer('format_output'):
                     body = output_handler['dump'](
-                        [x[1] for x in func_info['returns']], *result,  # type: ignore
+                        func_info['returns'], *result,  # type: ignore
                     )
 
                 await send(output_handler['response'])

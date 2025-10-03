@@ -9,6 +9,7 @@ from copy import copy
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Union
 
 try:
@@ -29,6 +30,14 @@ except ImportError:
             seperator = ' ' * (8 - len(recordcopy.levelname))
             recordcopy.__dict__['levelprefix'] = levelname + ':' + seperator
             return super().formatMessage(recordcopy)
+
+from ..typing import Transformer
+
+
+def apply_transformer(func: Optional[Transformer], v: Any) -> Any:
+    if func is not None:
+        return func(v)
+    return v
 
 
 class JSONFormatter(logging.Formatter):
