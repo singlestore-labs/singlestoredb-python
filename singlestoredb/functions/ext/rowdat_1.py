@@ -578,7 +578,10 @@ def _load_numpy_accel(
             # then fill it in with the transformed values. The transformer may have
             # an output_type attribute that we can use to create a more specific type.
             if getattr(transformer, 'output_type', None):
-                new_col = np.empty(len(numpy_cols[i][0]), dtype=transformer.output_type)
+                new_col = np.empty(
+                    len(numpy_cols[i][0]),
+                    dtype=transformer.output_type,  # type: ignore
+                )
                 new_col[:] = list(map(transformer, numpy_cols[i][0]))
             else:
                 new_col = np.array(list(map(transformer, numpy_cols[i][0])))
