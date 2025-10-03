@@ -23,7 +23,7 @@ except ImportError:
     from typing_extensions import Unpack  # type: ignore
     from typing_extensions import TypeAlias  # type: ignore
 
-from .. import dtypes
+from .. import sql_types
 
 T = TypeVar('T', bound=Sequence[Any])  # Generic type for iterable types
 
@@ -89,7 +89,7 @@ def output_type(dtype: Any) -> Callable[..., Any]:
 
 @dataclasses.dataclass
 class UDFAttrs:
-    sql_type: Optional[dtypes.SQLString] = None
+    sql_type: Optional[sql_types.SQLString] = None
     args_transformer: Optional[Transformer] = None
     returns_transformer: Optional[Transformer] = None
 
@@ -147,7 +147,7 @@ def json_or_null_loads(v: Optional[str], **kwargs: Any) -> Optional[Any]:
 JSON: TypeAlias = Annotated[
     Union[Dict[str, Any], List[Any], int, float, str, bool, None],
     UDFAttrs(
-        sql_type=dtypes.JSON(nullable=False),
+        sql_type=sql_types.JSON(nullable=False),
         args_transformer=json_or_null_loads,
         returns_transformer=json_or_null_dumps,
     ),

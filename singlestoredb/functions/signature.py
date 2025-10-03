@@ -31,7 +31,7 @@ try:
 except ImportError:
     from typing_extensions import Annotated  # type: ignore
 
-from . import dtypes as dt
+from . import sql_types as dt
 from . import utils
 from .typing import UDFAttrs
 from .typing import Table

@@ -7,12 +7,12 @@ from typing import Optional
 from typing import Tuple
 from typing import TYPE_CHECKING
 
-from ..dtypes import DEFAULT_VALUES
-from ..dtypes import NUMPY_TYPE_MAP
-from ..dtypes import PANDAS_TYPE_MAP
-from ..dtypes import POLARS_TYPE_MAP
-from ..dtypes import PYARROW_TYPE_MAP
-from ..dtypes import PYTHON_CONVERTERS
+from ..sql_types import DEFAULT_VALUES
+from ..sql_types import NUMPY_TYPE_MAP
+from ..sql_types import PANDAS_TYPE_MAP
+from ..sql_types import POLARS_TYPE_MAP
+from ..sql_types import PYARROW_TYPE_MAP
+from ..sql_types import PYTHON_CONVERTERS
 from .utils import apply_transformer
 from .utils import Transformer
 

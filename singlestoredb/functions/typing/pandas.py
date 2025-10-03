@@ -15,70 +15,70 @@ except ImportError:
 from . import UDFAttrs
 from . import json_or_null_dumps
 from . import json_or_null_loads
-from .. import dtypes
+from .. import sql_types
 
 
 StringSeries: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.TEXT(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.TEXT(nullable=False)),
 ]
 StrSeries: TypeAlias = StringSeries
 
 BytesSeries: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.BLOB(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.BLOB(nullable=False)),
 ]
 
 Float32Series: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.FLOAT(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.FLOAT(nullable=False)),
 ]
 FloatSeries: TypeAlias = Float32Series
 
 Float64Series: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.DOUBLE(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.DOUBLE(nullable=False)),
 ]
 DoubleSeries: TypeAlias = Float64Series
 
 IntSeries: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.INT(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.INT(nullable=False)),
 ]
 
 Int8Series: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.TINYINT(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.TINYINT(nullable=False)),
 ]
 
 Int16Series: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.SMALLINT(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.SMALLINT(nullable=False)),
 ]
 
 Int32Series: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.INT(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.INT(nullable=False)),
 ]
 
 Int64Series: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.BIGINT(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.BIGINT(nullable=False)),
 ]
 
 UInt8Series: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.TINYINT_UNSIGNED(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.TINYINT_UNSIGNED(nullable=False)),
 ]
 
 UInt16Series: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.SMALLINT_UNSIGNED(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.SMALLINT_UNSIGNED(nullable=False)),
 ]
 
 UInt32Series: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.INT_UNSIGNED(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.INT_UNSIGNED(nullable=False)),
 ]
 
 UInt64Series: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.BIGINT_UNSIGNED(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.BIGINT_UNSIGNED(nullable=False)),
 ]
 
 DateTimeSeries: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.DATETIME(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.DATETIME(nullable=False)),
 ]
 
 TimeSeries: TypeAlias = Annotated[
-    pd.Series, UDFAttrs(sql_type=dtypes.TIME(nullable=False)),
+    pd.Series, UDFAttrs(sql_type=sql_types.TIME(nullable=False)),
 ]
 
 
@@ -102,7 +102,7 @@ class PandasJSONEncoder(json.JSONEncoder):
 JSONSeries: TypeAlias = Annotated[
     pd.Series,
     UDFAttrs(
-        sql_type=dtypes.JSON(nullable=False),
+        sql_type=sql_types.JSON(nullable=False),
         args_transformer=json_or_null_loads,
         returns_transformer=lambda x: json_or_null_dumps(x, cls=PandasJSONEncoder),
     ),

@@ -9,7 +9,7 @@ from typing import Type
 from typing import Union
 
 from . import utils
-from .dtypes import SQLString
+from .sql_types import SQLString
 
 
 ParameterType = Union[
