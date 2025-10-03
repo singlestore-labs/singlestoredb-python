@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # mypy: disable-error-code="type-arg"
 import asyncio
+import json
 import time
 import typing
 from typing import List
@@ -9,6 +10,7 @@ from typing import Optional
 from typing import Tuple
 
 import numpy as np
+import pyarrow.compute as pc
 
 import singlestoredb.functions.dtypes as dt
 from singlestoredb.functions import Masked
@@ -890,14 +892,459 @@ def vec_function_ints_masked2(
     )
 
 
-# JSON Test Functions
+#
+# Begin JSON UDFs
+#
 
-def json_echo(data: JSON) -> JSON:
-    """Echo JSON using type alias."""
-    return data
+# numpy
+
+@udf
+def test_json_object_numpy(
+    x: npt.IntArray,
+    y: npt.JSONArray,
+) -> npt.JSONArray:
+    return npt.array([
+        None if a == 0 and b is None else dict(
+            x=a * 2 if a is not None else None,
+            y=b['foo'] if b is not None else None,
+        ) for a, b in zip(x, y)
+    ])
 
 
 @udf
-def json_list_echo(data: List[JSON]) -> List[JSON]:
-    """Echo JSON array using type alias."""
-    return data
+def test_json_object_numpy_masked(
+    x: Masked[npt.IntArray],
+    y: Masked[npt.JSONArray],
+) -> Masked[npt.JSONArray]:
+    (x_data, x_nulls), (y_data, y_nulls) = x, y
+    return Masked(
+        npt.array([
+            dict(
+                x=a * 2 if a is not None else 0,
+                y=b['foo'] if b is not None else None,
+            ) for a, b in zip(x_data, y_data)
+        ]),
+        x_nulls & y_nulls,
+    )
+
+
+@udf
+def test_json_list_numpy(x: npt.IntArray, y: npt.JSONArray) -> npt.JSONArray:
+    return npt.array([
+        None if a == 0 and b is None else dict(
+            x=a * 2 if a is not None else None,
+            y=b[0] if b is not None else None,
+        )
+        for a, b in zip(x, y)
+    ])
+
+
+@udf
+def test_json_list_numpy_masked(
+    x: Masked[npt.IntArray],
+    y: Masked[npt.JSONArray],
+) -> Masked[npt.JSONArray]:
+    (x_data, x_nulls), (y_data, y_nulls) = x, y
+    return Masked(
+        npt.array([
+            dict(
+                x=a * 2 if a is not None else 0,
+                y=b[0] if b is not None else None,
+            ) for a, b in zip(x_data, y_data)
+        ]),
+        x_nulls & y_nulls,
+    )
+
+
+@udf
+def test_json_object_numpy_tvf(
+    x: npt.IntArray,
+    y: npt.JSONArray,
+) -> Table[npt.IntArray, npt.JSONArray]:
+    return Table(
+        npt.array([x[0] * i for i in range(5)]),
+        npt.array([
+            dict(x=x[0] * i, y=y[0]['foo'] if y[0] is not None else None)
+            for i in range(5)
+        ]),
+    )
+
+
+@udf
+def test_json_object_numpy_tvf_masked(
+    x: Masked[npt.IntArray],
+    y: Masked[npt.JSONArray],
+) -> Table[Masked[npt.IntArray], Masked[npt.JSONArray]]:
+    (x_data, _), (y_data, _) = x, y
+    return Table(
+        Masked(
+            npt.array([
+                0 if x_data[0] == 20 else x_data[0] * i for i in range(5)
+            ]),
+            npt.array([False, False, True, False, False]),
+        ),
+        Masked(
+            npt.array([
+                dict(
+                    x=x_data[0] * i, y=y_data[0]['foo']
+                    if i != 4 and y_data[0] is not None else None,
+                )
+                for i in range(5)
+            ]),
+            npt.array([False, False, False, False, True]),
+        ),
+    )
+
+
+# pandas
+
+
+@udf
+def test_json_object_pandas(
+    x: pdt.IntSeries,
+    y: pdt.JSONSeries,
+) -> pdt.JSONSeries:
+    return pdt.Series([
+        None if a == 0 and b is None else dict(
+            x=a * 2 if a is not None else None,
+            y=b['foo'] if b is not None else None,
+        ) for a, b in zip(x, y)
+    ])
+
+
+@udf
+def test_json_object_pandas_masked(
+    x: Masked[pdt.IntSeries],
+    y: Masked[pdt.JSONSeries],
+) -> Masked[pdt.JSONSeries]:
+    (x_data, x_nulls), (y_data, y_nulls) = x, y
+    return Masked(
+        pdt.Series([
+            dict(
+                x=a * 2 if a is not None else 0,
+                y=b['foo'] if b is not None else None,
+            ) for a, b in zip(x_data, y_data)
+        ]),
+        x_nulls & y_nulls,
+    )
+
+
+@udf
+def test_json_list_pandas(x: pdt.IntSeries, y: pdt.JSONSeries) -> pdt.JSONSeries:
+    return pdt.Series([
+        None if a == 0 and b is None else dict(
+            x=a * 2 if a is not None else None,
+            y=b[0] if b is not None else None,
+        )
+        for a, b in zip(x, y)
+    ])
+
+
+@udf
+def test_json_list_pandas_masked(
+    x: Masked[pdt.IntSeries],
+    y: Masked[pdt.JSONSeries],
+) -> Masked[pdt.JSONSeries]:
+    (x_data, x_nulls), (y_data, y_nulls) = x, y
+    return Masked(
+        pdt.Series([
+            dict(
+                x=a * 2 if a is not None else 0,
+                y=b[0] if b is not None else None,
+            ) for a, b in zip(x_data, y_data)
+        ]),
+        x_nulls & y_nulls,
+    )
+
+
+@udf
+def test_json_object_pandas_tvf(
+    x: pdt.IntSeries,
+    y: pdt.JSONSeries,
+) -> Table[pdt.IntSeries, pdt.JSONSeries]:
+    return Table(
+        pdt.Series([x[0] * i for i in range(5)]),
+        pdt.Series([
+            dict(x=x[0] * i, y=y[0]['foo'] if y[0] is not None else None)
+            for i in range(5)
+        ]),
+    )
+
+
+@udf
+def test_json_object_pandas_tvf_masked(
+    x: Masked[pdt.IntSeries],
+    y: Masked[pdt.JSONSeries],
+) -> Table[Masked[pdt.IntSeries], Masked[pdt.JSONSeries]]:
+    (x_data, _), (y_data, _) = x, y
+    return Table(
+        Masked(
+            pdt.Series([
+                0 if x_data[0] == 20 else x_data[0] * i for i in range(5)
+            ]),
+            pdt.Series([False, False, True, False, False]),
+        ),
+        Masked(
+            pdt.Series([
+                dict(
+                    x=x_data[0] * i, y=y_data[0]['foo']
+                    if i != 4 and y_data[0] is not None else None,
+                )
+                for i in range(5)
+            ]),
+            pdt.Series([False, False, False, False, True]),
+        ),
+    )
+
+
+# polars
+
+
+@udf
+def test_json_object_polars(
+    x: plt.IntSeries,
+    y: plt.JSONSeries,
+) -> plt.JSONSeries:
+    return plt.Series([
+        None if a == 0 and b is None else dict(
+            x=a * 2 if a is not None else None,
+            y=b['foo'] if b is not None else None,
+        ) for a, b in zip(x, y)
+    ])
+
+
+@udf
+def test_json_object_polars_masked(
+    x: Masked[plt.IntSeries],
+    y: Masked[plt.JSONSeries],
+) -> Masked[plt.JSONSeries]:
+    (x_data, x_nulls), (y_data, y_nulls) = x, y
+    return Masked(
+        plt.Series([
+            dict(
+                x=a * 2 if a is not None else 0,
+                y=b['foo'] if b is not None else None,
+            ) for a, b in zip(x_data, y_data)
+        ]),
+        x_nulls & y_nulls,
+    )
+
+
+@udf
+def test_json_list_polars(x: plt.IntSeries, y: plt.JSONSeries) -> plt.JSONSeries:
+    return plt.Series([
+        None if a == 0 and b is None else dict(
+            x=a * 2 if a is not None else None,
+            y=b[0] if b is not None else None,
+        )
+        for a, b in zip(x, y)
+    ])
+
+
+@udf
+def test_json_list_polars_masked(
+    x: Masked[plt.IntSeries],
+    y: Masked[plt.JSONSeries],
+) -> Masked[plt.JSONSeries]:
+    (x_data, x_nulls), (y_data, y_nulls) = x, y
+    return Masked(
+        plt.Series([
+            dict(
+                x=a * 2 if a is not None else 0,
+                y=b[0] if b is not None else None,
+            ) for a, b in zip(x_data, y_data)
+        ]),
+        x_nulls & y_nulls,
+    )
+
+
+@udf
+def test_json_object_polars_tvf(
+    x: plt.IntSeries,
+    y: plt.JSONSeries,
+) -> Table[plt.IntSeries, plt.JSONSeries]:
+    return Table(
+        plt.Series([x[0] * i for i in range(5)]),
+        plt.Series([
+            dict(x=x[0] * i, y=y[0]['foo'] if y[0] is not None else None)
+            for i in range(5)
+        ]),
+    )
+
+
+@udf
+def test_json_object_polars_tvf_masked(
+    x: Masked[plt.IntSeries],
+    y: Masked[plt.JSONSeries],
+) -> Table[Masked[plt.IntSeries], Masked[plt.JSONSeries]]:
+    (x_data, _), (y_data, _) = x, y
+    return Table(
+        Masked(
+            plt.Series([
+                0 if x_data[0] == 20 else x_data[0] * i for i in range(5)
+            ]),
+            plt.Series([False, False, True, False, False]),
+        ),
+        Masked(
+            plt.Series([
+                dict(
+                    x=x_data[0] * i, y=y_data[0]['foo']
+                    if i != 4 and y_data[0] is not None else None,
+                )
+                for i in range(5)
+            ]),
+            plt.Series([False, False, False, False, True]),
+        ),
+    )
+
+
+# pyarrow
+
+
+@udf
+def test_json_object_pyarrow(
+    x: pat.IntArray,
+    y: pat.JSONArray,
+) -> pat.JSONArray:
+    return pat.array([
+        None if a == 0 and b.as_py() is None else dict(
+            x=pc.multiply(a, 2) if a is not None else None,
+            y=json.loads(b.as_py())['foo'] if b.as_py() is not None else None,
+        ) for a, b in zip(x, y)
+    ])
+
+
+@udf
+def test_json_object_pyarrow_masked(
+    x: Masked[pat.IntArray],
+    y: Masked[pat.JSONArray],
+) -> Masked[pat.JSONArray]:
+    (x_data, x_nulls), (y_data, y_nulls) = x, y
+    return Masked(
+        pat.array([
+            dict(
+                x=pc.multiply(a, 2) if a is not None else 0,
+                y=json.loads(b.as_py())['foo'] if b.as_py() is not None else None,
+            ) for a, b in zip(x_data, y_data)
+        ]),
+        pc.and_(x_nulls, y_nulls),
+    )
+
+
+@udf
+def test_json_list_pyarrow(x: pat.IntArray, y: pat.JSONArray) -> pat.JSONArray:
+    return pat.array([
+        None if a == 0 and b is None else dict(
+            x=pc.multiply(a, 2) if a is not None else None,
+            y=json.loads(b.as_py())[0] if b.as_py() is not None else None,
+        )
+        for a, b in zip(x, y)
+    ])
+
+
+@udf
+def test_json_list_pyarrow_masked(
+    x: Masked[pat.IntArray],
+    y: Masked[pat.JSONArray],
+) -> Masked[pat.JSONArray]:
+    (x_data, x_nulls), (y_data, y_nulls) = x, y
+    return Masked(
+        pat.array([
+            dict(
+                x=pc.multiply(a, 2) if a is not None else 0,
+                y=json.loads(b.as_py())[0] if b.as_py() is not None else None,
+            ) for a, b in zip(x_data, y_data)
+        ]),
+        pc.and_(x_nulls, y_nulls),
+    )
+
+
+@udf
+def test_json_object_pyarrow_tvf(
+    x: pat.IntArray,
+    y: pat.JSONArray,
+) -> Table[pat.IntArray, pat.JSONArray]:
+    return Table(
+        pat.array([pc.multiply(x[0], i) for i in range(5)]),
+        pat.array([
+            dict(
+                x=pc.multiply(x[0], i),
+                y=json.loads(y[0].as_py())['foo'] if y[0].as_py() is not None else None,
+            )
+            for i in range(5)
+        ]),
+    )
+
+
+@udf
+def test_json_object_pyarrow_tvf_masked(
+    x: Masked[pat.IntArray],
+    y: Masked[pat.JSONArray],
+) -> Table[Masked[pat.IntArray], Masked[pat.JSONArray]]:
+    (x_data, _), (y_data, _) = x, y
+    return Table(
+        Masked(
+            pat.array([
+                0 if x_data[0] == 20 else pc.multiply(x_data[0], i) for i in range(5)
+            ]),
+            pat.array([False, False, True, False, False]),
+        ),
+        Masked(
+            pat.array([
+                dict(
+                    x=pc.multiply(x_data[0], i),
+                    y=json.loads(str(y_data[0]))['foo']
+                    if i != 4 and y_data[0].as_py() is not None else None,
+                )
+                for i in range(5)
+            ]),
+            pat.array([False, False, False, False, True]),
+        ),
+    )
+
+
+@udf
+def test_json_object_list(x: List[int], y: List[JSON]) -> List[JSON]:
+    return [dict(x=x * 2, y=y['foo']) for x, y in zip(x, y)]  # type: ignore
+
+
+@udf
+def test_json_list_list(x: List[int], y: List[JSON]) -> List[JSON]:
+    return [dict(x=x * 2, y=y[0] if isinstance(y, list) else None) for x, y in zip(x, y)]
+
+
+@udf
+def test_json_object_list_tvf(
+    x: List[int], y: List[JSON],
+) -> Table[List[Tuple[int, JSON]]]:
+    out: List[Tuple[int, JSON]] = []
+    for i in range(5):
+        out.append((
+            x[0] * i,
+            dict(x=x[0] * i, y=y[0]['foo'] if isinstance(y[0], dict) else None),
+        ))
+    return Table(out)
+
+
+@udf
+def test_json_object_nonvector(x: int, y: JSON) -> JSON:
+    if not isinstance(y, dict):
+        raise ValueError('Expected dict for JSON object')
+    return dict(x=x * 2, y=y['foo'])
+
+
+@udf
+def test_json_list_nonvector(x: int, y: JSON) -> JSON:
+    if not isinstance(y, list):
+        raise ValueError('Expected list for JSON array')
+    return dict(x=x * 2, y=y[0])
+
+
+@udf
+def test_json_object_nonvector_tvf(
+    x: int, y: JSON,
+) -> Table[List[Tuple[int, JSON]]]:
+    out: List[Tuple[int, JSON]] = []
+    for i in range(5):
+        out.append((x * i, dict(x=x * i, y=y['foo'] if isinstance(y, dict) else None)))
+    return Table(out)
