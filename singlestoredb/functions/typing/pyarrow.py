@@ -15,70 +15,70 @@ except ImportError:
 from . import UDFAttrs
 from . import json_or_null_dumps
 from . import json_or_null_loads  # noqa: F401
-from .. import dtypes
+from .. import sql_types
 
 
 StringArray: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.TEXT(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.TEXT(nullable=True)),
 ]
 StrArray: TypeAlias = StringArray
 
 BytesArray: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.BLOB(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.BLOB(nullable=True)),
 ]
 
 Float32Array: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.FLOAT(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.FLOAT(nullable=True)),
 ]
 FloatArray: TypeAlias = Float32Array
 
 Float64Array: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.DOUBLE(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.DOUBLE(nullable=True)),
 ]
 DoubleArray: TypeAlias = Float64Array
 
 IntArray: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.INT(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.INT(nullable=True)),
 ]
 
 Int8Array: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.TINYINT(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.TINYINT(nullable=True)),
 ]
 
 Int16Array: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.SMALLINT(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.SMALLINT(nullable=True)),
 ]
 
 Int32Array: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.INT(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.INT(nullable=True)),
 ]
 
 Int64Array: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.BIGINT(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.BIGINT(nullable=True)),
 ]
 
 UInt8Array: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.TINYINT_UNSIGNED(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.TINYINT_UNSIGNED(nullable=True)),
 ]
 
 UInt16Array: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.SMALLINT_UNSIGNED(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.SMALLINT_UNSIGNED(nullable=True)),
 ]
 
 UInt32Array: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.INT_UNSIGNED(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.INT_UNSIGNED(nullable=True)),
 ]
 
 UInt64Array: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.BIGINT_UNSIGNED(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.BIGINT_UNSIGNED(nullable=True)),
 ]
 
 DateTimeArray: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.DATETIME(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.DATETIME(nullable=True)),
 ]
 
 TimeDeltaArray: TypeAlias = Annotated[
-    pa.Array, UDFAttrs(sql_type=dtypes.TIME(nullable=True)),
+    pa.Array, UDFAttrs(sql_type=sql_types.TIME(nullable=True)),
 ]
 
 
@@ -106,7 +106,7 @@ class PyArrowJSONEncoder(json.JSONEncoder):
 JSONArray: TypeAlias = Annotated[
     pa.Array,
     UDFAttrs(
-        sql_type=dtypes.JSON(nullable=True),
+        sql_type=sql_types.JSON(nullable=True),
         # input_transformer=json_or_null_loads,
         returns_transformer=lambda x: json_or_null_dumps(x, cls=PyArrowJSONEncoder),
     ),
