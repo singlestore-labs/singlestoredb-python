@@ -311,6 +311,7 @@ def cancel_on_event(
 
 def build_udf_endpoint(
     func: Callable[..., Any],
+    args_data_format: str,
     returns_data_format: str,
 ) -> Callable[..., Any]:
     """
@@ -352,11 +353,12 @@ def build_udf_endpoint(
 
         return do_func
 
-    return build_vector_udf_endpoint(func, returns_data_format)
+    return build_vector_udf_endpoint(func, args_data_format, returns_data_format)
 
 
 def build_vector_udf_endpoint(
     func: Callable[..., Any],
+    args_data_format: str,
     returns_data_format: str,
 ) -> Callable[..., Any]:
     """
@@ -422,6 +424,7 @@ def build_vector_udf_endpoint(
 
 def build_tvf_endpoint(
     func: Callable[..., Any],
+    args_data_format: str,
     returns_data_format: str,
 ) -> Callable[..., Any]:
     """
@@ -451,10 +454,10 @@ def build_tvf_endpoint(
             rows: Sequence[Sequence[Any]],
         ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
             '''Call function on given rows of data.'''
-            out_ids: List[int] = []
-            out = []
+            out: List[Tuple[Any, ...]] = []
             # Call function on each row of data
             async with timer('call_function'):
+                out = []
                 for i, row in zip(row_ids, rows):
                     cancel_on_event(cancel_event)
                     if is_async:
@@ -462,16 +465,16 @@ def build_tvf_endpoint(
                     else:
                         res = func(*row)
                     out.extend(as_list_of_tuples(res))
-                    out_ids.extend([row_ids[i]] * (len(out)-len(out_ids)))
-            return out_ids, out
+            return [row_ids[0]] * len(out), out
 
         return do_func
 
-    return build_vector_tvf_endpoint(func, returns_data_format)
+    return build_vector_tvf_endpoint(func, args_data_format, returns_data_format)
 
 
 def build_vector_tvf_endpoint(
     func: Callable[..., Any],
+    args_data_format: str,
     returns_data_format: str,
 ) -> Callable[..., Any]:
     """
@@ -575,9 +578,9 @@ def make_func(
     )
 
     if function_type == 'tvf':
-        do_func = build_tvf_endpoint(func, returns_data_format)
+        do_func = build_tvf_endpoint(func, args_data_format, returns_data_format)
     else:
-        do_func = build_udf_endpoint(func, returns_data_format)
+        do_func = build_udf_endpoint(func, args_data_format, returns_data_format)
 
     do_func.__name__ = name
     do_func.__doc__ = func.__doc__

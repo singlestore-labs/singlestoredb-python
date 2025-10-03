@@ -2,10 +2,13 @@
 # type: ignore
 """Test SingleStoreDB external functions."""
 import os
+import random
 import socket
+import string
 import subprocess
 import time
 import unittest
+from contextlib import contextmanager
 
 import requests
 
@@ -100,6 +103,23 @@ class TestExtFunc(unittest.TestCase):
     http_server = None
     http_host = '127.0.0.1'
     http_port = 0
+
+    @contextmanager
+    def temp_table(self, table_name=None, schema=None):
+        """Context manager for creating and cleaning up temporary tables."""
+        if table_name is None:
+            table_name = 'temp_' + ''.join(random.choices(string.ascii_lowercase, k=8))
+
+        try:
+            if schema:
+                self.cur.execute(f'CREATE TABLE {table_name} {schema}')
+            yield table_name
+        finally:
+            try:
+                self.cur.execute(f'DROP TABLE IF EXISTS {table_name}')
+            except Exception:
+                # Ignore cleanup errors
+                pass
 
     @classmethod
     def setUpClass(cls):
@@ -1795,3 +1815,321 @@ class TestExtFunc(unittest.TestCase):
         assert desc[1].name == 'res2'
         assert desc[1].type_code == ft.SHORT
         assert desc[1].null_ok is True
+
+    def _test_json_object_vector(self, vector_type: str):
+        self.cur.execute(
+            f'select test_json_object_{vector_type}(x, y) as res '
+            'from json_data order by id',
+        )
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.JSON
+        assert desc[0].null_ok is False if vector_type != 'pyarrow' else True
+
+        assert [tuple(x) for x in self.cur] == [
+            ({'x': 202, 'y': 10},),
+            ({'x': 242, 'y': 105},),
+            ({'x': 302, 'y': 50},),
+        ]
+
+        if vector_type == 'pyarrow':
+            self.cur.execute(
+                f'select test_json_object_{vector_type}(x, y) as res '
+                'from json_data_with_nulls order by id',
+            )
+
+            desc = self.cur.description
+            assert len(desc) == 1
+            assert desc[0].name == 'res'
+            assert desc[0].type_code == ft.JSON
+            assert desc[0].null_ok is True
+
+            assert [tuple(x) for x in self.cur] == [
+                ({'x': None, 'y': 10},),
+                ({'x': 242, 'y': None},),
+                ({'x': 302, 'y': 50},),
+                ({'x': None, 'y': None},),
+            ]
+
+        else:
+            with self.assertRaises(self.conn.OperationalError):
+                self.cur.execute(
+                    f'select test_json_object_{vector_type}(x, y) as res '
+                    'from json_data_with_nulls order by id',
+                )
+
+        # Masks are not used with Python lists
+        if vector_type in ['list', 'nonvector']:
+            return
+
+        self.cur.execute(
+            f'select test_json_object_{vector_type}_masked(x, y) as res '
+            'from json_data order by id',
+        )
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.JSON
+        assert desc[0].null_ok is True
+
+        assert [tuple(x) for x in self.cur] == [
+            ({'x': 202, 'y': 10},),
+            ({'x': 242, 'y': 105},),
+            ({'x': 302, 'y': 50},),
+        ]
+
+        self.cur.execute(
+            f'select test_json_object_{vector_type}_masked(x, y) as res '
+            'from json_data_with_nulls order by id',
+        )
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.JSON
+        assert desc[0].null_ok is True
+
+        if vector_type == 'pyarrow':
+            assert [tuple(x) for x in self.cur] == [
+                ({'x': None, 'y': 10},),
+                ({'x': 242, 'y': None},),
+                ({'x': 302, 'y': 50},),
+                (None,),
+            ]
+        else:
+            assert [tuple(x) for x in self.cur] == [
+                ({'x': 0, 'y': 10},),
+                ({'x': 242, 'y': None},),
+                ({'x': 302, 'y': 50},),
+                (None,),
+            ]
+
+    def test_json_object_numpy(self):
+        self._test_json_object_vector('numpy')
+
+    def test_json_object_pandas(self):
+        self._test_json_object_vector('pandas')
+
+    def test_json_object_polars(self):
+        self._test_json_object_vector('polars')
+
+    def test_json_object_pyarrow(self):
+        self._test_json_object_vector('pyarrow')
+
+    def test_json_object_list(self):
+        self._test_json_object_vector('list')
+
+    def test_json_object_nonvector(self):
+        self._test_json_object_vector('nonvector')
+
+    def _test_json_list_vector(self, vector_type: str):
+        self.cur.execute(
+            f'select test_json_list_{vector_type}(x, y) as res '
+            'from json_list_data order by id',
+        )
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.JSON
+        assert desc[0].null_ok is False if vector_type != 'pyarrow' else True
+
+        assert [tuple(x) for x in self.cur] == [
+            ({'x': 202, 'y': 'foo'},),
+            ({'x': 242, 'y': 'foo'},),
+            ({'x': 302, 'y': 'foo'},),
+        ]
+
+        # Pyarrow supports nulls, but the return object should not be null
+        if vector_type == 'pyarrow':
+            self.cur.execute(
+                f'select test_json_list_{vector_type}(x, y) as res '
+                'from json_list_data_with_nulls order by id',
+            )
+
+            desc = self.cur.description
+            assert len(desc) == 1
+            assert desc[0].name == 'res'
+            assert desc[0].type_code == ft.JSON
+            assert desc[0].null_ok is True
+
+            assert [tuple(x) for x in self.cur] == [
+                ({'x': None, 'y': 'foo'},),
+                ({'x': 242, 'y': None},),
+                ({'x': 302, 'y': 'foo'},),
+                ({'x': None, 'y': None},),
+            ]
+
+        else:
+            with self.assertRaises(self.conn.OperationalError):
+                self.cur.execute(
+                    f'select test_json_list_{vector_type}(x, y) as res '
+                    'from json_list_data_with_nulls order by id',
+                )
+
+        # Masks are not used with Python lists
+        if vector_type in ['list', 'nonvector']:
+            return
+
+        self.cur.execute(
+            f'select test_json_list_{vector_type}_masked(x, y) as res '
+            'from json_list_data order by id',
+        )
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.JSON
+        assert desc[0].null_ok is True if vector_type != 'pyarrow' else True
+
+        assert [tuple(x) for x in self.cur] == [
+            ({'x': 202, 'y': 'foo'},),
+            ({'x': 242, 'y': 'foo'},),
+            ({'x': 302, 'y': 'foo'},),
+        ]
+
+        self.cur.execute(
+            f'select test_json_list_{vector_type}_masked(x, y) as res '
+            'from json_list_data_with_nulls order by id',
+        )
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.JSON
+        assert desc[0].null_ok is True
+
+        if vector_type == 'pyarrow':
+            assert [tuple(x) for x in self.cur] == [
+                ({'x': None, 'y': 'foo'},),
+                ({'x': 242, 'y': None},),
+                ({'x': 302, 'y': 'foo'},),
+                (None,),
+            ]
+        else:
+            assert [tuple(x) for x in self.cur] == [
+                ({'x': 0, 'y': 'foo'},),
+                ({'x': 242, 'y': None},),
+                ({'x': 302, 'y': 'foo'},),
+                (None,),
+            ]
+
+    def test_json_list_numpy(self):
+        self._test_json_list_vector('numpy')
+
+    def test_json_list_pandas(self):
+        self._test_json_list_vector('pandas')
+
+    def test_json_list_polars(self):
+        self._test_json_list_vector('polars')
+
+    def test_json_list_pyarrow(self):
+        self._test_json_list_vector('pyarrow')
+
+    def test_json_list_list(self):
+        self._test_json_list_vector('list')
+
+    def test_json_list_nonvector(self):
+        self._test_json_list_vector('nonvector')
+
+    def _test_json_object_vector_tvf(self, vector_type: str):
+
+        int_data = 10
+        json_data = '{"foo": "bar", "baz": 2.75}'
+
+        self.cur.execute(
+            f'select * from test_json_object_{vector_type}_tvf(%s, %s) order by a',
+            (int_data, json_data),
+        )
+
+        desc = self.cur.description
+        assert len(desc) == 2
+        assert desc[0].name == 'a'
+        assert desc[1].name == 'b'
+        assert desc[0].type_code in [ft.LONGLONG, ft.LONG]
+        assert desc[1].type_code == ft.JSON
+        assert desc[0].null_ok is False if vector_type != 'pyarrow' else True
+        assert desc[1].null_ok is False if vector_type != 'pyarrow' else True
+
+        assert [tuple(x) for x in self.cur] == [
+            (0, {'x': 0, 'y': 'bar'}),
+            (10, {'x': 10, 'y': 'bar'}),
+            (20, {'x': 20, 'y': 'bar'}),
+            (30, {'x': 30, 'y': 'bar'}),
+            (40, {'x': 40, 'y': 'bar'}),
+        ]
+
+        if vector_type == 'pyarrow':
+            self.cur.execute(
+                f'select * from test_json_object_{vector_type}_tvf(10, NULL)',
+            )
+
+            desc = self.cur.description
+            assert len(desc) == 2
+            assert desc[0].name == 'a'
+            assert desc[1].name == 'b'
+            assert desc[0].type_code == ft.LONG
+            assert desc[1].type_code == ft.JSON
+            assert desc[0].null_ok is True if vector_type != 'pyarrow' else True
+            assert desc[1].null_ok is True if vector_type != 'pyarrow' else True
+
+            assert [tuple(x) for x in self.cur] == [
+                (0, {'x': 0, 'y': None}),
+                (10, {'x': 10, 'y': None}),
+                (20, {'x': 20, 'y': None}),
+                (30, {'x': 30, 'y': None}),
+                (40, {'x': 40, 'y': None}),
+            ]
+
+        else:
+            with self.assertRaises(self.conn.OperationalError):
+                self.cur.execute(
+                    f'select * from test_json_object_{vector_type}_tvf(10, NULL)',
+                )
+
+        # Masks are not used with Python lists
+        if vector_type in ['list', 'nonvector']:
+            return
+
+        self.cur.execute(
+            f'select * from test_json_object_{vector_type}_tvf_masked(%s, %s) order by a',
+            (int_data, json_data),
+        )
+
+        desc = self.cur.description
+        assert len(desc) == 2
+        assert desc[0].name == 'a'
+        assert desc[1].name == 'b'
+        assert desc[0].type_code == ft.LONG
+        assert desc[1].type_code == ft.JSON
+        assert desc[0].null_ok is True if vector_type != 'pyarrow' else True
+        assert desc[1].null_ok is True if vector_type != 'pyarrow' else True
+
+        assert [tuple(x) for x in self.cur] == [
+            (None, {'x': 20, 'y': 'bar'}),
+            (0, {'x': 0, 'y': 'bar'}),
+            (10, {'x': 10, 'y': 'bar'}),
+            (30, {'x': 30, 'y': 'bar'}),
+            (40, None),
+        ]
+
+    def test_json_object_numpy_tvf(self):
+        self._test_json_object_vector_tvf('numpy')
+
+    def test_json_object_pandas_tvf(self):
+        self._test_json_object_vector_tvf('pandas')
+
+    def test_json_object_polars_tvf(self):
+        self._test_json_object_vector_tvf('polars')
+
+    def test_json_object_pyarrow_tvf(self):
+        self._test_json_object_vector_tvf('pyarrow')
+
+    def test_json_object_list_tvf(self):
+        self._test_json_object_vector_tvf('list')
+
+    def test_json_object_nonvector_tvf(self):
+        self._test_json_object_vector_tvf('nonvector')

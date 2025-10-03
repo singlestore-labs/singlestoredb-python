@@ -924,6 +924,7 @@ def get_schema(
     spec: Any,
     overrides: Optional[List[ParamSpec]] = None,
     mode: str = 'parameter',
+    masks: Optional[List[bool]] = None,
 ) -> Tuple[List[ParamSpec], str, str]:
     """
     Expand a return type annotation into a list of types and field names.
@@ -936,6 +937,8 @@ def get_schema(
         List of SQL type specifications for the return type
     mode : str
         The mode of the function, either 'parameter' or 'return'
+    is_masked : bool
+        Whether the type is wrapped in a Masked type
 
     Returns
     -------
@@ -997,7 +1000,13 @@ def get_schema(
                         'dataclass, TypedDict, or pydantic model',
                     )
                 spec = typing.get_args(unpacked_spec[0])[0]
-                data_format = 'list'
+                # Lists as output from TVFs are considered scalar outputs
+                # since they correspond to individual Python objects, not
+                # a true vector type.
+                if function_type == 'tvf':
+                    data_format = 'scalar'
+                else:
+                    data_format = 'list'
 
             elif all([utils.is_vector(x, include_masks=True) for x in unpacked_spec]):
                 pass
@@ -1114,7 +1123,11 @@ def get_schema(
             _, inner_apply_meta = unpack_annotated(typing.get_args(spec)[0])
             if inner_apply_meta.sql_type:
                 udf_attrs = inner_apply_meta
-                colspec = get_schema(typing.get_args(spec)[0], mode=mode)[0]
+                colspec = get_schema(
+                    typing.get_args(spec)[0],
+                    mode=mode,
+                    masks=[masks[0]] if masks else None,
+                )[0]
             else:
                 colspec = [
                     ParamSpec(
@@ -1145,6 +1158,7 @@ def get_schema(
                     overrides=[overrides[i]] if overrides else [],
                     # Always pass UDF mode for individual items
                     mode=mode,
+                    masks=[masks[i]] if masks else None,
                 )
 
                 # Use the name from the overrides if specified
@@ -1186,7 +1200,7 @@ def get_schema(
     out = []
 
     # Normalize colspec data types
-    for c in colspec:
+    for i, c in enumerate(colspec):
 
         # if the dtype is a string, it is resolved already
         if isinstance(c.dtype, str):
@@ -1204,13 +1218,27 @@ def get_schema(
                 include_null=c.is_optional,
             )
 
+        sql_type = c.sql_type if isinstance(c.sql_type, str) else udf_attrs.sql_type
+
+        is_optional = (
+            c.is_optional
+            or bool(dtype and dtype.endswith('?'))
+            or bool(masks and masks[i])
+        )
+
+        if is_optional:
+            if dtype and not dtype.endswith('?'):
+                dtype += '?'
+            if sql_type and re.search(r' NOT NULL\b', sql_type):
+                sql_type = re.sub(r' NOT NULL\b', r' NULL', sql_type)
+
         p = ParamSpec(
             name=c.name,
             dtype=dtype,
-            sql_type=c.sql_type if isinstance(c.sql_type, str) else udf_attrs.sql_type,
-            is_optional=c.is_optional or bool(dtype and dtype.endswith('?')),
-            transformer=udf_attrs.input_transformer
-            if mode == 'parameter' else udf_attrs.output_transformer,
+            sql_type=sql_type,
+            is_optional=is_optional,
+            transformer=udf_attrs.args_transformer
+            if mode == 'parameter' else udf_attrs.returns_transformer,
         )
 
         out.append(p)
@@ -1348,6 +1376,7 @@ def get_signature(
             unpack_masked_type(param.annotation),
             overrides=[args_colspec[i]] if args_colspec else [],
             mode='parameter',
+            masks=[args_masks[i]] if args_masks else [],
         )
         args_data_formats.append(args_data_format)
 
@@ -1407,6 +1436,7 @@ def get_signature(
         unpack_masked_type(signature.return_annotation),
         overrides=returns_colspec if returns_colspec else None,
         mode='return',
+        masks=ret_masks or [],
     )
 
     rdf = out['returns_data_format'] = out['returns_data_format'] or 'scalar'
@@ -1421,6 +1451,12 @@ def get_signature(
                 'or vice versa. Parameters and return values must all be either ',
                 'scalar or vector types.',
             )
+
+    # If we hava function parameters and the function is a TVF, then
+    # the return type should just match the parameter vector types. This ensures
+    # the output producers for scalars and vectors are consistent.
+    elif function_type == 'tvf' and rdf == 'scalar' and args_schema:
+        out['returns_data_format'] = out['args_data_format']
 
     # All functions have to return a value, so if none was specified try to
     # insert a reasonable default that includes NULLs.

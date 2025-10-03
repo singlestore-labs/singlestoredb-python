@@ -800,3 +800,44 @@ class TestUDF(unittest.TestCase):
 
         sql = to_sql(alias_vector_json_func)
         self.assertIn('JSON NOT NULL', sql)
+
+        # Test typing package JSON aliases
+        from ..functions.typing import numpy as npt
+        from ..functions.typing import pandas as pdt
+        from ..functions.typing import polars as plt
+        from ..functions.typing import pyarrow as pat
+
+        # Test numpy JSONArray
+        def numpy_json_func(data: npt.JSONArray) -> npt.JSONArray:
+            return data
+
+        sql = to_sql(numpy_json_func)
+        self.assertIn('JSON NOT NULL', sql)
+        self.assertIn('RETURNS JSON NOT NULL', sql)
+
+        # Test pandas JSONSeries
+        def pandas_json_func(data: pdt.JSONSeries) -> pdt.StringSeries:
+            import pandas as pd
+            return pd.Series(['result'])
+
+        sql = to_sql(pandas_json_func)
+        self.assertIn('JSON NOT NULL', sql)
+        self.assertIn('RETURNS TEXT NOT NULL', sql)
+
+        # Test polars JSONSeries
+        def polars_json_func(data: plt.JSONSeries) -> plt.Int32Series:
+            import polars as pl
+            return pl.Series([1], dtype=pl.Int32)
+
+        sql = to_sql(polars_json_func)
+        self.assertIn('JSON NOT NULL', sql)
+        self.assertIn('RETURNS INT NOT NULL', sql)
+
+        # Test pyarrow JSONArray
+        def arrow_json_func(data: pat.JSONArray) -> pat.JSONArray:
+            import pyarrow as pa
+            return pa.array([{'result': 'success'}])
+
+        sql = to_sql(arrow_json_func)
+        self.assertIn('JSON NULL', sql)
+        self.assertIn('RETURNS JSON NULL', sql)

@@ -1,5 +1,6 @@
 import json
 from typing import Annotated
+from typing import Any
 
 import polars as pl
 from polars import DataFrame  # noqa: F401
@@ -11,6 +12,8 @@ except ImportError:
     from typing_extensions import TypeAlias
 
 from . import UDFAttrs
+from . import json_or_null_dumps
+from . import json_or_null_loads
 from .. import dtypes
 
 
@@ -77,12 +80,37 @@ TimeDeltaSeries: TypeAlias = Annotated[
     pl.Series, UDFAttrs(sql_type=dtypes.TIME(nullable=False)),
 ]
 
+
+class PolarsJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder that converts Polars Series / scalar types to Python types."""
+
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, pl.Series):
+            # Convert Polars Series to Python list
+            return obj.to_list()
+        elif hasattr(obj, 'dtype') and \
+                str(obj.dtype).startswith(('Int', 'UInt', 'Float')):
+            # Handle Polars scalar integer and float types
+            return obj.item() if hasattr(obj, 'item') else obj
+        elif isinstance(
+            obj, (
+                pl.datatypes.Int8, pl.datatypes.Int16, pl.datatypes.Int32,
+                pl.datatypes.Int64, pl.datatypes.UInt8, pl.datatypes.UInt16,
+                pl.datatypes.UInt32, pl.datatypes.UInt64,
+            ),
+        ):
+            return int(obj)
+        elif isinstance(obj, (pl.datatypes.Float32, pl.datatypes.Float64)):
+            return float(obj)
+        return super().default(obj)
+
+
 JSONSeries: TypeAlias = Annotated[
     pl.Series,
     UDFAttrs(
         sql_type=dtypes.JSON(nullable=False),
-        input_transformer=json.loads,
-        output_transformer=json.dumps,
+        args_transformer=json_or_null_loads,
+        returns_transformer=lambda x: json_or_null_dumps(x, cls=PolarsJSONEncoder),
     ),
 ]
 
