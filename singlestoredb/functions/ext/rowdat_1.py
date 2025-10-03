@@ -462,7 +462,7 @@ def _dump_vectors(
             default = DEFAULT_VALUES[rtype]
             try:
                 if rtype in numeric_formats:
-                    if value is None:
+                    if is_null or value is None:
                         out.write(struct.pack(numeric_formats[rtype], default))
                     else:
                         if rtype in int_types:
@@ -486,14 +486,14 @@ def _dump_vectors(
                                 ),
                             )
                 elif rtype in string_types:
-                    if value is None:
+                    if is_null or value is None:
                         out.write(struct.pack('<q', 0))
                     else:
                         sval = value.encode('utf-8')
                         out.write(struct.pack('<q', len(sval)))
                         out.write(sval)
                 elif rtype in binary_types:
-                    if value is None:
+                    if is_null or value is None:
                         out.write(struct.pack('<q', 0))
                     else:
                         out.write(struct.pack('<q', len(value)))
@@ -571,8 +571,18 @@ def _load_numpy_accel(
 
     for i, (_, dtype, transformer) in enumerate(colspec):
         if transformer is not None:
-            t = np.vectorize(transformer)
-            numpy_cols[i] = (t(numpy_cols[i][0]), numpy_cols[i][1])
+            # Numpy will try to be "helpful" and create multidimensional arrays
+            # from nested iterables. We don't usually want that. What we want is
+            # numpy arrays of Python objects (e.g., lists, dicts, etc). To do that,
+            # we have to create an empty array of the correct length and dtype=object,
+            # then fill it in with the transformed values. The transformer may have
+            # an output_type attribute that we can use to create a more specific type.
+            if getattr(transformer, 'output_type', None):
+                new_col = np.empty(len(numpy_cols[i][0]), dtype=transformer.output_type)
+                new_col[:] = list(map(transformer, numpy_cols[i][0]))
+            else:
+                new_col = np.array(list(map(transformer, numpy_cols[i][0])))
+            numpy_cols[i] = (new_col, numpy_cols[i][1])
 
     return numpy_ids, numpy_cols
 
@@ -589,8 +599,7 @@ def _dump_numpy_accel(
 
     for i, (_, dtype, transformer) in enumerate(returns):
         if transformer is not None:
-            t = np.vectorize(transformer)
-            cols[i] = (t(cols[i][0]), cols[i][1])
+            cols[i] = (np.array(list(map(transformer, cols[i][0]))), cols[i][1])
 
     return _singlestoredb_accel.dump_rowdat_1_numpy(returns, row_ids, cols)
 
@@ -678,10 +687,18 @@ def _dump_polars_accel(
     if not has_accel:
         raise RuntimeError('could not load SingleStoreDB extension')
 
+    import numpy as np
+    import polars as pl
+
     numpy_ids = row_ids.to_numpy()
     numpy_cols = [
         (
-            data.to_numpy(),
+            # Polars will try to be "helpful" and convert nested iterables into
+            # multidimensional arrays. We don't usually want that. What we want is
+            # numpy arrays of Python objects (e.g., lists, dicts, etc). To
+            # do that, we have to convert the Series to a list first.
+            np.array(data.to_list())
+            if isinstance(data.dtype, (pl.Struct, pl.Object)) else data.to_numpy(),
             mask.to_numpy() if mask is not None else None,
         )
         for data, mask in cols
@@ -722,7 +739,7 @@ def _create_arrow_mask(
     if mask is None:
         return data.is_null().to_numpy(zero_copy_only=False)
 
-    return pc.or_(data.is_null(), mask.is_null()).to_numpy(zero_copy_only=False)
+    return pc.or_(data.is_null(), mask).to_numpy(zero_copy_only=False)
 
 
 def _dump_arrow_accel(
