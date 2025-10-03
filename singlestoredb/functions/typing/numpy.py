@@ -27,9 +27,9 @@ TimeDeltaArray = npt.NDArray[np.timedelta64]
 JSONArray = npt.NDArray[np.object_]
 =======
 try:
-    from typing import TypeAlias
+    from typing import TypeAlias  # type: ignore
 except ImportError:
-    from typing_extensions import TypeAlias
+    from typing_extensions import TypeAlias  # type: ignore
 
 from . import UDFAttrs
 from . import json_or_null_dumps

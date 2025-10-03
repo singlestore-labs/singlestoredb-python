@@ -54,12 +54,15 @@ class Table(Tuple[Unpack[Ts]]):
         return tuple.__new__(cls, args)  # type: ignore
 
 
-class Transformer(Protocol):
+class TypedTransformer(Protocol):
 
     output_type: Optional[Any] = None
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         ...
+
+
+Transformer = Union[Callable[..., Any], TypedTransformer]
 
 
 def output_type(dtype: Any) -> Callable[..., Any]:
