@@ -51,15 +51,22 @@ import zipimport
 from collections.abc import Awaitable
 from collections.abc import Iterable
 from collections.abc import Sequence
+from threading import Event
 from types import ModuleType
 from typing import Any
 from typing import Callable
+from typing import Coroutine
 from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
 from typing import Tuple
 from typing import Union
+
+try:
+    from typing import TypeAlias
+except ImportError:
+    from typing_extensions import TypeAlias
 
 from . import arrow
 from . import json as jdata
@@ -69,13 +76,13 @@ from ... import connection
 from ... import manage_workspaces
 from ...config import get_option
 from ...mysql.constants import FIELD_TYPE as ft
+from ...docstring.parser import parse
 from ..signature import get_signature
 from ..signature import signature_to_sql
+from ..sql_types import escape_name
 from ..typing import Masked
 from ..typing import Table
 from .timer import Timer
-from singlestoredb.docstring.parser import parse
-from singlestoredb.functions.sql_types import escape_name
 
 try:
     import cloudpickle
@@ -166,36 +173,37 @@ def get_func_names(funcs: str) -> List[Tuple[str, str]]:
     return out
 
 
-def as_tuple(x: Any) -> Any:
-    """Convert object to tuple."""
-    if has_pydantic and isinstance(x, BaseModel):
-        return tuple(x.model_dump().values())
-    if dataclasses.is_dataclass(x):
-        return dataclasses.astuple(x)  # type: ignore
-    if isinstance(x, dict):
-        return tuple(x.values())
-    return tuple(x)
-
-
-def as_list_of_tuples(x: Any) -> Any:
-    """Convert object to a list of tuples."""
+def extend_rows(rows: List[Any], x: Any) -> int:
+    """Extend list of rows with data from object."""
     if isinstance(x, Table):
         x = x[0]
+
     if isinstance(x, (list, tuple)) and len(x) > 0:
+
         if isinstance(x[0], (list, tuple)):
-            return x
-        if has_pydantic and isinstance(x[0], BaseModel):
-            return [tuple(y.model_dump().values()) for y in x]
-        if dataclasses.is_dataclass(x[0]):
-            return [dataclasses.astuple(y) for y in x]
-        if isinstance(x[0], dict):
-            return [tuple(y.values()) for y in x]
-        return [(y,) for y in x]
-    return x
+            rows.extend(x)
 
+        elif has_pydantic and isinstance(x[0], BaseModel):
+            for y in x:
+                rows.append(tuple(y.model_dump().values()))
 
-def transpose(data: Sequence[Sequence[Any]]) -> List[Tuple[Any]]:
-    return [tuple(row) for row in zip(*data)]
+        elif dataclasses.is_dataclass(x[0]):
+            for y in x:
+                rows.append(dataclasses.astuple(y))
+
+        elif isinstance(x[0], dict):
+            for y in x:
+                rows.append(tuple(y.values()))
+
+        else:
+            for y in x:
+                rows.append((y,))
+
+        return len(x)
+
+    rows.append((x,))
+
+    return 1
 
 
 def get_dataframe_columns(df: Any) -> List[Any]:
@@ -228,10 +236,7 @@ def get_dataframe_columns(df: Any) -> List[Any]:
         return [df]
     # List of objects
     elif 'list' in rtype:
-        return transpose(as_list_of_tuples(df))
-    # Tuple of objects
-    elif 'tuple' in rtype:
-        return transpose(as_list_of_tuples(df))
+        return [df]
 
     raise TypeError(
         'Unsupported data type for dataframe columns: '
@@ -239,24 +244,37 @@ def get_dataframe_columns(df: Any) -> List[Any]:
     )
 
 
-def get_array_class(data_format: str) -> Callable[..., Any]:
+def get_array_class(array: Any) -> Callable[..., Any]:
     """
     Get the array class for the current data format.
 
     """
-    if data_format == 'polars':
-        import polars as pl
-        array_cls = pl.Series
-    elif data_format == 'arrow':
-        import pyarrow as pa
-        array_cls = pa.array
-    elif data_format == 'pandas':
-        import pandas as pd
-        array_cls = pd.Series
+    mod = inspect.getmodule(type(array))
+    if mod:
+        array_type = mod.__name__.split('.')[0]
     else:
+        raise TypeError(f'Unsupported array type: {type(array)}')
+
+    if array_type == 'polars':
+        import polars as pl
+        return pl.Series
+
+    if array_type == 'pyarrow':
+        import pyarrow as pa
+        return pa.array
+
+    if array_type == 'pandas':
+        import pandas as pd
+        return pd.Series
+
+    if array_type == 'numpy':
         import numpy as np
-        array_cls = np.array
-    return array_cls
+        return np.array
+
+    if isinstance(array, list):
+        return list
+
+    raise TypeError(f'Unsupported array type: {type(array)}')
 
 
 def get_masked_params(func: Callable[..., Any]) -> List[bool]:
@@ -309,11 +327,381 @@ def cancel_on_event(
         )
 
 
+RowIDs: TypeAlias = Sequence[int]
+VectorInput: TypeAlias = Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]]
+ScalarInput: TypeAlias = Sequence[Sequence[Any]]
+UDFInput = Union[VectorInput, ScalarInput]
+VectorOutput: TypeAlias = List[Tuple[Sequence[Any], Optional[Sequence[bool]]]]
+ScalarOutput: TypeAlias = List[Tuple[Any, ...]]
+UDFOutput = Union[VectorOutput, ScalarOutput]
+
+
+def scalar_in_scalar_out(
+    func: Callable[..., Any],
+    function_type: str = 'udf',
+) -> Callable[
+    [Event, Timer, RowIDs, ScalarInput],
+    Coroutine[Any, Any, Tuple[RowIDs, ScalarOutput]],
+]:
+    """
+    Create a scalar in, scalar out function endpoint.
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call as the endpoint
+    function_type : str, optional
+        The type of function: 'udf' or 'tvf'
+
+    Returns
+    -------
+    Callable
+        The function endpoint
+
+    """
+    is_async = asyncio.iscoroutinefunction(func)
+    is_udf = function_type == 'udf'
+
+    async def do_scalar_in_scalar_out_func(
+        cancel_event: threading.Event,
+        timer: Timer,
+        row_ids: RowIDs,
+        rows: ScalarInput,
+    ) -> Tuple[RowIDs, ScalarOutput]:
+        """Call function on given rows of data."""
+        cancel_on_event(cancel_event)
+
+        async with (timer('call_function')):
+            out_ids = []
+            out_rows: ScalarOutput = []
+
+            for i, row in zip(row_ids, rows):
+                func_res = await func(*row) if is_async else func(*row)
+
+                cancel_on_event(cancel_event)
+
+                n_rows = extend_rows(out_rows, func_res)
+
+                if is_udf and n_rows != 1:
+                    raise ValueError('UDF must return a single value per input row')
+
+                out_ids.extend([i] * n_rows)
+
+            cancel_on_event(cancel_event)
+
+            return out_ids, out_rows
+
+    return do_scalar_in_scalar_out_func
+
+
+def scalar_in_vector_out(
+    func: Callable[..., Any],
+    function_type: str = 'udf',
+) -> Callable[
+    [Event, Timer, RowIDs, ScalarInput],
+    Coroutine[Any, Any, Tuple[RowIDs, VectorOutput]],
+]:
+    """
+    Create a scalar in, vector out function endpoint.
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call as the endpoint
+    function_type : str, optional
+        The type of function: 'udf' or 'tvf'
+
+    Returns
+    -------
+    Callable
+        The function endpoint
+
+    """
+    is_async = asyncio.iscoroutinefunction(func)
+    is_udf = function_type == 'udf'
+
+    async def do_scalar_in_vector_out_func(
+        cancel_event: threading.Event,
+        timer: Timer,
+        row_ids: RowIDs,
+        rows: ScalarInput,
+    ) -> Tuple[RowIDs, VectorOutput]:
+        """Call function on given rows of data."""
+        cancel_on_event(cancel_event)
+
+        async with (timer('call_function')):
+            out_vectors = []
+            out_ids = []
+            for i, row in zip(row_ids, rows):
+                func_res = await func(*row) if is_async else func(*row)
+
+                cancel_on_event(cancel_event)
+
+                res = get_dataframe_columns(func_res)
+
+                ref = res[0][0] if isinstance(res[0], Masked) else res[0]
+                if is_udf and len(ref) != 1:
+                    raise ValueError('UDF must return a single value per input row')
+
+                out_ids.extend([i] * len(ref))
+
+                out_vectors.append([build_tuple(x) for x in res])
+
+            cancel_on_event(cancel_event)
+
+            # Concatenate vector results from all rows
+            out = concatenate_vectors(out_vectors)
+
+            return get_array_class(out[0][0][0])(out_ids), out
+
+    return do_scalar_in_vector_out_func
+
+
+def vector_in_vector_out(
+    func: Callable[..., Any],
+    function_type: str = 'udf',
+) -> Callable[
+    [Event, Timer, RowIDs, VectorInput],
+    Coroutine[Any, Any, Tuple[RowIDs, VectorOutput]],
+]:
+    """
+    Create a vector in, vector out function endpoint.
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call as the endpoint
+    function_type : str, optional
+        The type of function: 'udf' or 'tvf'
+
+    Returns
+    -------
+    Callable
+        The function endpoint
+
+    """
+    masks = get_masked_params(func)
+    is_async = asyncio.iscoroutinefunction(func)
+    is_udf = function_type == 'udf'
+
+    async def do_vector_in_vector_out_func(
+        cancel_event: threading.Event,
+        timer: Timer,
+        row_ids: RowIDs,
+        cols: VectorInput,
+    ) -> Tuple[RowIDs, VectorOutput]:
+        """Call function on given columns of data."""
+        cancel_on_event(cancel_event)
+
+        args = []
+
+        async with timer('call_function'):
+            # Remove masks from args if mask is None
+            if cols and cols[0]:
+                args = [x if m else x[0] for x, m in zip(cols, masks)]
+
+            func_res = await func(*args) if is_async else func(*args)
+
+            cancel_on_event(cancel_event)
+
+            out = get_dataframe_columns(func_res)
+
+            ref = out[0][0] if isinstance(out[0], Masked) else out[0]
+            array_cls = get_array_class(ref)
+            if is_udf:
+                if len(ref) != len(row_ids):
+                    raise ValueError('UDF must return a single value per input row')
+                row_ids = array_cls(row_ids)
+            else:
+                row_ids = array_cls([row_ids[0]] * len(ref))
+
+            return row_ids, [build_tuple(x) for x in out]
+
+    return do_vector_in_vector_out_func
+
+
+def vector_in_scalar_out(
+    func: Callable[..., Any],
+    function_type: str = 'udf',
+) -> Callable[
+    [Event, Timer, RowIDs, VectorInput],
+    Coroutine[Any, Any, Tuple[RowIDs, ScalarOutput]],
+]:
+    """
+    Create a vector in, scalar out function endpoint.
+
+    Parameters
+    ----------
+    func : Callable
+        The function to call as the endpoint
+    function_type : str, optional
+        The type of function: 'udf' or 'tvf'
+
+    Returns
+    -------
+    Callable
+        The function endpoint
+
+    """
+    masks = get_masked_params(func)
+    is_async = asyncio.iscoroutinefunction(func)
+    is_udf = function_type == 'udf'
+
+    async def do_vector_in_scalar_out_func(
+        cancel_event: threading.Event,
+        timer: Timer,
+        row_ids: RowIDs,
+        cols: VectorInput,
+    ) -> Tuple[RowIDs, ScalarOutput]:
+        """Call function on given columns of data."""
+        cancel_on_event(cancel_event)
+
+        out_ids = []
+        out_rows: ScalarOutput = []
+        args = []
+
+        async with timer('call_function'):
+            # Remove masks from args if mask is None
+            if cols and cols[0]:
+                args = [x if m else x[0] for x, m in zip(cols, masks)]
+
+            func_res = await func(*args) if is_async else func(*args)
+
+            cancel_on_event(cancel_event)
+
+            n_rows = extend_rows(out_rows, func_res)
+
+            if is_udf:
+                if n_rows != len(row_ids):
+                    raise ValueError('UDF must return a single value per input row')
+                out_ids = list(row_ids)
+            else:
+                out_ids.extend([row_ids[0]] * n_rows)
+
+            return out_ids, out_rows
+
+    return do_vector_in_scalar_out_func
+
+
+def concatenate_vectors(segments: List[VectorOutput]) -> VectorOutput:
+    """
+    Concatenate lists of vectors with optional masks.
+
+    Parameters
+    ----------
+    segments : List[VectorOutput]
+        List of vectors to concatenate. Each vector is a list of tuples,
+        where each tuple contains an array and an optional mask.
+
+    Returns
+    -------
+    VectorOutput
+        Concatenated vector with optional mask.
+
+    Raises
+    ------
+    ValueError
+        If masks are used on some but not all elements.
+
+    """
+    columns: List[List[Sequence[Any]]] = []
+    masks: List[List[Sequence[bool]]] = []
+    has_masks: List[bool] = []
+
+    for s in segments:
+        columns = [[]] * len(s)
+        masks = [[]] * len(s)
+        has_masks = [False] * len(s)
+        for i, v in enumerate(s):
+            columns[i].append(v[0])
+            if v[1] is not None:
+                masks[i].append(v[1])
+
+    for i, mask in enumerate(masks):
+        if mask and len(mask) != len(columns[i]):
+            raise ValueError('Vector masks must be used on either all or no elements')
+        if mask:
+            has_masks[i] = True
+
+    return [
+        (_concatenate_arrays(c), _concatenate_arrays(m) if has_masks[i] else None)
+        for i, (c, m) in enumerate(zip(columns, masks))
+    ]
+
+
+def _concatenate_arrays(
+    arrays: Sequence[Sequence[Any]],
+) -> Sequence[Any]:
+    """
+    Concatenate lists of arrays from various formats.
+
+    Parameters
+    ----------
+    arrays : Sequence[Sequence[Any]]
+        List of arrays to concatenate. Supported formats:
+        - PyArrow arrays
+        - NumPy arrays
+        - Pandas Series
+        - Polars Series
+        - Python lists
+
+    Returns
+    -------
+    Sequence[Any]
+        Concatenated array in the same format as input arrays,
+        or None if input is None
+
+    Raises
+    ------
+    ValueError
+        If arrays list contains a mix of None and non-None values
+    TypeError
+        If arrays contain mixed or unsupported types
+
+    """
+    if arrays[0] is None:
+        raise ValueError('Cannot concatenate None arrays')
+
+    mod = inspect.getmodule(type(arrays[0]))
+    if mod:
+        array_type = mod.__name__.split('.')[0]
+    else:
+        raise TypeError(f'Unsupported array type: {type(arrays[0])}')
+
+    if array_type == 'numpy':
+        import numpy as np
+        return np.concatenate(arrays)
+
+    if array_type == 'pyarrow':
+        import pyarrow as pa
+        return pa.concat_arrays(arrays)
+
+    if array_type == 'pandas':
+        import pandas as pd
+        return pd.concat(arrays, ignore_index=True)
+
+    if array_type == 'polars':
+        import polars as pl
+        return pl.concat(arrays)
+
+    if isinstance(arrays[0], list):
+        result: List[Any] = []
+        for arr in arrays:
+            result.extend(arr)
+        return result
+
+    raise TypeError(f'Unsupported array type: {type(arrays[0])}')
+
+
 def build_udf_endpoint(
     func: Callable[..., Any],
     args_data_format: str,
     returns_data_format: str,
-) -> Callable[..., Any]:
+    function_type: str = 'udf',
+) -> Callable[
+    [Event, Timer, RowIDs, Any],
+    Coroutine[Any, Any, Tuple[RowIDs, Any]],
+]:
     """
     Build a UDF endpoint for scalar / list types (row-based).
 
@@ -321,8 +709,12 @@ def build_udf_endpoint(
     ----------
     func : Callable
         The function to call as the endpoint
+    args_data_format : str
+        The format of the argument values
     returns_data_format : str
         The format of the return values
+    function_type : str, optional
+        The type of function: 'udf' or 'tvf'
 
     Returns
     -------
@@ -330,218 +722,14 @@ def build_udf_endpoint(
         The function endpoint
 
     """
-    if returns_data_format in ['scalar']:
-
-        is_async = asyncio.iscoroutinefunction(func)
-
-        async def do_func(
-            cancel_event: threading.Event,
-            timer: Timer,
-            row_ids: Sequence[int],
-            rows: Sequence[Sequence[Any]],
-        ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
-            '''Call function on given rows of data.'''
-            out = []
-            async with timer('call_function'):
-                for row in rows:
-                    cancel_on_event(cancel_event)
-                    if is_async:
-                        out.append(await func(*row))
-                    else:
-                        out.append(func(*row))
-            return row_ids, list(zip(out))
-
-        return do_func
-
-    return build_vector_udf_endpoint(func, args_data_format, returns_data_format)
-
-
-def build_vector_udf_endpoint(
-    func: Callable[..., Any],
-    args_data_format: str,
-    returns_data_format: str,
-) -> Callable[..., Any]:
-    """
-    Build a UDF endpoint for vector formats (column-based).
-
-    Parameters
-    ----------
-    func : Callable
-        The function to call as the endpoint
-    returns_data_format : str
-        The format of the return values
-
-    Returns
-    -------
-    Callable
-        The function endpoint
-
-    """
-    masks = get_masked_params(func)
-    array_cls = get_array_class(returns_data_format)
-    is_async = asyncio.iscoroutinefunction(func)
-
-    async def do_func(
-        cancel_event: threading.Event,
-        timer: Timer,
-        row_ids: Sequence[int],
-        cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-    ) -> Tuple[
-        Sequence[int],
-        List[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-    ]:
-        '''Call function on given columns of data.'''
-        row_ids = array_cls(row_ids)
-
-        # Call the function with `cols` as the function parameters
-        async with timer('call_function'):
-            if cols and cols[0]:
-                if is_async:
-                    out = await func(*[x if m else x[0] for x, m in zip(cols, masks)])
-                else:
-                    out = func(*[x if m else x[0] for x, m in zip(cols, masks)])
-            else:
-                if is_async:
-                    out = await func()
-                else:
-                    out = func()
-
-        cancel_on_event(cancel_event)
-
-        # Single masked value
-        if isinstance(out, Masked):
-            return row_ids, [tuple(out)]
-
-        # Multiple return values
-        if isinstance(out, tuple):
-            return row_ids, [build_tuple(x) for x in out]
-
-        # Single return value
-        return row_ids, [(out, None)]
-
-    return do_func
-
-
-def build_tvf_endpoint(
-    func: Callable[..., Any],
-    args_data_format: str,
-    returns_data_format: str,
-) -> Callable[..., Any]:
-    """
-    Build a TVF endpoint for scalar / list types (row-based).
-
-    Parameters
-    ----------
-    func : Callable
-        The function to call as the endpoint
-    returns_data_format : str
-        The format of the return values
-
-    Returns
-    -------
-    Callable
-        The function endpoint
-
-    """
-    if returns_data_format in ['scalar']:
-
-        is_async = asyncio.iscoroutinefunction(func)
-
-        async def do_func(
-            cancel_event: threading.Event,
-            timer: Timer,
-            row_ids: Sequence[int],
-            rows: Sequence[Sequence[Any]],
-        ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
-            '''Call function on given rows of data.'''
-            out: List[Tuple[Any, ...]] = []
-            # Call function on each row of data
-            async with timer('call_function'):
-                out = []
-                for i, row in zip(row_ids, rows):
-                    cancel_on_event(cancel_event)
-                    if is_async:
-                        res = await func(*row)
-                    else:
-                        res = func(*row)
-                    out.extend(as_list_of_tuples(res))
-            return [row_ids[0]] * len(out), out
-
-        return do_func
-
-    return build_vector_tvf_endpoint(func, args_data_format, returns_data_format)
-
-
-def build_vector_tvf_endpoint(
-    func: Callable[..., Any],
-    args_data_format: str,
-    returns_data_format: str,
-) -> Callable[..., Any]:
-    """
-    Build a TVF endpoint for vector formats (column-based).
-
-    Parameters
-    ----------
-    func : Callable
-        The function to call as the endpoint
-    returns_data_format : str
-        The format of the return values
-
-    Returns
-    -------
-    Callable
-        The function endpoint
-
-    """
-    masks = get_masked_params(func)
-    array_cls = get_array_class(returns_data_format)
-
-    async def do_func(
-        cancel_event: threading.Event,
-        timer: Timer,
-        row_ids: Sequence[int],
-        cols: Sequence[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-    ) -> Tuple[
-        Sequence[int],
-        List[Tuple[Sequence[Any], Optional[Sequence[bool]]]],
-    ]:
-        '''Call function on given columns of data.'''
-        # NOTE: There is no way to determine which row ID belongs to
-        #        each result row, so we just have to use the same
-        #        row ID for all rows in the result.
-
-        is_async = asyncio.iscoroutinefunction(func)
-
-        # Call function on each column of data
-        async with timer('call_function'):
-            if cols and cols[0]:
-                if is_async:
-                    func_res = await func(
-                        *[x if m else x[0] for x, m in zip(cols, masks)],
-                    )
-                else:
-                    func_res = func(
-                        *[x if m else x[0] for x, m in zip(cols, masks)],
-                    )
-            else:
-                if is_async:
-                    func_res = await func()
-                else:
-                    func_res = func()
-
-        res = get_dataframe_columns(func_res)
-
-        cancel_on_event(cancel_event)
-
-        # Generate row IDs
-        if isinstance(res[0], Masked):
-            row_ids = array_cls([row_ids[0]] * len(res[0][0]))
-        else:
-            row_ids = array_cls([row_ids[0]] * len(res[0]))
-
-        return row_ids, [build_tuple(x) for x in res]
-
-    return do_func
+    if args_data_format in ['scalar'] and returns_data_format in ['scalar']:
+        return scalar_in_scalar_out(func, function_type=function_type)
+    elif args_data_format in ['scalar'] and returns_data_format not in ['scalar']:
+        return scalar_in_vector_out(func, function_type=function_type)
+    elif args_data_format not in ['scalar'] and returns_data_format in ['scalar']:
+        return vector_in_scalar_out(func, function_type=function_type)
+    else:
+        return vector_in_vector_out(func, function_type=function_type)
 
 
 def make_func(
@@ -577,10 +765,12 @@ def make_func(
         get_option('external_function.timeout')
     )
 
-    if function_type == 'tvf':
-        do_func = build_tvf_endpoint(func, args_data_format, returns_data_format)
-    else:
-        do_func = build_udf_endpoint(func, args_data_format, returns_data_format)
+    do_func = build_udf_endpoint(
+        func,
+        args_data_format,
+        returns_data_format,
+        function_type=function_type,
+    )
 
     do_func.__name__ = name
     do_func.__doc__ = func.__doc__

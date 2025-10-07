@@ -234,23 +234,6 @@ class ArrayCollection(Collection):
     pass
 
 
-def get_data_format(obj: Any) -> str:
-    """Return the data format of the DataFrame / Table / vector."""
-    # Cheating here a bit so we don't have to import pandas / polars / pyarrow
-    # unless we absolutely need to
-    if getattr(obj, '__module__', '').startswith('pandas.'):
-        return 'pandas'
-    if getattr(obj, '__module__', '').startswith('polars.'):
-        return 'polars'
-    if getattr(obj, '__module__', '').startswith('pyarrow.'):
-        return 'arrow'
-    if getattr(obj, '__module__', '').startswith('numpy.'):
-        return 'numpy'
-    if isinstance(obj, list):
-        return 'list'
-    return 'scalar'
-
-
 def escape_name(name: str) -> str:
     """Escape a function parameter name."""
     if '`' in name:
@@ -1188,7 +1171,7 @@ def get_schema(
         # Use overrides if specified
         elif overrides:
             if not data_format:
-                data_format = get_data_format(spec)
+                data_format = utils.get_data_format(spec)
             colspec = overrides
 
         # Single value, no override
@@ -1451,12 +1434,6 @@ def get_signature(
                 'or vice versa. Parameters and return values must all be either ',
                 'scalar or vector types.',
             )
-
-    # If we hava function parameters and the function is a TVF, then
-    # the return type should just match the parameter vector types. This ensures
-    # the output producers for scalars and vectors are consistent.
-    elif function_type == 'tvf' and rdf == 'scalar' and args_schema:
-        out['returns_data_format'] = out['args_data_format']
 
     # All functions have to return a value, so if none was specified try to
     # insert a reasonable default that includes NULLs.
