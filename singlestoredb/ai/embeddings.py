@@ -29,21 +29,6 @@ from botocore import UNSIGNED
 from botocore.config import Config
 
 
-class SingleStoreEmbeddings(OpenAIEmbeddings):
-
-    def __init__(self, model_name: str, **kwargs: Any):
-        inference_api_manger = (
-            manage_workspaces().organizations.current.inference_apis
-        )
-        info = inference_api_manger.get(model_name=model_name)
-        super().__init__(
-            base_url=info.connection_url,
-            api_key=os.environ.get('SINGLESTOREDB_USER_TOKEN'),
-            model=model_name,
-            **kwargs,
-        )
-
-
 def SingleStoreEmbeddingsFactory(
     model_name: str,
     api_key: Optional[str] = None,
