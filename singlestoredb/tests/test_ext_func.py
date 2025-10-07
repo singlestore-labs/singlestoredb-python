@@ -1818,7 +1818,7 @@ class TestExtFunc(unittest.TestCase):
 
     def _test_json_object_vector(self, vector_type: str):
         self.cur.execute(
-            f'select test_json_object_{vector_type}(x, y) as res '
+            f'select json_object_{vector_type}(x, y) as res '
             'from json_data order by id',
         )
 
@@ -1836,7 +1836,7 @@ class TestExtFunc(unittest.TestCase):
 
         if vector_type == 'pyarrow':
             self.cur.execute(
-                f'select test_json_object_{vector_type}(x, y) as res '
+                f'select json_object_{vector_type}(x, y) as res '
                 'from json_data_with_nulls order by id',
             )
 
@@ -1856,7 +1856,7 @@ class TestExtFunc(unittest.TestCase):
         else:
             with self.assertRaises(self.conn.OperationalError):
                 self.cur.execute(
-                    f'select test_json_object_{vector_type}(x, y) as res '
+                    f'select json_object_{vector_type}(x, y) as res '
                     'from json_data_with_nulls order by id',
                 )
 
@@ -1865,7 +1865,7 @@ class TestExtFunc(unittest.TestCase):
             return
 
         self.cur.execute(
-            f'select test_json_object_{vector_type}_masked(x, y) as res '
+            f'select json_object_{vector_type}_masked(x, y) as res '
             'from json_data order by id',
         )
 
@@ -1882,7 +1882,7 @@ class TestExtFunc(unittest.TestCase):
         ]
 
         self.cur.execute(
-            f'select test_json_object_{vector_type}_masked(x, y) as res '
+            f'select json_object_{vector_type}_masked(x, y) as res '
             'from json_data_with_nulls order by id',
         )
 
@@ -1927,7 +1927,7 @@ class TestExtFunc(unittest.TestCase):
 
     def _test_json_list_vector(self, vector_type: str):
         self.cur.execute(
-            f'select test_json_list_{vector_type}(x, y) as res '
+            f'select json_list_{vector_type}(x, y) as res '
             'from json_list_data order by id',
         )
 
@@ -1946,7 +1946,7 @@ class TestExtFunc(unittest.TestCase):
         # Pyarrow supports nulls, but the return object should not be null
         if vector_type == 'pyarrow':
             self.cur.execute(
-                f'select test_json_list_{vector_type}(x, y) as res '
+                f'select json_list_{vector_type}(x, y) as res '
                 'from json_list_data_with_nulls order by id',
             )
 
@@ -1966,7 +1966,7 @@ class TestExtFunc(unittest.TestCase):
         else:
             with self.assertRaises(self.conn.OperationalError):
                 self.cur.execute(
-                    f'select test_json_list_{vector_type}(x, y) as res '
+                    f'select json_list_{vector_type}(x, y) as res '
                     'from json_list_data_with_nulls order by id',
                 )
 
@@ -1975,7 +1975,7 @@ class TestExtFunc(unittest.TestCase):
             return
 
         self.cur.execute(
-            f'select test_json_list_{vector_type}_masked(x, y) as res '
+            f'select json_list_{vector_type}_masked(x, y) as res '
             'from json_list_data order by id',
         )
 
@@ -1992,7 +1992,7 @@ class TestExtFunc(unittest.TestCase):
         ]
 
         self.cur.execute(
-            f'select test_json_list_{vector_type}_masked(x, y) as res '
+            f'select json_list_{vector_type}_masked(x, y) as res '
             'from json_list_data_with_nulls order by id',
         )
 
@@ -2041,7 +2041,7 @@ class TestExtFunc(unittest.TestCase):
         json_data = '{"foo": "bar", "baz": 2.75}'
 
         self.cur.execute(
-            f'select * from test_json_object_{vector_type}_tvf(%s, %s) order by a',
+            f'select * from json_object_{vector_type}_tvf(%s, %s) order by a',
             (int_data, json_data),
         )
 
@@ -2064,7 +2064,7 @@ class TestExtFunc(unittest.TestCase):
 
         if vector_type == 'pyarrow':
             self.cur.execute(
-                f'select * from test_json_object_{vector_type}_tvf(10, NULL)',
+                f'select * from json_object_{vector_type}_tvf(10, NULL)',
             )
 
             desc = self.cur.description
@@ -2087,7 +2087,7 @@ class TestExtFunc(unittest.TestCase):
         else:
             with self.assertRaises(self.conn.OperationalError):
                 self.cur.execute(
-                    f'select * from test_json_object_{vector_type}_tvf(10, NULL)',
+                    f'select * from json_object_{vector_type}_tvf(10, NULL)',
                 )
 
         # Masks are not used with Python lists
@@ -2095,7 +2095,7 @@ class TestExtFunc(unittest.TestCase):
             return
 
         self.cur.execute(
-            f'select * from test_json_object_{vector_type}_tvf_masked(%s, %s) order by a',
+            f'select * from json_object_{vector_type}_tvf_masked(%s, %s) order by a',
             (int_data, json_data),
         )
 
