@@ -64,9 +64,9 @@ from typing import Tuple
 from typing import Union
 
 try:
-    from typing import TypeAlias
+    from typing import TypeAlias  # type: ignore
 except ImportError:
-    from typing_extensions import TypeAlias
+    from typing_extensions import TypeAlias  # type: ignore
 
 from . import arrow
 from . import json as jdata
