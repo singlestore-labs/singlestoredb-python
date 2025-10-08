@@ -43,6 +43,36 @@ rsa = ["cryptography"]
 sqlalchemy = ["sqlalchemy-singlestoredb>=1.0.0"]
 vectorstore = ["singlestore-vectorstore>=0.1.2"]
 
+# Development dependency groups
+test = [
+    "coverage",
+    "dash",
+    "fastapi",
+    "ipython",
+    "jupysql",
+    "pandas",
+    "parameterized",
+    "polars",
+    "pyarrow",
+    "pydantic",
+    "pytest",
+    "pytest-cov",
+    "singlestore-vectorstore>=0.1.2",
+    "uvicorn",
+]
+docs = [
+    "sphinx",
+    "sphinx_rtd_theme",
+]
+build = [
+    "build",
+    "setuptools>=61.0",
+    "wheel",
+]
+dev = [
+    "singlestoredb[test,docs,build]",
+]
+
 [project.entry-points.pytest11]
 singlestoredb = "singlestoredb.pytest"
 

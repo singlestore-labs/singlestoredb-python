@@ -27,8 +27,13 @@ pre-commit run --all-files
 
 To create a test environment, do the following:
 ```
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
+pip install -e ".[dev]"
+```
+
+Or if you only need specific dependency groups:
+```
+pip install -e ".[test]"  # Just testing dependencies
+pip install -e ".[docs]"  # Just documentation dependencies
 ```
 
 If you have Docker installed, you can run the tests as follows. Note that
