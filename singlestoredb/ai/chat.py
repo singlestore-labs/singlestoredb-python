@@ -29,44 +29,6 @@ from botocore import UNSIGNED
 from botocore.config import Config
 
 
-class SingleStoreChatOpenAI(ChatOpenAI):
-    def __init__(self, model_name: str, api_key: Optional[str] = None, **kwargs: Any):
-        inference_api_manger = (
-            manage_workspaces().organizations.current.inference_apis
-        )
-        info = inference_api_manger.get(model_name=model_name)
-        token = (
-            api_key
-            if api_key is not None
-            else os.environ.get('SINGLESTOREDB_USER_TOKEN')
-        )
-        super().__init__(
-            base_url=info.connection_url,
-            api_key=token,
-            model=model_name,
-            **kwargs,
-        )
-
-
-class SingleStoreChat(ChatOpenAI):
-    def __init__(self, model_name: str, api_key: Optional[str] = None, **kwargs: Any):
-        inference_api_manger = (
-            manage_workspaces().organizations.current.inference_apis
-        )
-        info = inference_api_manger.get(model_name=model_name)
-        token = (
-            api_key
-            if api_key is not None
-            else os.environ.get('SINGLESTOREDB_USER_TOKEN')
-        )
-        super().__init__(
-            base_url=info.connection_url,
-            api_key=token,
-            model=model_name,
-            **kwargs,
-        )
-
-
 def SingleStoreChatFactory(
     model_name: str,
     api_key: Optional[str] = None,
