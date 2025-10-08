@@ -1,9 +1,6 @@
-build
 parsimonious
 PyJWT
 requests
-setuptools
 sqlparams
 tomli>=1.1.0; python_version < '3.11'
 typing_extensions<=4.13.2
-wheel
