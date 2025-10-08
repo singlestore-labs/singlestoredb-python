@@ -9,7 +9,6 @@ parameterized
 polars
 pyarrow
 pydantic
-pygeos ; python_version < '3.12'
 pytest
 pytest-cov
 setuptools
