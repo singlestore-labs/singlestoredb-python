@@ -12,7 +12,6 @@ pydantic
 pytest
 pytest-cov
 setuptools
-shapely
 singlestore-vectorstore>=0.1.2
 sphinx
 sphinx_rtd_theme
