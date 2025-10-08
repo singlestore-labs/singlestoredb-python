@@ -7,8 +7,7 @@ name = "singlestoredb"
 version = "1.15.8"
 description = "Interface to the SingleStoreDB database and workspace management APIs"
 readme = {file = "README.md", content-type = "text/markdown"}
-license = "Apache-2.0"
-license-files = ["LICENSE"]
+license = {text = "Apache-2.0"}
 authors = [
     {name = "SingleStore", email = "support@singlestore.com"}
 ]
