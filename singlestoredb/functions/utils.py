@@ -4,10 +4,10 @@ import struct
 import sys
 import types
 import typing
+from collections.abc import Iterable
 from enum import Enum
 from typing import Any
 from typing import Dict
-from typing import Iterable
 from typing import Tuple
 from typing import Union
 

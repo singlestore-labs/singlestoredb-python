@@ -6,11 +6,11 @@ import itertools
 import os
 import re
 import sys
+from collections.abc import Mapping
 from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
-from typing import Mapping
 from typing import Optional
 from typing import SupportsIndex
 from typing import Tuple

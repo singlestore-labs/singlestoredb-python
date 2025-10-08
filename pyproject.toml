@@ -1,0 +1,89 @@
+[build-system]
+requires = ["build", "setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "singlestoredb"
+version = "1.15.8"
+description = "Interface to the SingleStoreDB database and workspace management APIs"
+readme = {file = "README.md", content-type = "text/markdown"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+    {name = "SingleStore", email = "support@singlestore.com"}
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Database",
+]
+dependencies = [
+    "PyJWT",
+    "parsimonious",
+    "requests",
+    "sqlparams",
+    "tomli>=1.1.0; python_version < '3.11'",
+    "typing-extensions<=4.13.2; python_version < '3.11'",
+]
+
+[project.urls]
+Homepage = "https://github.com/singlestore-labs/singlestoredb-python"
+
+[project.optional-dependencies]
+dataframe = ["ibis-singlestoredb"]
+dbt = ["dbt-singlestore"]
+docker = ["docker"]
+ed22519 = ["PyNaCl>=1.4.0"]
+gssapi = ["gssapi"]
+ibis = ["ibis-singlestoredb"]
+kerberos = ["gssapi"]
+pytest = ["pytest"]
+rsa = ["cryptography"]
+sqlalchemy = ["sqlalchemy-singlestoredb>=1.0.0"]
+vectorstore = ["singlestore-vectorstore>=0.1.2"]
+
+[project.entry-points.pytest11]
+singlestoredb = "singlestoredb.pytest"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+exclude = ["docs*", "resources*", "examples*", "licenses*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.typed", "*.sql", "*.csv", "*.ipynb"]
+
+[tool.pytest.ini_options]
+markers = [
+    "management",
+]
+
+[tool.mypy]
+check_untyped_defs = true
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "testing.*"
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.coverage.run]
+source_pkgs = ["singlestoredb"]
+
+[tool.coverage.report]
+omit = [
+    "setup.py",
+    "*/tests/*",
+    "*/docs/*",
+]

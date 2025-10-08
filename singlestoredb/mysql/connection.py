@@ -13,9 +13,9 @@ import struct
 import sys
 import traceback
 import warnings
+from collections.abc import Iterable
 from typing import Any
 from typing import Dict
-from typing import Iterable
 
 try:
     import _singlestoredb_accel

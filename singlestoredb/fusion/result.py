@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from typing import Any
-from typing import Iterable
 from typing import List
 from typing import Optional
 from typing import Tuple

@@ -1,0 +1,15 @@
+[flake8]
+exclude =
+    docs/*
+    resources/*
+    licenses/*
+max-complexity = 45
+max-line-length = 90
+min-python-version = 3.9.0
+per-file-ignores =
+    singlestoredb/__init__.py:F401
+    singlestoredb/fusion/__init__.py:F401
+    singlestoredb/fusion/grammar.py:E501
+    singlestoredb/http/__init__.py:F401
+    singlestoredb/management/__init__.py:F401
+    singlestoredb/mysql/__init__.py:F401

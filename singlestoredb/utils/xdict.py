@@ -19,14 +19,14 @@
 """Dictionary that allows setting nested keys by period (.) delimited strings."""
 import copy
 import re
+from collections.abc import ItemsView
+from collections.abc import Iterable
+from collections.abc import KeysView
+from collections.abc import ValuesView
 from typing import Any
 from typing import Dict
-from typing import ItemsView
-from typing import Iterable
-from typing import KeysView
 from typing import List
 from typing import Tuple
-from typing import ValuesView
 
 
 def _is_compound_key(key: str) -> bool:
