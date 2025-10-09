@@ -839,7 +839,7 @@ class FileSpace(FileLocation):
         """
         res = self._manager._get(
             re.sub(r'/+$', r'/', f'files/fs/{self._location}/{path}'),
-            params=dict(metadata=True),
+            params=dict(metadata=1),
         ).json()
 
         return FilesObject.from_dict(res, self)
