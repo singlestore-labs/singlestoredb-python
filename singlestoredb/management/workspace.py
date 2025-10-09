@@ -378,7 +378,7 @@ class Stage(FileLocation):
         """
         res = self._manager._get(
             re.sub(r'/+$', r'/', f'stage/{self._deployment_id}/fs/{stage_path}'),
-            params=dict(metadata=1),
+            params=dict(metadata=True),
         ).json()
 
         return FilesObject.from_dict(res, self)
