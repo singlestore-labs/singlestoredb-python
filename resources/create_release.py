@@ -13,7 +13,7 @@ Usage:
     python create_release.py [--version VERSION] [--dry-run]
 
 Examples:
-    python create_release.py                    # Use current version from setup.cfg
+    python create_release.py                    # Use current version from pyproject.toml
     python create_release.py --version 1.15.6   # Use specific version
     python create_release.py --dry-run          # Preview without executing
 """
@@ -39,19 +39,19 @@ def step(step_num: int, total_steps: int, message: str) -> None:
     print(f'📍 Step {step_num}/{total_steps}: {message}', file=sys.stderr)
 
 
-def get_version_from_setup_cfg() -> str:
-    """Extract the current version from setup.cfg."""
-    setup_cfg_path = Path(__file__).parent.parent / 'setup.cfg'
+def get_version_from_pyproject() -> str:
+    """Extract the current version from pyproject.toml."""
+    pyproject_path = Path(__file__).parent.parent / 'pyproject.toml'
 
-    if not setup_cfg_path.exists():
-        raise FileNotFoundError(f'Could not find setup.cfg at {setup_cfg_path}')
+    if not pyproject_path.exists():
+        raise FileNotFoundError(f'Could not find pyproject.toml at {pyproject_path}')
 
-    with open(setup_cfg_path, 'r') as f:
+    with open(pyproject_path, 'r') as f:
         content = f.read()
 
-    match = re.search(r'^version\s*=\s*(.+)$', content, re.MULTILINE)
+    match = re.search(r'^version\s*=\s*["\'](.+)["\']$', content, re.MULTILINE)
     if not match:
-        raise ValueError('Could not find version in setup.cfg')
+        raise ValueError('Could not find version in pyproject.toml')
 
     return match.group(1).strip()
 
@@ -228,14 +228,14 @@ def main() -> None:
         description='Create GitHub release for SingleStoreDB Python SDK',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''Examples:
-  %(prog)s                        # Use current version from setup.cfg
+  %(prog)s                        # Use current version from pyproject.toml
   %(prog)s --version 1.15.6       # Use specific version
   %(prog)s --dry-run               # Preview without executing''',
     )
 
     parser.add_argument(
         '--version',
-        help='Version to release (default: extract from setup.cfg)',
+        help='Version to release (default: extract from pyproject.toml)',
     )
 
     parser.add_argument(
@@ -267,8 +267,8 @@ def main() -> None:
             version = args.version
             status(f'Using specified version: {version}')
         else:
-            version = get_version_from_setup_cfg()
-            status(f'Extracted from setup.cfg: {version}')
+            version = get_version_from_pyproject()
+            status(f'Extracted from pyproject.toml: {version}')
 
         elapsed = time.time() - start_time
         status(f'✅ Version determined in {elapsed:.1f}s')

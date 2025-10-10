@@ -48,15 +48,15 @@ import urllib
 import uuid
 import zipfile
 import zipimport
+from collections.abc import Awaitable
+from collections.abc import Iterable
+from collections.abc import Sequence
 from types import ModuleType
 from typing import Any
-from typing import Awaitable
 from typing import Callable
 from typing import Dict
-from typing import Iterable
 from typing import List
 from typing import Optional
-from typing import Sequence
 from typing import Set
 from typing import Tuple
 from typing import Union

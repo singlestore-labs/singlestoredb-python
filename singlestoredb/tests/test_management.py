@@ -30,6 +30,7 @@ def shared_database_name(s):
     return re.sub(r'[^\w]', '', s).replace('-', '_').lower()
 
 
+@pytest.mark.skip(reason='Legacy cluster Management API is going away')
 @pytest.mark.management
 class TestCluster(unittest.TestCase):
 

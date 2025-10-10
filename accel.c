@@ -3079,11 +3079,11 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
         PyErr_SetString(PyExc_ValueError, "value is outside the valid range for UNSIGNED INT"); \
         goto error; \
     }
-#define CHECK_BIGINT(x, unsigned_input) if ((x) < ((unsigned_input) ? 0 : -9223372036854775808) || (x) > 9223372036854775807) { \
+#define CHECK_BIGINT(x, unsigned_input) if ((x) < ((unsigned_input) ? 0 : INT64_MIN) || (x) > INT64_MAX) { \
         PyErr_SetString(PyExc_ValueError, "value is outside the valid range for BIGINT"); \
         goto error; \
     }
-#define CHECK_UNSIGNED_BIGINT(x, unsigned_input) if ((x) < 0 || (x) > 18446744073709551615) { \
+#define CHECK_UNSIGNED_BIGINT(x, unsigned_input) if ((x) < 0) { \
         PyErr_SetString(PyExc_ValueError, "value is outside the valid range for UNSIGNED BIGINT"); \
         goto error; \
     }

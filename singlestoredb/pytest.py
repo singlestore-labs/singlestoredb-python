@@ -6,8 +6,8 @@ import socket
 import subprocess
 import time
 import uuid
+from collections.abc import Iterator
 from enum import Enum
-from typing import Iterator
 from typing import Optional
 
 import pytest

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import struct
 import warnings
+from collections.abc import Sequence
 from io import BytesIO
 from typing import Any
 from typing import List
 from typing import Optional
-from typing import Sequence
 from typing import Tuple
 from typing import TYPE_CHECKING
 

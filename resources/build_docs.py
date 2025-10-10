@@ -27,10 +27,10 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from re import Match
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Match
 from typing import Optional
 
 # Detect script location and set up paths

@@ -10,13 +10,13 @@ import os
 import re
 import time
 from base64 import b64decode
+from collections.abc import Iterable
+from collections.abc import Sequence
 from typing import Any
 from typing import Callable
 from typing import Dict
-from typing import Iterable
 from typing import List
 from typing import Optional
-from typing import Sequence
 from typing import Tuple
 from typing import Union
 from urllib.parse import urljoin

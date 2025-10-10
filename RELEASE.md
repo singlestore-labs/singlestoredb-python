@@ -8,7 +8,7 @@ resources/bump_version.py < major | minor | patch >
 
 ```
 
-This will bump the version number in `setup.cfg` and `singlestoredb/__init__.py`
+This will bump the version number in `pyproject.toml` and `singlestoredb/__init__.py`
 using semantic versioning rules: minor bump for new features, patch bump for
 bug fixes. It will genarete a list of changes since the last version and
 ask for confirmation of the release notes in `docs/src/whatsnew.rst`.
