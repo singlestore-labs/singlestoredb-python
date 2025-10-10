@@ -33,6 +33,90 @@ from singlestoredb.functions.typing import pyarrow as pat
 
 
 @udf
+def add(x: int, y: int) -> int:
+    """
+    Add two integers.
+
+    Parameters
+    ----------
+    x : int
+        First integer.
+    y : int
+        Second integer.
+
+    Returns
+    -------
+    int
+        Sum of x and y.
+
+    """
+    return x + y
+
+
+@udf
+def add_vec(x: npt.Int64Array, y: npt.Int64Array) -> npt.Int64Array:
+    """
+    Add two numpy arrays of int64.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        First array.
+    y : numpy.ndarray
+        Second array.
+
+    Returns
+    -------
+    numpy.ndarray
+        Elementwise sum of x and y.
+
+    """
+    return x + y
+
+
+@udf
+async def async_add(x: int, y: int) -> int:
+    """
+    Asynchronously add two integers.
+
+    Parameters
+    ----------
+    x : int
+        First integer.
+    y : int
+        Second integer.
+
+    Returns
+    -------
+    int
+        Sum of x and y.
+
+    """
+    return x + y
+
+
+@udf
+async def async_add_vec_vec(x: npt.Int64Array, y: npt.Int64Array) -> npt.Int64Array:
+    """
+    Asynchronously add two numpy arrays of int64.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        First array.
+    y : numpy.ndarray
+        Second array.
+
+    Returns
+    -------
+    numpy.ndarray
+        Elementwise sum of x and y.
+
+    """
+    return x + y
+
+
+@udf
 def doc_test(x: int, y: float) -> int:
     """
     A simple function to test the decorator and documentation.

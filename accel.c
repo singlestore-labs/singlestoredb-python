@@ -365,18 +365,15 @@ static PyObject *apply_transformer(PyObject *transformer, PyObject *value) {
     }
 
     if (transformer == NULL || transformer == Py_None) {
-        // Increment refcount fo Py_None since we are returning it
-        if (value == Py_None) {
-            Py_INCREF(value);
-        }
+        // No transformation needed, return value as-is
+        // We steal the reference from the caller
         return value;
     }
 
     PyObject *out = PyObject_CallFunction(transformer, "O", value);
-    // Don't decref Py_None since we assume it was passed in literally and not from a new reference
-    if (value != NULL && value != Py_None) {
-        Py_DECREF(value);
-    }
+    // Always decref value since we're stealing the reference from the caller
+    // This includes Py_None when it's passed as a new reference (e.g., from PyIter_Next)
+    Py_DECREF(value);
 
     return out;
 }
@@ -4312,7 +4309,10 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
         if (!py_row) goto error;
 
         row_id = *(int64_t*)data; data += 8;
-        CHECKRC(PyList_Append(py_out_row_ids, PyLong_FromLongLong(row_id)));
+        PyObject *py_row_id = PyLong_FromLongLong(row_id);
+        if (!py_row_id) goto error;
+        CHECKRC(PyList_Append(py_out_row_ids, py_row_id));
+        Py_DECREF(py_row_id);
 
         for (unsigned long long i = 0; i < colspec_l; i++) {
             is_null = data[0] == '\x01'; data += 1;
