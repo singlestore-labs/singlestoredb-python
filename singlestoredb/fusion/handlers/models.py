@@ -8,6 +8,7 @@ from ..handler import SQLHandler
 from ..result import FusionSQLResult
 from .files import ShowFilesHandler
 from .utils import get_file_space
+from .utils import get_inference_api
 
 
 class ShowModelsHandler(ShowFilesHandler):
@@ -248,3 +249,77 @@ class DropModelsHandler(SQLHandler):
 
 
 DropModelsHandler.register(overwrite=True)
+
+
+class StartModelHandler(SQLHandler):
+    """
+    START MODEL model_name ;
+
+    # Model Name
+    model_name = '<model-name>'
+
+    Description
+    -----------
+    Starts an inference API model.
+
+    Arguments
+    ---------
+    * ``<model-name>``: Name of the model to start.
+
+    Example
+    --------
+    The following command starts a model::
+
+        START MODEL my_model;
+
+    See Also
+    --------
+    * ``STOP MODEL model_name``
+    * ``SHOW MODELS``
+
+    """  # noqa: E501
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        inference_api = get_inference_api(params)
+        inference_api.start()
+        return None
+
+
+StartModelHandler.register(overwrite=True)
+
+
+class StopModelHandler(SQLHandler):
+    """
+    STOP MODEL model_name ;
+
+    # Model Name
+    model_name = '<model-name>'
+
+    Description
+    -----------
+    Stops an inference API model.
+
+    Arguments
+    ---------
+    * ``<model-name>``: Name of the model to stop.
+
+    Example
+    --------
+    The following command stops a model::
+
+        STOP MODEL my_model;
+
+    See Also
+    --------
+    * ``START MODEL model_name``
+    * ``SHOW MODELS``
+
+    """  # noqa: E501
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        inference_api = get_inference_api(params)
+        inference_api.stop()
+        return None
+
+
+StopModelHandler.register(overwrite=True)

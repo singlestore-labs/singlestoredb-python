@@ -24,6 +24,7 @@ class InferenceAPIInfo(object):
     connection_url: str
     project_id: str
     hosting_platform: str
+    _manager: Optional['InferenceAPIManager']
 
     def __init__(
         self,
@@ -33,6 +34,7 @@ class InferenceAPIInfo(object):
         connection_url: str,
         project_id: str,
         hosting_platform: str,
+        manager: Optional['InferenceAPIManager'] = None,
     ):
         self.service_id = service_id
         self.connection_url = connection_url
@@ -40,6 +42,7 @@ class InferenceAPIInfo(object):
         self.name = name
         self.project_id = project_id
         self.hosting_platform = hosting_platform
+        self._manager = manager
 
     @classmethod
     def from_dict(
@@ -77,6 +80,34 @@ class InferenceAPIInfo(object):
         """Return string representation."""
         return str(self)
 
+    def start(self) -> Dict[str, Any]:
+        """
+        Start this inference API model.
+
+        Returns
+        -------
+        dict
+            Response from the start operation
+
+        """
+        if self._manager is None:
+            raise ManagementError(msg='No manager associated with this inference API')
+        return self._manager.start(self.name)
+
+    def stop(self) -> Dict[str, Any]:
+        """
+        Stop this inference API model.
+
+        Returns
+        -------
+        dict
+            Response from the stop operation
+
+        """
+        if self._manager is None:
+            raise ManagementError(msg='No manager associated with this inference API')
+        return self._manager.stop(self.name)
+
 
 class InferenceAPIManager(object):
     """
@@ -102,4 +133,46 @@ class InferenceAPIManager(object):
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
         res = self._manager._get(f'inferenceapis/{self.project_id}/{model_name}').json()
-        return InferenceAPIInfo.from_dict(res)
+        inference_api = InferenceAPIInfo.from_dict(res)
+        inference_api._manager = self  # Associate the manager
+        return inference_api
+
+    def start(self, model_name: str) -> Dict[str, Any]:
+        """
+        Start an inference API model.
+
+        Parameters
+        ----------
+        model_name : str
+            Name of the model to start
+
+        Returns
+        -------
+        dict
+            Response from the start operation
+
+        """
+        if self._manager is None:
+            raise ManagementError(msg='Manager not initialized')
+        res = self._manager._post(f'inferenceapis/{self.project_id}/{model_name}/start')
+        return res.json()
+
+    def stop(self, model_name: str) -> Dict[str, Any]:
+        """
+        Stop an inference API model.
+
+        Parameters
+        ----------
+        model_name : str
+            Name of the model to stop
+
+        Returns
+        -------
+        dict
+            Response from the stop operation
+
+        """
+        if self._manager is None:
+            raise ManagementError(msg='Manager not initialized')
+        res = self._manager._post(f'inferenceapis/{self.project_id}/{model_name}/stop')
+        return res.json()
