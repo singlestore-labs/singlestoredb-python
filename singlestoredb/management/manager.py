@@ -310,3 +310,58 @@ class Manager(object):
             out = getattr(self, f'get_{self.obj_type}')(out.id)
 
         return out
+
+    def _wait_on_endpoint(
+        self,
+        out: Any,
+        interval: int = 10,
+        timeout: int = 300,
+    ) -> Any:
+        """
+        Wait for the endpoint to be ready by attempting to connect.
+
+        Parameters
+        ----------
+        out : Any
+            Workspace object with an endpoint attribute
+        interval : int, optional
+            Interval between each connection attempt (default: 10 seconds)
+        timeout : int, optional
+            Maximum time to wait before raising an exception (default: 300 seconds)
+
+        Raises
+        ------
+        ManagementError
+            If timeout is reached or endpoint is not available
+
+        Returns
+        -------
+        Same object type as `out`
+
+        """
+        if not hasattr(out, 'endpoint') or not out.endpoint:
+            raise ManagementError(
+                msg=f'{type(out).__name__} object does not have a valid endpoint',
+            )
+
+        # Import connection module here to avoid circular imports
+        from .. import connection
+
+        while True:
+            try:
+                # Try to establish a connection to the endpoint using context manager
+                with connection.connect(host=out.endpoint, connect_timeout=5):
+                    pass
+                # If connection succeeds, endpoint is ready
+                break
+            except Exception:
+                # If connection fails, check timeout and retry
+                if timeout <= 0:
+                    raise ManagementError(
+                        msg=f'Exceeded waiting time for {self.obj_type} endpoint '
+                            'to become ready',
+                    )
+                time.sleep(interval)
+                timeout -= interval
+
+        return out
