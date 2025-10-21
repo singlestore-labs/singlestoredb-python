@@ -323,7 +323,7 @@ class Manager(object):
         Parameters
         ----------
         out : Any
-            Workspace object with an endpoint attribute
+            Workspace object with a connect method
         interval : int, optional
             Interval between each connection attempt (default: 10 seconds)
         timeout : int, optional
@@ -339,18 +339,15 @@ class Manager(object):
         Same object type as `out`
 
         """
-        if not hasattr(out, 'endpoint') or not out.endpoint:
+        if not hasattr(out, 'connect') or not out.connect:
             raise ManagementError(
                 msg=f'{type(out).__name__} object does not have a valid endpoint',
             )
 
-        # Import connection module here to avoid circular imports
-        from .. import connection
-
         while True:
             try:
                 # Try to establish a connection to the endpoint using context manager
-                with connection.connect(host=out.endpoint, connect_timeout=5):
+                with out.connect(connect_timeout=5):
                     pass
                 # If connection succeeds, endpoint is ready
                 print('CONNECTED')
