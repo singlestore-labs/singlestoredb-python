@@ -351,12 +351,10 @@ class Manager(object):
                 with out.connect(connect_timeout=5):
                     pass
             except Exception as exc:
+                # If we get an 'access denied' error, that means that the server is
+                # up and we just aren't authenticating.
                 if isinstance(exc, OperationalError) and exc.errno == 1045:
-                    print('CONNECTED')
                     break
-                print('STILL WAITING')
-                import traceback
-                traceback.print_exc()
                 # If connection fails, check timeout and retry
                 if timeout <= 0:
                     raise ManagementError(
