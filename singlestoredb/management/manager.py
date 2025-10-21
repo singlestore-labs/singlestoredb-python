@@ -15,6 +15,7 @@ import requests
 
 from .. import config
 from ..exceptions import ManagementError
+from ..exceptions import OperationalError
 from .utils import get_token
 
 
@@ -349,10 +350,10 @@ class Manager(object):
                 # Try to establish a connection to the endpoint using context manager
                 with out.connect(connect_timeout=5):
                     pass
-                # If connection succeeds, endpoint is ready
-                print('CONNECTED')
-                break
-            except Exception:
+            except Exception as exc:
+                if isinstance(exc, OperationalError) and exc.errno == 1045:
+                    print('CONNECTED')
+                    break
                 print('STILL WAITING')
                 import traceback
                 traceback.print_exc()
