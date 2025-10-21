@@ -354,6 +354,8 @@ class Manager(object):
                 break
             except Exception:
                 print('STILL WAITING')
+                import traceback
+                traceback.print_exc()
                 # If connection fails, check timeout and retry
                 if timeout <= 0:
                     raise ManagementError(
