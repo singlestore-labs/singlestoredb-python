@@ -1597,3 +1597,401 @@ class TestRegions(unittest.TestCase):
 
         # Test __repr__
         assert repr(region) == str(region)
+
+
+@pytest.mark.management
+class TestTeams(unittest.TestCase):
+    """Test cases for teams management."""
+
+    manager = None
+    team = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_teams()
+
+        # Create a test team
+        name = clean_name(f'test-team-{secrets.token_urlsafe(10)}')
+        cls.team = cls.manager.create_team(
+            name=name,
+            description='Test team for unit tests',
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        if cls.team is not None:
+            try:
+                cls.team.delete()
+            except Exception:
+                pass
+        cls.manager = None
+        cls.team = None
+
+    def test_create_team(self):
+        """Test creating a team."""
+        assert self.team is not None
+        assert self.team.name.startswith('test-team-')
+        assert self.team.description == 'Test team for unit tests'
+        assert isinstance(self.team.member_users, list)
+        assert isinstance(self.team.member_teams, list)
+
+    def test_get_team(self):
+        """Test getting a team by ID."""
+        team = self.manager.get_team(self.team.id)
+        assert team.id == self.team.id
+        assert team.name == self.team.name
+
+    def test_list_teams(self):
+        """Test listing teams."""
+        teams = self.manager.list_teams()
+        team_ids = [t.id for t in teams]
+        assert self.team.id in team_ids
+
+    def test_update_team(self):
+        """Test updating a team."""
+        new_description = 'Updated test team description'
+        self.team.update(description=new_description)
+
+        # Verify update
+        updated_team = self.manager.get_team(self.team.id)
+        assert updated_team.description == new_description
+
+    def test_str_repr(self):
+        """Test string representation of team."""
+        s = str(self.team)
+        assert self.team.name in s
+        assert repr(self.team) == str(self.team)
+
+    def test_no_manager_error(self):
+        """Test error when no manager is associated."""
+        team = self.manager.get_team(self.team.id)
+        team._manager = None
+
+        with self.assertRaises(s2.ManagementError) as cm:
+            team.update()
+        assert 'No teams manager' in cm.exception.msg
+
+
+@pytest.mark.management
+class TestPrivateConnections(unittest.TestCase):
+    """Test cases for private connections management."""
+
+    manager = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_private_connections()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        cls.manager = None
+
+
+@pytest.mark.management
+class TestAuditLogs(unittest.TestCase):
+    """Test cases for audit logs management."""
+
+    manager = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_audit_logs()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        cls.manager = None
+
+    def test_list_audit_logs(self):
+        """Test listing audit logs."""
+        logs = self.manager.list_audit_logs(limit=10)
+        # Should return a list (may be empty)
+        assert isinstance(logs, list)
+
+
+@pytest.mark.management
+class TestUsers(unittest.TestCase):
+    """Test cases for users management."""
+
+    manager = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_users()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        cls.manager = None
+
+    def test_get_user(self):
+        """Test getting a user object."""
+        # Create a basic user object (no actual API call since user ID is arbitrary)
+        user = self.manager.get_user('test-user-123')
+        assert user.id == 'test-user-123'
+        assert user._manager is not None
+        assert user.email == ''  # Empty since no actual API call
+        assert user.first_name == ''
+        assert user.last_name == ''
+
+    def test_user_from_dict(self):
+        """Test User.from_dict conversion."""
+        from singlestoredb.management.users import User
+
+        data = {
+            'userID': 'user-123',
+            'email': 'test@example.com',
+            'firstName': 'Test',
+            'lastName': 'User',
+        }
+
+        user = User.from_dict(data, self.manager)
+        assert user.id == 'user-123'
+        assert user.email == 'test@example.com'
+        assert user.first_name == 'Test'
+        assert user.last_name == 'User'
+        assert user._manager is self.manager
+
+    def test_user_invitation_from_dict(self):
+        """Test UserInvitation.from_dict conversion."""
+        from singlestoredb.management.users import UserInvitation
+
+        data = {
+            'invitationID': 'invite-123',
+            'email': 'invitee@example.com',
+            'state': 'Pending',
+            'createdAt': '2023-01-01T00:00:00Z',
+            'actedAt': '2023-01-02T00:00:00Z',
+            'message': 'Welcome to our team!',
+            'teamIDs': ['team-1', 'team-2'],
+        }
+
+        invitation = UserInvitation.from_dict(data, self.manager)
+        assert invitation.id == 'invite-123'
+        assert invitation.email == 'invitee@example.com'
+        assert invitation.state == 'Pending'
+        assert invitation.message == 'Welcome to our team!'
+        assert invitation.team_ids == ['team-1', 'team-2']
+        assert invitation._manager is self.manager
+
+
+@pytest.mark.management
+class TestWorkspaceManagerIntegration(unittest.TestCase):
+    """Test cases for workspace manager integration with new modules."""
+
+    manager = None
+    workspace_group = None
+    password = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up the test environment."""
+        cls.manager = s2.manage_workspaces()
+
+        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
+        cls.password = secrets.token_urlsafe(20) + '-x&$'
+
+        name = clean_name(secrets.token_urlsafe(20)[:20])
+
+        cls.workspace_group = cls.manager.create_workspace_group(
+            f'wg-integration-test-{name}',
+            region=random.choice(us_regions).id,
+            admin_password=cls.password,
+            firewall_ranges=['0.0.0.0/0'],
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up the test environment."""
+        if cls.workspace_group is not None:
+            cls.workspace_group.terminate(force=True)
+        cls.workspace_group = None
+        cls.manager = None
+        cls.password = None
+
+
+@pytest.mark.management
+class TestDataClasses(unittest.TestCase):
+    """Test cases for data classes and object conversion."""
+
+    def test_team_from_dict(self):
+        """Test Team.from_dict conversion."""
+        from singlestoredb.management.teams import Team, TeamsManager
+
+        manager = TeamsManager()
+        data = {
+            'teamID': 'team-123',
+            'name': 'Test Team',
+            'description': 'Test Description',
+            'memberUsers': [
+                {
+                    'userID': 'user-1',
+                    'email': 'user1@example.com',
+                    'firstName': 'User',
+                    'lastName': 'One',
+                },
+                {
+                    'userID': 'user-2',
+                    'email': 'user2@example.com',
+                    'firstName': 'User',
+                    'lastName': 'Two',
+                },
+            ],
+            'memberTeams': [
+                {
+                    'teamID': 'team-1',
+                    'name': 'Subteam One',
+                    'description': 'Sub team description',
+                },
+            ],
+            'createdAt': '2023-01-01T00:00:00Z',
+        }
+
+        team = Team.from_dict(data, manager)
+        assert team.id == 'team-123'
+        assert team.name == 'Test Team'
+        assert team.description == 'Test Description'
+        assert len(team.member_users) == 2
+        assert len(team.member_teams) == 1
+        assert team.member_users[0]['userID'] == 'user-1'
+        assert team.member_teams[0]['teamID'] == 'team-1'
+        assert team._manager is manager
+
+    def test_private_connection_from_dict(self):
+        """Test PrivateConnection.from_dict conversion."""
+        from singlestoredb.management.private_connections import (
+            PrivateConnection,
+            PrivateConnectionsManager,
+        )
+
+        manager = PrivateConnectionsManager()
+        data = {
+            'privateConnectionID': 'conn-123',
+            'workspaceGroupID': 'wg-456',
+            'serviceName': 'Test Connection',
+            'type': 'INBOUND',
+            'status': 'ACTIVE',
+            'allowList': 'my-allow-list',
+            'sqlPort': 3306,
+            'websocketsPort': 443,
+            'createdAt': '2023-01-01T00:00:00Z',
+            'updatedAt': '2023-01-02T00:00:00Z',
+        }
+
+        conn = PrivateConnection.from_dict(data, manager)
+        assert conn.id == 'conn-123'
+        assert conn.workspace_group_id == 'wg-456'
+        assert conn.service_name == 'Test Connection'
+        assert conn.type == 'INBOUND'
+        assert conn.status == 'ACTIVE'
+        assert conn.allow_list == 'my-allow-list'
+        assert conn.sql_port == 3306
+        assert conn.websockets_port == 443
+        assert conn._manager is manager
+
+    def test_audit_log_from_dict(self):
+        """Test AuditLog.from_dict conversion."""
+        from singlestoredb.management.audit_logs import AuditLog
+
+        data = {
+            'auditID': 'log-123',
+            'createdAt': '2023-01-01T00:00:00Z',
+            'userID': 'user-123',
+            'userEmail': 'test@example.com',
+            'type': 'CREATE_WORKSPACE',
+            'reason': 'User created a new workspace',
+            'source': 'Portal',
+            'userType': 'Customer',
+            'orgID': 'org-456',
+            'projectID': 'proj-789',
+            'workspaceID': 'ws-101',
+        }
+
+        log = AuditLog.from_dict(data)
+        assert log.id == 'log-123'
+        assert log.user_id == 'user-123'
+        assert log.user_email == 'test@example.com'
+        assert log.type == 'CREATE_WORKSPACE'
+        assert log.reason == 'User created a new workspace'
+        assert log.source == 'Portal'
+        assert log.user_type == 'Customer'
+        assert log.organization_id == 'org-456'
+        assert log.project_id == 'proj-789'
+        assert log.workspace_id == 'ws-101'
+
+    def test_workspace_group_metrics_from_openmetrics(self):
+        """Test WorkspaceGroupMetrics.from_openmetrics_text parsing."""
+        from singlestoredb.management.metrics import WorkspaceGroupMetrics
+
+        openmetrics_text = (
+            '# TYPE singlestoredb_cloud_threads_running gauge'
+            'singlestoredb_cloud_threads_running{'
+            "extractor=\"monitoring-customer-prd/memsql-exporter\","
+            "node=\"node-3337afc7-443e-4126-b784-413903527186-aggregator-0\","
+            "role=\"CA\","
+            "workspace_group_id=\"3337afc7-443e-4126-b784-413903527186\","
+            "workspace_name=\"singlestore-central\"} 1"
+            'singlestoredb_cloud_cpu_usage{'
+            "node=\"aggregator-0\",workspace_group_id=\"wg-123\"} 75.5"
+        )
+
+        metrics = WorkspaceGroupMetrics.from_openmetrics_text('wg-123', openmetrics_text)
+
+        assert metrics.workspace_group_id == 'wg-123'
+        assert len(metrics.data_points) == 2
+
+        # Test first metric
+        threads_metrics = metrics.get_metrics_by_name(
+            'singlestoredb_cloud_threads_running',
+        )
+        assert len(threads_metrics) == 1
+        assert threads_metrics[0].value == 1.0
+        assert threads_metrics[0].labels['role'] == 'CA'
+
+        # Test second metric
+        cpu_metrics = metrics.get_metrics_by_name('singlestoredb_cloud_cpu_usage')
+        assert len(cpu_metrics) == 1
+        assert cpu_metrics[0].value == 75.5
+
+    def test_storage_dr_status_from_dict(self):
+        """Test StorageDRStatus.from_dict conversion."""
+        from singlestoredb.management.storage_dr import StorageDRStatus
+
+        data = {
+            'compute': {
+                'storageDRType': 'Failover',
+                'storageDRState': 'Active',
+                'totalWorkspaces': 2,
+                'totalAttachments': 5,
+                'completedWorkspaces': 1,
+                'completedAttachments': 3,
+            },
+            'storage': [
+                {
+                    'databaseName': 'test_db',
+                    'region': 'us-east-1',
+                    'duplicationState': 'Active',
+                },
+                {
+                    'databaseName': 'prod_db',
+                    'region': 'us-west-2',
+                    'duplicationState': 'Pending',
+                },
+            ],
+        }
+
+        status = StorageDRStatus.from_dict(data)
+        assert status.compute.storage_dr_type == 'Failover'
+        assert status.compute.storage_dr_state == 'Active'
+        assert status.compute.total_workspaces == 2
+        assert status.compute.completed_workspaces == 1
+        assert len(status.storage) == 2
+        assert status.storage[0].database_name == 'test_db'
+        assert status.storage[0].duplication_state == 'Active'
+        assert status.storage[1].duplication_state == 'Pending'
