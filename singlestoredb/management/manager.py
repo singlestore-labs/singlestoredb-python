@@ -15,6 +15,7 @@ import requests
 
 from .. import config
 from ..exceptions import ManagementError
+from ..exceptions import OperationalError
 from .utils import get_token
 
 
@@ -308,5 +309,59 @@ class Manager(object):
             time.sleep(interval)
             timeout -= interval
             out = getattr(self, f'get_{self.obj_type}')(out.id)
+
+        return out
+
+    def _wait_on_endpoint(
+        self,
+        out: Any,
+        interval: int = 10,
+        timeout: int = 300,
+    ) -> Any:
+        """
+        Wait for the endpoint to be ready by attempting to connect.
+
+        Parameters
+        ----------
+        out : Any
+            Workspace object with a connect method
+        interval : int, optional
+            Interval between each connection attempt (default: 10 seconds)
+        timeout : int, optional
+            Maximum time to wait before raising an exception (default: 300 seconds)
+
+        Raises
+        ------
+        ManagementError
+            If timeout is reached or endpoint is not available
+
+        Returns
+        -------
+        Same object type as `out`
+
+        """
+        if not hasattr(out, 'connect') or not out.connect:
+            raise ManagementError(
+                msg=f'{type(out).__name__} object does not have a valid endpoint',
+            )
+
+        while True:
+            try:
+                # Try to establish a connection to the endpoint using context manager
+                with out.connect(connect_timeout=5):
+                    pass
+            except Exception as exc:
+                # If we get an 'access denied' error, that means that the server is
+                # up and we just aren't authenticating.
+                if isinstance(exc, OperationalError) and exc.errno == 1045:
+                    break
+                # If connection fails, check timeout and retry
+                if timeout <= 0:
+                    raise ManagementError(
+                        msg=f'Exceeded waiting time for {self.obj_type} endpoint '
+                            'to become ready',
+                    )
+                time.sleep(interval)
+                timeout -= interval
 
         return out

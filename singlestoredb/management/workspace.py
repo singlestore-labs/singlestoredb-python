@@ -1794,6 +1794,12 @@ class WorkspaceManager(Manager):
                 interval=wait_interval,
                 timeout=wait_timeout,
             )
+            # After workspace is active, wait for endpoint to be ready
+            out = self._wait_on_endpoint(
+                out,
+                interval=wait_interval,
+                timeout=wait_timeout,
+            )
         return out
 
     def get_workspace_group(self, id: str) -> WorkspaceGroup:
