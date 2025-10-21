@@ -353,8 +353,10 @@ class Manager(object):
                 with connection.connect(host=out.endpoint, connect_timeout=5):
                     pass
                 # If connection succeeds, endpoint is ready
+                print('CONNECTED')
                 break
             except Exception:
+                print('STILL WAITING')
                 # If connection fails, check timeout and retry
                 if timeout <= 0:
                     raise ManagementError(
