@@ -340,6 +340,12 @@ class Manager(object):
         Same object type as `out`
 
         """
+        # Only wait if workload type is set which means we are in the
+        # notebook environment. Outside of the environment, the endpoint
+        # may not be reachable directly.
+        if not os.environ.get('SINGLESTOREDB_WORKLOAD_TYPE', ''):
+            return out
+
         if not hasattr(out, 'connect') or not out.connect:
             raise ManagementError(
                 msg=f'{type(out).__name__} object does not have a valid endpoint',
