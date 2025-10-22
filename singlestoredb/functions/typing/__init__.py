@@ -1,6 +1,6 @@
-from collections.abc import Iterable
 import dataclasses
 import json
+from collections.abc import Sequence
 from typing import Annotated
 from typing import Any
 from typing import Callable
@@ -8,7 +8,6 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Protocol
-from typing import Sequence
 from typing import Tuple
 from typing import TypeVar
 from typing import Union
