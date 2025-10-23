@@ -8,6 +8,12 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.16.0 - October 23, 2025
+--------------------------
+* Add additional check for the workspace endpoint being available (#102)
+* Modernize the build and install system (#100)
+* Delete deprecated, old, invalid versions for chat and embeddings clients. (#99)
+
 v1.15.8 - September 26, 2025
 ----------------------------
 * Mcdb 80886 fix httpx timeout (#97)
