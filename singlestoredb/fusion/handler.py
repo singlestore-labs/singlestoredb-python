@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import textwrap
+import warnings
 from collections.abc import Iterable
 from typing import Any
 from typing import Callable
@@ -21,6 +22,7 @@ from parsimonious.nodes import NodeVisitor
 
 from . import result
 from ..connection import Connection
+from ..warnings import PreviewFeatureWarning
 
 CORE_GRAMMAR = r'''
     ws = ~r"(\s+|(\s*/\*.*\*/\s*)+)"
@@ -580,6 +582,7 @@ class SQLHandler(NodeVisitor):
     _grammar: str = CORE_GRAMMAR
     _is_compiled: bool = False
     _enabled: bool = True
+    _preview: bool = False
 
     def __init__(self, connection: Connection):
         self.connection = connection
@@ -654,6 +657,13 @@ class SQLHandler(NodeVisitor):
         DummySQLResult
 
         """
+        if type(self)._preview:
+            warnings.warn(
+                'This is a preview Fusion SQL command. '
+                'The options and syntax may change in the future.',
+                PreviewFeatureWarning, stacklevel=2,
+            )
+
         type(self).compile()
         self._handled = set()
         try:

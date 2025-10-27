@@ -122,6 +122,8 @@ class ScheduleJobHandler(SQLHandler):
         ;
     """
 
+    _preview = True
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         res = FusionSQLResult()
         res.add_field('JobID', result.STRING)

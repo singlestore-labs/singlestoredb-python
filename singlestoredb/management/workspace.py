@@ -226,8 +226,8 @@ class Stage(FileLocation):
         include_root : bool, optional
             Should the local root folder itself be uploaded as the top folder?
         ignore : Path or str or List[Path] or List[str], optional
-            Glob patterns of files to ignore, for example, '**/*.pyc` will
-            ignore all '*.pyc' files in the directory tree
+            Glob patterns of files to ignore, for example, ``**/*.pyc`` will
+            ignore all ``*.pyc`` files in the directory tree
 
         """
         if not os.path.isdir(local_path):
