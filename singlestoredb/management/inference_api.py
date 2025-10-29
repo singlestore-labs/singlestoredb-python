@@ -154,7 +154,7 @@ class InferenceAPIManager(object):
         """
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
-        res = self._manager._post(f'inferenceapis/{self.project_id}/{model_name}/start')
+        res = self._manager._post(f'inferenceapis/{model_name}/start')
         return res.json()
 
     def stop(self, model_name: str) -> Dict[str, Any]:
@@ -174,5 +174,5 @@ class InferenceAPIManager(object):
         """
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
-        res = self._manager._post(f'inferenceapis/{self.project_id}/{model_name}/stop')
+        res = self._manager._post(f'inferenceapis/{model_name}/stop')
         return res.json()

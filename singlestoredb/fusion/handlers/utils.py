@@ -12,12 +12,12 @@ from ...management import manage_workspaces
 from ...management.files import FilesManager
 from ...management.files import FileSpace
 from ...management.files import manage_files
+from ...management.inference_api import InferenceAPIInfo
+from ...management.inference_api import InferenceAPIManager
 from ...management.workspace import StarterWorkspace
 from ...management.workspace import Workspace
 from ...management.workspace import WorkspaceGroup
 from ...management.workspace import WorkspaceManager
-from ...management.inference_api import InferenceAPIInfo
-from ...management.inference_api import InferenceAPIManager
 
 
 def get_workspace_manager() -> WorkspaceManager:
