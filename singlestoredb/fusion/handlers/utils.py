@@ -18,8 +18,6 @@ from ...management.workspace import StarterWorkspace
 from ...management.workspace import Workspace
 from ...management.workspace import WorkspaceGroup
 from ...management.workspace import WorkspaceManager
-from ...management.inference_api import InferenceAPIInfo
-from ...management.inference_api import InferenceAPIManager
 
 
 def get_workspace_manager() -> WorkspaceManager:
