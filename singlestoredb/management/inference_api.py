@@ -242,7 +242,11 @@ class InferenceAPIManager(object):
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
         res = self._manager._post(f'inferenceapis/{model_name}/start')
-        return ModelOperationResult.from_start_response(res.json())
+        response_data = res.json()
+        # Debug: print the actual response to see what we're getting
+        import json
+        print(f"DEBUG - Start response: {json.dumps(response_data, indent=2, default=str)}")
+        return ModelOperationResult.from_start_response(response_data)
 
     def stop(self, model_name: str) -> ModelOperationResult:
         """
