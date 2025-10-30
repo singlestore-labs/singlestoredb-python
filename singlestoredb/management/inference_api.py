@@ -50,7 +50,7 @@ class ModelOperationResult(object):
 
         """
         return cls(
-            name=response.get('modelName', ''),
+            name=response.get('modelID', ''),
             status='Initializing',
             hosting_platform=response.get('hostingPlatform', ''),
         )
@@ -86,7 +86,7 @@ class ModelOperationResult(object):
             Message describing the operation result
 
         """
-        return f"Model '{self.name}' status is now {self.status}"
+        return f"Model is {self.status}"
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -262,4 +262,8 @@ class InferenceAPIManager(object):
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
         res = self._manager._post(f'inferenceapis/{model_name}/stop')
-        return ModelOperationResult.from_stop_response(res.json())
+        response_data = res.json()
+        # Debug: print the actual response to see what we're getting
+        import json
+        print(f"DEBUG - Stop response: {json.dumps(response_data, indent=2, default=str)}")
+        return ModelOperationResult.from_stop_response(response_data)
