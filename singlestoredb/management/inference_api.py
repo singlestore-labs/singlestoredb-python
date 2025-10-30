@@ -50,7 +50,7 @@ class ModelOperationResult(object):
 
         """
         return cls(
-            name=response.get('modelName', ''),
+            name=response.get('modelID', ''),
             status='Initializing',
             hosting_platform=response.get('hostingPlatform', ''),
         )
