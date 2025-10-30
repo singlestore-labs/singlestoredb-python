@@ -86,7 +86,7 @@ class ModelOperationResult(object):
             Message describing the operation result
 
         """
-        return f"Model is {self.status}"
+        return f'Model is {self.status}'
 
     def __str__(self) -> str:
         """Return string representation."""
