@@ -7,7 +7,6 @@ from typing import Optional
 from .. import result
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
-from .. import result
 from .files import ShowFilesHandler
 from .utils import get_file_space
 from .utils import get_inference_api
