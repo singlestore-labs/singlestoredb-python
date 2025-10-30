@@ -285,12 +285,10 @@ class StartModelHandler(SQLHandler):
         operation_result = inference_api.start()
 
         res = FusionSQLResult()
-        res.add_field('Model', result.STRING)
         res.add_field('Status', result.STRING)
         res.add_field('Message', result.STRING)
         res.set_rows([
             (
-                operation_result.name,
                 operation_result.status,
                 operation_result.get_message(),
             ),
@@ -335,12 +333,10 @@ class StopModelHandler(SQLHandler):
         operation_result = inference_api.stop()
 
         res = FusionSQLResult()
-        res.add_field('Model', result.STRING)
         res.add_field('Status', result.STRING)
         res.add_field('Message', result.STRING)
         res.set_rows([
             (
-                operation_result.name,
                 operation_result.status,
                 operation_result.get_message(),
             ),

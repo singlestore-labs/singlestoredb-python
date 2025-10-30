@@ -50,7 +50,7 @@ class ModelOperationResult(object):
 
         """
         return cls(
-            name=response.get('modelID', ''),
+            name=response.get('modelName', ''),
             status='Initializing',
             hosting_platform=response.get('hostingPlatform', ''),
         )
@@ -242,11 +242,7 @@ class InferenceAPIManager(object):
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
         res = self._manager._post(f'inferenceapis/{model_name}/start')
-        response_data = res.json()
-        # Debug: print the actual response to see what we're getting
-        import json
-        print(f"DEBUG - Start response: {json.dumps(response_data, indent=2, default=str)}")
-        return ModelOperationResult.from_start_response(response_data)
+        return ModelOperationResult.from_start_response(res.json())
 
     def stop(self, model_name: str) -> ModelOperationResult:
         """
@@ -266,8 +262,4 @@ class InferenceAPIManager(object):
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
         res = self._manager._post(f'inferenceapis/{model_name}/stop')
-        response_data = res.json()
-        # Debug: print the actual response to see what we're getting
-        import json
-        print(f"DEBUG - Stop response: {json.dumps(response_data, indent=2, default=str)}")
-        return ModelOperationResult.from_stop_response(response_data)
+        return ModelOperationResult.from_stop_response(res.json())
