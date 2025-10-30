@@ -10,6 +10,93 @@ from singlestoredb.exceptions import ManagementError
 from singlestoredb.management.manager import Manager
 
 
+class ModelOperationResult(object):
+    """
+    Result of a model start or stop operation.
+
+    Attributes
+    ----------
+    name : str
+        Name of the model
+    status : str
+        Current status of the model (e.g., 'Active', 'Initializing', 'Suspended')
+    hosting_platform : str
+        Hosting platform (e.g., 'Nova', 'Amazon', 'Azure')
+    """
+
+    def __init__(
+        self,
+        name: str,
+        status: str,
+        hosting_platform: str,
+    ):
+        self.name = name
+        self.status = status
+        self.hosting_platform = hosting_platform
+
+    @classmethod
+    def from_start_response(cls, response: Dict[str, Any]) -> 'ModelOperationResult':
+        """
+        Create a ModelOperationResult from a start operation response.
+
+        Parameters
+        ----------
+        response : dict
+            Response from the start endpoint
+
+        Returns
+        -------
+        ModelOperationResult
+
+        """
+        return cls(
+            name=response.get('modelName', ''),
+            status='Initializing',
+            hosting_platform=response.get('hostingPlatform', ''),
+        )
+
+    @classmethod
+    def from_stop_response(cls, response: Dict[str, Any]) -> 'ModelOperationResult':
+        """
+        Create a ModelOperationResult from a stop operation response.
+
+        Parameters
+        ----------
+        response : dict
+            Response from the stop endpoint
+
+        Returns
+        -------
+        ModelOperationResult
+
+        """
+        return cls(
+            name=response.get('name', ''),
+            status=response.get('status', 'Suspended'),
+            hosting_platform=response.get('hostingPlatform', ''),
+        )
+
+    def get_message(self) -> str:
+        """
+        Get a human-readable message about the operation.
+
+        Returns
+        -------
+        str
+            Message describing the operation result
+
+        """
+        return f"Model '{self.name}' status is now {self.status}"
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
+
 class InferenceAPIInfo(object):
     """
     Inference API definition.
@@ -80,28 +167,28 @@ class InferenceAPIInfo(object):
         """Return string representation."""
         return str(self)
 
-    def start(self) -> Dict[str, Any]:
+    def start(self) -> ModelOperationResult:
         """
         Start this inference API model.
 
         Returns
         -------
-        dict
-            Response from the start operation
+        ModelOperationResult
+            Result object containing status information about the started model
 
         """
         if self._manager is None:
             raise ManagementError(msg='No manager associated with this inference API')
         return self._manager.start(self.name)
 
-    def stop(self) -> Dict[str, Any]:
+    def stop(self) -> ModelOperationResult:
         """
         Stop this inference API model.
 
         Returns
         -------
-        dict
-            Response from the stop operation
+        ModelOperationResult
+            Result object containing status information about the stopped model
 
         """
         if self._manager is None:
@@ -137,7 +224,7 @@ class InferenceAPIManager(object):
         inference_api._manager = self  # Associate the manager
         return inference_api
 
-    def start(self, model_name: str) -> Dict[str, Any]:
+    def start(self, model_name: str) -> ModelOperationResult:
         """
         Start an inference API model.
 
@@ -148,16 +235,16 @@ class InferenceAPIManager(object):
 
         Returns
         -------
-        dict
-            Response from the start operation
+        ModelOperationResult
+            Result object containing status information about the started model
 
         """
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
         res = self._manager._post(f'inferenceapis/{model_name}/start')
-        return res.json()
+        return ModelOperationResult.from_start_response(res.json())
 
-    def stop(self, model_name: str) -> Dict[str, Any]:
+    def stop(self, model_name: str) -> ModelOperationResult:
         """
         Stop an inference API model.
 
@@ -168,11 +255,11 @@ class InferenceAPIManager(object):
 
         Returns
         -------
-        dict
-            Response from the stop operation
+        ModelOperationResult
+            Result object containing status information about the stopped model
 
         """
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
         res = self._manager._post(f'inferenceapis/{model_name}/stop')
-        return res.json()
+        return ModelOperationResult.from_stop_response(res.json())

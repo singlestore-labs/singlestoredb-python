@@ -6,6 +6,7 @@ from typing import Optional
 
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
+from .. import result
 from .files import ShowFilesHandler
 from .utils import get_file_space
 from .utils import get_inference_api
@@ -281,8 +282,21 @@ class StartModelHandler(SQLHandler):
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         inference_api = get_inference_api(params)
-        inference_api.start()
-        return None
+        operation_result = inference_api.start()
+
+        res = FusionSQLResult()
+        res.add_field('Model', result.STRING)
+        res.add_field('Status', result.STRING)
+        res.add_field('Message', result.STRING)
+        res.set_rows([
+            (
+                operation_result.name,
+                operation_result.status,
+                operation_result.get_message(),
+            ),
+        ])
+
+        return res
 
 
 StartModelHandler.register(overwrite=True)
@@ -318,8 +332,21 @@ class StopModelHandler(SQLHandler):
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         inference_api = get_inference_api(params)
-        inference_api.stop()
-        return None
+        operation_result = inference_api.stop()
+
+        res = FusionSQLResult()
+        res.add_field('Model', result.STRING)
+        res.add_field('Status', result.STRING)
+        res.add_field('Message', result.STRING)
+        res.set_rows([
+            (
+                operation_result.name,
+                operation_result.status,
+                operation_result.get_message(),
+            ),
+        ])
+
+        return res
 
 
 StopModelHandler.register(overwrite=True)
