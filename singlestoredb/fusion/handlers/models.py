@@ -12,7 +12,7 @@ from .utils import get_file_space
 
 class ShowModelsHandler(ShowFilesHandler):
     """
-    SHOW MODELS
+    SHOW MODEL FILES
         [ at_path ] [ <like> ]
         [ <order-by> ]
         [ <limit> ] [ recursive ] [ extended ];
@@ -53,16 +53,16 @@ class ShowModelsHandler(ShowFilesHandler):
     --------
     The following command lists the models::
 
-        SHOW MODELS;
+        SHOW MODEL FILES;
 
     The following command lists the models with additional information::
 
-        SHOW MODELS EXTENDED;
+        SHOW MODEL FILES EXTENDED;
 
     See Also
     --------
-    * ``UPLOAD MODEL model_name FROM path``
-    * ``DOWNLOAD MODEL model_name``
+    * ``UPLOAD MODEL FILE model_name FROM path``
+    * ``DOWNLOAD MODEL FILE model_name``
 
 
     """  # noqa: E501
@@ -78,7 +78,7 @@ ShowModelsHandler.register(overwrite=True)
 
 class UploadModelHandler(SQLHandler):
     """
-    UPLOAD MODEL model_name
+    UPLOAD MODEL FILE model_name
         FROM local_path [ overwrite ];
 
     # Model Name
@@ -110,12 +110,12 @@ class UploadModelHandler(SQLHandler):
     The following command uploads a file to models space and overwrite any
     existing files at the specified path::
 
-        UPLOAD MODEL model_name
+        UPLOAD MODEL FILE model_name
             FROM 'llama3/' OVERWRITE;
 
     See Also
     --------
-    * ``DOWNLOAD MODEL model_name``
+    * ``DOWNLOAD MODEL FILE model_name``
 
     """  # noqa: E501
 
@@ -148,7 +148,7 @@ UploadModelHandler.register(overwrite=True)
 
 class DownloadModelHandler(SQLHandler):
     """
-    DOWNLOAD MODEL model_name
+    DOWNLOAD MODEL FILE model_name
         [ local_path ]
         [ overwrite ];
 
@@ -182,17 +182,17 @@ class DownloadModelHandler(SQLHandler):
     The following command displays the contents of the file on the
     standard output::
 
-        DOWNLOAD MODEL llama3;
+        DOWNLOAD MODEL FILE llama3;
 
     The following command downloads a model to a specific location and
     overwrites any existing models folder with the name ``local_llama3`` on the local storage::
 
-        DOWNLOAD MODEL llama3
+        DOWNLOAD MODEL FILE llama3
             TO 'local_llama3' OVERWRITE;
 
     See Also
     --------
-    * ``UPLOAD MODEL model_name FROM local_path``
+    * ``UPLOAD MODEL FILE model_name FROM local_path``
 
     """  # noqa: E501
 
@@ -216,7 +216,7 @@ DownloadModelHandler.register(overwrite=True)
 
 class DropModelsHandler(SQLHandler):
     """
-    DROP MODEL model_name;
+    DROP MODEL FILE model_name;
 
     # Model Name
     model_name = '<model-name>'
@@ -233,7 +233,7 @@ class DropModelsHandler(SQLHandler):
     --------
     The following commands deletes a model from a model space::
 
-        DROP MODEL llama3;
+        DROP MODEL FILE llama3;
 
     """  # noqa: E501
 
