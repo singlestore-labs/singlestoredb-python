@@ -5,6 +5,9 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+from singlestoredb.functions.ext.utils import apply_transformer
+from singlestoredb.functions.ext.utils import Transformer
+
 try:
     import numpy as np
     has_numpy = True
@@ -32,7 +35,7 @@ except ImportError:
 
 
 def load(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[List[int], List[Any]]:
     '''
@@ -40,7 +43,7 @@ def load(
 
     Parameters
     ----------
-    colspec : List[str]
+    colspec : List[Tuple[str, int, Optional[Transformer]]]
         An List of column data types
     data : bytes
         The data in Apache Feather format
@@ -57,12 +60,19 @@ def load(
     row_ids = table.column(0).to_pylist()
     rows = []
     for row in table.to_pylist():
-        rows.append([row[c] for c in table.column_names[1:]])
+        converted_row = []
+        for i, col_name in enumerate(table.column_names[1:]):
+            value = apply_transformer(
+                colspec[i][2],
+                row[col_name],
+            )
+            converted_row.append(value)
+        rows.append(converted_row)
     return row_ids, rows
 
 
 def _load_vectors(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[
     'pa.Array[pa.int64]',
@@ -73,7 +83,7 @@ def _load_vectors(
 
     Parameters
     ----------
-    colspec : List[str]
+    colspec : List[Tuple[str, int, Optional[Transformer]]]
         An List of column data types
     data : bytes
         The data in Apache Feather format
@@ -86,16 +96,23 @@ def _load_vectors(
     if not has_pyarrow:
         raise RuntimeError('pyarrow must be installed for this operation')
 
+    import pyarrow as pa
+
     table = pa.feather.read_table(BytesIO(data))
     row_ids = table.column(0)
     out = []
     for i, col in enumerate(table.columns[1:]):
-        out.append((col, col.is_null()))
+        out.append((
+            apply_transformer(
+                colspec[i][2], col,
+            ), col.is_null(),
+        ))
+
     return row_ids, out
 
 
 def load_pandas(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[
     'pd.Series[np.int64]',
@@ -106,7 +123,7 @@ def load_pandas(
 
     Parameters
     ----------
-    colspec : List[str]
+    colspec : List[Tuple[str, int, Optional[Transformer]]]
         An List of column data types
     data : bytes
         The data in Apache Feather format
@@ -128,12 +145,12 @@ def load_pandas(
                 data.to_pandas().reindex(index),
                 mask.to_pandas().reindex(index),
             )
-            for (data, mask), (name, dtype) in zip(cols, colspec)
+            for (data, mask), (name, dtype, _) in zip(cols, colspec)
         ]
 
 
 def load_polars(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[
     'pl.Series[pl.Int64]',
@@ -144,7 +161,7 @@ def load_polars(
 
     Parameters
     ----------
-    colspec : List[str]
+    colspec : List[Tuple[str, int, Optional[Transformer]]]
         An List of column data types
     data : bytes
         The data in Apache Feather format
@@ -166,13 +183,13 @@ def load_polars(
                 pl.from_arrow(data),  # type: ignore
                 pl.from_arrow(mask),  # type: ignore
             )
-            for (data, mask), (name, dtype) in zip(cols, colspec)
+            for (data, mask), (name, dtype, _) in zip(cols, colspec)
         ],
     )
 
 
 def load_numpy(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[
     'np.typing.NDArray[np.int64]',
@@ -183,7 +200,7 @@ def load_numpy(
 
     Parameters
     ----------
-    colspec : List[str]
+    colspec : List[Tuple[str, int, Optional[Transformer]]]
         An List of column data types
     data : bytes
         The data in Apache Feather format
@@ -204,12 +221,12 @@ def load_numpy(
                 data.to_numpy(),
                 mask.to_numpy(),
             )
-            for (data, mask), (name, dtype) in zip(cols, colspec)
+            for (data, mask), (name, dtype, _) in zip(cols, colspec)
         ]
 
 
 def load_arrow(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[
     'pa.Array[pa.int64()]',
@@ -220,7 +237,7 @@ def load_arrow(
 
     Parameters
     ----------
-    colspec : List[str]
+    colspec : List[Tuple[str, int, Optional[Transformer]]]
         An List of column data types
     data : bytes
         The data in Apache Feather format
@@ -237,7 +254,7 @@ def load_arrow(
 
 
 def dump(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: List[int],
     rows: List[List[Any]],
 ) -> bytes:
@@ -246,7 +263,7 @@ def dump(
 
     Parameters
     ----------
-    returns : List[int]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : List[int]
         The row IDs
@@ -262,11 +279,23 @@ def dump(
         raise RuntimeError('pyarrow must be installed for this operation')
 
     if len(rows) == 0 or len(row_ids) == 0:
-        return BytesIO().getbuffer()
+        return BytesIO().getvalue()
 
     colnames = ['col{}'.format(x) for x in range(len(rows[0]))]
 
-    tbl = pa.Table.from_pylist([dict(list(zip(colnames, row))) for row in rows])
+    # Process rows to handle JSON serialization
+    processed_rows = []
+    for row in rows:
+        processed_row = []
+        for i, value in enumerate(row):
+            processed_row.append(
+                apply_transformer(
+                    returns[i][2], value,
+                ),
+            )
+        processed_rows.append(processed_row)
+
+    tbl = pa.Table.from_pylist([dict(list(zip(colnames, row))) for row in processed_rows])
     tbl = tbl.add_column(0, '__index__', pa.array(row_ids))
 
     sink = pa.BufferOutputStream()
@@ -278,7 +307,7 @@ def dump(
 
 
 def _dump_vectors(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pa.Array[pa.int64]',
     cols: List[Tuple['pa.Array[Any]', Optional['pa.Array[pa.bool_]']]],
 ) -> bytes:
@@ -287,7 +316,7 @@ def _dump_vectors(
 
     Parameters
     ----------
-    returns : List[int]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : List[int]
         The row IDs
@@ -303,10 +332,19 @@ def _dump_vectors(
         raise RuntimeError('pyarrow must be installed for this operation')
 
     if len(cols) == 0 or len(row_ids) == 0:
-        return BytesIO().getbuffer()
+        return BytesIO().getvalue()
+
+    # Process columns to handle JSON serialization
+    processed_cols = []
+    for i, (data, mask) in enumerate(cols):
+        processed_cols.append((
+            apply_transformer(
+                returns[i][2], data,
+            ), mask,
+        ))
 
     tbl = pa.Table.from_arrays(
-        [pa.array(data, mask=mask) for data, mask in cols],
+        [pa.array(data, mask=mask) for data, mask in processed_cols],
         names=['col{}'.format(x) for x in range(len(cols))],
     )
     tbl = tbl.add_column(0, '__index__', row_ids)
@@ -320,7 +358,7 @@ def _dump_vectors(
 
 
 def dump_arrow(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pa.Array[int]',
     cols: List[Tuple['pa.Array[Any]', 'pa.Array[bool]']],
 ) -> bytes:
@@ -331,7 +369,7 @@ def dump_arrow(
 
 
 def dump_numpy(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'np.typing.NDArray[np.int64]',
     cols: List[Tuple['np.typing.NDArray[Any]', 'np.typing.NDArray[np.bool_]']],
 ) -> bytes:
@@ -346,7 +384,7 @@ def dump_numpy(
 
 
 def dump_pandas(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pd.Series[np.int64]',
     cols: List[Tuple['pd.Series[Any]', 'pd.Series[np.bool_]']],
 ) -> bytes:
@@ -361,7 +399,7 @@ def dump_pandas(
 
 
 def dump_polars(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pl.Series[pl.Int64]',
     cols: List[Tuple['pl.Series[Any]', 'pl.Series[pl.Boolean]']],
 ) -> bytes:
