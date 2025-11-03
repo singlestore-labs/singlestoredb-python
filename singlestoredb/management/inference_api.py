@@ -219,7 +219,7 @@ class InferenceAPIManager(object):
     def get(self, model_name: str) -> InferenceAPIInfo:
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
-        res = self._manager._get(f'inferenceapis/{self.project_id}/{model_name}').json()
+        res = self._manager._get(f'models/{self.project_id}/{model_name}').json()
         inference_api = InferenceAPIInfo.from_dict(res)
         inference_api._manager = self  # Associate the manager
         return inference_api
@@ -241,7 +241,7 @@ class InferenceAPIManager(object):
         """
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
-        res = self._manager._post(f'inferenceapis/{model_name}/start')
+        res = self._manager._post(f'models/{model_name}/start')
         return ModelOperationResult.from_start_response(res.json())
 
     def stop(self, model_name: str) -> ModelOperationResult:
@@ -261,5 +261,5 @@ class InferenceAPIManager(object):
         """
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
-        res = self._manager._post(f'inferenceapis/{model_name}/stop')
+        res = self._manager._post(f'models/{model_name}/stop')
         return ModelOperationResult.from_stop_response(res.json())
