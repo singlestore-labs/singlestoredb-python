@@ -136,10 +136,7 @@ class SingleStoreDB:
 
         # Setup license value
         if license is None:
-            try:
-                license = os.environ['SINGLESTORE_LICENSE']
-            except KeyError:
-                raise ValueError('a SingleStore license must be supplied')
+            license = os.environ.get('SINGLESTORE_LICENSE', None)
 
         # Setup environment variables for the container
         env = {'ROOT_PASSWORD': self.password}
