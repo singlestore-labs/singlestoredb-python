@@ -250,6 +250,7 @@ class Portal(object):
             raise RuntimeError('workspace is not active')
 
         id = w.id
+        print(w, default_database)
 
         self._call_javascript(
             'changeConnection', [id, default_database],
