@@ -8,6 +8,12 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.16.1 - November 5, 2025
+--------------------------
+* Add preview tag to Fusion SQL schedule jobs command
+* Improve USE WORKSPACE reliability (#104)
+* Remove license requirement
+
 v1.16.0 - October 23, 2025
 --------------------------
 * Add additional check for the workspace endpoint being available (#102)
