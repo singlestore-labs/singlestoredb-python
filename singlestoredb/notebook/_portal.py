@@ -57,7 +57,7 @@ class Portal(object):
         wait_on_condition: Optional[Callable[[], bool]] = None,
         timeout_message: str = 'timed out waiting on condition',
         wait_interval: float = 0.2,
-        timeout: float = 5.0,
+        timeout: float = 20.0,
     ) -> None:
         if not has_ipython or not func:
             return
@@ -250,7 +250,6 @@ class Portal(object):
             raise RuntimeError('workspace is not active')
 
         id = w.id
-        print(w, default_database)
 
         self._call_javascript(
             'changeConnection', [id, default_database],
