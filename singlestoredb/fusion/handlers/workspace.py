@@ -107,32 +107,37 @@ class UseWorkspaceHandler(SQLHandler):
 
             workspace_id = workspace.id
 
-        # Set workspace and database
-        if params.get('with_database'):
-            if params.get('in_group'):
-                # Use 3-element tuple: (workspace_group_id, workspace_name_or_id,
-                # database)
-                portal.connection = (  # type: ignore[assignment]
-                    workspace_group.id,
-                    workspace_name or workspace_id,
-                    params['with_database'],
-                )
+        try:
+            # Set workspace and database
+            if params.get('with_database'):
+                if params.get('in_group'):
+                    # Use 3-element tuple: (workspace_group_id, workspace_name_or_id,
+                    # database)
+                    portal.connection = (  # type: ignore[assignment]
+                        workspace_group.id,
+                        workspace_name or workspace_id,
+                        params['with_database'],
+                    )
+                else:
+                    # Use 2-element tuple: (workspace_name_or_id, database)
+                    portal.connection = (
+                        workspace_name or workspace_id,
+                        params['with_database'],
+                    )
             else:
-                # Use 2-element tuple: (workspace_name_or_id, database)
-                portal.connection = (
-                    workspace_name or workspace_id,
-                    params['with_database'],
-                )
-        else:
-            if params.get('in_group'):
-                # Use 2-element tuple: (workspace_group_id, workspace_name_or_id)
-                portal.workspace = (  # type: ignore[assignment]
-                    workspace_group.id,
-                    workspace_name or workspace_id,
-                )
-            else:
-                # Use string: workspace_name_or_id
-                portal.workspace = workspace_name or workspace_id
+                if params.get('in_group'):
+                    # Use 2-element tuple: (workspace_group_id, workspace_name_or_id)
+                    portal.workspace = (  # type: ignore[assignment]
+                        workspace_group.id,
+                        workspace_name or workspace_id,
+                    )
+                else:
+                    # Use string: workspace_name_or_id
+                    portal.workspace = workspace_name or workspace_id
+
+        except RuntimeError as exc:
+            if 'timeout' not in str(exc):
+                raise
 
         return None
 

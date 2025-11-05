@@ -56,7 +56,7 @@ class Portal(object):
         args: Optional[List[Any]] = None,
         wait_on_condition: Optional[Callable[[], bool]] = None,
         timeout_message: str = 'timed out waiting on condition',
-        wait_interval: float = 1.0,
+        wait_interval: float = 2.0,
         timeout: float = 60.0,
     ) -> None:
         if not has_ipython or not func:
