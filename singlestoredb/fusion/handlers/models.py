@@ -12,7 +12,7 @@ from .utils import get_file_space
 from .utils import get_inference_api
 
 
-class ShowModelsHandler(ShowFilesHandler):
+class ShowModelFilesHandler(ShowFilesHandler):
     """
     SHOW MODEL FILES
         [ at_path ] [ <like> ]
@@ -75,10 +75,10 @@ class ShowModelsHandler(ShowFilesHandler):
         return super().run(params)
 
 
-ShowModelsHandler.register(overwrite=True)
+ShowModelFilesHandler.register(overwrite=True)
 
 
-class UploadModelHandler(SQLHandler):
+class UploadModelFileHandler(SQLHandler):
     """
     UPLOAD MODEL FILE model_name
         FROM local_path [ overwrite ];
@@ -145,10 +145,10 @@ class UploadModelHandler(SQLHandler):
         return None
 
 
-UploadModelHandler.register(overwrite=True)
+UploadModelFileHandler.register(overwrite=True)
 
 
-class DownloadModelHandler(SQLHandler):
+class DownloadModelFileHandler(SQLHandler):
     """
     DOWNLOAD MODEL FILE model_name
         [ local_path ]
@@ -213,10 +213,10 @@ class DownloadModelHandler(SQLHandler):
         return None
 
 
-DownloadModelHandler.register(overwrite=True)
+DownloadModelFileHandler.register(overwrite=True)
 
 
-class DropModelsHandler(SQLHandler):
+class DropModelFileHandler(SQLHandler):
     """
     DROP MODEL FILE model_name;
 
@@ -249,7 +249,7 @@ class DropModelsHandler(SQLHandler):
         return None
 
 
-DropModelsHandler.register(overwrite=True)
+DropModelFileHandler.register(overwrite=True)
 
 
 class StartModelHandler(SQLHandler):
