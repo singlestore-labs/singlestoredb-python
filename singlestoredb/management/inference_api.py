@@ -3,6 +3,7 @@
 import os
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
 
 from .utils import vars_to_str
@@ -73,6 +74,48 @@ class ModelOperationResult(object):
         return cls(
             name=response.get('name', ''),
             status=response.get('status', 'Suspended'),
+            hosting_platform=response.get('hostingPlatform', ''),
+        )
+
+    @classmethod
+    def from_drop_response(cls, response: Dict[str, Any]) -> 'ModelOperationResult':
+        """
+        Create a ModelOperationResult from a drop operation response.
+
+        Parameters
+        ----------
+        response : dict
+            Response from the drop endpoint
+
+        Returns
+        -------
+        ModelOperationResult
+
+        """
+        return cls(
+            name=response.get('name', ''),
+            status=response.get('status', 'Deleted'),
+            hosting_platform=response.get('hostingPlatform', ''),
+        )
+
+    @classmethod
+    def from_show_response(cls, response: Dict[str, Any]) -> 'ModelOperationResult':
+        """
+        Create a ModelOperationResult from a show operation response.
+
+        Parameters
+        ----------
+        response : dict
+            Response from the show endpoint (single model info)
+
+        Returns
+        -------
+        ModelOperationResult
+
+        """
+        return cls(
+            name=response.get('name', ''),
+            status=response.get('status', ''),
             hosting_platform=response.get('hostingPlatform', ''),
         )
 
@@ -195,6 +238,20 @@ class InferenceAPIInfo(object):
             raise ManagementError(msg='No manager associated with this inference API')
         return self._manager.stop(self.name)
 
+    def drop(self) -> ModelOperationResult:
+        """
+        Drop this inference API model.
+
+        Returns
+        -------
+        ModelOperationResult
+            Result object containing status information about the dropped model
+
+        """
+        if self._manager is None:
+            raise ManagementError(msg='No manager associated with this inference API')
+        return self._manager.drop(self.name)
+
 
 class InferenceAPIManager(object):
     """
@@ -263,3 +320,38 @@ class InferenceAPIManager(object):
             raise ManagementError(msg='Manager not initialized')
         res = self._manager._post(f'models/{model_name}/stop')
         return ModelOperationResult.from_stop_response(res.json())
+
+    def show(self) -> List[ModelOperationResult]:
+        """
+        Show all inference APIs in the project.
+
+        Returns
+        -------
+        List[ModelOperationResult]
+            List of ModelOperationResult objects with status information
+
+        """
+        if self._manager is None:
+            raise ManagementError(msg='Manager not initialized')
+        res = self._manager._get('models').json()
+        return [ModelOperationResult.from_show_response(api) for api in res]
+
+    def drop(self, model_name: str) -> ModelOperationResult:
+        """
+        Drop an inference API model.
+
+        Parameters
+        ----------
+        model_name : str
+            Name of the model to drop
+
+        Returns
+        -------
+        ModelOperationResult
+            Result object containing status information about the dropped model
+
+        """
+        if self._manager is None:
+            raise ManagementError(msg='Manager not initialized')
+        res = self._manager._delete(f'models/{model_name}/drop')
+        return ModelOperationResult.from_drop_response(res.json())
