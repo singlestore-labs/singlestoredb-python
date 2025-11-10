@@ -12,6 +12,8 @@ from ...management import manage_workspaces
 from ...management.files import FilesManager
 from ...management.files import FileSpace
 from ...management.files import manage_files
+from ...management.inference_api import InferenceAPIInfo
+from ...management.inference_api import InferenceAPIManager
 from ...management.workspace import StarterWorkspace
 from ...management.workspace import Workspace
 from ...management.workspace import WorkspaceGroup
@@ -322,3 +324,16 @@ def get_file_space(params: Dict[str, Any]) -> FileSpace:
             raise ValueError(f'invalid file location: {file_location}')
 
     raise KeyError('no file space was specified')
+
+
+def get_inference_api_manager() -> InferenceAPIManager:
+    """Return the inference API manager for the current project."""
+    wm = get_workspace_manager()
+    return wm.organization.inference_apis
+
+
+def get_inference_api(params: Dict[str, Any]) -> InferenceAPIInfo:
+    """Return an inference API based on model name in params."""
+    inference_apis = get_inference_api_manager()
+    model_name = params['model_name']
+    return inference_apis.get(model_name)

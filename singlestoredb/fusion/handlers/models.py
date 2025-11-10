@@ -4,10 +4,12 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from .. import result
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
 from .files import ShowFilesHandler
 from .utils import get_file_space
+from .utils import get_inference_api
 
 
 class ShowModelsHandler(ShowFilesHandler):
@@ -248,3 +250,99 @@ class DropModelsHandler(SQLHandler):
 
 
 DropModelsHandler.register(overwrite=True)
+
+
+class StartModelHandler(SQLHandler):
+    """
+    START MODEL model_name ;
+
+    # Model Name
+    model_name = '<model-name>'
+
+    Description
+    -----------
+    Starts an inference API model.
+
+    Arguments
+    ---------
+    * ``<model-name>``: Name of the model to start.
+
+    Example
+    --------
+    The following command starts a model::
+
+        START MODEL my_model;
+
+    See Also
+    --------
+    * ``STOP MODEL model_name``
+    * ``SHOW MODELS``
+
+    """  # noqa: E501
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        inference_api = get_inference_api(params)
+        operation_result = inference_api.start()
+
+        res = FusionSQLResult()
+        res.add_field('Status', result.STRING)
+        res.add_field('Message', result.STRING)
+        res.set_rows([
+            (
+                operation_result.status,
+                operation_result.get_message(),
+            ),
+        ])
+
+        return res
+
+
+StartModelHandler.register(overwrite=True)
+
+
+class StopModelHandler(SQLHandler):
+    """
+    STOP MODEL model_name ;
+
+    # Model Name
+    model_name = '<model-name>'
+
+    Description
+    -----------
+    Stops an inference API model.
+
+    Arguments
+    ---------
+    * ``<model-name>``: Name of the model to stop.
+
+    Example
+    --------
+    The following command stops a model::
+
+        STOP MODEL my_model;
+
+    See Also
+    --------
+    * ``START MODEL model_name``
+    * ``SHOW MODELS``
+
+    """  # noqa: E501
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        inference_api = get_inference_api(params)
+        operation_result = inference_api.stop()
+
+        res = FusionSQLResult()
+        res.add_field('Status', result.STRING)
+        res.add_field('Message', result.STRING)
+        res.set_rows([
+            (
+                operation_result.status,
+                operation_result.get_message(),
+            ),
+        ])
+
+        return res
+
+
+StopModelHandler.register(overwrite=True)
