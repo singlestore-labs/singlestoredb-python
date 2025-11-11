@@ -12,9 +12,9 @@ from .utils import get_file_space
 from .utils import get_inference_api
 
 
-class ShowModelFilesHandler(ShowFilesHandler):
+class ShowCustomModelsHandler(ShowFilesHandler):
     """
-    SHOW MODEL FILES
+    SHOW CUSTOM MODELS
         [ at_path ] [ <like> ]
         [ <order-by> ]
         [ <limit> ] [ recursive ] [ extended ];
@@ -55,16 +55,16 @@ class ShowModelFilesHandler(ShowFilesHandler):
     --------
     The following command lists the models::
 
-        SHOW MODEL FILES;
+        SHOW CUSTOM MODELS;
 
     The following command lists the models with additional information::
 
-        SHOW MODEL FILES EXTENDED;
+        SHOW CUSTOM MODELS EXTENDED;
 
     See Also
     --------
-    * ``UPLOAD MODEL FILE model_name FROM path``
-    * ``DOWNLOAD MODEL FILE model_name``
+    * ``UPLOAD CUSTOM MODEL model_name FROM path``
+    * ``DOWNLOAD CUSTOM MODEL model_name``
 
 
     """  # noqa: E501
@@ -75,12 +75,12 @@ class ShowModelFilesHandler(ShowFilesHandler):
         return super().run(params)
 
 
-ShowModelFilesHandler.register(overwrite=True)
+ShowCustomModelsHandler.register(overwrite=True)
 
 
-class UploadModelFileHandler(SQLHandler):
+class UploadCustomModelHandler(SQLHandler):
     """
-    UPLOAD MODEL FILE model_name
+    UPLOAD CUSTOM MODEL model_name
         FROM local_path [ overwrite ];
 
     # Model Name
@@ -112,12 +112,12 @@ class UploadModelFileHandler(SQLHandler):
     The following command uploads a file to models space and overwrite any
     existing files at the specified path::
 
-        UPLOAD MODEL FILE model_name
+        UPLOAD CUSTOM MODEL model_name
             FROM 'llama3/' OVERWRITE;
 
     See Also
     --------
-    * ``DOWNLOAD MODEL FILE model_name``
+    * ``DOWNLOAD CUSTOM MODEL model_name``
 
     """  # noqa: E501
 
@@ -145,12 +145,12 @@ class UploadModelFileHandler(SQLHandler):
         return None
 
 
-UploadModelFileHandler.register(overwrite=True)
+UploadCustomModelHandler.register(overwrite=True)
 
 
-class DownloadModelFileHandler(SQLHandler):
+class DownloadCustomModelHandler(SQLHandler):
     """
-    DOWNLOAD MODEL FILE model_name
+    DOWNLOAD CUSTOM MODEL model_name
         [ local_path ]
         [ overwrite ];
 
@@ -184,17 +184,17 @@ class DownloadModelFileHandler(SQLHandler):
     The following command displays the contents of the file on the
     standard output::
 
-        DOWNLOAD MODEL FILE llama3;
+        DOWNLOAD CUSTOM MODEL llama3;
 
     The following command downloads a model to a specific location and
     overwrites any existing models folder with the name ``local_llama3`` on the local storage::
 
-        DOWNLOAD MODEL FILE llama3
+        DOWNLOAD CUSTOM MODEL llama3
             TO 'local_llama3' OVERWRITE;
 
     See Also
     --------
-    * ``UPLOAD MODEL FILE model_name FROM local_path``
+    * ``UPLOAD CUSTOM MODEL model_name FROM local_path``
 
     """  # noqa: E501
 
@@ -213,12 +213,12 @@ class DownloadModelFileHandler(SQLHandler):
         return None
 
 
-DownloadModelFileHandler.register(overwrite=True)
+DownloadCustomModelHandler.register(overwrite=True)
 
 
-class DropModelFileHandler(SQLHandler):
+class DropCustomModelHandler(SQLHandler):
     """
-    DROP MODEL FILE model_name;
+    DROP CUSTOM MODEL model_name;
 
     # Model Name
     model_name = '<model-name>'
@@ -235,7 +235,7 @@ class DropModelFileHandler(SQLHandler):
     --------
     The following commands deletes a model from a model space::
 
-        DROP MODEL FILE llama3;
+        DROP CUSTOM MODEL llama3;
 
     """  # noqa: E501
 
@@ -249,7 +249,7 @@ class DropModelFileHandler(SQLHandler):
         return None
 
 
-DropModelFileHandler.register(overwrite=True)
+DropCustomModelHandler.register(overwrite=True)
 
 
 class StartModelHandler(SQLHandler):
