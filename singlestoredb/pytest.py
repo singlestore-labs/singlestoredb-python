@@ -86,9 +86,27 @@ def node_name() -> Iterator[str]:
 
 
 class _TestContainerManager():
-    """Manages the setup and teardown of a SingleStoreDB Dev Container"""
+    """Manages the setup and teardown of a SingleStoreDB Dev Container
+
+    If SINGLESTOREDB_URL environment variable is set, the manager will use
+    the existing server instead of starting a Docker container. This allows
+    tests to run against either an existing server or an automatically
+    managed Docker container.
+    """
 
     def __init__(self) -> None:
+        # Check if SINGLESTOREDB_URL is already set - if so, use existing server
+        self.existing_url = os.environ.get('SINGLESTOREDB_URL')
+        self.use_existing = self.existing_url is not None
+
+        if self.use_existing:
+            logger.info('Using existing SingleStore server from SINGLESTOREDB_URL')
+            self.url = self.existing_url
+            # No need to initialize Docker-related attributes
+            return
+
+        logger.info('SINGLESTOREDB_URL not set, will start Docker container')
+
         # Generate unique container name using UUID and worker ID
         worker = os.environ.get('PYTEST_XDIST_WORKER', 'master')
         unique_id = uuid.uuid4().hex[:8]
@@ -96,7 +114,11 @@ class _TestContainerManager():
 
         self.dev_image_name = 'ghcr.io/singlestore-labs/singlestoredb-dev'
 
-        assert 'SINGLESTORE_LICENSE' in os.environ, 'SINGLESTORE_LICENSE not set'
+        # Use SINGLESTORE_LICENSE from environment, or empty string as fallback
+        # Empty string works for the client SDK
+        license = os.environ.get('SINGLESTORE_LICENSE', '')
+        if not license:
+            logger.info('SINGLESTORE_LICENSE not set, using empty string')
 
         self.root_password = 'Q8r4D7yXR8oqn'
         self.environment_vars = {
@@ -111,11 +133,22 @@ class _TestContainerManager():
         self.studio_port = _find_free_port()
         self.ports = [
             (self.mysql_port, '3306'),    # External port -> Internal port
-            (self.http_port, '8080'),
-            (self.studio_port, '9000'),
+            (self.studio_port, '8080'),   # Studio
+            (self.http_port, '9000'),     # Data API
         ]
 
         self.url = f'root:{self.root_password}@127.0.0.1:{self.mysql_port}'
+
+    @property
+    def http_connection_url(self) -> Optional[str]:
+        """HTTP connection URL for the SingleStoreDB server using Data API."""
+        if self.use_existing:
+            # If using existing server, HTTP URL not available from manager
+            return None
+        return (
+            f'singlestoredb+http://root:{self.root_password}@'
+            f'127.0.0.1:{self.http_port}'
+        )
 
     def _container_exists(self) -> bool:
         """Check if a container with this name already exists."""
@@ -173,7 +206,11 @@ class _TestContainerManager():
             env = {
                 'SINGLESTORE_LICENSE': license,
             }
-            subprocess.check_call(command, shell=True, env=env)
+            # Capture output to avoid printing the container ID hash
+            subprocess.check_call(
+                command, shell=True, env=env,
+                stdout=subprocess.DEVNULL,
+            )
         except Exception as e:
             logger.exception(e)
             raise RuntimeError(
@@ -250,14 +287,22 @@ class _TestContainerManager():
         logger.info('Cleaning up SingleStore DB dev container')
         logger.debug('Stopping container')
         try:
-            subprocess.check_call(f'docker stop {self.container_name}', shell=True)
+            subprocess.check_call(
+                f'docker stop {self.container_name}',
+                shell=True,
+                stdout=subprocess.DEVNULL,
+            )
         except Exception as e:
             logger.exception(e)
             raise RuntimeError('Failed to stop container.') from e
 
         logger.debug('Removing container')
         try:
-            subprocess.check_call(f'docker rm {self.container_name}', shell=True)
+            subprocess.check_call(
+                f'docker rm {self.container_name}',
+                shell=True,
+                stdout=subprocess.DEVNULL,
+            )
         except Exception as e:
             logger.exception(e)
             raise RuntimeError('Failed to stop container.') from e
@@ -267,12 +312,23 @@ class _TestContainerManager():
 def singlestoredb_test_container(
     execution_mode: ExecutionMode,
 ) -> Iterator[_TestContainerManager]:
-    """Sets up and tears down the test container"""
+    """Sets up and tears down the test container
+
+    If SINGLESTOREDB_URL is set in the environment, uses the existing server
+    and skips Docker container lifecycle management. Otherwise, automatically
+    starts a Docker container for testing.
+    """
 
     if not isinstance(execution_mode, ExecutionMode):
         raise TypeError(f"Invalid execution mode '{execution_mode}'")
 
     container_manager = _TestContainerManager()
+
+    # If using existing server, skip all Docker lifecycle management
+    if container_manager.use_existing:
+        logger.info('Using existing server, skipping Docker container lifecycle')
+        yield container_manager
+        return
 
     # In sequential operation do all the steps
     if execution_mode == ExecutionMode.SEQUENTIAL:
