@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.16.2 - November 13, 2025
+---------------------------
+* Add MODEL START and MODEL STOP fusion commands (#101)
+* Rename model commands to include CUSTOM keyword (#103)
+
 v1.16.1 - November 5, 2025
 --------------------------
 * Add preview tag to Fusion SQL schedule jobs command
