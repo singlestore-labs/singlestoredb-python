@@ -16,7 +16,8 @@ from singlestoredb.connection import Cursor
 # Skip all tests in this module when using HTTP Data API
 # The singlestoredb_tempdb fixture uses 'USE database' which doesn't work with HTTP
 pytestmark = pytest.mark.skipif(
-    os.environ.get('USE_DATA_API', '0').lower() in ('1', 'true', 'on'),
+    'http://' in os.environ.get('SINGLESTOREDB_URL', '').lower() or
+    'https:/' in os.environ.get('SINGLESTOREDB_URL', '').lower(),
     reason='Plugin tests require MySQL protocol (USE database not supported via HTTP)',
 )
 
