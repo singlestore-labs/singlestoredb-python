@@ -122,7 +122,7 @@ class _TestContainerManager():
 
         self.root_password = 'Q8r4D7yXR8oqn'
         self.environment_vars = {
-            'SINGLESTORE_LICENSE': None,
+            'SINGLESTORE_LICENSE': license,
             'ROOT_PASSWORD': f"\"{self.root_password}\"",
             'SINGLESTORE_SET_GLOBAL_DEFAULT_PARTITIONS_PER_LEAF': '1',
         }
@@ -202,7 +202,7 @@ class _TestContainerManager():
             f'{self.http_port}, {self.studio_port}',
         )
         try:
-            license = os.environ['SINGLESTORE_LICENSE']
+            license = os.environ.get('SINGLESTORE_LICENSE', '')
             env = {
                 'SINGLESTORE_LICENSE': license,
             }
@@ -211,6 +211,7 @@ class _TestContainerManager():
                 command, shell=True, env=env,
                 stdout=subprocess.DEVNULL,
             )
+
         except Exception as e:
             logger.exception(e)
             raise RuntimeError(
@@ -292,6 +293,7 @@ class _TestContainerManager():
                 shell=True,
                 stdout=subprocess.DEVNULL,
             )
+
         except Exception as e:
             logger.exception(e)
             raise RuntimeError('Failed to stop container.') from e
@@ -303,9 +305,10 @@ class _TestContainerManager():
                 shell=True,
                 stdout=subprocess.DEVNULL,
             )
+
         except Exception as e:
             logger.exception(e)
-            raise RuntimeError('Failed to stop container.') from e
+            raise RuntimeError('Failed to remove container.') from e
 
 
 @pytest.fixture(scope='session')
