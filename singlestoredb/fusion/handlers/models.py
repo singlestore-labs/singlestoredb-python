@@ -349,9 +349,9 @@ class StopModelHandler(SQLHandler):
 StopModelHandler.register(overwrite=True)
 
 
-class ShowInferenceAPIsHandler(SQLHandler):
+class ShowModelsHandler(SQLHandler):
     """
-    SHOW INFERENCE APIS ;
+    SHOW MODELS ;
 
     Description
     -----------
@@ -361,13 +361,13 @@ class ShowInferenceAPIsHandler(SQLHandler):
     --------
     The following command lists all inference APIs::
 
-        SHOW INFERENCE APIS;
+        SHOW MODELS;
 
     See Also
     --------
     * ``START MODEL model_name``
     * ``STOP MODEL model_name``
-    * ``DROP INFERENCE API model_name``
+    * ``DROP MODEL model_name``
 
     """  # noqa: E501
 
@@ -390,12 +390,12 @@ class ShowInferenceAPIsHandler(SQLHandler):
         return res
 
 
-ShowInferenceAPIsHandler.register(overwrite=True)
+ShowModelsHandler.register(overwrite=True)
 
 
-class DropInferenceAPIHandler(SQLHandler):
+class DropModelHandler(SQLHandler):
     """
-    DROP INFERENCE API model_name ;
+    DROP MODEL model_name ;
 
     # Model Name
     model_name = '<model-name>'
@@ -412,13 +412,13 @@ class DropInferenceAPIHandler(SQLHandler):
     --------
     The following command drops an inference API::
 
-        DROP INFERENCE API my_model;
+        DROP MODEL my_model;
 
     See Also
     --------
     * ``START MODEL model_name``
     * ``STOP MODEL model_name``
-    * ``SHOW INFERENCE APIS``
+    * ``SHOW MODELS``
 
     """  # noqa: E501
 
@@ -439,4 +439,4 @@ class DropInferenceAPIHandler(SQLHandler):
         return res
 
 
-DropInferenceAPIHandler.register(overwrite=True)
+DropModelHandler.register(overwrite=True)
