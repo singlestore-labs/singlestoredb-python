@@ -353,5 +353,5 @@ class InferenceAPIManager(object):
         """
         if self._manager is None:
             raise ManagementError(msg='Manager not initialized')
-        res = self._manager._delete(f'models/{model_name}/drop')
+        res = self._manager._delete(f'models/{model_name}')
         return ModelOperationResult.from_drop_response(res.json())
