@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # type: ignore
 """Utilities for testing."""
+import logging
 import os
 import uuid
 from typing import Any
@@ -9,6 +10,9 @@ from urllib.parse import urlparse
 
 import singlestoredb as s2
 from singlestoredb.connection import build_params
+
+
+logger = logging.getLogger(__name__)
 
 
 def apply_template(content: str, vars: Dict[str, Any]) -> str:
@@ -46,12 +50,16 @@ def load_sql(sql_file: str) -> str:
     elif 'SINGLESTOREDB_DATABASE' in os.environ:
         dbname = os.environ['SINGLESTOREDB_DATBASE']
 
-    # If no database name was specified, use initializer URL if given.
-    # HTTP can't change databases, so you can't initialize from HTTP
-    # while also creating a database.
+    # Use initializer URL if given for setup operations.
+    # HTTP can't change databases or execute certain commands like SET GLOBAL,
+    # so we always use the MySQL protocol URL for initialization.
     args = {'local_infile': True}
-    if not dbname and 'SINGLESTOREDB_INIT_DB_URL' in os.environ:
+    if 'SINGLESTOREDB_INIT_DB_URL' in os.environ:
         args['host'] = os.environ['SINGLESTOREDB_INIT_DB_URL']
+        logger.info(
+            f'load_sql: Using SINGLESTOREDB_INIT_DB_URL for setup: '
+            f'{os.environ["SINGLESTOREDB_INIT_DB_URL"]}',
+        )
 
     http_port = 0
     if 'SINGLESTOREDB_URL' in os.environ:
