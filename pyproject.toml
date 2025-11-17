@@ -47,6 +47,7 @@ vectorstore = ["singlestore-vectorstore>=0.1.2"]
 test = [
     "coverage",
     "dash",
+    "docker",
     "fastapi",
     "ipython",
     "jupysql",
