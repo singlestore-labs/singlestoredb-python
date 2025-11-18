@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import webbrowser
 from pathlib import Path
 
 
@@ -234,6 +235,92 @@ def edit_content(content: str, description: str = 'content') -> str | None:
             pass
 
 
+def prompt_yes_no(question: str, default: bool = True) -> bool:
+    """Prompt user for yes/no input with a default value.
+
+    Args:
+        question: The question to ask the user
+        default: Default value (True for yes, False for no)
+
+    Returns:
+        True for yes, False for no
+    """
+    prompt_suffix = '[Y/n]' if default else '[y/N]'
+    prompt = f'{question} {prompt_suffix}: '
+
+    while True:
+        response = input(prompt).strip().lower()
+
+        if not response:
+            return default
+
+        if response in ('y', 'yes'):
+            return True
+        elif response in ('n', 'no'):
+            return False
+        else:
+            print('Please answer y or n')
+
+
+def execute_commit_and_push(new_version: str) -> bool:
+    """Execute git commit and push commands.
+
+    Args:
+        new_version: The new version being released
+
+    Returns:
+        True if successful, False otherwise
+    """
+    commit_msg = f'Prepare for v{new_version} release'
+
+    try:
+        # Execute git commit
+        status(f'📝 Committing changes: {commit_msg}')
+        result = subprocess.run(
+            ['git', 'commit', '-m', commit_msg],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            print(f'❌ Error committing changes: {result.stderr}', file=sys.stderr)
+            return False
+
+        status('✅ Changes committed successfully')
+
+        # Execute git push
+        status('🚀 Pushing to remote repository...')
+        result = subprocess.run(
+            ['git', 'push'],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            print(f'❌ Error pushing changes: {result.stderr}', file=sys.stderr)
+            return False
+
+        status('✅ Changes pushed successfully')
+        return True
+
+    except Exception as e:
+        print(f'❌ Unexpected error: {e}', file=sys.stderr)
+        return False
+
+
+def open_actions_page() -> None:
+    """Open the GitHub Actions page in the default web browser."""
+    actions_url = 'https://github.com/singlestore-labs/singlestoredb-python/actions'
+    status(f'🌐 Opening GitHub Actions page: {actions_url}')
+
+    try:
+        webbrowser.open(actions_url)
+        status('✅ Browser opened successfully')
+    except Exception as e:
+        print(f'⚠️  Could not open browser: {e}', file=sys.stderr)
+        print(f'   Please visit: {actions_url}', file=sys.stderr)
+
+
 def prepare_whatsnew_content(new_version: str, summary: str) -> str:
     """Prepare the content for the new release section."""
     today = datetime.date.today()
@@ -424,11 +511,30 @@ def main() -> None:
     print('=' * 50, file=sys.stderr)
     print(f'🎉 Version bump completed successfully in {total_elapsed:.1f}s!', file=sys.stderr)
     print(f'📝 Version: {current_version} → {new_version}', file=sys.stderr)
-    print('🚀 Next steps:', file=sys.stderr)
-    print('    📄 git commit -m "Prepare for v{} release" && git push'.format(new_version), file=sys.stderr)
-    print('    📄 Run Coverage tests <https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml>', file=sys.stderr)
-    print('    📄 Run Smoke test <https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml>', file=sys.stderr)
-    print('    📄 Run resources/create_release.py', file=sys.stderr)
+    print('', file=sys.stderr)
+
+    # Prompt user to commit and push
+    if prompt_yes_no('Do you want to commit and push now?', default=True):
+        print('', file=sys.stderr)
+        if execute_commit_and_push(new_version):
+            print('', file=sys.stderr)
+            open_actions_page()
+            print('', file=sys.stderr)
+            print('🚀 Next steps:', file=sys.stderr)
+            print('    📄 Run Coverage tests <https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml>', file=sys.stderr)
+            print('    📄 Run Smoke test <https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml>', file=sys.stderr)
+            print('    📄 Run resources/create_release.py', file=sys.stderr)
+        else:
+            print('', file=sys.stderr)
+            print('⚠️  Commit/push failed. Please manually run:', file=sys.stderr)
+            print('    📄 git commit -m "Prepare for v{} release" && git push'.format(new_version), file=sys.stderr)
+    else:
+        print('', file=sys.stderr)
+        print('🚀 Next steps:', file=sys.stderr)
+        print('    📄 git commit -m "Prepare for v{} release" && git push'.format(new_version), file=sys.stderr)
+        print('    📄 Run Coverage tests <https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml>', file=sys.stderr)
+        print('    📄 Run Smoke test <https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml>', file=sys.stderr)
+        print('    📄 Run resources/create_release.py', file=sys.stderr)
 
 
 if __name__ == '__main__':
