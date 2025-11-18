@@ -10,6 +10,7 @@ from ..result import FusionSQLResult
 from .files import ShowFilesHandler
 from .utils import get_file_space
 from .utils import get_inference_api
+from .utils import get_inference_api_manager
 
 
 class ShowCustomModelsHandler(ShowFilesHandler):
@@ -346,3 +347,98 @@ class StopModelHandler(SQLHandler):
 
 
 StopModelHandler.register(overwrite=True)
+
+
+class ShowModelsHandler(SQLHandler):
+    """
+    SHOW MODELS ;
+
+    Description
+    -----------
+    Displays the list of inference APIs in the current project.
+
+    Example
+    --------
+    The following command lists all inference APIs::
+
+        SHOW MODELS;
+
+    See Also
+    --------
+    * ``START MODEL model_name``
+    * ``STOP MODEL model_name``
+    * ``DROP MODEL model_name``
+
+    """  # noqa: E501
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        inference_api_manager = get_inference_api_manager()
+        models = inference_api_manager.show()
+
+        res = FusionSQLResult()
+        res.add_field('Model Name', result.STRING)
+        res.add_field('Status', result.STRING)
+
+        rows = []
+        for model in models:
+            rows.append((
+                model.name,
+                model.status,
+            ))
+
+        res.set_rows(rows)
+        return res
+
+
+ShowModelsHandler.register(overwrite=True)
+
+
+class DropModelHandler(SQLHandler):
+    """
+    DROP MODEL model_name ;
+
+    # Model Name
+    model_name = '<model-name>'
+
+    Description
+    -----------
+    Drops (deletes) an inference API model.
+
+    Arguments
+    ---------
+    * ``<model-name>``: Name of the model to drop.
+
+    Example
+    --------
+    The following command drops an inference API::
+
+        DROP MODEL my_model;
+
+    See Also
+    --------
+    * ``START MODEL model_name``
+    * ``STOP MODEL model_name``
+    * ``SHOW MODELS``
+
+    """  # noqa: E501
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        inference_api = get_inference_api(params)
+        operation_result = inference_api.drop()
+
+        res = FusionSQLResult()
+        res.add_field('Model Name', result.STRING)
+        res.add_field('Status', result.STRING)
+        res.add_field('Message', result.STRING)
+        res.set_rows([
+            (
+                operation_result.name,
+                operation_result.status,
+                operation_result.get_message(),
+            ),
+        ])
+
+        return res
+
+
+DropModelHandler.register(overwrite=True)
