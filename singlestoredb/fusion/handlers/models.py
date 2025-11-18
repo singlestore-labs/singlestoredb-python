@@ -427,10 +427,12 @@ class DropModelHandler(SQLHandler):
         operation_result = inference_api.drop()
 
         res = FusionSQLResult()
+        res.add_field('Model Name', result.STRING)
         res.add_field('Status', result.STRING)
         res.add_field('Message', result.STRING)
         res.set_rows([
             (
+                operation_result.name,
                 operation_result.status,
                 operation_result.get_message(),
             ),
