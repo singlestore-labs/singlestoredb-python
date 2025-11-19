@@ -677,4 +677,33 @@ INSERT INTO i64_vectors VALUES(2, '[4, 5, 6]');
 INSERT INTO i64_vectors VALUES(3, '[-1, -4, 8]');
 
 
+--
+-- Boolean test data for UDF testing
+--
+CREATE ROWSTORE TABLE IF NOT EXISTS bool_data (
+    id VARCHAR(255) NOT NULL,
+    bool_a BOOL NOT NULL,
+    bool_b BOOL NOT NULL,
+    PRIMARY KEY (id) USING HASH
+) DEFAULT CHARSET = utf8 COLLATE = utf8_unicode_ci;
+
+INSERT INTO bool_data SET id='tt', bool_a=TRUE, bool_b=TRUE;
+INSERT INTO bool_data SET id='tf', bool_a=TRUE, bool_b=FALSE;
+INSERT INTO bool_data SET id='ft', bool_a=FALSE, bool_b=TRUE;
+INSERT INTO bool_data SET id='ff', bool_a=FALSE, bool_b=FALSE;
+
+CREATE ROWSTORE TABLE IF NOT EXISTS bool_data_with_nulls (
+    id VARCHAR(255) NOT NULL,
+    bool_a BOOL,
+    bool_b BOOL,
+    PRIMARY KEY (id) USING HASH
+) DEFAULT CHARSET = utf8 COLLATE = utf8_unicode_ci;
+
+INSERT INTO bool_data_with_nulls SET id='tt', bool_a=TRUE, bool_b=TRUE;
+INSERT INTO bool_data_with_nulls SET id='tn', bool_a=TRUE, bool_b=NULL;
+INSERT INTO bool_data_with_nulls SET id='nt', bool_a=NULL, bool_b=TRUE;
+INSERT INTO bool_data_with_nulls SET id='nn', bool_a=NULL, bool_b=NULL;
+INSERT INTO bool_data_with_nulls SET id='ff', bool_a=FALSE, bool_b=FALSE;
+
+
 COMMIT;

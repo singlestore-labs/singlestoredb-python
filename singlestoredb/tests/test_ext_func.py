@@ -1051,6 +1051,331 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.LONGLONG
         assert desc[0].null_ok is True
 
+    # ========== BOOL TESTS ==========
+
+    def test_bool_and(self):
+        """Test scalar (non-vector) bool AND."""
+        self.cur.execute('select bool_and(TRUE, TRUE) as res')
+        assert [tuple(x) for x in self.cur] == [(1,)]
+
+        self.cur.execute('select bool_and(TRUE, FALSE) as res')
+        assert [tuple(x) for x in self.cur] == [(0,)]
+
+        self.cur.execute('select bool_and(FALSE, TRUE) as res')
+        assert [tuple(x) for x in self.cur] == [(0,)]
+
+        self.cur.execute('select bool_and(FALSE, FALSE) as res')
+        assert [tuple(x) for x in self.cur] == [(0,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY  # BOOL is stored as TINYINT
+        assert desc[0].null_ok is False
+
+    def test_bool_or(self):
+        """Test scalar (non-vector) bool OR."""
+        self.cur.execute('select bool_or(TRUE, TRUE) as res')
+        assert [tuple(x) for x in self.cur] == [(1,)]
+
+        self.cur.execute('select bool_or(TRUE, FALSE) as res')
+        assert [tuple(x) for x in self.cur] == [(1,)]
+
+        self.cur.execute('select bool_or(FALSE, TRUE) as res')
+        assert [tuple(x) for x in self.cur] == [(1,)]
+
+        self.cur.execute('select bool_or(FALSE, FALSE) as res')
+        assert [tuple(x) for x in self.cur] == [(0,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is False
+
+    def test_bool_not(self):
+        """Test scalar (non-vector) bool NOT."""
+        self.cur.execute('select bool_not(TRUE) as res')
+        assert [tuple(x) for x in self.cur] == [(0,)]
+
+        self.cur.execute('select bool_not(FALSE) as res')
+        assert [tuple(x) for x in self.cur] == [(1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is False
+
+    def test_bool_xor(self):
+        """Test scalar (non-vector) bool XOR."""
+        self.cur.execute('select bool_xor(TRUE, TRUE) as res')
+        assert [tuple(x) for x in self.cur] == [(0,)]
+
+        self.cur.execute('select bool_xor(TRUE, FALSE) as res')
+        assert [tuple(x) for x in self.cur] == [(1,)]
+
+        self.cur.execute('select bool_xor(FALSE, TRUE) as res')
+        assert [tuple(x) for x in self.cur] == [(1,)]
+
+        self.cur.execute('select bool_xor(FALSE, FALSE) as res')
+        assert [tuple(x) for x in self.cur] == [(0,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is False
+
+    def test_numpy_bool_and(self):
+        """Test vector bool AND using numpy arrays."""
+        self.cur.execute(
+            'select numpy_bool_and(bool_a, bool_b) as res '
+            'from bool_data order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (0,), (0,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is False
+
+        # NULL is not valid
+        with self.assertRaises(self.conn.OperationalError):
+            self.cur.execute(
+                'select numpy_bool_and(bool_a, NULL) as res '
+                'from bool_data order by id',
+            )
+
+    def test_pandas_bool_and(self):
+        """Test vector bool AND using pandas Series."""
+        self.cur.execute(
+            'select pandas_bool_and(bool_a, bool_b) as res '
+            'from bool_data order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (0,), (0,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is False
+
+        # NULL is not valid
+        with self.assertRaises(self.conn.OperationalError):
+            self.cur.execute(
+                'select pandas_bool_and(bool_a, NULL) as res '
+                'from bool_data order by id',
+            )
+
+    def test_polars_bool_and(self):
+        """Test vector bool AND using polars Series."""
+        self.cur.execute(
+            'select polars_bool_and(bool_a, bool_b) as res '
+            'from bool_data order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (0,), (0,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is False
+
+        # NULL is not valid
+        with self.assertRaises(self.conn.OperationalError):
+            self.cur.execute(
+                'select polars_bool_and(bool_a, NULL) as res '
+                'from bool_data order by id',
+            )
+
+    def test_arrow_bool_and(self):
+        """Test vector bool AND using pyarrow arrays."""
+        self.cur.execute(
+            'select arrow_bool_and(bool_a, bool_b) as res '
+            'from bool_data order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (0,), (0,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is False
+
+        # NULL is not valid
+        with self.assertRaises(self.conn.OperationalError):
+            self.cur.execute(
+                'select arrow_bool_and(bool_a, NULL) as res '
+                'from bool_data order by id',
+            )
+
+    def test_nullable_bool_and(self):
+        """Test nullable scalar bool AND."""
+        self.cur.execute(
+            'select nullable_bool_and(bool_a, bool_b) as res '
+            'from bool_data_with_nulls order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (None,), (None,), (None,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is True
+
+        self.cur.execute(
+            'select nullable_bool_and(bool_a, NULL) as res '
+            'from bool_data_with_nulls order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(None,), (None,), (None,), (None,), (None,)]
+
+    def test_numpy_nullable_bool_and(self):
+        """Test nullable vector bool AND using numpy."""
+        self.cur.execute(
+            'select numpy_nullable_bool_and(bool_a, bool_b) as res '
+            'from bool_data_with_nulls order by id',
+        )
+
+        # Note: Without masks, NULL values may behave like 0 in numpy
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (0,), (0,), (0,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is True
+
+    def test_pandas_nullable_bool_and(self):
+        """Test nullable vector bool AND using pandas."""
+        self.cur.execute(
+            'select pandas_nullable_bool_and(bool_a, bool_b) as res '
+            'from bool_data_with_nulls order by id',
+        )
+
+        # Note: Without masks, NULL values may behave like 0 in pandas
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (0,), (0,), (0,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is True
+
+    def test_polars_nullable_bool_and(self):
+        """Test nullable vector bool AND using polars."""
+        self.cur.execute(
+            'select polars_nullable_bool_and(bool_a, bool_b) as res '
+            'from bool_data_with_nulls order by id',
+        )
+
+        # Note: Without masks, NULL values may behave like 0 in polars
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (0,), (0,), (0,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is True
+
+    def test_arrow_nullable_bool_and(self):
+        """Test nullable vector bool AND using pyarrow."""
+        self.cur.execute(
+            'select arrow_nullable_bool_and(bool_a, bool_b) as res '
+            'from bool_data_with_nulls order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (None,), (None,), (None,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is True
+
+    def test_numpy_nullable_bool_and_with_masks(self):
+        """Test nullable vector bool AND with masks using numpy."""
+        self.cur.execute(
+            'select numpy_nullable_bool_and_with_masks(bool_a, bool_b) as res '
+            'from bool_data_with_nulls order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (None,), (None,), (None,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is True
+
+    def test_pandas_nullable_bool_and_with_masks(self):
+        """Test nullable vector bool AND with masks using pandas."""
+        self.cur.execute(
+            'select pandas_nullable_bool_and_with_masks(bool_a, bool_b) as res '
+            'from bool_data_with_nulls order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (None,), (None,), (None,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is True
+
+    def test_polars_nullable_bool_and_with_masks(self):
+        """Test nullable vector bool AND with masks using polars."""
+        self.cur.execute(
+            'select polars_nullable_bool_and_with_masks(bool_a, bool_b) as res '
+            'from bool_data_with_nulls order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (None,), (None,), (None,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is True
+
+    def test_arrow_nullable_bool_and_with_masks(self):
+        """Test nullable vector bool AND with masks using pyarrow."""
+        self.cur.execute(
+            'select arrow_nullable_bool_and_with_masks(bool_a, bool_b) as res '
+            'from bool_data_with_nulls order by id',
+        )
+
+        assert [tuple(x) for x in self.cur] == \
+               [(0,), (None,), (None,), (None,), (1,)]
+
+        desc = self.cur.description
+        assert len(desc) == 1
+        assert desc[0].name == 'res'
+        assert desc[0].type_code == ft.TINY
+        assert desc[0].null_ok is True
+
+    # ========== END BOOL TESTS ==========
+
     def test_string_mult(self):
         self.cur.execute(
             'select string_mult(name, value) as res '

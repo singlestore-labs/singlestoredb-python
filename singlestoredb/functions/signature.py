@@ -55,6 +55,7 @@ array_types: Tuple[Any, ...]
 if has_numpy:
     array_types = (Sequence, np.ndarray)
     numpy_type_map = {
+        np.bool_: 'bool',
         np.integer: 'int64',
         np.int_: 'int64',
         np.int64: 'int64',
