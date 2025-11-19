@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 """SingleStoreDB Base Manager."""
 import os
+import re
 import sys
 import time
+from copy import deepcopy
 from typing import Any
 from typing import Dict
 from typing import List
@@ -64,6 +66,8 @@ class Manager(object):
         if not new_access_token:
             raise ManagementError(msg='No management token was configured.')
 
+        self.version = version or self.default_version
+
         self._is_jwt = not access_token and new_access_token and is_jwt(new_access_token)
         self._sess = requests.Session()
         self._sess.headers.update({
@@ -73,16 +77,34 @@ class Manager(object):
             'User-Agent': f'SingleStoreDB-Python/{client_version}',
         })
 
-        self._base_url = urljoin(
+        self._base_url = (
             base_url
             or config.get_option('management.base_url')
-            or type(self).default_base_url,
-            version or type(self).default_version,
+            or type(self).default_base_url
         ) + '/'
-
+        self._access_token = new_access_token
         self._params: Dict[str, str] = {}
         if organization_id:
             self._params['organizationID'] = organization_id
+
+    def copy(self) -> 'Manager':
+        """Create a new instance with the same settings."""
+        new_manager = type(self).__new__(type(self))
+        new_manager._is_jwt = self._is_jwt
+        new_manager._sess = deepcopy(self._sess)
+        new_manager._base_url = self._base_url
+        new_manager.version = self.version
+        new_manager._access_token = self._access_token
+        new_manager._params = deepcopy(self._params)
+        return new_manager
+
+    def __getattr__(self, name: str) -> Any:
+        """Handle dynamic version attributes (v2, v3, etc.)."""
+        if re.match(r'^v\d+[0-9a-z]*$', name):
+            new_mgr = self.copy()
+            new_mgr.version = name
+            return new_mgr
+        return super().__getattribute__(name)
 
     def _check(
         self, res: requests.Response, url: str, params: Dict[str, Any],
@@ -126,8 +148,12 @@ class Manager(object):
         # Refresh the JWT as needed
         if self._is_jwt:
             self._sess.headers.update({'Authorization': f'Bearer {get_token()}'})
+
+        # Combine version and path
+        versioned_path = f'{self.version}/{path}'
+
         return getattr(self._sess, method.lower())(
-            urljoin(self._base_url, path), *args, **kwargs,
+            urljoin(self._base_url, versioned_path), *args, **kwargs,
         )
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
