@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.16.3 - November 20, 2025
+---------------------------
+* Add show and drop aura model fusion commands (#105)
+
 v1.16.2 - November 13, 2025
 ---------------------------
 * Add MODEL START and MODEL STOP fusion commands (#101)
