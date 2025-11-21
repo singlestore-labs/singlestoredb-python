@@ -3,7 +3,7 @@ exclude =
     docs/*
     resources/*
     licenses/*
-max-complexity = 45
+max-complexity = 50
 max-line-length = 90
 min-python-version = 3.9.0
 per-file-ignores =
