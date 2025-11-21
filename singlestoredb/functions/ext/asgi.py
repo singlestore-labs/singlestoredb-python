@@ -326,15 +326,16 @@ def build_udf_endpoint(
             rows: Sequence[Sequence[Any]],
         ) -> Tuple[Sequence[int], List[Tuple[Any, ...]]]:
             '''Call function on given rows of data.'''
-            out = []
+            tasks = []
             async with timer('call_function'):
                 for row in rows:
                     cancel_on_event(cancel_event)
                     if is_async:
-                        out.append(await func(*row))
+                        tasks.append(func(*row))
                     else:
-                        out.append(func(*row))
-            return row_ids, list(zip(out))
+                        tasks.append(asyncio.to_thread(func, *row))
+
+            return row_ids, list(zip(await asyncio.gather(*tasks)))
 
         return do_func
 
