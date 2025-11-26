@@ -1,4 +1,5 @@
 import os
+from collections.abc import Generator
 from typing import Any
 from typing import Callable
 from typing import Optional
@@ -7,6 +8,7 @@ from typing import Union
 import httpx
 
 from singlestoredb import manage_workspaces
+from singlestoredb.management.inference_api import InferenceAPIInfo
 
 try:
     from langchain_openai import OpenAIEmbeddings
@@ -31,19 +33,54 @@ from botocore.config import Config
 
 def SingleStoreEmbeddingsFactory(
     model_name: str,
-    api_key: Optional[str] = None,
+    api_key: Optional[Union[Optional[str], Callable[[], Optional[str]]]] = None,
     http_client: Optional[httpx.Client] = None,
-    obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
+    obo_token: Optional[Union[Optional[str], Callable[[], Optional[str]]]] = None,
+    base_url: Optional[str] = None,
+    hosting_platform: Optional[str] = None,
     **kwargs: Any,
 ) -> Union[OpenAIEmbeddings, BedrockEmbeddings]:
     """Return an embeddings model instance (OpenAIEmbeddings or BedrockEmbeddings).
     """
-    inference_api_manager = (
-        manage_workspaces().organizations.current.inference_apis
-    )
-    info = inference_api_manager.get(model_name=model_name)
-    token_env = os.environ.get('SINGLESTOREDB_USER_TOKEN')
-    token = api_key if api_key is not None else token_env
+    # Handle api_key and obo_token as callable functions
+    if callable(api_key):
+        api_key_getter = api_key
+    else:
+        def api_key_getter() -> Optional[str]:
+            if api_key is None:
+                return os.environ.get('SINGLESTOREDB_USER_TOKEN')
+            return api_key
+
+    if callable(obo_token):
+        obo_token_getter = obo_token
+    else:
+        def obo_token_getter() -> Optional[str]:
+            return obo_token
+
+    # handle model info
+    if base_url is None:
+        base_url = os.environ.get('SINGLESTOREDB_INFERENCE_API_BASE_URL')
+    if hosting_platform is None:
+        hosting_platform = os.environ.get('SINGLESTOREDB_INFERENCE_API_HOSTING_PLATFORM')
+
+    if base_url is None or hosting_platform is None:
+        inference_api_manager = (
+            manage_workspaces().organizations.current.inference_apis
+        )
+        info = inference_api_manager.get(model_name=model_name)
+    else:
+        info = InferenceAPIInfo(
+            service_id='',
+            model_name=model_name,
+            name='',
+            connection_url=base_url,
+            project_id='',
+            hosting_platform=hosting_platform,
+        )
+    if base_url is not None:
+        info.connection_url = base_url
+    if hosting_platform is not None:
+        info.hosting_platform = hosting_platform
 
     if info.hosting_platform == 'Amazon':
         # Instantiate Bedrock client
@@ -85,12 +122,14 @@ def SingleStoreEmbeddingsFactory(
 
         def _inject_headers(request: Any, **_ignored: Any) -> None:
             """Inject dynamic auth/OBO headers prior to Bedrock sending."""
+            if api_key_getter is not None:
+                token_val = api_key_getter()
+                if token_val:
+                    request.headers['Authorization'] = f'Bearer {token_val}'
             if obo_token_getter is not None:
                 obo_val = obo_token_getter()
                 if obo_val:
                     request.headers['X-S2-OBO'] = obo_val
-            if token:
-                request.headers['Authorization'] = f'Bearer {token}'
             request.headers.pop('X-Amz-Date', None)
             request.headers.pop('X-Amz-Security-Token', None)
 
@@ -114,10 +153,29 @@ def SingleStoreEmbeddingsFactory(
             **kwargs,
         )
 
+    class OpenAIAuth(httpx.Auth):
+        def auth_flow(
+            self, request: httpx.Request,
+        ) -> Generator[httpx.Request, None, None]:
+            if api_key_getter is not None:
+                token_val = api_key_getter()
+                if token_val:
+                    request.headers['Authorization'] = f'Bearer {token_val}'
+            if obo_token_getter is not None:
+                obo_val = obo_token_getter()
+                if obo_val:
+                    request.headers['X-S2-OBO'] = obo_val
+            yield request
+
+    http_client = httpx.Client(
+        timeout=30,
+        auth=OpenAIAuth(),
+    )
+
     # OpenAI / Azure OpenAI path
     openai_kwargs = dict(
         base_url=info.connection_url,
-        api_key=token,
+        api_key='placeholder',
         model=model_name,
     )
     if http_client is not None:
