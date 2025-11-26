@@ -81,29 +81,30 @@ def SingleStoreEmbeddingsFactory(
     if hosting_platform is not None:
         info.hosting_platform = hosting_platform
 
+    # Extract timeouts from http_client if provided
+    t = http_client.timeout if http_client is not None else None
+    connect_timeout = None
+    read_timeout = None
+    if t is not None:
+        if isinstance(t, httpx.Timeout):
+            if t.connect is not None:
+                connect_timeout = float(t.connect)
+            if t.read is not None:
+                read_timeout = float(t.read)
+            if connect_timeout is None and read_timeout is not None:
+                connect_timeout = read_timeout
+            if read_timeout is None and connect_timeout is not None:
+                read_timeout = connect_timeout
+        elif isinstance(t, (int, float)):
+            connect_timeout = float(t)
+            read_timeout = float(t)
+
     if info.hosting_platform == 'Amazon':
         # Instantiate Bedrock client
         cfg_kwargs = {
             'signature_version': UNSIGNED,
             'retries': {'max_attempts': 1, 'mode': 'standard'},
         }
-        # Extract timeouts from http_client if provided
-        t = http_client.timeout if http_client is not None else None
-        connect_timeout = None
-        read_timeout = None
-        if t is not None:
-            if isinstance(t, httpx.Timeout):
-                if t.connect is not None:
-                    connect_timeout = float(t.connect)
-                if t.read is not None:
-                    read_timeout = float(t.read)
-                if connect_timeout is None and read_timeout is not None:
-                    connect_timeout = read_timeout
-                if read_timeout is None and connect_timeout is not None:
-                    read_timeout = connect_timeout
-            elif isinstance(t, (int, float)):
-                connect_timeout = float(t)
-                read_timeout = float(t)
         if read_timeout is not None:
             cfg_kwargs['read_timeout'] = read_timeout
         if connect_timeout is not None:
@@ -166,8 +167,18 @@ def SingleStoreEmbeddingsFactory(
                     request.headers['X-S2-OBO'] = obo_val
             yield request
 
+    # Build timeout configuration
+    if connect_timeout is not None and read_timeout is not None:
+        t = httpx.Timeout(connect=connect_timeout, read=read_timeout)
+    elif connect_timeout is not None:
+        t = httpx.Timeout(connect=connect_timeout)
+    elif read_timeout is not None:
+        t = httpx.Timeout(read=read_timeout)
+    else:
+        t = 60.0  # default OpenAI client timeout
+
     http_client = httpx.Client(
-        timeout=30,
+        timeout=t,
         auth=OpenAIAuth(),
     )
 
@@ -177,8 +188,7 @@ def SingleStoreEmbeddingsFactory(
         api_key='placeholder',
         model=model_name,
     )
-    if http_client is not None:
-        openai_kwargs['http_client'] = http_client
+    openai_kwargs['http_client'] = http_client
     return OpenAIEmbeddings(
         **openai_kwargs,
         **kwargs,
