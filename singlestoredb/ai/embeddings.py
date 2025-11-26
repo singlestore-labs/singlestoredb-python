@@ -62,7 +62,6 @@ def SingleStoreEmbeddingsFactory(
         base_url = os.environ.get('SINGLESTOREDB_INFERENCE_API_BASE_URL')
     if hosting_platform is None:
         hosting_platform = os.environ.get('SINGLESTOREDB_INFERENCE_API_HOSTING_PLATFORM')
-
     if base_url is None or hosting_platform is None:
         inference_api_manager = (
             manage_workspaces().organizations.current.inference_apis
