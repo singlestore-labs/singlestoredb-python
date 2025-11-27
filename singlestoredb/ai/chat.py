@@ -37,26 +37,31 @@ def SingleStoreChatFactory(
     streaming: bool = True,
     http_client: Optional[httpx.Client] = None,
     obo_token: Optional[Union[Optional[str], Callable[[], Optional[str]]]] = None,
+    obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
     base_url: Optional[str] = None,
     hosting_platform: Optional[str] = None,
+    timeout: Optional[float] = None,
     **kwargs: Any,
 ) -> Union[ChatOpenAI, ChatBedrockConverse]:
     """Return a chat model instance (ChatOpenAI or ChatBedrockConverse).
     """
     # Handle api_key and obo_token as callable functions
     if callable(api_key):
-        api_key_getter = api_key
+        api_key_getter_fn = api_key
     else:
-        def api_key_getter() -> Optional[str]:
+        def api_key_getter_fn() -> Optional[str]:
             if api_key is None:
                 return os.environ.get('SINGLESTOREDB_USER_TOKEN')
             return api_key
 
-    if callable(obo_token):
-        obo_token_getter = obo_token
+    if obo_token_getter is not None:
+        obo_token_getter_fn = obo_token_getter
     else:
-        def obo_token_getter() -> Optional[str]:
-            return obo_token
+        if callable(obo_token):
+            obo_token_getter_fn = obo_token
+        else:
+            def obo_token_getter_fn() -> Optional[str]:
+                return obo_token
 
     # handle model info
     if base_url is None:
@@ -99,6 +104,10 @@ def SingleStoreChatFactory(
         elif isinstance(t, (int, float)):
             connect_timeout = float(t)
             read_timeout = float(t)
+    if timeout is not None:
+        connect_timeout = timeout
+        read_timeout = timeout
+        t = httpx.Timeout(timeout)
 
     if info.hosting_platform == 'Amazon':
         # Instantiate Bedrock client
@@ -123,12 +132,12 @@ def SingleStoreChatFactory(
 
         def _inject_headers(request: Any, **_ignored: Any) -> None:
             """Inject dynamic auth/OBO headers prior to Bedrock sending."""
-            if api_key_getter is not None:
-                token_val = api_key_getter()
+            if api_key_getter_fn is not None:
+                token_val = api_key_getter_fn()
                 if token_val:
                     request.headers['Authorization'] = f'Bearer {token_val}'
-            if obo_token_getter is not None:
-                obo_val = obo_token_getter()
+            if obo_token_getter_fn is not None:
+                obo_val = obo_token_getter_fn()
                 if obo_val:
                     request.headers['X-S2-OBO'] = obo_val
             request.headers.pop('X-Amz-Date', None)
@@ -167,30 +176,26 @@ def SingleStoreChatFactory(
         def auth_flow(
             self, request: httpx.Request,
         ) -> Generator[httpx.Request, None, None]:
-            if api_key_getter is not None:
-                token_val = api_key_getter()
+            if api_key_getter_fn is not None:
+                token_val = api_key_getter_fn()
                 if token_val:
                     request.headers['Authorization'] = f'Bearer {token_val}'
-            if obo_token_getter is not None:
-                obo_val = obo_token_getter()
+            if obo_token_getter_fn is not None:
+                obo_val = obo_token_getter_fn()
                 if obo_val:
                     request.headers['X-S2-OBO'] = obo_val
             yield request
 
-    # Build timeout configuration
-    if connect_timeout is not None and read_timeout is not None:
-        t = httpx.Timeout(connect=connect_timeout, read=read_timeout)
-    elif connect_timeout is not None:
-        t = httpx.Timeout(connect=connect_timeout)
-    elif read_timeout is not None:
-        t = httpx.Timeout(read=read_timeout)
+    if t is not None:
+        http_client = httpx.Client(
+            timeout=t,
+            auth=OpenAIAuth(),
+        )
     else:
-        t = 60.0  # default OpenAI client timeout
-
-    http_client = httpx.Client(
-        timeout=t,
-        auth=OpenAIAuth(),
-    )
+        http_client = httpx.Client(
+            timeout=httpx.Timeout(timeout=600, connect=5.0),  # default OpenAI timeout
+            auth=OpenAIAuth(),
+        )
 
     # OpenAI / Azure OpenAI path
     openai_kwargs = dict(
