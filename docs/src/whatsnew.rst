@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.16.4 - December 1, 2025
+--------------------------
+* fix: Make auth tokens resolved dynamically per request. (#108)
+
 v1.16.3 - November 20, 2025
 ---------------------------
 * Add show and drop aura model fusion commands (#105)
