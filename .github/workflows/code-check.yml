@@ -71,6 +71,17 @@ jobs:
             fi
           fi
 
+          # Check if this is a release preparation commit
+          COMMIT_MSG=$(git log -1 --format='%s' HEAD)
+          if [[ "$COMMIT_MSG" =~ ^Prepare\ for\ v[0-9]+\.[0-9]+\.[0-9]+\ release$ ]]; then
+            echo "🚀 Release preparation commit detected: $COMMIT_MSG"
+            echo "changes-detected=true" >> $GITHUB_OUTPUT
+            echo "changed-directories=release" >> $GITHUB_OUTPUT
+            echo ""
+            echo "🎯 RESULT: Full test suite will run for release preparation"
+            exit 0
+          fi
+
           echo "Checking for changes in: $MONITORED_DIRS"
           echo "Comparing against: $BASE_COMMIT"
 
@@ -111,6 +122,15 @@ jobs:
             echo ""
             echo "🎯 RESULT: No changes in monitored directories"
           fi
+
+      - name: Trigger smoke tests for release
+        if: steps.check-changes.outputs.changed-directories == 'release'
+        run: |
+          echo "🔥 Triggering smoke tests for release preparation..."
+          gh workflow run smoke-test.yml
+          echo "✅ Smoke tests triggered successfully"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run MySQL protocol tests (with management API)
         if: steps.check-changes.outputs.changes-detected == 'true'

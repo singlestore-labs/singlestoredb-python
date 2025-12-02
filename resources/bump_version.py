@@ -520,10 +520,10 @@ def main() -> None:
             print('', file=sys.stderr)
             open_actions_page()
             print('', file=sys.stderr)
-            print('🚀 Next steps:', file=sys.stderr)
-            print('    📄 Run Coverage tests <https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml>', file=sys.stderr)
-            print('    📄 Run Smoke test <https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml>', file=sys.stderr)
-            print('    📄 Run resources/create_release.py', file=sys.stderr)
+            print('✅ Code checks and smoke tests triggered automatically', file=sys.stderr)
+            print('', file=sys.stderr)
+            print('🚀 Next step:', file=sys.stderr)
+            print('    📄 Run resources/create_release.py once tests complete', file=sys.stderr)
         else:
             print('', file=sys.stderr)
             print('⚠️  Commit/push failed. Please manually run:', file=sys.stderr)
@@ -532,9 +532,8 @@ def main() -> None:
         print('', file=sys.stderr)
         print('🚀 Next steps:', file=sys.stderr)
         print('    📄 git commit -m "Prepare for v{} release" && git push'.format(new_version), file=sys.stderr)
-        print('    📄 Run Coverage tests <https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml>', file=sys.stderr)
-        print('    📄 Run Smoke test <https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml>', file=sys.stderr)
-        print('    📄 Run resources/create_release.py', file=sys.stderr)
+        print('    ✅ Code checks and smoke tests will trigger automatically', file=sys.stderr)
+        print('    📄 Run resources/create_release.py once tests complete', file=sys.stderr)
 
 
 if __name__ == '__main__':
