@@ -31,7 +31,7 @@ from botocore import UNSIGNED
 from botocore.config import Config
 
 
-def SingleStoreChatFactoryDebug(
+def SingleStoreChatFactoryDebugV2(
     model_name: str,
     api_key: Optional[Union[Optional[str], Callable[[], Optional[str]]]] = None,
     streaming: bool = True,
@@ -212,7 +212,7 @@ def SingleStoreChatFactoryDebug(
     # OpenAI / Azure OpenAI path
     openai_kwargs = dict(
         base_url=info.connection_url,
-        # api_key='placeholder',
+        api_key='placeholder',
         model=model_name,
         streaming=streaming,
         http_client=http_client,
