@@ -212,7 +212,7 @@ def SingleStoreChatFactoryDebug(
     # OpenAI / Azure OpenAI path
     openai_kwargs = dict(
         base_url=info.connection_url,
-        api_key='placeholder',
+        # api_key='placeholder',
         model=model_name,
         streaming=streaming,
         http_client=http_client,
