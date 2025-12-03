@@ -1,23 +1,17 @@
-from collections.abc import Generator
-from typing import Callable
-from typing import Optional
-
 import httpx
 
 
 class SingleStoreOpenAIAuth(httpx.Auth):
-    def __init__(
-        self,
-        api_key_getter: Optional[Callable[[], Optional[str]]] = None,
-        obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
-    ):
+    def __init__(self, api_key_getter, obo_token_getter):  # type: ignore
         self.api_key_getter = api_key_getter
         self.obo_token_getter = obo_token_getter
 
-    def auth_flow(
-        self,
-        request: httpx.Request,
-    ) -> Generator[httpx.Request, httpx.Response, None]:
+    # def auth_flow(
+    #     self,
+    #     request: httpx.Request,
+    # ) -> Generator[httpx.Request, httpx.Response, None]:
+
+    def auth_flow(self, request):  # type: ignore[no-untyped-def]
         print(f'[DEBUG] auth_flow called for {request.method} {request.url}')
         if self.api_key_getter is not None:
             token_val = self.api_key_getter()
