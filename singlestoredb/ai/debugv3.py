@@ -31,7 +31,7 @@ from botocore import UNSIGNED
 from botocore.config import Config
 
 
-def SingleStoreChatFactoryDebugV2(
+def SingleStoreChatFactoryDebugV3(
     model_name: str,
     api_key: Optional[Union[Optional[str], Callable[[], Optional[str]]]] = None,
     streaming: bool = True,
