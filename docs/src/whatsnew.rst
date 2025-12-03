@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.16.5 - December 3, 2025
+--------------------------
+* fix: Impersonating JWT (obo) header not propagated correctly for OpenAI requests. (#109)
+
 v1.16.4 - December 1, 2025
 --------------------------
 * fix: Make auth tokens resolved dynamically per request. (#108)
