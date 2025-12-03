@@ -173,12 +173,12 @@ def SingleStoreChatFactoryDebugV3(
         )
 
     if t is not None:
-        http_client = httpx.Client(
+        http_client_internal = httpx.Client(
             timeout=t,
             auth=SingleStoreOpenAIAuth(api_key_getter_fn, obo_token_getter_fn),
         )
     else:
-        http_client = httpx.Client(
+        http_client_internal = httpx.Client(
             timeout=httpx.Timeout(timeout=600, connect=5.0),  # default OpenAI timeout
             auth=SingleStoreOpenAIAuth(api_key_getter_fn, obo_token_getter_fn),
         )
@@ -186,10 +186,10 @@ def SingleStoreChatFactoryDebugV3(
     # OpenAI / Azure OpenAI path
     openai_kwargs = dict(
         base_url=info.connection_url,
-        api_key='placeholder',
+        api_key=api_key_getter_fn(),
         model=model_name,
         streaming=streaming,
-        http_client=http_client,
+        http_client=http_client_internal,
     )
     return ChatOpenAI(
         **openai_kwargs,

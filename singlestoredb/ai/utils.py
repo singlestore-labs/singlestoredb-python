@@ -13,15 +13,19 @@ class SingleStoreOpenAIAuth(httpx.Auth):
 
     def auth_flow(self, request):  # type: ignore[no-untyped-def]
         print(f'[DEBUG] auth_flow called for {request.method} {request.url}')
-        if self.api_key_getter is not None:
-            token_val = self.api_key_getter()
-            print(f"[DEBUG] api_key_getter: {token_val if token_val else 'None'}...")
-            if token_val:
-                request.headers['Authorization'] = f'Bearer {token_val}'
+        # if self.api_key_getter is not None:
+        #     token_val = self.api_key_getter()
+        #     print(f"[DEBUG] api_key_getter: {token_val if token_val else 'None'}...")
+        #     if token_val:
+        #         request.headers['Authorization'] = f'Bearer {token_val}'
+        # else:
+        #     print('[DEBUG] api_key_getter is None')
         if self.obo_token_getter is not None:
             obo_val = self.obo_token_getter()
             print(f"[DEBUG] obo_token_getter: {obo_val if obo_val else 'None'}...")
             if obo_val:
                 request.headers['X-S2-OBO'] = obo_val
+        else:
+            print('[DEBUG] obo_token_getter is None')
         print(f'[DEBUG] Final headers: {dict(request.headers)}')
         yield request
