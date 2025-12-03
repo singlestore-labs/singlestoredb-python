@@ -39,7 +39,6 @@ def SingleStoreChatFactory(
     obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
     base_url: Optional[str] = None,
     hosting_platform: Optional[str] = None,
-    timeout: Optional[float] = None,
     **kwargs: Any,
 ) -> Union[ChatOpenAI, ChatBedrockConverse]:
     """Return a chat model instance (ChatOpenAI or ChatBedrockConverse).
@@ -103,10 +102,6 @@ def SingleStoreChatFactory(
         elif isinstance(t, (int, float)):
             connect_timeout = float(t)
             read_timeout = float(t)
-    if timeout is not None:
-        connect_timeout = timeout
-        read_timeout = timeout
-        t = httpx.Timeout(timeout)
 
     if info.hosting_platform == 'Amazon':
         # Instantiate Bedrock client
