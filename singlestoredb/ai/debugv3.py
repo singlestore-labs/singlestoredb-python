@@ -7,7 +7,6 @@ from typing import Union
 import httpx
 
 from singlestoredb import manage_workspaces
-from singlestoredb.ai.utils import SingleStoreOpenAIAuth
 from singlestoredb.management.inference_api import InferenceAPIInfo
 
 try:
@@ -172,25 +171,17 @@ def SingleStoreChatFactoryDebugV3(
             **kwargs,
         )
 
-    if t is not None:
-        http_client_internal = httpx.Client(
-            timeout=t,
-            auth=SingleStoreOpenAIAuth(api_key_getter_fn, obo_token_getter_fn),
-        )
-    else:
-        http_client_internal = httpx.Client(
-            timeout=httpx.Timeout(timeout=600, connect=5.0),  # default OpenAI timeout
-            auth=SingleStoreOpenAIAuth(api_key_getter_fn, obo_token_getter_fn),
-        )
-
     # OpenAI / Azure OpenAI path
+    token = api_key_getter_fn()
+
     openai_kwargs = dict(
         base_url=info.connection_url,
-        api_key=api_key_getter_fn(),
+        api_key=token,
         model=model_name,
         streaming=streaming,
-        http_client=http_client_internal,
     )
+    if http_client is not None:
+        openai_kwargs['http_client'] = http_client
     return ChatOpenAI(
         **openai_kwargs,
         **kwargs,
