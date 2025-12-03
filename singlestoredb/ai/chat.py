@@ -5,9 +5,9 @@ from typing import Optional
 from typing import Union
 
 import httpx
-from utils import SingleStoreOpenAIAuth
 
 from singlestoredb import manage_workspaces
+from singlestoredb.ai.utils import SingleStoreOpenAIAuth
 from singlestoredb.management.inference_api import InferenceAPIInfo
 
 try:
