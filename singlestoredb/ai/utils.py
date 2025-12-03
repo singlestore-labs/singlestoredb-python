@@ -10,13 +10,14 @@ class SingleStoreOpenAIAuth(httpx.Auth):
         self,
         api_key_getter: Optional[Callable[[], Optional[str]]] = None,
         obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
-    ) -> None:
+    ):
         self.api_key_getter = api_key_getter
         self.obo_token_getter = obo_token_getter
 
     def auth_flow(
-        self, request: httpx.Request,
-    ) -> Generator[httpx.Request, None, None]:
+        self,
+        request: httpx.Request,
+    ) -> Generator[httpx.Request, httpx.Response, None]:
         print(f'[DEBUG] auth_flow called for {request.method} {request.url}')
         if self.api_key_getter is not None:
             token_val = self.api_key_getter()
