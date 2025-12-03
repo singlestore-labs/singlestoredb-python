@@ -1,4 +1,5 @@
 import os
+from collections.abc import Generator
 from typing import Any
 from typing import Callable
 from typing import Optional
@@ -171,26 +172,37 @@ def SingleStoreChatFactory(
             **kwargs,
         )
 
-    def inject_auth_headers(request: httpx.Request) -> None:
-        """Inject dynamic auth/OBO headers before request is sent."""
-        if api_key_getter_fn is not None:
-            token_val = api_key_getter_fn()
-            if token_val:
-                request.headers['Authorization'] = f'Bearer {token_val}'
-        if obo_token_getter_fn is not None:
-            obo_val = obo_token_getter_fn()
-            if obo_val:
-                request.headers['X-S2-OBO'] = obo_val
+    class OpenAIAuth(httpx.Auth):
+        def __init__(
+            self,
+            api_key_getter: Optional[Callable[[], Optional[str]]] = None,
+            obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
+        ) -> None:
+            self.api_key_getter = api_key_getter
+            self.obo_token_getter = obo_token_getter
+
+        def auth_flow(
+            self, request: httpx.Request,
+        ) -> Generator[httpx.Request, None, None]:
+            if self.api_key_getter is not None:
+                token_val = self.api_key_getter()
+                if token_val:
+                    request.headers['Authorization'] = f'Bearer {token_val}'
+            if self.obo_token_getter is not None:
+                obo_val = self.obo_token_getter()
+                if obo_val:
+                    request.headers['X-S2-OBO'] = obo_val
+            yield request
 
     if t is not None:
         http_client = httpx.Client(
             timeout=t,
-            event_hooks={'request': [inject_auth_headers]},
+            auth=OpenAIAuth(api_key_getter_fn, obo_token_getter_fn),
         )
     else:
         http_client = httpx.Client(
             timeout=httpx.Timeout(timeout=600, connect=5.0),  # default OpenAI timeout
-            event_hooks={'request': [inject_auth_headers]},
+            auth=OpenAIAuth(api_key_getter_fn, obo_token_getter_fn),
         )
 
     # OpenAI / Azure OpenAI path
