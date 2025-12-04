@@ -908,9 +908,9 @@ class FileSpace(FileLocation):
                 return False
             raise
 
-    def _listdir(self, path: PathLike, *, recursive: bool = False) -> List[str]:
+    def _listdir(self, path: PathLike, *, recursive: bool = False, return_meta: bool = False) -> List[Union[str, Dict[str, Any]]]:
         """
-        Return the names of files in a directory.
+        Return the names (or metadata) of files in a directory.
 
         Parameters
         ----------
@@ -918,28 +918,35 @@ class FileSpace(FileLocation):
             Path to the folder
         recursive : bool, optional
             Should folders be listed recursively?
-
+        return_meta : bool, optional
+            If True, return list of dicts with 'path' and 'type'. Otherwise just paths.
         """
         res = self._manager._get(
             f'files/fs/{self._location}/{path}',
         ).json()
 
         if recursive:
-            out = []
-            for item in res['content'] or []:
-                out.append(item['path'])
+            out: List[Union[str, Dict[str, Any]]] = []
+            for item in res.get('content') or []:
+                if return_meta:
+                    out.append({'path': item['path'], 'type': item['type']})
+                else:
+                    out.append(item['path'])
                 if item['type'] == 'directory':
-                    out.extend(self._listdir(item['path'], recursive=recursive))
+                    out.extend(self._listdir(item['path'], recursive=recursive, return_meta=return_meta))
             return out
 
-        return [x['path'] for x in res['content'] or []]
+        if return_meta:
+            return [{'path': x['path'], 'type': x['type']} for x in (res.get('content') or [])]
+        return [x['path'] for x in (res.get('content') or [])]
 
     def listdir(
         self,
         path: PathLike = '/',
         *,
         recursive: bool = False,
-    ) -> List[str]:
+        return_meta: bool = False,
+    ) -> List[Union[str, Dict[str, Any]]]:
         """
         List the files / folders at the given path.
 
@@ -948,21 +955,32 @@ class FileSpace(FileLocation):
         path : Path or str, optional
             Path to the file location
 
+        return_meta : bool, optional
+            If True, return list of dicts with 'path' and 'type'. Otherwise just paths.
+
         Returns
         -------
-        List[str]
+        List[str] or List[dict]
 
         """
         path = re.sub(r'^(\./|/)+', r'', str(path))
         path = re.sub(r'/+$', r'', path) + '/'
 
-        if not self.is_dir(path):
+        # Single validation GET (info) rather than is_dir + info later
+        info = self.info(path)
+        if info.type != 'directory':
             raise NotADirectoryError(f'path is not a directory: {path}')
 
-        out = self._listdir(path, recursive=recursive)
+        out = self._listdir(path, recursive=recursive, return_meta=return_meta)
         if path != '/':
             path_n = len(path.split('/')) - 1
-            out = ['/'.join(x.split('/')[path_n:]) for x in out]
+            if return_meta:
+                for i in range(len(out)):
+                    if isinstance(out[i], dict):
+                        rel = '/'.join(out[i]['path'].split('/')[path_n:])
+                        out[i]['path'] = rel
+            else:
+                out = ['/'.join(str(x).split('/')[path_n:]) for x in out]
         return out
 
     def download_file(
@@ -1036,17 +1054,26 @@ class FileSpace(FileLocation):
         if local_path is not None and not overwrite and os.path.exists(local_path):
             raise OSError('target path already exists; use overwrite=True to replace')
 
-        if not self.is_dir(path):
+        # Validate directory with single info call
+        info = self.info(path)
+        if info.type != 'directory':
             raise NotADirectoryError(f'path is not a directory: {path}')
 
-        files = self.listdir(path, recursive=True)
-        for f in files:
-            remote_path = os.path.join(path, f)
-            if self.is_dir(remote_path):
+        entries = self.listdir(path, recursive=True, return_meta=True)
+        for entry in entries:
+            # Each entry is a dict with path relative to root and type
+            if not isinstance(entry, dict):  # defensive: skip unexpected
                 continue
-            target = os.path.normpath(os.path.join(local_path, f))
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            self.download_file(remote_path, target, overwrite=overwrite)
+            rel_path = entry['path']
+            if entry['type'] == 'directory':
+                # Ensure local directory exists; no remote call needed
+                target_dir = os.path.normpath(os.path.join(local_path, rel_path))
+                os.makedirs(target_dir, exist_ok=True)
+                continue
+            remote_path = os.path.join(path, rel_path)
+            target_file = os.path.normpath(os.path.join(local_path, rel_path))
+            os.makedirs(os.path.dirname(target_file), exist_ok=True)
+            self.download_file(remote_path, target_file, overwrite=overwrite)
 
     def remove(self, path: PathLike) -> None:
         """
