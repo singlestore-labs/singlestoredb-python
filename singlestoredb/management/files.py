@@ -966,12 +966,12 @@ class FileSpace(FileLocation):
         path = re.sub(r'^(\./|/)+', r'', str(path))
         path = re.sub(r'/+$', r'', path) + '/'
 
-        # Single validation GET (info) rather than is_dir + info later
-        info = self.info(path)
-        if info.type != 'directory':
-            raise NotADirectoryError(f'path is not a directory: {path}')
-
-        out = self._listdir(path, recursive=recursive, return_meta=return_meta)
+        # Validate via listing GET; if response lacks 'content', it's not a directory
+        try:
+            out = self._listdir(path, recursive=recursive, return_meta=return_meta)
+        except Exception as exc:
+            # If the path doesn't exist or isn't a directory, _listdir will fail
+            raise NotADirectoryError(f'path is not a directory: {path}') from exc
         if path != '/':
             path_n = len(path.split('/')) - 1
             if return_meta:
@@ -990,6 +990,7 @@ class FileSpace(FileLocation):
         *,
         overwrite: bool = False,
         encoding: Optional[str] = None,
+        _skip_dir_check: bool = False,
     ) -> Optional[Union[bytes, str]]:
         """
         Download the content of a file path.
@@ -1013,7 +1014,7 @@ class FileSpace(FileLocation):
         """
         if local_path is not None and not overwrite and os.path.exists(local_path):
             raise OSError('target file already exists; use overwrite=True to replace')
-        if self.is_dir(path):
+        if not _skip_dir_check and self.is_dir(path):
             raise IsADirectoryError(f'file path is a directory: {path}')
 
         out = self._manager._get(
@@ -1054,11 +1055,7 @@ class FileSpace(FileLocation):
         if local_path is not None and not overwrite and os.path.exists(local_path):
             raise OSError('target path already exists; use overwrite=True to replace')
 
-        # Validate directory with single info call
-        info = self.info(path)
-        if info.type != 'directory':
-            raise NotADirectoryError(f'path is not a directory: {path}')
-
+        # listdir validates directory; no extra info call needed
         entries = self.listdir(path, recursive=True, return_meta=True)
         for entry in entries:
             # Each entry is a dict with path relative to root and type
@@ -1073,7 +1070,7 @@ class FileSpace(FileLocation):
             remote_path = os.path.join(path, rel_path)
             target_file = os.path.normpath(os.path.join(local_path, rel_path))
             os.makedirs(os.path.dirname(target_file), exist_ok=True)
-            self.download_file(remote_path, target_file, overwrite=overwrite)
+            self.download_file(remote_path, target_file, overwrite=overwrite, _skip_dir_check=True)
 
     def remove(self, path: PathLike) -> None:
         """
