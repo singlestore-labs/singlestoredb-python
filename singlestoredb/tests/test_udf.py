@@ -251,6 +251,38 @@ class TestUDF(unittest.TestCase):
 
     def test_numerics(self):
         #
+        # Bools
+        #
+        def foo(x: bool) -> None: ...
+        assert to_sql(foo) == '`foo`(`x` BOOL NOT NULL) RETURNS TINYINT NULL'
+
+        def foo(x: np.bool_) -> None: ...
+        assert to_sql(foo) == '`foo`(`x` BOOL NOT NULL) RETURNS TINYINT NULL'
+
+        def foo(x: Optional[bool]) -> None: ...
+        assert to_sql(foo) == '`foo`(`x` BOOL NULL) RETURNS TINYINT NULL'
+
+        def foo(x: Optional[np.bool_]) -> None: ...
+        assert to_sql(foo) == '`foo`(`x` BOOL NULL) RETURNS TINYINT NULL'
+
+        # Bool return types
+        def foo() -> bool: ...
+        assert to_sql(foo) == '`foo`() RETURNS BOOL NOT NULL'
+
+        def foo() -> np.bool_: ...
+        assert to_sql(foo) == '`foo`() RETURNS BOOL NOT NULL'
+
+        def foo() -> Optional[bool]: ...
+        assert to_sql(foo) == '`foo`() RETURNS BOOL NULL'
+
+        # Vector bool (List)
+        def foo(x: List[bool]) -> List[bool]: ...
+        assert to_sql(foo) == '`foo`(`x` BOOL NOT NULL) RETURNS BOOL NOT NULL'
+
+        def foo(x: List[np.bool_]) -> List[np.bool_]: ...
+        assert to_sql(foo) == '`foo`(`x` BOOL NOT NULL) RETURNS BOOL NOT NULL'
+
+        #
         # Ints
         #
         def foo(x: int) -> None: ...

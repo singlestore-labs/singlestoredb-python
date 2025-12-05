@@ -16,6 +16,7 @@ from singlestoredb.functions import Table
 from singlestoredb.functions import udf
 from singlestoredb.functions.dtypes import BIGINT
 from singlestoredb.functions.dtypes import BLOB
+from singlestoredb.functions.dtypes import BOOL
 from singlestoredb.functions.dtypes import DOUBLE
 from singlestoredb.functions.dtypes import FLOAT
 from singlestoredb.functions.dtypes import MEDIUMINT
@@ -306,6 +307,192 @@ def numpy_bigint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 def arrow_bigint_mult(x: pat.Array, y: pat.Array) -> pat.Array:
     import pyarrow.compute as pc
     return pc.multiply(x, y)
+
+
+#
+# BOOL - Scalar (non-vector) tests
+#
+
+@udf
+def bool_and(x: bool, y: bool) -> bool:
+    """Scalar bool AND operation."""
+    return x and y
+
+
+@udf
+def bool_or(x: bool, y: bool) -> bool:
+    """Scalar bool OR operation."""
+    return x or y
+
+
+@udf
+def bool_not(x: bool) -> bool:
+    """Scalar bool NOT operation."""
+    return not x
+
+
+@udf
+def bool_xor(x: bool, y: bool) -> bool:
+    """Scalar bool XOR operation."""
+    return x != y
+
+
+#
+# BOOL - Vector (non-nullable)
+#
+
+bool_udf = udf(
+    args=[BOOL(nullable=False), BOOL(nullable=False)],
+    returns=BOOL(nullable=False),
+)
+
+
+@bool_udf
+def numpy_bool_and(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Vector bool AND using numpy."""
+    return x & y
+
+
+@bool_udf
+def pandas_bool_and(x: pdt.Series, y: pdt.Series) -> pdt.Series:
+    """Vector bool AND using pandas."""
+    return x & y
+
+
+@bool_udf
+def polars_bool_and(x: plt.Series, y: plt.Series) -> plt.Series:
+    """Vector bool AND using polars."""
+    return x & y
+
+
+@bool_udf
+def arrow_bool_and(x: pat.Array, y: pat.Array) -> pat.Array:
+    """Vector bool AND using pyarrow."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    # Convert TINYINT (0/1) to bool by comparing with 0
+    x_bool = pc.not_equal(x, 0)
+    y_bool = pc.not_equal(y, 0)
+    result_bool = pc.and_(x_bool, y_bool)
+    # Convert back to int8 for TINYINT return type
+    return pc.cast(result_bool, pa.int8())
+
+
+#
+# BOOL - Nullable scalar
+#
+
+@udf
+def nullable_bool_and(x: Optional[bool], y: Optional[bool]) -> Optional[bool]:
+    """Nullable scalar bool AND operation."""
+    if x is None or y is None:
+        return None
+    return x and y
+
+
+#
+# BOOL - Nullable vector
+#
+
+nullable_bool_udf = udf(
+    args=[BOOL(nullable=True), BOOL(nullable=True)],
+    returns=BOOL(nullable=True),
+)
+
+
+@nullable_bool_udf
+def numpy_nullable_bool_and(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Nullable vector bool AND using numpy."""
+    return x & y
+
+
+@nullable_bool_udf
+def pandas_nullable_bool_and(x: pdt.Series, y: pdt.Series) -> pdt.Series:
+    """Nullable vector bool AND using pandas."""
+    return x & y
+
+
+@nullable_bool_udf
+def polars_nullable_bool_and(x: plt.Series, y: plt.Series) -> plt.Series:
+    """Nullable vector bool AND using polars."""
+    return x & y
+
+
+@nullable_bool_udf
+def arrow_nullable_bool_and(x: pat.Array, y: pat.Array) -> pat.Array:
+    """Nullable vector bool AND using pyarrow."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    # Convert TINYINT (0/1) to bool by comparing with 0
+    x_bool = pc.not_equal(x, 0)
+    y_bool = pc.not_equal(y, 0)
+    result_bool = pc.and_(x_bool, y_bool)
+    # Convert back to int8 for TINYINT return type
+    return pc.cast(result_bool, pa.int8())
+
+
+#
+# BOOL - Masked variants (with explicit null handling)
+#
+
+@udf(
+    args=[BOOL(nullable=True), BOOL(nullable=True)],
+    returns=BOOL(nullable=True),
+)
+def numpy_nullable_bool_and_with_masks(
+    x: Masked[npt.NDArray[np.bool_]], y: Masked[npt.NDArray[np.bool_]],
+) -> Masked[npt.NDArray[np.bool_]]:
+    """Nullable vector bool AND with masks using numpy."""
+    x_data, x_nulls = x
+    y_data, y_nulls = y
+    return Masked(x_data & y_data, x_nulls | y_nulls)
+
+
+@udf(
+    args=[BOOL(nullable=True), BOOL(nullable=True)],
+    returns=BOOL(nullable=True),
+)
+def pandas_nullable_bool_and_with_masks(
+    x: Masked[pdt.Series], y: Masked[pdt.Series],
+) -> Masked[pdt.Series]:
+    """Nullable vector bool AND with masks using pandas."""
+    x_data, x_nulls = x
+    y_data, y_nulls = y
+    return Masked(x_data & y_data, x_nulls | y_nulls)
+
+
+@udf(
+    args=[BOOL(nullable=True), BOOL(nullable=True)],
+    returns=BOOL(nullable=True),
+)
+def polars_nullable_bool_and_with_masks(
+    x: Masked[plt.Series], y: Masked[plt.Series],
+) -> Masked[plt.Series]:
+    """Nullable vector bool AND with masks using polars."""
+    x_data, x_nulls = x
+    y_data, y_nulls = y
+    return Masked(x_data & y_data, x_nulls | y_nulls)
+
+
+@udf(
+    args=[BOOL(nullable=True), BOOL(nullable=True)],
+    returns=BOOL(nullable=True),
+)
+def arrow_nullable_bool_and_with_masks(
+    x: Masked[pat.Array], y: Masked[pat.Array],
+) -> Masked[pat.Array]:
+    """Nullable vector bool AND with masks using pyarrow."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    x_data, x_nulls = x
+    y_data, y_nulls = y
+    # Convert TINYINT (0/1) to bool by comparing with 0
+    x_bool = pc.not_equal(x_data, 0)
+    y_bool = pc.not_equal(y_data, 0)
+    result_bool = pc.and_(x_bool, y_bool)
+    # Convert back to int8 for TINYINT return type
+    result_int = pc.cast(result_bool, pa.int8())
+    return Masked(result_int, pc.or_(x_nulls, y_nulls))
 
 
 #
