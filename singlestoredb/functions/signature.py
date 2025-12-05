@@ -100,6 +100,7 @@ float_type_map = {
 }
 
 int_type_map = {
+    'bool': 'bool',
     'int': 'int64',
     'integer': 'int64',
     'int_': 'int64',
