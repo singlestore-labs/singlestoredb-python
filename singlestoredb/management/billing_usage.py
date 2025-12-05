@@ -82,7 +82,7 @@ class UsageItem(object):
             owner_id=obj['ownerId'],
             resource_id=obj['resourceId'],
             resource_name=obj['resourceName'],
-            resource_type=obj['resource_type'],
+            resource_type=obj['resourceType'],
             value=obj['value'],
         )
         out._manager = manager
@@ -142,7 +142,7 @@ class BillingUsageItem(object):
         out = cls(
             description=obj['description'],
             metric=str(camel_to_snake(obj['metric'])),
-            usage=[UsageItem.from_dict(x, manager) for x in obj['Usage']],
+            usage=[UsageItem.from_dict(x, manager) for x in obj['usage']],
         )
         out._manager = manager
         return out
