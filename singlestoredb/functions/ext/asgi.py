@@ -50,13 +50,12 @@ import zipfile
 import zipimport
 from collections.abc import Awaitable
 from collections.abc import Iterable
+from collections.abc import Iterator
 from collections.abc import Sequence
 from types import ModuleType
 from typing import Any
 from typing import Callable
 from typing import Dict
-from typing import Iterable
-from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Set
@@ -93,6 +92,7 @@ except ImportError:
 
 
 logger = utils.get_logger('singlestoredb.functions.ext.asgi')
+
 
 async def to_thread(
     func: Any, /, *args: Any, **kwargs: Dict[str, Any],
