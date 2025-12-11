@@ -16,7 +16,7 @@ jobs:
       run_secret-detection: false # this will disable the secret detection scanner.
       run_license: true
       run_actions_scan: true
-      
+
       # For multiple paths, please separate them using commas (,).
       iac_exclude_path: ".github/workflows,exclude"
       sast_exclude_path: ".github/workflows,exclude"
