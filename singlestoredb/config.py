@@ -468,6 +468,13 @@ register_option(
     environ=['SINGLESTOREDB_EXT_FUNC_APP_NAME'],
 )
 
+register_option(
+    'external_function.concurrency_limit', 'int', check_int, 1,
+    'Specifies the maximum number of subsets of a batch of rows '
+    'to process simultaneously.',
+    environ=['SINGLESTOREDB_EXT_FUNC_CONCURRENCY_LIMIT'],
+)
+
 #
 # Debugging options
 #
