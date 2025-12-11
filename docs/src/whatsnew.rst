@@ -10,6 +10,11 @@ This document outlines features and improvements from each release.
 
 v1.16.6 - December 11, 2025
 ---------------------------
+* changes for adding internalConnectionURL (#112)
+* Add ability to use bools in UDF type annotations (#111)
+
+v1.16.6 - December 11, 2025
+---------------------------
 * Add ability to use bools in UDF type annotations (#111)
 
 v1.16.6 - December 10, 2025
