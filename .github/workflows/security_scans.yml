@@ -1,0 +1,29 @@
+name: Security scans
+
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+
+jobs:
+  security_scan:
+    #uses: singlestore/securitytesting/.github/workflows/secure-code-scan.yml@v1.7 # Use this workflow when pulling images from the GCR.
+    uses: singlestore/securitytesting/.github/workflows/Security-Scans.yml@v1.7
+    with:
+      run_sast: true
+      run_iac: true
+      run_secret-detection: false # this will disable the secret detection scanner.
+      run_license: true
+      run_actions_scan: true
+      
+      # For multiple paths, please separate them using commas (,).
+      iac_exclude_path: ".github/workflows,exclude"
+      sast_exclude_path: ".github/workflows,exclude"
+      license_scan_path: "./example ./test"
+      runners_group: "shared-4cpu-8gb"
+      allowed_licenses: HPND,NCSA,0BSD,BSD-3-Clause,BSD-2-Clause,Python-2.0,Apache-2.0,MIT,ISC,Unlicense,CC0-1.0,WTFPL,BlueOak-1.0.0,Zlib,UNKNOWN
+
+    secrets:
+      PRISMA_ACCESS_KEY_CONFIGURED: ${{ vars.PRISMA_ACCESS_KEY }}
+      PRISMA_SECRET_KEY_CONFIGURED: ${{ secrets.PRISMA_SECRET_KEY }}
