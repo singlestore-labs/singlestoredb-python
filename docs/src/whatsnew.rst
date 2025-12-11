@@ -8,6 +8,14 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.16.6 - December 11, 2025
+---------------------------
+* Add ability to use bools in UDF type annotations (#111)
+
+v1.16.6 - December 10, 2025
+---------------------------
+* Add ability to use bools in UDF type annotations (#111)
+
 v1.16.5 - December 3, 2025
 --------------------------
 * fix: Impersonating JWT (obo) header not propagated correctly for OpenAI requests. (#109)

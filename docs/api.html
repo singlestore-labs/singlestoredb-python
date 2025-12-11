@@ -1,18 +1,16 @@
+
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" data-content_root="./">
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStoreDB 1.16.5 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 1.16.6 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
-  <!--[if lt IE 9]>
-    <script src="_static/js/html5shiv.min.js"></script>
-  <![endif]-->
-        <script src="_static/documentation_options.js?v=baa394f0"></script>
-        <script src="_static/doctools.js?v=9a2dae69"></script>
-        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/documentation_options.js?v=8d5b1e9a"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -27,9 +25,6 @@
           <a href="index.html" class="icon icon-home">
             SingleStoreDB
           </a>
-              <div class="version">
-                1.16.5
-              </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
     <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
@@ -528,7 +523,7 @@ option on the <code class="docutils literal notranslate"><span class="pre">curso
 <h5>Uploading data using a generator function<a class="headerlink" href="#uploading-data-using-a-generator-function" title="Link to this heading">¶</a></h5>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;s2-host.com/my_db?local_infile=true&#39;</span><span class="p">)</span>
 <span class="n">cur</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
-<span class="k">def</span> <span class="nf">upload_csv</span><span class="p">():</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">upload_csv</span><span class="p">():</span>
     <span class="k">yield</span> <span class="s1">&#39;1,2,3</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="k">yield</span> <span class="s1">&#39;4,5,6</span><span class="se">\n</span><span class="s1">&#39;</span>
     <span class="k">yield</span> <span class="s1">&#39;7,8,9</span><span class="se">\n</span><span class="s1">&#39;</span>
@@ -549,8 +544,8 @@ option on the <code class="docutils literal notranslate"><span class="pre">curso
 </section>
 <section id="uploading-data-using-a-queue-and-threads">
 <h5>Uploading data using a queue and threads<a class="headerlink" href="#uploading-data-using-a-queue-and-threads" title="Link to this heading">¶</a></h5>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">queue</span> <span class="kn">import</span> <span class="n">Queue</span>
-<span class="kn">from</span> <span class="nn">threading</span> <span class="kn">import</span> <span class="n">Thread</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">queue</span><span class="w"> </span><span class="kn">import</span> <span class="n">Queue</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">threading</span><span class="w"> </span><span class="kn">import</span> <span class="n">Thread</span>
 <span class="n">conn</span> <span class="o">=</span> <span class="n">s2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;s2-host.com/my_db?local_infile=true&#39;</span><span class="p">)</span>
 <span class="n">cur</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
 <span class="n">data_feeder</span> <span class="o">=</span> <span class="n">Queue</span><span class="p">()</span>
@@ -821,13 +816,13 @@ methods for creating, monitoring, and managing scheduled notebook jobs.</p>
 <p>The following classes are used as parameters and return values in the jobs API.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Mode.html#singlestoredb.management.job.Mode" title="singlestoredb.management.job.Mode"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Mode</span></code></a>(value[, names, module, qualname, type, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Mode.html#singlestoredb.management.job.Mode" title="singlestoredb.management.job.Mode"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Mode</span></code></a>(*values)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.TargetType.html#singlestoredb.management.job.TargetType" title="singlestoredb.management.job.TargetType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TargetType</span></code></a>(value[, names, module, qualname, ...])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.TargetType.html#singlestoredb.management.job.TargetType" title="singlestoredb.management.job.TargetType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TargetType</span></code></a>(*values)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Status.html#singlestoredb.management.job.Status" title="singlestoredb.management.job.Status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Status</span></code></a>(value[, names, module, qualname, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Status.html#singlestoredb.management.job.Status" title="singlestoredb.management.job.Status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Status</span></code></a>(*values)</p></td>
 <td><p></p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Parameter.html#singlestoredb.management.job.Parameter" title="singlestoredb.management.job.Parameter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Parameter</span></code></a>(name, value, type)</p></td>
@@ -1105,7 +1100,7 @@ included with the Python SDK to start a SingleStoreDB server in Docker. This
 allows you to open interactive shells, SQL Studio, and also use the <cite>%sql</cite>
 magic commands from Jupysql with a SingleStoreDB server running in a container.</p>
 <p>An example of starting SingleStoreDB in Docker is shown below.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">singlestoredb.server</span> <span class="kn">import</span> <span class="n">docker</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">singlestoredb.server</span><span class="w"> </span><span class="kn">import</span> <span class="n">docker</span>
 <span class="n">s2db</span> <span class="o">=</span> <span class="n">docker</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">s2db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
     <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
@@ -1118,7 +1113,7 @@ magic commands from Jupysql with a SingleStoreDB server running in a container.<
 <p>It is possible to use the server instance as a context manager as well.
 This will automatically shut down the container after exiting the <code class="docutils literal notranslate"><span class="pre">with</span></code>
 block.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">singlestoredb.server</span> <span class="kn">import</span> <span class="n">docker</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">singlestoredb.server</span><span class="w"> </span><span class="kn">import</span> <span class="n">docker</span>
 <span class="k">with</span> <span class="n">docker</span><span class="o">.</span><span class="n">start</span><span class="p">()</span> <span class="k">as</span> <span class="n">s2db</span><span class="p">:</span>
     <span class="k">with</span> <span class="n">s2db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
         <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
@@ -1175,7 +1170,7 @@ down when the Python process exits.</p>
 <p>The Cloud Free Tier interface works much in the same way as the Docker
 interface, although it doesn’t support as many features. To start a
 server in the Cloud Free Tier, you use the following:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">singlestoredb.server</span> <span class="kn">import</span> <span class="n">free_tier</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">singlestoredb.server</span><span class="w"> </span><span class="kn">import</span> <span class="n">free_tier</span>
 <span class="n">s2db</span> <span class="o">=</span> <span class="n">free_tier</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">s2db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
     <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
@@ -1238,7 +1233,7 @@ see the documentation for all options.</p>
 <p>In addition to the function above, you can access options through the
 <code class="docutils literal notranslate"><span class="pre">singlestoredb.options</span></code> object. This gives you attribute-like access to the option
 values.</p>
-<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [1]: </span><span class="kn">import</span> <span class="nn">singlestoredb</span> <span class="k">as</span> <span class="nn">s2</span>
+<div class="highlight-ipython notranslate"><div class="highlight"><pre><span></span><span class="gp">In [1]: </span><span class="kn">import</span><span class="w"> </span><span class="nn">singlestoredb</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">s2</span>
 <span class="gp">In [2]: </span><span class="n">s2</span><span class="o">.</span><span class="n">describe_option</span><span class="p">(</span><span class="s1">&#39;local_infile&#39;</span><span class="p">)</span>
 <span class="go">local_infile : bool</span>
 <span class="go">    Should it be possible to load local files?</span>

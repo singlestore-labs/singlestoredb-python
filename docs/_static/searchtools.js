@@ -1,12 +1,5 @@
 /*
- * searchtools.js
- * ~~~~~~~~~~~~~~~~
- *
  * Sphinx JavaScript utilities for the full-text search.
- *
- * :copyright: Copyright 2007-2024 by the Sphinx team, see AUTHORS.
- * :license: BSD, see LICENSE for details.
- *
  */
 "use strict";
 /**
@@ -19,7 +12,7 @@ if (typeof Scorer === "undefined") {
     // and returns the new score.
     /*
     score: result => {
-      const [docname, title, anchor, descr, score, filename] = result
+      const [docname, title, anchor, descr, score, filename, kind] = result
       return score
     },
     */
@@ -43,6 +36,13 @@ if (typeof Scorer === "undefined") {
     partialTerm: 2,
   };
 }
+// Global search result kind enum, used by themes to style search results.
+class SearchResultKind {
+    static get index() { return  "index"; }
+    static get object() { return "object"; }
+    static get text() { return "text"; }
+    static get title() { return "title"; }
+}
 const _removeChildren = (element) => {
   while (element && element.lastChild) element.removeChild(element.lastChild);
 };
@@ -57,8 +57,12 @@ const _displayItem = (item, searchTerms, highlightTerms) => {
   const docLinkSuffix = DOCUMENTATION_OPTIONS.LINK_SUFFIX;
   const showSearchSummary = DOCUMENTATION_OPTIONS.SHOW_SEARCH_SUMMARY;
   const contentRoot = document.documentElement.dataset.content_root;
-  const [docName, title, anchor, descr, score, _filename] = item;
+  const [docName, title, anchor, descr, score, _filename, kind] = item;
   let listItem = document.createElement("li");
+  // Add a class representing the item's type:
+  // can be used by a theme's CSS selector for styling
+  // See SearchResultKind for the class names.
+  listItem.classList.add(`kind-${kind}`);
   let requestUrl;
   let linkUrl;
   if (docBuilder === "dirhtml") {
@@ -107,8 +111,10 @@ const _finishSearch = (resultCount) => {
       "Your search did not match any documents. Please make sure that all words are spelled correctly and that you've selected enough categories."
     );
   else
-    Search.status.innerText = _(
-      "Search finished, found ${resultCount} page(s) matching the search query."
+    Search.status.innerText = Documentation.ngettext(
+      "Search finished, found one page matching the search query.",
+      "Search finished, found ${resultCount} pages matching the search query.",
+      resultCount,
     ).replace('${resultCount}', resultCount);
 };
 const _displayNextItem = (
@@ -130,7 +136,7 @@ const _displayNextItem = (
   else _finishSearch(resultCount);
 };
 // Helper function used by query() to order search results.
-// Each input is an array of [docname, title, anchor, descr, score, filename].
+// Each input is an array of [docname, title, anchor, descr, score, filename, kind].
 // Order the results by score (in opposite order of appearance, since the
 // `_displayNextItem` function uses pop() to retrieve items) and then alphabetically.
 const _orderResultsByScoreThenName = (a, b) => {
@@ -225,6 +231,7 @@ const Search = {
     searchSummary.classList.add("search-summary");
     searchSummary.innerText = "";
     const searchList = document.createElement("ul");
+    searchList.setAttribute("role", "list");
     searchList.classList.add("search");
     const out = document.getElementById("search-results");
     Search.title = out.appendChild(searchText);
@@ -284,7 +291,7 @@ const Search = {
     const allTitles = Search._index.alltitles;
     const indexEntries = Search._index.indexentries;
     // Collect multiple result groups to be sorted separately and then ordered.
-    // Each is an array of [docname, title, anchor, descr, score, filename].
+    // Each is an array of [docname, title, anchor, descr, score, filename, kind].
     const normalResults = [];
     const nonMainIndexResults = [];
     _removeChildren(document.getElementById("search-progress"));
@@ -301,6 +308,7 @@ const Search = {
             null,
             score + boost,
             filenames[file],
+            SearchResultKind.title,
           ]);
         }
       }
@@ -317,6 +325,7 @@ const Search = {
             null,
             score,
             filenames[file],
+            SearchResultKind.index,
           ];
           if (isMain) {
             normalResults.push(result);
@@ -417,6 +426,7 @@ const Search = {
         descr,
         score,
         filenames[match[0]],
+        SearchResultKind.object,
       ]);
     };
     Object.keys(objects).forEach((prefix) =>
@@ -441,9 +451,11 @@ const Search = {
     // perform the search on the required terms
     searchTerms.forEach((word) => {
       const files = [];
+      // find documents, if any, containing the query word in their text/title term indices
+      // use Object.hasOwnProperty to avoid mismatching against prototype properties
       const arr = [
-        { files: terms[word], score: Scorer.term },
-        { files: titleTerms[word], score: Scorer.title },
+        { files: terms.hasOwnProperty(word) ? terms[word] : undefined, score: Scorer.term },
+        { files: titleTerms.hasOwnProperty(word) ? titleTerms[word] : undefined, score: Scorer.title },
       ];
       // add support for partial matches
       if (word.length > 2) {
@@ -471,8 +483,9 @@ const Search = {
         files.push(...recordFiles);
         // set score for the word in each file
         recordFiles.forEach((file) => {
-          if (!scoreMap.has(file)) scoreMap.set(file, {});
-          scoreMap.get(file)[word] = record.score;
+          if (!scoreMap.has(file)) scoreMap.set(file, new Map());
+          const fileScores = scoreMap.get(file);
+          fileScores.set(word, record.score);
         });
       });
       // create the mapping
@@ -506,7 +519,7 @@ const Search = {
       )
         break;
       // select one (max) score for the file.
-      const score = Math.max(...wordList.map((w) => scoreMap.get(file)[w]));
+      const score = Math.max(...wordList.map((w) => scoreMap.get(file).get(w)));
       // add result to the result list
       results.push([
         docNames[file],
@@ -515,6 +528,7 @@ const Search = {
         null,
         score,
         filenames[file],
+        SearchResultKind.text,
       ]);
     }
     return results;

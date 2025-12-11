@@ -9,6 +9,7 @@ repos:
         exclude: singlestoredb/clients/pymysqlsv/charset.py
     -   id: check-json
     -   id: check-added-large-files
+        args: ["--maxkb=800"]
 #   -   id: check-yaml
     -   id: debug-statements
 #   -   id: name-tests-test
