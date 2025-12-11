@@ -51,6 +51,8 @@ def SingleStoreEmbeddingsFactory(
             manage_workspaces().organizations.current.inference_apis
         )
         info = inference_api_manager.get(model_name=model_name)
+        if info.internal_connection_url == '':
+            info.internal_connection_url = info.connection_url
     else:
         info = InferenceAPIInfo(
             service_id='',
