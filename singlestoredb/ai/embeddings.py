@@ -57,11 +57,13 @@ def SingleStoreEmbeddingsFactory(
             model_name=model_name,
             name='',
             connection_url=base_url,
+            internal_connection_url=base_url,
             project_id='',
             hosting_platform=hosting_platform,
         )
     if base_url is not None:
         info.connection_url = base_url
+        info.internal_connection_url = base_url
     if hosting_platform is not None:
         info.hosting_platform = hosting_platform
 
@@ -97,7 +99,7 @@ def SingleStoreEmbeddingsFactory(
         cfg = Config(**cfg_kwargs)
         client = boto3.client(
             'bedrock-runtime',
-            endpoint_url=info.connection_url,
+            endpoint_url=info.internal_connection_url,
             region_name='us-east-1',
             aws_access_key_id='placeholder',
             aws_secret_access_key='placeholder',
@@ -129,7 +131,7 @@ def SingleStoreEmbeddingsFactory(
 
         return BedrockEmbeddings(
             model_id=model_name,
-            endpoint_url=info.connection_url,
+            endpoint_url=info.internal_connection_url,
             region_name='us-east-1',
             aws_access_key_id='placeholder',
             aws_secret_access_key='placeholder',
@@ -142,7 +144,7 @@ def SingleStoreEmbeddingsFactory(
     token = api_key if api_key is not None else token_env
 
     openai_kwargs = dict(
-        base_url=info.connection_url,
+        base_url=info.internal_connection_url,
         api_key=token,
         model=model_name,
     )

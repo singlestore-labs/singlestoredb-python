@@ -152,6 +152,7 @@ class InferenceAPIInfo(object):
     model_name: str
     name: str
     connection_url: str
+    internal_connection_url: str
     project_id: str
     hosting_platform: str
     _manager: Optional['InferenceAPIManager']
@@ -162,12 +163,14 @@ class InferenceAPIInfo(object):
         model_name: str,
         name: str,
         connection_url: str,
+        internal_connection_url: str,
         project_id: str,
         hosting_platform: str,
         manager: Optional['InferenceAPIManager'] = None,
     ):
         self.service_id = service_id
         self.connection_url = connection_url
+        self.internal_connection_url = internal_connection_url
         self.model_name = model_name
         self.name = name
         self.project_id = project_id
@@ -198,6 +201,7 @@ class InferenceAPIInfo(object):
             model_name=obj['modelName'],
             name=obj['name'],
             connection_url=obj['connectionURL'],
+            internal_connection_url=obj['internalConnectionURL'],
             hosting_platform=obj['hostingPlatform'],
         )
         return out
