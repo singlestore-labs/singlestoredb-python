@@ -2,6 +2,8 @@
 # Unless a later match takes precedence,
 # the following teams will be requested for
 # review when someone opens a pull request.
+* @kesmit13
+* @srinathnarayanan
 * @singlestore-labs/launch-pad
 * @singlestore-labs/developer-relations
 * @singlestore-labs/training
