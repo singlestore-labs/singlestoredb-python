@@ -990,7 +990,6 @@ class FileSpace(FileLocation):
         *,
         overwrite: bool = False,
         encoding: Optional[str] = None,
-        _skip_dir_check: bool = False,
     ) -> Optional[Union[bytes, str]]:
         """
         Download the content of a file path.
@@ -1005,6 +1004,45 @@ class FileSpace(FileLocation):
             Should an existing file be overwritten if it exists?
         encoding : str, optional
             Encoding used to convert the resulting data
+
+        Returns
+        -------
+        bytes or str - ``local_path`` is None
+        None - ``local_path`` is a Path or str
+
+        """
+        return self._download_file(
+            path,
+            local_path=local_path,
+            overwrite=overwrite,
+            encoding=encoding,
+            _skip_dir_check=False,
+        )
+
+    def _download_file(
+        self,
+        path: PathLike,
+        local_path: Optional[PathLike] = None,
+        *,
+        overwrite: bool = False,
+        encoding: Optional[str] = None,
+        _skip_dir_check: bool = False,
+    ) -> Optional[Union[bytes, str]]:
+        """
+        Internal method to download the content of a file path.
+
+        Parameters
+        ----------
+        path : Path or str
+            Path to the file
+        local_path : Path or str
+            Path to local file target location
+        overwrite : bool, optional
+            Should an existing file be overwritten if it exists?
+        encoding : str, optional
+            Encoding used to convert the resulting data
+        _skip_dir_check : bool, optional
+            Skip the directory check (internal use only)
 
         Returns
         -------
@@ -1070,7 +1108,7 @@ class FileSpace(FileLocation):
             remote_path = os.path.join(path, rel_path)
             target_file = os.path.normpath(os.path.join(local_path, rel_path))
             os.makedirs(os.path.dirname(target_file), exist_ok=True)
-            self.download_file(remote_path, target_file, overwrite=overwrite, _skip_dir_check=True)
+            self._download_file(remote_path, target_file, overwrite=overwrite, _skip_dir_check=True)
 
     def remove(self, path: PathLike) -> None:
         """
