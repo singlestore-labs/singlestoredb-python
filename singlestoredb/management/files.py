@@ -10,9 +10,12 @@ import re
 from abc import ABC
 from abc import abstractmethod
 from typing import Any
+from typing import cast
 from typing import Dict
 from typing import List
+from typing import Literal
 from typing import Optional
+from typing import overload
 from typing import Union
 
 from .. import config
@@ -427,7 +430,7 @@ class FileLocation(ABC):
         path: PathLike = '/',
         *,
         recursive: bool = False,
-    ) -> List[str]:
+    ) -> Union[List[str], List[Union[str, Dict[str, Any]]]]:
         pass
 
     @abstractmethod
@@ -908,7 +911,11 @@ class FileSpace(FileLocation):
                 return False
             raise
 
-    def _listdir(self, path: PathLike, *, recursive: bool = False, return_meta: bool = False) -> List[Union[str, Dict[str, Any]]]:
+    def _listdir(
+        self, path: PathLike, *,
+        recursive: bool = False,
+        return_meta: bool = False,
+    ) -> List[Union[str, Dict[str, Any]]]:
         """
         Return the names (or metadata) of files in a directory.
 
@@ -929,16 +936,47 @@ class FileSpace(FileLocation):
             out: List[Union[str, Dict[str, Any]]] = []
             for item in res.get('content') or []:
                 if return_meta:
-                    out.append({'path': item['path'], 'type': item['type']})
+                    out.append(
+                        {'path': item['path'], 'type': item['type']},
+                    )
                 else:
                     out.append(item['path'])
                 if item['type'] == 'directory':
-                    out.extend(self._listdir(item['path'], recursive=recursive, return_meta=return_meta))
+                    out.extend(
+                        self._listdir(
+                            item['path'],
+                            recursive=recursive,
+                            return_meta=return_meta,
+                        ),
+                    )
             return out
 
         if return_meta:
-            return [{'path': x['path'], 'type': x['type']} for x in (res.get('content') or [])]
+            return [
+                {'path': x['path'], 'type': x['type']}
+                for x in (res.get('content') or [])
+            ]
         return [x['path'] for x in (res.get('content') or [])]
+
+    @overload
+    def listdir(
+        self,
+        path: PathLike = '/',
+        *,
+        recursive: bool = False,
+        return_meta: Literal[True] = ...,
+    ) -> List[Dict[str, Any]]:
+        ...
+
+    @overload
+    def listdir(
+        self,
+        path: PathLike = '/',
+        *,
+        recursive: bool = False,
+        return_meta: Literal[False] = ...,
+    ) -> List[str]:
+        ...
 
     def listdir(
         self,
@@ -946,7 +984,7 @@ class FileSpace(FileLocation):
         *,
         recursive: bool = False,
         return_meta: bool = False,
-    ) -> List[Union[str, Dict[str, Any]]]:
+    ) -> Union[List[str], List[Dict[str, Any]]]:
         """
         List the files / folders at the given path.
 
@@ -972,16 +1010,23 @@ class FileSpace(FileLocation):
         except Exception as exc:
             # If the path doesn't exist or isn't a directory, _listdir will fail
             raise NotADirectoryError(f'path is not a directory: {path}') from exc
+
         if path != '/':
             path_n = len(path.split('/')) - 1
             if return_meta:
-                for i in range(len(out)):
-                    if isinstance(out[i], dict):
-                        rel = '/'.join(out[i]['path'].split('/')[path_n:])
-                        out[i]['path'] = rel
-            else:
-                out = ['/'.join(str(x).split('/')[path_n:]) for x in out]
-        return out
+                result: List[Dict[str, Any]] = []
+                for item in out:
+                    if isinstance(item, dict):
+                        rel = '/'.join(item['path'].split('/')[path_n:])
+                        item['path'] = rel
+                        result.append(item)
+                return result
+            return ['/'.join(str(x).split('/')[path_n:]) for x in out]
+
+        # _listdir guarantees homogeneous type based on return_meta
+        if return_meta:
+            return cast(List[Dict[str, Any]], out)
+        return cast(List[str], out)
 
     def download_file(
         self,
@@ -1106,9 +1151,14 @@ class FileSpace(FileLocation):
                 os.makedirs(target_dir, exist_ok=True)
                 continue
             remote_path = os.path.join(path, rel_path)
-            target_file = os.path.normpath(os.path.join(local_path, rel_path))
+            target_file = os.path.normpath(
+                os.path.join(local_path, rel_path),
+            )
             os.makedirs(os.path.dirname(target_file), exist_ok=True)
-            self._download_file(remote_path, target_file, overwrite=overwrite, _skip_dir_check=True)
+            self._download_file(
+                remote_path, target_file,
+                overwrite=overwrite, _skip_dir_check=True,
+            )
 
     def remove(self, path: PathLike) -> None:
         """
