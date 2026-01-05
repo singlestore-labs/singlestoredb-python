@@ -425,7 +425,6 @@ class FileLocation(ABC):
         pass
 
     @overload
-    @abstractmethod
     def listdir(
         self,
         path: PathLike = '/',
@@ -436,7 +435,6 @@ class FileLocation(ABC):
         pass
 
     @overload
-    @abstractmethod
     def listdir(
         self,
         path: PathLike = '/',
@@ -1028,7 +1026,7 @@ class FileSpace(FileLocation):
         # Validate via listing GET; if response lacks 'content', it's not a directory
         try:
             out = self._listdir(path, recursive=recursive, return_objects=return_objects)
-        except Exception as exc:
+        except (ManagementError, KeyError) as exc:
             # If the path doesn't exist or isn't a directory, _listdir will fail
             raise NotADirectoryError(f'path is not a directory: {path}') from exc
 

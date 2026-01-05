@@ -32,7 +32,7 @@ class ShowFilesHandler(SQLHandler):
             for x in file_space.listdir(
                 params['at_path'] or '/',
                 recursive=params['recursive'],
-                return_meta=False,
+                return_objects=False,
             ):
                 info = file_space.info(x)
                 files.append(
@@ -48,7 +48,7 @@ class ShowFilesHandler(SQLHandler):
             res.set_rows([(x,) for x in file_space.listdir(
                 params['at_path'] or '/',
                 recursive=params['recursive'],
-                return_meta=False,
+                return_objects=False,
             )])
 
         if params['like']:
