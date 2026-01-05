@@ -529,6 +529,8 @@ class Stage(FileLocation):
         ----------
         stage_path : Path or str, optional
             Path to the stage location
+        recursive : bool, optional
+            If True, recursively list all files and folders
         return_objects : bool, optional
             If True, return list of FilesObject instances. Otherwise just paths.
 
