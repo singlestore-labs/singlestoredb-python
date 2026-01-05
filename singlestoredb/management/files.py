@@ -424,13 +424,36 @@ class FileLocation(ABC):
     def is_file(self, path: PathLike) -> bool:
         pass
 
+    @overload
     @abstractmethod
     def listdir(
         self,
         path: PathLike = '/',
         *,
         recursive: bool = False,
-    ) -> Union[List[str], List[Union[str, Dict[str, Any]]]]:
+        return_objects: Literal[True],
+    ) -> List[FilesObject]:
+        pass
+
+    @overload
+    @abstractmethod
+    def listdir(
+        self,
+        path: PathLike = '/',
+        *,
+        recursive: bool = False,
+        return_objects: Literal[False] = False,
+    ) -> List[str]:
+        pass
+
+    @abstractmethod
+    def listdir(
+        self,
+        path: PathLike = '/',
+        *,
+        recursive: bool = False,
+        return_objects: bool = False,
+    ) -> Union[List[str], List[FilesObject]]:
         pass
 
     @abstractmethod
@@ -914,10 +937,10 @@ class FileSpace(FileLocation):
     def _listdir(
         self, path: PathLike, *,
         recursive: bool = False,
-        return_meta: bool = False,
-    ) -> List[Union[str, Dict[str, Any]]]:
+        return_objects: bool = False,
+    ) -> List[Union[str, FilesObject]]:
         """
-        Return the names (or metadata) of files in a directory.
+        Return the names (or FilesObject instances) of files in a directory.
 
         Parameters
         ----------
@@ -925,20 +948,18 @@ class FileSpace(FileLocation):
             Path to the folder
         recursive : bool, optional
             Should folders be listed recursively?
-        return_meta : bool, optional
-            If True, return list of dicts with 'path' and 'type'. Otherwise just paths.
+        return_objects : bool, optional
+            If True, return list of FilesObject instances. Otherwise just paths.
         """
         res = self._manager._get(
             f'files/fs/{self._location}/{path}',
         ).json()
 
         if recursive:
-            out: List[Union[str, Dict[str, Any]]] = []
+            out: List[Union[str, FilesObject]] = []
             for item in res.get('content') or []:
-                if return_meta:
-                    out.append(
-                        {'path': item['path'], 'type': item['type']},
-                    )
+                if return_objects:
+                    out.append(FilesObject.from_dict(item, self))
                 else:
                     out.append(item['path'])
                 if item['type'] == 'directory':
@@ -946,14 +967,14 @@ class FileSpace(FileLocation):
                         self._listdir(
                             item['path'],
                             recursive=recursive,
-                            return_meta=return_meta,
+                            return_objects=return_objects,
                         ),
                     )
             return out
 
-        if return_meta:
+        if return_objects:
             return [
-                {'path': x['path'], 'type': x['type']}
+                FilesObject.from_dict(x, self)
                 for x in (res.get('content') or [])
             ]
         return [x['path'] for x in (res.get('content') or [])]
@@ -964,8 +985,8 @@ class FileSpace(FileLocation):
         path: PathLike = '/',
         *,
         recursive: bool = False,
-        return_meta: Literal[True] = ...,
-    ) -> List[Dict[str, Any]]:
+        return_objects: Literal[True],
+    ) -> List[FilesObject]:
         ...
 
     @overload
@@ -974,7 +995,7 @@ class FileSpace(FileLocation):
         path: PathLike = '/',
         *,
         recursive: bool = False,
-        return_meta: Literal[False] = ...,
+        return_objects: Literal[False] = False,
     ) -> List[str]:
         ...
 
@@ -983,8 +1004,8 @@ class FileSpace(FileLocation):
         path: PathLike = '/',
         *,
         recursive: bool = False,
-        return_meta: bool = False,
-    ) -> Union[List[str], List[Dict[str, Any]]]:
+        return_objects: bool = False,
+    ) -> Union[List[str], List[FilesObject]]:
         """
         List the files / folders at the given path.
 
@@ -993,12 +1014,12 @@ class FileSpace(FileLocation):
         path : Path or str, optional
             Path to the file location
 
-        return_meta : bool, optional
-            If True, return list of dicts with 'path' and 'type'. Otherwise just paths.
+        return_objects : bool, optional
+            If True, return list of FilesObject instances. Otherwise just paths.
 
         Returns
         -------
-        List[str] or List[dict]
+        List[str] or List[FilesObject]
 
         """
         path = re.sub(r'^(\./|/)+', r'', str(path))
@@ -1006,26 +1027,26 @@ class FileSpace(FileLocation):
 
         # Validate via listing GET; if response lacks 'content', it's not a directory
         try:
-            out = self._listdir(path, recursive=recursive, return_meta=return_meta)
+            out = self._listdir(path, recursive=recursive, return_objects=return_objects)
         except Exception as exc:
             # If the path doesn't exist or isn't a directory, _listdir will fail
             raise NotADirectoryError(f'path is not a directory: {path}') from exc
 
         if path != '/':
             path_n = len(path.split('/')) - 1
-            if return_meta:
-                result: List[Dict[str, Any]] = []
+            if return_objects:
+                result: List[FilesObject] = []
                 for item in out:
-                    if isinstance(item, dict):
-                        rel = '/'.join(item['path'].split('/')[path_n:])
-                        item['path'] = rel
+                    if isinstance(item, FilesObject):
+                        rel = '/'.join(item.path.split('/')[path_n:])
+                        item.path = rel
                         result.append(item)
                 return result
             return ['/'.join(str(x).split('/')[path_n:]) for x in out]
 
-        # _listdir guarantees homogeneous type based on return_meta
-        if return_meta:
-            return cast(List[Dict[str, Any]], out)
+        # _listdir guarantees homogeneous type based on return_objects
+        if return_objects:
+            return cast(List[FilesObject], out)
         return cast(List[str], out)
 
     def download_file(
@@ -1139,13 +1160,13 @@ class FileSpace(FileLocation):
             raise OSError('target path already exists; use overwrite=True to replace')
 
         # listdir validates directory; no extra info call needed
-        entries = self.listdir(path, recursive=True, return_meta=True)
+        entries = self.listdir(path, recursive=True, return_objects=True)
         for entry in entries:
-            # Each entry is a dict with path relative to root and type
-            if not isinstance(entry, dict):  # defensive: skip unexpected
+            # Each entry is a FilesObject with path relative to root and type
+            if not isinstance(entry, FilesObject):  # defensive: skip unexpected
                 continue
-            rel_path = entry['path']
-            if entry['type'] == 'directory':
+            rel_path = entry.path
+            if entry.type == 'directory':
                 # Ensure local directory exists; no remote call needed
                 target_dir = os.path.normpath(os.path.join(local_path, rel_path))
                 os.makedirs(target_dir, exist_ok=True)
