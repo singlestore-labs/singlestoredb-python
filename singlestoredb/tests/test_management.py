@@ -757,6 +757,60 @@ class TestStage(unittest.TestCase):
         with self.assertRaises(s2.ManagementError):
             st.removedirs(mkdir_test_sql)
 
+    def test_listdir_return_objects(self):
+        st = self.wg.stage
+
+        listdir_test_dir = f'listdir_test_{id(self)}'
+        listdir_test_sql = f'listdir_test_{id(self)}.sql'
+
+        # Create test directory structure
+        st.mkdir(listdir_test_dir)
+        st.mkdir(f'{listdir_test_dir}/nest_1')
+        st.upload_file(TEST_DIR / 'test.sql', listdir_test_sql)
+        st.upload_file(
+            TEST_DIR / 'test.sql',
+            f'{listdir_test_dir}/nested_test.sql',
+        )
+
+        # Test return_objects=False (default behavior)
+        out = st.listdir('/')
+        assert isinstance(out, list)
+        assert all(isinstance(item, str) for item in out)
+        assert f'{listdir_test_dir}/' in out
+        assert listdir_test_sql in out
+
+        # Test return_objects=True
+        out_objs = st.listdir('/', return_objects=True)
+        assert isinstance(out_objs, list)
+        assert all(hasattr(item, 'path') for item in out_objs)
+        assert all(hasattr(item, 'type') for item in out_objs)
+
+        # Verify we have the expected items
+        obj_paths = [obj.path for obj in out_objs]
+        assert f'{listdir_test_dir}/' in obj_paths
+        assert listdir_test_sql in obj_paths
+
+        # Verify object types
+        for obj in out_objs:
+            if obj.path == f'{listdir_test_dir}/':
+                assert obj.type == 'directory'
+            elif obj.path == listdir_test_sql:
+                assert obj.type == 'file'
+
+        # Test with subdirectory and return_objects=True
+        out_objs_sub = st.listdir(listdir_test_dir, return_objects=True)
+        assert isinstance(out_objs_sub, list)
+        obj_paths_sub = [obj.path for obj in out_objs_sub]
+        assert 'nest_1/' in obj_paths_sub
+        assert 'nested_test.sql' in obj_paths_sub
+
+        # Test recursive with return_objects=True
+        out_objs_rec = st.listdir('/', recursive=True, return_objects=True)
+        obj_paths_rec = [obj.path for obj in out_objs_rec]
+        assert f'{listdir_test_dir}/' in obj_paths_rec
+        assert f'{listdir_test_dir}/nest_1/' in obj_paths_rec
+        assert f'{listdir_test_dir}/nested_test.sql' in obj_paths_rec
+
     def test_os_files(self):
         st = self.wg.stage
 

@@ -10,9 +10,12 @@ import re
 import time
 from collections.abc import Mapping
 from typing import Any
+from typing import cast
 from typing import Dict
 from typing import List
+from typing import Literal
 from typing import Optional
+from typing import overload
 from typing import Union
 
 from .. import config
@@ -447,9 +450,13 @@ class Stage(FileLocation):
                 return False
             raise
 
-    def _listdir(self, stage_path: PathLike, *, recursive: bool = False) -> List[str]:
+    def _listdir(
+        self, stage_path: PathLike, *,
+        recursive: bool = False,
+        return_objects: bool = False,
+    ) -> List[Union[str, 'FilesObject']]:
         """
-        Return the names of files in a directory.
+        Return the names (or FilesObject instances) of files in a directory.
 
         Parameters
         ----------
@@ -457,26 +464,64 @@ class Stage(FileLocation):
             Path to the folder in Stage
         recursive : bool, optional
             Should folders be listed recursively?
+        return_objects : bool, optional
+            If True, return list of FilesObject instances. Otherwise just paths.
 
         """
+        from .files import FilesObject
         res = self._manager._get(
             re.sub(r'/+$', r'/', f'stage/{self._deployment_id}/fs/{stage_path}'),
         ).json()
         if recursive:
-            out = []
+            out: List[Union[str, FilesObject]] = []
             for item in res['content'] or []:
-                out.append(item['path'])
+                if return_objects:
+                    out.append(FilesObject.from_dict(item, self))
+                else:
+                    out.append(item['path'])
                 if item['type'] == 'directory':
-                    out.extend(self._listdir(item['path'], recursive=recursive))
+                    out.extend(
+                        self._listdir(
+                            item['path'],
+                            recursive=recursive,
+                            return_objects=return_objects,
+                        ),
+                    )
             return out
+        if return_objects:
+            return [
+                FilesObject.from_dict(x, self)
+                for x in res['content'] or []
+            ]
         return [x['path'] for x in res['content'] or []]
+
+    @overload
+    def listdir(
+        self,
+        stage_path: PathLike = '/',
+        *,
+        recursive: bool = False,
+        return_objects: Literal[True],
+    ) -> List['FilesObject']:
+        ...
+
+    @overload
+    def listdir(
+        self,
+        stage_path: PathLike = '/',
+        *,
+        recursive: bool = False,
+        return_objects: Literal[False] = False,
+    ) -> List[str]:
+        ...
 
     def listdir(
         self,
         stage_path: PathLike = '/',
         *,
         recursive: bool = False,
-    ) -> List[str]:
+        return_objects: bool = False,
+    ) -> Union[List[str], List['FilesObject']]:
         """
         List the files / folders at the given path.
 
@@ -484,21 +529,40 @@ class Stage(FileLocation):
         ----------
         stage_path : Path or str, optional
             Path to the stage location
+        recursive : bool, optional
+            If True, recursively list all files and folders
+        return_objects : bool, optional
+            If True, return list of FilesObject instances. Otherwise just paths.
 
         Returns
         -------
-        List[str]
+        List[str] or List[FilesObject]
 
         """
+        from .files import FilesObject
         stage_path = re.sub(r'^(\./|/)+', r'', str(stage_path))
         stage_path = re.sub(r'/+$', r'', stage_path) + '/'
 
         if self.is_dir(stage_path):
-            out = self._listdir(stage_path, recursive=recursive)
+            out = self._listdir(
+                stage_path,
+                recursive=recursive,
+                return_objects=return_objects,
+            )
             if stage_path != '/':
                 stage_path_n = len(stage_path.split('/')) - 1
-                out = ['/'.join(x.split('/')[stage_path_n:]) for x in out]
-            return out
+                if return_objects:
+                    result: List[FilesObject] = []
+                    for item in out:
+                        if isinstance(item, FilesObject):
+                            rel = '/'.join(item.path.split('/')[stage_path_n:])
+                            item.path = rel
+                            result.append(item)
+                    return result
+                out = ['/'.join(str(x).split('/')[stage_path_n:]) for x in out]
+            if return_objects:
+                return cast(List[FilesObject], out)
+            return cast(List[str], out)
 
         raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
 
@@ -577,7 +641,7 @@ class Stage(FileLocation):
         if not self.is_dir(stage_path):
             raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
 
-        for f in self.listdir(stage_path, recursive=True):
+        for f in self.listdir(stage_path, recursive=True, return_objects=False):
             if self.is_dir(f):
                 continue
             target = os.path.normpath(os.path.join(local_path, f))
