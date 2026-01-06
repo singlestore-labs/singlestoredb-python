@@ -5,6 +5,7 @@ from typing import Optional
 
 from .manager import Manager
 from .utils import NamedList
+from .utils import normalize_cloud_provider
 from .utils import vars_to_str
 
 
@@ -32,8 +33,8 @@ class Region(object):
         #: Name of the region
         self.name = name
 
-        #: Name of the cloud provider
-        self.provider = provider
+        #: Name of the cloud provider (e.g., 'AWS', 'GCP', 'AZURE')
+        self.provider = normalize_cloud_provider(provider) or provider
 
         #: Name of the provider region
         self.region_name = region_name

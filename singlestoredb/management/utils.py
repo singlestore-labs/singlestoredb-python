@@ -328,6 +328,95 @@ def vars_to_str(obj: Any) -> str:
     return '{}({})'.format(type(obj).__name__, ', '.join(attrs))
 
 
+def _normalize_upper(s: Optional[str]) -> Optional[str]:
+    """Normalize string to uppercase."""
+    if s is None:
+        return None
+    return s.upper()
+
+
+def _normalize_lower(s: Optional[str]) -> Optional[str]:
+    """Normalize string to lowercase."""
+    if s is None:
+        return None
+    return s.lower()
+
+
+def _normalize_title(s: Optional[str]) -> Optional[str]:
+    """Normalize string to title case."""
+    if s is None:
+        return None
+    return s.title()
+
+
+# Specific enum normalizers - use these in API calls and constructors
+def normalize_resource_type(s: Optional[str]) -> Optional[str]:
+    """Normalize resource type to lowercase (e.g., 'organization', 'workspace')."""
+    return _normalize_lower(s)
+
+
+def normalize_connection_type(s: Optional[str]) -> Optional[str]:
+    """Normalize private connection type to uppercase (e.g., 'INBOUND', 'OUTBOUND')."""
+    return _normalize_upper(s)
+
+
+def normalize_audit_log_type(s: Optional[str]) -> Optional[str]:
+    """Normalize audit log type to title case (e.g., 'Login')."""
+    return _normalize_title(s)
+
+
+def normalize_audit_log_source(s: Optional[str]) -> Optional[str]:
+    """Normalize audit log source to title case (e.g., 'Portal', 'Admin')."""
+    return _normalize_title(s)
+
+
+def normalize_cloud_provider(s: Optional[str]) -> Optional[str]:
+    """Normalize cloud provider to uppercase (e.g., 'AWS', 'GCP', 'AZURE')."""
+    return _normalize_upper(s)
+
+
+def normalize_deployment_type(s: Optional[str]) -> Optional[str]:
+    """Normalize deployment type to uppercase (e.g., 'PRODUCTION', 'NON-PRODUCTION')."""
+    return _normalize_upper(s)
+
+
+def normalize_project_edition(s: Optional[str]) -> Optional[str]:
+    """Normalize project edition to uppercase (e.g., 'STANDARD', 'ENTERPRISE')."""
+    return _normalize_upper(s)
+
+
+def normalize_invitation_state(s: Optional[str]) -> Optional[str]:
+    """Normalize invitation state to title case (e.g., 'Pending', 'Accepted')."""
+    return _normalize_title(s)
+
+
+def normalize_connection_status(s: Optional[str]) -> Optional[str]:
+    """Normalize connection status to uppercase (e.g., 'PENDING', 'ACTIVE')."""
+    return _normalize_upper(s)
+
+
+def require_fields(obj: Dict[str, Any], *fields: str) -> None:
+    """
+    Validate that required fields are present in a dictionary.
+
+    Parameters
+    ----------
+    obj : dict
+        Dictionary to validate
+    *fields : str
+        Field names that must be present
+
+    Raises
+    ------
+    KeyError
+        If any required field is missing
+
+    """
+    missing = [f for f in fields if f not in obj]
+    if missing:
+        raise KeyError(f"Missing required field(s): {', '.join(missing)}")
+
+
 def single_item(s: Any) -> Any:
     """Return only item if ``s`` is a list, otherwise return ``s``."""
     if isinstance(s, list):
