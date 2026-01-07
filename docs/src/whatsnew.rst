@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.16.7 - January 7, 2026
+-------------------------
+* optimize management api calls (#110)
+
 v1.16.6 - December 11, 2025
 ---------------------------
 * changes for adding internalConnectionURL (#112)
