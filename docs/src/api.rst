@@ -306,8 +306,6 @@ or by retrieving an element from :attr:`WorkspaceManager.workspace_groups`.
    WorkspaceGroup.update
    WorkspaceGroup.terminate
    WorkspaceGroup.private_connections
-   WorkspaceGroup.create_private_connection
-   WorkspaceGroup.get_private_connection
    WorkspaceGroup.get_access_controls
    WorkspaceGroup.update_access_controls
    WorkspaceGroup.get_metrics
@@ -331,8 +329,6 @@ Workspaces are created within WorkspaceGroups. They can be created using either
    Workspace.suspend
    Workspace.resume
    Workspace.private_connections
-   Workspace.create_private_connection
-   Workspace.get_private_connection
    Workspace.get_kai_private_connection_info
    Workspace.get_outbound_allow_list
 
@@ -379,12 +375,8 @@ They provide access to organization-level resources and operations.
    Organization.get_secret
    Organization.jobs
    Organization.inference_apis
-   Organization.secrets
-   Organization.get_secret_by_id
-   Organization.create_secret
    Organization.get_access_controls
    Organization.update_access_controls
-   Organization.get_audit_logs
 
 
 Secret
