@@ -676,6 +676,9 @@ INSERT INTO i64_vectors VALUES(1, '[1, 2, 3]');
 INSERT INTO i64_vectors VALUES(2, '[4, 5, 6]');
 INSERT INTO i64_vectors VALUES(3, '[-1, -4, 8]');
 
+-- Float16 vectors require server version 9.1 or later
+-- Table creation is handled conditionally in Python code (see utils.py or test setup)
+
 
 --
 -- Boolean test data for UDF testing

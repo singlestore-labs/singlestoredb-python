@@ -5,6 +5,7 @@ NDArray = npt.NDArray
 
 StringArray = StrArray = npt.NDArray[np.str_]
 BytesArray = npt.NDArray[np.bytes_]
+Float16Array = HalfArray = npt.NDArray[np.float16]
 Float32Array = FloatArray = npt.NDArray[np.float32]
 Float64Array = DoubleArray = npt.NDArray[np.float64]
 BoolArray = npt.NDArray[np.bool_]

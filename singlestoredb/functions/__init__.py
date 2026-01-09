@@ -8,6 +8,7 @@ from .utils import unpack_vectors  # noqa: F401
 from .utils import VectorTypes
 
 
+F16 = VectorTypes.F16
 F32 = VectorTypes.F32
 F64 = VectorTypes.F64
 I8 = VectorTypes.I8

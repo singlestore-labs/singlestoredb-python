@@ -135,6 +135,7 @@ sql_type_map = {
     'uint16': 'SMALLINT UNSIGNED',
     'uint32': 'INT UNSIGNED',
     'uint64': 'BIGINT UNSIGNED',
+    'float16': 'FLOAT',
     'float32': 'FLOAT',
     'float64': 'DOUBLE',
     'str': 'TEXT',

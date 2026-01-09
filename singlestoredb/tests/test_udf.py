@@ -321,11 +321,26 @@ class TestUDF(unittest.TestCase):
         def foo(x: float) -> None: ...
         assert to_sql(foo) == '`foo`(`x` DOUBLE NOT NULL) RETURNS TINYINT NULL'
 
+        def foo(x: np.float16) -> None: ...
+        assert to_sql(foo) == '`foo`(`x` FLOAT NOT NULL) RETURNS TINYINT NULL'
+
         def foo(x: np.float32) -> None: ...
         assert to_sql(foo) == '`foo`(`x` FLOAT NOT NULL) RETURNS TINYINT NULL'
 
         def foo(x: np.float64) -> None: ...
         assert to_sql(foo) == '`foo`(`x` DOUBLE NOT NULL) RETURNS TINYINT NULL'
+
+        # Vector float16 (List)
+        def foo(x: List[np.float16]) -> List[np.float16]: ...
+        assert to_sql(foo) == '`foo`(`x` FLOAT NOT NULL) RETURNS FLOAT NOT NULL'
+
+        # Vector float32 (List)
+        def foo(x: List[np.float32]) -> List[np.float32]: ...
+        assert to_sql(foo) == '`foo`(`x` FLOAT NOT NULL) RETURNS FLOAT NOT NULL'
+
+        # Vector float64 (List)
+        def foo(x: List[np.float64]) -> List[np.float64]: ...
+        assert to_sql(foo) == '`foo`(`x` DOUBLE NOT NULL) RETURNS DOUBLE NOT NULL'
 
         #
         # Type collapsing

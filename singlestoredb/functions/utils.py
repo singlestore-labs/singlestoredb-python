@@ -198,7 +198,9 @@ def _vector_type_to_numpy_type(
     vector_type: VectorTypes,
 ) -> str:
     """Convert a vector type to a numpy type."""
-    if vector_type == VectorTypes.F32:
+    if vector_type == VectorTypes.F16:
+        return 'f2'
+    elif vector_type == VectorTypes.F32:
         return 'f4'
     elif vector_type == VectorTypes.F64:
         return 'f8'
@@ -219,7 +221,11 @@ def _vector_type_to_struct_format(
 ) -> str:
     """Convert a vector type to a struct format string."""
     n = len(vec)
-    if vector_type == VectorTypes.F32:
+    if vector_type == VectorTypes.F16:
+        if isinstance(vec, (bytes, bytearray)):
+            n = n // 2
+        return f'<{n}e'
+    elif vector_type == VectorTypes.F32:
         if isinstance(vec, (bytes, bytearray)):
             n = n // 4
         return f'<{n}f'

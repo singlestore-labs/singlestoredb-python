@@ -91,12 +91,14 @@
 #define MYSQL_TYPE_INT16_VECTOR_JSON 2004
 #define MYSQL_TYPE_INT32_VECTOR_JSON 2005
 #define MYSQL_TYPE_INT64_VECTOR_JSON 2006
+#define MYSQL_TYPE_FLOAT16_VECTOR_JSON 2007
 #define MYSQL_TYPE_FLOAT32_VECTOR 3001
 #define MYSQL_TYPE_FLOAT64_VECTOR 3002
 #define MYSQL_TYPE_INT8_VECTOR 3003
 #define MYSQL_TYPE_INT16_VECTOR 3004
 #define MYSQL_TYPE_INT32_VECTOR 3005
 #define MYSQL_TYPE_INT64_VECTOR 3006
+#define MYSQL_TYPE_FLOAT16_VECTOR 3007
 
 #define MYSQL_TYPE_CHAR MYSQL_TYPE_TINY
 #define MYSQL_TYPE_INTERVAL MYSQL_TYPE_ENUM
@@ -503,6 +505,7 @@ typedef struct {
     PyObject *int64;
     PyObject *float32;
     PyObject *float64;
+    PyObject *float16;
     PyObject *unpack;
     PyObject *decode;
     PyObject *frombuffer;
@@ -541,7 +544,7 @@ typedef struct {
     PyObject *namedtuple_kwargs;
     PyObject *create_numpy_array_args;
     PyObject *create_numpy_array_kwargs;
-    PyObject *create_numpy_array_kwargs_vector[7];
+    PyObject *create_numpy_array_kwargs_vector[8];
     PyObject *struct_unpack_args;
     PyObject *bson_decode_args;
 } PyObjects;
@@ -1565,8 +1568,8 @@ static PyObject *read_row_from_packet(
     PyObject *py_str = NULL;
     PyObject *py_memview = NULL;
     char end = '\0';
-    char *cast_type_codes[] = {"", "f", "d", "b", "h", "i", "q"};
-    int item_type_lengths[] = {0, 4, 8, 1, 2, 4, 8};
+    char *cast_type_codes[] = {"", "f", "d", "b", "h", "i", "q", "e"};
+    int item_type_lengths[] = {0, 4, 8, 1, 2, 4, 8, 2};
 
     int sign = 1;
     int year = 0;
@@ -1826,6 +1829,7 @@ static PyObject *read_row_from_packet(
                 case MYSQL_TYPE_INT16_VECTOR_JSON:
                 case MYSQL_TYPE_INT32_VECTOR_JSON:
                 case MYSQL_TYPE_INT64_VECTOR_JSON:
+                case MYSQL_TYPE_FLOAT16_VECTOR_JSON:
                     if (!py_state->encodings[i]) {
                         py_item = PyBytes_FromStringAndSize(out, out_l);
                         if (!py_item) goto error;
@@ -1847,7 +1851,7 @@ static PyObject *read_row_from_packet(
                     // Parse JSON string.
                     if ((py_state->type_codes[i] == MYSQL_TYPE_JSON && py_state->options.parse_json)
                         || (py_state->type_codes[i] >= MYSQL_TYPE_FLOAT32_VECTOR_JSON
-                            && py_state->type_codes[i] <= MYSQL_TYPE_INT64_VECTOR_JSON)) {
+                            && py_state->type_codes[i] <= MYSQL_TYPE_FLOAT16_VECTOR_JSON)) {
                         py_str = py_item;
                         py_item = PyObject_CallFunctionObjArgs(PyFunc.json_loads, py_str, NULL);
                         Py_CLEAR(py_str);
@@ -1862,6 +1866,7 @@ static PyObject *read_row_from_packet(
                         case MYSQL_TYPE_INT16_VECTOR_JSON:
                         case MYSQL_TYPE_INT32_VECTOR_JSON:
                         case MYSQL_TYPE_INT64_VECTOR_JSON:
+                        case MYSQL_TYPE_FLOAT16_VECTOR_JSON:
                             CHECKRC(PyTuple_SetItem(PyObj.create_numpy_array_args, 0, py_item));
                             py_item = PyObject_Call(
                                 PyFunc.numpy_array,
@@ -1880,6 +1885,7 @@ static PyObject *read_row_from_packet(
                 case MYSQL_TYPE_INT16_VECTOR:
                 case MYSQL_TYPE_INT32_VECTOR:
                 case MYSQL_TYPE_INT64_VECTOR:
+                case MYSQL_TYPE_FLOAT16_VECTOR:
                 {
                     int type_idx = py_state->type_codes[i] % 1000;
 
@@ -4844,6 +4850,7 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     PyStr.int64 = PyUnicode_FromString("int64");
     PyStr.float32 = PyUnicode_FromString("float32");
     PyStr.float64 = PyUnicode_FromString("float64");
+    PyStr.float16 = PyUnicode_FromString("float16");
     PyStr.unpack = PyUnicode_FromString("unpack");
     PyStr.decode = PyUnicode_FromString("decode");
     PyStr.frombuffer = PyUnicode_FromString("frombuffer");
@@ -4919,6 +4926,11 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     PyObj.create_numpy_array_kwargs_vector[6] = PyDict_New();
     if (!PyObj.create_numpy_array_kwargs_vector[6]) goto error;
     if (PyDict_SetItemString(PyObj.create_numpy_array_kwargs_vector[6], "dtype", PyStr.int64)) {
+        goto error;
+    }
+    PyObj.create_numpy_array_kwargs_vector[7] = PyDict_New();
+    if (!PyObj.create_numpy_array_kwargs_vector[7]) goto error;
+    if (PyDict_SetItemString(PyObj.create_numpy_array_kwargs_vector[7], "dtype", PyStr.float16)) {
         goto error;
     }
 
