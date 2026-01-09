@@ -676,6 +676,14 @@ INSERT INTO i64_vectors VALUES(1, '[1, 2, 3]');
 INSERT INTO i64_vectors VALUES(2, '[4, 5, 6]');
 INSERT INTO i64_vectors VALUES(3, '[-1, -4, 8]');
 
+CREATE TABLE IF NOT EXISTS `f16_vectors` (
+    id INT(11),
+    a VECTOR(3, F16)
+);
+INSERT INTO f16_vectors VALUES(1, '[0.267, 0.535, 0.802]');
+INSERT INTO f16_vectors VALUES(2, '[0.371, 0.557, 0.743]');
+INSERT INTO f16_vectors VALUES(3, '[-0.424, -0.566, 0.707]');
+
 
 --
 -- Boolean test data for UDF testing

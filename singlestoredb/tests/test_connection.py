@@ -3097,6 +3097,40 @@ class TestConnection(unittest.TestCase):
             np.array([-1, -4, 8], dtype=np.int64),
         )
 
+    def test_f16_vectors(self):
+        if self.conn.driver in ['http', 'https']:
+            self.skipTest('Data API does not surface vector information')
+
+        self.cur.execute('show variables like "enable_extended_types_metadata"')
+        out = list(self.cur)
+        if not out or out[0][1].lower() == 'off':
+            self.skipTest('Database engine does not support extended types metadata')
+
+        self.cur.execute('select a from f16_vectors order by id')
+        out = list(self.cur)
+
+        if hasattr(out[0][0], 'dtype'):
+            assert out[0][0].dtype is np.dtype('float16')
+            assert out[1][0].dtype is np.dtype('float16')
+            assert out[2][0].dtype is np.dtype('float16')
+
+        # Float16 has ~3 decimal digits precision, use lower tolerance
+        np.testing.assert_array_almost_equal(
+            out[0][0],
+            np.array([0.267, 0.535, 0.802], dtype=np.float16),
+            decimal=2,
+        )
+        np.testing.assert_array_almost_equal(
+            out[1][0],
+            np.array([0.371, 0.557, 0.743], dtype=np.float16),
+            decimal=2,
+        )
+        np.testing.assert_array_almost_equal(
+            out[2][0],
+            np.array([-0.424, -0.566, 0.707], dtype=np.float16),
+            decimal=2,
+        )
+
 
 if __name__ == '__main__':
     import nose2

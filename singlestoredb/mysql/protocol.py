@@ -318,6 +318,11 @@ class FieldDescriptorPacket(MysqlPacket):
                         self.type_code = FIELD_TYPE.INT64_VECTOR
                     else:
                         self.type_code = FIELD_TYPE.INT64_VECTOR_JSON
+                elif vec_type == VECTOR_TYPE.FLOAT16:
+                    if self.charsetnr == 63:
+                        self.type_code = FIELD_TYPE.FLOAT16_VECTOR
+                    else:
+                        self.type_code = FIELD_TYPE.FLOAT16_VECTOR_JSON
                 else:
                     raise TypeError(f'unrecognized vector data type: {vec_type}')
             else:

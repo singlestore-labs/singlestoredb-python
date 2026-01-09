@@ -597,6 +597,62 @@ def float32_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
     return struct.unpack(f'<{len(x)//4}f', x)
 
 
+def float16_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
+    """
+    Convert value to float16 array.
+
+    Parameters
+    ----------
+    x : str or None
+        JSON array
+
+    Returns
+    -------
+    float16 numpy array
+        If input value is not None and numpy is installed
+    float Python list
+        If input value is not None and numpy is not installed
+    None
+        If input value is None
+
+    """
+    if x is None:
+        return None
+
+    if has_numpy:
+        return numpy.array(json_loads(x), dtype=numpy.float16)
+
+    return map(float, json_loads(x))
+
+
+def float16_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
+    """
+    Convert value to float16 array.
+
+    Parameters
+    ----------
+    x : bytes or None
+        Little-endian block of bytes.
+
+    Returns
+    -------
+    float16 numpy array
+        If input value is not None and numpy is installed
+    float Python list
+        If input value is not None and numpy is not installed
+    None
+        If input value is None
+
+    """
+    if x is None:
+        return None
+
+    if has_numpy:
+        return numpy.frombuffer(x, dtype=numpy.float16)
+
+    return struct.unpack(f'<{len(x)//2}e', x)
+
+
 def float64_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     """
     Covert value to float64 array.
@@ -941,10 +997,12 @@ converters: Dict[int, Callable[..., Any]] = {
     2004: int16_vector_json_or_none,
     2005: int32_vector_json_or_none,
     2006: int64_vector_json_or_none,
+    2007: float16_vector_json_or_none,
     3001: float32_vector_or_none,
     3002: float64_vector_or_none,
     3003: int8_vector_or_none,
     3004: int16_vector_or_none,
     3005: int32_vector_or_none,
     3006: int64_vector_or_none,
+    3007: float16_vector_or_none,
 }

@@ -4,3 +4,4 @@ INT8 = 3
 INT16 = 4
 INT32 = 5
 INT64 = 6
+FLOAT16 = 7
