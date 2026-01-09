@@ -3101,6 +3101,19 @@ class TestConnection(unittest.TestCase):
         if self.conn.driver in ['http', 'https']:
             self.skipTest('Data API does not surface vector information')
 
+        # Check server version - float16 requires 9.1 or later
+        self.cur.execute('select @@memsql_version')
+        version_str = list(self.cur)[0][0]
+        # Parse version string like "9.1.2" or "9.1.2-abc123"
+        version_parts = version_str.split('-')[0].split('.')
+        major = int(version_parts[0])
+        minor = int(version_parts[1]) if len(version_parts) > 1 else 0
+        if major < 9 or (major == 9 and minor < 1):
+            self.skipTest(
+                f'Float16 vectors require server version 9.1 or later '
+                f'(found {version_str})',
+            )
+
         self.cur.execute('show variables like "enable_extended_types_metadata"')
         out = list(self.cur)
         if not out or out[0][1].lower() == 'off':
