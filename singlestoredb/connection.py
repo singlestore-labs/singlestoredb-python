@@ -1120,32 +1120,32 @@ class Connection(metaclass=abc.ABCMeta):
         params: Optional[Union[Sequence[Any], Dict[str, Any], Any]],
     ) -> Tuple[Any, ...]:
         """Convert query to correct parameter format."""
-        if params:
 
-            if cls._map_param_converter is None:
-                cls._map_param_converter = sqlparams.SQLParams(
-                    map_paramstyle, cls.paramstyle, escape_char=True,
-                )
+        if cls._map_param_converter is None:
+            cls._map_param_converter = sqlparams.SQLParams(
+                map_paramstyle, cls.paramstyle, escape_char=True,
+            )
 
-            if cls._positional_param_converter is None:
-                cls._positional_param_converter = sqlparams.SQLParams(
-                    positional_paramstyle, cls.paramstyle, escape_char=True,
-                )
+        if cls._positional_param_converter is None:
+            cls._positional_param_converter = sqlparams.SQLParams(
+                positional_paramstyle, cls.paramstyle, escape_char=True,
+            )
 
-            is_sequence = isinstance(params, Sequence) \
-                and not isinstance(params, str) \
-                and not isinstance(params, bytes)
-            is_mapping = isinstance(params, Mapping)
+        is_sequence = isinstance(params, Sequence) \
+            and not isinstance(params, str) \
+            and not isinstance(params, bytes)
+        is_mapping = isinstance(params, Mapping)
 
-            param_converter = cls._map_param_converter \
-                if is_mapping else cls._positional_param_converter
+        param_converter = cls._map_param_converter \
+            if is_mapping else cls._positional_param_converter
 
-            if not is_sequence and not is_mapping:
-                params = [params]
+        params_to_use = params
+        if not params:
+            params_to_use = ()
+        elif not is_sequence and not is_mapping:
+            params_to_use = [params]
 
-            return param_converter.format(oper, params)
-
-        return (oper, None)
+        return param_converter.format(oper, params_to_use)
 
     def autocommit(self, value: bool = True) -> None:
         """Set autocommit mode."""
