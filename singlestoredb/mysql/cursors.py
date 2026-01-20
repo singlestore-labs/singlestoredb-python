@@ -183,6 +183,8 @@ class Cursor(BaseCursor):
 
         if args:
             query = query % self._escape_args(args, conn)
+        else:
+            query = query % ()
 
         return query
 
