@@ -181,10 +181,8 @@ class Cursor(BaseCursor):
         """
         conn = self._get_db()
 
-        if args:
+        if args is not None:
             query = query % self._escape_args(args, conn)
-        else:
-            query = query % ()
 
         return query
 

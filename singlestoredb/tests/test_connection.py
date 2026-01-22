@@ -3149,6 +3149,7 @@ class TestConnection(unittest.TestCase):
         self.cur.execute(
             '''SELECT REPLACE(i, "%%", "\\%%")
             FROM test_val_with_percent''',
+            (),
         )
         res1 = self.cur.fetchall()
         assert res1[0][0] == 'a\\%a'

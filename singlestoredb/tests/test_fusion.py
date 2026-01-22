@@ -79,7 +79,7 @@ class TestFusion(unittest.TestCase):
         assert cmds
         assert [x for x in cmds if x.strip().startswith('SHOW FUSION GRAMMAR')], cmds
 
-        self.cur.execute('show fusion commands like "create%%"')
+        self.cur.execute('show fusion commands like "create%"')
         cmds = [x[0] for x in self.cur.fetchall()]
         assert cmds
         assert [x for x in cmds if x.strip().startswith('CREATE')] == cmds, cmds

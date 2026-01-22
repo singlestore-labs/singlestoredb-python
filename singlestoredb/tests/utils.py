@@ -220,8 +220,7 @@ def load_sql(sql_file: str) -> str:
                     cur.execute(f'USE {dbname};')
 
                 # Start HTTP server as needed.
-                if http_port and not conn.driver.startswith('http') and \
-                        'IS_HELIOS' not in os.environ:
+                if http_port and not conn.driver.startswith('http'):
                     cur.execute(f'SET GLOBAL HTTP_PROXY_PORT={http_port};')
                     cur.execute('SET GLOBAL HTTP_API=ON;')
                     cur.execute('RESTART PROXY;')
