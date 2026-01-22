@@ -712,6 +712,6 @@ CREATE TABLE IF NOT EXISTS test_val_with_percent (
     i VARCHAR(16)
 );
 -- Double percent sign for execution from python
-INSERT INTO test_val_with_percent VALUES ('a%%a');
+INSERT INTO test_val_with_percent VALUES ('a%a');
 
 COMMIT;
