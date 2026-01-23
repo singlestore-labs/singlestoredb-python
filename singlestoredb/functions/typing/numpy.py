@@ -28,11 +28,6 @@ BytesArray: TypeAlias = Annotated[
     npt.NDArray[np.bytes_], UDFAttrs(sql_type=sql_types.BLOB(nullable=False)),
 ]
 
-Float16Array: TypeAlias = Annotated[
-    npt.NDArray[np.float16], UDFAttrs(sql_type=sql_types.FLOAT16(nullable=False)),
-]
-HalfArray: TypeAlias = Float16Array
-
 Float32Array: TypeAlias = Annotated[
     npt.NDArray[np.float32], UDFAttrs(sql_type=sql_types.FLOAT(nullable=False)),
 ]
