@@ -181,7 +181,12 @@ class Cursor(BaseCursor):
         """
         conn = self._get_db()
 
-        if args is not None:
+        if conn.mogrify_empty_args:
+            should_interpolate = args is not None
+        else:
+            should_interpolate = bool(args)
+
+        if should_interpolate:
             query = query % self._escape_args(args, conn)
 
         return query

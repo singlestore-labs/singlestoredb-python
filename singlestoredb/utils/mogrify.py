@@ -123,6 +123,7 @@ def mogrify(
     encoders: Optional[Encoders] = None,
     server_status: int = 0,
     binary_prefix: bool = False,
+    mogrify_empty_args: bool = False,
 ) -> Union[str, bytes]:
     """
     Returns the exact string sent to the database by calling the execute() method.
@@ -135,13 +136,21 @@ def mogrify(
         Query to mogrify.
     args : Sequence[Any] or Dict[str, Any] or Any, optional
         Parameters used with query. (optional)
+    mogrify_empty_args : bool, optional
+        If True, apply string interpolation even when args is an empty tuple/list.
+        If False, only apply when args is truthy. Defaults to False.
 
     Returns
     -------
     str : The query with argument binding applied.
 
     """
-    if args:
+    if mogrify_empty_args:
+        should_interpolate = args is not None
+    else:
+        should_interpolate = bool(args)
+
+    if should_interpolate:
         query = query % _escape_args(
             args, charset=charset,
             encoders=encoders,

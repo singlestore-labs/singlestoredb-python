@@ -360,6 +360,7 @@ class Connection(BaseConnection):
         track_env=False,
         enable_extended_data_types=True,
         vector_data_format='binary',
+        mogrify_empty_args=None,
     ):
         BaseConnection.__init__(**dict(locals()))
 
@@ -614,6 +615,7 @@ class Connection(BaseConnection):
         self._auth_plugin_map = auth_plugin_map or {}
         self._binary_prefix = binary_prefix
         self.server_public_key = server_public_key
+        self.mogrify_empty_args = mogrify_empty_args
 
         if self.connection_params['nan_as_null'] or \
                 self.connection_params['inf_as_null']:

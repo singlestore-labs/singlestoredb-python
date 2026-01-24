@@ -548,7 +548,10 @@ class Cursor(connection.Cursor):
         if handler is not None:
             return self._execute_fusion_query(oper, params, handler=handler)
 
-        oper, params = self._connection._convert_params(oper, params)
+        mogrify_empty_args = self._connection.connection_params.get(
+            'mogrify_empty_args', False,
+        )
+        oper, params = self._connection._convert_params(oper, params, mogrify_empty_args)
 
         log_query(oper, params)
 
