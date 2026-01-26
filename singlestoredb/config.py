@@ -252,9 +252,9 @@ register_option(
 )
 
 register_option(
-    'mogrify_empty_args', 'bool', check_bool, False,
+    'interpolate_query_with_empty_args', 'bool', check_bool, False,
     'Should mogrify apply string interpolation when args is an empty tuple/list? ',
-    environ='SINGLESTOREDB_MOGRIFY_EMPTY_ARGS',
+    environ='SINGLESTOREDB_interpolate_query_with_empty_args',
 )
 
 register_option(

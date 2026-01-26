@@ -3145,7 +3145,10 @@ class TestConnection(unittest.TestCase):
         )
 
     def test_mogrify_val_with_percent(self):
-        conn = s2.connect(database=type(self).dbname, mogrify_empty_args=True)
+        conn = s2.connect(
+            database=type(self).dbname,
+            interpolate_query_with_empty_args=True,
+        )
         cur = conn.cursor()
         val_with_percent = 'a%a'
         cur.execute(
