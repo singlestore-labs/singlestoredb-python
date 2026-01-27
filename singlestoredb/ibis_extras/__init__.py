@@ -53,7 +53,7 @@ def _check_collisions(cls: type, mixin: type) -> None:
         name
         for name in dir(mixin)
         if not name.startswith('_')
-        and isinstance(getattr(type(mixin), name, None), property)
+        and isinstance(getattr(mixin, name, None), property)
     }
     mixin_members = mixin_attrs | mixin_props
 
