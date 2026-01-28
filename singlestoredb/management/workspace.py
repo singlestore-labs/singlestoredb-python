@@ -1974,7 +1974,7 @@ def manage_workspaces(
     access_token : str, optional
         The API key or other access token for the workspace management API
     version : str, optional
-        Version of the API to use
+        Version of the API to use (default is 'v1')
     base_url : str, optional
         Base URL of the workspace management API
     organization_id : str, optional
