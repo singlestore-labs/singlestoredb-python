@@ -78,8 +78,14 @@ def register() -> None:
     if _registered:
         return
 
-    import ibis.expr.types as ir
-    from ibis.backends.singlestoredb import Backend
+    try:
+        import ibis.expr.types as ir
+        from ibis.backends.singlestoredb import Backend
+    except ImportError as e:
+        raise ImportError(
+            'ibis_extras requires ibis with singlestoredb backend. '
+            'Install with: pip install "singlestoredb[ibis]"',
+        ) from e
 
     # Check for collisions before adding mixins
     _check_collisions(Backend, BackendExtensionsMixin)

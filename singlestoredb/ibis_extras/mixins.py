@@ -5,8 +5,6 @@ from typing import Any
 from typing import Protocol
 from typing import TYPE_CHECKING
 
-import sqlglot as sg
-
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
 
@@ -34,12 +32,12 @@ else:
     _BackendBase = object
     _TableBase = object
 
-_DIALECT = 'singlestore'
-
 
 def _quote_identifier(name: str) -> str:
     """Quote an identifier (table, database, column name) for safe SQL usage."""
-    return sg.to_identifier(name, quoted=True).sql(_DIALECT)
+    # Escape backticks by doubling them (MySQL/SingleStore convention)
+    escaped = name.replace('`', '``')
+    return f'`{escaped}`'
 
 
 def _escape_string_literal(value: str) -> str:
@@ -48,11 +46,14 @@ def _escape_string_literal(value: str) -> str:
     return value.replace('\\', '\\\\').replace("'", "''")
 
 
-def _get_singlestore_backend(table: ir.Table) -> BackendExtensionsMixin:
-    """Get SingleStoreDB backend from table, or raise error."""
+def _get_table_backend_and_db(
+    table: ir.Table,
+) -> tuple[BackendExtensionsMixin, str | None]:
+    """Get SingleStoreDB backend and database from table."""
     op = table.op()
     if hasattr(op, 'source') and op.source.name == 'singlestoredb':
-        return op.source  # type: ignore[return-value]
+        db = getattr(getattr(op, 'namespace', None), 'database', None)
+        return op.source, db  # type: ignore[return-value]
     raise TypeError(
         f'This method only works with SingleStoreDB tables, '
         f"got {getattr(op.source, 'name', 'unknown')} backend",
@@ -184,13 +185,13 @@ class TableExtensionsMixin(_TableBase):
 
     def optimize(self) -> None:
         """Optimize this table (SingleStoreDB only)."""
-        backend = _get_singlestore_backend(self)
-        backend.optimize_table(self.get_name())
+        backend, db = _get_table_backend_and_db(self)
+        backend.optimize_table(self.get_name(), database=db)
 
     def get_stats(self) -> dict[str, Any]:
         """Get statistics for this table (SingleStoreDB only)."""
-        backend = _get_singlestore_backend(self)
-        return backend.get_table_stats(self.get_name())
+        backend, db = _get_table_backend_and_db(self)
+        return backend.get_table_stats(self.get_name(), database=db)
 
     def get_column_statistics(self, column: str | None = None) -> ir.Table:
         """Get column statistics (SingleStoreDB only).
@@ -200,10 +201,11 @@ class TableExtensionsMixin(_TableBase):
         column
             Specific column name, or None for all columns.
         """
-        backend = _get_singlestore_backend(self)
-        db = _quote_identifier(backend.current_database)
+        backend, db = _get_table_backend_and_db(self)
+        db_name = db or backend.current_database
+        db_quoted = _quote_identifier(db_name)
         table = _quote_identifier(self.get_name())
-        query = f'SHOW COLUMNAR_SEGMENT_INDEX ON {db}.{table}'
+        query = f'SHOW COLUMNAR_SEGMENT_INDEX ON {db_quoted}.{table}'
         if column:
             query += f' COLUMNS ({_quote_identifier(column)})'
         return backend.sql(query)
