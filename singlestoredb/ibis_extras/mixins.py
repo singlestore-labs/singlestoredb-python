@@ -163,18 +163,17 @@ class TableExtensionsMixin(_TableBase):
         with backend.raw_sql(f'OPTIMIZE TABLE {db}.{table} FULL'):
             pass
 
-    def get_stats(self) -> dict[str, Any]:
+    def get_stats(self) -> ir.Table:
         """Get statistics for this table (SingleStoreDB only)."""
         backend, db = _get_table_backend_and_db(self, escape='literal')
         table = _escape_string_literal(self.get_name())
         # S608: db and table are escaped via _escape_string_literal
-        result = backend.sql(
+        return backend.sql(
             f"""
             SELECT * FROM information_schema.table_statistics
             WHERE database_name = '{db}' AND table_name = '{table}'
         """,  # noqa: S608
-        ).execute()
-        return result.to_dict(orient='records')[0] if len(result) else {}
+        )
 
     def get_column_statistics(self, column: str | None = None) -> ir.Table:
         """Get column statistics (SingleStoreDB only).
