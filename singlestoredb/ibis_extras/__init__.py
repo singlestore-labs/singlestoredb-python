@@ -18,7 +18,6 @@ Usage
 >>> # Backend methods
 >>> con.get_storage_info()
 >>> con.get_workload_metrics()
->>> con.optimize_table("users")
 >>>
 >>> # Table methods (work on any table from SingleStoreDB)
 >>> t = con.table("users")

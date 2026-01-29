@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import Literal
 from typing import Protocol
 from typing import TYPE_CHECKING
 
@@ -48,11 +49,29 @@ def _escape_string_literal(value: str) -> str:
 
 def _get_table_backend_and_db(
     table: ir.Table,
-) -> tuple[BackendExtensionsMixin, str | None]:
-    """Get SingleStoreDB backend and database from table."""
+    *,
+    escape: Literal['identifier', 'literal'] | None = None,
+) -> tuple[BackendExtensionsMixin, str]:
+    """Get SingleStoreDB backend and database from table.
+
+    Parameters
+    ----------
+    table
+        The Ibis table object.
+    escape
+        How to escape the database name:
+        - None: return unescaped
+        - 'identifier': escape for SQL identifiers (backticks)
+        - 'literal': escape for string literals (quotes)
+    """
     op = table.op()
     if hasattr(op, 'source') and op.source.name == 'singlestoredb':
         db = getattr(getattr(op, 'namespace', None), 'database', None)
+        db = db or op.source.current_database
+        if escape == 'identifier':
+            db = _quote_identifier(db)
+        elif escape == 'literal':
+            db = _escape_string_literal(db)
         return op.source, db  # type: ignore[return-value]
     raise TypeError(
         f'This method only works with SingleStoreDB tables, '
@@ -131,52 +150,6 @@ class BackendExtensionsMixin(_BackendBase):
             'SELECT * FROM information_schema.mv_workload_management_events',
         )
 
-    def optimize_table(self, table_name: str, *, database: str | None = None) -> None:
-        """Optimize a specific table.
-
-        Parameters
-        ----------
-        table_name
-            Name of table to optimize.
-        database
-            Database name. Defaults to current database.
-        """
-        db = _quote_identifier(database or self.current_database)
-        table = _quote_identifier(table_name)
-        with self.raw_sql(f'OPTIMIZE TABLE {db}.{table} FULL'):
-            pass
-
-    def get_table_stats(
-        self,
-        table_name: str,
-        *,
-        database: str | None = None,
-    ) -> dict[str, Any]:
-        """Get statistics for a specific table.
-
-        Parameters
-        ----------
-        table_name
-            Name of table.
-        database
-            Database name. Defaults to current database.
-
-        Returns
-        -------
-        dict
-            Table statistics.
-        """
-        db = _escape_string_literal(database or self.current_database)
-        table = _escape_string_literal(table_name)
-        # S608: db and table are escaped via _escape_string_literal
-        result = self.sql(
-            f"""
-            SELECT * FROM information_schema.table_statistics
-            WHERE database_name = '{db}' AND table_name = '{table}'
-        """,  # noqa: S608
-        ).execute()
-        return result.to_dict(orient='records')[0] if len(result) else {}
-
 
 class TableExtensionsMixin(_TableBase):
     """Mixin for ir.Table extensions (SingleStoreDB only)."""
@@ -185,13 +158,23 @@ class TableExtensionsMixin(_TableBase):
 
     def optimize(self) -> None:
         """Optimize this table (SingleStoreDB only)."""
-        backend, db = _get_table_backend_and_db(self)
-        backend.optimize_table(self.get_name(), database=db)
+        backend, db = _get_table_backend_and_db(self, escape='identifier')
+        table = _quote_identifier(self.get_name())
+        with backend.raw_sql(f'OPTIMIZE TABLE {db}.{table} FULL'):
+            pass
 
     def get_stats(self) -> dict[str, Any]:
         """Get statistics for this table (SingleStoreDB only)."""
-        backend, db = _get_table_backend_and_db(self)
-        return backend.get_table_stats(self.get_name(), database=db)
+        backend, db = _get_table_backend_and_db(self, escape='literal')
+        table = _escape_string_literal(self.get_name())
+        # S608: db and table are escaped via _escape_string_literal
+        result = backend.sql(
+            f"""
+            SELECT * FROM information_schema.table_statistics
+            WHERE database_name = '{db}' AND table_name = '{table}'
+        """,  # noqa: S608
+        ).execute()
+        return result.to_dict(orient='records')[0] if len(result) else {}
 
     def get_column_statistics(self, column: str | None = None) -> ir.Table:
         """Get column statistics (SingleStoreDB only).
@@ -201,11 +184,9 @@ class TableExtensionsMixin(_TableBase):
         column
             Specific column name, or None for all columns.
         """
-        backend, db = _get_table_backend_and_db(self)
-        db_name = db or backend.current_database
-        db_quoted = _quote_identifier(db_name)
+        backend, db = _get_table_backend_and_db(self, escape='identifier')
         table = _quote_identifier(self.get_name())
-        query = f'SHOW COLUMNAR_SEGMENT_INDEX ON {db_quoted}.{table}'
+        query = f'SHOW COLUMNAR_SEGMENT_INDEX ON {db}.{table}'
         if column:
             query += f' COLUMNS ({_quote_identifier(column)})'
         return backend.sql(query)
