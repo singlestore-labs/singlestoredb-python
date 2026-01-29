@@ -1,2 +1,157 @@
+import json
+from typing import Annotated
+from typing import Any
+
+import polars as pl
 from polars import DataFrame  # noqa: F401
 from polars import Series  # noqa: F401
+
+try:
+    from typing import TypeAlias  # type: ignore
+except ImportError:
+    from typing_extensions import TypeAlias  # type: ignore
+
+from . import msgpack_or_null_dumps
+from . import msgpack_or_null_loads
+from . import UDFAttrs
+from . import json_or_null_dumps
+from . import json_or_null_loads
+from .. import sql_types
+
+
+StringSeries: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.TEXT(nullable=False)),
+]
+StrSeries: TypeAlias = StringSeries
+
+BytesSeries: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.BLOB(nullable=False)),
+]
+
+Float32Series: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.FLOAT(nullable=False)),
+]
+FloatSeries: TypeAlias = Float32Series
+
+Float64Series: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.DOUBLE(nullable=False)),
+]
+DoubleSeries: TypeAlias = Float64Series
+
+IntSeries: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.INT(nullable=False)),
+]
+
+Int8Series: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.TINYINT(nullable=False)),
+]
+
+Int16Series: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.SMALLINT(nullable=False)),
+]
+
+Int32Series: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.INT(nullable=False)),
+]
+
+Int64Series: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.BIGINT(nullable=False)),
+]
+
+UInt8Series: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.TINYINT_UNSIGNED(nullable=False)),
+]
+
+UInt16Series: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.SMALLINT_UNSIGNED(nullable=False)),
+]
+
+UInt32Series: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.INT_UNSIGNED(nullable=False)),
+]
+
+UInt64Series: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.BIGINT_UNSIGNED(nullable=False)),
+]
+
+DateTimeSeries: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.DATETIME(nullable=False)),
+]
+
+TimeDeltaSeries: TypeAlias = Annotated[
+    pl.Series, UDFAttrs(sql_type=sql_types.TIME(nullable=False)),
+]
+
+
+class PolarsJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder that converts Polars Series / scalar types to Python types."""
+
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, pl.Series):
+            # Convert Polars Series to Python list
+            return obj.to_list()
+        elif hasattr(obj, 'dtype') and \
+                str(obj.dtype).startswith(('Int', 'UInt', 'Float')):
+            # Handle Polars scalar integer and float types
+            return obj.item() if hasattr(obj, 'item') else obj
+        elif isinstance(
+            obj, (
+                pl.datatypes.Int8, pl.datatypes.Int16, pl.datatypes.Int32,
+                pl.datatypes.Int64, pl.datatypes.UInt8, pl.datatypes.UInt16,
+                pl.datatypes.UInt32, pl.datatypes.UInt64,
+            ),
+        ):
+            return int(obj)
+        elif isinstance(obj, (pl.datatypes.Float32, pl.datatypes.Float64)):
+            return float(obj)
+        return super().default(obj)
+
+
+JSONSeries: TypeAlias = Annotated[
+    pl.Series,
+    UDFAttrs(
+        sql_type=sql_types.JSON(nullable=False),
+        args_transformer=json_or_null_loads,
+        returns_transformer=lambda x: json_or_null_dumps(x, cls=PolarsJSONEncoder),
+    ),
+]
+
+
+def msgpack_polars_default(obj: Any) -> Any:
+    """Default function for msgpack that handles polars types."""
+    if isinstance(obj, pl.Series):
+        # Convert Polars Series to Python list
+        return obj.to_list()
+    elif hasattr(obj, 'dtype') and \
+            str(obj.dtype).startswith(('Int', 'UInt', 'Float')):
+        # Handle Polars scalar integer and float types
+        return obj.item() if hasattr(obj, 'item') else obj
+    elif isinstance(
+        obj, (
+            pl.datatypes.Int8, pl.datatypes.Int16, pl.datatypes.Int32,
+            pl.datatypes.Int64, pl.datatypes.UInt8, pl.datatypes.UInt16,
+            pl.datatypes.UInt32, pl.datatypes.UInt64,
+        ),
+    ):
+        return int(obj)
+    elif isinstance(obj, (pl.datatypes.Float32, pl.datatypes.Float64)):
+        return float(obj)
+    raise TypeError(f'Object of type {type(obj)} is not msgpack serializable')
+
+
+MessagePackSeries: TypeAlias = Annotated[
+    pl.Series,
+    UDFAttrs(
+        sql_type=sql_types.BLOB(nullable=False),
+        args_transformer=msgpack_or_null_loads,
+        returns_transformer=lambda x: msgpack_or_null_dumps(
+            x, default=msgpack_polars_default,
+        ),
+    ),
+]
+
+
+__all__ = ['DataFrame'] + [
+    x for x in globals().keys()
+    if x.endswith('Series')
+]

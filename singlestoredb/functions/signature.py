@@ -25,9 +25,15 @@ try:
 except ImportError:
     has_numpy = False
 
+try:
+    # Python 3.9+ should use typing directly, else fallback to typing_extensions
+    from typing import Annotated
+except ImportError:
+    from typing_extensions import Annotated  # type: ignore
 
-from . import dtypes as dt
+from . import sql_types as dt
 from . import utils
+from .typing import UDFAttrs
 from .typing import Table
 from .typing import Masked
 from ..mysql.converters import escape_item  # type: ignore
@@ -146,6 +152,7 @@ sql_type_map = {
     'date': 'DATE',
     'time': 'TIME',
     'time6': 'TIME(6)',
+    'json': 'JSON',
 }
 
 sql_to_type_map = {
@@ -187,6 +194,7 @@ sql_to_type_map = {
     'TINYBLOB': 'bytes',
     'MEDIUMBLOB': 'bytes',
     'LONGBLOB': 'bytes',
+    'JSON': 'json',
 }
 
 
@@ -224,23 +232,6 @@ class TupleCollection(Collection):
 
 class ArrayCollection(Collection):
     pass
-
-
-def get_data_format(obj: Any) -> str:
-    """Return the data format of the DataFrame / Table / vector."""
-    # Cheating here a bit so we don't have to import pandas / polars / pyarrow
-    # unless we absolutely need to
-    if getattr(obj, '__module__', '').startswith('pandas.'):
-        return 'pandas'
-    if getattr(obj, '__module__', '').startswith('polars.'):
-        return 'polars'
-    if getattr(obj, '__module__', '').startswith('pyarrow.'):
-        return 'arrow'
-    if getattr(obj, '__module__', '').startswith('numpy.'):
-        return 'numpy'
-    if isinstance(obj, list):
-        return 'list'
-    return 'scalar'
 
 
 def escape_name(name: str) -> str:
@@ -380,8 +371,12 @@ def normalize_dtype(dtype: Any) -> str:
         origin = typing.get_origin(dtype)
         if origin is not None:
 
+            # Dict type (for JSON support)
+            if origin is dict:
+                return 'json'
+
             # Tuple type
-            if origin is Tuple:
+            elif origin is Tuple:
                 args = typing.get_args(dtype)
                 item_dtypes = ','.join(normalize_dtype(x) for x in args)
                 return f'tuple[{item_dtypes}]'
@@ -787,6 +782,41 @@ def unwrap_optional(annotation: Any) -> Tuple[Any, bool]:
     return annotation, is_optional
 
 
+def validate_udf_type(spec: Any, origin: Any, args_origins: List[Any], mode: str) -> None:
+    """
+    Validate that a type specification is valid for UDF parameters or returns.
+
+    Parameters
+    ----------
+    spec : Any
+        The type specification to validate
+    origin : Any
+        The origin type from typing.get_origin()
+    args_origins : List[Any]
+        List of origins from the type arguments
+    mode : str
+        Either 'parameter' or 'return'
+
+    Raises
+    ------
+    TypeError
+        If the type is not valid for UDF usage
+
+    """
+    # Short circuit check for common valid types
+    if utils.is_vector(spec) or type(spec) is type and spec in {str, float, int, bytes}:
+        return
+
+    # Try to catch some common mistakes
+    if origin in [tuple, dict] or tuple in args_origins or is_composite_type(spec):
+        type_desc = 'return type' if mode == 'return' else 'parameter types'
+        usage_desc = 'scalar or vector' if mode == 'return' else 'scalar or vector'
+        raise TypeError(
+            f'invalid {type_desc} for a UDF; expecting a {usage_desc}, '
+            f'got {getattr(spec, "__name__", spec)}',
+        )
+
+
 def is_composite_type(spec: Any) -> bool:
     """
     Check if the object is a composite type (e.g., dataclass, TypedDict, etc.).
@@ -846,10 +876,38 @@ def check_composite_type(colspec: List[ParamSpec], mode: str, type_name: str) ->
     return False
 
 
+def unpack_annotated(spec: Any) -> Tuple[Any, UDFAttrs]:
+    """
+    Unpack an Annotated type into its base type and metadata.
+
+    Parameters
+    ----------
+    spec : Any
+        The type annotation to unpack
+
+    Returns
+    -------
+    Tuple[Any, UDFAttrs]
+        A tuple containing:
+        - The base type of the annotation
+        - The Apply metadata, or an empty Apply if none exists
+
+    """
+    if typing.get_origin(spec) is Annotated:
+        args = typing.get_args(spec)
+        base_type = args[0]
+        metadata = [x for x in args[1:] if isinstance(x, UDFAttrs)]
+        if metadata:
+            return base_type, metadata[0]
+        return base_type, UDFAttrs()
+    return spec, UDFAttrs()
+
+
 def get_schema(
     spec: Any,
     overrides: Optional[List[ParamSpec]] = None,
     mode: str = 'parameter',
+    masks: Optional[List[bool]] = None,
 ) -> Tuple[List[ParamSpec], str, str]:
     """
     Expand a return type annotation into a list of types and field names.
@@ -862,6 +920,8 @@ def get_schema(
         List of SQL type specifications for the return type
     mode : str
         The mode of the function, either 'parameter' or 'return'
+    is_masked : bool
+        Whether the type is wrapped in a Masked type
 
     Returns
     -------
@@ -876,9 +936,18 @@ def get_schema(
     udf_parameter = '`returns=`' if mode == 'return' else '`args=`'
 
     spec, is_optional = unwrap_optional(spec)
+    spec, udf_attrs = unpack_annotated(spec)
     origin = typing.get_origin(spec)
     args = typing.get_args(spec)
     args_origins = [typing.get_origin(x) if x is not None else None for x in args]
+
+    if not overrides and udf_attrs.sql_type:
+        overrides = [
+            ParamSpec(
+                dtype=normalize_dtype(udf_attrs.sql_type),
+                sql_type=udf_attrs.sql_type,
+            ),
+        ]
 
     # Make sure that the result of a TVF is a list or dataframe
     if mode == 'return':
@@ -888,33 +957,41 @@ def get_schema(
 
             function_type = 'tvf'
 
-            if utils.is_dataframe(args[0]):
+            unpacked_spec = [x[0] for x in (unpack_annotated(x) for x in args)]
+
+            if utils.is_dataframe(unpacked_spec[0]):
                 if not overrides:
                     raise TypeError(
                         'column types must be specified by the '
                         '`returns=` parameter of the @udf decorator',
                     )
 
-                if utils.get_module(args[0]) in ['pandas', 'polars', 'pyarrow']:
-                    data_format = utils.get_module(args[0])
-                    spec = args[0]
+                if utils.get_module(unpacked_spec[0]) in ['pandas', 'polars', 'pyarrow']:
+                    data_format = utils.get_module(unpacked_spec[0])
+                    spec = unpacked_spec[0]
                 else:
                     raise TypeError(
                         'only pandas.DataFrames, polars.DataFrames, '
                         'and pyarrow.Tables are supported as tables.',
                     )
 
-            elif typing.get_origin(args[0]) is list:
+            elif typing.get_origin(unpacked_spec[0]) is list:
                 if len(args) != 1:
                     raise TypeError(
                         'only one list is supported within a table; to '
                         'return multiple columns, use a tuple, NamedTuple, '
                         'dataclass, TypedDict, or pydantic model',
                     )
-                spec = typing.get_args(args[0])[0]
-                data_format = 'list'
+                spec = typing.get_args(unpacked_spec[0])[0]
+                # Lists as output from TVFs are considered scalar outputs
+                # since they correspond to individual Python objects, not
+                # a true vector type.
+                if function_type == 'tvf':
+                    data_format = 'scalar'
+                else:
+                    data_format = 'list'
 
-            elif all([utils.is_vector(x, include_masks=True) for x in args]):
+            elif all([utils.is_vector(x, include_masks=True) for x in unpacked_spec]):
                 pass
 
             else:
@@ -923,27 +1000,19 @@ def get_schema(
                     'or tuple of vectors',
                 )
 
-        # Short circuit check for common valid types
-        elif utils.is_vector(spec) or spec in {str, float, int, bytes}:
+        elif overrides:
             pass
 
-        # Try to catch some common mistakes
-        elif origin in [tuple, dict] or tuple in args_origins or is_composite_type(spec):
-            raise TypeError(
-                'invalid return type for a UDF; expecting a scalar or vector, '
-                f'but got {getattr(spec, "__name__", spec)}',
-            )
+        # Validate the return type
+        else:
+            validate_udf_type(spec, origin, args_origins, mode)
 
-    # Short circuit check for common valid types
-    elif utils.is_vector(spec) or spec in {str, float, int, bytes}:
+    elif overrides:
         pass
 
-    # Error out for incorrect parameter types
-    elif origin in [tuple, dict] or tuple in args_origins or is_composite_type(spec):
-        raise TypeError(
-            'parameter types must be scalar or vector, '
-            f'got {getattr(spec, "__name__", spec)}',
-        )
+    # Validate parameter types
+    else:
+        validate_udf_type(spec, origin, args_origins, mode)
 
     #
     # Process each parameter / return type into a colspec
@@ -1034,7 +1103,21 @@ def get_schema(
         # Plain list vector
         elif typing.get_origin(spec) is list:
             data_format = 'list'
-            colspec = [ParamSpec(dtype=typing.get_args(spec)[0], is_optional=is_optional)]
+            _, inner_apply_meta = unpack_annotated(typing.get_args(spec)[0])
+            if inner_apply_meta.sql_type:
+                udf_attrs = inner_apply_meta
+                colspec = get_schema(
+                    typing.get_args(spec)[0],
+                    mode=mode,
+                    masks=[masks[0]] if masks else None,
+                )[0]
+            else:
+                colspec = [
+                    ParamSpec(
+                        dtype=typing.get_args(spec)[0],
+                        is_optional=is_optional,
+                    ),
+                ]
 
         # Multiple return values
         elif inspect.isclass(typing.get_origin(spec)) \
@@ -1058,6 +1141,7 @@ def get_schema(
                     overrides=[overrides[i]] if overrides else [],
                     # Always pass UDF mode for individual items
                     mode=mode,
+                    masks=[masks[i]] if masks else None,
                 )
 
                 # Use the name from the overrides if specified
@@ -1087,7 +1171,7 @@ def get_schema(
         # Use overrides if specified
         elif overrides:
             if not data_format:
-                data_format = get_data_format(spec)
+                data_format = utils.get_data_format(spec)
             colspec = overrides
 
         # Single value, no override
@@ -1099,21 +1183,45 @@ def get_schema(
     out = []
 
     # Normalize colspec data types
-    for c in colspec:
+    for i, c in enumerate(colspec):
 
+        # if the dtype is a string, it is resolved already
         if isinstance(c.dtype, str):
             dtype = c.dtype
+
+        # As long as we don't have explicit overrides,
+        # use the sql_type from the annotation
+        elif not overrides and udf_attrs.sql_type:
+            dtype = normalize_dtype(udf_attrs.sql_type)
+
+        # Otherwise, normalize the dtype from the signature value
         else:
             dtype = collapse_dtypes(
                 [normalize_dtype(x) for x in simplify_dtype(c.dtype)],
                 include_null=c.is_optional,
             )
 
+        sql_type = c.sql_type if isinstance(c.sql_type, str) else udf_attrs.sql_type
+
+        is_optional = (
+            c.is_optional
+            or bool(dtype and dtype.endswith('?'))
+            or bool(masks and masks[i])
+        )
+
+        if is_optional:
+            if dtype and not dtype.endswith('?'):
+                dtype += '?'
+            if sql_type and re.search(r' NOT NULL\b', sql_type):
+                sql_type = re.sub(r' NOT NULL\b', r' NULL', sql_type)
+
         p = ParamSpec(
             name=c.name,
             dtype=dtype,
-            sql_type=c.sql_type if isinstance(c.sql_type, str) else None,
-            is_optional=c.is_optional,
+            sql_type=sql_type,
+            is_optional=is_optional,
+            transformer=udf_attrs.args_transformer
+            if mode == 'parameter' else udf_attrs.returns_transformer,
         )
 
         out.append(p)
@@ -1251,6 +1359,7 @@ def get_signature(
             unpack_masked_type(param.annotation),
             overrides=[args_colspec[i]] if args_colspec else [],
             mode='parameter',
+            masks=[args_masks[i]] if args_masks else [],
         )
         args_data_formats.append(args_data_format)
 
@@ -1288,8 +1397,8 @@ def get_signature(
                 name=pspec.name,
                 dtype=pspec.dtype,
                 sql=sql,
-                **default_option,
                 transformer=pspec.transformer,
+                **default_option,
             ),
         )
 
@@ -1310,6 +1419,7 @@ def get_signature(
         unpack_masked_type(signature.return_annotation),
         overrides=returns_colspec if returns_colspec else None,
         mode='return',
+        masks=ret_masks or [],
     )
 
     rdf = out['returns_data_format'] = out['returns_data_format'] or 'scalar'

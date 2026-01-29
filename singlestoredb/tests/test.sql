@@ -710,3 +710,43 @@ INSERT INTO bool_data_with_nulls SET id='ff', bool_a=FALSE, bool_b=FALSE;
 
 
 COMMIT;
+
+CREATE TABLE `json_data` (
+    id INT NOT NULL PRIMARY KEY,
+    x INT NOT NULL,
+    y JSON NOT NULL
+);
+INSERT INTO json_data VALUES (1, 101, '{"foo": 10, "bar": 2.75, "baz": "hello"}');
+INSERT INTO json_data VALUES (2, 121, '{"foo": 105, "bar": 3.5, "baz": "goodbye"}');
+INSERT INTO json_data VALUES (3, 151, '{"foo": 50, "bar": 7.63, "baz": ""}');
+
+CREATE TABLE `json_data_with_nulls` (
+    id INT NOT NULL PRIMARY KEY,
+    x INT NULL,
+    y JSON NULL
+);
+INSERT INTO json_data_with_nulls VALUES (1, NULL, '{"foo": 10, "bar": 2.75, "baz": "hello"}');
+INSERT INTO json_data_with_nulls VALUES (2, 121, NULL);
+INSERT INTO json_data_with_nulls VALUES (3, 151, '{"foo": 50, "bar": 7.63, "baz": ""}');
+INSERT INTO json_data_with_nulls VALUES (4, NULL, NULL);
+
+CREATE TABLE `json_list_data` (
+    id INT NOT NULL PRIMARY KEY,
+    x INT NOT NULL,
+    y JSON NOT NULL
+);
+INSERT INTO json_list_data VALUES (1, 101, '["foo", "bar", "baz"]');
+INSERT INTO json_list_data VALUES (2, 121, '["foo", "bar", "baz"]');
+INSERT INTO json_list_data VALUES (3, 151, '["foo", "bar", "baz"]');
+
+CREATE TABLE `json_list_data_with_nulls` (
+    id INT NOT NULL PRIMARY KEY,
+    x INT NULL,
+    y JSON NULL
+);
+INSERT INTO json_list_data_with_nulls VALUES (1, NULL, '["foo", "bar", "baz"]');
+INSERT INTO json_list_data_with_nulls VALUES (2, 121, NULL);
+INSERT INTO json_list_data_with_nulls VALUES (3, 151, '["foo", "bar", "baz"]');
+INSERT INTO json_list_data_with_nulls VALUES (4, NULL, NULL);
+
+COMMIT;

@@ -359,6 +359,58 @@ inline int IMIN(int a, int b) { return((a) < (b) ? a : b); }
 
 static PyObject *create_numpy_array(PyObject *py_memview, char *data_format, int data_type, PyObject *py_objs);
 
+static PyObject *apply_transformer(PyObject *transformer, PyObject *value) {
+    if (value == NULL) {
+        return value;
+    }
+
+    if (transformer == NULL || transformer == Py_None) {
+        // No transformation needed, return value as-is
+        // We steal the reference from the caller
+        return value;
+    }
+
+    PyObject *out = PyObject_CallFunction(transformer, "O", value);
+    // Always decref value since we're stealing the reference from the caller
+    // This includes Py_None when it's passed as a new reference (e.g., from PyIter_Next)
+    Py_DECREF(value);
+
+    return out;
+}
+
+/*
+static PyObject *apply_transformer_numpy(PyObject *numpy_vectorize, PyObject *transformer, PyObject *array) {
+    if (array == NULL) {
+        return NULL;
+    }
+
+    if (transformer == NULL || transformer == Py_None) {
+        // Increment refcount fo Py_None since we are returning it
+        if (array == Py_None) {
+            Py_INCREF(array);
+        }
+        return array;
+    }
+
+    // Convert function to vectorized function
+    PyObject *py_vec_func = PyObject_CallFunction(numpy_vectorize, "O", transformer);
+    if (!py_vec_func) {
+        PyErr_SetString(PyExc_ValueError, "unable to vectorize transformer function");
+        return NULL;
+    }
+
+    PyObject *out = PyObject_CallFunction(py_vec_func, "O", array);
+    // Don't decref Py_None since we assume it was passed in literally and not from a new reference
+    if (array != NULL && array != Py_None) {
+        Py_DECREF(array);
+    }
+
+    Py_DECREF(py_vec_func);
+
+    return out;
+}
+*/
+
 char *_PyUnicode_AsUTF8(PyObject *unicode) {
     PyObject *bytes = PyUnicode_AsEncodedString(unicode, "utf-8", "strict");
     if (!bytes) return NULL;
@@ -366,11 +418,13 @@ char *_PyUnicode_AsUTF8(PyObject *unicode) {
     char *str = NULL;
     Py_ssize_t str_l = 0;
     if (PyBytes_AsStringAndSize(bytes, &str, &str_l) < 0) {
+        Py_DECREF(bytes);
         return NULL;
     }
 
     char *out = calloc(str_l + 1, 1);
     memcpy(out, str, str_l);
+    Py_DECREF(bytes);
     return out;
 }
 
@@ -910,7 +964,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
                               NULL : _PyUnicode_AsUTF8(py_encoding);
 
         self->py_invalid_values[i] = (!py_invalid_value || py_invalid_value == Py_None) ?
-                                      NULL : py_converter;
+                                      NULL : py_invalid_value;
         Py_XINCREF(self->py_invalid_values[i]);
 
         self->py_converters[i] = ((!py_converter || py_converter == py_default_converter)
@@ -956,13 +1010,13 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
             py_args = PyTuple_New(2);
             if (!py_args) goto error;
 
+            Py_INCREF(PyStr.Row);
             rc = PyTuple_SetItem(py_args, 0, PyStr.Row);
             if (rc) goto error;
-            Py_INCREF(PyStr.Row);
 
+            Py_INCREF(self->py_names_list);
             rc = PyTuple_SetItem(py_args, 1, self->py_names_list);
             if (rc) goto error;
-            Py_INCREF(self->py_names_list);
 
             self->py_namedtuple = PyObject_Call(
                                       PyFunc.collections_namedtuple,
@@ -1274,9 +1328,9 @@ static PyObject *read_packet(StateObject *py_state) {
         if (!py_recv_data) goto error;
 
         py_new_buff = PyByteArray_Concat(py_buff, py_recv_data);
+        if (!py_new_buff) goto error;
         Py_CLEAR(py_recv_data);
         Py_CLEAR(py_buff);
-        if (!py_new_buff) goto error;
 
         py_buff = py_new_buff;
         py_new_buff = NULL;
@@ -1955,7 +2009,10 @@ static PyObject *read_row_from_packet(
             break;
         case ACCEL_OUT_DICTS:
         case ACCEL_OUT_ARROW:
-            PyDict_SetItem(py_result, py_state->py_names[i], py_item);
+            if (PyDict_SetItem(py_result, py_state->py_names[i], py_item) < 0) {
+                Py_DECREF(py_item);
+                goto error;
+            }
             Py_DECREF(py_item);
             break;
         default:
@@ -2020,10 +2077,10 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
 
         PyObject *py_args = PyTuple_New(2);
         if (!py_args) goto error;
-        PyTuple_SetItem(py_args, 0, py_res);
-        PyTuple_SetItem(py_args, 1, py_requested_n_rows);
         Py_INCREF(py_res);
         Py_INCREF(py_requested_n_rows);
+        PyTuple_SetItem(py_args, 0, py_res);
+        PyTuple_SetItem(py_args, 1, py_requested_n_rows);
 
         py_state = (StateObject*)PyObject_CallObject((PyObject*)StateType, py_args);
         if (!py_state) { Py_DECREF(py_args); goto error; }
@@ -2228,6 +2285,7 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
     PyObject *py_objs = NULL;
     PyObject *py_mask = NULL;
     PyObject *py_pair = NULL;
+    PyObject **py_transformers = NULL;
     Py_ssize_t length = 0;
     uint8_t is_null = 0;
     int8_t i8 = 0;
@@ -2272,6 +2330,8 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
     // Determine column types
     ctypes = calloc(sizeof(int), n_cols);
     if (!ctypes) goto error;
+    py_transformers = calloc(sizeof(PyObject*), n_cols);
+    if (!py_transformers) goto error;
     for (i = 0; i < n_cols; i++) {
         PyObject *py_cspec = PySequence_GetItem(py_colspec, i);
         if (!py_cspec) goto error;
@@ -2279,6 +2339,8 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
         if (!py_ctype) { Py_DECREF(py_cspec); goto error; }
         ctypes[i] = (int)PyLong_AsLong(py_ctype);
         Py_DECREF(py_ctype);
+        py_transformers[i] = PySequence_GetItem(py_cspec, 2);
+        if (!py_transformers[i]) { Py_DECREF(py_cspec); goto error; }
         Py_DECREF(py_cspec);
         if (PyErr_Occurred()) { goto error; }
     }
@@ -2695,6 +2757,12 @@ exit:
         }
         free(mask_cols);
     }
+    if (py_transformers) {
+        for (i = 0; i < n_cols; i++) {
+            Py_XDECREF(py_transformers[i]);
+        }
+        free(py_transformers);
+    }
     if (out_row_ids) free(out_row_ids);
     if (data_formats) free(data_formats);
     if (item_sizes) free(item_sizes);
@@ -2881,6 +2949,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
     PyObject *py_row_ids = NULL;
     PyObject *py_cols = NULL;
     PyObject *py_out = NULL;
+    PyObject **py_transformers = NULL;
     unsigned long long n_cols = 0;
     unsigned long long n_rows = 0;
     uint8_t is_null = 0;
@@ -2971,11 +3040,23 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
         goto error;
     }
 
+    // Get transformers
+    py_transformers = malloc(sizeof(PyObject*) * n_cols);
+    if (!py_transformers) {
+        PyErr_SetString(PyExc_MemoryError, "failed to allocate transformers array");
+        goto error;
+    }
+
     for (i = 0; i < n_cols; i++) {
-        PyObject *py_item = PySequence_GetItem(py_returns, i);
-        if (!py_item) goto error;
-        returns[i] = (int)PyLong_AsLong(py_item);
-        Py_DECREF(py_item);
+        PyObject *py_retspec = PySequence_GetItem(py_returns, i);
+        if (!py_retspec) goto error;
+        PyObject *py_rtype = PySequence_GetItem(py_retspec, 1);
+        if (!py_rtype) { Py_DECREF(py_retspec); goto error; }
+        returns[i] = (int)PyLong_AsLong(py_rtype);
+        Py_DECREF(py_rtype);
+        py_transformers[i] = PySequence_GetItem(py_retspec, 2);
+        if (!py_transformers[i]) { Py_DECREF(py_retspec); goto error; }
+        Py_DECREF(py_retspec);
         if (PyErr_Occurred()) { goto error; }
     }
 
@@ -4016,7 +4097,10 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                         out_idx += 8;
                     } else {
                         PyObject *py_bytes = PyUnicode_AsEncodedString(py_str, "utf-8", "strict");
-                        if (!py_bytes) goto error;
+                        if (!py_bytes) {
+                            PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for character output types");
+                            goto error;
+                        }
 
                         char *str = NULL;
                         Py_ssize_t str_l = 0;
@@ -4094,6 +4178,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                         char *str = NULL;
                         Py_ssize_t str_l = 0;
                         if (PyBytes_AsStringAndSize(py_bytes, &str, &str_l) < 0) {
+                            PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for binary output types");
                             goto error;
                         }
 
@@ -4140,8 +4225,6 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     PyObject *py_out_rows = NULL;
     PyObject *py_row = NULL;
     PyObject *py_colspec = NULL;
-    PyObject *py_str = NULL;
-    PyObject *py_blob = NULL;
     Py_ssize_t length = 0;
     uint64_t row_id = 0;
     uint8_t is_null = 0;
@@ -4156,11 +4239,14 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     float flt = 0;
     double dbl = 0;
     int *ctypes = NULL;
+    PyObject **py_transformers = NULL;
     char *data = NULL;
     char *end = NULL;
     unsigned long long colspec_l = 0;
     unsigned long long i = 0;
     char *keywords[] = {"colspec", "data", NULL};
+    PyObject *t = NULL;
+    PyObject *py_value = NULL;
 
     // Parse function args.
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO", keywords, &py_colspec, &py_data)) {
@@ -4171,15 +4257,25 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     end = data + (unsigned long long)length;
 
     colspec_l = PyObject_Length(py_colspec);
-    ctypes = malloc(sizeof(int) * colspec_l);
+    ctypes = calloc(sizeof(int), colspec_l);
+    if (!ctypes) goto error;
+    py_transformers = calloc(sizeof(PyObject*), colspec_l);
+    if (!py_transformers) goto error;
 
     for (i = 0; i < colspec_l; i++) {
         PyObject *py_cspec = PySequence_GetItem(py_colspec, i);
         if (!py_cspec) goto error;
+
+        // Extract type (second element)
         PyObject *py_ctype = PySequence_GetItem(py_cspec, 1);
         if (!py_ctype) { Py_DECREF(py_cspec); goto error; }
         ctypes[i] = (int)PyLong_AsLong(py_ctype);
         Py_DECREF(py_ctype);
+
+        // Extract transformer (third element)
+        py_transformers[i] = PySequence_GetItem(py_cspec, 2);
+        if (!py_transformers[i]) { Py_DECREF(py_cspec); goto error; }
+
         Py_DECREF(py_cspec);
         if (PyErr_Occurred()) { goto error; }
     }
@@ -4194,32 +4290,42 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!py_out) { Py_DECREF(py_out_row_ids); Py_DECREF(py_out_rows); goto error; }
 
     if (PyTuple_SetItem(py_out, 0, py_out_row_ids) < 0) {
+        // PyTuple_SetItem steals reference on success, so on failure we still own it
         Py_DECREF(py_out_row_ids);
         Py_DECREF(py_out_rows);
         goto error;
     }
+    // py_out_row_ids reference now stolen by tuple
 
     if (PyTuple_SetItem(py_out, 1, py_out_rows) < 0) {
+        // py_out_row_ids already stolen by first SetItem, only clean up py_out_rows
         Py_DECREF(py_out_rows);
         goto error;
     }
+    // py_out_rows reference now stolen by tuple
 
     while (end > data) {
         py_row = PyTuple_New(colspec_l);
         if (!py_row) goto error;
 
         row_id = *(int64_t*)data; data += 8;
-        CHECKRC(PyList_Append(py_out_row_ids, PyLong_FromLongLong(row_id)));
+        PyObject *py_row_id = PyLong_FromLongLong(row_id);
+        if (!py_row_id) goto error;
+        CHECKRC(PyList_Append(py_out_row_ids, py_row_id));
+        Py_DECREF(py_row_id);
 
         for (unsigned long long i = 0; i < colspec_l; i++) {
             is_null = data[0] == '\x01'; data += 1;
             if (is_null) Py_INCREF(Py_None);
 
+            t = py_transformers[i];
+
             switch (ctypes[i]) {
             case MYSQL_TYPE_NULL:
                 data += 1;
-                CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                Py_INCREF(Py_None);
+                py_value = apply_transformer(t, Py_None);
+                if (!py_value) goto error;
+                CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 break;
 
             case MYSQL_TYPE_BIT:
@@ -4228,108 +4334,78 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
             case MYSQL_TYPE_TINY:
                 i8 = *(int8_t*)data; data += 1;
-                if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
-                } else {
-                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromLong((long)i8)));
-                }
+                py_value = apply_transformer(t, (is_null) ? Py_None : PyLong_FromLong((long)i8));
+                if (!py_value) goto error;
+                CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 break;
 
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_TINY:
                 u8 = *(uint8_t*)data; data += 1;
-                if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
-                } else {
-                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLong((unsigned long)u8)));
-                }
+                py_value = apply_transformer(t, (is_null) ? Py_None : PyLong_FromUnsignedLong((unsigned long)u8));
+                if (!py_value) goto error;
+                CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 break;
 
             case MYSQL_TYPE_SHORT:
                 i16 = *(int16_t*)data; data += 2;
-                if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
-                } else {
-                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromLong((long)i16)));
-                }
+                py_value = apply_transformer(t, (is_null) ? Py_None : PyLong_FromLong((long)i16));
+                if (!py_value) goto error;
+                CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 break;
 
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_SHORT:
                 u16 = *(uint16_t*)data; data += 2;
-                if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
-                } else {
-                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLong((unsigned long)u16)));
-                }
+                py_value = apply_transformer(t, (is_null) ? Py_None : PyLong_FromUnsignedLong((unsigned long)u16));
+                if (!py_value) goto error;
+                CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 break;
 
             case MYSQL_TYPE_LONG:
             case MYSQL_TYPE_INT24:
                 i32 = *(int32_t*)data; data += 4;
-                if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
-                } else {
-                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromLong((long)i32)));
-                }
+                py_value = apply_transformer(t, (is_null) ? Py_None : PyLong_FromLong((long)i32));
+                if (!py_value) goto error;
+                CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 break;
 
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_LONG:
             case -MYSQL_TYPE_INT24:
                 u32 = *(uint32_t*)data; data += 4;
-                if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
-                } else {
-                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLong((unsigned long)u32)));
-                }
+                py_value = apply_transformer(t, (is_null) ? Py_None : PyLong_FromUnsignedLong((unsigned long)u32));
+                if (!py_value) goto error;
+                CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 break;
 
             case MYSQL_TYPE_LONGLONG:
                 i64 = *(int64_t*)data; data += 8;
-                if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
-                } else {
-                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromLongLong((long long)i64)));
-                }
+                py_value = apply_transformer(t, (is_null) ? Py_None : PyLong_FromLongLong((long long)i64));
+                if (!py_value) goto error;
+                CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 break;
 
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_LONGLONG:
                 u64 = *(uint64_t*)data; data += 8;
-                if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
-                } else {
-                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLongLong((unsigned long long)u64)));
-                }
+                py_value = apply_transformer(t, (is_null) ? Py_None : PyLong_FromUnsignedLongLong((unsigned long long)u64));
+                if (!py_value) goto error;
+                CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 break;
 
             case MYSQL_TYPE_FLOAT:
                 flt = *(float*)data; data += 4;
-                if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
-                } else {
-                    CHECKRC(PyTuple_SetItem(py_row, i, PyFloat_FromDouble((double)flt)));
-                }
+                py_value = apply_transformer(t, (is_null) ? Py_None : PyFloat_FromDouble((double)flt));
+                if (!py_value) goto error;
+                CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 break;
 
             case MYSQL_TYPE_DOUBLE:
                 dbl = *(double*)data; data += 8;
-                if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
-                } else {
-                    CHECKRC(PyTuple_SetItem(py_row, i, PyFloat_FromDouble((double)dbl)));
-                }
+                py_value = apply_transformer(t, (is_null) ? Py_None : PyFloat_FromDouble((double)dbl));
+                if (!py_value) goto error;
+                CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 break;
 
             case MYSQL_TYPE_DECIMAL:
@@ -4356,12 +4432,9 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
             case MYSQL_TYPE_YEAR:
                 u16 = *(uint16_t*)data; data += 2;
-                if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
-                } else {
-                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLong((unsigned long)u16)));
-                }
+                py_value = apply_transformer(t, (is_null) ? Py_None : PyLong_FromUnsignedLong((unsigned long)u16));
+                if (!py_value) goto error;
+                CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 break;
 
             case MYSQL_TYPE_VARCHAR:
@@ -4377,13 +4450,14 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
             case MYSQL_TYPE_BLOB:
                 i64 = *(int64_t*)data; data += 8;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
+                    py_value = apply_transformer(t, Py_None);
+                    if (!py_value) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 } else {
-                    py_str = PyUnicode_FromStringAndSize(data, (Py_ssize_t)i64);
+                    py_value = apply_transformer(t, PyUnicode_FromStringAndSize(data, (Py_ssize_t)i64));
                     data += i64;
-                    if (!py_str) goto error;
-                    CHECKRC(PyTuple_SetItem(py_row, i, py_str));
+                    if (!py_value) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 }
                 break;
 
@@ -4401,13 +4475,14 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
             case -MYSQL_TYPE_BLOB:
                 i64 = *(int64_t*)data; data += 8;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
-                    Py_INCREF(Py_None);
+                    py_value = apply_transformer(t, Py_None);
+                    if (!py_value) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 } else {
-                    py_blob = PyBytes_FromStringAndSize(data, (Py_ssize_t)i64);
+                    py_value = apply_transformer(t, PyBytes_FromStringAndSize(data, (Py_ssize_t)i64));
                     data += i64;
-                    if (!py_blob) goto error;
-                    CHECKRC(PyTuple_SetItem(py_row, i, py_blob));
+                    if (!py_value) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_value));
                 }
                 break;
 
@@ -4423,6 +4498,12 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
 exit:
     if (ctypes) free(ctypes);
+    if (py_transformers) {
+        for (unsigned long long j = 0; j < colspec_l; j++) {
+            Py_XDECREF(py_transformers[j]);
+        }
+        free(py_transformers);
+    }
 
     Py_XDECREF(py_row);
 
@@ -4462,6 +4543,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     unsigned long long out_l = 0;
     unsigned long long out_idx = 0;
     int *returns = NULL;
+    PyObject **py_transformers = NULL;
     char *keywords[] = {"returns", "row_ids", "data", NULL};
     unsigned long long i = 0;
     unsigned long long n_cols = 0;
@@ -4491,14 +4573,26 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
         goto error;
     }
 
-    returns = malloc(sizeof(int) * n_cols);
+    returns = calloc(sizeof(int), n_cols);
     if (!returns) goto error;
+    py_transformers = calloc(sizeof(PyObject*), n_cols);
+    if (!py_transformers) goto error;
 
     for (i = 0; i < n_cols; i++) {
-        PyObject *py_item = PySequence_GetItem(py_returns, i);
-        if (!py_item) goto error;
-        returns[i] = (int)PyLong_AsLong(py_item);
-        Py_DECREF(py_item);
+        PyObject *py_retspec = PySequence_GetItem(py_returns, i);
+        if (!py_retspec) goto error;
+
+        // Extract return type (second element)
+        PyObject *py_rtype = PySequence_GetItem(py_retspec, 1);
+        if (!py_rtype) { Py_DECREF(py_retspec); goto error; }
+        returns[i] = (int)PyLong_AsLong(py_rtype);
+        Py_DECREF(py_rtype);
+
+        // Extract transformer (third element)
+        py_transformers[i] = PySequence_GetItem(py_retspec, 2);
+        if (!py_transformers[i]) { Py_DECREF(py_retspec); goto error; }
+
+        Py_DECREF(py_retspec);
         if (PyErr_Occurred()) { goto error; }
     }
 
@@ -4544,6 +4638,8 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
         while ((py_item = PyIter_Next(py_row_iter))) {
 
+            py_item = apply_transformer(py_transformers[i], py_item);
+            if (!py_item) goto error;
             is_null = (uint8_t)(py_item == Py_None);
 
             CHECKMEM(1);
@@ -4757,6 +4853,12 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 exit:
     if (out) free(out);
     if (returns) free(returns);
+    if (py_transformers) {
+        for (unsigned long long j = 0; j < n_cols; j++) {
+            Py_XDECREF(py_transformers[j]);
+        }
+        free(py_transformers);
+    }
 
     Py_XDECREF(py_item);
     Py_XDECREF(py_row_iter);

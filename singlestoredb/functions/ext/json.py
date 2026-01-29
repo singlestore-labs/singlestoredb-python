@@ -3,15 +3,18 @@ import base64
 import json
 from typing import Any
 from typing import List
+from typing import Optional
 from typing import Tuple
 from typing import TYPE_CHECKING
 
-from ..dtypes import DEFAULT_VALUES
-from ..dtypes import NUMPY_TYPE_MAP
-from ..dtypes import PANDAS_TYPE_MAP
-from ..dtypes import POLARS_TYPE_MAP
-from ..dtypes import PYARROW_TYPE_MAP
-from ..dtypes import PYTHON_CONVERTERS
+from ..sql_types import DEFAULT_VALUES
+from ..sql_types import NUMPY_TYPE_MAP
+from ..sql_types import PANDAS_TYPE_MAP
+from ..sql_types import POLARS_TYPE_MAP
+from ..sql_types import PYARROW_TYPE_MAP
+from ..sql_types import PYTHON_CONVERTERS
+from .utils import apply_transformer
+from .utils import Transformer
 
 if TYPE_CHECKING:
     try:
@@ -40,19 +43,33 @@ class JSONEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def decode_row(coltypes: List[int], row: List[Any]) -> List[Any]:
+def decode_row(
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
+    row: List[Any],
+) -> List[Any]:
     out = []
-    for dtype, item in zip(coltypes, row):
-        out.append(PYTHON_CONVERTERS[dtype](item))  # type: ignore
+    for (_, dtype, transformer), item in zip(colspec, row):
+        out.append(
+            apply_transformer(
+                transformer,
+                PYTHON_CONVERTERS[dtype](item),  # type: ignore
+            ),
+        )
     return out
 
 
-def decode_value(coltype: int, data: Any) -> Any:
-    return PYTHON_CONVERTERS[coltype](data)  # type: ignore
+def decode_value(
+    colspec: Tuple[str, int, Optional[Transformer]],
+    data: Any,
+) -> Any:
+    return apply_transformer(
+        colspec[2],
+        PYTHON_CONVERTERS[colspec[1]](data),  # type: ignore
+    )
 
 
 def load(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[List[int], List[Any]]:
     '''
@@ -60,7 +77,7 @@ def load(
 
     Parameters
     ----------
-    colspec : Iterable[Tuple[str, int]]
+    colspec : Iterable[Tuple[str, int, Optional[Transformer]]]
         An Iterable of column data types
     data : bytes
         The data in JSON format
@@ -74,12 +91,12 @@ def load(
     rows = []
     for row_id, *row in json.loads(data.decode('utf-8'))['data']:
         row_ids.append(row_id)
-        rows.append(decode_row([x[1] for x in colspec], row))
+        rows.append(decode_row(colspec, row))
     return row_ids, rows
 
 
 def _load_vectors(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[List[int], List[Any]]:
     '''
@@ -87,7 +104,7 @@ def _load_vectors(
 
     Parameters
     ----------
-    colspec : Iterable[Tuple[str, int]]
+    colspec : Iterable[Tuple[str, int, Optional[Transformer]]]
         An Iterable of column data types
     data : bytes
         The data in JSON format
@@ -107,13 +124,13 @@ def _load_vectors(
         if not cols:
             cols = [([], []) for _ in row]
         for i, (spec, x) in enumerate(zip(colspec, row)):
-            cols[i][0].append(decode_value(spec[1], x) if x is not None else defaults[i])
+            cols[i][0].append(decode_value(spec, x) if x is not None else defaults[i])
             cols[i][1].append(False if x is not None else True)
     return row_ids, cols
 
 
 def load_pandas(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[List[int], List[Any]]:
     '''
@@ -121,7 +138,7 @@ def load_pandas(
 
     Parameters
     ----------
-    colspec : Iterable[Tuple[str, int]]
+    colspec : Iterable[Tuple[str, int, Optional[Transformer]]]
         An Iterable of column data types
     data : bytes
         The data in JSON format
@@ -149,7 +166,7 @@ def load_pandas(
 
 
 def load_polars(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[List[int], List[Any]]:
     '''
@@ -180,7 +197,7 @@ def load_polars(
 
 
 def load_numpy(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[Any, List[Any]]:
     '''
@@ -188,7 +205,7 @@ def load_numpy(
 
     Parameters
     ----------
-    colspec : Iterable[Tuple[str, int]]
+    colspec : Iterable[Tuple[str, int, Optional[Transformer]]]
         An Iterable of column data types
     data : bytes
         The data in JSON format
@@ -211,7 +228,7 @@ def load_numpy(
 
 
 def load_arrow(
-    colspec: List[Tuple[str, int]],
+    colspec: List[Tuple[str, int, Optional[Transformer]]],
     data: bytes,
 ) -> Tuple[Any, List[Any]]:
     '''
@@ -219,7 +236,7 @@ def load_arrow(
 
     Parameters
     ----------
-    colspec : Iterable[Tuple[str, int]]
+    colspec : Iterable[Tuple[str, int, Optional[Transformer]]]
         An Iterable of column data types
     data : bytes
         The data in JSON format
@@ -240,12 +257,12 @@ def load_arrow(
                 ),
                 pa.array(mask, type=pa.bool_()),
             )
-            for (data, mask), (name, dtype) in zip(cols, colspec)
+            for (data, mask), (name, dtype, _) in zip(cols, colspec)
         ]
 
 
 def dump(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: List[int],
     rows: List[List[Any]],
 ) -> bytes:
@@ -254,7 +271,7 @@ def dump(
 
     Parameters
     ----------
-    returns : List[int]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : List[int]
         Row IDs
@@ -266,12 +283,20 @@ def dump(
     bytes
 
     '''
+    rows = list(rows)
+    transformers = []
+    for i, (_, _, transformer) in enumerate(returns):
+        if transformer is not None:
+            transformers.append((i, transformer))
+    for (i, transformer) in transformers:
+        for row in rows:
+            row[i] = apply_transformer(transformer, row[i])
     data = list(zip(row_ids, *list(zip(*rows))))
     return json.dumps(dict(data=data), cls=JSONEncoder).encode('utf-8')
 
 
 def _dump_vectors(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: List[int],
     cols: List[Tuple[Any, Any]],
 ) -> bytes:
@@ -295,9 +320,18 @@ def _dump_vectors(
     masked_cols = []
     for i, (data, mask) in enumerate(cols):
         if mask is not None:
-            masked_cols.append([d if m is not None else None for d, m in zip(data, mask)])
+            masked_cols.append([
+                apply_transformer(
+                    returns[i][2], d,
+                ) if m is not None else None for d, m in zip(data, mask)
+            ])
         else:
-            masked_cols.append(cols[i][0])
+            masked_cols.append(
+                apply_transformer(
+                    returns[i][2],
+                    cols[i][0],
+                ),
+            )
     data = list(zip(row_ids, *masked_cols))
     return json.dumps(dict(data=data), cls=JSONEncoder).encode('utf-8')
 
@@ -307,7 +341,7 @@ dump_list = _dump_vectors
 
 
 def dump_pandas(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pd.Series[int]',
     cols: List[Tuple['pd.Series[int]', 'pd.Series[bool]']],
 ) -> bytes:
@@ -316,7 +350,7 @@ def dump_pandas(
 
     Parameters
     ----------
-    returns : List[int]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : pd.Series[int]
         Row IDs
@@ -329,13 +363,34 @@ def dump_pandas(
 
     '''
     import pandas as pd
+
     row_ids.index = row_ids
-    df = pd.concat([row_ids] + [x[0] for x in cols], axis=1)
+
+    for i, ((data, mask), (_, dtype, transformer)) in enumerate(zip(cols, returns)):
+        data.index = row_ids.index
+        if mask is not None:
+            mask.index = row_ids.index
+            cols[i] = pd.Series(
+                [
+                    apply_transformer(transformer, d) if not m else None
+                    for d, m in zip(data, mask)
+                ], index=row_ids.index, name=data.name, dtype=PANDAS_TYPE_MAP[dtype],
+            )
+        else:
+            cols[i] = pd.Series(
+                apply_transformer(transformer, data),
+                index=row_ids.index,
+                name=data.name,
+                dtype=PANDAS_TYPE_MAP[dtype],
+            )
+
+    df = pd.concat([row_ids] + cols, axis=1)
+
     return ('{"data": %s}' % df.to_json(orient='values')).encode('utf-8')
 
 
 def dump_polars(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pl.Series[int]',
     cols: List[Tuple['pl.Series[Any]', 'pl.Series[int]']],
 ) -> bytes:
@@ -344,7 +399,7 @@ def dump_polars(
 
     Parameters
     ----------
-    returns : List[int]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : List[int]
     cols : List[Tuple[polars.Series[Any], polars.Series[bool]]
@@ -363,7 +418,7 @@ def dump_polars(
 
 
 def dump_numpy(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'np.typing.NDArray[np.int64]',
     cols: List[Tuple['np.typing.NDArray[Any]', 'np.typing.NDArray[np.bool_]']],
 ) -> bytes:
@@ -372,7 +427,7 @@ def dump_numpy(
 
     Parameters
     ----------
-    returns : List[int]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : List[int]
         Row IDs
@@ -392,7 +447,7 @@ def dump_numpy(
 
 
 def dump_arrow(
-    returns: List[int],
+    returns: List[Tuple[str, int, Optional[Transformer]]],
     row_ids: 'pa.Array[int]',
     cols: List[Tuple['pa.Array[int]', 'pa.Array[bool]']],
 ) -> bytes:
@@ -401,7 +456,7 @@ def dump_arrow(
 
     Parameters
     ----------
-    returns : List[int]
+    returns : List[Tuple[str, int, Optional[Transformer]]]
         The returned data type
     row_ids : pyarrow.Array[int]
         Row IDs
