@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # mypy: disable-error-code="type-arg"
 import asyncio
+import datetime
 import json
 import time
 import typing
@@ -26,6 +27,7 @@ from singlestoredb.functions.sql_types import SMALLINT
 from singlestoredb.functions.sql_types import TEXT
 from singlestoredb.functions.sql_types import TINYINT
 from singlestoredb.functions.typing import JSON
+from singlestoredb.functions.typing import MessagePack
 from singlestoredb.functions.typing import numpy as npt
 from singlestoredb.functions.typing import pandas as pdt
 from singlestoredb.functions.typing import polars as plt
@@ -3166,3 +3168,221 @@ def json_object_nonvector_tvf(
     for i in range(5):
         out.append((x * i, dict(x=x * i, y=y['foo'] if isinstance(y, dict) else None)))
     return Table(out)
+
+
+#
+# Begin MSGPACK UDFs
+#
+
+# numpy
+
+
+@udf
+def msgpack_object_numpy(
+    x: npt.IntArray,
+    y: npt.MessagePackArray,
+) -> npt.MessagePackArray:
+    """Create a numpy array of objects from int and MSGPACK arrays."""
+    return npt.array([
+        None if a == 0 and b is None else dict(
+            x=a * 2 if a is not None else None,
+            y=b['foo'] if b is not None else None,
+        ) for a, b in zip(x, y)
+    ])
+
+
+@udf
+def msgpack_object_numpy_masked(
+    x: Masked[npt.IntArray],
+    y: Masked[npt.MessagePackArray],
+) -> Masked[npt.MessagePackArray]:
+    """Create a masked numpy array of objects from masked int and MSGPACK arrays."""
+    (x_data, x_nulls), (y_data, y_nulls) = x, y
+    return Masked(
+        npt.array([
+            dict(
+                x=a * 2 if a is not None else 0,
+                y=b['foo'] if b is not None else None,
+            ) for a, b in zip(x_data, y_data)
+        ]),
+        x_nulls & y_nulls,
+    )
+
+
+# pandas
+
+
+@udf
+def msgpack_object_pandas(
+    x: pdt.IntSeries,
+    y: pdt.MessagePackSeries,
+) -> pdt.MessagePackSeries:
+    """Create a pandas Series of objects from int and MSGPACK series."""
+    return pdt.Series([
+        None if a == 0 and b is None else dict(
+            x=a * 2 if a is not None else None,
+            y=b['foo'] if b is not None else None,
+        ) for a, b in zip(x, y)
+    ])
+
+
+@udf
+def msgpack_object_pandas_masked(
+    x: Masked[pdt.IntSeries],
+    y: Masked[pdt.MessagePackSeries],
+) -> Masked[pdt.MessagePackSeries]:
+    """Create a masked pandas Series of objects from masked int and MSGPACK series."""
+    (x_data, x_nulls), (y_data, y_nulls) = x, y
+    return Masked(
+        pdt.Series([
+            dict(
+                x=a * 2 if a is not None else 0,
+                y=b['foo'] if b is not None else None,
+            ) for a, b in zip(x_data, y_data)
+        ]),
+        x_nulls & y_nulls,
+    )
+
+
+# polars
+
+
+@udf
+def msgpack_object_polars(
+    x: plt.IntSeries,
+    y: plt.MessagePackSeries,
+) -> plt.MessagePackSeries:
+    """Create a polars Series of objects from int and MSGPACK series."""
+    return plt.Series([
+        None if a == 0 and b is None else dict(
+            x=a * 2 if a is not None else None,
+            y=b['foo'] if b is not None else None,
+        ) for a, b in zip(x, y)
+    ])
+
+
+@udf
+def msgpack_object_polars_masked(
+    x: Masked[plt.IntSeries],
+    y: Masked[plt.MessagePackSeries],
+) -> Masked[plt.MessagePackSeries]:
+    """Create a masked polars Series of objects from masked int and MSGPACK series."""
+    (x_data, x_nulls), (y_data, y_nulls) = x, y
+    return Masked(
+        plt.Series([
+            dict(
+                x=a * 2 if a is not None else 0,
+                y=b['foo'] if b is not None else None,
+            ) for a, b in zip(x_data, y_data)
+        ]),
+        x_nulls & y_nulls,
+    )
+
+
+# list-based
+
+
+@udf
+def msgpack_object_list(x: List[int], y: List[MessagePack]) -> List[MessagePack]:
+    """Create a list of objects from int and MSGPACK lists."""
+    return [dict(x=x * 2, y=y['foo']) for x, y in zip(x, y)]  # type: ignore
+
+
+# non-vector
+
+
+@udf
+def msgpack_object_nonvector(x: int, y: MessagePack) -> MessagePack:
+    """Extract and transform values from a MSGPACK object."""
+    if not isinstance(y, dict):
+        raise ValueError('Expected dict for MSGPACK object')
+    return dict(x=x * 2, y=y['foo'])
+
+
+# timestamp tests
+
+
+@udf
+def msgpack_timestamp_nonvector(x: int, y: MessagePack) -> MessagePack:
+    """Extract timestamp from MessagePack object and return with metadata."""
+    if not isinstance(y, dict):
+        raise ValueError('Expected dict for MessagePack object')
+    ts = y.get('timestamp')
+    if ts is not None and isinstance(ts, datetime.datetime):
+        return dict(x=x, year=ts.year, month=ts.month, day=ts.day)
+    return dict(x=x, year=0, month=0, day=0)
+
+
+@udf
+def msgpack_timestamp_list(x: List[int], y: List[MessagePack]) -> List[MessagePack]:
+    """Process list of MessagePack objects with timestamps."""
+    out: List[MessagePack] = []
+    for xi, yi in zip(x, y):
+        if isinstance(yi, dict):
+            ts = yi.get('timestamp')
+            if ts is not None and isinstance(ts, datetime.datetime):
+                out.append(dict(x=xi, year=ts.year, month=ts.month, day=ts.day))
+            else:
+                out.append(dict(x=xi, year=0, month=0, day=0))
+        else:
+            out.append(dict(x=xi, year=0, month=0, day=0))
+    return out
+
+
+@udf
+def msgpack_timestamp_numpy(
+    x: npt.IntArray,
+    y: npt.MessagePackArray,
+) -> npt.MessagePackArray:
+    """Process numpy arrays with MessagePack timestamps."""
+    out = []
+    for xi, yi in zip(x, y):
+        if isinstance(yi, dict):
+            ts = yi.get('timestamp')
+            if ts is not None and isinstance(ts, datetime.datetime):
+                out.append(dict(x=int(xi), year=ts.year, month=ts.month, day=ts.day))
+            else:
+                out.append(dict(x=int(xi), year=0, month=0, day=0))
+        else:
+            out.append(dict(x=int(xi), year=0, month=0, day=0))
+    return np.array(out, dtype=object)
+
+
+@udf
+def msgpack_timestamp_pandas(
+    x: pdt.IntSeries,
+    y: pdt.MessagePackSeries,
+) -> pdt.MessagePackSeries:
+    """Process pandas Series with MessagePack timestamps."""
+    import pandas as pd
+    out = []
+    for xi, yi in zip(x, y):
+        if isinstance(yi, dict):
+            ts = yi.get('timestamp')
+            if ts is not None and isinstance(ts, datetime.datetime):
+                out.append(dict(x=int(xi), year=ts.year, month=ts.month, day=ts.day))
+            else:
+                out.append(dict(x=int(xi), year=0, month=0, day=0))
+        else:
+            out.append(dict(x=int(xi), year=0, month=0, day=0))
+    return pd.Series(out, dtype=object)
+
+
+@udf
+def msgpack_timestamp_polars(
+    x: plt.IntSeries,
+    y: plt.MessagePackSeries,
+) -> plt.MessagePackSeries:
+    """Process polars Series with MessagePack timestamps."""
+    import polars as pl
+    out = []
+    for xi, yi in zip(x, y):
+        if isinstance(yi, dict):
+            ts = yi.get('timestamp')
+            if ts is not None and isinstance(ts, datetime.datetime):
+                out.append(dict(x=int(xi), year=ts.year, month=ts.month, day=ts.day))
+            else:
+                out.append(dict(x=int(xi), year=0, month=0, day=0))
+        else:
+            out.append(dict(x=int(xi), year=0, month=0, day=0))
+    return pl.Series(out)

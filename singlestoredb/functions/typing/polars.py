@@ -11,6 +11,8 @@ try:
 except ImportError:
     from typing_extensions import TypeAlias  # type: ignore
 
+from . import msgpack_or_null_dumps
+from . import msgpack_or_null_loads
 from . import UDFAttrs
 from . import json_or_null_dumps
 from . import json_or_null_loads
@@ -115,4 +117,41 @@ JSONSeries: TypeAlias = Annotated[
 ]
 
 
-__all__ = ['DataFrame'] + [x for x in globals().keys() if x.endswith('Series')]
+def msgpack_polars_default(obj: Any) -> Any:
+    """Default function for msgpack that handles polars types."""
+    if isinstance(obj, pl.Series):
+        # Convert Polars Series to Python list
+        return obj.to_list()
+    elif hasattr(obj, 'dtype') and \
+            str(obj.dtype).startswith(('Int', 'UInt', 'Float')):
+        # Handle Polars scalar integer and float types
+        return obj.item() if hasattr(obj, 'item') else obj
+    elif isinstance(
+        obj, (
+            pl.datatypes.Int8, pl.datatypes.Int16, pl.datatypes.Int32,
+            pl.datatypes.Int64, pl.datatypes.UInt8, pl.datatypes.UInt16,
+            pl.datatypes.UInt32, pl.datatypes.UInt64,
+        ),
+    ):
+        return int(obj)
+    elif isinstance(obj, (pl.datatypes.Float32, pl.datatypes.Float64)):
+        return float(obj)
+    raise TypeError(f'Object of type {type(obj)} is not msgpack serializable')
+
+
+MessagePackSeries: TypeAlias = Annotated[
+    pl.Series,
+    UDFAttrs(
+        sql_type=sql_types.BLOB(nullable=False),
+        args_transformer=msgpack_or_null_loads,
+        returns_transformer=lambda x: msgpack_or_null_dumps(
+            x, default=msgpack_polars_default,
+        ),
+    ),
+]
+
+
+__all__ = ['DataFrame'] + [
+    x for x in globals().keys()
+    if x.endswith('Series')
+]

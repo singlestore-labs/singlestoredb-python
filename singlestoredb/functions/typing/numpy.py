@@ -11,6 +11,8 @@ try:
 except ImportError:
     from typing_extensions import TypeAlias  # type: ignore
 
+from . import msgpack_or_null_dumps
+from . import msgpack_or_null_loads
 from . import UDFAttrs
 from . import json_or_null_dumps
 from . import json_or_null_loads
@@ -107,4 +109,30 @@ JSONArray: TypeAlias = Annotated[
 ]
 
 
-__all__ = ['array'] + [x for x in globals().keys() if x.endswith('Array')]
+def msgpack_numpy_default(obj: Any) -> Any:
+    """Default function for msgpack that handles numpy types."""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    raise TypeError(f'Object of type {type(obj)} is not msgpack serializable')
+
+
+MessagePackArray: TypeAlias = Annotated[
+    npt.NDArray[np.object_],
+    UDFAttrs(
+        sql_type=sql_types.BLOB(nullable=False),
+        args_transformer=msgpack_or_null_loads,
+        returns_transformer=lambda x: msgpack_or_null_dumps(
+            x, default=msgpack_numpy_default,
+        ),
+    ),
+]
+
+
+__all__ = ['array'] + [
+    x for x in globals().keys()
+    if x.endswith('Array')
+]

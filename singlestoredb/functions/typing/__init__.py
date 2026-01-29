@@ -13,6 +13,13 @@ from typing import TypeVar
 from typing import Union
 
 try:
+    import msgpack
+    _has_msgpack = True
+except ImportError:
+    msgpack = None  # type: ignore[assignment]
+    _has_msgpack = False
+
+try:
     from typing import TypeVarTuple  # type: ignore
     from typing import Unpack  # type: ignore
     from typing import TypeAlias  # type: ignore
@@ -153,10 +160,86 @@ JSON: TypeAlias = Annotated[
 ]
 
 
+def msgpack_or_null_dumps(v: Optional[Any], **kwargs: Any) -> Optional[bytes]:
+    """
+    Serialize a Python object to MessagePack bytes or None.
+
+    Parameters
+    ----------
+    v : Optional[Any]
+        The Python object to serialize. If None or empty, the function returns None.
+    **kwargs : Any
+        Additional keyword arguments to pass to `msgpack.packb`.
+
+    Returns
+    -------
+    Optional[bytes]
+        The MessagePack bytes representation of the input object,
+        or None if the input is None or empty.
+
+    Raises
+    ------
+    ImportError
+        If msgpack is not installed.
+
+    """
+    if not _has_msgpack:
+        raise ImportError('msgpack is required for MessagePack serialization')
+    if not v:
+        return None
+    return msgpack.packb(v, datetime=True, **kwargs)
+
+
+# Force numpy dtype to 'object' to avoid issues with
+# numpy trying to infer the dtype and creating multidimensional arrays
+# instead of an array of Python objects.
+@output_type('object')
+def msgpack_or_null_loads(v: Optional[bytes], **kwargs: Any) -> Optional[Any]:
+    """
+    Deserialize MessagePack bytes to a Python object or None.
+
+    Parameters
+    ----------
+    v : Optional[bytes]
+        The MessagePack bytes to deserialize. If None or empty,
+        the function returns None.
+    **kwargs : Any
+        Additional keyword arguments to pass to `msgpack.unpackb`.
+
+    Returns
+    -------
+    Optional[Any]
+        The Python object represented by the MessagePack bytes,
+        or None if the input is None or empty.
+
+    Raises
+    ------
+    ImportError
+        If msgpack is not installed.
+
+    """
+    if not _has_msgpack:
+        raise ImportError('msgpack is required for MessagePack deserialization')
+    if not v:
+        return None
+    return msgpack.unpackb(v, raw=False, strict_map_key=False, timestamp=3, **kwargs)
+
+
+MessagePack: TypeAlias = Annotated[
+    Union[Dict[str, Any], List[Any], int, float, str, bool, bytes, None],
+    UDFAttrs(
+        sql_type=sql_types.BLOB(nullable=False),
+        args_transformer=msgpack_or_null_loads,
+        returns_transformer=msgpack_or_null_dumps,
+    ),
+]
+
+
 __all__ = [
     'Table',
     'Masked',
     'JSON',
+    'MessagePack',
     'UDFAttrs',
     'Transformer',
 ]

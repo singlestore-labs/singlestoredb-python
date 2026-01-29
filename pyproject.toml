@@ -51,6 +51,7 @@ test = [
     "fastapi",
     "ipython",
     "jupysql",
+    "msgpack>=1.0.0",
     "pandas",
     "parameterized",
     "polars",

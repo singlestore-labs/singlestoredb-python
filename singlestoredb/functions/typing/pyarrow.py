@@ -12,6 +12,8 @@ try:
 except ImportError:
     from typing_extensions import TypeAlias  # type: ignore
 
+from . import msgpack_or_null_dumps
+from . import msgpack_or_null_loads  # noqa: F401
 from . import UDFAttrs
 from . import json_or_null_dumps
 from . import json_or_null_loads  # noqa: F401
@@ -113,4 +115,38 @@ JSONArray: TypeAlias = Annotated[
 ]
 
 
-__all__ = ['Table', 'array'] + [x for x in globals().keys() if x.endswith('Array')]
+def msgpack_pyarrow_default(obj: Any) -> Any:
+    """Default function for msgpack that handles pyarrow types."""
+    if hasattr(obj, 'as_py'):
+        # Handle PyArrow scalar types (including individual ints and floats)
+        return obj.as_py()
+    elif isinstance(obj, pa.Array):
+        # Convert PyArrow Array to Python list
+        return obj.to_pylist()
+    elif isinstance(obj, pa.Table):
+        # Convert PyArrow Table to list of dictionaries
+        return obj.to_pydict()
+    raise TypeError(f'Object of type {type(obj)} is not msgpack serializable')
+
+
+#
+# NOTE: We don't use input_transformer=msgpack_or_null_loads because it doesn't handle
+#       all cases (e.g., when the input is already a dict/list).
+#
+
+MessagePackArray: TypeAlias = Annotated[
+    pa.Array,
+    UDFAttrs(
+        sql_type=sql_types.BLOB(nullable=True),
+        # input_transformer=msgpack_or_null_loads,
+        returns_transformer=lambda x: msgpack_or_null_dumps(
+            x, default=msgpack_pyarrow_default,
+        ),
+    ),
+]
+
+
+__all__ = ['Table', 'array'] + [
+    x for x in globals().keys()
+    if x.endswith('Array')
+]

@@ -4639,6 +4639,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
         while ((py_item = PyIter_Next(py_row_iter))) {
 
             py_item = apply_transformer(py_transformers[i], py_item);
+            if (!py_item) goto error;
             is_null = (uint8_t)(py_item == Py_None);
 
             CHECKMEM(1);
