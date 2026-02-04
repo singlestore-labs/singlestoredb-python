@@ -1,16 +1,27 @@
 #!/usr/bin/env python
 """SingleStoreDB Cloud Organization."""
+from __future__ import annotations
+
 import datetime
+from typing import Any
+from typing import cast
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import TYPE_CHECKING
 from typing import Union
 
 from ..exceptions import ManagementError
 from .inference_api import InferenceAPIManager
 from .job import JobsManager
 from .manager import Manager
+from .utils import NamedList
+from .utils import require_fields
+from .utils import to_datetime
 from .utils import vars_to_str
+
+if TYPE_CHECKING:
+    from .workspace import WorkspaceManager
 
 
 def listify(x: Union[str, List[str]]) -> List[str]:
@@ -30,76 +41,69 @@ class Secret(object):
     SingleStoreDB secrets definition.
 
     This object is not directly instantiated. It is used in results
-    of API calls on the :class:`Organization`. See :meth:`Organization.get_secret`.
+    of API calls on the :class:`WorkspaceManager`. Secrets are created using
+    :meth:`WorkspaceManager.create_secret`, or existing secrets are accessed
+    by either :attr:`WorkspaceManager.secrets` or by calling
+    :meth:`WorkspaceManager.get_secret_by_id`.
+
+    See Also
+    --------
+    :meth:`WorkspaceManager.create_secret`
+    :meth:`WorkspaceManager.get_secret_by_id`
+    :attr:`WorkspaceManager.secrets`
+
     """
+
+    id: str
+    name: str
+    value: Optional[str]
+    created_by: str
+    created_at: Optional[datetime.datetime]
+    last_updated_by: Optional[str]
+    last_updated_at: Optional[datetime.datetime]
+    deleted_by: Optional[str]
+    deleted_at: Optional[datetime.datetime]
 
     def __init__(
         self,
         id: str,
         name: str,
         created_by: str,
-        created_at: Union[str, datetime.datetime],
-        last_updated_by: str,
-        last_updated_at: Union[str, datetime.datetime],
+        created_at: Optional[datetime.datetime] = None,
+        last_updated_by: Optional[str] = None,
+        last_updated_at: Optional[datetime.datetime] = None,
         value: Optional[str] = None,
         deleted_by: Optional[str] = None,
-        deleted_at: Optional[Union[str, datetime.datetime]] = None,
+        deleted_at: Optional[datetime.datetime] = None,
     ):
-        # UUID of the secret
+        #: UUID of the secret
         self.id = id
 
-        # Name of the secret
+        #: Name of the secret
         self.name = name
 
-        # Value of the secret
+        #: Value of the secret
         self.value = value
 
-        # User who created the secret
+        #: User who created the secret
         self.created_by = created_by
 
-        # Time when the secret was created
+        #: Time when the secret was created
         self.created_at = created_at
 
-        # UUID of the user who last updated the secret
+        #: UUID of the user who last updated the secret
         self.last_updated_by = last_updated_by
 
-        # Time when the secret was last updated
+        #: Time when the secret was last updated
         self.last_updated_at = last_updated_at
 
-        # UUID of the user who deleted the secret
+        #: UUID of the user who deleted the secret
         self.deleted_by = deleted_by
 
-        # Time when the secret was deleted
+        #: Time when the secret was deleted
         self.deleted_at = deleted_at
 
-    @classmethod
-    def from_dict(cls, obj: Dict[str, str]) -> 'Secret':
-        """
-        Construct a Secret from a dictionary of values.
-
-        Parameters
-        ----------
-        obj : dict
-            Dictionary of values
-
-        Returns
-        -------
-        :class:`Secret`
-
-        """
-        out = cls(
-            id=obj['secretID'],
-            name=obj['name'],
-            created_by=obj['createdBy'],
-            created_at=obj['createdAt'],
-            last_updated_by=obj['lastUpdatedBy'],
-            last_updated_at=obj['lastUpdatedAt'],
-            value=obj.get('value'),
-            deleted_by=obj.get('deletedBy'),
-            deleted_at=obj.get('deletedAt'),
-        )
-
-        return out
+        self._manager: Optional[Manager] = None
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -108,6 +112,185 @@ class Secret(object):
     def __repr__(self) -> str:
         """Return string representation."""
         return str(self)
+
+    @classmethod
+    def from_dict(
+        cls,
+        obj: Dict[str, Any],
+        manager: Manager,
+    ) -> 'Secret':
+        """
+        Construct a Secret from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+        manager : Manager
+            The Manager the Secret belongs to
+
+        Returns
+        -------
+        :class:`Secret`
+
+        """
+        require_fields(obj, 'secretID', 'name', 'createdBy')
+        out = cls(
+            id=obj['secretID'],
+            name=obj['name'],
+            created_by=obj['createdBy'],
+            created_at=to_datetime(obj.get('createdAt')),
+            last_updated_by=obj.get('lastUpdatedBy'),
+            last_updated_at=to_datetime(obj.get('lastUpdatedAt')),
+            value=obj.get('value'),
+            deleted_by=obj.get('deletedBy'),
+            deleted_at=to_datetime(obj.get('deletedAt')),
+        )
+        out._manager = manager
+        return out
+
+    def update(
+        self,
+        name: Optional[str] = None,
+        value: Optional[str] = None,
+    ) -> None:
+        """
+        Update the secret.
+
+        Parameters
+        ----------
+        name : str, optional
+            New name for the secret
+        value : str, optional
+            New value for the secret
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        data: Dict[str, Any] = {}
+        if name is not None:
+            data['name'] = name
+        if value is not None:
+            data['value'] = value
+
+        if data:
+            self._manager._patch(f'secrets/{self.id}', json=data)
+            # Update local state
+            if name is not None:
+                self.name = name
+            if value is not None:
+                self.value = value
+
+    def delete(self) -> None:
+        """Delete the secret."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        self._manager._delete(f'secrets/{self.id}')
+
+    def get_access_controls(self) -> Dict[str, Any]:
+        """
+        Get access control information for this secret.
+
+        Returns
+        -------
+        dict
+            Access control information including grants
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get(f'secrets/{self.id}/accessControls')
+        return res.json()
+
+    def update_access_controls(
+        self,
+        grants: Optional[List[Dict[str, Any]]] = None,
+        revokes: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
+        """
+        Update access controls for this secret.
+
+        Parameters
+        ----------
+        grants : list of dict, optional
+            List of grants to add, each with 'identity' and 'role' keys
+        revokes : list of dict, optional
+            List of revokes to remove, each with 'identity' and 'role' keys
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        data: Dict[str, Any] = {}
+        if grants is not None:
+            data['grants'] = grants
+        if revokes is not None:
+            data['revokes'] = revokes
+
+        if data:
+            self._manager._patch(f'secrets/{self.id}/accessControls', json=data)
+
+
+class SecretsMixin:
+    """Mixin class that adds secret management methods to WorkspaceManager."""
+
+    @property
+    def secrets(self) -> NamedList[Secret]:
+        """Return a list of all secrets in the organization."""
+        manager = cast('WorkspaceManager', self)
+        res = manager._get('secrets')
+        return NamedList([
+            Secret.from_dict(item, manager)
+            for item in res.json().get('secrets', [])
+        ])
+
+    def get_secret_by_id(self, secret_id: str) -> Secret:
+        """
+        Retrieve a secret by ID.
+
+        Parameters
+        ----------
+        secret_id : str
+            ID of the secret
+
+        Returns
+        -------
+        :class:`Secret`
+
+        """
+        manager = cast('WorkspaceManager', self)
+        res = manager._get(f'secrets/{secret_id}')
+        return Secret.from_dict(res.json(), manager)
+
+    def create_secret(self, name: str, value: str) -> Secret:
+        """
+        Create a new secret.
+
+        Parameters
+        ----------
+        name : str
+            Name of the secret
+        value : str
+            Value of the secret
+
+        Returns
+        -------
+        :class:`Secret`
+
+        """
+        manager = cast('WorkspaceManager', self)
+        data = {'name': name, 'value': value}
+        res = manager._post('secrets', json=data)
+        return self.get_secret_by_id(res.json()['secretID'])
 
 
 class Organization(object):
@@ -154,7 +337,10 @@ class Organization(object):
 
         res = self._manager._get('secrets', params=dict(name=name))
 
-        secrets = [Secret.from_dict(item) for item in res.json()['secrets']]
+        secrets = [
+            Secret.from_dict(item, self._manager)
+            for item in res.json()['secrets']
+        ]
 
         if len(secrets) == 0:
             raise ManagementError(msg=f'Secret {name} not found')
@@ -224,3 +410,49 @@ class Organization(object):
         :class:`InferenceAPIManager`
         """
         return InferenceAPIManager(self._manager)
+
+    def get_access_controls(self) -> Dict[str, Any]:
+        """
+        Get access control information for this organization.
+
+        Returns
+        -------
+        dict
+            Access control information including grants
+
+        """
+        if self._manager is None:
+            raise ManagementError(msg='Organization not initialized')
+        res = self._manager._get(f'organizations/{self.id}/accessControls')
+        return res.json()
+
+    def update_access_controls(
+        self,
+        grants: Optional[List[Dict[str, Any]]] = None,
+        revokes: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
+        """
+        Update access controls for this organization.
+
+        Parameters
+        ----------
+        grants : list of dict, optional
+            List of grants to add, each with 'identity' and 'role' keys
+        revokes : list of dict, optional
+            List of revokes to remove, each with 'identity' and 'role' keys
+
+        """
+        if self._manager is None:
+            raise ManagementError(msg='Organization not initialized')
+
+        data: Dict[str, Any] = {}
+        if grants is not None:
+            data['grants'] = grants
+        if revokes is not None:
+            data['revokes'] = revokes
+
+        if data:
+            self._manager._patch(
+                f'organizations/{self.id}/accessControls',
+                json=data,
+            )

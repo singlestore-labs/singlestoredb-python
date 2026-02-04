@@ -21,6 +21,7 @@ from typing import Union
 from .. import config
 from .. import connection
 from ..exceptions import ManagementError
+from .audit_logs import AuditLogsMixin
 from .billing_usage import BillingUsageItem
 from .files import FileLocation
 from .files import FilesObject
@@ -28,12 +29,25 @@ from .files import FilesObjectBytesReader
 from .files import FilesObjectBytesWriter
 from .files import FilesObjectTextReader
 from .files import FilesObjectTextWriter
+from .invitations import InvitationsMixin
 from .manager import Manager
 from .organization import Organization
+from .organization import SecretsMixin
+from .private_connections import KaiPrivateConnectionInfo
+from .private_connections import OutboundAllowListEntry
+from .private_connections import PrivateConnection
+from .private_connections import PrivateConnectionsMixin
+from .projects import ProjectsMixin
 from .region import Region
+from .roles import RolesMixin
+from .storage import Storage
+from .teams import TeamsMixin
+from .users import UsersMixin
 from .utils import camel_to_snake_dict
 from .utils import from_datetime
 from .utils import NamedList
+from .utils import normalize_cloud_provider
+from .utils import normalize_deployment_type
 from .utils import PathLike
 from .utils import snake_to_camel
 from .utils import snake_to_camel_dict
@@ -740,6 +754,9 @@ class Workspace(object):
     resume_attachments: Optional[List[Dict[str, Any]]]
     scaling_progress: Optional[int]
     last_resumed_at: Optional[datetime.datetime]
+    kai_enabled: Optional[bool]
+    auto_scale: Optional[Dict[str, Any]]
+    scale_factor: Optional[int]
 
     def __init__(
         self,
@@ -757,6 +774,9 @@ class Workspace(object):
         resume_attachments: Optional[List[Dict[str, Any]]] = None,
         scaling_progress: Optional[int] = None,
         last_resumed_at: Optional[Union[str, datetime.datetime]] = None,
+        kai_enabled: Optional[bool] = None,
+        auto_scale: Optional[Dict[str, Any]] = None,
+        scale_factor: Optional[int] = None,
     ):
         #: Name of the workspace
         self.name = name
@@ -792,8 +812,11 @@ class Workspace(object):
         #: Multiplier for the persistent cache
         self.cache_config = cache_config
 
-        #: Deployment type of the workspace
-        self.deployment_type = deployment_type
+        #: Deployment type of the workspace (e.g., 'PRODUCTION', 'NON-PRODUCTION')
+        if deployment_type:
+            self.deployment_type = normalize_deployment_type(deployment_type)
+        else:
+            self.deployment_type = deployment_type
 
         #: Database attachments
         self.resume_attachments = [
@@ -807,6 +830,15 @@ class Workspace(object):
 
         #: Timestamp when workspace was last resumed
         self.last_resumed_at = to_datetime(last_resumed_at)
+
+        #: Whether Kai (MongoDB compatibility) is enabled
+        self.kai_enabled = kai_enabled
+
+        #: Auto-scale settings (max_scale_factor, sensitivity)
+        self.auto_scale = camel_to_snake_dict(auto_scale)
+
+        #: Scale factor for the workspace (1, 2, or 4)
+        self.scale_factor = scale_factor
 
         self._manager: Optional[WorkspaceManager] = None
 
@@ -850,6 +882,9 @@ class Workspace(object):
             last_resumed_at=obj.get('lastResumedAt'),
             resume_attachments=obj.get('resumeAttachments'),
             scaling_progress=obj.get('scalingProgress'),
+            kai_enabled=obj.get('kaiEnabled'),
+            auto_scale=obj.get('autoScale'),
+            scale_factor=obj.get('scaleFactor'),
         )
         out._manager = manager
         return out
@@ -860,6 +895,7 @@ class Workspace(object):
         cache_config: Optional[int] = None,
         deployment_type: Optional[str] = None,
         size: Optional[str] = None,
+        auto_scale: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Update the workspace definition.
@@ -874,9 +910,12 @@ class Workspace(object):
             multiplier. It can have one of the following values: 1, 2, or 4.
         deployment_type : str, optional
             The deployment type that will be applied to all the workspaces
-            within the group
+            within the group (case-insensitive)
         size : str, optional
             Size of the workspace (in workspace size notation), such as "S-1".
+        auto_scale : Dict[str, Any], optional
+            Auto-scale settings: dict(max_scale_factor=int, sensitivity=str).
+            sensitivity can be 'LOW', 'MEDIUM', or 'HIGH' (case-insensitive).
 
         """
         if self._manager is None:
@@ -887,8 +926,9 @@ class Workspace(object):
             k: v for k, v in dict(
                 autoSuspend=snake_to_camel_dict(auto_suspend),
                 cacheConfig=cache_config,
-                deploymentType=deployment_type,
+                deploymentType=normalize_deployment_type(deployment_type),
                 size=size,
+                autoScale=snake_to_camel_dict(auto_scale),
             ).items() if v is not None
         }
         self._manager._patch(f'workspaces/{self.id}', json=data)
@@ -1048,6 +1088,56 @@ class Workspace(object):
             )
             self.refresh()
 
+    @property
+    def private_connections(self) -> NamedList[PrivateConnection]:
+        """Return a list of private connections for this workspace."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get(f'workspaces/{self.id}/privateConnections')
+        return NamedList([
+            PrivateConnection.from_dict(item, self._manager)
+            for item in res.json()
+        ])
+
+    def get_kai_private_connection_info(self) -> KaiPrivateConnectionInfo:
+        """
+        Get Kai (MongoDB-compatible) private connection information.
+
+        Returns
+        -------
+        :class:`KaiPrivateConnectionInfo`
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get(f'workspaces/{self.id}/privateConnections/kai')
+        return KaiPrivateConnectionInfo.from_dict(res.json())
+
+    def get_outbound_allow_list(self) -> List[OutboundAllowListEntry]:
+        """
+        Get the outbound allow list for this workspace.
+
+        Returns
+        -------
+        List[:class:`OutboundAllowListEntry`]
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get(
+            f'workspaces/{self.id}/privateConnections/outboundAllowList',
+        )
+        return [
+            OutboundAllowListEntry.from_dict(item)
+            for item in res.json().get('allowList', [])
+        ]
+
 
 class WorkspaceGroup(object):
     """
@@ -1074,6 +1164,14 @@ class WorkspaceGroup(object):
     firewall_ranges: List[str]
     terminated_at: Optional[datetime.datetime]
     allow_all_traffic: bool
+    state: Optional[str]
+    deployment_type: Optional[str]
+    update_window: Optional[Dict[str, Any]]
+    smart_dr: Optional[bool]
+    expires_at: Optional[datetime.datetime]
+    project_id: Optional[str]
+    high_availability_two_zones: Optional[bool]
+    opt_in_preview_feature: Optional[bool]
 
     def __init__(
         self,
@@ -1084,6 +1182,14 @@ class WorkspaceGroup(object):
         firewall_ranges: List[str],
         terminated_at: Optional[Union[str, datetime.datetime]],
         allow_all_traffic: Optional[bool],
+        state: Optional[str] = None,
+        deployment_type: Optional[str] = None,
+        update_window: Optional[Dict[str, Any]] = None,
+        smart_dr: Optional[bool] = None,
+        expires_at: Optional[Union[str, datetime.datetime]] = None,
+        project_id: Optional[str] = None,
+        high_availability_two_zones: Optional[bool] = None,
+        opt_in_preview_feature: Optional[bool] = None,
     ):
         #: Name of the workspace group
         self.name = name
@@ -1105,6 +1211,33 @@ class WorkspaceGroup(object):
 
         #: Should all traffic be allowed?
         self.allow_all_traffic = allow_all_traffic or False
+
+        #: State of the workspace group (ACTIVE, PENDING, FAILED, TERMINATED)
+        self.state = state
+
+        #: Deployment type (PRODUCTION or NON-PRODUCTION)
+        if deployment_type:
+            self.deployment_type = normalize_deployment_type(deployment_type)
+        else:
+            self.deployment_type = deployment_type
+
+        #: Update window settings (day: 0-6, hour: 0-23)
+        self.update_window = camel_to_snake_dict(update_window)
+
+        #: Whether Smart Disaster Recovery is enabled
+        self.smart_dr = smart_dr
+
+        #: Timestamp of when the workspace group will expire
+        self.expires_at = to_datetime(expires_at)
+
+        #: Project ID this workspace group belongs to
+        self.project_id = project_id
+
+        #: Whether the workspace group spans two availability zones
+        self.high_availability_two_zones = high_availability_two_zones
+
+        #: Whether preview features are enabled (NON-PRODUCTION only)
+        self.opt_in_preview_feature = opt_in_preview_feature
 
         self._manager: Optional[WorkspaceManager] = None
 
@@ -1147,6 +1280,14 @@ class WorkspaceGroup(object):
             firewall_ranges=obj.get('firewallRanges', []),
             terminated_at=obj.get('terminatedAt'),
             allow_all_traffic=obj.get('allowAllTraffic'),
+            state=obj.get('state'),
+            deployment_type=obj.get('deploymentType'),
+            update_window=obj.get('updateWindow'),
+            smart_dr=obj.get('smartDR'),
+            expires_at=obj.get('expiresAt'),
+            project_id=obj.get('projectID'),
+            high_availability_two_zones=obj.get('highAvailabilityTwoZones'),
+            opt_in_preview_feature=obj.get('optInPreviewFeature'),
         )
         out._manager = manager
         return out
@@ -1192,6 +1333,7 @@ class WorkspaceGroup(object):
         expires_at: Optional[str] = None,
         allow_all_traffic: Optional[bool] = None,
         update_window: Optional[Dict[str, int]] = None,
+        deployment_type: Optional[str] = None,
     ) -> None:
         """
         Update the workspace group definition.
@@ -1217,6 +1359,8 @@ class WorkspaceGroup(object):
             Allow all traffic to the workspace group
         update_window : Dict[str, int], optional
             Specify the day and hour of an update window: dict(day=0-6, hour=0-23)
+        deployment_type : str, optional
+            Deployment type: 'PRODUCTION' or 'NON-PRODUCTION' (case-insensitive)
 
         """
         if self._manager is None:
@@ -1231,6 +1375,7 @@ class WorkspaceGroup(object):
                 expiresAt=expires_at,
                 allowAllTraffic=allow_all_traffic,
                 updateWindow=snake_to_camel_dict(update_window),
+                deploymentType=normalize_deployment_type(deployment_type),
             ).items() if v is not None
         }
         self._manager._patch(f'workspaceGroups/{self.id}', json=data)
@@ -1286,6 +1431,7 @@ class WorkspaceGroup(object):
         auto_suspend: Optional[Dict[str, Any]] = None,
         cache_config: Optional[int] = None,
         enable_kai: Optional[bool] = None,
+        scale_factor: Optional[int] = None,
         wait_on_active: bool = False,
         wait_interval: int = 10,
         wait_timeout: int = 600,
@@ -1308,6 +1454,8 @@ class WorkspaceGroup(object):
             multiplier. It can have one of the following values: 1, 2, or 4.
         enable_kai : bool, optional
             Whether to create a SingleStore Kai-enabled workspace
+        scale_factor : int, optional
+            Scale factor for the workspace. Valid values are 1, 2, or 4.
         wait_on_active : bool, optional
             Wait for the workspace to be active before returning
         wait_timeout : int, optional
@@ -1333,6 +1481,7 @@ class WorkspaceGroup(object):
             auto_suspend=snake_to_camel_dict(auto_suspend),
             cache_config=cache_config,
             enable_kai=enable_kai,
+            scale_factor=scale_factor,
             wait_on_active=wait_on_active,
             wait_interval=wait_interval,
             wait_timeout=wait_timeout,
@@ -1350,6 +1499,218 @@ class WorkspaceGroup(object):
         res = self._manager._get('workspaces', params=dict(workspaceGroupID=self.id))
         return NamedList(
             [Workspace.from_dict(item, self._manager) for item in res.json()],
+        )
+
+    @property
+    def private_connections(self) -> NamedList[PrivateConnection]:
+        """Return a list of private connections for this workspace group."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get(f'workspaceGroups/{self.id}/privateConnections')
+        return NamedList([
+            PrivateConnection.from_dict(item, self._manager)
+            for item in res.json()
+        ])
+
+    @property
+    def storage(self) -> Storage:
+        """
+        Access storage operations for this workspace group.
+
+        Returns
+        -------
+        :class:`Storage`
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        return Storage(self.id, self._manager)
+
+    def get_access_controls(self) -> Dict[str, Any]:
+        """
+        Get access control information for this workspace group.
+
+        Returns
+        -------
+        dict
+            Access control information including grants
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get(f'workspaceGroups/{self.id}/accessControls')
+        return res.json()
+
+    def update_access_controls(
+        self,
+        grants: Optional[List[Dict[str, Any]]] = None,
+        revokes: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
+        """
+        Update access controls for this workspace group.
+
+        Parameters
+        ----------
+        grants : list of dict, optional
+            List of grants to add, each with 'identity' and 'role' keys
+        revokes : list of dict, optional
+            List of revokes to remove, each with 'identity' and 'role' keys
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        data: Dict[str, Any] = {}
+        if grants is not None:
+            data['grants'] = grants
+        if revokes is not None:
+            data['revokes'] = revokes
+
+        if data:
+            self._manager._patch(
+                f'workspaceGroups/{self.id}/accessControls',
+                json=data,
+            )
+
+    def get_metrics(self) -> str:
+        """
+        Get metrics for this workspace group in OpenMetrics format.
+
+        Returns
+        -------
+        str
+            Metrics in OpenMetrics/Prometheus format
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        org = self._manager.organization
+        res = self._manager._get(
+            f'v2/organizations/{org.id}/workspaceGroups/{self.id}/metrics',
+        )
+        return res.text
+
+
+class StarterWorkspaceUser:
+    """
+    SingleStoreDB starter workspace user definition.
+
+    This object is not instantiated directly. It is used in the results
+    of API calls on the :class:`StarterWorkspace`. Users are created using
+    :meth:`StarterWorkspace.create_user`.
+
+    See Also
+    --------
+    :meth:`StarterWorkspace.create_user`
+    :meth:`StarterWorkspace.get_user`
+
+    """
+
+    id: str
+    name: str
+    password: Optional[str]
+
+    def __init__(
+        self,
+        user_id: str,
+        name: str,
+        starter_workspace_id: str,
+        password: Optional[str] = None,
+    ):
+        #: Unique ID of the user
+        self.id = user_id
+
+        #: Username
+        self.name = name
+
+        #: Password (only available immediately after creation)
+        self.password = password
+
+        self._starter_workspace_id = starter_workspace_id
+        self._manager: Optional[Manager] = None
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
+    @classmethod
+    def from_dict(
+        cls,
+        obj: Dict[str, Any],
+        starter_workspace_id: str,
+        manager: Manager,
+        password: Optional[str] = None,
+    ) -> 'StarterWorkspaceUser':
+        """
+        Construct a StarterWorkspaceUser from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+        starter_workspace_id : str
+            ID of the starter workspace this user belongs to
+        manager : Manager
+            The Manager the user belongs to
+        password : str, optional
+            Password (only available after creation)
+
+        Returns
+        -------
+        :class:`StarterWorkspaceUser`
+
+        """
+        out = cls(
+            user_id=obj.get('userID', ''),
+            name=obj.get('userName', ''),
+            starter_workspace_id=starter_workspace_id,
+            password=password,
+        )
+        out._manager = manager
+        return out
+
+    def update(self, password: str) -> None:
+        """
+        Update the user's password.
+
+        Parameters
+        ----------
+        password : str
+            New password for the user
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No manager is associated with this object.',
+            )
+        self._manager._patch(
+            f'sharedtier/virtualWorkspaces/{self._starter_workspace_id}/users/{self.id}',
+            json={'password': password},
+        )
+        self.password = password
+
+    def delete(self) -> None:
+        """Delete the user."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No manager is associated with this object.',
+            )
+        self._manager._delete(
+            f'sharedtier/virtualWorkspaces/{self._starter_workspace_id}/users/{self.id}',
         )
 
 
@@ -1518,7 +1879,7 @@ class StarterWorkspace(object):
         self,
         username: str,
         password: Optional[str] = None,
-    ) -> Dict[str, str]:
+    ) -> StarterWorkspaceUser:
         """
         Create a new user for this starter workspace.
 
@@ -1532,8 +1893,8 @@ class StarterWorkspace(object):
 
         Returns
         -------
-        Dict[str, str]
-            Dictionary containing 'userID' and 'password' of the created user
+        :class:`StarterWorkspaceUser`
+            The created user object
 
         Raises
         ------
@@ -1561,16 +1922,53 @@ class StarterWorkspace(object):
         if not user_id:
             raise ManagementError(msg='No userID returned from API')
 
-        # Return the password provided by user or generated by API
+        # Get the password provided by user or generated by API
         returned_password = password if password is not None \
             else response_data.get('password')
         if not returned_password:
             raise ManagementError(msg='No password available from API response')
 
-        return {
-            'user_id': user_id,
-            'password': returned_password,
-        }
+        user = StarterWorkspaceUser(
+            user_id=user_id,
+            name=username,
+            starter_workspace_id=self.id,
+            password=returned_password,
+        )
+        user._manager = self._manager
+        return user
+
+    def get_user(self, user_id: str) -> StarterWorkspaceUser:
+        """
+        Get a user by ID.
+
+        Parameters
+        ----------
+        user_id : str
+            The ID of the user to retrieve
+
+        Returns
+        -------
+        :class:`StarterWorkspaceUser`
+
+        Raises
+        ------
+        ManagementError
+            If no workspace manager is associated with this object.
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        res = self._manager._get(
+            f'sharedtier/virtualWorkspaces/{self.id}/users/{user_id}',
+        )
+
+        return StarterWorkspaceUser.from_dict(
+            res.json(),
+            self.id,
+            self._manager,
+        )
 
 
 class Billing(object):
@@ -1644,7 +2042,17 @@ class Organizations(object):
         return Organization.from_dict(res, self._manager)
 
 
-class WorkspaceManager(Manager):
+class WorkspaceManager(
+    AuditLogsMixin,
+    InvitationsMixin,
+    PrivateConnectionsMixin,
+    ProjectsMixin,
+    RolesMixin,
+    SecretsMixin,
+    TeamsMixin,
+    UsersMixin,
+    Manager,
+):
     """
     SingleStoreDB workspace manager.
 
@@ -1709,6 +2117,21 @@ class WorkspaceManager(Manager):
         return NamedList([Region.from_dict(item, self) for item in res.json()])
 
     @ttl_property(datetime.timedelta(hours=1))
+    def regions_v2(self) -> NamedList[Region]:
+        """
+        Return a list of available regions using the v2 API.
+
+        This is the non-deprecated version of the regions endpoint.
+
+        Returns
+        -------
+        :class:`NamedList` of :class:`Region`
+
+        """
+        res = self._get('v2/regions')
+        return NamedList([Region.from_dict(item, self) for item in res.json()])
+
+    @ttl_property(datetime.timedelta(hours=1))
     def shared_tier_regions(self) -> NamedList[Region]:
         """Return a list of regions that support shared tier workspaces."""
         res = self._get('regions/sharedtier')
@@ -1728,6 +2151,10 @@ class WorkspaceManager(Manager):
         smart_dr: Optional[bool] = None,
         allow_all_traffic: Optional[bool] = None,
         update_window: Optional[Dict[str, int]] = None,
+        deployment_type: Optional[str] = None,
+        high_availability_two_zones: Optional[bool] = None,
+        opt_in_preview_feature: Optional[bool] = None,
+        project_id: Optional[str] = None,
     ) -> WorkspaceGroup:
         """
         Create a new workspace group.
@@ -1770,6 +2197,14 @@ class WorkspaceManager(Manager):
             Allow all traffic to the workspace group
         update_window : Dict[str, int], optional
             Specify the day and hour of an update window: dict(day=0-6, hour=0-23)
+        deployment_type : str, optional
+            Deployment type: 'PRODUCTION' or 'NON-PRODUCTION' (case-insensitive)
+        high_availability_two_zones : bool, optional
+            Whether to deploy the workspace group across two availability zones
+        opt_in_preview_feature : bool, optional
+            Whether to enable preview features (only for NON-PRODUCTION)
+        project_id : str, optional
+            Project ID to assign the workspace group to
 
         Returns
         -------
@@ -1789,6 +2224,10 @@ class WorkspaceManager(Manager):
                 smartDR=smart_dr,
                 allowAllTraffic=allow_all_traffic,
                 updateWindow=snake_to_camel_dict(update_window),
+                deploymentType=normalize_deployment_type(deployment_type),
+                highAvailabilityTwoZones=high_availability_two_zones,
+                optInPreviewFeature=opt_in_preview_feature,
+                projectID=project_id,
             ),
         )
         return self.get_workspace_group(res.json()['workspaceGroupID'])
@@ -1801,6 +2240,7 @@ class WorkspaceManager(Manager):
         auto_suspend: Optional[Dict[str, Any]] = None,
         cache_config: Optional[int] = None,
         enable_kai: Optional[bool] = None,
+        scale_factor: Optional[int] = None,
         wait_on_active: bool = False,
         wait_interval: int = 10,
         wait_timeout: int = 600,
@@ -1825,6 +2265,8 @@ class WorkspaceManager(Manager):
             multiplier. It can have one of the following values: 1, 2, or 4.
         enable_kai : bool, optional
             Whether to create a SingleStore Kai-enabled workspace
+        scale_factor : int, optional
+            Scale factor for the workspace. Valid values are 1, 2, or 4.
         wait_on_active : bool, optional
             Wait for the workspace to be active before returning
         wait_timeout : int, optional
@@ -1848,6 +2290,7 @@ class WorkspaceManager(Manager):
                 autoSuspend=snake_to_camel_dict(auto_suspend),
                 cacheConfig=cache_config,
                 enableKai=enable_kai,
+                scaleFactor=scale_factor,
             ),
         )
         out = self.get_workspace(res.json()['workspaceID'])
@@ -1934,7 +2377,7 @@ class WorkspaceManager(Manager):
         database_name : str
             Name of the database for the starter workspace
         provider : str
-            Cloud provider for the starter workspace (e.g., 'aws', 'gcp', 'azure')
+            Cloud provider for the starter workspace (e.g., 'AWS', 'GCP', 'Azure')
         region_name : str
             Cloud provider region for the starter workspace (e.g., 'us-east-1')
 
@@ -1946,7 +2389,7 @@ class WorkspaceManager(Manager):
         payload = {
             'name': name,
             'databaseName': database_name,
-            'provider': provider,
+            'provider': normalize_cloud_provider(provider),
             'regionName': region_name,
         }
 

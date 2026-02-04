@@ -99,3 +99,4 @@ dask-worker-space
 singlestoredb/mysql/tests/databases.json
 
 trees
+uv.lock

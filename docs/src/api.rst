@@ -258,13 +258,34 @@ create new ones.
    WorkspaceManager.workspace_groups
    WorkspaceManager.starter_workspaces
    WorkspaceManager.regions
+   WorkspaceManager.regions_v2
    WorkspaceManager.shared_tier_regions
+   WorkspaceManager.billing
    WorkspaceManager.create_workspace_group
    WorkspaceManager.create_workspace
    WorkspaceManager.create_starter_workspace
    WorkspaceManager.get_workspace_group
    WorkspaceManager.get_workspace
    WorkspaceManager.get_starter_workspace
+   WorkspaceManager.invitations
+   WorkspaceManager.get_invitation
+   WorkspaceManager.create_invitation
+   WorkspaceManager.users
+   WorkspaceManager.current_user
+   WorkspaceManager.get_user
+   WorkspaceManager.add_user
+   WorkspaceManager.teams
+   WorkspaceManager.get_team
+   WorkspaceManager.create_team
+   WorkspaceManager.get_roles
+   WorkspaceManager.get_role
+   WorkspaceManager.create_role
+   WorkspaceManager.secrets
+   WorkspaceManager.get_secret_by_id
+   WorkspaceManager.create_secret
+   WorkspaceManager.get_audit_logs
+   WorkspaceManager.create_private_connection
+   WorkspaceManager.get_private_connection
 
 
 WorkspaceGroup
@@ -279,10 +300,15 @@ or by retrieving an element from :attr:`WorkspaceManager.workspace_groups`.
    WorkspaceGroup
    WorkspaceGroup.workspaces
    WorkspaceGroup.stage
+   WorkspaceGroup.storage
    WorkspaceGroup.create_workspace
    WorkspaceGroup.refresh
    WorkspaceGroup.update
    WorkspaceGroup.terminate
+   WorkspaceGroup.private_connections
+   WorkspaceGroup.get_access_controls
+   WorkspaceGroup.update_access_controls
+   WorkspaceGroup.get_metrics
 
 
 Workspace
@@ -300,12 +326,18 @@ Workspaces are created within WorkspaceGroups. They can be created using either
    Workspace.refresh
    Workspace.update
    Workspace.terminate
+   Workspace.suspend
+   Workspace.resume
+   Workspace.private_connections
+   Workspace.get_kai_private_connection_info
+   Workspace.get_outbound_allow_list
 
 
 Region
 ......
 
-Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
+Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute
+or through the :class:`RegionManager`.
 
 .. currentmodule:: singlestoredb.management.region
 
@@ -313,6 +345,19 @@ Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
    :toctree: generated/
 
    Region
+
+
+RegionManager
+^^^^^^^^^^^^^
+
+RegionManager provides methods for listing available regions.
+
+.. autosummary::
+   :toctree: generated/
+
+   RegionManager
+   RegionManager.list_regions
+   RegionManager.list_shared_tier_regions
 
 
 Organization
@@ -330,6 +375,8 @@ They provide access to organization-level resources and operations.
    Organization.get_secret
    Organization.jobs
    Organization.inference_apis
+   Organization.get_access_controls
+   Organization.update_access_controls
 
 
 Secret
@@ -342,6 +389,290 @@ They represent organization-wide secrets that can be used in various operations.
    :toctree: generated/
 
    Secret
+   Secret.update
+   Secret.delete
+   Secret.get_access_controls
+   Secret.update_access_controls
+
+
+Cluster Management
+..................
+
+The :func:`manage_cluster` function provides access to cluster management functionality.
+
+.. currentmodule:: singlestoredb
+
+.. autosummary::
+   :toctree: generated/
+
+   manage_cluster
+
+
+ClusterManager
+^^^^^^^^^^^^^^
+
+ClusterManager objects are returned by the :func:`manage_cluster` function.
+They allow you to create and manage clusters.
+
+.. currentmodule:: singlestoredb.management.cluster
+
+.. autosummary::
+   :toctree: generated/
+
+   ClusterManager
+   ClusterManager.clusters
+   ClusterManager.regions
+   ClusterManager.create_cluster
+   ClusterManager.get_cluster
+
+
+Cluster
+^^^^^^^
+
+Cluster objects represent SingleStore clusters. They can be created using
+:meth:`ClusterManager.create_cluster` or retrieved from :attr:`ClusterManager.clusters`.
+
+.. autosummary::
+   :toctree: generated/
+
+   Cluster
+   Cluster.connect
+   Cluster.refresh
+   Cluster.update
+   Cluster.suspend
+   Cluster.resume
+   Cluster.terminate
+
+
+User Management
+...............
+
+User objects represent users in your organization.
+
+.. currentmodule:: singlestoredb.management.users
+
+.. autosummary::
+   :toctree: generated/
+
+   User
+   User.get_identity_roles
+   User.remove
+
+
+Team Management
+...............
+
+Team objects allow you to organize users into groups.
+
+.. currentmodule:: singlestoredb.management.teams
+
+.. autosummary::
+   :toctree: generated/
+
+   Team
+   Team.refresh
+   Team.update
+   Team.delete
+   Team.get_access_controls
+   Team.update_access_controls
+   Team.get_identity_roles
+
+
+Role Management
+...............
+
+Role objects define permissions within your organization.
+
+.. currentmodule:: singlestoredb.management.roles
+
+.. autosummary::
+   :toctree: generated/
+
+   Role
+   Role.update
+   Role.delete
+
+
+Invitation Management
+.....................
+
+Invitation objects represent invitations to join your organization.
+
+.. currentmodule:: singlestoredb.management.invitations
+
+.. autosummary::
+   :toctree: generated/
+
+   Invitation
+   Invitation.revoke
+
+
+Audit Logging
+.............
+
+Audit logs track changes and actions within your organization.
+
+.. currentmodule:: singlestoredb.management.audit_logs
+
+.. autosummary::
+   :toctree: generated/
+
+   AuditLog
+   AuditLogResult
+
+
+Private Connections
+...................
+
+Private connections allow you to establish private network connectivity
+to your workspaces.
+
+.. currentmodule:: singlestoredb.management.private_connections
+
+.. autosummary::
+   :toctree: generated/
+
+   PrivateConnection
+   PrivateConnection.refresh
+   PrivateConnection.update
+   PrivateConnection.delete
+   OutboundAllowListEntry
+   KaiPrivateConnectionInfo
+
+
+Billing
+.......
+
+Billing objects provide access to usage and billing information.
+
+.. currentmodule:: singlestoredb.management.workspace
+
+.. autosummary::
+   :toctree: generated/
+
+   Billing
+   Billing.usage
+
+.. currentmodule:: singlestoredb.management.billing_usage
+
+.. autosummary::
+   :toctree: generated/
+
+   UsageItem
+   BillingUsageItem
+
+
+Starter Workspaces
+..................
+
+Starter workspaces provide a free tier option for development and testing.
+
+.. currentmodule:: singlestoredb.management.workspace
+
+.. autosummary::
+   :toctree: generated/
+
+   StarterWorkspace
+   StarterWorkspace.connect
+   StarterWorkspace.terminate
+   StarterWorkspace.refresh
+   StarterWorkspace.create_user
+   StarterWorkspace.get_user
+   StarterWorkspaceUser
+   StarterWorkspaceUser.update
+   StarterWorkspaceUser.delete
+
+
+Storage and Disaster Recovery
+.............................
+
+Storage objects provide access to workspace group storage settings
+and disaster recovery functionality.
+
+.. currentmodule:: singlestoredb.management.storage
+
+.. autosummary::
+   :toctree: generated/
+
+   Storage
+   Storage.dr
+   Storage.update_retention_period
+
+
+DisasterRecovery
+^^^^^^^^^^^^^^^^
+
+DisasterRecovery objects manage disaster recovery configuration and operations.
+
+.. autosummary::
+   :toctree: generated/
+
+   DisasterRecovery
+   DisasterRecovery.get_status
+   DisasterRecovery.get_regions
+   DisasterRecovery.setup
+   DisasterRecovery.failover
+   DisasterRecovery.failback
+   DisasterRecovery.start_pre_provision
+   DisasterRecovery.stop_pre_provision
+   DRStatus
+   DRRegion
+
+
+Export Service
+..............
+
+Export services allow you to replicate data from SingleStore to external systems.
+
+.. currentmodule:: singlestoredb.management.export
+
+.. autosummary::
+   :toctree: generated/
+
+   ExportService
+   ExportService.create_cluster_identity
+   ExportService.start
+   ExportService.suspend
+   ExportService.resume
+   ExportService.drop
+   ExportService.status
+   ExportStatus
+
+
+Inference API
+.............
+
+Inference API management allows you to deploy and manage ML models.
+
+.. currentmodule:: singlestoredb.management.inference_api
+
+.. autosummary::
+   :toctree: generated/
+
+   InferenceAPIManager
+   InferenceAPIManager.get
+   InferenceAPIManager.start
+   InferenceAPIManager.stop
+   InferenceAPIManager.show
+   InferenceAPIManager.drop
+   InferenceAPIInfo
+   InferenceAPIInfo.start
+   InferenceAPIInfo.stop
+   InferenceAPIInfo.drop
+   ModelOperationResult
+
+
+Projects
+........
+
+Project objects represent projects within your organization.
+
+.. currentmodule:: singlestoredb.management.projects
+
+.. autosummary::
+   :toctree: generated/
+
+   Project
 
 
 Jobs Management
