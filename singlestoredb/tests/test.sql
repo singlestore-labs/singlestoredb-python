@@ -708,5 +708,10 @@ INSERT INTO bool_data_with_nulls SET id='nt', bool_a=NULL, bool_b=TRUE;
 INSERT INTO bool_data_with_nulls SET id='nn', bool_a=NULL, bool_b=NULL;
 INSERT INTO bool_data_with_nulls SET id='ff', bool_a=FALSE, bool_b=FALSE;
 
+CREATE TABLE IF NOT EXISTS test_val_with_percent (
+    i VARCHAR(16)
+);
+-- Double percent sign for execution from python
+INSERT INTO test_val_with_percent VALUES ('a%a');
 
 COMMIT;

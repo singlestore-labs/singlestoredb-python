@@ -3144,6 +3144,30 @@ class TestConnection(unittest.TestCase):
             decimal=2,
         )
 
+    def test_mogrify_val_with_percent(self):
+        conn = s2.connect(
+            database=type(self).dbname,
+            interpolate_query_with_empty_args=True,
+        )
+        cur = conn.cursor()
+        val_with_percent = 'a%a'
+        cur.execute(
+            '''SELECT REPLACE(i, "%%", "\\%%")
+            FROM test_val_with_percent''',
+            (),
+        )
+        res1 = cur.fetchall()
+        assert res1[0][0] == 'a\\%a'
+
+        cur.execute(
+            '''SELECT REPLACE(i, "%%", "\\%%")
+            FROM test_val_with_percent
+            WHERE i = %s''',
+            (val_with_percent,),
+        )
+        res2 = cur.fetchall()
+        assert res2[0][0] == 'a\\%a'
+
 
 if __name__ == '__main__':
     import nose2

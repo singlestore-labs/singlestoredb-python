@@ -252,6 +252,12 @@ register_option(
 )
 
 register_option(
+    'interpolate_query_with_empty_args', 'bool', check_bool, False,
+    'Should mogrify apply string interpolation when args is an empty tuple/list? ',
+    environ='SINGLESTOREDB_INTERPOLATE_QUERY_WITH_EMPTY_ARGS',
+)
+
+register_option(
     'fusion.enabled', 'bool', check_bool, False,
     'Should Fusion SQL queries be enabled?',
     environ='SINGLESTOREDB_FUSION_ENABLED',

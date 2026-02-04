@@ -6,6 +6,7 @@ from . import err
 from ..connection import Cursor as BaseCursor
 from ..utils import results
 from ..utils.debug import log_query
+from ..utils.mogrify import should_interpolate_query
 from ..utils.results import get_schema
 
 try:
@@ -181,7 +182,7 @@ class Cursor(BaseCursor):
         """
         conn = self._get_db()
 
-        if args:
+        if should_interpolate_query(conn.interpolate_query_with_empty_args, args):
             query = query % self._escape_args(args, conn)
 
         return query

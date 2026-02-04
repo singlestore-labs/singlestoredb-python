@@ -1118,9 +1118,15 @@ class Connection(metaclass=abc.ABCMeta):
     def _convert_params(
         cls, oper: str,
         params: Optional[Union[Sequence[Any], Dict[str, Any], Any]],
+        interpolate_query_with_empty_args: bool = False,
     ) -> Tuple[Any, ...]:
         """Convert query to correct parameter format."""
-        if params:
+        if interpolate_query_with_empty_args:
+            should_convert = params is not None
+        else:
+            should_convert = bool(params)
+
+        if should_convert:
 
             if cls._map_param_converter is None:
                 cls._map_param_converter = sqlparams.SQLParams(
@@ -1333,6 +1339,7 @@ def connect(
     enable_extended_data_types: Optional[bool] = None,
     vector_data_format: Optional[str] = None,
     parse_json: Optional[bool] = None,
+    interpolate_query_with_empty_args: Optional[bool] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1418,6 +1425,9 @@ def connect(
         Should extended data types (BSON, vector) be enabled?
     vector_data_format : str, optional
         Format for vector types: json or binary
+    interpolate_query_with_empty_args : bool, optional
+        Should the connector apply parameter interpolation even when the
+        parameters are empty? This corresponds to pymysql/mysqlclient's handling
 
     Examples
     --------
