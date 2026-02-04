@@ -145,12 +145,7 @@ def mogrify(
     str : The query with argument binding applied.
 
     """
-    if interpolate_query_with_empty_args:
-        should_interpolate = args is not None
-    else:
-        should_interpolate = bool(args)
-
-    if should_interpolate:
+    if should_interpolate_query(interpolate_query_with_empty_args, args):
         query = query % _escape_args(
             args, charset=charset,
             encoders=encoders,
@@ -158,3 +153,12 @@ def mogrify(
             binary_prefix=binary_prefix,
         )
     return query
+
+
+def should_interpolate_query(
+    interpolate_query_with_empty_args: bool,
+    args: Union[Sequence[Any], Dict[str, Any], None],
+) -> bool:
+    if interpolate_query_with_empty_args:
+        return args is not None
+    return bool(args)
