@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.16.9 - February 5, 2026
+--------------------------
+* Apply string interpolation in mogrify if args is not None (#118)
+
 v1.16.8 - January 9, 2026
 -------------------------
 * Add float16 (half-precision) vector support (#117)

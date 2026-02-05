@@ -99,3 +99,5 @@ dask-worker-space
 singlestoredb/mysql/tests/databases.json
 
 trees
+CODIFI_**
+msgpack-wasm
