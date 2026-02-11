@@ -4,6 +4,32 @@ Fork this repo and commit your changes to the forked repo.
 From there make a Pull Request with your submission keeping the
 following in mind:
 
+## Setting up a development environment
+
+Use [uv](https://docs.astral.sh/uv/) to create a virtual environment and install
+development dependencies:
+
+```bash
+# Create and activate a virtual environment
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install the package with all development dependencies
+uv pip install -e ".[dev]"
+
+# Install pre-commit hooks (required for contributions)
+pre-commit install
+```
+
+Alternatively, use standard pip:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+pre-commit install
+```
+
 ## Pre-commit checks on the clone of this repo
 
 The CI pipeline in this repo runs a bunch of validation checks and code
@@ -28,25 +54,11 @@ pre-commit run --all-files
 ### Prerequisites
 
 Before running tests, ensure you have:
+- **Development environment set up** (see above)
 - **Docker installed and running** (for automatic test database management)
-- Test dependencies installed: `pip install -e ".[test]"` or `pip install -e ".[dev]"` for all development dependencies
 
-The `docker` Python package is required for the test framework to manage Docker containers automatically.
-
-### Installation
-
-To create a test environment:
-```bash
-pip install -e ".[dev]"  # All development dependencies (recommended)
-```
-
-Or if you only need specific dependency groups:
-```bash
-pip install -e ".[test]"      # Just testing dependencies
-pip install -e ".[docs]"      # Just documentation dependencies
-pip install -e ".[build]"     # Just build dependencies
-pip install -e ".[examples]"  # Just example/demo dependencies
-```
+The `docker` Python package (included in `[dev]` and `[test]` extras) is required
+for the test framework to manage Docker containers automatically.
 
 ### Basic Testing
 
@@ -136,7 +148,7 @@ The following environment variables control test behavior:
 
 - **`SINGLESTOREDB_PURE_PYTHON`**: Set to `1` to disable C acceleration and test in pure Python mode.
 
-- **`SINGLESTOREDB_MANAGEMENT_TOKEN`**: Management API token for testing management features (mark tests with `@pytest.mark.management`).
+- **`SINGLESTOREDB_MANAGEMENT_TOKEN`**: Management API token for testing management features. Get your API key from the [SingleStore Portal](https://portal.singlestore.com/). Tests marked with `@pytest.mark.management` will create and delete workspace groups/workspaces in your organization.
 
 ### Testing Best Practices
 
@@ -152,6 +164,10 @@ The following environment variables control test behavior:
    ```
 
 3. **Management API tests**: These require a management token and are marked with `@pytest.mark.management`.
+   - Set `SINGLESTOREDB_MANAGEMENT_TOKEN` to your API key
+   - **Warning**: These tests create actual workspace groups and workspaces in the SingleStore Launchpad organization associated with your API key
+   - Resources are cleaned up after tests, but failed tests may leave orphaned resources
+   - To skip management tests: `pytest -v -m 'not management' singlestoredb/tests`
 
 ### Examples
 
@@ -172,3 +188,96 @@ SINGLESTOREDB_URL=admin:pass@localhost:3306 pytest -v singlestoredb/tests
 # Debug mode with verbose output
 pytest -vv -s singlestoredb/tests/test_basics.py
 ```
+
+## Version Bumping and Releases
+
+This section documents the process for creating new releases of the SDK.
+
+### Bumping the Version
+
+Use the `resources/bump_version.py` script to increment the version number
+and prepare release notes.
+
+```bash
+# Bump patch version (1.2.3 -> 1.2.4)
+python resources/bump_version.py patch
+
+# Bump minor version (1.2.3 -> 1.3.0)
+python resources/bump_version.py minor
+
+# Bump major version (1.2.3 -> 2.0.0)
+python resources/bump_version.py major
+
+# Provide custom release notes (supports reStructuredText)
+python resources/bump_version.py patch --summary "* Fixed critical bug in connection handling"
+```
+
+The script performs the following steps:
+1. Reads the current version from `pyproject.toml`
+2. Calculates the new version based on bump type
+3. Updates version in both `pyproject.toml` and `singlestoredb/__init__.py`
+4. Generates release notes from git history (or uses provided summary)
+5. Opens an editor to customize release notes for `docs/src/whatsnew.rst`
+6. Builds the documentation
+7. Stages all modified files for commit
+8. Optionally commits and pushes changes
+
+### Creating a Release
+
+After version bumping and CI tests pass, use the `resources/create_release.py`
+script to create a GitHub release.
+
+```bash
+# Create release using version from pyproject.toml
+python resources/create_release.py
+
+# Create release for a specific version
+python resources/create_release.py --version 1.16.9
+
+# Preview without creating (dry run)
+python resources/create_release.py --dry-run
+```
+
+The script:
+1. Checks prerequisites (gh CLI installed, authenticated with GitHub)
+2. Extracts version from `pyproject.toml` (or uses specified version)
+3. Reads release notes from `docs/src/whatsnew.rst`
+4. Creates a GitHub release with tag `v<version>`
+
+**Prerequisites**: The GitHub CLI (`gh`) must be installed and authenticated.
+Install from https://cli.github.com/ and run `gh auth login`.
+
+### Complete Release Workflow
+
+1. **Bump the version**:
+   ```bash
+   python resources/bump_version.py patch
+   ```
+
+2. **Review and edit release notes** in the editor that opens
+
+3. **Commit and push** (the script prompts for this, or do manually):
+   ```bash
+   git commit -m "Prepare for v1.x.x release" && git push
+   ```
+
+4. **Wait for CI tests to pass** on GitHub Actions
+
+5. **Create the GitHub release**:
+   ```bash
+   python resources/create_release.py
+   ```
+
+6. **Verify PyPI publish** workflow completes successfully
+   (triggered automatically by the GitHub release). Check the
+   [PyPI package page](https://pypi.org/project/singlestoredb/) to confirm
+   the new version is available.
+
+### Version File Locations
+
+Version numbers are stored in two locations that must stay in sync:
+- `pyproject.toml` (line 7): Package metadata version
+- `singlestoredb/__init__.py` (line 16): `__version__` variable
+
+The `bump_version.py` script handles updating both files automatically.
+Never edit these manually unless you update both locations.

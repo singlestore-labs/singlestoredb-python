@@ -31,12 +31,12 @@ dependencies = [
 Homepage = "https://github.com/singlestore-labs/singlestoredb-python"
 
 [project.optional-dependencies]
-dataframe = ["ibis-singlestoredb"]
+dataframe = ["ibis-framework[singlestoredb]"]
 dbt = ["dbt-singlestore"]
 docker = ["docker"]
 ed22519 = ["PyNaCl>=1.4.0"]
 gssapi = ["gssapi"]
-ibis = ["ibis-singlestoredb"]
+ibis = ["ibis-framework[singlestoredb]"]
 kerberos = ["gssapi"]
 pytest = ["pytest"]
 rsa = ["cryptography"]
