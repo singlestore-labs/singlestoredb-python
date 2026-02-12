@@ -261,16 +261,18 @@ Install from https://cli.github.com/ and run `gh auth login`.
    git commit -m "Prepare for v1.x.x release" && git push
    ```
 
-4. **Wait for CI tests to pass** on GitHub Actions
+4. **Wait for CI tests to pass** on GitHub Actions:
+   - [Coverage tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml)
+   - [Smoke tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml)
 
 5. **Create the GitHub release**:
    ```bash
    python resources/create_release.py
    ```
 
-6. **Verify PyPI publish** workflow completes successfully
-   (triggered automatically by the GitHub release). Check the
-   [PyPI package page](https://pypi.org/project/singlestoredb/) to confirm
+6. **Verify [PyPI publish](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/publish.yml)**
+   workflow completes successfully (triggered automatically by the GitHub release).
+   Check the [PyPI package page](https://pypi.org/project/singlestoredb/) to confirm
    the new version is available.
 
 ### Version File Locations
