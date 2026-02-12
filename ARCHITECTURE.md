@@ -141,10 +141,10 @@ conn = s2.connect('http://user:password@host:9000/database')
 └─────────────────────────────────────────────────────────────────────┘
                                    │
                                    ▼
-                    ┌─────────────────────────────┐
+                    ┌─────────────────────────────────┐
                     │  _parse_url() + build_params()  │
-                    │  Extract driver from scheme │
-                    └─────────────────────────────┘
+                    │  Extract driver from scheme     │
+                    └─────────────────────────────────┘
                                    │
               ┌────────────────────┼────────────────────┐
               ▼                    ▼                    ▼
@@ -648,11 +648,11 @@ as SingleStore external functions.
 │                     Execution Modes                                 │
 │                 singlestoredb/functions/ext/                        │
 ├─────────────────────────────────────────────────────────────────────┤
-│  asgi.py    │  HTTP server via ASGI (Uvicorn)                      │
-│  mmap.py    │  Memory-mapped shared memory (collocated)            │
-│  json.py    │  JSON serialization over HTTP                        │
-│  rowdat_1.py│  ROWDAT_1 binary format                              │
-│  arrow.py   │  Apache Arrow columnar format                        │
+│  asgi.py    │  HTTP server via ASGI (Uvicorn)                       │
+│  mmap.py    │  Memory-mapped shared memory (collocated)             │
+│  json.py    │  JSON serialization over HTTP                         │
+│  rowdat_1.py│  ROWDAT_1 binary format                               │
+│  arrow.py   │  Apache Arrow columnar format                         │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -707,11 +707,11 @@ The `signature.py` module maps Python types to SQL types:
          │ ASGI/HTTP          │ Memory-mapped      │ JSON
          │ (remote)           │ (collocated)       │ (simple)
          ▼                    ▼                    ▼
-┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-│   asgi.py   │      │   mmap.py   │      │   json.py   │
-│  Uvicorn    │      │  Shared     │      │  Simple     │
-│  HTTP/2     │      │  Memory     │      │  Serialize  │
-└─────────────┘      └─────────────┘      └─────────────┘
+   ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
+   │   asgi.py   │      │   mmap.py   │      │   json.py   │
+   │  Uvicorn    │      │  Shared     │      │  Simple     │
+   │  HTTP/2     │      │  Memory     │      │  Serialize  │
+   └─────────────┘      └─────────────┘      └─────────────┘
          │                    │                    │
          └────────────────────┼────────────────────┘
                               ▼
