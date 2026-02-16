@@ -558,7 +558,7 @@ def manage_files(
     access_token : str, optional
         The API key or other access token for the files management API
     version : str, optional
-        Version of the API to use
+        Version of the API to use (default: 'v1')
     base_url : str, optional
         Base URL of the files management API
     organization_id : str, optional

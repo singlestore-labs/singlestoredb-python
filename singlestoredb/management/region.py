@@ -153,7 +153,7 @@ def manage_regions(
     access_token : str, optional
         The API key or other access token for the workspace management API
     version : str, optional
-        Version of the API to use
+        Version of the API to use (default: 'v1')
     base_url : str, optional
         Base URL of the workspace management API
 
