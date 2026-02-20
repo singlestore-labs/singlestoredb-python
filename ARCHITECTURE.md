@@ -94,7 +94,7 @@ singlestoredb/
 │   ├── decorator.py         # @udf decorator
 │   ├── signature.py         # Type signature handling
 │   ├── dtypes.py            # Data type mapping
-│   └── ext/                 # Execution modes
+│   └── ext/                 # External function servers
 │       ├── asgi.py          # HTTP/ASGI server
 │       ├── mmap.py          # Memory-mapped execution
 │       ├── json.py          # JSON serialization
@@ -105,7 +105,7 @@ singlestoredb/
 │   ├── chat.py              # Chat completion factory
 │   └── embeddings.py        # Embeddings factory
 │
-├── alchemy/                 # SQLAlchemy integration
+├── alchemy/                 # SQLAlchemy utilities
 ├── notebook/                # Jupyter notebook support
 ├── magics/                  # IPython magic commands
 ├── server/                  # Server management tools
@@ -352,21 +352,9 @@ with conn.cursor(results_type='pandas', buffered=False) as cur:
         process(batch)
 ```
 
-#### Authentication Methods
+### HTTP (Data API) Connector (`singlestoredb/http/`)
 
-Defined in `singlestoredb/mysql/_auth.py`:
-
-| Method | Function | Description |
-|--------|----------|-------------|
-| Native | `scramble_native_password()` | MySQL native password authentication |
-| SHA256 | `sha256_password_auth()` | SHA-256 with RSA encryption |
-| Caching SHA2 | `caching_sha2_password_auth()` | Fast cached authentication |
-| Ed25519 | `ed25519_password()` | Ed25519 signature authentication |
-| GSSAPI | `gssapi_auth()` | Kerberos/GSSAPI authentication |
-
-### HTTP Connector (`singlestoredb/http/`)
-
-The HTTP connector provides REST-based access via SingleStore's HTTP API (port 9000).
+The HTTP connector provides REST-like access via SingleStore's HTTP API (port 9000).
 
 **Key Characteristics:**
 - JSON request/response encoding
@@ -443,7 +431,7 @@ SingleStore's cloud management features.
 │                      api.singlestore.com                            │
 └─────────────────────────────────────────────────────────────────────┘
                                    ▲
-                                   │ REST + JWT Auth
+                                   │ REST + (JWT Auth or Org API key)
                                    │
 ┌─────────────────────────────────────────────────────────────────────┐
 │                          Manager (base)                             │
@@ -460,20 +448,6 @@ SingleStore's cloud management features.
 │  create_workspace()    get_workspace()     billing()                │
 │  starter_workspaces()  create_workspace_group()                     │
 └─────────────────────────────────────────────────────────────────────┘
-```
-
-### Resource Hierarchy
-
-```
-Organization
-    │
-    ├── WorkspaceGroup
-    │       ├── Stage (file storage)
-    │       └── Workspace (database instance)
-    │               └── connect() → Connection
-    │
-    └── StarterWorkspace (free tier)
-            └── connect() → Connection
 ```
 
 ### Usage
@@ -531,24 +505,24 @@ intercepted before being sent to the database and processed by registered handle
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    cursor.execute(sql)                              │
 └─────────────────────────────────────────────────────────────────────┘
-                                   │
-                                   ▼
-                    ┌─────────────────────────────────────┐
-                    │       Fusion SQL Registry           │
-                    │  singlestoredb/fusion/registry.py   │
-                    │       Match leading keywords        │
-                    └─────────────────────────────────────┘
-                                   │
-              ┌────────────────────┼────────────────────┐
-              │                    │                    │
-              ▼                    ▼                    ▼
-      ┌───────────┐        ┌───────────┐        ┌───────────┐
-      │  No Match │        │  Handler  │        │  Handler  │
-      │  → Send   │        │  Found    │        │  Found    │
-      │  to DB    │        │           │        │           │
-      └───────────┘        └───────────┘        └───────────┘
-                                   │                    │
-                                   ▼                    ▼
+                                 │
+                                 ▼
+               ┌─────────────────────────────────────┐
+               │       Fusion SQL Registry           │
+               │  singlestoredb/fusion/registry.py   │
+               │       Match leading keywords        │
+               └─────────────────────────────────────┘
+                                 │
+                      ┌────────────────────┐
+                      │                    │
+                      ▼                    ▼
+                ┌───────────┐        ┌───────────┐
+                │  No Match │        │  Handler  │
+                │  → Send   │        │  Found    │
+                │  to DB    │        │           │
+                └───────────┘        └───────────┘
+                                           │
+                                           ▼
                            ┌─────────────────────────────────┐
                            │   SQLHandler.execute(sql)       │
                            │   Parse grammar → params dict   │
@@ -561,6 +535,8 @@ intercepted before being sent to the database and processed by registered handle
 
 ```python
 import os
+
+# Must be enabled by env var (default in notebook env is 1)
 os.environ['SINGLESTOREDB_FUSION_ENABLED'] = '1'
 
 import singlestoredb as s2
@@ -573,7 +549,8 @@ cur.execute('SHOW WORKSPACE GROUPS')
 ### Handler Architecture
 
 Handlers extend `SQLHandler` (`singlestoredb/fusion/handler.py`) with grammar defined
-in the docstring:
+in the docstring. See the `singlestoredb/fusion/README.md` for more detailed information
+on writing handlers.
 
 ```python
 from singlestoredb.fusion.handler import SQLHandler
@@ -626,7 +603,9 @@ Located in `singlestoredb/fusion/handlers/`:
 ## External Functions (UDFs)
 
 The functions module (`singlestoredb/functions/`) enables deploying Python functions
-as SingleStore external functions.
+as SingleStore external functions. UDF servers can be deployed as HTTP using
+an ASGI application or a collocated socket server that uses mmap files to
+transfer data.
 
 ### Architecture
 
@@ -648,8 +627,8 @@ as SingleStore external functions.
 │                     Execution Modes                                 │
 │                 singlestoredb/functions/ext/                        │
 ├─────────────────────────────────────────────────────────────────────┤
-│  asgi.py    │  HTTP server via ASGI (Uvicorn)                       │
-│  mmap.py    │  Memory-mapped shared memory (collocated)             │
+│  asgi.py    │  HTTP server via ASGI (Uvicorn; JSON or ROWDAT_1)     │
+│  mmap.py    │  Memory-mapped shared memory (collocated; ROWDAT_1)   │
 │  json.py    │  JSON serialization over HTTP                         │
 │  rowdat_1.py│  ROWDAT_1 binary format                               │
 │  arrow.py   │  Apache Arrow columnar format                         │
@@ -703,22 +682,23 @@ The `signature.py` module maps Python types to SQL types:
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      SingleStore Database                           │
 └─────────────────────────────────────────────────────────────────────┘
-         │                    │                    │
-         │ ASGI/HTTP          │ Memory-mapped      │ JSON
-         │ (remote)           │ (collocated)       │ (simple)
-         ▼                    ▼                    ▼
-   ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-   │   asgi.py   │      │   mmap.py   │      │   json.py   │
-   │  Uvicorn    │      │  Shared     │      │  Simple     │
-   │  HTTP/2     │      │  Memory     │      │  Serialize  │
-   └─────────────┘      └─────────────┘      └─────────────┘
-         │                    │                    │
-         └────────────────────┼────────────────────┘
+                   │                    │
+                   │ ASGI/HTTP          │ Memory-mapped
+                   │ (remote)           │ (collocated)
+                   ▼                    ▼
+             ┌─────────────┐      ┌─────────────┐
+             │   asgi.py   │      │   mmap.py   │
+             │   Uvicorn   │      │   Shared    │
+             │   HTTP/2    │      │   Memory    │
+             └─────────────┘      └─────────────┘
+                   │                    │
+                   └────────────────────┘
+                              │
                               ▼
-                    ┌─────────────────┐
-                    │  Python UDF     │
-                    │  Functions      │
-                    └─────────────────┘
+                      ┌─────────────────┐
+                      │  Python UDF     │
+                      │  Functions      │
+                      └─────────────────┘
 ```
 
 | Mode | File | Use Case |
@@ -761,11 +741,6 @@ embeddings = SingleStoreEmbeddingsFactory(
 
 vectors = embeddings.embed(['Hello', 'World'])
 ```
-
-### Supported Providers
-
-- **OpenAI**: GPT models, text embeddings
-- **AWS Bedrock**: Claude, Titan models
 
 ---
 
@@ -911,12 +886,14 @@ class _TestContainerManager:
 
 ### SQLAlchemy (`singlestoredb/alchemy/`)
 
-SQLAlchemy dialect for SingleStore:
+SQLAlchemy utilities for SingleStore. The dialect is a separate package.
+This package just addes a `create_function` that works in the notebook
+environment without having to specify a connection URL.
 
 ```python
 from sqlalchemy import create_engine
 
-engine = create_engine('singlestoredb://user:pass@host/db')
+engine = create_engine()
 ```
 
 ### Jupyter/Notebook (`singlestoredb/notebook/`, `singlestoredb/magics/`)
@@ -926,8 +903,9 @@ IPython magic commands for notebooks:
 ```python
 %load_ext singlestoredb
 
-%%sql
-SELECT * FROM users
+%run_shared shared_notebook.ipynb
+
+%run_personal personal_notebook.ipynb
 ```
 
 #### Portal and Live Accessor Objects
@@ -992,6 +970,58 @@ propagate bidirectionally between Python and the Portal UI.
 
 Utilities for managing SingleStore server instances, including Docker helpers and
 free tier management.
+
+#### Docker Server (`singlestoredb/server/docker.py`)
+
+Start a SingleStore server in a Docker container and connect to it:
+
+```python
+from singlestoredb.server import docker
+
+# Start with default settings
+server = docker.start(password='my_password')
+
+# Or customize ports, license, and other options
+server = docker.start(
+    name='my-container',
+    password='my_password',
+    license='your-license-key',
+    server_port=3306,
+    data_api_port=9000,
+    database='my_db',
+)
+
+# Connect using the MySQL protocol
+conn = server.connect()
+
+# Connect using the HTTP Data API
+conn = server.connect(use_data_api=True)
+
+# Use as a context manager for automatic cleanup
+with docker.start(password='my_password') as server:
+    conn = server.connect()
+    # ... use connection ...
+# Server is stopped automatically on exit
+```
+
+#### Free Tier Server (`singlestoredb/server/free_tier.py`)
+
+Start a free tier SingleStore server instance:
+
+```python
+from singlestoredb.server import free_tier
+
+# Start the free tier server (no configuration required)
+server = free_tier.start()
+
+# Connect to the server
+conn = server.connect()
+
+# Use as a context manager
+with free_tier.start() as server:
+    conn = server.connect()
+    # ... use connection ...
+```
 
 ---
 
