@@ -114,6 +114,7 @@ def SingleStoreChatFactory(
         cfg_kwargs = {
             'signature_version': UNSIGNED,
             'retries': {'max_attempts': 1, 'mode': 'standard'},
+            'max_pool_connections': 50,
         }
         if read_timeout is not None:
             cfg_kwargs['read_timeout'] = read_timeout
