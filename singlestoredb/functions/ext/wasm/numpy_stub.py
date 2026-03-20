@@ -13,10 +13,10 @@ class _DtypeMeta(type):
 
 class dtype(metaclass=_DtypeMeta):
     """Stub dtype class."""
-    def __init__(self, spec=None):
+    def __init__(self, spec: object = None) -> None:
         self.spec = spec
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'dtype({self.spec!r})'
 
 
