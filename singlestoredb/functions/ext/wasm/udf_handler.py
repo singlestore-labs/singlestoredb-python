@@ -58,12 +58,12 @@ class _TracingFormatter(logging.Formatter):
         'CRITICAL': '\033[31m',  # red
     }
 
-    def formatTime(self, record, datefmt=None):
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
         from datetime import datetime, timezone
         dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
         return dt.strftime('%Y-%m-%dT%H:%M:%S.') + f'{dt.microsecond:06d}Z'
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         ts = self.formatTime(record)
         color = self._LEVEL_COLORS.get(record.levelname, '')
         level = f'{color}{self._BOLD}{record.levelname:>5}{self._RESET}'
@@ -101,7 +101,7 @@ rowdat_1_type_map = {
 class FunctionRegistry:
     """Registry of discovered UDF functions."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.functions: Dict[str, Dict[str, Any]] = {}
 
     def initialize(self) -> None:
@@ -331,7 +331,7 @@ class FunctionRegistry:
 
     def _register_function(
         self,
-        func: Callable,
+        func: Callable[..., Any],
         func_name: str,
         sig: Dict[str, Any],
     ) -> None:
