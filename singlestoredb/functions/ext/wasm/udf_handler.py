@@ -97,6 +97,25 @@ rowdat_1_type_map = {
     'bytes': -ft.STRING,
 }
 
+# Map dtype strings to Python type annotation strings for code generation.
+_dtype_to_python: Dict[str, str] = {
+    'bool': 'bool',
+    'int8': 'int',
+    'int16': 'int',
+    'int32': 'int',
+    'int64': 'int',
+    'int': 'int',
+    'uint8': 'int',
+    'uint16': 'int',
+    'uint32': 'int',
+    'uint64': 'int',
+    'float32': 'float',
+    'float64': 'float',
+    'float': 'float',
+    'str': 'str',
+    'bytes': 'bytes',
+}
+
 
 class FunctionRegistry:
     """Registry of discovered UDF functions."""
@@ -256,27 +275,98 @@ class FunctionRegistry:
             })
         return descriptions
 
+    @staticmethod
+    def _python_type_annotation(dtype: str) -> str:
+        """Convert a dtype string to a Python type annotation.
+
+        Handles nullable types (trailing '?') by wrapping in Optional.
+        """
+        nullable = dtype.endswith('?')
+        base = dtype.rstrip('?')
+        py_type = _dtype_to_python.get(base)
+        if py_type is None:
+            raise ValueError(f'Unsupported dtype: {dtype!r}')
+        if nullable:
+            return f'Optional[{py_type}]'
+        return py_type
+
+    @staticmethod
+    def _build_python_code(
+        sig: Dict[str, Any],
+        body: str,
+    ) -> str:
+        """Build a complete @udf-decorated Python function from signature and body.
+
+        Args:
+            sig: Parsed signature dict with 'name', 'args', 'returns'.
+            body: The function body (e.g. "return x * 3").
+
+        Returns:
+            Complete Python source with imports and a @udf-decorated function.
+        """
+        func_name = sig['name']
+        args = sig.get('args', [])
+        returns = sig.get('returns', [])
+
+        # Build parameter list with type annotations
+        params = []
+        for arg in args:
+            ann = FunctionRegistry._python_type_annotation(arg['dtype'])
+            params.append(f'{arg["name"]}: {ann}')
+        params_str = ', '.join(params)
+
+        # Build return type annotation
+        if len(returns) == 0:
+            ret_ann = 'None'
+        elif len(returns) == 1:
+            ret_ann = FunctionRegistry._python_type_annotation(
+                returns[0]['dtype'],
+            )
+        else:
+            parts = [
+                FunctionRegistry._python_type_annotation(r['dtype'])
+                for r in returns
+            ]
+            ret_ann = f'Tuple[{", ".join(parts)}]'
+
+        # Indent body lines
+        indented_body = '\n'.join(
+            f'    {line}' for line in body.splitlines()
+        )
+
+        return (
+            'from singlestoredb.functions import udf\n'
+            'from typing import Optional, Tuple\n'
+            '\n'
+            '@udf\n'
+            f'def {func_name}({params_str}) -> {ret_ann}:\n'
+            f'{indented_body}\n'
+        )
+
     def create_function(
         self,
         signature_json: str,
         code: str,
         replace: bool,
     ) -> List[str]:
-        """Register a function from its signature and Python source code.
+        """Register a function from its signature and function body.
+
+        Constructs a complete @udf-decorated Python function from the
+        signature metadata and the raw function body, then compiles
+        and executes it.
 
         Args:
             signature_json: JSON object matching the describe-functions
                 element schema (must contain a 'name' field)
-            code: Python source code containing the @udf-decorated function
+            code: Function body (e.g. "return x * 3"), not full source
             replace: If False, raise an error if the function already exists
 
         Returns:
             List of newly registered function names
 
         Raises:
-            SyntaxError: If the code has syntax errors
-            ValueError: If no @udf-decorated functions are found or
-                function already exists and replace is False
+            SyntaxError: If the generated code has syntax errors
+            ValueError: If the function already exists and replace is False
         """
         sig = json.loads(signature_json)
         func_name = sig.get('name')
@@ -297,11 +387,14 @@ class FunctionRegistry:
         if replace and func_name in self.functions:
             del self.functions[func_name]
 
+        # Build a complete @udf-decorated function from signature + body
+        full_code = self._build_python_code(sig, code)
+
         # Use __main__ as the module name for dynamically submitted functions
         name = '__main__'
 
         # Validate syntax
-        compiled = compile(code, f'<{name}>', 'exec')
+        compiled = compile(full_code, f'<{name}>', 'exec')
 
         # Reuse existing module to avoid corrupting the componentize-py
         # runtime state (replacing sys.modules['__main__'] traps WASM).
@@ -320,7 +413,8 @@ class FunctionRegistry:
 
         if not new_names:
             raise ValueError(
-                'No @udf-decorated functions found in submitted code',
+                f'Function "{func_name}" was not registered. '
+                f'Check that the signature dtypes are supported.',
             )
 
         logger.info(
