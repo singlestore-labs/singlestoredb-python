@@ -25,12 +25,6 @@ from urllib.parse import unquote_plus
 from urllib.parse import urlparse
 
 import sqlparams
-try:
-    from pandas import DataFrame
-except ImportError:
-    class DataFrame(object):  # type: ignore
-        def itertuples(self, *args: Any, **kwargs: Any) -> None:
-            pass
 
 from . import auth
 from . import exceptions
@@ -1175,7 +1169,7 @@ class Connection(metaclass=abc.ABCMeta):
             out = list(cur.fetchall())
             if not out:
                 return []
-            if isinstance(out, DataFrame):
+            if hasattr(out, 'to_dict') and callable(getattr(out, 'to_dict')):
                 out = out.to_dict(orient='records')
             elif isinstance(out[0], (tuple, list)):
                 if cur.description:

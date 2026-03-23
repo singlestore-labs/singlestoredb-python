@@ -11,10 +11,9 @@ from typing import Union
 from ..converters import converters
 from ..mysql.converters import escape_item  # type: ignore
 from ..utils.dtypes import DEFAULT_VALUES  # noqa
-from ..utils.dtypes import NUMPY_TYPE_MAP  # noqa
-from ..utils.dtypes import PANDAS_TYPE_MAP  # noqa
-from ..utils.dtypes import POLARS_TYPE_MAP  # noqa
-from ..utils.dtypes import PYARROW_TYPE_MAP  # noqa
+from ..utils.dtypes import get_numpy_type_map  # noqa
+from ..utils.dtypes import get_polars_type_map  # noqa
+from ..utils.dtypes import get_pyarrow_type_map  # noqa
 
 
 DataType = Union[str, Callable[..., Any]]
