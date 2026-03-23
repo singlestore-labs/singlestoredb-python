@@ -7,10 +7,9 @@ from typing import Tuple
 from typing import TYPE_CHECKING
 
 from ..dtypes import DEFAULT_VALUES
-from ..dtypes import NUMPY_TYPE_MAP
-from ..dtypes import PANDAS_TYPE_MAP
-from ..dtypes import POLARS_TYPE_MAP
-from ..dtypes import PYARROW_TYPE_MAP
+from ..dtypes import get_numpy_type_map
+from ..dtypes import get_polars_type_map
+from ..dtypes import get_pyarrow_type_map
 from ..dtypes import PYTHON_CONVERTERS
 
 if TYPE_CHECKING:
@@ -140,7 +139,7 @@ def load_pandas(
             (
                 pd.Series(
                     data, index=index, name=spec[0],
-                    dtype=PANDAS_TYPE_MAP[spec[1]],
+                    dtype=get_numpy_type_map()[spec[1]],
                 ),
                 pd.Series(mask, index=index, dtype=np.longlong),
             )
@@ -172,7 +171,7 @@ def load_polars(
     return pl.Series(None, row_ids, dtype=pl.Int64), \
         [
             (
-                pl.Series(spec[0], data, dtype=POLARS_TYPE_MAP[spec[1]]),
+                pl.Series(spec[0], data, dtype=get_polars_type_map()[spec[1]]),
                 pl.Series(None, mask, dtype=pl.Boolean),
             )
             for (data, mask), spec in zip(cols, colspec)
@@ -203,7 +202,7 @@ def load_numpy(
     return np.asarray(row_ids, dtype=np.longlong), \
         [
             (
-                np.asarray(data, dtype=NUMPY_TYPE_MAP[spec[1]]),  # type: ignore
+                np.asarray(data, dtype=get_numpy_type_map()[spec[1]]),  # type: ignore
                 np.asarray(mask, dtype=np.bool_),  # type: ignore
             )
             for (data, mask), spec in zip(cols, colspec)
@@ -235,7 +234,7 @@ def load_arrow(
         [
             (
                 pa.array(
-                    data, type=PYARROW_TYPE_MAP[dtype],
+                    data, type=get_pyarrow_type_map()[dtype],
                     mask=pa.array(mask, type=pa.bool_()),
                 ),
                 pa.array(mask, type=pa.bool_()),

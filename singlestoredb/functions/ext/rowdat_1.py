@@ -12,10 +12,9 @@ from typing import TYPE_CHECKING
 from ...config import get_option
 from ...mysql.constants import FIELD_TYPE as ft
 from ..dtypes import DEFAULT_VALUES
-from ..dtypes import NUMPY_TYPE_MAP
-from ..dtypes import PANDAS_TYPE_MAP
-from ..dtypes import POLARS_TYPE_MAP
-from ..dtypes import PYARROW_TYPE_MAP
+from ..dtypes import get_numpy_type_map
+from ..dtypes import get_polars_type_map
+from ..dtypes import get_pyarrow_type_map
 
 if TYPE_CHECKING:
     try:
@@ -212,7 +211,7 @@ def _load_pandas(
     index = pd.Series(row_ids)
     return pd.Series(row_ids, dtype=np.int64), [
         (
-            pd.Series(data, index=index, name=name, dtype=PANDAS_TYPE_MAP[dtype]),
+            pd.Series(data, index=index, name=name, dtype=get_numpy_type_map()[dtype]),
             pd.Series(mask, index=index, dtype=np.bool_),
         )
         for (data, mask), (name, dtype) in zip(cols, colspec)
@@ -247,7 +246,7 @@ def _load_polars(
     return pl.Series(None, row_ids, dtype=pl.Int64), \
         [
             (
-                pl.Series(name=name, values=data, dtype=POLARS_TYPE_MAP[dtype]),
+                pl.Series(name=name, values=data, dtype=get_polars_type_map()[dtype]),
                 pl.Series(values=mask, dtype=pl.Boolean),
             )
             for (data, mask), (name, dtype) in zip(cols, colspec)
@@ -282,7 +281,7 @@ def _load_numpy(
     return np.asarray(row_ids, dtype=np.int64), \
         [
             (
-                np.asarray(data, dtype=NUMPY_TYPE_MAP[dtype]),  # type: ignore
+                np.asarray(data, dtype=get_numpy_type_map()[dtype]),  # type: ignore
                 np.asarray(mask, dtype=np.bool_),  # type: ignore
             )
             for (data, mask), (name, dtype) in zip(cols, colspec)
@@ -318,7 +317,7 @@ def _load_arrow(
         [
             (
                 pa.array(
-                    data, type=PYARROW_TYPE_MAP[dtype],
+                    data, type=get_pyarrow_type_map()[dtype],
                     mask=pa.array(mask, type=pa.bool_()),
                 ),
                 pa.array(mask, type=pa.bool_()),
@@ -565,7 +564,7 @@ def _load_pandas_accel(
     numpy_ids, numpy_cols = _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
     cols = [
         (
-            pd.Series(data, name=name, dtype=PANDAS_TYPE_MAP[dtype]),
+            pd.Series(data, name=name, dtype=get_numpy_type_map()[dtype]),
             pd.Series(mask, dtype=np.bool_),
         )
         for (name, dtype), (data, mask) in zip(colspec, numpy_cols)
@@ -610,7 +609,7 @@ def _load_polars_accel(
             pl.Series(
                 name=name, values=data.tolist()
                 if dtype in string_types or dtype in binary_types else data,
-                dtype=POLARS_TYPE_MAP[dtype],
+                dtype=get_polars_type_map()[dtype],
             ),
             pl.Series(values=mask, dtype=pl.Boolean),
         )
@@ -653,7 +652,7 @@ def _load_arrow_accel(
     numpy_ids, numpy_cols = _singlestoredb_accel.load_rowdat_1_numpy(colspec, data)
     cols = [
         (
-            pa.array(data, type=PYARROW_TYPE_MAP[dtype], mask=mask),
+            pa.array(data, type=get_pyarrow_type_map()[dtype], mask=mask),
             pa.array(mask, type=pa.bool_()),
         )
         for (data, mask), (name, dtype) in zip(numpy_cols, colspec)
