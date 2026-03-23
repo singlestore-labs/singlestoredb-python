@@ -22,6 +22,7 @@ from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
+from typing import Optional
 
 
 # Install numpy stub before importing singlestoredb (which tries to import numpy)
@@ -58,7 +59,7 @@ class _TracingFormatter(logging.Formatter):
         'CRITICAL': '\033[31m',  # red
     }
 
-    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+    def formatTime(self, record: logging.LogRecord, datefmt: Optional[str] = None) -> str:
         from datetime import datetime, timezone
         dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
         return dt.strftime('%Y-%m-%dT%H:%M:%S.') + f'{dt.microsecond:06d}Z'
