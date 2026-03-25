@@ -24,18 +24,9 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-
-# Install numpy stub before importing singlestoredb (which tries to import numpy)
-if 'numpy' not in sys.modules:
-    try:
-        import numpy  # noqa: F401
-    except ImportError:
-        from . import numpy_stub
-        sys.modules['numpy'] = numpy_stub
-
-from singlestoredb.functions.signature import get_signature
-from singlestoredb.functions.ext.rowdat_1 import load as _load_rowdat_1
 from singlestoredb.functions.ext.rowdat_1 import dump as _dump_rowdat_1
+from singlestoredb.functions.ext.rowdat_1 import load as _load_rowdat_1
+from singlestoredb.functions.signature import get_signature
 from singlestoredb.mysql.constants import FIELD_TYPE as ft
 
 try:
@@ -144,7 +135,7 @@ class FunctionRegistry:
         """
         # Infrastructure modules that are part of this project
         _infra = frozenset({
-            'udf_handler', 'numpy_stub',
+            'udf_handler',
         })
         if mod_name in _infra:
             return True
