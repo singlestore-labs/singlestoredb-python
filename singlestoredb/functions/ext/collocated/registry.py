@@ -1,16 +1,11 @@
 """
-Python UDF handler implementing the WIT interface for WASM component.
+Function registry for UDF discovery, registration, and invocation.
 
-This module provides a Python runtime for UDF functions. When compiled
-with componentize-py, it becomes a WASM component that can be loaded by
-the Rust UDF server.
-
-Functions are discovered automatically by scanning sys.modules for
-@udf-decorated functions. No _exports.py is needed — just import
-FunctionHandler from this module in your UDF file and decorate
-functions with @udf.
+This module contains the core FunctionRegistry class (moved from
+wasm/udf_handler.py) plus standalone call_function() and
+describe_functions_json() helpers. Both the WASM handler and the
+collocated server use these directly.
 """
-import difflib  # noqa: F401
 import inspect
 import json
 import logging
@@ -18,11 +13,14 @@ import os
 import sys
 import traceback
 import types
+from datetime import datetime
+from datetime import timezone
 from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 
 from singlestoredb.functions.ext.rowdat_1 import dump as _dump_rowdat_1
 from singlestoredb.functions.ext.rowdat_1 import load as _load_rowdat_1
@@ -50,8 +48,11 @@ class _TracingFormatter(logging.Formatter):
         'CRITICAL': '\033[31m',  # red
     }
 
-    def formatTime(self, record: logging.LogRecord, datefmt: Optional[str] = None) -> str:
-        from datetime import datetime, timezone
+    def formatTime(
+        self,
+        record: logging.LogRecord,
+        datefmt: Optional[str] = None,
+    ) -> str:
         dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
         return dt.strftime('%Y-%m-%dT%H:%M:%S.') + f'{dt.microsecond:06d}Z'
 
@@ -64,16 +65,18 @@ class _TracingFormatter(logging.Formatter):
         return f'{self._DIM}{ts}{self._RESET} {level} {name}: {msg}'
 
 
-_handler = logging.StreamHandler()
-_handler.setFormatter(_TracingFormatter())
-logging.basicConfig(level=logging.INFO, handlers=[_handler])
-logger = logging.getLogger('udf_handler')
+def setup_logging(level: int = logging.INFO) -> None:
+    """Configure root logging with the tracing formatter."""
+    handler = logging.StreamHandler()
+    handler.setFormatter(_TracingFormatter())
+    logging.basicConfig(level=level, handlers=[handler])
+
 
 # Map dtype strings to rowdat_1 type codes for wire serialization.
 # rowdat_1 always uses 8-byte encoding for integers and doubles for floats,
 # so all int types collapse to LONGLONG and all float types to DOUBLE.
 # Uses negative values for unsigned ints / binary data.
-rowdat_1_type_map = {
+rowdat_1_type_map: Dict[str, int] = {
     'bool': ft.LONGLONG,
     'int8': ft.LONGLONG,
     'int16': ft.LONGLONG,
@@ -108,6 +111,8 @@ _dtype_to_python: Dict[str, str] = {
     'bytes': 'bytes',
 }
 
+logger = logging.getLogger('udf_handler')
+
 
 class FunctionRegistry:
     """Registry of discovered UDF functions."""
@@ -119,7 +124,7 @@ class FunctionRegistry:
         """Initialize and discover UDF functions from loaded modules.
 
         Scans sys.modules for any module containing @udf-decorated
-        functions. No _exports.py is needed — modules just need to be
+        functions. No _exports.py is needed -- modules just need to be
         imported before initialize() is called (componentize-py captures
         them at build time).
         """
@@ -133,18 +138,15 @@ class FunctionRegistry:
         (under sys.prefix but not in site-packages) rather than
         maintaining a hardcoded list of names.
         """
-        # Infrastructure modules that are part of this project
         _infra = frozenset({
             'udf_handler',
         })
         if mod_name in _infra:
             return True
 
-        # Resolve symlinks for reliable prefix comparison
         real_file = os.path.realpath(mod_file)
         real_prefix = os.path.realpath(sys.prefix)
 
-        # Modules under sys.prefix but NOT in site-packages are stdlib
         if real_file.startswith(real_prefix + os.sep):
             if 'site-packages' not in real_file:
                 return True
@@ -160,6 +162,9 @@ class FunctionRegistry:
         Modules without a __file__ (built-in/frozen) and stdlib/
         infrastructure modules are skipped automatically.
         """
+        # Import here to avoid circular dependency at module level
+        from .wasm import FunctionHandler
+
         found_modules = []
         for mod_name, mod in list(sys.modules.items()):
             if mod is None:
@@ -178,7 +183,6 @@ class FunctionRegistry:
             ):
                 continue
 
-            # Skip stdlib and infrastructure modules
             if self._is_stdlib_or_infra(mod_name, mod_file):
                 continue
 
@@ -201,11 +205,7 @@ class FunctionRegistry:
             )
 
     def _extract_functions(self, module: Any) -> None:
-        """Extract @udf-decorated functions from a module.
-
-        Unlike module scanning, this does not filter by __module__ —
-        _exports.py may re-export functions defined in other modules.
-        """
+        """Extract @udf-decorated functions from a module."""
         for name, obj in inspect.getmembers(module):
             if name.startswith('_'):
                 continue
@@ -216,7 +216,6 @@ class FunctionRegistry:
             if not inspect.isfunction(obj):
                 continue
 
-            # Only register functions decorated with @udf
             if not hasattr(obj, '_singlestoredb_attrs'):
                 continue
 
@@ -225,17 +224,13 @@ class FunctionRegistry:
                 if sig and sig.get('args') is not None and sig.get('returns'):
                     self._register_function(obj, name, sig)
             except (TypeError, ValueError):
-                # Skip functions that can't be introspected
                 pass
 
     def _build_json_descriptions(
         self,
         func_names: List[str],
     ) -> List[Dict[str, Any]]:
-        """Build JSON-serializable descriptions for the given function names.
-
-        Extracts metadata from the stored signature dict for each function.
-        """
+        """Build JSON-serializable descriptions for the given function names."""
         descriptions = []
         for func_name in func_names:
             func_info = self.functions[func_name]
@@ -269,10 +264,7 @@ class FunctionRegistry:
 
     @staticmethod
     def _python_type_annotation(dtype: str) -> str:
-        """Convert a dtype string to a Python type annotation.
-
-        Handles nullable types (trailing '?') by wrapping in Optional.
-        """
+        """Convert a dtype string to a Python type annotation."""
         nullable = dtype.endswith('?')
         base = dtype.rstrip('?')
         py_type = _dtype_to_python.get(base)
@@ -287,27 +279,17 @@ class FunctionRegistry:
         sig: Dict[str, Any],
         body: str,
     ) -> str:
-        """Build a complete @udf-decorated Python function from signature and body.
-
-        Args:
-            sig: Parsed signature dict with 'name', 'args', 'returns'.
-            body: The function body (e.g. "return x * 3").
-
-        Returns:
-            Complete Python source with imports and a @udf-decorated function.
-        """
+        """Build a complete @udf-decorated Python function from sig + body."""
         func_name = sig['name']
         args = sig.get('args', [])
         returns = sig.get('returns', [])
 
-        # Build parameter list with type annotations
         params = []
         for arg in args:
             ann = FunctionRegistry._python_type_annotation(arg['dtype'])
             params.append(f'{arg["name"]}: {ann}')
         params_str = ', '.join(params)
 
-        # Build return type annotation
         if len(returns) == 0:
             ret_ann = 'None'
         elif len(returns) == 1:
@@ -321,7 +303,6 @@ class FunctionRegistry:
             ]
             ret_ann = f'Tuple[{", ".join(parts)}]'
 
-        # Indent body lines
         indented_body = '\n'.join(
             f'    {line}' for line in body.splitlines()
         )
@@ -343,10 +324,6 @@ class FunctionRegistry:
     ) -> List[str]:
         """Register a function from its signature and function body.
 
-        Constructs a complete @udf-decorated Python function from the
-        signature metadata and the raw function body, then compiles
-        and executes it.
-
         Args:
             signature_json: JSON object matching the describe-functions
                 element schema (must contain a 'name' field)
@@ -355,10 +332,6 @@ class FunctionRegistry:
 
         Returns:
             List of newly registered function names
-
-        Raises:
-            SyntaxError: If the generated code has syntax errors
-            ValueError: If the function already exists and replace is False
         """
         sig = json.loads(signature_json)
         func_name = sig.get('name')
@@ -367,29 +340,20 @@ class FunctionRegistry:
                 'signature JSON must contain a "name" field',
             )
 
-        # Check for name collision when replace is False
         if not replace and func_name in self.functions:
             raise ValueError(
                 f'Function "{func_name}" already exists '
                 f'(use replace=true to overwrite)',
             )
 
-        # When replacing, remove the old entry so the new registration
-        # is detected as "new" by the before/after name comparison.
         if replace and func_name in self.functions:
             del self.functions[func_name]
 
-        # Build a complete @udf-decorated function from signature + body
         full_code = self._build_python_code(sig, code)
 
-        # Use __main__ as the module name for dynamically submitted functions
         name = '__main__'
-
-        # Validate syntax
         compiled = compile(full_code, f'<{name}>', 'exec')
 
-        # Reuse existing module to avoid corrupting the componentize-py
-        # runtime state (replacing sys.modules['__main__'] traps WASM).
         if name in sys.modules:
             module = sys.modules[name]
         else:
@@ -398,7 +362,6 @@ class FunctionRegistry:
             sys.modules[name] = module
         exec(compiled, module.__dict__)  # noqa: S102
 
-        # Extract functions from the module
         before_names = set(self.functions.keys())
         self._extract_functions(module)
         new_names = [k for k in self.functions if k not in before_names]
@@ -421,30 +384,26 @@ class FunctionRegistry:
         func_name: str,
         sig: Dict[str, Any],
     ) -> None:
-        """Register a function under its bare name.
-
-        All functions are registered as top-level names (no module prefix).
-        If a function with the same name already exists, the last
-        registration wins.
-        """
-        # Use alias name from signature if available, otherwise use function name
+        """Register a function under its bare name."""
         full_name = sig.get('name') or func_name
 
-        # Convert args to (name, type_code) tuples
-        arg_types = []
+        arg_types: List[Tuple[str, int]] = []
         for arg in sig['args']:
             dtype = arg['dtype'].replace('?', '')
             if dtype not in rowdat_1_type_map:
-                logger.warning(f"Skipping {full_name}: unsupported arg dtype '{dtype}'")
+                logger.warning(
+                    f"Skipping {full_name}: unsupported arg dtype '{dtype}'",
+                )
                 return
             arg_types.append((arg['name'], rowdat_1_type_map[dtype]))
 
-        # Convert returns to type_code list
-        return_types = []
+        return_types: List[int] = []
         for ret in sig['returns']:
             dtype = ret['dtype'].replace('?', '')
             if dtype not in rowdat_1_type_map:
-                logger.warning(f'Skipping {full_name}: no type mapping for {dtype}')
+                logger.warning(
+                    f'Skipping {full_name}: no type mapping for {dtype}',
+                )
                 return
             return_types.append(rowdat_1_type_map[dtype])
 
@@ -456,86 +415,49 @@ class FunctionRegistry:
         }
 
 
-# Global registry instance
-_registry = FunctionRegistry()
+def call_function(
+    registry: FunctionRegistry,
+    name: str,
+    input_data: bytes,
+) -> bytes:
+    """Call a registered UDF by name using the C accelerator or fallback.
 
+    This is the hot-path function used by both the WASM handler and
+    the collocated server.
+    """
+    if name not in registry.functions:
+        raise ValueError(f'unknown function: {name}')
 
-class FunctionHandler:
-    """Implementation of the singlestore:udf/function-handler interface."""
+    func_info = registry.functions[name]
+    func = func_info['func']
+    arg_types = func_info['arg_types']
+    return_types = func_info['return_types']
 
-    def initialize(self) -> None:
-        """Initialize and discover UDF functions from loaded modules."""
+    try:
         if _has_call_accel:
-            logger.info('Using accelerated C call_function_accel loop')
-        else:
-            logger.info('Using pure Python call_function loop')
-        _registry.initialize()
+            return _call_function_accel(
+                colspec=arg_types,
+                returns=return_types,
+                data=input_data,
+                func=func,
+            )
 
-    def call_function(self, name: str, input_data: bytes) -> bytes:
-        """Call a function by its registered name."""
-        if name not in _registry.functions:
-            raise ValueError(f'unknown function: {name}')
+        row_ids, rows = _load_rowdat_1(arg_types, input_data)
+        results = []
+        for row in rows:
+            result = func(*row)
+            if not isinstance(result, tuple):
+                result = [result]
+            results.append(list(result))
+        return bytes(_dump_rowdat_1(return_types, row_ids, results))
 
-        func_info = _registry.functions[name]
-        func = func_info['func']
-        arg_types = func_info['arg_types']
-        return_types = func_info['return_types']
+    except Exception as e:
+        tb = traceback.format_exc()
+        raise RuntimeError(f'Error calling {name}: {e}\n{tb}')
 
-        try:
-            if _has_call_accel:
-                return _call_function_accel(
-                    colspec=arg_types,
-                    returns=return_types,
-                    data=input_data,
-                    func=func,
-                )
 
-            # Fallback to pure Python
-            row_ids, rows = _load_rowdat_1(arg_types, input_data)
-            results = []
-            for row in rows:
-                result = func(*row)
-                if not isinstance(result, tuple):
-                    result = [result]
-                results.append(list(result))
-            return bytes(_dump_rowdat_1(return_types, row_ids, results))
-
-        except Exception as e:
-            tb = traceback.format_exc()
-            raise RuntimeError(f'Error calling {name}: {e}\n{tb}')
-
-    def describe_functions(self) -> str:
-        """Describe all functions as a JSON array.
-
-        Returns a JSON string containing an array of function description
-        objects with: name, args, returns, args_data_format,
-        returns_data_format, function_type, doc.
-
-        Raises RuntimeError on failure (mapped to result Err by
-        componentize-py).
-        """
-        try:
-            func_names = list(_registry.functions.keys())
-            descriptions = _registry._build_json_descriptions(func_names)
-            return json.dumps(descriptions)
-        except Exception as e:
-            tb = traceback.format_exc()
-            raise RuntimeError(f'{e}\n{tb}')
-
-    def create_function(
-        self,
-        signature: str,
-        code: str,
-        replace: bool,
-    ) -> None:
-        """Register a function from its signature and Python source code.
-
-        Returns None on success (mapped to result Ok(()) by componentize-py).
-        Raises RuntimeError on failure (mapped to result Err by
-        componentize-py).
-        """
-        try:
-            _registry.create_function(signature, code, replace)
-        except Exception as e:
-            tb = traceback.format_exc()
-            raise RuntimeError(f'{e}\n{tb}')
+def describe_functions_json(registry: FunctionRegistry) -> str:
+    """Serialize all function descriptions as a JSON array string."""
+    func_names = list(registry.functions.keys())
+    descriptions = registry._build_json_descriptions(func_names)
+    return json.dumps(descriptions)

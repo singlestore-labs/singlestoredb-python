@@ -74,6 +74,9 @@ dev = [
     "singlestoredb[test,docs,build]",
 ]
 
+[project.scripts]
+python-udf-server = "singlestoredb.functions.ext.collocated.__main__:main"
+
 [project.entry-points.pytest11]
 singlestoredb = "singlestoredb.pytest"
 
