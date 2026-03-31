@@ -29,6 +29,7 @@ def dispatch_control_signal(
     signal_name: str,
     request_data: bytes,
     shared_registry: SharedRegistry,
+    pipe_write_fd: int | None = None,
 ) -> ControlResult:
     """Dispatch a control signal to the appropriate handler."""
     try:
@@ -37,7 +38,9 @@ def dispatch_control_signal(
         elif signal_name == '@@functions':
             return _handle_functions(shared_registry)
         elif signal_name == '@@register':
-            return _handle_register(request_data, shared_registry)
+            return _handle_register(
+                request_data, shared_registry, pipe_write_fd,
+            )
         else:
             return ControlResult(
                 ok=False,
@@ -62,8 +65,14 @@ def _handle_functions(shared_registry: SharedRegistry) -> ControlResult:
 def _handle_register(
     request_data: bytes,
     shared_registry: SharedRegistry,
+    pipe_write_fd: int | None = None,
 ) -> ControlResult:
-    """Handle @@register: register a new function dynamically."""
+    """Handle @@register: register a new function dynamically.
+
+    If ``pipe_write_fd`` is not None (process mode), the registration
+    payload is written to the pipe so the main process can update its
+    own registry and re-fork all workers.
+    """
     if not request_data:
         return ControlResult(ok=False, data='Missing registration payload')
 
@@ -110,6 +119,16 @@ def _handle_register(
         shared_registry.create_function(signature, func_body, replace)
     except Exception as e:
         return ControlResult(ok=False, data=str(e))
+
+    # Notify main process so it can re-fork workers with updated state
+    if pipe_write_fd is not None:
+        from .server import _write_pipe_message
+        payload = json.dumps({
+            'signature_json': signature,
+            'code': func_body,
+            'replace': replace,
+        }).encode()
+        _write_pipe_message(pipe_write_fd, payload)
 
     logger.info(f"@@register: added function '{function_name}'")
     return ControlResult(ok=True, data='{"status":"ok"}')
