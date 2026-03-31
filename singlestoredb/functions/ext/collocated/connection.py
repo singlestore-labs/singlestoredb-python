@@ -39,10 +39,13 @@ def handle_connection(
     conn: socket.socket,
     shared_registry: SharedRegistry,
     shutdown_event: threading.Event,
+    pipe_write_fd: int | None = None,
 ) -> None:
     """Handle a single client connection (runs in a thread pool worker)."""
     try:
-        _handle_connection_inner(conn, shared_registry, shutdown_event)
+        _handle_connection_inner(
+            conn, shared_registry, shutdown_event, pipe_write_fd,
+        )
     except Exception:
         logger.error(f'Connection error:\n{traceback.format_exc()}')
     finally:
@@ -56,6 +59,7 @@ def _handle_connection_inner(
     conn: socket.socket,
     shared_registry: SharedRegistry,
     shutdown_event: threading.Event,
+    pipe_write_fd: int | None = None,
 ) -> None:
     """Inner connection handler (may raise)."""
     # --- Handshake ---
@@ -87,6 +91,7 @@ def _handle_connection_inner(
         logger.info(f"Received control signal '{function_name}'")
         _handle_control_signal(
             conn, function_name, input_fd, output_fd, shared_registry,
+            pipe_write_fd,
         )
         return
 
@@ -104,6 +109,7 @@ def _handle_control_signal(
     input_fd: int,
     output_fd: int,
     shared_registry: SharedRegistry,
+    pipe_write_fd: int | None = None,
 ) -> None:
     """Handle a @@-prefixed control signal (one-shot request-response)."""
     try:
@@ -126,7 +132,7 @@ def _handle_control_signal(
 
         # Dispatch
         result = dispatch_control_signal(
-            signal_name, request_data, shared_registry,
+            signal_name, request_data, shared_registry, pipe_write_fd,
         )
 
         if result.ok:

@@ -6,12 +6,14 @@ for concurrent request handling and a SharedRegistry with generation-
 counter caching for thread-safe live reload.
 """
 import importlib
+import json
 import logging
 import multiprocessing
 import os
 import select
 import signal
 import socket
+import struct
 import sys
 import threading
 import traceback
@@ -26,6 +28,40 @@ from .connection import handle_connection
 from .registry import FunctionRegistry
 
 logger = logging.getLogger('collocated.server')
+
+
+def _read_pipe_message(fd: int) -> Optional[bytes]:
+    """Read a length-prefixed message from a pipe fd.
+
+    Wire format: [u32 LE length][payload].
+    Returns None on EOF or short read.
+    """
+    try:
+        len_buf = b''
+        while len(len_buf) < 4:
+            chunk = os.read(fd, 4 - len(len_buf))
+            if not chunk:
+                return None
+            len_buf += chunk
+        length = struct.unpack('<I', len_buf)[0]
+        payload = b''
+        while len(payload) < length:
+            chunk = os.read(fd, length - len(payload))
+            if not chunk:
+                return None
+            payload += chunk
+        return payload
+    except OSError:
+        return None
+
+
+def _write_pipe_message(fd: int, payload: bytes) -> None:
+    """Write a length-prefixed message to a pipe fd.
+
+    Wire format: [u32 LE length][payload].
+    """
+    header = struct.pack('<I', len(payload))
+    os.write(fd, header + payload)
 
 
 class SharedRegistry:
@@ -208,55 +244,45 @@ class Server:
         server_sock: socket.socket,
         n_workers: int,
     ) -> None:
-        """Pre-fork worker pool for true CPU parallelism."""
-        ctx = multiprocessing.get_context('fork')
-        workers: Dict[int, multiprocessing.process.BaseProcess] = {}
+        """Pre-fork worker pool for true CPU parallelism.
 
-        def _spawn_worker(
-            worker_id: int,
-        ) -> multiprocessing.process.BaseProcess:
+        Each worker gets a pipe back to the main process. When a worker
+        receives @@register, it writes the registration payload to its
+        pipe. The main process reads it, updates its own registry, then
+        kills and re-forks all workers so every worker has the updated
+        registry state.
+        """
+        ctx = multiprocessing.get_context('fork')
+        # workers[wid] = (process, pipe_read_fd)
+        workers: Dict[
+            int,
+            Tuple[multiprocessing.process.BaseProcess, int],
+        ] = {}
+
+        def _spawn_worker(worker_id: int) -> Tuple[
+            multiprocessing.process.BaseProcess, int,
+        ]:
+            pipe_r, pipe_w = os.pipe()
             p = ctx.Process(
                 target=self._worker_process_main,
-                args=(server_sock, worker_id),
+                args=(server_sock, worker_id, pipe_w),
                 daemon=True,
             )
             p.start()
+            # Close the write end in the parent — only the child writes
+            os.close(pipe_w)
             logger.info(
                 f'Started worker {worker_id} (pid={p.pid})',
             )
-            return p
+            return p, pipe_r
 
-        # Fork initial workers
-        logger.info(
-            f'Process pool: spawning {n_workers} workers',
-        )
-        for i in range(n_workers):
-            workers[i] = _spawn_worker(i)
-
-        # Monitor loop: restart dead workers
-        try:
-            while not self.shutdown_event.is_set():
-                self.shutdown_event.wait(timeout=0.5)
-                for wid, proc in list(workers.items()):
-                    if not proc.is_alive():
-                        exitcode = proc.exitcode
-                        if not self.shutdown_event.is_set():
-                            logger.warning(
-                                f'Worker {wid} (pid={proc.pid}) '
-                                f'exited with code {exitcode}, '
-                                f'restarting...',
-                            )
-                            workers[wid] = _spawn_worker(wid)
-        finally:
-            logger.info('Shutting down worker processes...')
-            # Signal all workers to stop
-            for wid, proc in workers.items():
+        def _kill_all_workers() -> None:
+            """SIGTERM all workers, wait, then SIGKILL stragglers."""
+            for wid, (proc, pipe_r) in workers.items():
                 if proc.is_alive():
                     assert proc.pid is not None
                     os.kill(proc.pid, signal.SIGTERM)
-
-            # Wait for graceful exit
-            for wid, proc in workers.items():
+            for wid, (proc, pipe_r) in workers.items():
                 proc.join(timeout=5.0)
                 if proc.is_alive():
                     logger.warning(
@@ -265,20 +291,111 @@ class Server:
                     )
                     proc.terminate()
                     proc.join(timeout=2.0)
+            # Close all pipe read fds
+            for wid, (proc, pipe_r) in workers.items():
+                try:
+                    os.close(pipe_r)
+                except OSError:
+                    pass
+
+        def _respawn_all_workers() -> None:
+            """Kill all workers and re-fork them with fresh state."""
+            _kill_all_workers()
+            workers.clear()
+            for i in range(n_workers):
+                workers[i] = _spawn_worker(i)
+
+        # Fork initial workers
+        logger.info(
+            f'Process pool: spawning {n_workers} workers',
+        )
+        for i in range(n_workers):
+            workers[i] = _spawn_worker(i)
+
+        # Monitor loop using poll() over pipe read fds
+        try:
+            while not self.shutdown_event.is_set():
+                poller = select.poll()
+                fd_to_wid: Dict[int, int] = {}
+                for wid, (proc, pipe_r) in workers.items():
+                    poller.register(
+                        pipe_r, select.POLLIN | select.POLLHUP,
+                    )
+                    fd_to_wid[pipe_r] = wid
+
+                events = poller.poll(500)  # 500ms timeout
+
+                registration_received = False
+                for fd, event in events:
+                    if fd not in fd_to_wid:
+                        continue
+                    wid = fd_to_wid[fd]
+
+                    if event & select.POLLIN:
+                        msg = _read_pipe_message(fd)
+                        if msg is not None:
+                            # Apply registration to main's registry
+                            try:
+                                body = json.loads(msg)
+                                self.shared_registry.create_function(
+                                    body['signature_json'],
+                                    body['code'],
+                                    body['replace'],
+                                )
+                                logger.info(
+                                    'Main process: applied '
+                                    '@@register from worker '
+                                    f'{wid}, will re-fork all '
+                                    'workers',
+                                )
+                                registration_received = True
+                            except Exception:
+                                logger.error(
+                                    'Main process: failed to '
+                                    'apply @@register:\n'
+                                    f'{traceback.format_exc()}',
+                                )
+                    elif event & select.POLLHUP:
+                        # Worker died — will be respawned below
+                        pass
+
+                if registration_received:
+                    _respawn_all_workers()
+                    continue
+
+                # Check for dead workers and respawn individually
+                for wid, (proc, pipe_r) in list(workers.items()):
+                    if not proc.is_alive():
+                        exitcode = proc.exitcode
+                        if not self.shutdown_event.is_set():
+                            logger.warning(
+                                f'Worker {wid} (pid={proc.pid}) '
+                                f'exited with code {exitcode}, '
+                                f'restarting...',
+                            )
+                            try:
+                                os.close(pipe_r)
+                            except OSError:
+                                pass
+                            workers[wid] = _spawn_worker(wid)
+        finally:
+            logger.info('Shutting down worker processes...')
+            _kill_all_workers()
 
     def _worker_process_main(
         self,
         server_sock: socket.socket,
         worker_id: int,
+        pipe_w: int,
     ) -> None:
-        """Entry point for each forked worker process."""
-        try:
-            # Each worker gets its own registry and shutdown event
-            local_shared = SharedRegistry()
-            local_registry = FunctionRegistry()
-            local_registry.initialize()
-            local_shared.set_base_registry(local_registry)
+        """Entry point for each forked worker process.
 
+        Uses ``self.shared_registry`` inherited via fork (contains the
+        main process's current state). ``pipe_w`` is used to notify the
+        main process when @@register is handled so it can re-fork all
+        workers.
+        """
+        try:
             local_shutdown = threading.Event()
 
             def _worker_signal_handler(
@@ -297,9 +414,10 @@ class Server:
             # non-blocking accept and the parent doesn't call accept.
             server_sock.setblocking(False)
 
+            registry = self.shared_registry.get_thread_local_registry()
             logger.info(
                 f'Worker {worker_id} (pid={os.getpid()}) ready, '
-                f'{len(local_registry.functions)} function(s)',
+                f'{len(registry.functions)} function(s)',
             )
 
             # Accept loop
@@ -322,8 +440,9 @@ class Server:
 
                 handle_connection(
                     conn,
-                    local_shared,
+                    self.shared_registry,
                     local_shutdown,
+                    pipe_write_fd=pipe_w,
                 )
         except Exception:
             logger.error(
@@ -331,6 +450,11 @@ class Server:
                 f'{traceback.format_exc()}',
             )
             raise
+        finally:
+            try:
+                os.close(pipe_w)
+            except OSError:
+                pass
 
     def _initialize_registry(self) -> FunctionRegistry:
         """Import the extension module and discover @udf functions."""
