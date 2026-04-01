@@ -29,9 +29,19 @@ from singlestoredb.mysql.constants import FIELD_TYPE as ft
 
 try:
     from _singlestoredb_accel import call_function_accel as _call_function_accel
-    _has_call_accel = True
-except Exception:
-    _has_call_accel = False
+    from _singlestoredb_accel import mmap_read as _mmap_read
+    from _singlestoredb_accel import mmap_write as _mmap_write
+    from _singlestoredb_accel import recv_exact as _recv_exact
+    _has_accel = True
+    logging.getLogger(__name__).info('_singlestoredb_accel loaded successfully')
+except Exception as e:
+    _has_accel = False
+    _mmap_read = None
+    _mmap_write = None
+    _recv_exact = None
+    logging.getLogger(__name__).warning(
+        '_singlestoredb_accel failed to load: %s', e,
+    )
 
 
 class _TracingFormatter(logging.Formatter):
@@ -434,7 +444,7 @@ def call_function(
     return_types = func_info['return_types']
 
     try:
-        if _has_call_accel:
+        if _has_accel:
             return _call_function_accel(
                 colspec=arg_types,
                 returns=return_types,

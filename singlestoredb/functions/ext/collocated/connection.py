@@ -10,14 +10,18 @@ import array
 import logging
 import mmap
 import os
-import select
 import socket
 import struct
 import threading
+import time
 import traceback
 from typing import TYPE_CHECKING
 
 from .control import dispatch_control_signal
+from .registry import _has_accel
+from .registry import _mmap_read
+from .registry import _mmap_write
+from .registry import _recv_exact as _c_recv_exact
 from .registry import call_function
 
 if TYPE_CHECKING:
@@ -33,6 +37,12 @@ STATUS_ERROR = 500
 
 # Minimum output mmap size to avoid repeated ftruncate
 _MIN_OUTPUT_SIZE = 128 * 1024
+
+# Pre-pack the status OK header prefix to avoid per-request struct.pack
+_STATUS_OK_PREFIX = struct.pack('<Q', STATUS_OK)
+
+# Enable per-request timing via environment variable
+_PROFILE = os.environ.get('SINGLESTOREDB_UDF_PROFILE', '') == '1'
 
 
 def handle_connection(
@@ -64,7 +74,7 @@ def _handle_connection_inner(
     """Inner connection handler (may raise)."""
     # --- Handshake ---
     # Receive 16 bytes: [version: u64 LE][namelen: u64 LE]
-    header = _recv_exact(conn, 16)
+    header = _recv_exact_py(conn, 16)
     if header is None:
         return
     version, namelen = struct.unpack('<QQ', header)
@@ -114,7 +124,7 @@ def _handle_control_signal(
     """Handle a @@-prefixed control signal (one-shot request-response)."""
     try:
         # Read 8-byte request length
-        len_buf = _recv_exact(conn, 8)
+        len_buf = _recv_exact_py(conn, 8)
         if len_buf is None:
             return
         length = struct.unpack('<Q', len_buf)[0]
@@ -122,13 +132,16 @@ def _handle_control_signal(
         # Read input data from mmap (if any)
         request_data = b''
         if length > 0:
-            mem = mmap.mmap(
-                input_fd, length, mmap.MAP_SHARED, mmap.PROT_READ,
-            )
-            try:
-                request_data = mem[:length]
-            finally:
-                mem.close()
+            if _has_accel:
+                request_data = _mmap_read(input_fd, length)
+            else:
+                mem = mmap.mmap(
+                    input_fd, length, mmap.MAP_SHARED, mmap.PROT_READ,
+                )
+                try:
+                    request_data = bytes(mem[:length])
+                finally:
+                    mem.close()
 
         # Dispatch
         result = dispatch_control_signal(
@@ -139,9 +152,15 @@ def _handle_control_signal(
             # Write response to output mmap
             response_bytes = result.data.encode('utf8')
             response_size = len(response_bytes)
-            os.ftruncate(output_fd, max(_MIN_OUTPUT_SIZE, response_size))
-            os.lseek(output_fd, 0, os.SEEK_SET)
-            os.write(output_fd, response_bytes)
+            if _has_accel:
+                _mmap_write(
+                    output_fd, response_bytes,
+                    max(_MIN_OUTPUT_SIZE, response_size),
+                )
+            else:
+                os.ftruncate(output_fd, max(_MIN_OUTPUT_SIZE, response_size))
+                os.lseek(output_fd, 0, os.SEEK_SET)
+                os.write(output_fd, response_bytes)
 
             # Send [status=200, size]
             conn.sendall(struct.pack('<QQ', STATUS_OK, response_size))
@@ -178,18 +197,55 @@ def _handle_udf_loop(
     # Track output mmap size to avoid repeated ftruncate
     current_output_size = 0
 
+    # Choose recv implementation: C accel or Python fallback
+    use_accel = _has_accel
+    sock_fd = conn.fileno()
+
+    if use_accel:
+        # Keep the fd in blocking mode. The C recv_exact uses poll()
+        # internally with a timeout, avoiding the interaction between
+        # Python's settimeout() (which sets O_NONBLOCK on the fd) and
+        # direct fd-level recv() in the C code.
+        pass
+    else:
+        # Python fallback: settimeout makes recv_into raise
+        # socket.timeout (alias for TimeoutError) when no data arrives.
+        conn.settimeout(0.1)
+
+    # Profiling accumulators
+    profile = _PROFILE
+    if profile:
+        n_requests = 0
+        t_recv = 0.0
+        t_mmap_read = 0.0
+        t_call = 0.0
+        t_mmap_write = 0.0
+        t_send = 0.0
+
     try:
         # Get thread-local registry
         registry = shared_registry.get_thread_local_registry()
 
         while not shutdown_event.is_set():
-            # Select-based recv with 100ms timeout for shutdown checks
-            readable, _, _ = select.select([conn], [], [], 0.1)
-            if not readable:
+            # Read 8-byte request length (with timeout for shutdown checks)
+            try:
+                if use_accel:
+                    if profile:
+                        t0 = time.monotonic()
+                    len_buf = _c_recv_exact(sock_fd, 8, 100)
+                    if profile:
+                        t_recv += time.monotonic() - t0
+                else:
+                    if profile:
+                        t0 = time.monotonic()
+                    len_buf = _recv_exact_py(conn, 8)
+                    if profile:
+                        t_recv += time.monotonic() - t0
+            except TimeoutError:
                 continue
+            except OSError:
+                break
 
-            # Read 8-byte request length
-            len_buf = _recv_exact(conn, 8)
             if len_buf is None:
                 break
             length = struct.unpack('<Q', len_buf)[0]
@@ -197,32 +253,64 @@ def _handle_udf_loop(
                 break
 
             # Read input from mmap
-            mem = mmap.mmap(
-                input_fd, length, mmap.MAP_SHARED, mmap.PROT_READ,
-            )
-            try:
-                input_data = bytes(mem[:length])
-            finally:
-                mem.close()
+            if profile:
+                t0 = time.monotonic()
+            if use_accel:
+                input_data = _mmap_read(input_fd, length)
+            else:
+                mem = mmap.mmap(
+                    input_fd, length, mmap.MAP_SHARED, mmap.PROT_READ,
+                )
+                try:
+                    input_data = bytes(mem[:length])
+                finally:
+                    mem.close()
+            if profile:
+                t_mmap_read += time.monotonic() - t0
 
             # Refresh registry if generation changed
             registry = shared_registry.get_thread_local_registry()
 
             # Call function
             try:
-                output_data = call_function(registry, function_name, input_data)
+                if profile:
+                    t0 = time.monotonic()
+                output_data = call_function(
+                    registry, function_name, input_data,
+                )
+                if profile:
+                    t_call += time.monotonic() - t0
 
                 # Write result to output mmap
                 response_size = len(output_data)
-                needed = max(_MIN_OUTPUT_SIZE, response_size)
-                if needed > current_output_size:
-                    os.ftruncate(output_fd, needed)
-                    current_output_size = needed
-                os.lseek(output_fd, 0, os.SEEK_SET)
-                os.write(output_fd, output_data)
+                if profile:
+                    t0 = time.monotonic()
+                if use_accel:
+                    needed = max(_MIN_OUTPUT_SIZE, response_size)
+                    if needed > current_output_size:
+                        _mmap_write(output_fd, output_data, needed)
+                        current_output_size = needed
+                    else:
+                        _mmap_write(output_fd, output_data, 0)
+                else:
+                    needed = max(_MIN_OUTPUT_SIZE, response_size)
+                    if needed > current_output_size:
+                        os.ftruncate(output_fd, needed)
+                        current_output_size = needed
+                    os.lseek(output_fd, 0, os.SEEK_SET)
+                    os.write(output_fd, output_data)
+                if profile:
+                    t_mmap_write += time.monotonic() - t0
 
                 # Send [status=200, size]
-                conn.sendall(struct.pack('<QQ', STATUS_OK, response_size))
+                if profile:
+                    t0 = time.monotonic()
+                conn.sendall(
+                    _STATUS_OK_PREFIX + struct.pack('<Q', response_size),
+                )
+                if profile:
+                    t_send += time.monotonic() - t0
+                    n_requests += 1
 
             except Exception as e:
                 error_msg = (
@@ -244,13 +332,30 @@ def _handle_udf_loop(
         os.close(input_fd)
         os.close(output_fd)
 
+        if profile and n_requests > 0:
+            t_total = (
+                t_recv + t_mmap_read + t_call + t_mmap_write + t_send
+            ) / n_requests * 1e6
+            logger.info(
+                f"PROFILE '{function_name}' "
+                f'n={n_requests} '
+                f'recv={t_recv / n_requests * 1e6:.1f}us '
+                f'mmap_read={t_mmap_read / n_requests * 1e6:.1f}us '
+                f'call={t_call / n_requests * 1e6:.1f}us '
+                f'mmap_write={t_mmap_write / n_requests * 1e6:.1f}us '
+                f'send={t_send / n_requests * 1e6:.1f}us '
+                f'total={t_total:.1f}us',
+            )
 
-def _recv_exact(sock: socket.socket, n: int) -> bytes | None:
+
+def _recv_exact_py(sock: socket.socket, n: int) -> bytes | None:
     """Receive exactly n bytes, or return None on EOF."""
-    buf = bytearray()
-    while len(buf) < n:
-        chunk = sock.recv(n - len(buf))
-        if not chunk:
+    buf = bytearray(n)
+    view = memoryview(buf)
+    pos = 0
+    while pos < n:
+        nbytes = sock.recv_into(view[pos:])
+        if nbytes == 0:
             return None
-        buf.extend(chunk)
+        pos += nbytes
     return bytes(buf)
