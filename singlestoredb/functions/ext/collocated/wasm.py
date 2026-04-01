@@ -8,6 +8,7 @@ shared FunctionRegistry in registry.py.
 import logging
 import traceback
 
+from .registry import _accel_error
 from .registry import _has_accel
 from .registry import call_function
 from .registry import describe_functions_json
@@ -30,6 +31,11 @@ class FunctionHandler:
             logger.info('Using accelerated C call_function_accel loop')
         else:
             logger.info('Using pure Python call_function loop')
+            if _accel_error:
+                logger.warning(
+                    '_singlestoredb_accel failed to load: %s',
+                    _accel_error,
+                )
         _registry.initialize()
 
     def call_function(self, name: str, input_data: bytes) -> bytes:

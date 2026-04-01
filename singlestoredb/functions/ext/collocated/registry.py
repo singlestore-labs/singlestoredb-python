@@ -27,6 +27,7 @@ from singlestoredb.functions.ext.rowdat_1 import load as _load_rowdat_1
 from singlestoredb.functions.signature import get_signature
 from singlestoredb.mysql.constants import FIELD_TYPE as ft
 
+_accel_error: Optional[str] = None
 try:
     from _singlestoredb_accel import call_function_accel as _call_function_accel
     from _singlestoredb_accel import mmap_read as _mmap_read
@@ -36,6 +37,7 @@ try:
     logging.getLogger(__name__).info('_singlestoredb_accel loaded successfully')
 except Exception as e:
     _has_accel = False
+    _accel_error = str(e)
     _mmap_read = None
     _mmap_write = None
     _recv_exact = None

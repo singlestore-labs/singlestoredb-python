@@ -5449,6 +5449,23 @@ static PyObject *accel_recv_exact(PyObject *self, PyObject *args) {
     free(buf);
     return result;
 }
+#else /* __wasi__ stubs — importable but raise NotImplementedError if called */
+
+static PyObject *accel_mmap_read(PyObject *self, PyObject *args) {
+    PyErr_SetString(PyExc_NotImplementedError, "mmap_read is not available in WASM");
+    return NULL;
+}
+
+static PyObject *accel_mmap_write(PyObject *self, PyObject *args) {
+    PyErr_SetString(PyExc_NotImplementedError, "mmap_write is not available in WASM");
+    return NULL;
+}
+
+static PyObject *accel_recv_exact(PyObject *self, PyObject *args) {
+    PyErr_SetString(PyExc_NotImplementedError, "recv_exact is not available in WASM");
+    return NULL;
+}
+
 #endif /* !__wasi__ */
 
 static PyMethodDef PyMySQLAccelMethods[] = {
@@ -5458,11 +5475,9 @@ static PyMethodDef PyMySQLAccelMethods[] = {
     {"dump_rowdat_1_numpy", (PyCFunction)dump_rowdat_1_numpy, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 formatter for external functions which takes numpy.arrays"},
     {"load_rowdat_1_numpy", (PyCFunction)load_rowdat_1_numpy, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions which creates numpy.arrays"},
     {"call_function_accel", (PyCFunction)call_function_accel, METH_VARARGS | METH_KEYWORDS, "Combined load/call/dump for UDF function calls"},
-#ifndef __wasi__
     {"mmap_read", (PyCFunction)accel_mmap_read, METH_VARARGS, "mmap read: maps fd, copies data, unmaps"},
     {"mmap_write", (PyCFunction)accel_mmap_write, METH_VARARGS, "mmap write: ftruncate+lseek+write in one call"},
     {"recv_exact", (PyCFunction)accel_recv_exact, METH_VARARGS, "Receive exactly N bytes from a socket fd"},
-#endif
     {NULL, NULL, 0, NULL}
 };
 
