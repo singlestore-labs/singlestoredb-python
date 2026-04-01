@@ -8,7 +8,7 @@ shared FunctionRegistry in registry.py.
 import logging
 import traceback
 
-from .registry import _has_call_accel
+from .registry import _has_accel
 from .registry import call_function
 from .registry import describe_functions_json
 from .registry import FunctionRegistry
@@ -24,7 +24,7 @@ class FunctionHandler:
 
     def initialize(self) -> None:
         """Initialize and discover UDF functions from loaded modules."""
-        if _has_call_accel:
+        if _has_accel:
             logger.info('Using accelerated C call_function_accel loop')
         else:
             logger.info('Using pure Python call_function loop')

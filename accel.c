@@ -1,7 +1,12 @@
 
 #include <math.h>
+#include <poll.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #include <Python.h>
 
 #ifndef Py_LIMITED_API
@@ -5293,6 +5298,153 @@ error:
     goto exit;
 }
 
+/*
+ * mmap_read(fd, length) -> bytes
+ *
+ * Maps the given fd with MAP_SHARED|PROT_READ for `length` bytes,
+ * copies into a Python bytes object, and unmaps in a single C call.
+ * Eliminates Python mmap object creation/destruction overhead.
+ */
+static PyObject *accel_mmap_read(PyObject *self, PyObject *args) {
+    int fd;
+    Py_ssize_t length;
+
+    if (!PyArg_ParseTuple(args, "in", &fd, &length))
+        return NULL;
+
+    if (length <= 0) {
+        return PyBytes_FromStringAndSize(NULL, 0);
+    }
+
+    void *addr = mmap(NULL, (size_t)length, PROT_READ, MAP_SHARED, fd, 0);
+    if (addr == MAP_FAILED) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+
+    PyObject *result = PyBytes_FromStringAndSize((const char *)addr, length);
+    munmap(addr, (size_t)length);
+    return result;
+}
+
+/*
+ * mmap_write(fd, data, min_size) -> None
+ *
+ * Writes `data` to the file descriptor, combining ftruncate + lseek + write
+ * into a single C call. If min_size > 0, ftruncate is called with
+ * max(min_size, len(data)); if min_size == 0, ftruncate is skipped
+ * (caller manages file size).
+ */
+static PyObject *accel_mmap_write(PyObject *self, PyObject *args) {
+    int fd;
+    const char *data;
+    Py_ssize_t data_len;
+    Py_ssize_t min_size;
+
+    if (!PyArg_ParseTuple(args, "iy#n", &fd, &data, &data_len, &min_size))
+        return NULL;
+
+    if (min_size > 0) {
+        Py_ssize_t trunc_size = data_len > min_size ? data_len : min_size;
+        if (ftruncate(fd, (off_t)trunc_size) < 0) {
+            PyErr_SetFromErrno(PyExc_OSError);
+            return NULL;
+        }
+    }
+
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+
+    const char *p = data;
+    Py_ssize_t remaining = data_len;
+    while (remaining > 0) {
+        ssize_t written = write(fd, p, (size_t)remaining);
+        if (written < 0) {
+            PyErr_SetFromErrno(PyExc_OSError);
+            return NULL;
+        }
+        p += written;
+        remaining -= written;
+    }
+
+    Py_RETURN_NONE;
+}
+
+/*
+ * recv_exact(fd, n, timeout_ms=-1) -> bytes or None
+ *
+ * Receives exactly `n` bytes from a socket fd using blocking recv.
+ * Returns None on EOF (peer closed). Operates on raw fd to avoid
+ * Python socket object overhead. Releases the GIL during recv.
+ *
+ * When timeout_ms >= 0, uses poll() before each recv() to wait for
+ * data with a timeout. Raises TimeoutError on timeout. This allows
+ * the fd to remain in blocking mode while still supporting timeouts,
+ * avoiding the interaction between Python's settimeout() (which sets
+ * O_NONBLOCK) and direct fd-level recv().
+ */
+static PyObject *accel_recv_exact(PyObject *self, PyObject *args) {
+    int fd, timeout_ms = -1;
+    Py_ssize_t n;
+
+    if (!PyArg_ParseTuple(args, "in|i", &fd, &n, &timeout_ms))
+        return NULL;
+
+    if (n <= 0) {
+        return PyBytes_FromStringAndSize(NULL, 0);
+    }
+
+    char *buf = (char *)malloc((size_t)n);
+    if (!buf) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+
+    Py_ssize_t pos = 0;
+    while (pos < n) {
+        if (timeout_ms >= 0) {
+            struct pollfd pfd = {fd, POLLIN, 0};
+            int poll_rc;
+            Py_BEGIN_ALLOW_THREADS
+            poll_rc = poll(&pfd, 1, timeout_ms);
+            Py_END_ALLOW_THREADS
+            if (poll_rc == 0) {
+                free(buf);
+                PyErr_SetString(PyExc_TimeoutError, "recv_exact timed out");
+                return NULL;
+            }
+            if (poll_rc < 0) {
+                free(buf);
+                PyErr_SetFromErrno(PyExc_OSError);
+                return NULL;
+            }
+        }
+
+        ssize_t received;
+        Py_BEGIN_ALLOW_THREADS
+        received = recv(fd, buf + pos, (size_t)(n - pos), 0);
+        Py_END_ALLOW_THREADS
+
+        if (received < 0) {
+            free(buf);
+            PyErr_SetFromErrno(PyExc_OSError);
+            return NULL;
+        }
+        if (received == 0) {
+            /* EOF */
+            free(buf);
+            Py_RETURN_NONE;
+        }
+        pos += received;
+    }
+
+    PyObject *result = PyBytes_FromStringAndSize(buf, n);
+    free(buf);
+    return result;
+}
+
 static PyMethodDef PyMySQLAccelMethods[] = {
     {"read_rowdata_packet", (PyCFunction)read_rowdata_packet, METH_VARARGS | METH_KEYWORDS, "PyMySQL row data packet reader"},
     {"dump_rowdat_1", (PyCFunction)dump_rowdat_1, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 formatter for external functions"},
@@ -5300,6 +5452,9 @@ static PyMethodDef PyMySQLAccelMethods[] = {
     {"dump_rowdat_1_numpy", (PyCFunction)dump_rowdat_1_numpy, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 formatter for external functions which takes numpy.arrays"},
     {"load_rowdat_1_numpy", (PyCFunction)load_rowdat_1_numpy, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions which creates numpy.arrays"},
     {"call_function_accel", (PyCFunction)call_function_accel, METH_VARARGS | METH_KEYWORDS, "Combined load/call/dump for UDF function calls"},
+    {"mmap_read", (PyCFunction)accel_mmap_read, METH_VARARGS, "mmap read: maps fd, copies data, unmaps"},
+    {"mmap_write", (PyCFunction)accel_mmap_write, METH_VARARGS, "mmap write: ftruncate+lseek+write in one call"},
+    {"recv_exact", (PyCFunction)accel_recv_exact, METH_VARARGS, "Receive exactly N bytes from a socket fd"},
     {NULL, NULL, 0, NULL}
 };
 
