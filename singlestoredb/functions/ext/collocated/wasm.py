@@ -12,6 +12,7 @@ from .registry import _has_accel
 from .registry import call_function
 from .registry import describe_functions_json
 from .registry import FunctionRegistry
+from .registry import setup_logging
 
 logger = logging.getLogger('udf_handler')
 
@@ -24,6 +25,7 @@ class FunctionHandler:
 
     def initialize(self) -> None:
         """Initialize and discover UDF functions from loaded modules."""
+        setup_logging()
         if _has_accel:
             logger.info('Using accelerated C call_function_accel loop')
         else:
