@@ -1,11 +1,15 @@
 
 #include <math.h>
+#ifndef __wasi__
 #include <poll.h>
+#endif
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef __wasi__
 #include <sys/mman.h>
 #include <sys/socket.h>
+#endif
 #include <unistd.h>
 #include <Python.h>
 
@@ -5298,6 +5302,7 @@ error:
     goto exit;
 }
 
+#ifndef __wasi__
 /*
  * mmap_read(fd, length) -> bytes
  *
@@ -5444,6 +5449,7 @@ static PyObject *accel_recv_exact(PyObject *self, PyObject *args) {
     free(buf);
     return result;
 }
+#endif /* !__wasi__ */
 
 static PyMethodDef PyMySQLAccelMethods[] = {
     {"read_rowdata_packet", (PyCFunction)read_rowdata_packet, METH_VARARGS | METH_KEYWORDS, "PyMySQL row data packet reader"},
@@ -5452,9 +5458,11 @@ static PyMethodDef PyMySQLAccelMethods[] = {
     {"dump_rowdat_1_numpy", (PyCFunction)dump_rowdat_1_numpy, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 formatter for external functions which takes numpy.arrays"},
     {"load_rowdat_1_numpy", (PyCFunction)load_rowdat_1_numpy, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions which creates numpy.arrays"},
     {"call_function_accel", (PyCFunction)call_function_accel, METH_VARARGS | METH_KEYWORDS, "Combined load/call/dump for UDF function calls"},
+#ifndef __wasi__
     {"mmap_read", (PyCFunction)accel_mmap_read, METH_VARARGS, "mmap read: maps fd, copies data, unmaps"},
     {"mmap_write", (PyCFunction)accel_mmap_write, METH_VARARGS, "mmap write: ftruncate+lseek+write in one call"},
     {"recv_exact", (PyCFunction)accel_recv_exact, METH_VARARGS, "Receive exactly N bytes from a socket fd"},
+#endif
     {NULL, NULL, 0, NULL}
 };
 
