@@ -332,7 +332,7 @@ def normalize_dtype(dtype: Any) -> str:
     if isinstance(dtype, str):
         return sql_to_dtype(dtype)
 
-    if typing.get_origin(dtype) is np.dtype:
+    if has_numpy and typing.get_origin(dtype) is np.dtype:
         dtype = typing.get_args(dtype)[0]
 
     # Specific types
