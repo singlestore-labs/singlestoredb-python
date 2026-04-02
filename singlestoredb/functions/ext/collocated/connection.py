@@ -41,6 +41,9 @@ _MIN_OUTPUT_SIZE = 128 * 1024
 # Pre-pack the status OK header prefix to avoid per-request struct.pack
 _STATUS_OK_PREFIX = struct.pack('<Q', STATUS_OK)
 
+# Maximum function name length to prevent resource exhaustion
+_MAX_FUNCTION_NAME_LEN = 4096
+
 # Enable per-request timing via environment variable
 _PROFILE = os.environ.get('SINGLESTOREDB_UDF_PROFILE', '') == '1'
 
@@ -83,18 +86,56 @@ def _handle_connection_inner(
         logger.warning(f'Unsupported protocol version: {version}')
         return
 
+    if namelen > _MAX_FUNCTION_NAME_LEN:
+        logger.warning(f'Function name too long: {namelen}')
+        return
+
     # Receive function name + 2 FDs via SCM_RIGHTS
     fd_model = array.array('i', [0, 0])
     msg, ancdata, flags, addr = conn.recvmsg(
         namelen,
         socket.CMSG_LEN(2 * fd_model.itemsize),
     )
-    if len(ancdata) != 1:
-        logger.warning(f'Expected 1 ancdata, got {len(ancdata)}')
-        return
 
-    function_name = msg.decode('utf8')
-    input_fd, output_fd = struct.unpack('<ii', ancdata[0][2])
+    # Validate ancdata and extract FDs
+    received_fds: list[int] = []
+    try:
+        if len(ancdata) != 1:
+            logger.warning(f'Expected 1 ancdata, got {len(ancdata)}')
+            return
+
+        level, type_, fd_data = ancdata[0]
+        if level != socket.SOL_SOCKET or type_ != socket.SCM_RIGHTS:
+            logger.warning(
+                f'Unexpected ancdata level={level} type={type_}',
+            )
+            return
+
+        if flags & getattr(socket, 'MSG_CTRUNC', 0):
+            logger.warning('Ancillary data was truncated (MSG_CTRUNC)')
+            return
+
+        fd_array = array.array('i')
+        fd_array.frombytes(fd_data)
+        received_fds = list(fd_array)
+
+        if len(received_fds) != 2:
+            logger.warning(
+                f'Expected 2 FDs, got {len(received_fds)}',
+            )
+            return
+
+        function_name = msg.decode('utf8')
+        input_fd, output_fd = received_fds[0], received_fds[1]
+        # Clear so finally doesn't close FDs we're handing off
+        received_fds = []
+    finally:
+        # Close any received FDs if we're returning early
+        for fd in received_fds:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
     # --- Control signal path ---
     if function_name.startswith('@@'):
@@ -160,7 +201,7 @@ def _handle_control_signal(
             else:
                 os.ftruncate(output_fd, max(_MIN_OUTPUT_SIZE, response_size))
                 os.lseek(output_fd, 0, os.SEEK_SET)
-                os.write(output_fd, response_bytes)
+                _write_all_fd(output_fd, response_bytes)
 
             # Send [status=200, size]
             conn.sendall(struct.pack('<QQ', STATUS_OK, response_size))
@@ -298,7 +339,7 @@ def _handle_udf_loop(
                         os.ftruncate(output_fd, needed)
                         current_output_size = needed
                     os.lseek(output_fd, 0, os.SEEK_SET)
-                    os.write(output_fd, output_data)
+                    _write_all_fd(output_fd, output_data)
                 if profile:
                     t_mmap_write += time.monotonic() - t0
 
@@ -359,3 +400,17 @@ def _recv_exact_py(sock: socket.socket, n: int) -> bytes | None:
             return None
         pos += nbytes
     return bytes(buf)
+
+
+def _write_all_fd(fd: int, data: bytes) -> None:
+    """Write all bytes to a file descriptor, handling partial writes."""
+    view = memoryview(data)
+    written = 0
+    while written < len(data):
+        try:
+            n = os.write(fd, view[written:])
+        except InterruptedError:
+            continue
+        if n == 0:
+            raise RuntimeError('short write to output fd')
+        written += n

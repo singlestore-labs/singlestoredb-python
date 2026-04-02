@@ -14,9 +14,9 @@ interface function-handler {
     /// args_data_format, returns_data_format, function_type, doc
     describe-functions: func() -> result<string, string>;
 
-    /// Register a function from its signature and Python source code.
+    /// Register a function from its signature and source code.
     /// `signature` is a JSON object matching the describe-functions element schema.
-    /// `code` is the Python source containing the @udf-decorated function.
+    /// `code` is the function body (not a full `def` statement).
     /// `replace` controls whether an existing function of the same name is overwritten.
     create-function: func(signature: string, code: string, replace: bool) -> result<_, string>;
 }

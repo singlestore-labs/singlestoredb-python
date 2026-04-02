@@ -7,7 +7,7 @@ from typing import Set
 try:
     from IPython import get_ipython
     has_ipython = True
-except Exception:
+except (ImportError, OSError):
     has_ipython = False
 
 

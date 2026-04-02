@@ -60,7 +60,11 @@ class FunctionHandler:
         code: str,
         replace: bool,
     ) -> None:
-        """Register a function from its signature and Python source code."""
+        """Register a function from its signature and function body.
+
+        The ``code`` parameter should contain the function body, not a
+        full ``def`` statement or ``@udf``-decorated source.
+        """
         try:
             _registry.create_function(signature, code, replace)
         except Exception as e:
