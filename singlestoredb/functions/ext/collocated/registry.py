@@ -458,7 +458,7 @@ def call_function(
         results = []
         for row in rows:
             result = func(*row)
-            if not isinstance(result, tuple):
+            if not isinstance(result, (tuple, list)):
                 result = [result]
             results.append(list(result))
         return bytes(_dump_rowdat_1(return_types, row_ids, results))

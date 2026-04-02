@@ -24,6 +24,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+from .connection import _write_all_fd
 from .connection import handle_connection
 from .registry import FunctionRegistry
 
@@ -61,7 +62,7 @@ def _write_pipe_message(fd: int, payload: bytes) -> None:
     Wire format: [u32 LE length][payload].
     """
     header = struct.pack('<I', len(payload))
-    os.write(fd, header + payload)
+    _write_all_fd(fd, header + payload)
 
 
 class SharedRegistry:
@@ -252,7 +253,14 @@ class Server:
         kills and re-forks all workers so every worker has the updated
         registry state.
         """
-        ctx = multiprocessing.get_context('fork')
+        try:
+            ctx = multiprocessing.get_context('fork')
+        except ValueError:
+            raise RuntimeError(
+                "Process mode requires 'fork' multiprocessing context, "
+                'which is not available on this platform. '
+                "Use process_mode='thread' instead.",
+            )
         # workers[wid] = (process, pipe_read_fd)
         workers: Dict[
             int,
@@ -407,11 +415,13 @@ class Server:
             signal.signal(signal.SIGTERM, _worker_signal_handler)
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-            # Set non-blocking so accept() raises BlockingIOError
-            # instead of blocking when another worker wins the race.
-            # O_NONBLOCK is on the open file description (shared across
-            # forked processes), but that's fine — all workers want
-            # non-blocking accept and the parent doesn't call accept.
+            # WARNING: setblocking(False) sets O_NONBLOCK on the open
+            # file description, which is shared across all forked
+            # processes. This is intentional here — all workers need
+            # non-blocking accept() to handle the thundering-herd race,
+            # and the parent process never calls accept() on this
+            # socket. Do NOT add blocking operations on this socket
+            # in the parent process after workers are forked.
             server_sock.setblocking(False)
 
             registry = self.shared_registry.get_thread_local_registry()

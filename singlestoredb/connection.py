@@ -1166,12 +1166,13 @@ class Connection(metaclass=abc.ABCMeta):
             cur.execute(oper, params)
             if not re.match(r'^\s*(select|show|call|echo)\s+', oper, flags=re.I):
                 return []
-            out = list(cur.fetchall())
+            raw = cur.fetchall()
+            if hasattr(raw, 'to_dict') and callable(raw.to_dict):
+                return raw.to_dict(orient='records')
+            out = list(raw)
             if not out:
                 return []
-            if hasattr(out, 'to_dict') and callable(getattr(out, 'to_dict')):
-                out = out.to_dict(orient='records')
-            elif isinstance(out[0], (tuple, list)):
+            if isinstance(out[0], (tuple, list)):
                 if cur.description:
                     names = [x[0] for x in cur.description]
                     if fix_names:
