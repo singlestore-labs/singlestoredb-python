@@ -2276,7 +2276,11 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
     orig_data = data;
 
     // Get number of columns
-    n_cols = PyObject_Length(py_colspec);
+    {
+        Py_ssize_t tmp = PyObject_Length(py_colspec);
+        if (tmp < 0) goto error;
+        n_cols = (unsigned long long)tmp;
+    }
 
     // Determine column types
     ctypes = calloc(sizeof(int), n_cols);
@@ -2920,19 +2924,27 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
         goto error;
     }
 
-    if (PyObject_Length(py_returns) != PyObject_Length(py_cols)) {
-        PyErr_SetString(PyExc_ValueError, "number of return values does not match number of returned columns");
-        goto error;
+    {
+        Py_ssize_t tmp_returns_l = PyObject_Length(py_returns);
+        if (tmp_returns_l < 0) goto error;
+        Py_ssize_t tmp_cols_l = PyObject_Length(py_cols);
+        if (tmp_cols_l < 0) goto error;
+        if (tmp_returns_l != tmp_cols_l) {
+            PyErr_SetString(PyExc_ValueError, "number of return values does not match number of returned columns");
+            goto error;
+        }
+        n_cols = (unsigned long long)tmp_returns_l;
     }
 
-    n_rows = (unsigned long long)PyObject_Length(py_row_ids);
+    {
+        Py_ssize_t tmp = PyObject_Length(py_row_ids);
+        if (tmp < 0) goto error;
+        n_rows = (unsigned long long)tmp;
+    }
     if (n_rows == 0) {
         py_out = PyBytes_FromStringAndSize("", 0);
         goto exit;
     }
-
-    // Verify all data lengths agree
-    n_cols = (unsigned long long)PyObject_Length(py_returns);
     if (n_cols == 0) {
         py_out = PyBytes_FromStringAndSize("", 0);
         goto exit;
@@ -2944,17 +2956,25 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
         PyObject *py_data = PyTuple_GetItem(py_item, 0);
         if (!py_data) goto error;
 
-        if ((unsigned long long)PyObject_Length(py_data) != n_rows) {
-            PyErr_SetString(PyExc_ValueError, "mismatched lengths of column values");
-            goto error;
+        {
+            Py_ssize_t tmp = PyObject_Length(py_data);
+            if (tmp < 0) goto error;
+            if ((unsigned long long)tmp != n_rows) {
+                PyErr_SetString(PyExc_ValueError, "mismatched lengths of column values");
+                goto error;
+            }
         }
 
         PyObject *py_mask = PyTuple_GetItem(py_item, 1);
         if (!py_mask) goto error;
 
-        if (py_mask != Py_None && (unsigned long long)PyObject_Length(py_mask) != n_rows) {
-            PyErr_SetString(PyExc_ValueError, "length of mask values does not match the length of data rows");
-            goto error;
+        if (py_mask != Py_None) {
+            Py_ssize_t tmp = PyObject_Length(py_mask);
+            if (tmp < 0) goto error;
+            if ((unsigned long long)tmp != n_rows) {
+                PyErr_SetString(PyExc_ValueError, "length of mask values does not match the length of data rows");
+                goto error;
+            }
         }
     }
 
@@ -4179,7 +4199,11 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     CHECKRC(PyBytes_AsStringAndSize(py_data, &data, &length));
     end = data + (unsigned long long)length;
 
-    colspec_l = PyObject_Length(py_colspec);
+    {
+        Py_ssize_t tmp = PyObject_Length(py_colspec);
+        if (tmp < 0) goto error;
+        colspec_l = (unsigned long long)tmp;
+    }
     ctypes = malloc(sizeof(int) * colspec_l);
 
     for (i = 0; i < colspec_l; i++) {
@@ -4481,7 +4505,11 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
         goto error;
     }
 
-    n_rows = (unsigned long long)PyObject_Length(py_rows);
+    {
+        Py_ssize_t tmp = PyObject_Length(py_rows);
+        if (tmp < 0) goto error;
+        n_rows = (unsigned long long)tmp;
+    }
     if (n_rows == 0) {
         py_out = PyBytes_FromStringAndSize("", 0);
         goto exit;
@@ -4494,7 +4522,11 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!out) goto error;
 
     // Get return types
-    n_cols = (unsigned long long)PyObject_Length(py_returns);
+    {
+        Py_ssize_t tmp = PyObject_Length(py_returns);
+        if (tmp < 0) goto error;
+        n_cols = (unsigned long long)tmp;
+    }
     if (n_cols == 0) {
         PyErr_SetString(PyExc_ValueError, "no return values specified");
         goto error;
@@ -4809,7 +4841,11 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
     if (length == 0) { py_out = PyBytes_FromStringAndSize("", 0); goto exit; }
 
     // Parse colspec types
-    colspec_l = (unsigned long long)PyObject_Length(py_colspec);
+    {
+        Py_ssize_t tmp = PyObject_Length(py_colspec);
+        if (tmp < 0) goto error;
+        colspec_l = (unsigned long long)tmp;
+    }
     ctypes = malloc(sizeof(int) * colspec_l);
     if (!ctypes) goto error;
     for (i = 0; i < colspec_l; i++) {
@@ -4822,7 +4858,11 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
     }
 
     // Parse return types
-    returns_l = (unsigned long long)PyObject_Length(py_returns);
+    {
+        Py_ssize_t tmp = PyObject_Length(py_returns);
+        if (tmp < 0) goto error;
+        returns_l = (unsigned long long)tmp;
+    }
     rtypes = malloc(sizeof(int) * returns_l);
     if (!rtypes) goto error;
     for (i = 0; i < returns_l; i++) {
@@ -5529,6 +5569,12 @@ static PyObject *accel_recv_exact(PyObject *self, PyObject *args) {
             poll_rc = poll(&pfd, 1, timeout_ms);
             Py_END_ALLOW_THREADS
             if (poll_rc == 0) {
+                if (pos > 0) {
+                    /* Partial message already consumed — must finish it.
+                       Block indefinitely to avoid protocol desync. */
+                    timeout_ms = -1;
+                    continue;
+                }
                 free(buf);
                 PyErr_SetString(PyExc_TimeoutError, "recv_exact timed out");
                 return NULL;

@@ -395,7 +395,15 @@ def _recv_exact_py(sock: socket.socket, n: int) -> bytes | None:
     view = memoryview(buf)
     pos = 0
     while pos < n:
-        nbytes = sock.recv_into(view[pos:])
+        try:
+            nbytes = sock.recv_into(view[pos:])
+        except TimeoutError:
+            if pos == 0:
+                raise
+            # Partial message already consumed — must finish it.
+            # Remove timeout to avoid protocol desync.
+            sock.settimeout(None)
+            continue
         if nbytes == 0:
             return None
         pos += nbytes
