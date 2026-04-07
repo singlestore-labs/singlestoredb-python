@@ -4911,6 +4911,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
 
             switch (ctypes[i]) {
             case MYSQL_TYPE_NULL:
+                data += 1;
                 Py_INCREF(Py_None);
                 CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 break;
