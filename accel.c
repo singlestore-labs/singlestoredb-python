@@ -4855,6 +4855,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
         if (!py_ctype) { Py_DECREF(py_cspec); goto error; }
         ctypes[i] = (int)PyLong_AsLong(py_ctype);
         Py_DECREF(py_ctype); Py_DECREF(py_cspec);
+        if (PyErr_Occurred()) { goto error; }
     }
 
     // Parse return types
@@ -4870,6 +4871,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
         if (!py_item) goto error;
         rtypes[i] = (int)PyLong_AsLong(py_item);
         Py_DECREF(py_item);
+        if (PyErr_Occurred()) { goto error; }
     }
 
     out_l = 256;
