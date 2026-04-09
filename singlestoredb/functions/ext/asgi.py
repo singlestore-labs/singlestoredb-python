@@ -128,6 +128,12 @@ rowdat_1_type_map = {
     'float64': ft.DOUBLE,
     'str': ft.STRING,
     'bytes': -ft.STRING,
+    'datetime': ft.DATETIME,
+    'datetime6': ft.DATETIME,
+    'date': ft.DATE,
+    'time': ft.TIME,
+    'time6': ft.TIME,
+    'decimal': ft.NEWDECIMAL,
 }
 
 
