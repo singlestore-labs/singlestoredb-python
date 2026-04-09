@@ -192,7 +192,15 @@ def _setup_authentication_info_handler() -> Callable[..., Dict[str, Any]]:
     return get_authentication_info
 
 
-get_authentication_info = _setup_authentication_info_handler()
+_get_authentication_info: Optional[Callable[..., Dict[str, Any]]] = None
+
+
+def get_authentication_info(include_env: bool = True) -> Dict[str, Any]:
+    """Return authentication info, initializing on first call."""
+    global _get_authentication_info
+    if _get_authentication_info is None:
+        _get_authentication_info = _setup_authentication_info_handler()
+    return _get_authentication_info(include_env=include_env)
 
 
 def get_token() -> Optional[str]:
