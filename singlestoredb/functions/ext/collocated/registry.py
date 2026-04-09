@@ -102,6 +102,12 @@ rowdat_1_type_map: Dict[str, int] = {
     'float64': ft.DOUBLE,
     'str': ft.STRING,
     'bytes': -ft.STRING,
+    'datetime': ft.DATETIME,
+    'datetime6': ft.DATETIME,
+    'date': ft.DATE,
+    'time': ft.TIME,
+    'time6': ft.TIME,
+    'decimal': ft.NEWDECIMAL,
 }
 
 # Map dtype strings to Python type annotation strings for code generation.
@@ -121,6 +127,12 @@ _dtype_to_python: Dict[str, str] = {
     'float': 'float',
     'str': 'str',
     'bytes': 'bytes',
+    'datetime': 'datetime.datetime',
+    'datetime6': 'datetime.datetime',
+    'date': 'datetime.date',
+    'time': 'datetime.timedelta',
+    'time6': 'datetime.timedelta',
+    'decimal': 'decimal.Decimal',
 }
 
 logger = logging.getLogger('udf_handler')
@@ -235,8 +247,10 @@ class FunctionRegistry:
                 sig = get_signature(obj)
                 if sig and sig.get('args') is not None and sig.get('returns'):
                     self._register_function(obj, name, sig)
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as exc:
+                logger.warning(
+                    f'Skipping {name}: {exc}',
+                )
 
     def _build_json_descriptions(
         self,
@@ -320,6 +334,9 @@ class FunctionRegistry:
         )
 
         return (
+            'import datetime\n'
+            'import decimal\n'
+            'from decimal import Decimal\n'
             'from singlestoredb.functions import udf\n'
             'from typing import Optional, Tuple\n'
             '\n'
@@ -403,20 +420,18 @@ class FunctionRegistry:
         for arg in sig['args']:
             dtype = arg['dtype'].replace('?', '')
             if dtype not in rowdat_1_type_map:
-                logger.warning(
-                    f"Skipping {full_name}: unsupported arg dtype '{dtype}'",
+                raise TypeError(
+                    f"unsupported arg dtype '{dtype}' for function '{full_name}'",
                 )
-                return
             arg_types.append((arg['name'], rowdat_1_type_map[dtype]))
 
         return_types: List[int] = []
         for ret in sig['returns']:
             dtype = ret['dtype'].replace('?', '')
             if dtype not in rowdat_1_type_map:
-                logger.warning(
-                    f'Skipping {full_name}: no type mapping for {dtype}',
+                raise TypeError(
+                    f"unsupported return dtype '{dtype}' for function '{full_name}'",
                 )
-                return
             return_types.append(rowdat_1_type_map[dtype])
 
         self.functions[full_name] = {

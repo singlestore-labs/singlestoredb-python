@@ -518,6 +518,16 @@ typedef struct {
     PyObject *unpack;
     PyObject *decode;
     PyObject *frombuffer;
+    PyObject *year_attr;
+    PyObject *month_attr;
+    PyObject *day_attr;
+    PyObject *hour_attr;
+    PyObject *minute_attr;
+    PyObject *second_attr;
+    PyObject *microsecond_attr;
+    PyObject *days_attr;
+    PyObject *seconds_attr;
+    PyObject *microseconds_attr;
 } PyStrings;
 
 static PyStrings PyStr = {0};
@@ -2379,29 +2389,36 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
             case MYSQL_TYPE_DECIMAL:
             case MYSQL_TYPE_NEWDECIMAL:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: DECIMAL");
-                goto error;
+                CHECKSIZE(8);
+                item_sizes[i] = 8;
+                data_formats[i] = "Q";
+                i64 = *(int64_t*)data;
+                data += 8;
+                CHECKSIZE(i64);
+                data += i64;
                 break;
 
             case MYSQL_TYPE_DATE:
             case MYSQL_TYPE_NEWDATE:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: DATE");
-                goto error;
+                CHECKSIZE(8);
+                item_sizes[i] = 8;
+                data_formats[i] = "Q";
+                data += 8;
                 break;
 
             case MYSQL_TYPE_TIME:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: TIME");
-                goto error;
+                CHECKSIZE(8);
+                item_sizes[i] = 8;
+                data_formats[i] = "Q";
+                data += 8;
                 break;
 
             case MYSQL_TYPE_DATETIME:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: DATETIME");
-                goto error;
-                break;
-
             case MYSQL_TYPE_TIMESTAMP:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: TIMESTAMP");
-                goto error;
+                CHECKSIZE(8);
+                item_sizes[i] = 8;
+                data_formats[i] = "Q";
+                data += 8;
                 break;
 
             case MYSQL_TYPE_YEAR:
@@ -2559,25 +2576,105 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
             case MYSQL_TYPE_DECIMAL:
             case MYSQL_TYPE_NEWDECIMAL:
-                // TODO
+                i64 = *(int64_t*)data; data += 8;
+                if (is_null) {
+                    u64 = 0;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                } else {
+                    py_str = PyUnicode_FromStringAndSize(data, (Py_ssize_t)i64);
+                    data += i64;
+                    if (!py_str) goto error;
+                    PyObject *py_dec = PyObject_CallFunctionObjArgs(PyFunc.decimal_Decimal, py_str, NULL);
+                    Py_CLEAR(py_str);
+                    if (!py_dec) goto error;
+                    u64 = (uint64_t)py_dec;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_dec));
+                    Py_CLEAR(py_dec);
+                }
                 break;
 
             case MYSQL_TYPE_DATE:
-            case MYSQL_TYPE_NEWDATE:
-                // TODO
+            case MYSQL_TYPE_NEWDATE: {
+                i64 = *(int64_t*)data; data += 8;
+                if (is_null) {
+                    u64 = 0;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                } else {
+                    int dy = (int)(i64 % 100); int64_t tmp = i64 / 100;
+                    int mo = (int)(tmp % 100); int yr = (int)(tmp / 100);
+                    PyObject *py_dt = PyObject_CallFunction(PyFunc.datetime_date, "iii", yr, mo, dy);
+                    if (!py_dt) goto error;
+                    u64 = (uint64_t)py_dt;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_dt));
+                    Py_CLEAR(py_dt);
+                }
                 break;
+            }
 
-            case MYSQL_TYPE_TIME:
-                // TODO
+            case MYSQL_TYPE_TIME: {
+                i64 = *(int64_t*)data; data += 8;
+                if (is_null) {
+                    u64 = 0;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                } else {
+                    int64_t sign_v = (i64 < 0) ? -1 : 1;
+                    int64_t abs_v = (i64 < 0) ? -i64 : i64;
+                    int64_t us_v = abs_v % 1000000;
+                    int64_t packed_v = abs_v / 1000000;
+                    int64_t ss_v = packed_v % 100;
+                    int64_t mm_v = (packed_v / 100) % 100;
+                    int64_t hh_v = packed_v / 10000;
+                    int64_t total_secs = hh_v * 3600 + mm_v * 60 + ss_v;
+                    if (sign_v < 0) { total_secs = -total_secs; us_v = -us_v; }
+                    int days_v = (int)(total_secs / 86400);
+                    int secs_v = (int)(total_secs % 86400);
+                    if (secs_v < 0) { days_v--; secs_v += 86400; }
+                    PyObject *py_d = PyLong_FromLong(days_v);
+                    PyObject *py_s = PyLong_FromLong(secs_v);
+                    PyObject *py_u = PyLong_FromLongLong(us_v);
+                    if (!py_d || !py_s || !py_u) {
+                        Py_XDECREF(py_d); Py_XDECREF(py_s); Py_XDECREF(py_u);
+                        goto error;
+                    }
+                    PyObject *py_td = PyObject_CallFunctionObjArgs(
+                        PyFunc.datetime_timedelta, py_d, py_s, py_u, NULL);
+                    Py_DECREF(py_d); Py_DECREF(py_s); Py_DECREF(py_u);
+                    if (!py_td) goto error;
+                    u64 = (uint64_t)py_td;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_td));
+                    Py_CLEAR(py_td);
+                }
                 break;
+            }
 
             case MYSQL_TYPE_DATETIME:
-                // TODO
+            case MYSQL_TYPE_TIMESTAMP: {
+                i64 = *(int64_t*)data; data += 8;
+                if (is_null) {
+                    u64 = 0;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                } else {
+                    int us_v = (int)(i64 & 0xFFFFF); i64 >>= 20;
+                    int sec_v = (int)(i64 & 0x3F);   i64 >>= 6;
+                    int min_v = (int)(i64 & 0x3F);   i64 >>= 6;
+                    int hr_v  = (int)(i64 & 0x1F);   i64 >>= 5;
+                    int dy_v  = (int)(i64 & 0x1F);   i64 >>= 5;
+                    int mo_v  = (int)(i64 & 0xF);    i64 >>= 4;
+                    int yr_v  = (int)i64;
+                    PyObject *py_dt = PyObject_CallFunction(
+                        PyFunc.datetime_datetime, "iiiiiii",
+                        yr_v, mo_v, dy_v, hr_v, min_v, sec_v, us_v);
+                    if (!py_dt) goto error;
+                    u64 = (uint64_t)py_dt;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_dt));
+                    Py_CLEAR(py_dt);
+                }
                 break;
-
-            case MYSQL_TYPE_TIMESTAMP:
-                // TODO
-                break;
+            }
 
             case MYSQL_TYPE_YEAR:
                 u16 = (is_null) ? 0 : *(uint16_t*)data; data += 2;
@@ -3887,35 +3984,122 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 break;
 
             case MYSQL_TYPE_DECIMAL:
-                // TODO
-                PyErr_SetString(PyExc_ValueError, "unsupported data type: DECIMAL");
-                goto error;
+            case MYSQL_TYPE_NEWDECIMAL: {
+                u64 = *(uint64_t*)(cols[i] + j * 8);
+                if (is_null || u64 == 0) {
+                    CHECKMEM(8);
+                    i64 = 0;
+                    memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                } else {
+                    PyObject *py_obj = (PyObject*)u64;
+                    PyObject *str_obj = PyObject_Str(py_obj);
+                    if (!str_obj) goto error;
+                    PyObject *encoded = PyUnicode_AsEncodedString(str_obj, "utf-8", "strict");
+                    Py_DECREF(str_obj);
+                    if (!encoded) goto error;
+                    char *str = NULL;
+                    Py_ssize_t str_l = 0;
+                    if (PyBytes_AsStringAndSize(encoded, &str, &str_l) < 0) {
+                        Py_DECREF(encoded); goto error;
+                    }
+                    CHECKMEM(8+str_l);
+                    i64 = str_l;
+                    memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                    memcpy(out+out_idx, str, str_l); out_idx += str_l;
+                    Py_DECREF(encoded);
+                }
                 break;
+            }
 
             case MYSQL_TYPE_DATE:
-            case MYSQL_TYPE_NEWDATE:
-                // TODO
-                PyErr_SetString(PyExc_ValueError, "unsupported data type: DATE");
-                goto error;
+            case MYSQL_TYPE_NEWDATE: {
+                CHECKMEM(8);
+                u64 = *(uint64_t*)(cols[i] + j * 8);
+                if (is_null || u64 == 0) {
+                    i64 = 0;
+                } else {
+                    PyObject *py_obj = (PyObject*)u64;
+                    PyObject *yr = PyObject_GetAttr(py_obj, PyStr.year_attr);
+                    PyObject *mo = PyObject_GetAttr(py_obj, PyStr.month_attr);
+                    PyObject *dy = PyObject_GetAttr(py_obj, PyStr.day_attr);
+                    if (!yr || !mo || !dy) {
+                        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy); goto error;
+                    }
+                    i64 = (int64_t)PyLong_AsLong(yr) * 10000
+                         + (int64_t)PyLong_AsLong(mo) * 100
+                         + (int64_t)PyLong_AsLong(dy);
+                    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+                    if (PyErr_Occurred()) goto error;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
+            }
 
-            case MYSQL_TYPE_TIME:
-                // TODO
-                PyErr_SetString(PyExc_ValueError, "unsupported data type: TIME");
-                goto error;
+            case MYSQL_TYPE_TIME: {
+                CHECKMEM(8);
+                u64 = *(uint64_t*)(cols[i] + j * 8);
+                if (is_null || u64 == 0) {
+                    i64 = 0;
+                } else {
+                    PyObject *py_obj = (PyObject*)u64;
+                    PyObject *py_days = PyObject_GetAttr(py_obj, PyStr.days_attr);
+                    PyObject *py_secs = PyObject_GetAttr(py_obj, PyStr.seconds_attr);
+                    PyObject *py_us = PyObject_GetAttr(py_obj, PyStr.microseconds_attr);
+                    if (!py_days || !py_secs || !py_us) {
+                        Py_XDECREF(py_days); Py_XDECREF(py_secs); Py_XDECREF(py_us); goto error;
+                    }
+                    long days_val = PyLong_AsLong(py_days);
+                    long secs_val = PyLong_AsLong(py_secs);
+                    long us_val = PyLong_AsLong(py_us);
+                    Py_DECREF(py_days); Py_DECREF(py_secs); Py_DECREF(py_us);
+                    if (PyErr_Occurred()) goto error;
+                    int64_t total_secs = (int64_t)days_val * 86400 + (int64_t)secs_val;
+                    int64_t total_us = (int64_t)us_val;
+                    int64_t sign_v = (total_secs < 0 || (total_secs == 0 && total_us < 0)) ? -1 : 1;
+                    if (sign_v < 0) { total_secs = -total_secs; total_us = -total_us; }
+                    int64_t hh = total_secs / 3600;
+                    int64_t mm = (total_secs % 3600) / 60;
+                    int64_t ss = total_secs % 60;
+                    i64 = sign_v * (hh * 10000 + mm * 100 + ss) * 1000000 + sign_v * total_us;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
+            }
 
             case MYSQL_TYPE_DATETIME:
-                // TODO
-                PyErr_SetString(PyExc_ValueError, "unsupported data type: DATETIME");
-                goto error;
+            case MYSQL_TYPE_TIMESTAMP: {
+                CHECKMEM(8);
+                u64 = *(uint64_t*)(cols[i] + j * 8);
+                if (is_null || u64 == 0) {
+                    i64 = 0;
+                } else {
+                    PyObject *py_obj = (PyObject*)u64;
+                    PyObject *yr = PyObject_GetAttr(py_obj, PyStr.year_attr);
+                    PyObject *mo = PyObject_GetAttr(py_obj, PyStr.month_attr);
+                    PyObject *dy = PyObject_GetAttr(py_obj, PyStr.day_attr);
+                    PyObject *hr = PyObject_GetAttr(py_obj, PyStr.hour_attr);
+                    PyObject *mi = PyObject_GetAttr(py_obj, PyStr.minute_attr);
+                    PyObject *se = PyObject_GetAttr(py_obj, PyStr.second_attr);
+                    PyObject *us = PyObject_GetAttr(py_obj, PyStr.microsecond_attr);
+                    if (!yr || !mo || !dy || !hr || !mi || !se || !us) {
+                        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy);
+                        Py_XDECREF(hr); Py_XDECREF(mi); Py_XDECREF(se); Py_XDECREF(us);
+                        goto error;
+                    }
+                    i64 = (int64_t)PyLong_AsLong(yr);
+                    i64 = (i64 << 4) | (int64_t)PyLong_AsLong(mo);
+                    i64 = (i64 << 5) | (int64_t)PyLong_AsLong(dy);
+                    i64 = (i64 << 5) | (int64_t)PyLong_AsLong(hr);
+                    i64 = (i64 << 6) | (int64_t)PyLong_AsLong(mi);
+                    i64 = (i64 << 6) | (int64_t)PyLong_AsLong(se);
+                    i64 = (i64 << 20) | (int64_t)PyLong_AsLong(us);
+                    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+                    Py_DECREF(hr); Py_DECREF(mi); Py_DECREF(se); Py_DECREF(us);
+                    if (PyErr_Occurred()) goto error;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
-
-            case MYSQL_TYPE_TIMESTAMP:
-                // TODO
-                PyErr_SetString(PyExc_ValueError, "unsupported data type: TIMESTAMP");
-                goto error;
-                break;
+            }
 
             case MYSQL_TYPE_YEAR:
                 CHECKMEM(2);
@@ -4367,25 +4551,94 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
             case MYSQL_TYPE_DECIMAL:
             case MYSQL_TYPE_NEWDECIMAL:
-                // TODO
+                i64 = *(int64_t*)data; data += 8;
+                if (is_null) {
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                    Py_INCREF(Py_None);
+                } else {
+                    py_str = PyUnicode_FromStringAndSize(data, (Py_ssize_t)i64);
+                    data += i64;
+                    if (!py_str) goto error;
+                    PyObject *py_dec = PyObject_CallFunctionObjArgs(PyFunc.decimal_Decimal, py_str, NULL);
+                    Py_DECREF(py_str); py_str = NULL;
+                    if (!py_dec) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_dec));
+                }
                 break;
 
             case MYSQL_TYPE_DATE:
-            case MYSQL_TYPE_NEWDATE:
-                // TODO
+            case MYSQL_TYPE_NEWDATE: {
+                i64 = *(int64_t*)data; data += 8;
+                if (is_null) {
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                    Py_INCREF(Py_None);
+                } else {
+                    int dy = (int)(i64 % 100); i64 /= 100;
+                    int mo = (int)(i64 % 100); i64 /= 100;
+                    int yr = (int)i64;
+                    PyObject *py_dt = PyObject_CallFunction(PyFunc.datetime_date, "iii", yr, mo, dy);
+                    if (!py_dt) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_dt));
+                }
                 break;
+            }
 
-            case MYSQL_TYPE_TIME:
-                // TODO
+            case MYSQL_TYPE_TIME: {
+                i64 = *(int64_t*)data; data += 8;
+                if (is_null) {
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                    Py_INCREF(Py_None);
+                } else {
+                    int64_t sign_v = (i64 < 0) ? -1 : 1;
+                    int64_t abs_v = (i64 < 0) ? -i64 : i64;
+                    int64_t us_v = abs_v % 1000000;
+                    int64_t packed_v = abs_v / 1000000;
+                    int64_t ss_v = packed_v % 100;
+                    int64_t mm_v = (packed_v / 100) % 100;
+                    int64_t hh_v = packed_v / 10000;
+                    int64_t total_secs = hh_v * 3600 + mm_v * 60 + ss_v;
+                    if (sign_v < 0) { total_secs = -total_secs; us_v = -us_v; }
+                    int days_v = (int)(total_secs / 86400);
+                    int secs_v = (int)(total_secs % 86400);
+                    if (secs_v < 0) { days_v--; secs_v += 86400; }
+                    PyObject *py_d = PyLong_FromLong(days_v);
+                    PyObject *py_s = PyLong_FromLong(secs_v);
+                    PyObject *py_u = PyLong_FromLongLong(us_v);
+                    if (!py_d || !py_s || !py_u) {
+                        Py_XDECREF(py_d); Py_XDECREF(py_s); Py_XDECREF(py_u);
+                        goto error;
+                    }
+                    PyObject *py_td = PyObject_CallFunctionObjArgs(
+                        PyFunc.datetime_timedelta, py_d, py_s, py_u, NULL);
+                    Py_DECREF(py_d); Py_DECREF(py_s); Py_DECREF(py_u);
+                    if (!py_td) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_td));
+                }
                 break;
+            }
 
             case MYSQL_TYPE_DATETIME:
-                // TODO
+            case MYSQL_TYPE_TIMESTAMP: {
+                i64 = *(int64_t*)data; data += 8;
+                if (is_null) {
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                    Py_INCREF(Py_None);
+                } else {
+                    int us_v = (int)(i64 & 0xFFFFF); i64 >>= 20;
+                    int sec_v = (int)(i64 & 0x3F);   i64 >>= 6;
+                    int min_v = (int)(i64 & 0x3F);   i64 >>= 6;
+                    int hr_v  = (int)(i64 & 0x1F);   i64 >>= 5;
+                    int dy_v  = (int)(i64 & 0x1F);   i64 >>= 5;
+                    int mo_v  = (int)(i64 & 0xF);    i64 >>= 4;
+                    int yr_v  = (int)i64;
+                    PyObject *py_dt = PyObject_CallFunction(
+                        PyFunc.datetime_datetime, "iiiiiii",
+                        yr_v, mo_v, dy_v, hr_v, min_v, sec_v, us_v);
+                    if (!py_dt) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_dt));
+                }
                 break;
-
-            case MYSQL_TYPE_TIMESTAMP:
-                // TODO
-                break;
+            }
 
             case MYSQL_TYPE_YEAR:
                 u16 = *(uint16_t*)data; data += 2;
@@ -4673,25 +4926,113 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 break;
 
             case MYSQL_TYPE_DECIMAL:
-                // TODO
+            case MYSQL_TYPE_NEWDECIMAL:
+                if (is_null) {
+                    CHECKMEM(8);
+                    i64 = 0;
+                    memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                } else {
+                    PyObject *str_obj = PyObject_Str(py_item);
+                    if (!str_obj) goto error;
+                    PyObject *encoded = PyUnicode_AsEncodedString(str_obj, "utf-8", "strict");
+                    Py_DECREF(str_obj);
+                    if (!encoded) goto error;
+                    char *str = NULL;
+                    Py_ssize_t str_l = 0;
+                    if (PyBytes_AsStringAndSize(encoded, &str, &str_l) < 0) {
+                        Py_DECREF(encoded); goto error;
+                    }
+                    CHECKMEM(8+str_l);
+                    i64 = str_l;
+                    memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                    memcpy(out+out_idx, str, str_l); out_idx += str_l;
+                    Py_DECREF(encoded);
+                }
                 break;
 
             case MYSQL_TYPE_DATE:
-            case MYSQL_TYPE_NEWDATE:
-                // TODO
+            case MYSQL_TYPE_NEWDATE: {
+                CHECKMEM(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    PyObject *yr = PyObject_GetAttr(py_item, PyStr.year_attr);
+                    PyObject *mo = PyObject_GetAttr(py_item, PyStr.month_attr);
+                    PyObject *dy = PyObject_GetAttr(py_item, PyStr.day_attr);
+                    if (!yr || !mo || !dy) {
+                        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy); goto error;
+                    }
+                    i64 = (int64_t)PyLong_AsLong(yr) * 10000
+                         + (int64_t)PyLong_AsLong(mo) * 100
+                         + (int64_t)PyLong_AsLong(dy);
+                    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+                    if (PyErr_Occurred()) goto error;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
+            }
 
-            case MYSQL_TYPE_TIME:
-                // TODO
+            case MYSQL_TYPE_TIME: {
+                CHECKMEM(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    PyObject *py_days = PyObject_GetAttr(py_item, PyStr.days_attr);
+                    PyObject *py_secs = PyObject_GetAttr(py_item, PyStr.seconds_attr);
+                    PyObject *py_us = PyObject_GetAttr(py_item, PyStr.microseconds_attr);
+                    if (!py_days || !py_secs || !py_us) {
+                        Py_XDECREF(py_days); Py_XDECREF(py_secs); Py_XDECREF(py_us); goto error;
+                    }
+                    long days_val = PyLong_AsLong(py_days);
+                    long secs_val = PyLong_AsLong(py_secs);
+                    long us_val = PyLong_AsLong(py_us);
+                    Py_DECREF(py_days); Py_DECREF(py_secs); Py_DECREF(py_us);
+                    if (PyErr_Occurred()) goto error;
+                    int64_t total_secs = (int64_t)days_val * 86400 + (int64_t)secs_val;
+                    int64_t total_us = (int64_t)us_val;
+                    int64_t sign_v = (total_secs < 0 || (total_secs == 0 && total_us < 0)) ? -1 : 1;
+                    if (sign_v < 0) { total_secs = -total_secs; total_us = -total_us; }
+                    int64_t hh = total_secs / 3600;
+                    int64_t mm = (total_secs % 3600) / 60;
+                    int64_t ss = total_secs % 60;
+                    i64 = sign_v * (hh * 10000 + mm * 100 + ss) * 1000000 + sign_v * total_us;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
+            }
 
             case MYSQL_TYPE_DATETIME:
-                // TODO
+            case MYSQL_TYPE_TIMESTAMP: {
+                CHECKMEM(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    PyObject *yr = PyObject_GetAttr(py_item, PyStr.year_attr);
+                    PyObject *mo = PyObject_GetAttr(py_item, PyStr.month_attr);
+                    PyObject *dy = PyObject_GetAttr(py_item, PyStr.day_attr);
+                    PyObject *hr = PyObject_GetAttr(py_item, PyStr.hour_attr);
+                    PyObject *mi = PyObject_GetAttr(py_item, PyStr.minute_attr);
+                    PyObject *se = PyObject_GetAttr(py_item, PyStr.second_attr);
+                    PyObject *us = PyObject_GetAttr(py_item, PyStr.microsecond_attr);
+                    if (!yr || !mo || !dy || !hr || !mi || !se || !us) {
+                        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy);
+                        Py_XDECREF(hr); Py_XDECREF(mi); Py_XDECREF(se); Py_XDECREF(us);
+                        goto error;
+                    }
+                    i64 = (int64_t)PyLong_AsLong(yr);
+                    i64 = (i64 << 4) | (int64_t)PyLong_AsLong(mo);
+                    i64 = (i64 << 5) | (int64_t)PyLong_AsLong(dy);
+                    i64 = (i64 << 5) | (int64_t)PyLong_AsLong(hr);
+                    i64 = (i64 << 6) | (int64_t)PyLong_AsLong(mi);
+                    i64 = (i64 << 6) | (int64_t)PyLong_AsLong(se);
+                    i64 = (i64 << 20) | (int64_t)PyLong_AsLong(us);
+                    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+                    Py_DECREF(hr); Py_DECREF(mi); Py_DECREF(se); Py_DECREF(us);
+                    if (PyErr_Occurred()) goto error;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
-
-            case MYSQL_TYPE_TIMESTAMP:
-                // TODO
-                break;
+            }
 
             case MYSQL_TYPE_YEAR:
                 CHECKMEM(2);
@@ -5032,30 +5373,99 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
 
             case MYSQL_TYPE_DECIMAL:
             case MYSQL_TYPE_NEWDECIMAL:
-                PyErr_SetString(PyExc_NotImplementedError,
-                    "DECIMAL type not yet supported in call_function_accel");
-                goto error;
+                CHECK_REMAINING(8);
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECK_REMAINING((size_t)i64);
+                    py_str = PyUnicode_FromStringAndSize(data, (Py_ssize_t)i64);
+                    data += i64;
+                    if (!py_str) goto error;
+                    PyObject *py_dec = PyObject_CallFunctionObjArgs(PyFunc.decimal_Decimal, py_str, NULL);
+                    Py_DECREF(py_str); py_str = NULL;
+                    if (!py_dec) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_dec));
+                }
+                break;
 
             case MYSQL_TYPE_DATE:
-            case MYSQL_TYPE_NEWDATE:
-                PyErr_SetString(PyExc_NotImplementedError,
-                    "DATE type not yet supported in call_function_accel");
-                goto error;
+            case MYSQL_TYPE_NEWDATE: {
+                CHECK_REMAINING(8);
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    int dy = (int)(i64 % 100); i64 /= 100;
+                    int mo = (int)(i64 % 100); i64 /= 100;
+                    int yr = (int)i64;
+                    PyObject *py_dt = PyObject_CallFunction(PyFunc.datetime_date, "iii", yr, mo, dy);
+                    if (!py_dt) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_dt));
+                }
+                break;
+            }
 
-            case MYSQL_TYPE_TIME:
-                PyErr_SetString(PyExc_NotImplementedError,
-                    "TIME type not yet supported in call_function_accel");
-                goto error;
+            case MYSQL_TYPE_TIME: {
+                CHECK_REMAINING(8);
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    int64_t sign_v = (i64 < 0) ? -1 : 1;
+                    int64_t abs_v = (i64 < 0) ? -i64 : i64;
+                    int64_t us_v = abs_v % 1000000;
+                    int64_t packed_v = abs_v / 1000000;
+                    int64_t ss_v = packed_v % 100;
+                    int64_t mm_v = (packed_v / 100) % 100;
+                    int64_t hh_v = packed_v / 10000;
+                    int64_t total_secs = hh_v * 3600 + mm_v * 60 + ss_v;
+                    if (sign_v < 0) { total_secs = -total_secs; us_v = -us_v; }
+                    int days_v = (int)(total_secs / 86400);
+                    int secs_v = (int)(total_secs % 86400);
+                    if (secs_v < 0) { days_v--; secs_v += 86400; }
+                    PyObject *py_d = PyLong_FromLong(days_v);
+                    PyObject *py_s = PyLong_FromLong(secs_v);
+                    PyObject *py_u = PyLong_FromLongLong(us_v);
+                    if (!py_d || !py_s || !py_u) {
+                        Py_XDECREF(py_d); Py_XDECREF(py_s); Py_XDECREF(py_u);
+                        goto error;
+                    }
+                    PyObject *py_td = PyObject_CallFunctionObjArgs(
+                        PyFunc.datetime_timedelta, py_d, py_s, py_u, NULL);
+                    Py_DECREF(py_d); Py_DECREF(py_s); Py_DECREF(py_u);
+                    if (!py_td) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_td));
+                }
+                break;
+            }
 
             case MYSQL_TYPE_DATETIME:
-                PyErr_SetString(PyExc_NotImplementedError,
-                    "DATETIME type not yet supported in call_function_accel");
-                goto error;
-
-            case MYSQL_TYPE_TIMESTAMP:
-                PyErr_SetString(PyExc_NotImplementedError,
-                    "TIMESTAMP type not yet supported in call_function_accel");
-                goto error;
+            case MYSQL_TYPE_TIMESTAMP: {
+                CHECK_REMAINING(8);
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    int us_v = (int)(i64 & 0xFFFFF); i64 >>= 20;
+                    int sec_v = (int)(i64 & 0x3F);   i64 >>= 6;
+                    int min_v = (int)(i64 & 0x3F);   i64 >>= 6;
+                    int hr_v  = (int)(i64 & 0x1F);   i64 >>= 5;
+                    int dy_v  = (int)(i64 & 0x1F);   i64 >>= 5;
+                    int mo_v  = (int)(i64 & 0xF);    i64 >>= 4;
+                    int yr_v  = (int)i64;
+                    PyObject *py_dt = PyObject_CallFunction(
+                        PyFunc.datetime_datetime, "iiiiiii",
+                        yr_v, mo_v, dy_v, hr_v, min_v, sec_v, us_v);
+                    if (!py_dt) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_dt));
+                }
+                break;
+            }
 
             case MYSQL_TYPE_YEAR:
                 CHECK_REMAINING(2);
@@ -5291,40 +5701,121 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
 
             case MYSQL_TYPE_DECIMAL:
             case MYSQL_TYPE_NEWDECIMAL:
-                Py_DECREF(py_result_item);
-                py_result_item = NULL;
-                PyErr_SetString(PyExc_NotImplementedError,
-                    "DECIMAL type not yet supported in call_function_accel");
-                goto error;
+                if (is_null) {
+                    CHECKMEM_CFA(8);
+                    i64 = 0;
+                    memcpy(out+out_idx, &i64, 8);
+                    out_idx += 8;
+                } else {
+                    PyObject *str_obj = PyObject_Str(py_result_item);
+                    if (!str_obj) {
+                        Py_DECREF(py_result_item); py_result_item = NULL; goto error;
+                    }
+                    PyObject *encoded = PyUnicode_AsEncodedString(str_obj, "utf-8", "strict");
+                    Py_DECREF(str_obj);
+                    if (!encoded) {
+                        Py_DECREF(py_result_item); py_result_item = NULL; goto error;
+                    }
+                    char *str = NULL;
+                    Py_ssize_t str_l = 0;
+                    if (PyBytes_AsStringAndSize(encoded, &str, &str_l) < 0) {
+                        Py_DECREF(encoded);
+                        Py_DECREF(py_result_item); py_result_item = NULL; goto error;
+                    }
+                    CHECKMEM_CFA(8+str_l);
+                    i64 = str_l;
+                    memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                    memcpy(out+out_idx, str, str_l); out_idx += str_l;
+                    Py_DECREF(encoded);
+                }
+                break;
 
             case MYSQL_TYPE_DATE:
-            case MYSQL_TYPE_NEWDATE:
-                Py_DECREF(py_result_item);
-                py_result_item = NULL;
-                PyErr_SetString(PyExc_NotImplementedError,
-                    "DATE type not yet supported in call_function_accel");
-                goto error;
+            case MYSQL_TYPE_NEWDATE: {
+                CHECKMEM_CFA(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    PyObject *yr = PyObject_GetAttr(py_result_item, PyStr.year_attr);
+                    PyObject *mo = PyObject_GetAttr(py_result_item, PyStr.month_attr);
+                    PyObject *dy = PyObject_GetAttr(py_result_item, PyStr.day_attr);
+                    if (!yr || !mo || !dy) {
+                        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy);
+                        Py_DECREF(py_result_item); py_result_item = NULL; goto error;
+                    }
+                    i64 = (int64_t)PyLong_AsLong(yr) * 10000
+                         + (int64_t)PyLong_AsLong(mo) * 100
+                         + (int64_t)PyLong_AsLong(dy);
+                    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                break;
+            }
 
-            case MYSQL_TYPE_TIME:
-                Py_DECREF(py_result_item);
-                py_result_item = NULL;
-                PyErr_SetString(PyExc_NotImplementedError,
-                    "TIME type not yet supported in call_function_accel");
-                goto error;
+            case MYSQL_TYPE_TIME: {
+                CHECKMEM_CFA(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    PyObject *py_days = PyObject_GetAttr(py_result_item, PyStr.days_attr);
+                    PyObject *py_secs = PyObject_GetAttr(py_result_item, PyStr.seconds_attr);
+                    PyObject *py_us = PyObject_GetAttr(py_result_item, PyStr.microseconds_attr);
+                    if (!py_days || !py_secs || !py_us) {
+                        Py_XDECREF(py_days); Py_XDECREF(py_secs); Py_XDECREF(py_us);
+                        Py_DECREF(py_result_item); py_result_item = NULL; goto error;
+                    }
+                    long days_val = PyLong_AsLong(py_days);
+                    long secs_val = PyLong_AsLong(py_secs);
+                    long us_val = PyLong_AsLong(py_us);
+                    Py_DECREF(py_days); Py_DECREF(py_secs); Py_DECREF(py_us);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+
+                    int64_t total_secs = (int64_t)days_val * 86400 + (int64_t)secs_val;
+                    int64_t total_us = (int64_t)us_val;
+                    int64_t sign_v = (total_secs < 0 || (total_secs == 0 && total_us < 0)) ? -1 : 1;
+                    if (sign_v < 0) { total_secs = -total_secs; total_us = -total_us; }
+                    int64_t hh = total_secs / 3600;
+                    int64_t mm = (total_secs % 3600) / 60;
+                    int64_t ss = total_secs % 60;
+                    i64 = sign_v * (hh * 10000 + mm * 100 + ss) * 1000000 + sign_v * total_us;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                break;
+            }
 
             case MYSQL_TYPE_DATETIME:
-                Py_DECREF(py_result_item);
-                py_result_item = NULL;
-                PyErr_SetString(PyExc_NotImplementedError,
-                    "DATETIME type not yet supported in call_function_accel");
-                goto error;
-
-            case MYSQL_TYPE_TIMESTAMP:
-                Py_DECREF(py_result_item);
-                py_result_item = NULL;
-                PyErr_SetString(PyExc_NotImplementedError,
-                    "TIMESTAMP type not yet supported in call_function_accel");
-                goto error;
+            case MYSQL_TYPE_TIMESTAMP: {
+                CHECKMEM_CFA(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    PyObject *yr = PyObject_GetAttr(py_result_item, PyStr.year_attr);
+                    PyObject *mo = PyObject_GetAttr(py_result_item, PyStr.month_attr);
+                    PyObject *dy = PyObject_GetAttr(py_result_item, PyStr.day_attr);
+                    PyObject *hr = PyObject_GetAttr(py_result_item, PyStr.hour_attr);
+                    PyObject *mi = PyObject_GetAttr(py_result_item, PyStr.minute_attr);
+                    PyObject *se = PyObject_GetAttr(py_result_item, PyStr.second_attr);
+                    PyObject *us = PyObject_GetAttr(py_result_item, PyStr.microsecond_attr);
+                    if (!yr || !mo || !dy || !hr || !mi || !se || !us) {
+                        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy);
+                        Py_XDECREF(hr); Py_XDECREF(mi); Py_XDECREF(se); Py_XDECREF(us);
+                        Py_DECREF(py_result_item); py_result_item = NULL; goto error;
+                    }
+                    i64 = (int64_t)PyLong_AsLong(yr);
+                    i64 = (i64 << 4) | (int64_t)PyLong_AsLong(mo);
+                    i64 = (i64 << 5) | (int64_t)PyLong_AsLong(dy);
+                    i64 = (i64 << 5) | (int64_t)PyLong_AsLong(hr);
+                    i64 = (i64 << 6) | (int64_t)PyLong_AsLong(mi);
+                    i64 = (i64 << 6) | (int64_t)PyLong_AsLong(se);
+                    i64 = (i64 << 20) | (int64_t)PyLong_AsLong(us);
+                    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+                    Py_DECREF(hr); Py_DECREF(mi); Py_DECREF(se); Py_DECREF(us);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                break;
+            }
 
             case MYSQL_TYPE_YEAR:
                 CHECKMEM_CFA(2);
@@ -5714,6 +6205,16 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     PyStr.unpack = PyUnicode_FromString("unpack");
     PyStr.decode = PyUnicode_FromString("decode");
     PyStr.frombuffer = PyUnicode_FromString("frombuffer");
+    PyStr.year_attr = PyUnicode_FromString("year");
+    PyStr.month_attr = PyUnicode_FromString("month");
+    PyStr.day_attr = PyUnicode_FromString("day");
+    PyStr.hour_attr = PyUnicode_FromString("hour");
+    PyStr.minute_attr = PyUnicode_FromString("minute");
+    PyStr.second_attr = PyUnicode_FromString("second");
+    PyStr.microsecond_attr = PyUnicode_FromString("microsecond");
+    PyStr.days_attr = PyUnicode_FromString("days");
+    PyStr.seconds_attr = PyUnicode_FromString("seconds");
+    PyStr.microseconds_attr = PyUnicode_FromString("microseconds");
 
     PyObject *decimal_mod = PyImport_ImportModule("decimal");
     if (!decimal_mod) goto error;

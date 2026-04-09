@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import datetime as _dt
+import decimal
 import struct
 import warnings
 from collections.abc import Sequence
@@ -83,8 +85,82 @@ int_types = set([
     ft.TINY, -ft.TINY, ft.SHORT, -ft.SHORT, ft.INT24, -ft.INT24,
     ft.LONG, -ft.LONG, ft.LONGLONG, -ft.LONGLONG,
 ])
-string_types = set([15, 245, 247, 248, 249, 250, 251, 252, 253, 254])
+string_types = set([15, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254])
 binary_types = set([-x for x in string_types])
+datetime_types = {ft.DATETIME, ft.TIMESTAMP}
+date_types = {ft.DATE}
+time_types = {ft.TIME}
+decimal_types = {ft.NEWDECIMAL, ft.DECIMAL}
+
+
+def _pack_datetime(dt: _dt.datetime) -> int:
+    """Bit-pack a datetime into int64 per rowdat_1 spec."""
+    v = dt.year
+    v = (v << 4) | dt.month
+    v = (v << 5) | dt.day
+    v = (v << 5) | dt.hour
+    v = (v << 6) | dt.minute
+    v = (v << 6) | dt.second
+    v = (v << 20) | dt.microsecond
+    return v
+
+
+def _unpack_datetime(v: int) -> _dt.datetime:
+    """Unpack bit-packed int64 into datetime."""
+    us = v & 0xFFFFF
+    v >>= 20
+    sec = v & 0x3F
+    v >>= 6
+    min_ = v & 0x3F
+    v >>= 6
+    hour = v & 0x1F
+    v >>= 5
+    day = v & 0x1F
+    v >>= 5
+    mon = v & 0xF
+    v >>= 4
+    year = v
+    return _dt.datetime(year, mon, day, hour, min_, sec, us)
+
+
+def _pack_date(d: _dt.date) -> int:
+    """Pack a date as year*10000 + month*100 + day."""
+    return d.year * 10000 + d.month * 100 + d.day
+
+
+def _unpack_date(v: int) -> _dt.date:
+    """Unpack int64 into date."""
+    day = v % 100
+    v //= 100
+    mon = v % 100
+    v //= 100
+    return _dt.date(v, mon, day)
+
+
+def _pack_time(td: _dt.timedelta) -> int:
+    """Pack a timedelta into int64 per rowdat_1 spec."""
+    total_us = int(td.total_seconds() * 1_000_000)
+    sign = -1 if total_us < 0 else 1
+    total_us = abs(total_us)
+    us = total_us % 1_000_000
+    total_secs = total_us // 1_000_000
+    ss = total_secs % 60
+    mm = (total_secs // 60) % 60
+    hh = total_secs // 3600
+    return sign * (hh * 10000 + mm * 100 + ss) * 1_000_000 + (sign * us)
+
+
+def _unpack_time(v: int) -> _dt.timedelta:
+    """Unpack int64 into timedelta."""
+    sign = -1 if v < 0 else 1
+    v = abs(v)
+    us = v % 1_000_000
+    packed = v // 1_000_000
+    ss = packed % 100
+    mm = (packed // 100) % 100
+    hh = packed // 10000
+    total = _dt.timedelta(hours=hh, minutes=mm, seconds=ss, microseconds=us)
+    return total if sign >= 0 else -total
 
 
 def _load(
@@ -127,6 +203,23 @@ def _load(
             elif ctype in binary_types:
                 slen = struct.unpack('<q', data_io.read(8))[0]
                 val = data_io.read(slen)
+            elif ctype in datetime_types:
+                val = _unpack_datetime(
+                    struct.unpack('<q', data_io.read(8))[0],
+                )
+            elif ctype in date_types:
+                val = _unpack_date(
+                    struct.unpack('<q', data_io.read(8))[0],
+                )
+            elif ctype in time_types:
+                val = _unpack_time(
+                    struct.unpack('<q', data_io.read(8))[0],
+                )
+            elif ctype in decimal_types:
+                slen = struct.unpack('<q', data_io.read(8))[0]
+                val = decimal.Decimal(
+                    data_io.read(slen).decode('utf-8'),
+                )
             else:
                 raise TypeError(f'unrecognized column type: {ctype}')
             row.append(None if is_null else val)
@@ -175,6 +268,23 @@ def _load_vectors(
             elif ctype in binary_types:
                 slen = struct.unpack('<q', data_io.read(8))[0]
                 val = data_io.read(slen)
+            elif ctype in datetime_types:
+                val = _unpack_datetime(
+                    struct.unpack('<q', data_io.read(8))[0],
+                )
+            elif ctype in date_types:
+                val = _unpack_date(
+                    struct.unpack('<q', data_io.read(8))[0],
+                )
+            elif ctype in time_types:
+                val = _unpack_time(
+                    struct.unpack('<q', data_io.read(8))[0],
+                )
+            elif ctype in decimal_types:
+                slen = struct.unpack('<q', data_io.read(8))[0]
+                val = decimal.Decimal(
+                    data_io.read(slen).decode('utf-8'),
+                )
             else:
                 raise TypeError(f'unrecognized column type: {ctype}')
             cols[i].append(default if is_null else val)
@@ -389,6 +499,22 @@ def _dump(
                 else:
                     out.write(struct.pack('<q', len(value)))
                     out.write(value)
+            elif rtype in datetime_types:
+                packed = _pack_datetime(value) if value is not None else 0
+                out.write(struct.pack('<q', packed))
+            elif rtype in date_types:
+                packed = _pack_date(value) if value is not None else 0
+                out.write(struct.pack('<q', packed))
+            elif rtype in time_types:
+                packed = _pack_time(value) if value is not None else 0
+                out.write(struct.pack('<q', packed))
+            elif rtype in decimal_types:
+                if value is None:
+                    out.write(struct.pack('<q', 0))
+                else:
+                    sval = str(value).encode('utf-8')
+                    out.write(struct.pack('<q', len(sval)))
+                    out.write(sval)
             else:
                 raise TypeError(f'unrecognized column type: {rtype}')
 
@@ -467,6 +593,22 @@ def _dump_vectors(
                     else:
                         out.write(struct.pack('<q', len(value)))
                         out.write(value)
+                elif rtype in datetime_types:
+                    packed = _pack_datetime(value) if value is not None else 0
+                    out.write(struct.pack('<q', packed))
+                elif rtype in date_types:
+                    packed = _pack_date(value) if value is not None else 0
+                    out.write(struct.pack('<q', packed))
+                elif rtype in time_types:
+                    packed = _pack_time(value) if value is not None else 0
+                    out.write(struct.pack('<q', packed))
+                elif rtype in decimal_types:
+                    if value is None:
+                        out.write(struct.pack('<q', 0))
+                    else:
+                        sval = str(value).encode('utf-8')
+                        out.write(struct.pack('<q', len(sval)))
+                        out.write(sval)
                 else:
                     raise TypeError(f'unrecognized column type: {rtype}')
 

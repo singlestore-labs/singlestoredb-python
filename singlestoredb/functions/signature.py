@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import dataclasses
 import datetime
+import decimal
 import inspect
 import numbers
 import os
@@ -146,6 +147,7 @@ sql_type_map = {
     'date': 'DATE',
     'time': 'TIME',
     'time6': 'TIME(6)',
+    'decimal': 'DECIMAL',
 }
 
 sql_to_type_map = {
@@ -187,6 +189,9 @@ sql_to_type_map = {
     'TINYBLOB': 'bytes',
     'MEDIUMBLOB': 'bytes',
     'LONGBLOB': 'bytes',
+    'DECIMAL': 'decimal',
+    'NEWDECIMAL': 'decimal',
+    'NUMERIC': 'decimal',
 }
 
 
@@ -418,11 +423,17 @@ def normalize_dtype(dtype: Any) -> str:
     if issubclass(dtype, (bytes, bytearray)):
         return 'bytes'
 
+    # Decimal
+    if issubclass(dtype, decimal.Decimal):
+        return 'decimal'
+
     # Date / Times
     if issubclass(dtype, datetime.datetime):
         return 'datetime'
     if issubclass(dtype, datetime.date):
         return 'date'
+    if issubclass(dtype, datetime.time):
+        return 'time'
     if issubclass(dtype, datetime.timedelta):
         return 'time'
 
