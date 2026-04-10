@@ -394,6 +394,7 @@ def _recv_exact_py(sock: socket.socket, n: int) -> bytes | None:
     buf = bytearray(n)
     view = memoryview(buf)
     pos = 0
+    orig_timeout = sock.gettimeout()
     while pos < n:
         try:
             nbytes = sock.recv_into(view[pos:])
@@ -405,8 +406,12 @@ def _recv_exact_py(sock: socket.socket, n: int) -> bytes | None:
             sock.settimeout(None)
             continue
         if nbytes == 0:
+            if orig_timeout is not None:
+                sock.settimeout(orig_timeout)
             return None
         pos += nbytes
+    if orig_timeout is not None:
+        sock.settimeout(orig_timeout)
     return bytes(buf)
 
 
