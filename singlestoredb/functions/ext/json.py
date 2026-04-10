@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import base64
+import datetime
+import decimal
 import json
 from typing import Any
 from typing import List
@@ -36,6 +38,22 @@ class JSONEncoder(json.JSONEncoder):
     def default(self, obj: Any) -> Any:
         if isinstance(obj, bytes):
             return base64.b64encode(obj).decode('utf-8')
+        if isinstance(obj, datetime.datetime):
+            return obj.strftime('%Y-%m-%d %H:%M:%S.%f')
+        if isinstance(obj, datetime.date):
+            return obj.isoformat()
+        if isinstance(obj, datetime.timedelta):
+            total_us = int(obj.total_seconds() * 1_000_000)
+            sign = '-' if total_us < 0 else ''
+            total_us = abs(total_us)
+            us = total_us % 1_000_000
+            total_secs = total_us // 1_000_000
+            ss = total_secs % 60
+            mm = (total_secs // 60) % 60
+            hh = total_secs // 3600
+            return f'{sign}{hh}:{mm:02d}:{ss:02d}.{us:06d}'
+        if isinstance(obj, decimal.Decimal):
+            return str(obj)
         return json.JSONEncoder.default(self, obj)
 
 
