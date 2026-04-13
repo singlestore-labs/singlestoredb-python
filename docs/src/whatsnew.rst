@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.16.10 - April 13, 2026
+-------------------------
+* set keep alive probes for mysql connection (#122)
+
 v1.16.9 - February 5, 2026
 --------------------------
 * Apply string interpolation in mogrify if args is not None (#118)
