@@ -9,6 +9,7 @@ from .utils.config import check_dict_str_str  # noqa: F401
 from .utils.config import check_float  # noqa: F401
 from .utils.config import check_int  # noqa: F401
 from .utils.config import check_optional_bool  # noqa: F401
+from .utils.config import check_socket_options  # noqa: F401
 from .utils.config import check_str  # noqa: F401
 from .utils.config import check_url  # noqa: F401
 from .utils.config import describe_option  # noqa: F401
@@ -261,6 +262,11 @@ register_option(
     'fusion.enabled', 'bool', check_bool, False,
     'Should Fusion SQL queries be enabled?',
     environ='SINGLESTOREDB_FUSION_ENABLED',
+)
+
+register_option(
+    'socket_options', 'dict', check_socket_options, None,
+    'Format for socket options',
 )
 
 #

@@ -1340,6 +1340,7 @@ def connect(
     vector_data_format: Optional[str] = None,
     parse_json: Optional[bool] = None,
     interpolate_query_with_empty_args: Optional[bool] = None,
+    socket_options: Optional[Dict[int, Dict[int, Any]]] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1428,6 +1429,11 @@ def connect(
     interpolate_query_with_empty_args : bool, optional
         Should the connector apply parameter interpolation even when the
         parameters are empty? This corresponds to pymysql/mysqlclient's handling
+    socket_options : dict, optional
+        Socket options to set on the underlying socket. The keys should be
+        socket level constants (e.g., socket.SOL_SOCKET) and the values should be
+        dictionaries mapping socket option constants (e.g., socket.SO_KEEPALIVE) to
+        the desired value for that option.
 
     Examples
     --------

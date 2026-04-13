@@ -230,6 +230,10 @@ class Connection(BaseConnection):
         Set to true to check the server's identity.
     tls_sni_servername: str, optional
         Set server host name for TLS connection
+    socket_options: Dict[int, Dict[int, any]], optional
+        A dictionary of socket options to set on the connection.
+        The keys are the socket level constants (e.g., socket.SOL_SOCKET),
+        and the values are dictionaries mapping option names to values.
     read_default_group : str, optional
         Group to read from in the configuration file.
     autocommit : bool, optional
@@ -341,6 +345,7 @@ class Connection(BaseConnection):
         ssl_verify_cert=None,
         ssl_verify_identity=None,
         tls_sni_servername=None,
+        socket_options=None,
         parse_json=True,
         invalid_values=None,
         pure_python=None,
@@ -477,7 +482,7 @@ class Connection(BaseConnection):
         self.collation = collation
         self.use_unicode = use_unicode
         self.encoding_errors = encoding_errors
-
+        self._socket_options = socket_options or {}
         self.encoding = charset_by_name(self.charset).encoding
 
         client_flag |= CLIENT.CAPABILITIES
@@ -1107,6 +1112,11 @@ class Connection(BaseConnection):
                         print('connected using socket')
                     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                     sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+
+                    for level, options in self._socket_options.items():
+                        for opt, value in options.items():
+                            sock.setsockopt(level, opt, value)
+
                 sock.settimeout(None)
 
             self._sock = sock
