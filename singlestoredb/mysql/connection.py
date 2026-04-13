@@ -1107,6 +1107,12 @@ class Connection(BaseConnection):
                         print('connected using socket')
                     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                     sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+
+                    # setting TCP keepalive for mysql
+                    # 60s idle, 30s interval, 5 times before close
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 30)
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
                 sock.settimeout(None)
 
             self._sock = sock
