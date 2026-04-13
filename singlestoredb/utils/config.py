@@ -646,6 +646,55 @@ def check_str(
     return out
 
 
+def check_socket_options(
+    value: Any,
+) -> Optional[Dict[int, Dict[int, Any]]]:
+    """
+    Validate socket options.
+
+    Parameters
+    ----------
+    value : dict
+        The value to validate.  It must be a dictionary where the keys are
+        socket level constants (e.g., socket.SOL_SOCKET) and the values are
+        dictionaries mapping socket option constants (e.g., socket.SO_KEEPALIVE)
+        to the desired value for that option.
+
+    Returns
+    -------
+    dict
+        The validated socket options
+
+    """
+    if value is None:
+        return None
+
+    if not isinstance(value, Mapping):
+        raise ValueError(
+            'value {} must be of type dict'.format(value),
+        )
+
+    out: dict[int, dict[int, Any]] = {}
+    for level, options in value.items():
+        if not isinstance(level, int):
+            raise ValueError(
+                f'keys in {value} must be integers corresponding to socket levels',
+            )
+        if not isinstance(options, Mapping):
+            raise ValueError(
+                f'values in {value} must be dicts.',
+            )
+        out[level] = {}
+        for opt, val in options.items():
+            if not isinstance(opt, int):
+                raise ValueError(
+                    f'keys in sub-dicts of {value} must be integers.',
+                )
+            out[level][opt] = val
+
+    return out
+
+
 def check_dict_str_str(
     value: Any,
 ) -> Optional[Dict[str, str]]:

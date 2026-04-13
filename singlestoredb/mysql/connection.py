@@ -1113,8 +1113,6 @@ class Connection(BaseConnection):
                     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                     sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
-                    # setting TCP keepalive for mysql
-                    # 60s idle, 30s interval, 5 times before close
                     for level, options in self._socket_options.items():
                         for opt, value in options.items():
                             sock.setsockopt(level, opt, value)
