@@ -3,9 +3,9 @@ CLI entry point for the collocated Python UDF server.
 
 Usage::
 
-    python -m singlestoredb.functions.ext.collocated \\
-        --extension myfuncs \\
-        --extension-path /home/user/libs \\
+    python -m singlestoredb.functions.ext.plugin \\
+        --plugin-name myfuncs \\
+        --search-path /home/user/libs \\
         --socket /tmp/my-udf.sock
 
 Arguments match the Rust wasm-udf-server CLI for drop-in compatibility.
@@ -26,29 +26,29 @@ logger = logging.getLogger('collocated')
 
 def main(argv: Any = None) -> None:
     parser = argparse.ArgumentParser(
-        prog='python -m singlestoredb.functions.ext.collocated',
+        prog='python -m singlestoredb.functions.ext.plugin',
         description='High-performance collocated Python UDF server',
     )
     parser.add_argument(
-        '--extension',
-        default=os.environ.get('EXTERNAL_UDF_EXTENSION', ''),
+        '--plugin-name',
+        default=os.environ.get('PLUGIN_NAME', ''),
         help=(
             'Python module to import (e.g. myfuncs). '
-            'Env: EXTERNAL_UDF_EXTENSION'
+            'Env: PLUGIN_NAME'
         ),
     )
     parser.add_argument(
-        '--extension-path',
-        default=os.environ.get('EXTERNAL_UDF_EXTENSION_PATH', ''),
+        '--search-path',
+        default=os.environ.get('PLUGIN_SEARCH_PATH', ''),
         help=(
             'Colon-separated search dirs for the module. '
-            'Env: EXTERNAL_UDF_EXTENSION_PATH'
+            'Env: PLUGIN_SEARCH_PATH'
         ),
     )
     parser.add_argument(
         '--socket',
         default=os.environ.get(
-            'EXTERNAL_UDF_SOCKET_PATH',
+            'PLUGIN_SOCKET_PATH',
             os.path.join(
                 tempfile.gettempdir(),
                 f'singlestore-udf-{os.getpid()}-{secrets.token_hex(4)}.sock',
@@ -56,53 +56,53 @@ def main(argv: Any = None) -> None:
         ),
         help=(
             'Unix socket path. '
-            'Env: EXTERNAL_UDF_SOCKET_PATH'
+            'Env: PLUGIN_SOCKET_PATH'
         ),
     )
     parser.add_argument(
         '--n-workers',
         type=int,
-        default=int(os.environ.get('EXTERNAL_UDF_N_WORKERS', '0')),
+        default=int(os.environ.get('PLUGIN_N_WORKERS', '0')),
         help=(
             'Worker threads (0 = CPU count). '
-            'Env: EXTERNAL_UDF_N_WORKERS'
+            'Env: PLUGIN_N_WORKERS'
         ),
     )
     parser.add_argument(
         '--max-connections',
         type=int,
-        default=int(os.environ.get('EXTERNAL_UDF_MAX_CONNECTIONS', '32')),
+        default=int(os.environ.get('PLUGIN_MAX_CONNECTIONS', '32')),
         help=(
             'Socket backlog. '
-            'Env: EXTERNAL_UDF_MAX_CONNECTIONS'
+            'Env: PLUGIN_MAX_CONNECTIONS'
         ),
     )
     parser.add_argument(
         '--log-level',
-        default=os.environ.get('EXTERNAL_UDF_LOG_LEVEL', 'info'),
+        default=os.environ.get('PLUGIN_LOG_LEVEL', 'info'),
         choices=['debug', 'info', 'warning', 'error'],
         help=(
             'Logging level. '
-            'Env: EXTERNAL_UDF_LOG_LEVEL'
+            'Env: PLUGIN_LOG_LEVEL'
         ),
     )
     parser.add_argument(
         '--process-mode',
-        default=os.environ.get('EXTERNAL_UDF_PROCESS_MODE', 'process'),
+        default=os.environ.get('PLUGIN_PROCESS_MODE', 'process'),
         choices=['thread', 'process'],
         help=(
             'Concurrency mode: "thread" uses a thread pool, '
             '"process" uses pre-fork workers for true CPU '
-            'parallelism. Env: EXTERNAL_UDF_PROCESS_MODE'
+            'parallelism. Env: PLUGIN_PROCESS_MODE'
         ),
     )
 
     args = parser.parse_args(argv)
 
-    if not args.extension:
+    if not args.plugin_name:
         parser.error(
-            '--extension is required '
-            '(or set EXTERNAL_UDF_EXTENSION env var)',
+            '--plugin-name is required '
+            '(or set PLUGIN_NAME env var)',
         )
 
     # Setup logging
@@ -110,8 +110,8 @@ def main(argv: Any = None) -> None:
     setup_logging(level)
 
     config = {
-        'extension': args.extension,
-        'extension_path': args.extension_path,
+        'plugin_name': args.plugin_name,
+        'search_path': args.search_path,
         'socket': args.socket,
         'n_workers': args.n_workers,
         'max_connections': args.max_connections,

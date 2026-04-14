@@ -467,21 +467,21 @@ class Server:
                 pass
 
     def _initialize_registry(self) -> FunctionRegistry:
-        """Import the extension module and discover @udf functions."""
-        extension = self.config['extension']
-        extension_path = self.config.get('extension_path', '')
+        """Import the plugin module and discover @udf functions."""
+        plugin_name = self.config['plugin_name']
+        search_path = self.config.get('search_path', '')
 
-        # Prepend extension path directories to sys.path
-        if extension_path:
-            for p in reversed(extension_path.split(':')):
+        # Prepend search path directories to sys.path
+        if search_path:
+            for p in reversed(search_path.split(':')):
                 p = p.strip()
                 if p and p not in sys.path:
                     sys.path.insert(0, p)
                     logger.info(f'Added to sys.path: {p}')
 
-        # Import the extension module
-        logger.info(f'Importing extension module: {extension}')
-        importlib.import_module(extension)
+        # Import the plugin module
+        logger.info(f'Importing plugin module: {plugin_name}')
+        importlib.import_module(plugin_name)
 
         # Initialize registry (discovers @udf functions from sys.modules)
         registry = FunctionRegistry()
@@ -490,7 +490,7 @@ class Server:
         func_count = len(registry.functions)
         if func_count == 0:
             raise RuntimeError(
-                f'No @udf functions found after importing {extension!r}',
+                f'No @udf functions found after importing {plugin_name!r}',
             )
         logger.info(f'Discovered {func_count} function(s)')
         for name in sorted(registry.functions):
