@@ -18,7 +18,7 @@ analytics and vector search.
 - **Vector Store**: Pinecone-compatible vector database API for similarity search
   applications with built-in connection pooling
 - **User-Defined Functions**: Deploy Python functions as SingleStore UDFs with
-  automatic type mapping
+  automatic type mapping (HTTP/ASGI or plugin-mode via CLI)
 - **SQLAlchemy Support**: Integrate with SQLAlchemy through the optional
   `sqlalchemy-singlestoredb` adapter
 - **Fusion SQL**: Extend SQL with custom client-side command handlers

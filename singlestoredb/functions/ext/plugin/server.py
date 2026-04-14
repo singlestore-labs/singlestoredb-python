@@ -28,7 +28,7 @@ from .connection import _write_all_fd
 from .connection import handle_connection
 from .registry import FunctionRegistry
 
-logger = logging.getLogger('collocated.server')
+logger = logging.getLogger('plugin.server')
 
 
 def _read_pipe_message(fd: int) -> Optional[bytes]:
@@ -151,7 +151,7 @@ class SharedRegistry:
 
 
 class Server:
-    """Collocated UDF server with Unix socket + thread pool."""
+    """Plugin UDF server with Unix socket + thread pool."""
 
     def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
