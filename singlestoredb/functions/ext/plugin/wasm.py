@@ -1,8 +1,8 @@
 """
 Thin WIT adapter over FunctionRegistry.
 
-This module provides the FunctionHandler class that implements the
-singlestore:udf/function-handler WIT interface by delegating to the
+This module provides the Plugin class that implements the
+singlestore:plugin/plugin WIT interface by delegating to the
 shared FunctionRegistry in registry.py.
 """
 import logging
@@ -21,8 +21,8 @@ logger = logging.getLogger('udf_handler')
 _registry = FunctionRegistry()
 
 
-class FunctionHandler:
-    """Implementation of the singlestore:udf/function-handler interface."""
+class Plugin:
+    """Implementation of the singlestore:plugin/plugin interface."""
 
     def initialize(self) -> None:
         """Initialize and discover UDF functions from loaded modules."""

@@ -1,6 +1,6 @@
-package singlestore:udf;
+package singlestore:plugin;
 
-interface function-handler {
+interface plugin {
     /// Initialize the handler and discover pre-imported UDF modules.
     /// Must be called before any other functions.
     initialize: func() -> result<_, string>;
@@ -21,6 +21,6 @@ interface function-handler {
     create-function: func(signature: string, code: string, replace: bool) -> result<_, string>;
 }
 
-world external-udf {
-    export function-handler;
+world plugin-server {
+    export plugin;
 }

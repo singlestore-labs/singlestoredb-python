@@ -181,13 +181,13 @@ class FunctionRegistry:
         """Discover @udf functions by scanning sys.modules.
 
         Uses a two-pass approach: first, identify candidate modules
-        that import FunctionHandler (the convention for UDF modules).
+        that import Plugin (the convention for UDF modules).
         Then extract @udf-decorated functions from those modules.
         Modules without a __file__ (built-in/frozen) and stdlib/
         infrastructure modules are skipped automatically.
         """
         # Import here to avoid circular dependency at module level
-        from .wasm import FunctionHandler
+        from .wasm import Plugin
 
         found_modules = []
         for mod_name, mod in list(sys.modules.items()):
@@ -200,9 +200,9 @@ class FunctionRegistry:
                 continue
 
             # Short-circuit: only scan modules that import
-            # FunctionHandler (the convention for UDF modules)
+            # Plugin (the convention for UDF modules)
             if not any(
-                obj is FunctionHandler
+                obj is Plugin
                 for obj in vars(mod).values()
             ):
                 continue
