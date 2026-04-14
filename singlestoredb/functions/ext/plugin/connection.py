@@ -27,7 +27,7 @@ from .registry import call_function
 if TYPE_CHECKING:
     from .server import SharedRegistry
 
-logger = logging.getLogger('collocated.connection')
+logger = logging.getLogger('plugin.connection')
 
 # Protocol constants
 PROTOCOL_VERSION = 1

@@ -4,7 +4,7 @@ Function registry for UDF discovery, registration, and invocation.
 This module contains the core FunctionRegistry class (moved from
 wasm/udf_handler.py) plus standalone call_function() and
 describe_functions_json() helpers. Both the WASM handler and the
-collocated server use these directly.
+plugin server use these directly.
 """
 import inspect
 import json
@@ -450,7 +450,7 @@ def call_function(
     """Call a registered UDF by name using the C accelerator or fallback.
 
     This is the hot-path function used by both the WASM handler and
-    the collocated server.
+    the plugin server.
     """
     if name not in registry.functions:
         raise ValueError(f'unknown function: {name}')

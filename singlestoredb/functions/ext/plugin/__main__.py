@@ -1,5 +1,5 @@
 """
-CLI entry point for the collocated Python UDF server.
+CLI entry point for the plugin Python UDF server.
 
 Usage::
 
@@ -21,13 +21,13 @@ from typing import Any
 from .registry import setup_logging
 from .server import Server
 
-logger = logging.getLogger('collocated')
+logger = logging.getLogger('plugin')
 
 
 def main(argv: Any = None) -> None:
     parser = argparse.ArgumentParser(
         prog='python -m singlestoredb.functions.ext.plugin',
-        description='High-performance collocated Python UDF server',
+        description='High-performance plugin Python UDF server',
     )
     parser.add_argument(
         '--plugin-name',

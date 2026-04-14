@@ -1,1 +1,1 @@
-"""High-performance collocated Python UDF server for SingleStoreDB."""
+"""High-performance plugin Python UDF server for SingleStoreDB."""

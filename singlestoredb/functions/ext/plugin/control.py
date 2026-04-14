@@ -15,7 +15,7 @@ from .registry import describe_functions_json
 if TYPE_CHECKING:
     from .server import SharedRegistry
 
-logger = logging.getLogger('collocated.control')
+logger = logging.getLogger('plugin.control')
 
 
 @dataclass
