@@ -2457,6 +2457,7 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
             case -MYSQL_TYPE_TINY_BLOB:
             case -MYSQL_TYPE_MEDIUM_BLOB:
             case -MYSQL_TYPE_LONG_BLOB:
+            case -MYSQL_TYPE_BLOB:
                 CHECKSIZE(8);
                 item_sizes[i] = 8;
                 data_formats[i] = "Q";
