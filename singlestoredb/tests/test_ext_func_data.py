@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # type: ignore
 """Test external function data parsing and formatting"""
+import datetime
+import decimal
 import json
 import unittest
 
@@ -13,6 +15,13 @@ from parameterized import parameterized
 
 from singlestoredb.functions.ext import json as jsonx
 from singlestoredb.functions.ext import rowdat_1
+from singlestoredb.functions.ext.json import JSONEncoder
+from singlestoredb.functions.ext.rowdat_1 import _pack_date
+from singlestoredb.functions.ext.rowdat_1 import _pack_datetime
+from singlestoredb.functions.ext.rowdat_1 import _pack_time
+from singlestoredb.functions.ext.rowdat_1 import _unpack_date
+from singlestoredb.functions.ext.rowdat_1 import _unpack_datetime
+from singlestoredb.functions.ext.rowdat_1 import _unpack_time
 
 
 TINYINT = 1
@@ -1099,3 +1108,189 @@ class TestJSON(unittest.TestCase):
         assert_array_equal(columns[11][0], pyarrow_unsigned_int24_arr, strict=True)
         assert_array_equal(columns[12][0], pyarrow_string_arr, strict=True)
         assert_array_equal(columns[13][0], pyarrow_binary_arr, strict=True)
+
+
+# --- Datetime / Date / Time pack/unpack tests ---
+
+DATETIME = 12
+TIMESTAMP = 7
+DATE = 10
+TIME = 11
+
+dt_col_spec = [
+    ('dt', DATETIME),
+    ('d', DATE),
+    ('t', TIME),
+]
+
+dt_col_types = [x[1] for x in dt_col_spec]
+
+
+class TestDatetimePacking(unittest.TestCase):
+
+    def test_datetime_round_trip(self):
+        dt = datetime.datetime(2024, 3, 15, 10, 30, 45, 123456)
+        assert _unpack_datetime(_pack_datetime(dt)) == dt
+
+    def test_datetime_min_values(self):
+        dt = datetime.datetime(1, 1, 1, 0, 0, 0, 0)
+        assert _unpack_datetime(_pack_datetime(dt)) == dt
+
+    def test_datetime_max_microsecond(self):
+        dt = datetime.datetime(2024, 12, 31, 23, 59, 59, 999999)
+        assert _unpack_datetime(_pack_datetime(dt)) == dt
+
+    def test_datetime_epoch(self):
+        dt = datetime.datetime(1970, 1, 1, 0, 0, 0, 0)
+        assert _unpack_datetime(_pack_datetime(dt)) == dt
+
+    def test_datetime_no_microseconds(self):
+        dt = datetime.datetime(2024, 6, 15, 12, 0, 0, 0)
+        assert _unpack_datetime(_pack_datetime(dt)) == dt
+
+    def test_date_round_trip(self):
+        d = datetime.date(2024, 3, 15)
+        assert _unpack_date(_pack_date(d)) == d
+
+    def test_date_min(self):
+        d = datetime.date(1, 1, 1)
+        assert _unpack_date(_pack_date(d)) == d
+
+    def test_date_leap_day(self):
+        d = datetime.date(2024, 2, 29)
+        assert _unpack_date(_pack_date(d)) == d
+
+    def test_time_positive(self):
+        td = datetime.timedelta(hours=10, minutes=30, seconds=45)
+        assert _unpack_time(_pack_time(td)) == td
+
+    def test_time_zero(self):
+        td = datetime.timedelta(0)
+        assert _unpack_time(_pack_time(td)) == td
+
+    def test_time_with_microseconds(self):
+        td = datetime.timedelta(
+            hours=1, minutes=2, seconds=3, microseconds=456789,
+        )
+        assert _unpack_time(_pack_time(td)) == td
+
+    def test_time_negative(self):
+        td = datetime.timedelta(hours=-5, minutes=-30)
+        assert _unpack_time(_pack_time(td)) == td
+
+    def test_time_negative_with_microseconds(self):
+        td = -datetime.timedelta(
+            hours=1, minutes=2, seconds=3, microseconds=100000,
+        )
+        assert _unpack_time(_pack_time(td)) == td
+
+    def test_time_large_hours(self):
+        td = datetime.timedelta(hours=838, minutes=59, seconds=59)
+        assert _unpack_time(_pack_time(td)) == td
+
+    def test_time_only_microseconds(self):
+        td = datetime.timedelta(microseconds=500000)
+        assert _unpack_time(_pack_time(td)) == td
+
+    def test_time_days_to_hours(self):
+        td = datetime.timedelta(days=2, hours=3)
+        assert _unpack_time(_pack_time(td)) == td
+
+
+class TestDatetimeRowdat1RoundTrip(unittest.TestCase):
+
+    def test_python_datetime_round_trip(self):
+        dt = datetime.datetime(2024, 3, 15, 10, 30, 45, 123456)
+        d = datetime.date(2024, 3, 15)
+        td = datetime.timedelta(
+            hours=10, minutes=30, seconds=45, microseconds=123456,
+        )
+        rows = [[dt, d, td]]
+        dump_res = rowdat_1._dump(dt_col_types, [1], rows)
+        ids, loaded = rowdat_1._load(dt_col_spec, dump_res)
+
+        assert ids == [1]
+        assert loaded[0][0] == dt
+        assert loaded[0][1] == d
+        assert loaded[0][2] == td
+
+    def test_python_datetime_null(self):
+        rows = [[None, None, None]]
+        dump_res = rowdat_1._dump(dt_col_types, [1], rows)
+        ids, loaded = rowdat_1._load(dt_col_spec, dump_res)
+        assert loaded[0] == [None, None, None]
+
+    def test_python_datetime_multiple_rows(self):
+        dt1 = datetime.datetime(2024, 1, 1, 0, 0, 0, 0)
+        dt2 = datetime.datetime(2024, 12, 31, 23, 59, 59, 999999)
+        d1 = datetime.date(2024, 1, 1)
+        d2 = datetime.date(2024, 12, 31)
+        td1 = datetime.timedelta(hours=0)
+        td2 = datetime.timedelta(hours=23, minutes=59, seconds=59)
+
+        rows = [[dt1, d1, td1], [dt2, d2, td2]]
+        dump_res = rowdat_1._dump(dt_col_types, [1, 2], rows)
+        ids, loaded = rowdat_1._load(dt_col_spec, dump_res)
+
+        assert ids == [1, 2]
+        assert loaded[0] == [dt1, d1, td1]
+        assert loaded[1] == [dt2, d2, td2]
+
+    def test_python_negative_time_round_trip(self):
+        td = -datetime.timedelta(hours=1, minutes=30)
+        rows = [[td]]
+        dump_res = rowdat_1._dump([TIME], [1], rows)
+        ids, loaded = rowdat_1._load([('t', TIME)], dump_res)
+        assert loaded[0][0] == td
+
+
+class TestJSONEncoder(unittest.TestCase):
+
+    def _encode(self, obj):
+        return json.loads(json.dumps(obj, cls=JSONEncoder))
+
+    def test_bytes_base64(self):
+        assert self._encode(b'\x00\x01\x02') == 'AAEC'
+
+    def test_datetime(self):
+        dt = datetime.datetime(2024, 3, 15, 10, 30, 45, 123456)
+        assert self._encode(dt) == '2024-03-15 10:30:45.123456'
+
+    def test_datetime_no_microseconds(self):
+        dt = datetime.datetime(2024, 3, 15, 10, 30, 45, 0)
+        assert self._encode(dt) == '2024-03-15 10:30:45.000000'
+
+    def test_date(self):
+        d = datetime.date(2024, 3, 15)
+        assert self._encode(d) == '2024-03-15'
+
+    def test_timedelta_positive(self):
+        td = datetime.timedelta(
+            hours=10, minutes=30, seconds=45, microseconds=123456,
+        )
+        assert self._encode(td) == '10:30:45.123456'
+
+    def test_timedelta_zero(self):
+        td = datetime.timedelta(0)
+        assert self._encode(td) == '0:00:00.000000'
+
+    def test_timedelta_negative(self):
+        td = -datetime.timedelta(hours=1, minutes=30)
+        result = self._encode(td)
+        assert result.startswith('-')
+
+    def test_decimal(self):
+        d = decimal.Decimal('123.456')
+        assert self._encode(d) == '123.456'
+
+    def test_decimal_negative(self):
+        d = decimal.Decimal('-99.99')
+        assert self._encode(d) == '-99.99'
+
+    def test_decimal_integer(self):
+        d = decimal.Decimal('42')
+        assert self._encode(d) == '42'
+
+    def test_unsupported_type_raises(self):
+        with self.assertRaises(TypeError):
+            json.dumps(object(), cls=JSONEncoder)
