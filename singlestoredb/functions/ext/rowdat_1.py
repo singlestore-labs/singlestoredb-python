@@ -204,21 +204,19 @@ def _load(
                 slen = struct.unpack('<q', data_io.read(8))[0]
                 val = data_io.read(slen)
             elif ctype in datetime_types:
-                val = _unpack_datetime(
-                    struct.unpack('<q', data_io.read(8))[0],
-                )
+                raw = struct.unpack('<q', data_io.read(8))[0]
+                val = None if is_null else _unpack_datetime(raw)
             elif ctype in date_types:
-                val = _unpack_date(
-                    struct.unpack('<q', data_io.read(8))[0],
-                )
+                raw = struct.unpack('<q', data_io.read(8))[0]
+                val = None if is_null else _unpack_date(raw)
             elif ctype in time_types:
-                val = _unpack_time(
-                    struct.unpack('<q', data_io.read(8))[0],
-                )
+                raw = struct.unpack('<q', data_io.read(8))[0]
+                val = None if is_null else _unpack_time(raw)
             elif ctype in decimal_types:
                 slen = struct.unpack('<q', data_io.read(8))[0]
-                val = decimal.Decimal(
-                    data_io.read(slen).decode('utf-8'),
+                raw_bytes = data_io.read(slen)
+                val = None if is_null else decimal.Decimal(
+                    raw_bytes.decode('utf-8'),
                 )
             else:
                 raise TypeError(f'unrecognized column type: {ctype}')
@@ -269,21 +267,19 @@ def _load_vectors(
                 slen = struct.unpack('<q', data_io.read(8))[0]
                 val = data_io.read(slen)
             elif ctype in datetime_types:
-                val = _unpack_datetime(
-                    struct.unpack('<q', data_io.read(8))[0],
-                )
+                raw = struct.unpack('<q', data_io.read(8))[0]
+                val = None if is_null else _unpack_datetime(raw)
             elif ctype in date_types:
-                val = _unpack_date(
-                    struct.unpack('<q', data_io.read(8))[0],
-                )
+                raw = struct.unpack('<q', data_io.read(8))[0]
+                val = None if is_null else _unpack_date(raw)
             elif ctype in time_types:
-                val = _unpack_time(
-                    struct.unpack('<q', data_io.read(8))[0],
-                )
+                raw = struct.unpack('<q', data_io.read(8))[0]
+                val = None if is_null else _unpack_time(raw)
             elif ctype in decimal_types:
                 slen = struct.unpack('<q', data_io.read(8))[0]
-                val = decimal.Decimal(
-                    data_io.read(slen).decode('utf-8'),
+                raw_bytes = data_io.read(slen)
+                val = None if is_null else decimal.Decimal(
+                    raw_bytes.decode('utf-8'),
                 )
             else:
                 raise TypeError(f'unrecognized column type: {ctype}')

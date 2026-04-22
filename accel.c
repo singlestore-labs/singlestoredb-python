@@ -2511,6 +2511,7 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
             switch (ctypes[i]) {
             case MYSQL_TYPE_NULL:
+                CHECKSIZE(1);
                 i8 = 0; data += 1;
                 memcpy(out_cols[i] + j * 1, &i8, 1);
                 break;
@@ -5265,6 +5266,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
 
             switch (ctypes[i]) {
             case MYSQL_TYPE_NULL:
+                CHECK_REMAINING(1);
                 data += 1;
                 Py_INCREF(Py_None);
                 CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
