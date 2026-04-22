@@ -571,6 +571,205 @@ typedef struct {
 static PyObjects PyObj = {0};
 
 //
+// rowdat_1 type descriptor table
+//
+
+typedef struct {
+    int fixed_size;
+    int is_variable;
+    const char *fmt;
+    const char *fmt_unsigned;
+} RowdatTypeInfo;
+
+static RowdatTypeInfo get_rowdat_type_info(int ctype) {
+    int abs_ctype = (ctype < 0) ? -ctype : ctype;
+    switch (abs_ctype) {
+    case MYSQL_TYPE_TINY:
+        return (RowdatTypeInfo){1, 0, "b", "B"};
+    case MYSQL_TYPE_SHORT:
+        return (RowdatTypeInfo){2, 0, "h", "H"};
+    case MYSQL_TYPE_LONG:
+    case MYSQL_TYPE_INT24:
+        return (RowdatTypeInfo){4, 0, "i", "I"};
+    case MYSQL_TYPE_LONGLONG:
+        return (RowdatTypeInfo){8, 0, "q", "Q"};
+    case MYSQL_TYPE_FLOAT:
+        return (RowdatTypeInfo){4, 0, "f", "f"};
+    case MYSQL_TYPE_DOUBLE:
+        return (RowdatTypeInfo){8, 0, "d", "d"};
+    case MYSQL_TYPE_YEAR:
+        return (RowdatTypeInfo){2, 0, "H", "H"};
+    case MYSQL_TYPE_DATE:
+    case MYSQL_TYPE_NEWDATE:
+    case MYSQL_TYPE_TIME:
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_TIMESTAMP:
+        return (RowdatTypeInfo){8, 0, "Q", "Q"};
+    case MYSQL_TYPE_DECIMAL:
+    case MYSQL_TYPE_NEWDECIMAL:
+    case MYSQL_TYPE_VARCHAR:
+    case MYSQL_TYPE_JSON:
+    case MYSQL_TYPE_SET:
+    case MYSQL_TYPE_ENUM:
+    case MYSQL_TYPE_VAR_STRING:
+    case MYSQL_TYPE_STRING:
+    case MYSQL_TYPE_GEOMETRY:
+    case MYSQL_TYPE_TINY_BLOB:
+    case MYSQL_TYPE_MEDIUM_BLOB:
+    case MYSQL_TYPE_LONG_BLOB:
+    case MYSQL_TYPE_BLOB:
+        return (RowdatTypeInfo){0, 1, "Q", "Q"};
+    default:
+        return (RowdatTypeInfo){-1, 0, NULL, NULL};
+    }
+}
+
+//
+// rowdat_1 case-label macros for string/binary type groups
+//
+
+#define CASE_STRING_TYPES \
+    case MYSQL_TYPE_VARCHAR: \
+    case MYSQL_TYPE_JSON: \
+    case MYSQL_TYPE_SET: \
+    case MYSQL_TYPE_ENUM: \
+    case MYSQL_TYPE_VAR_STRING: \
+    case MYSQL_TYPE_STRING: \
+    case MYSQL_TYPE_GEOMETRY: \
+    case MYSQL_TYPE_TINY_BLOB: \
+    case MYSQL_TYPE_MEDIUM_BLOB: \
+    case MYSQL_TYPE_LONG_BLOB: \
+    case MYSQL_TYPE_BLOB
+
+#define CASE_BINARY_TYPES \
+    case -MYSQL_TYPE_VARCHAR: \
+    case -MYSQL_TYPE_JSON: \
+    case -MYSQL_TYPE_SET: \
+    case -MYSQL_TYPE_ENUM: \
+    case -MYSQL_TYPE_VAR_STRING: \
+    case -MYSQL_TYPE_STRING: \
+    case -MYSQL_TYPE_GEOMETRY: \
+    case -MYSQL_TYPE_TINY_BLOB: \
+    case -MYSQL_TYPE_MEDIUM_BLOB: \
+    case -MYSQL_TYPE_LONG_BLOB: \
+    case -MYSQL_TYPE_BLOB
+
+//
+// rowdat_1 datetime decode helpers (binary -> PyObject)
+//
+
+static inline PyObject *decode_rowdat_date(int64_t i64) {
+    int dy = (int)(i64 % 100); int64_t tmp = i64 / 100;
+    int mo = (int)(tmp % 100); int yr = (int)(tmp / 100);
+    return PyObject_CallFunction(PyFunc.datetime_date, "iii", yr, mo, dy);
+}
+
+static inline PyObject *decode_rowdat_time(int64_t i64) {
+    int64_t sign_v = (i64 < 0) ? -1 : 1;
+    int64_t abs_v = (i64 < 0) ? -i64 : i64;
+    int64_t us_v = abs_v % 1000000;
+    int64_t packed_v = abs_v / 1000000;
+    int64_t ss_v = packed_v % 100;
+    int64_t mm_v = (packed_v / 100) % 100;
+    int64_t hh_v = packed_v / 10000;
+    int64_t total_secs = hh_v * 3600 + mm_v * 60 + ss_v;
+    if (sign_v < 0) { total_secs = -total_secs; us_v = -us_v; }
+    int days_v = (int)(total_secs / 86400);
+    int secs_v = (int)(total_secs % 86400);
+    if (secs_v < 0) { days_v--; secs_v += 86400; }
+    PyObject *py_d = PyLong_FromLong(days_v);
+    PyObject *py_s = PyLong_FromLong(secs_v);
+    PyObject *py_u = PyLong_FromLongLong(us_v);
+    if (!py_d || !py_s || !py_u) {
+        Py_XDECREF(py_d); Py_XDECREF(py_s); Py_XDECREF(py_u);
+        return NULL;
+    }
+    PyObject *py_td = PyObject_CallFunctionObjArgs(
+        PyFunc.datetime_timedelta, py_d, py_s, py_u, NULL);
+    Py_DECREF(py_d); Py_DECREF(py_s); Py_DECREF(py_u);
+    return py_td;
+}
+
+static inline PyObject *decode_rowdat_datetime(int64_t i64) {
+    int us_v = (int)(i64 & 0xFFFFF); i64 >>= 20;
+    int sec_v = (int)(i64 & 0x3F);   i64 >>= 6;
+    int min_v = (int)(i64 & 0x3F);   i64 >>= 6;
+    int hr_v  = (int)(i64 & 0x1F);   i64 >>= 5;
+    int dy_v  = (int)(i64 & 0x1F);   i64 >>= 5;
+    int mo_v  = (int)(i64 & 0xF);    i64 >>= 4;
+    int yr_v  = (int)i64;
+    return PyObject_CallFunction(
+        PyFunc.datetime_datetime, "iiiiiii",
+        yr_v, mo_v, dy_v, hr_v, min_v, sec_v, us_v);
+}
+
+//
+// rowdat_1 datetime encode helpers (PyObject -> packed int64)
+//
+
+static inline int64_t encode_rowdat_date(PyObject *py_obj) {
+    PyObject *yr = PyObject_GetAttr(py_obj, PyStr.year_attr);
+    PyObject *mo = PyObject_GetAttr(py_obj, PyStr.month_attr);
+    PyObject *dy = PyObject_GetAttr(py_obj, PyStr.day_attr);
+    if (!yr || !mo || !dy) {
+        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy);
+        return 0;
+    }
+    int64_t val = (int64_t)PyLong_AsLong(yr) * 10000
+                + (int64_t)PyLong_AsLong(mo) * 100
+                + (int64_t)PyLong_AsLong(dy);
+    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+    return val;
+}
+
+static inline int64_t encode_rowdat_time(PyObject *py_obj) {
+    PyObject *py_days = PyObject_GetAttr(py_obj, PyStr.days_attr);
+    PyObject *py_secs = PyObject_GetAttr(py_obj, PyStr.seconds_attr);
+    PyObject *py_us = PyObject_GetAttr(py_obj, PyStr.microseconds_attr);
+    if (!py_days || !py_secs || !py_us) {
+        Py_XDECREF(py_days); Py_XDECREF(py_secs); Py_XDECREF(py_us);
+        return 0;
+    }
+    long days_val = PyLong_AsLong(py_days);
+    long secs_val = PyLong_AsLong(py_secs);
+    long us_val = PyLong_AsLong(py_us);
+    Py_DECREF(py_days); Py_DECREF(py_secs); Py_DECREF(py_us);
+    int64_t total_secs = (int64_t)days_val * 86400 + (int64_t)secs_val;
+    int64_t total_us = (int64_t)us_val;
+    int64_t sign_v = (total_secs < 0 || (total_secs == 0 && total_us < 0)) ? -1 : 1;
+    if (sign_v < 0) { total_secs = -total_secs; total_us = -total_us; }
+    int64_t hh = total_secs / 3600;
+    int64_t mm = (total_secs % 3600) / 60;
+    int64_t ss = total_secs % 60;
+    return sign_v * (hh * 10000 + mm * 100 + ss) * 1000000 + sign_v * total_us;
+}
+
+static inline int64_t encode_rowdat_datetime(PyObject *py_obj) {
+    PyObject *yr = PyObject_GetAttr(py_obj, PyStr.year_attr);
+    PyObject *mo = PyObject_GetAttr(py_obj, PyStr.month_attr);
+    PyObject *dy = PyObject_GetAttr(py_obj, PyStr.day_attr);
+    PyObject *hr = PyObject_GetAttr(py_obj, PyStr.hour_attr);
+    PyObject *mi = PyObject_GetAttr(py_obj, PyStr.minute_attr);
+    PyObject *se = PyObject_GetAttr(py_obj, PyStr.second_attr);
+    PyObject *us = PyObject_GetAttr(py_obj, PyStr.microsecond_attr);
+    if (!yr || !mo || !dy || !hr || !mi || !se || !us) {
+        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy);
+        Py_XDECREF(hr); Py_XDECREF(mi); Py_XDECREF(se); Py_XDECREF(us);
+        return 0;
+    }
+    int64_t val = (int64_t)PyLong_AsLong(yr);
+    val = (val << 4) | (int64_t)PyLong_AsLong(mo);
+    val = (val << 5) | (int64_t)PyLong_AsLong(dy);
+    val = (val << 5) | (int64_t)PyLong_AsLong(hr);
+    val = (val << 6) | (int64_t)PyLong_AsLong(mi);
+    val = (val << 6) | (int64_t)PyLong_AsLong(se);
+    val = (val << 20) | (int64_t)PyLong_AsLong(us);
+    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+    Py_DECREF(hr); Py_DECREF(mi); Py_DECREF(se); Py_DECREF(us);
+    return val;
+}
+
+//
 // State
 //
 
@@ -2312,160 +2511,37 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
         goto error; \
     }
 
-    // Determine number of rows
+    // Determine number of rows using type descriptor table
     item_sizes = malloc(sizeof(int) * n_cols);
     if (!item_sizes) goto error;
     data_formats = malloc(sizeof(char*) * n_cols);
     if (!data_formats) goto error;
     while (end > data) {
-        // Row ID
         CHECKSIZE(8);
         data += 8;
 
         for (i = 0; i < n_cols; i++) {
-            // Null slot
             CHECKSIZE(1);
             data += 1;
 
-            // Data row
-            switch (ctypes[i]) {
-            case MYSQL_TYPE_NULL:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: NULL");
+            RowdatTypeInfo info = get_rowdat_type_info(ctypes[i]);
+            if (info.fixed_size < 0) {
+                PyErr_Format(PyExc_TypeError, "unsupported data type: %d", ctypes[i]);
                 goto error;
-                break;
-
-            case MYSQL_TYPE_BIT:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: BIT");
-                goto error;
-                break;
-
-            case MYSQL_TYPE_TINY:
-            case -MYSQL_TYPE_TINY:
-                CHECKSIZE(1);
-                item_sizes[i] = 1;
-                data_formats[i] = (ctypes[i] < 0) ? "B" : "b";
-                data += 1;
-                break;
-
-            case MYSQL_TYPE_SHORT:
-            case -MYSQL_TYPE_SHORT:
-                CHECKSIZE(2);
-                item_sizes[i] = 2;
-                data_formats[i] = (ctypes[i] < 0) ? "H" : "h";
-                data += 2;
-                break;
-
-            case MYSQL_TYPE_LONG:
-            case -MYSQL_TYPE_LONG:
-            case MYSQL_TYPE_INT24:
-            case -MYSQL_TYPE_INT24:
-                CHECKSIZE(4);
-                item_sizes[i] = 4;
-                data_formats[i] = (ctypes[i] < 0) ? "I" : "i";
-                data += 4;
-                break;
-
-            case MYSQL_TYPE_LONGLONG:
-            case -MYSQL_TYPE_LONGLONG:
+            }
+            if (n_rows == 0) {
+                item_sizes[i] = info.is_variable ? 8 : info.fixed_size;
+                data_formats[i] = (char*)((ctypes[i] < 0) ? info.fmt_unsigned : info.fmt);
+            }
+            if (info.is_variable) {
                 CHECKSIZE(8);
-                item_sizes[i] = 8;
-                data_formats[i] = (ctypes[i] < 0) ? "Q" : "q";
-                data += 8;
-                break;
-
-            case MYSQL_TYPE_FLOAT:
-                CHECKSIZE(4);
-                item_sizes[i] = 4;
-                data_formats[i] = "f";
-                data += 4;
-                break;
-
-            case MYSQL_TYPE_DOUBLE:
-                CHECKSIZE(8);
-                item_sizes[i] = 8;
-                data_formats[i] = "d";
-                data += 8;
-                break;
-
-            case MYSQL_TYPE_DECIMAL:
-            case MYSQL_TYPE_NEWDECIMAL:
-                CHECKSIZE(8);
-                item_sizes[i] = 8;
-                data_formats[i] = "Q";
                 memcpy(&i64, data, 8);
                 data += 8;
                 CHECKSIZE(i64);
                 data += i64;
-                break;
-
-            case MYSQL_TYPE_DATE:
-            case MYSQL_TYPE_NEWDATE:
-                CHECKSIZE(8);
-                item_sizes[i] = 8;
-                data_formats[i] = "Q";
-                data += 8;
-                break;
-
-            case MYSQL_TYPE_TIME:
-                CHECKSIZE(8);
-                item_sizes[i] = 8;
-                data_formats[i] = "Q";
-                data += 8;
-                break;
-
-            case MYSQL_TYPE_DATETIME:
-            case MYSQL_TYPE_TIMESTAMP:
-                CHECKSIZE(8);
-                item_sizes[i] = 8;
-                data_formats[i] = "Q";
-                data += 8;
-                break;
-
-            case MYSQL_TYPE_YEAR:
-                CHECKSIZE(2);
-                data += 2;
-                break;
-
-            case MYSQL_TYPE_VARCHAR:
-            case MYSQL_TYPE_JSON:
-            case MYSQL_TYPE_SET:
-            case MYSQL_TYPE_ENUM:
-            case MYSQL_TYPE_VAR_STRING:
-            case MYSQL_TYPE_STRING:
-            case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_TINY_BLOB:
-            case MYSQL_TYPE_MEDIUM_BLOB:
-            case MYSQL_TYPE_LONG_BLOB:
-            case MYSQL_TYPE_BLOB:
-                CHECKSIZE(8);
-                item_sizes[i] = 8;
-                data_formats[i] = "Q";
-                memcpy(&i64, data, 8);
-                data += 8;
-                CHECKSIZE(i64);
-                data += i64;
-                break;
-
-            // Use negative to indicate binary
-            case -MYSQL_TYPE_VARCHAR:
-            case -MYSQL_TYPE_JSON:
-            case -MYSQL_TYPE_SET:
-            case -MYSQL_TYPE_ENUM:
-            case -MYSQL_TYPE_VAR_STRING:
-            case -MYSQL_TYPE_STRING:
-            case -MYSQL_TYPE_GEOMETRY:
-            case -MYSQL_TYPE_TINY_BLOB:
-            case -MYSQL_TYPE_MEDIUM_BLOB:
-            case -MYSQL_TYPE_LONG_BLOB:
-            case -MYSQL_TYPE_BLOB:
-                CHECKSIZE(8);
-                item_sizes[i] = 8;
-                data_formats[i] = "Q";
-                memcpy(&i64, data, 8);
-                data += 8;
-                CHECKSIZE(i64);
-                data += i64;
-                break;
+            } else {
+                CHECKSIZE(info.fixed_size);
+                data += info.fixed_size;
             }
         }
 
@@ -2613,9 +2689,7 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     u64 = 0;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
                 } else {
-                    int dy = (int)(i64 % 100); int64_t tmp = i64 / 100;
-                    int mo = (int)(tmp % 100); int yr = (int)(tmp / 100);
-                    PyObject *py_dt = PyObject_CallFunction(PyFunc.datetime_date, "iii", yr, mo, dy);
+                    PyObject *py_dt = decode_rowdat_date(i64);
                     if (!py_dt) goto error;
                     u64 = (uint64_t)py_dt;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
@@ -2631,28 +2705,7 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     u64 = 0;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
                 } else {
-                    int64_t sign_v = (i64 < 0) ? -1 : 1;
-                    int64_t abs_v = (i64 < 0) ? -i64 : i64;
-                    int64_t us_v = abs_v % 1000000;
-                    int64_t packed_v = abs_v / 1000000;
-                    int64_t ss_v = packed_v % 100;
-                    int64_t mm_v = (packed_v / 100) % 100;
-                    int64_t hh_v = packed_v / 10000;
-                    int64_t total_secs = hh_v * 3600 + mm_v * 60 + ss_v;
-                    if (sign_v < 0) { total_secs = -total_secs; us_v = -us_v; }
-                    int days_v = (int)(total_secs / 86400);
-                    int secs_v = (int)(total_secs % 86400);
-                    if (secs_v < 0) { days_v--; secs_v += 86400; }
-                    PyObject *py_d = PyLong_FromLong(days_v);
-                    PyObject *py_s = PyLong_FromLong(secs_v);
-                    PyObject *py_u = PyLong_FromLongLong(us_v);
-                    if (!py_d || !py_s || !py_u) {
-                        Py_XDECREF(py_d); Py_XDECREF(py_s); Py_XDECREF(py_u);
-                        goto error;
-                    }
-                    PyObject *py_td = PyObject_CallFunctionObjArgs(
-                        PyFunc.datetime_timedelta, py_d, py_s, py_u, NULL);
-                    Py_DECREF(py_d); Py_DECREF(py_s); Py_DECREF(py_u);
+                    PyObject *py_td = decode_rowdat_time(i64);
                     if (!py_td) goto error;
                     u64 = (uint64_t)py_td;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
@@ -2669,16 +2722,7 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     u64 = 0;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
                 } else {
-                    int us_v = (int)(i64 & 0xFFFFF); i64 >>= 20;
-                    int sec_v = (int)(i64 & 0x3F);   i64 >>= 6;
-                    int min_v = (int)(i64 & 0x3F);   i64 >>= 6;
-                    int hr_v  = (int)(i64 & 0x1F);   i64 >>= 5;
-                    int dy_v  = (int)(i64 & 0x1F);   i64 >>= 5;
-                    int mo_v  = (int)(i64 & 0xF);    i64 >>= 4;
-                    int yr_v  = (int)i64;
-                    PyObject *py_dt = PyObject_CallFunction(
-                        PyFunc.datetime_datetime, "iiiiiii",
-                        yr_v, mo_v, dy_v, hr_v, min_v, sec_v, us_v);
+                    PyObject *py_dt = decode_rowdat_datetime(i64);
                     if (!py_dt) goto error;
                     u64 = (uint64_t)py_dt;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
@@ -2694,17 +2738,7 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 memcpy(out_cols[i] + j * 2, &u16, 2);
                 break;
 
-            case MYSQL_TYPE_VARCHAR:
-            case MYSQL_TYPE_JSON:
-            case MYSQL_TYPE_SET:
-            case MYSQL_TYPE_ENUM:
-            case MYSQL_TYPE_VAR_STRING:
-            case MYSQL_TYPE_STRING:
-            case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_TINY_BLOB:
-            case MYSQL_TYPE_MEDIUM_BLOB:
-            case MYSQL_TYPE_LONG_BLOB:
-            case MYSQL_TYPE_BLOB:
+            CASE_STRING_TYPES:
                 memcpy(&i64, data, 8); data += 8;
                 if (is_null) {
                     u64 = 0;
@@ -2720,18 +2754,7 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 }
                 break;
 
-            // Use negative to indicate binary
-            case -MYSQL_TYPE_VARCHAR:
-            case -MYSQL_TYPE_JSON:
-            case -MYSQL_TYPE_SET:
-            case -MYSQL_TYPE_ENUM:
-            case -MYSQL_TYPE_VAR_STRING:
-            case -MYSQL_TYPE_STRING:
-            case -MYSQL_TYPE_GEOMETRY:
-            case -MYSQL_TYPE_TINY_BLOB:
-            case -MYSQL_TYPE_MEDIUM_BLOB:
-            case -MYSQL_TYPE_LONG_BLOB:
-            case -MYSQL_TYPE_BLOB:
+            CASE_BINARY_TYPES:
                 memcpy(&i64, data, 8); data += 8;
                 if (is_null) {
                     u64 = 0;
@@ -4031,17 +4054,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 if (is_null || u64 == 0) {
                     i64 = 0;
                 } else {
-                    PyObject *py_obj = (PyObject*)u64;
-                    PyObject *yr = PyObject_GetAttr(py_obj, PyStr.year_attr);
-                    PyObject *mo = PyObject_GetAttr(py_obj, PyStr.month_attr);
-                    PyObject *dy = PyObject_GetAttr(py_obj, PyStr.day_attr);
-                    if (!yr || !mo || !dy) {
-                        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy); goto error;
-                    }
-                    i64 = (int64_t)PyLong_AsLong(yr) * 10000
-                         + (int64_t)PyLong_AsLong(mo) * 100
-                         + (int64_t)PyLong_AsLong(dy);
-                    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+                    i64 = encode_rowdat_date((PyObject*)u64);
                     if (PyErr_Occurred()) goto error;
                 }
                 memcpy(out+out_idx, &i64, 8); out_idx += 8;
@@ -4054,26 +4067,8 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 if (is_null || u64 == 0) {
                     i64 = 0;
                 } else {
-                    PyObject *py_obj = (PyObject*)u64;
-                    PyObject *py_days = PyObject_GetAttr(py_obj, PyStr.days_attr);
-                    PyObject *py_secs = PyObject_GetAttr(py_obj, PyStr.seconds_attr);
-                    PyObject *py_us = PyObject_GetAttr(py_obj, PyStr.microseconds_attr);
-                    if (!py_days || !py_secs || !py_us) {
-                        Py_XDECREF(py_days); Py_XDECREF(py_secs); Py_XDECREF(py_us); goto error;
-                    }
-                    long days_val = PyLong_AsLong(py_days);
-                    long secs_val = PyLong_AsLong(py_secs);
-                    long us_val = PyLong_AsLong(py_us);
-                    Py_DECREF(py_days); Py_DECREF(py_secs); Py_DECREF(py_us);
+                    i64 = encode_rowdat_time((PyObject*)u64);
                     if (PyErr_Occurred()) goto error;
-                    int64_t total_secs = (int64_t)days_val * 86400 + (int64_t)secs_val;
-                    int64_t total_us = (int64_t)us_val;
-                    int64_t sign_v = (total_secs < 0 || (total_secs == 0 && total_us < 0)) ? -1 : 1;
-                    if (sign_v < 0) { total_secs = -total_secs; total_us = -total_us; }
-                    int64_t hh = total_secs / 3600;
-                    int64_t mm = (total_secs % 3600) / 60;
-                    int64_t ss = total_secs % 60;
-                    i64 = sign_v * (hh * 10000 + mm * 100 + ss) * 1000000 + sign_v * total_us;
                 }
                 memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
@@ -4086,28 +4081,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 if (is_null || u64 == 0) {
                     i64 = 0;
                 } else {
-                    PyObject *py_obj = (PyObject*)u64;
-                    PyObject *yr = PyObject_GetAttr(py_obj, PyStr.year_attr);
-                    PyObject *mo = PyObject_GetAttr(py_obj, PyStr.month_attr);
-                    PyObject *dy = PyObject_GetAttr(py_obj, PyStr.day_attr);
-                    PyObject *hr = PyObject_GetAttr(py_obj, PyStr.hour_attr);
-                    PyObject *mi = PyObject_GetAttr(py_obj, PyStr.minute_attr);
-                    PyObject *se = PyObject_GetAttr(py_obj, PyStr.second_attr);
-                    PyObject *us = PyObject_GetAttr(py_obj, PyStr.microsecond_attr);
-                    if (!yr || !mo || !dy || !hr || !mi || !se || !us) {
-                        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy);
-                        Py_XDECREF(hr); Py_XDECREF(mi); Py_XDECREF(se); Py_XDECREF(us);
-                        goto error;
-                    }
-                    i64 = (int64_t)PyLong_AsLong(yr);
-                    i64 = (i64 << 4) | (int64_t)PyLong_AsLong(mo);
-                    i64 = (i64 << 5) | (int64_t)PyLong_AsLong(dy);
-                    i64 = (i64 << 5) | (int64_t)PyLong_AsLong(hr);
-                    i64 = (i64 << 6) | (int64_t)PyLong_AsLong(mi);
-                    i64 = (i64 << 6) | (int64_t)PyLong_AsLong(se);
-                    i64 = (i64 << 20) | (int64_t)PyLong_AsLong(us);
-                    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
-                    Py_DECREF(hr); Py_DECREF(mi); Py_DECREF(se); Py_DECREF(us);
+                    i64 = encode_rowdat_datetime((PyObject*)u64);
                     if (PyErr_Occurred()) goto error;
                 }
                 memcpy(out+out_idx, &i64, 8); out_idx += 8;
@@ -4180,17 +4154,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 out_idx += 2;
                 break;
 
-            case MYSQL_TYPE_VARCHAR:
-            case MYSQL_TYPE_JSON:
-            case MYSQL_TYPE_SET:
-            case MYSQL_TYPE_ENUM:
-            case MYSQL_TYPE_VAR_STRING:
-            case MYSQL_TYPE_STRING:
-            case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_TINY_BLOB:
-            case MYSQL_TYPE_MEDIUM_BLOB:
-            case MYSQL_TYPE_LONG_BLOB:
-            case MYSQL_TYPE_BLOB:
+            CASE_STRING_TYPES:
                 if  (col_types[i].type != NUMPY_OBJECT && col_types[i].type != NUMPY_FIXED_STRING) {
                     PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for character output types");
                     goto error;
@@ -4262,18 +4226,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 }
                 break;
 
-            // Use negative to indicate binary
-            case -MYSQL_TYPE_VARCHAR:
-            case -MYSQL_TYPE_JSON:
-            case -MYSQL_TYPE_SET:
-            case -MYSQL_TYPE_ENUM:
-            case -MYSQL_TYPE_VAR_STRING:
-            case -MYSQL_TYPE_STRING:
-            case -MYSQL_TYPE_GEOMETRY:
-            case -MYSQL_TYPE_TINY_BLOB:
-            case -MYSQL_TYPE_MEDIUM_BLOB:
-            case -MYSQL_TYPE_LONG_BLOB:
-            case -MYSQL_TYPE_BLOB:
+            CASE_BINARY_TYPES:
                 if  (col_types[i].type != NUMPY_OBJECT && col_types[i].type != NUMPY_BYTES) {
                     PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for binary output types");
                     goto error;
@@ -4585,10 +4538,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                     Py_INCREF(Py_None);
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
-                    int dy = (int)(i64 % 100); i64 /= 100;
-                    int mo = (int)(i64 % 100); i64 /= 100;
-                    int yr = (int)i64;
-                    PyObject *py_dt = PyObject_CallFunction(PyFunc.datetime_date, "iii", yr, mo, dy);
+                    PyObject *py_dt = decode_rowdat_date(i64);
                     if (!py_dt) goto error;
                     CHECKRC(PyTuple_SetItem(py_row, i, py_dt));
                 }
@@ -4601,28 +4551,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                     Py_INCREF(Py_None);
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
-                    int64_t sign_v = (i64 < 0) ? -1 : 1;
-                    int64_t abs_v = (i64 < 0) ? -i64 : i64;
-                    int64_t us_v = abs_v % 1000000;
-                    int64_t packed_v = abs_v / 1000000;
-                    int64_t ss_v = packed_v % 100;
-                    int64_t mm_v = (packed_v / 100) % 100;
-                    int64_t hh_v = packed_v / 10000;
-                    int64_t total_secs = hh_v * 3600 + mm_v * 60 + ss_v;
-                    if (sign_v < 0) { total_secs = -total_secs; us_v = -us_v; }
-                    int days_v = (int)(total_secs / 86400);
-                    int secs_v = (int)(total_secs % 86400);
-                    if (secs_v < 0) { days_v--; secs_v += 86400; }
-                    PyObject *py_d = PyLong_FromLong(days_v);
-                    PyObject *py_s = PyLong_FromLong(secs_v);
-                    PyObject *py_u = PyLong_FromLongLong(us_v);
-                    if (!py_d || !py_s || !py_u) {
-                        Py_XDECREF(py_d); Py_XDECREF(py_s); Py_XDECREF(py_u);
-                        goto error;
-                    }
-                    PyObject *py_td = PyObject_CallFunctionObjArgs(
-                        PyFunc.datetime_timedelta, py_d, py_s, py_u, NULL);
-                    Py_DECREF(py_d); Py_DECREF(py_s); Py_DECREF(py_u);
+                    PyObject *py_td = decode_rowdat_time(i64);
                     if (!py_td) goto error;
                     CHECKRC(PyTuple_SetItem(py_row, i, py_td));
                 }
@@ -4636,16 +4565,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                     Py_INCREF(Py_None);
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
-                    int us_v = (int)(i64 & 0xFFFFF); i64 >>= 20;
-                    int sec_v = (int)(i64 & 0x3F);   i64 >>= 6;
-                    int min_v = (int)(i64 & 0x3F);   i64 >>= 6;
-                    int hr_v  = (int)(i64 & 0x1F);   i64 >>= 5;
-                    int dy_v  = (int)(i64 & 0x1F);   i64 >>= 5;
-                    int mo_v  = (int)(i64 & 0xF);    i64 >>= 4;
-                    int yr_v  = (int)i64;
-                    PyObject *py_dt = PyObject_CallFunction(
-                        PyFunc.datetime_datetime, "iiiiiii",
-                        yr_v, mo_v, dy_v, hr_v, min_v, sec_v, us_v);
+                    PyObject *py_dt = decode_rowdat_datetime(i64);
                     if (!py_dt) goto error;
                     CHECKRC(PyTuple_SetItem(py_row, i, py_dt));
                 }
@@ -4662,17 +4582,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            case MYSQL_TYPE_VARCHAR:
-            case MYSQL_TYPE_JSON:
-            case MYSQL_TYPE_SET:
-            case MYSQL_TYPE_ENUM:
-            case MYSQL_TYPE_VAR_STRING:
-            case MYSQL_TYPE_STRING:
-            case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_TINY_BLOB:
-            case MYSQL_TYPE_MEDIUM_BLOB:
-            case MYSQL_TYPE_LONG_BLOB:
-            case MYSQL_TYPE_BLOB:
+            CASE_STRING_TYPES:
                 memcpy(&i64, data, 8); data += 8;
                 if (is_null) {
                     Py_INCREF(Py_None);
@@ -4685,18 +4595,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            // Use negative to indicate binary
-            case -MYSQL_TYPE_VARCHAR:
-            case -MYSQL_TYPE_JSON:
-            case -MYSQL_TYPE_SET:
-            case -MYSQL_TYPE_ENUM:
-            case -MYSQL_TYPE_VAR_STRING:
-            case -MYSQL_TYPE_STRING:
-            case -MYSQL_TYPE_GEOMETRY:
-            case -MYSQL_TYPE_TINY_BLOB:
-            case -MYSQL_TYPE_MEDIUM_BLOB:
-            case -MYSQL_TYPE_LONG_BLOB:
-            case -MYSQL_TYPE_BLOB:
+            CASE_BINARY_TYPES:
                 memcpy(&i64, data, 8); data += 8;
                 if (is_null) {
                     Py_INCREF(Py_None);
@@ -4968,16 +4867,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 if (is_null) {
                     i64 = 0;
                 } else {
-                    PyObject *yr = PyObject_GetAttr(py_item, PyStr.year_attr);
-                    PyObject *mo = PyObject_GetAttr(py_item, PyStr.month_attr);
-                    PyObject *dy = PyObject_GetAttr(py_item, PyStr.day_attr);
-                    if (!yr || !mo || !dy) {
-                        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy); goto error;
-                    }
-                    i64 = (int64_t)PyLong_AsLong(yr) * 10000
-                         + (int64_t)PyLong_AsLong(mo) * 100
-                         + (int64_t)PyLong_AsLong(dy);
-                    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+                    i64 = encode_rowdat_date(py_item);
                     if (PyErr_Occurred()) goto error;
                 }
                 memcpy(out+out_idx, &i64, 8); out_idx += 8;
@@ -4989,25 +4879,8 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 if (is_null) {
                     i64 = 0;
                 } else {
-                    PyObject *py_days = PyObject_GetAttr(py_item, PyStr.days_attr);
-                    PyObject *py_secs = PyObject_GetAttr(py_item, PyStr.seconds_attr);
-                    PyObject *py_us = PyObject_GetAttr(py_item, PyStr.microseconds_attr);
-                    if (!py_days || !py_secs || !py_us) {
-                        Py_XDECREF(py_days); Py_XDECREF(py_secs); Py_XDECREF(py_us); goto error;
-                    }
-                    long days_val = PyLong_AsLong(py_days);
-                    long secs_val = PyLong_AsLong(py_secs);
-                    long us_val = PyLong_AsLong(py_us);
-                    Py_DECREF(py_days); Py_DECREF(py_secs); Py_DECREF(py_us);
+                    i64 = encode_rowdat_time(py_item);
                     if (PyErr_Occurred()) goto error;
-                    int64_t total_secs = (int64_t)days_val * 86400 + (int64_t)secs_val;
-                    int64_t total_us = (int64_t)us_val;
-                    int64_t sign_v = (total_secs < 0 || (total_secs == 0 && total_us < 0)) ? -1 : 1;
-                    if (sign_v < 0) { total_secs = -total_secs; total_us = -total_us; }
-                    int64_t hh = total_secs / 3600;
-                    int64_t mm = (total_secs % 3600) / 60;
-                    int64_t ss = total_secs % 60;
-                    i64 = sign_v * (hh * 10000 + mm * 100 + ss) * 1000000 + sign_v * total_us;
                 }
                 memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
@@ -5019,27 +4892,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 if (is_null) {
                     i64 = 0;
                 } else {
-                    PyObject *yr = PyObject_GetAttr(py_item, PyStr.year_attr);
-                    PyObject *mo = PyObject_GetAttr(py_item, PyStr.month_attr);
-                    PyObject *dy = PyObject_GetAttr(py_item, PyStr.day_attr);
-                    PyObject *hr = PyObject_GetAttr(py_item, PyStr.hour_attr);
-                    PyObject *mi = PyObject_GetAttr(py_item, PyStr.minute_attr);
-                    PyObject *se = PyObject_GetAttr(py_item, PyStr.second_attr);
-                    PyObject *us = PyObject_GetAttr(py_item, PyStr.microsecond_attr);
-                    if (!yr || !mo || !dy || !hr || !mi || !se || !us) {
-                        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy);
-                        Py_XDECREF(hr); Py_XDECREF(mi); Py_XDECREF(se); Py_XDECREF(us);
-                        goto error;
-                    }
-                    i64 = (int64_t)PyLong_AsLong(yr);
-                    i64 = (i64 << 4) | (int64_t)PyLong_AsLong(mo);
-                    i64 = (i64 << 5) | (int64_t)PyLong_AsLong(dy);
-                    i64 = (i64 << 5) | (int64_t)PyLong_AsLong(hr);
-                    i64 = (i64 << 6) | (int64_t)PyLong_AsLong(mi);
-                    i64 = (i64 << 6) | (int64_t)PyLong_AsLong(se);
-                    i64 = (i64 << 20) | (int64_t)PyLong_AsLong(us);
-                    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
-                    Py_DECREF(hr); Py_DECREF(mi); Py_DECREF(se); Py_DECREF(us);
+                    i64 = encode_rowdat_datetime(py_item);
                     if (PyErr_Occurred()) goto error;
                 }
                 memcpy(out+out_idx, &i64, 8); out_idx += 8;
@@ -5053,17 +4906,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 out_idx += 2;
                 break;
 
-            case MYSQL_TYPE_VARCHAR:
-            case MYSQL_TYPE_JSON:
-            case MYSQL_TYPE_SET:
-            case MYSQL_TYPE_ENUM:
-            case MYSQL_TYPE_VAR_STRING:
-            case MYSQL_TYPE_STRING:
-            case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_TINY_BLOB:
-            case MYSQL_TYPE_MEDIUM_BLOB:
-            case MYSQL_TYPE_LONG_BLOB:
-            case MYSQL_TYPE_BLOB:
+            CASE_STRING_TYPES:
                 if (is_null) {
                     CHECKMEM(8);
                     i64 = 0;
@@ -5094,18 +4937,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            // Use negative to indicate binary
-            case -MYSQL_TYPE_VARCHAR:
-            case -MYSQL_TYPE_JSON:
-            case -MYSQL_TYPE_SET:
-            case -MYSQL_TYPE_ENUM:
-            case -MYSQL_TYPE_VAR_STRING:
-            case -MYSQL_TYPE_STRING:
-            case -MYSQL_TYPE_GEOMETRY:
-            case -MYSQL_TYPE_TINY_BLOB:
-            case -MYSQL_TYPE_MEDIUM_BLOB:
-            case -MYSQL_TYPE_LONG_BLOB:
-            case -MYSQL_TYPE_BLOB:
+            CASE_BINARY_TYPES:
                 if (is_null) {
                     CHECKMEM(8);
                     i64 = 0;
@@ -5411,10 +5243,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
                     Py_INCREF(Py_None);
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
-                    int dy = (int)(i64 % 100); i64 /= 100;
-                    int mo = (int)(i64 % 100); i64 /= 100;
-                    int yr = (int)i64;
-                    PyObject *py_dt = PyObject_CallFunction(PyFunc.datetime_date, "iii", yr, mo, dy);
+                    PyObject *py_dt = decode_rowdat_date(i64);
                     if (!py_dt) goto error;
                     CHECKRC(PyTuple_SetItem(py_row, i, py_dt));
                 }
@@ -5428,28 +5257,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
                     Py_INCREF(Py_None);
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
-                    int64_t sign_v = (i64 < 0) ? -1 : 1;
-                    int64_t abs_v = (i64 < 0) ? -i64 : i64;
-                    int64_t us_v = abs_v % 1000000;
-                    int64_t packed_v = abs_v / 1000000;
-                    int64_t ss_v = packed_v % 100;
-                    int64_t mm_v = (packed_v / 100) % 100;
-                    int64_t hh_v = packed_v / 10000;
-                    int64_t total_secs = hh_v * 3600 + mm_v * 60 + ss_v;
-                    if (sign_v < 0) { total_secs = -total_secs; us_v = -us_v; }
-                    int days_v = (int)(total_secs / 86400);
-                    int secs_v = (int)(total_secs % 86400);
-                    if (secs_v < 0) { days_v--; secs_v += 86400; }
-                    PyObject *py_d = PyLong_FromLong(days_v);
-                    PyObject *py_s = PyLong_FromLong(secs_v);
-                    PyObject *py_u = PyLong_FromLongLong(us_v);
-                    if (!py_d || !py_s || !py_u) {
-                        Py_XDECREF(py_d); Py_XDECREF(py_s); Py_XDECREF(py_u);
-                        goto error;
-                    }
-                    PyObject *py_td = PyObject_CallFunctionObjArgs(
-                        PyFunc.datetime_timedelta, py_d, py_s, py_u, NULL);
-                    Py_DECREF(py_d); Py_DECREF(py_s); Py_DECREF(py_u);
+                    PyObject *py_td = decode_rowdat_time(i64);
                     if (!py_td) goto error;
                     CHECKRC(PyTuple_SetItem(py_row, i, py_td));
                 }
@@ -5464,16 +5272,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
                     Py_INCREF(Py_None);
                     CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
-                    int us_v = (int)(i64 & 0xFFFFF); i64 >>= 20;
-                    int sec_v = (int)(i64 & 0x3F);   i64 >>= 6;
-                    int min_v = (int)(i64 & 0x3F);   i64 >>= 6;
-                    int hr_v  = (int)(i64 & 0x1F);   i64 >>= 5;
-                    int dy_v  = (int)(i64 & 0x1F);   i64 >>= 5;
-                    int mo_v  = (int)(i64 & 0xF);    i64 >>= 4;
-                    int yr_v  = (int)i64;
-                    PyObject *py_dt = PyObject_CallFunction(
-                        PyFunc.datetime_datetime, "iiiiiii",
-                        yr_v, mo_v, dy_v, hr_v, min_v, sec_v, us_v);
+                    PyObject *py_dt = decode_rowdat_datetime(i64);
                     if (!py_dt) goto error;
                     CHECKRC(PyTuple_SetItem(py_row, i, py_dt));
                 }
@@ -5491,17 +5290,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
                 }
                 break;
 
-            case MYSQL_TYPE_VARCHAR:
-            case MYSQL_TYPE_JSON:
-            case MYSQL_TYPE_SET:
-            case MYSQL_TYPE_ENUM:
-            case MYSQL_TYPE_VAR_STRING:
-            case MYSQL_TYPE_STRING:
-            case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_TINY_BLOB:
-            case MYSQL_TYPE_MEDIUM_BLOB:
-            case MYSQL_TYPE_LONG_BLOB:
-            case MYSQL_TYPE_BLOB:
+            CASE_STRING_TYPES:
                 CHECK_REMAINING(8);
                 memcpy(&i64, data, 8); data += 8;
                 if (is_null) {
@@ -5517,17 +5306,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
                 }
                 break;
 
-            case -MYSQL_TYPE_VARCHAR:
-            case -MYSQL_TYPE_JSON:
-            case -MYSQL_TYPE_SET:
-            case -MYSQL_TYPE_ENUM:
-            case -MYSQL_TYPE_VAR_STRING:
-            case -MYSQL_TYPE_STRING:
-            case -MYSQL_TYPE_GEOMETRY:
-            case -MYSQL_TYPE_TINY_BLOB:
-            case -MYSQL_TYPE_MEDIUM_BLOB:
-            case -MYSQL_TYPE_LONG_BLOB:
-            case -MYSQL_TYPE_BLOB:
+            CASE_BINARY_TYPES:
                 CHECK_REMAINING(8);
                 memcpy(&i64, data, 8); data += 8;
                 if (is_null) {
@@ -5749,17 +5528,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
                 if (is_null) {
                     i64 = 0;
                 } else {
-                    PyObject *yr = PyObject_GetAttr(py_result_item, PyStr.year_attr);
-                    PyObject *mo = PyObject_GetAttr(py_result_item, PyStr.month_attr);
-                    PyObject *dy = PyObject_GetAttr(py_result_item, PyStr.day_attr);
-                    if (!yr || !mo || !dy) {
-                        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy);
-                        Py_DECREF(py_result_item); py_result_item = NULL; goto error;
-                    }
-                    i64 = (int64_t)PyLong_AsLong(yr) * 10000
-                         + (int64_t)PyLong_AsLong(mo) * 100
-                         + (int64_t)PyLong_AsLong(dy);
-                    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+                    i64 = encode_rowdat_date(py_result_item);
                     if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
                 }
                 memcpy(out+out_idx, &i64, 8); out_idx += 8;
@@ -5771,27 +5540,8 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
                 if (is_null) {
                     i64 = 0;
                 } else {
-                    PyObject *py_days = PyObject_GetAttr(py_result_item, PyStr.days_attr);
-                    PyObject *py_secs = PyObject_GetAttr(py_result_item, PyStr.seconds_attr);
-                    PyObject *py_us = PyObject_GetAttr(py_result_item, PyStr.microseconds_attr);
-                    if (!py_days || !py_secs || !py_us) {
-                        Py_XDECREF(py_days); Py_XDECREF(py_secs); Py_XDECREF(py_us);
-                        Py_DECREF(py_result_item); py_result_item = NULL; goto error;
-                    }
-                    long days_val = PyLong_AsLong(py_days);
-                    long secs_val = PyLong_AsLong(py_secs);
-                    long us_val = PyLong_AsLong(py_us);
-                    Py_DECREF(py_days); Py_DECREF(py_secs); Py_DECREF(py_us);
+                    i64 = encode_rowdat_time(py_result_item);
                     if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
-
-                    int64_t total_secs = (int64_t)days_val * 86400 + (int64_t)secs_val;
-                    int64_t total_us = (int64_t)us_val;
-                    int64_t sign_v = (total_secs < 0 || (total_secs == 0 && total_us < 0)) ? -1 : 1;
-                    if (sign_v < 0) { total_secs = -total_secs; total_us = -total_us; }
-                    int64_t hh = total_secs / 3600;
-                    int64_t mm = (total_secs % 3600) / 60;
-                    int64_t ss = total_secs % 60;
-                    i64 = sign_v * (hh * 10000 + mm * 100 + ss) * 1000000 + sign_v * total_us;
                 }
                 memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
@@ -5803,27 +5553,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
                 if (is_null) {
                     i64 = 0;
                 } else {
-                    PyObject *yr = PyObject_GetAttr(py_result_item, PyStr.year_attr);
-                    PyObject *mo = PyObject_GetAttr(py_result_item, PyStr.month_attr);
-                    PyObject *dy = PyObject_GetAttr(py_result_item, PyStr.day_attr);
-                    PyObject *hr = PyObject_GetAttr(py_result_item, PyStr.hour_attr);
-                    PyObject *mi = PyObject_GetAttr(py_result_item, PyStr.minute_attr);
-                    PyObject *se = PyObject_GetAttr(py_result_item, PyStr.second_attr);
-                    PyObject *us = PyObject_GetAttr(py_result_item, PyStr.microsecond_attr);
-                    if (!yr || !mo || !dy || !hr || !mi || !se || !us) {
-                        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy);
-                        Py_XDECREF(hr); Py_XDECREF(mi); Py_XDECREF(se); Py_XDECREF(us);
-                        Py_DECREF(py_result_item); py_result_item = NULL; goto error;
-                    }
-                    i64 = (int64_t)PyLong_AsLong(yr);
-                    i64 = (i64 << 4) | (int64_t)PyLong_AsLong(mo);
-                    i64 = (i64 << 5) | (int64_t)PyLong_AsLong(dy);
-                    i64 = (i64 << 5) | (int64_t)PyLong_AsLong(hr);
-                    i64 = (i64 << 6) | (int64_t)PyLong_AsLong(mi);
-                    i64 = (i64 << 6) | (int64_t)PyLong_AsLong(se);
-                    i64 = (i64 << 20) | (int64_t)PyLong_AsLong(us);
-                    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
-                    Py_DECREF(hr); Py_DECREF(mi); Py_DECREF(se); Py_DECREF(us);
+                    i64 = encode_rowdat_datetime(py_result_item);
                     if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
                 }
                 memcpy(out+out_idx, &i64, 8); out_idx += 8;
@@ -5842,17 +5572,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
                 out_idx += 2;
                 break;
 
-            case MYSQL_TYPE_VARCHAR:
-            case MYSQL_TYPE_JSON:
-            case MYSQL_TYPE_SET:
-            case MYSQL_TYPE_ENUM:
-            case MYSQL_TYPE_VAR_STRING:
-            case MYSQL_TYPE_STRING:
-            case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_TINY_BLOB:
-            case MYSQL_TYPE_MEDIUM_BLOB:
-            case MYSQL_TYPE_LONG_BLOB:
-            case MYSQL_TYPE_BLOB:
+            CASE_STRING_TYPES:
                 if (is_null) {
                     CHECKMEM_CFA(8);
                     i64 = 0;
@@ -5887,17 +5607,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
                 }
                 break;
 
-            case -MYSQL_TYPE_VARCHAR:
-            case -MYSQL_TYPE_JSON:
-            case -MYSQL_TYPE_SET:
-            case -MYSQL_TYPE_ENUM:
-            case -MYSQL_TYPE_VAR_STRING:
-            case -MYSQL_TYPE_STRING:
-            case -MYSQL_TYPE_GEOMETRY:
-            case -MYSQL_TYPE_TINY_BLOB:
-            case -MYSQL_TYPE_MEDIUM_BLOB:
-            case -MYSQL_TYPE_LONG_BLOB:
-            case -MYSQL_TYPE_BLOB:
+            CASE_BINARY_TYPES:
                 if (is_null) {
                     CHECKMEM_CFA(8);
                     i64 = 0;
