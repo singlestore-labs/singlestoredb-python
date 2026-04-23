@@ -1026,7 +1026,7 @@ class ShowAccessor(object):
             for j, (k, v) in enumerate(row.items()):
                 if j == 0:
                     k = 'Name'
-                new_row[under2camel(k)] = v
+                new_row[k] = v
             out[i] = new_row
         return ShowResult(out)
 
