@@ -312,7 +312,7 @@ def _dump_vectors(
     masked_cols = []
     for i, (data, mask) in enumerate(cols):
         if mask is not None:
-            masked_cols.append([d if m is not None else None for d, m in zip(data, mask)])
+            masked_cols.append([d if not m else None for d, m in zip(data, mask)])
         else:
             masked_cols.append(cols[i][0])
     data = list(zip(row_ids, *masked_cols))

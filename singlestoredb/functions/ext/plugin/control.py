@@ -69,6 +69,11 @@ def _handle_register(
 ) -> ControlResult:
     """Handle @@register: register a new function dynamically.
 
+    Security: the function body is passed to ``exec()`` via
+    ``FunctionRegistry.create_function``. The security boundary is
+    the Unix socket permission (0o600) set in ``Server._bind_socket``,
+    which restricts access to the socket owner.
+
     If ``pipe_write_fd`` is not None (process mode), the registration
     payload is written to the pipe so the main process can update its
     own registry and re-fork all workers.

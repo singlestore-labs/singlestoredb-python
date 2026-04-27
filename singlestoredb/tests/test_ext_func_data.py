@@ -249,7 +249,7 @@ py_col_data = [
     ],
     [
         100, 100, 32700, 32800, 2147483600, 2147483800, 100.0,
-        100.0, 100, 100, 8388600, 16777200, 'bye', b'bye',
+        100.0, 100, 100, 8388600, 16777210, 'bye', b'bye',
     ],
     [
         120, 130, 254, 254, 254, 254, 3.14159, 3.14159,
@@ -999,8 +999,6 @@ class TestJSON(unittest.TestCase):
         dump_res = jsonx.dump_numpy(
             col_types, numpy_row_ids, numpy_data,
         )
-        import pprint
-        pprint.pprint(json.loads(dump_res))
         load_res = jsonx.load_numpy(col_spec, dump_res)
 
         ids = load_res[0]
@@ -1294,3 +1292,178 @@ class TestJSONEncoder(unittest.TestCase):
     def test_unsupported_type_raises(self):
         with self.assertRaises(TypeError):
             json.dumps(object(), cls=JSONEncoder)
+
+
+NEWDECIMAL = 246
+
+
+class TestCallFunctionAccel(unittest.TestCase):
+    """Test call_function_accel with datetime/date/time/decimal types."""
+
+    def setUp(self):
+        try:
+            from _singlestoredb_accel import call_function_accel
+            self.call_function_accel = call_function_accel
+        except ImportError:
+            self.skipTest('_singlestoredb_accel not available')
+
+    def _round_trip(self, colspec, returns, rows, func):
+        input_data = bytes(
+            rowdat_1._dump(
+                [c[1] for c in colspec], list(range(len(rows))), rows,
+            ),
+        )
+        output_data = self.call_function_accel(
+            colspec=colspec, returns=returns,
+            data=input_data, func=func,
+        )
+        return rowdat_1._load(
+            [(f'r{i}', t) for i, t in enumerate(returns)], output_data,
+        )
+
+    def test_datetime_pass_through(self):
+        dt = datetime.datetime(2024, 3, 15, 10, 30, 45, 123456)
+        colspec = [('dt', DATETIME)]
+        ids, rows = self._round_trip(
+            colspec, [DATETIME], [[dt]], lambda x: x,
+        )
+        assert rows[0][0] == dt
+
+    def test_datetime_null(self):
+        colspec = [('dt', DATETIME)]
+        ids, rows = self._round_trip(
+            colspec, [DATETIME], [[None]], lambda x: x,
+        )
+        assert rows[0][0] is None
+
+    def test_date_pass_through(self):
+        d = datetime.date(2024, 2, 29)
+        colspec = [('d', DATE)]
+        ids, rows = self._round_trip(
+            colspec, [DATE], [[d]], lambda x: x,
+        )
+        assert rows[0][0] == d
+
+    def test_date_null(self):
+        colspec = [('d', DATE)]
+        ids, rows = self._round_trip(
+            colspec, [DATE], [[None]], lambda x: x,
+        )
+        assert rows[0][0] is None
+
+    def test_time_pass_through(self):
+        td = datetime.timedelta(hours=10, minutes=30, seconds=45, microseconds=123456)
+        colspec = [('t', TIME)]
+        ids, rows = self._round_trip(
+            colspec, [TIME], [[td]], lambda x: x,
+        )
+        assert rows[0][0] == td
+
+    def test_time_negative(self):
+        td = -datetime.timedelta(hours=1, minutes=30)
+        colspec = [('t', TIME)]
+        ids, rows = self._round_trip(
+            colspec, [TIME], [[td]], lambda x: x,
+        )
+        assert rows[0][0] == td
+
+    def test_time_null(self):
+        colspec = [('t', TIME)]
+        ids, rows = self._round_trip(
+            colspec, [TIME], [[None]], lambda x: x,
+        )
+        assert rows[0][0] is None
+
+    def test_decimal_pass_through(self):
+        colspec = [('d', NEWDECIMAL)]
+        input_data = bytes(
+            rowdat_1._dump(
+                [NEWDECIMAL], [0], [['123.456']],
+            ),
+        )
+        output_data = self.call_function_accel(
+            colspec=colspec, returns=[NEWDECIMAL],
+            data=input_data, func=lambda x: x,
+        )
+        # accel reads as Decimal, writes back as length-prefixed string;
+        # _load treats 246 as string_types, so we get a string back
+        _, rows = rowdat_1._load([('r0', NEWDECIMAL)], output_data)
+        assert rows[0][0] == '123.456'
+
+    def test_decimal_negative(self):
+        colspec = [('d', NEWDECIMAL)]
+        input_data = bytes(
+            rowdat_1._dump(
+                [NEWDECIMAL], [0], [['-99.99']],
+            ),
+        )
+        output_data = self.call_function_accel(
+            colspec=colspec, returns=[NEWDECIMAL],
+            data=input_data, func=lambda x: x,
+        )
+        _, rows = rowdat_1._load([('r0', NEWDECIMAL)], output_data)
+        assert rows[0][0] == '-99.99'
+
+    def test_decimal_null(self):
+        colspec = [('d', NEWDECIMAL)]
+        input_data = bytes(
+            rowdat_1._dump(
+                [NEWDECIMAL], [0], [[None]],
+            ),
+        )
+        output_data = self.call_function_accel(
+            colspec=colspec, returns=[NEWDECIMAL],
+            data=input_data, func=lambda x: x,
+        )
+        _, rows = rowdat_1._load([('r0', NEWDECIMAL)], output_data)
+        assert rows[0][0] is None
+
+    def test_mixed_datetime_types(self):
+        dt = datetime.datetime(2024, 6, 15, 12, 0, 0, 0)
+        d = datetime.date(2024, 6, 15)
+        td = datetime.timedelta(hours=5, minutes=30)
+        colspec = [('dt', DATETIME), ('d', DATE), ('t', TIME)]
+        returns = [DATETIME, DATE, TIME]
+        ids, rows = self._round_trip(
+            colspec, returns, [[dt, d, td]], lambda a, b, c: (a, b, c),
+        )
+        assert rows[0] == [dt, d, td]
+
+    def test_multiple_rows(self):
+        dt1 = datetime.datetime(2024, 1, 1, 0, 0, 0, 0)
+        dt2 = datetime.datetime(2024, 12, 31, 23, 59, 59, 999999)
+        colspec = [('dt', DATETIME)]
+        ids, rows = self._round_trip(
+            colspec, [DATETIME], [[dt1], [dt2]], lambda x: x,
+        )
+        assert rows[0][0] == dt1
+        assert rows[1][0] == dt2
+
+    def test_func_raises(self):
+        def bad_func(x):
+            raise ValueError('intentional error')
+
+        colspec = [('x', BIGINT)]
+        input_data = bytes(rowdat_1._dump([BIGINT], [0], [[42]]))
+        with self.assertRaises(Exception):
+            self.call_function_accel(
+                colspec=colspec, returns=[BIGINT],
+                data=input_data, func=bad_func,
+            )
+
+    def test_wrong_return_type(self):
+        colspec = [('x', BIGINT)]
+        input_data = bytes(rowdat_1._dump([BIGINT], [0], [[42]]))
+        with self.assertRaises(Exception):
+            self.call_function_accel(
+                colspec=colspec, returns=[STRING],
+                data=input_data, func=lambda x: x,
+            )
+
+    def test_empty_input(self):
+        colspec = [('x', BIGINT)]
+        result = self.call_function_accel(
+            colspec=colspec, returns=[BIGINT],
+            data=b'', func=lambda x: x,
+        )
+        assert result == b''
