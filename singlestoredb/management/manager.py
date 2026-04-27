@@ -10,7 +10,6 @@ from typing import Optional
 from typing import Union
 from urllib.parse import urljoin
 
-import jwt
 import requests
 
 from .. import config
@@ -33,6 +32,7 @@ def set_organization(kwargs: Dict[str, Any]) -> None:
 
 def is_jwt(token: str) -> bool:
     """Is the given token a JWT?"""
+    import jwt
     try:
         jwt.decode(token, options={'verify_signature': False})
         return True

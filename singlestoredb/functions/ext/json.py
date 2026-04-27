@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import base64
+import datetime
+import decimal
 import json
 from typing import Any
 from typing import List
@@ -7,10 +9,9 @@ from typing import Tuple
 from typing import TYPE_CHECKING
 
 from ..dtypes import DEFAULT_VALUES
-from ..dtypes import NUMPY_TYPE_MAP
-from ..dtypes import PANDAS_TYPE_MAP
-from ..dtypes import POLARS_TYPE_MAP
-from ..dtypes import PYARROW_TYPE_MAP
+from ..dtypes import get_numpy_type_map
+from ..dtypes import get_polars_type_map
+from ..dtypes import get_pyarrow_type_map
 from ..dtypes import PYTHON_CONVERTERS
 
 if TYPE_CHECKING:
@@ -37,6 +38,22 @@ class JSONEncoder(json.JSONEncoder):
     def default(self, obj: Any) -> Any:
         if isinstance(obj, bytes):
             return base64.b64encode(obj).decode('utf-8')
+        if isinstance(obj, datetime.datetime):
+            return obj.strftime('%Y-%m-%d %H:%M:%S.%f')
+        if isinstance(obj, datetime.date):
+            return obj.isoformat()
+        if isinstance(obj, datetime.timedelta):
+            total_us = int(obj.total_seconds() * 1_000_000)
+            sign = '-' if total_us < 0 else ''
+            total_us = abs(total_us)
+            us = total_us % 1_000_000
+            total_secs = total_us // 1_000_000
+            ss = total_secs % 60
+            mm = (total_secs // 60) % 60
+            hh = total_secs // 3600
+            return f'{sign}{hh}:{mm:02d}:{ss:02d}.{us:06d}'
+        if isinstance(obj, decimal.Decimal):
+            return str(obj)
         return json.JSONEncoder.default(self, obj)
 
 
@@ -140,7 +157,7 @@ def load_pandas(
             (
                 pd.Series(
                     data, index=index, name=spec[0],
-                    dtype=PANDAS_TYPE_MAP[spec[1]],
+                    dtype=get_numpy_type_map()[spec[1]],
                 ),
                 pd.Series(mask, index=index, dtype=np.longlong),
             )
@@ -172,7 +189,7 @@ def load_polars(
     return pl.Series(None, row_ids, dtype=pl.Int64), \
         [
             (
-                pl.Series(spec[0], data, dtype=POLARS_TYPE_MAP[spec[1]]),
+                pl.Series(spec[0], data, dtype=get_polars_type_map()[spec[1]]),
                 pl.Series(None, mask, dtype=pl.Boolean),
             )
             for (data, mask), spec in zip(cols, colspec)
@@ -203,7 +220,7 @@ def load_numpy(
     return np.asarray(row_ids, dtype=np.longlong), \
         [
             (
-                np.asarray(data, dtype=NUMPY_TYPE_MAP[spec[1]]),  # type: ignore
+                np.asarray(data, dtype=get_numpy_type_map()[spec[1]]),  # type: ignore
                 np.asarray(mask, dtype=np.bool_),  # type: ignore
             )
             for (data, mask), spec in zip(cols, colspec)
@@ -235,7 +252,7 @@ def load_arrow(
         [
             (
                 pa.array(
-                    data, type=PYARROW_TYPE_MAP[dtype],
+                    data, type=get_pyarrow_type_map()[dtype],
                     mask=pa.array(mask, type=pa.bool_()),
                 ),
                 pa.array(mask, type=pa.bool_()),
@@ -295,7 +312,7 @@ def _dump_vectors(
     masked_cols = []
     for i, (data, mask) in enumerate(cols):
         if mask is not None:
-            masked_cols.append([d if m is not None else None for d, m in zip(data, mask)])
+            masked_cols.append([d if not m else None for d, m in zip(data, mask)])
         else:
             masked_cols.append(cols[i][0])
     data = list(zip(row_ids, *masked_cols))

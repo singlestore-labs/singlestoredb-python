@@ -2,6 +2,7 @@
 """SingleStoreDB package utilities."""
 import collections
 import warnings
+from functools import lru_cache
 from typing import Any
 from typing import Callable
 from typing import Dict
@@ -9,47 +10,34 @@ from typing import List
 from typing import NamedTuple
 from typing import Optional
 from typing import Tuple
+from typing import TYPE_CHECKING
 from typing import Union
 
-from .dtypes import NUMPY_TYPE_MAP
-from .dtypes import POLARS_TYPE_MAP
-from .dtypes import PYARROW_TYPE_MAP
+if TYPE_CHECKING:
+    import numpy
+    import pandas
+    import polars
+    import pyarrow
+
+from ._lazy_import import get_numpy
+from ._lazy_import import get_pandas
+from ._lazy_import import get_polars
+from ._lazy_import import get_pyarrow
+from .dtypes import get_numpy_type_map
+from .dtypes import get_polars_type_map
+from .dtypes import get_pyarrow_type_map
 
 UNSIGNED_FLAG = 32
 BINARY_FLAG = 128
 
-try:
-    has_numpy = True
-    import numpy as np
-except ImportError:
-    has_numpy = False
-
-try:
-    has_pandas = True
-    import pandas as pd
-except ImportError:
-    has_pandas = False
-
-try:
-    has_polars = True
-    import polars as pl
-except ImportError:
-    has_polars = False
-
-try:
-    has_pyarrow = True
-    import pyarrow as pa
-except ImportError:
-    has_pyarrow = False
-
 DBAPIResult = Union[List[Tuple[Any, ...]], Tuple[Any, ...]]
 OneResult = Union[
     Tuple[Any, ...], Dict[str, Any],
-    'np.ndarray', 'pd.DataFrame', 'pl.DataFrame', 'pa.Table',
+    'numpy.ndarray', 'pandas.DataFrame', 'polars.DataFrame', 'pyarrow.Table',
 ]
 ManyResult = Union[
     List[Tuple[Any, ...]], List[Dict[str, Any]],
-    'np.ndarray', 'pd.DataFrame', 'pl.DataFrame', 'pa.Table',
+    'numpy.ndarray', 'pandas.DataFrame', 'polars.DataFrame', 'pyarrow.Table',
 ]
 Result = Union[OneResult, ManyResult]
 
@@ -67,11 +55,14 @@ class Description(NamedTuple):
     charset: Optional[int]
 
 
-if has_numpy:
-    # If an int column is nullable, we need to use floats rather than
-    # ints for numpy and pandas.
-    NUMPY_TYPE_MAP_CAST_FLOAT = NUMPY_TYPE_MAP.copy()
-    NUMPY_TYPE_MAP_CAST_FLOAT.update({
+@lru_cache(maxsize=None)
+def _get_numpy_type_map_cast_float() -> Dict[int, Any]:
+    """Return numpy type map with int types cast to float for nullable columns."""
+    np = get_numpy()
+    if np is None:
+        return {}
+    type_map = get_numpy_type_map().copy()
+    type_map.update({
         1: np.float32,  # Tiny
         -1: np.float32,  # Unsigned Tiny
         2: np.float32,  # Short
@@ -84,15 +75,23 @@ if has_numpy:
         -9: np.float64,  # Unsigned Int24
         13: np.float64,  # Year
     })
+    return type_map
 
-if has_polars:
+
+@lru_cache(maxsize=None)
+def _get_polars_type_map_with_dates() -> Dict[int, Any]:
+    """Return polars type map with date/times remapped to strings."""
+    pl = get_polars()
+    if pl is None:
+        return {}
+    type_map = get_polars_type_map().copy()
     # Remap date/times to strings; let polars do the parsing
-    POLARS_TYPE_MAP = POLARS_TYPE_MAP.copy()
-    POLARS_TYPE_MAP.update({
+    type_map.update({
         7: pl.Utf8,
         10: pl.Utf8,
         12: pl.Utf8,
     })
+    return type_map
 
 
 INT_TYPES = set([1, 2, 3, 8, 9])
@@ -109,13 +108,15 @@ def signed(desc: Description) -> int:
 
 def _description_to_numpy_schema(desc: List[Description]) -> Dict[str, Any]:
     """Convert description to numpy array schema info."""
-    if has_numpy:
+    if get_numpy() is not None:
+        numpy_type_map = get_numpy_type_map()
+        numpy_type_map_cast_float = _get_numpy_type_map_cast_float()
         return dict(
             dtype=[
                 (
                     x.name,
-                    NUMPY_TYPE_MAP_CAST_FLOAT[signed(x)]
-                    if x.null_ok else NUMPY_TYPE_MAP[signed(x)],
+                    numpy_type_map_cast_float[signed(x)]
+                    if x.null_ok else numpy_type_map[signed(x)],
                 )
                 for x in desc
             ],
@@ -125,18 +126,21 @@ def _description_to_numpy_schema(desc: List[Description]) -> Dict[str, Any]:
 
 def _description_to_pandas_schema(desc: List[Description]) -> Dict[str, Any]:
     """Convert description to pandas DataFrame schema info."""
-    if has_pandas:
+    if get_pandas() is not None:
         return dict(columns=[x.name for x in desc])
     return {}
 
 
-def _decimalize_polars(desc: Description) -> 'pl.Decimal':
-    return pl.Decimal(desc.precision or 10, desc.scale or 0)
+def _decimalize_polars(desc: Description) -> Any:
+    pl = get_polars()
+    return pl.Decimal(desc.precision or 10, desc.scale or 0)  # type: ignore[union-attr]
 
 
 def _description_to_polars_schema(desc: List[Description]) -> Dict[str, Any]:
     """Convert description to polars DataFrame schema info."""
-    if has_polars:
+    pl = get_polars()
+    if pl is not None:
+        polars_type_map = _get_polars_type_map_with_dates()
         with_columns = {}
         for x in desc:
             if x.type_code in [7, 12]:
@@ -156,7 +160,8 @@ def _description_to_polars_schema(desc: List[Description]) -> Dict[str, Any]:
                 schema=[
                     (
                         x.name, _decimalize_polars(x)
-                        if x.type_code in DECIMAL_TYPES else POLARS_TYPE_MAP[signed(x)],
+                        if x.type_code in DECIMAL_TYPES
+                        else polars_type_map[signed(x)],
                     )
                     for x in desc
                 ],
@@ -166,18 +171,24 @@ def _description_to_polars_schema(desc: List[Description]) -> Dict[str, Any]:
     return {}
 
 
-def _decimalize_arrow(desc: Description) -> 'pa.Decimal128':
-    return pa.decimal128(desc.precision or 10, desc.scale or 0)
+def _decimalize_arrow(desc: Description) -> Any:
+    pa = get_pyarrow()
+    return pa.decimal128(  # type: ignore[union-attr]
+        desc.precision or 10, desc.scale or 0,
+    )
 
 
 def _description_to_arrow_schema(desc: List[Description]) -> Dict[str, Any]:
     """Convert description to Arrow Table schema info."""
-    if has_pyarrow:
+    pa = get_pyarrow()
+    if pa is not None:
+        pyarrow_type_map = get_pyarrow_type_map()
         return dict(
             schema=pa.schema([
                 (
                     x.name, _decimalize_arrow(x)
-                    if x.type_code in DECIMAL_TYPES else PYARROW_TYPE_MAP[signed(x)],
+                    if x.type_code in DECIMAL_TYPES
+                    else pyarrow_type_map[signed(x)],
                 )
                 for x in desc
             ]),
@@ -215,7 +226,8 @@ def results_to_numpy(
     """
     if not res:
         return res
-    if has_numpy:
+    np = get_numpy()
+    if np is not None:
         schema = _description_to_numpy_schema(desc) if schema is None else schema
         if single:
             return np.array([res], **schema)
@@ -257,7 +269,8 @@ def results_to_pandas(
     """
     if not res:
         return res
-    if has_pandas:
+    pd = get_pandas()
+    if pd is not None:
         schema = _description_to_pandas_schema(desc) if schema is None else schema
         return pd.DataFrame(results_to_numpy(desc, res, single=single, schema=schema))
     warnings.warn(
@@ -297,7 +310,8 @@ def results_to_polars(
     """
     if not res:
         return res
-    if has_polars:
+    pl = get_polars()
+    if pl is not None:
         schema = _description_to_polars_schema(desc) if schema is None else schema
         if single:
             out = pl.DataFrame([res], orient='row', **schema.get('schema', {}))
@@ -344,7 +358,8 @@ def results_to_arrow(
     """
     if not res:
         return res
-    if has_pyarrow:
+    pa = get_pyarrow()
+    if pa is not None:
         names = [x[0] for x in desc]
         schema = _description_to_arrow_schema(desc) if schema is None else schema
         if single:

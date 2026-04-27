@@ -1,0 +1,26 @@
+package singlestore:plugin;
+
+interface plugin {
+    /// Initialize the handler and discover pre-imported UDF modules.
+    /// Must be called before any other functions.
+    initialize: func() -> result<_, string>;
+
+    /// Call a function by its registered name (e.g., "my_func")
+    /// Input/output are rowdat_1 binary format
+    call-function: func(name: string, input: list<u8>) -> result<list<u8>, string>;
+
+    /// Describe all registered functions as a JSON array of objects.
+    /// Each object has: name, args [{name, dtype, sql}], returns [{name, dtype, sql}],
+    /// args_data_format, returns_data_format, function_type, doc
+    describe-functions: func() -> result<string, string>;
+
+    /// Register a function from its signature and source code.
+    /// `signature` is a JSON object matching the describe-functions element schema.
+    /// `code` is the function body (not a full `def` statement).
+    /// `replace` controls whether an existing function of the same name is overwritten.
+    create-function: func(signature: string, code: string, replace: bool) -> result<_, string>;
+}
+
+world plugin-server {
+    export plugin;
+}

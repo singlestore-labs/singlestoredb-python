@@ -11,10 +11,9 @@ from typing import Union
 from ..converters import converters
 from ..mysql.converters import escape_item  # type: ignore
 from ..utils.dtypes import DEFAULT_VALUES  # noqa
-from ..utils.dtypes import NUMPY_TYPE_MAP  # noqa
-from ..utils.dtypes import PANDAS_TYPE_MAP  # noqa
-from ..utils.dtypes import POLARS_TYPE_MAP  # noqa
-from ..utils.dtypes import PYARROW_TYPE_MAP  # noqa
+from ..utils.dtypes import get_numpy_type_map  # noqa
+from ..utils.dtypes import get_polars_type_map  # noqa
+from ..utils.dtypes import get_pyarrow_type_map  # noqa
 
 
 DataType = Union[str, Callable[..., Any]]
@@ -1745,49 +1744,52 @@ def GEOGRAPHY(
 #     return out
 
 
-# F32 = 'F32'
-# F64 = 'F64'
-# I8 = 'I8'
-# I16 = 'I16'
-# I32 = 'I32'
-# I64 = 'I64'
+F16 = 'F16'
+F32 = 'F32'
+F64 = 'F64'
+I8 = 'I8'
+I16 = 'I16'
+I32 = 'I32'
+I64 = 'I64'
 
 
-# def VECTOR(
-#     length: int,
-#     element_type: str = F32,
-#     *,
-#     nullable: bool = True,
-#     default: Optional[bytes] = None,
-#     name: Optional[str] = None,
-# ) -> SQLString:
-#     """
-#     VECTOR type specification.
-#
-#     Parameters
-#     ----------
-#     n : int
-#         Number of elements in vector
-#     element_type : str, optional
-#         Type of the elements in the vector:
-#         F32, F64, I8, I16, I32, I64
-#     nullable : bool, optional
-#         Can the value be NULL?
-#     default : str, optional
-#         Default value
-#     name : str, optional
-#         Name of the column / parameter
-#
-#     Returns
-#     -------
-#     SQLString
-#
-#     """
-#     out = f'VECTOR({int(length)}, {element_type})'
-#     out = SQLString(
-#         out + _modifiers(
-#             nullable=nullable, default=default,
-#         ),
-#     )
-#     out.name = name
-#     return out
+def VECTOR(
+    length: int,
+    element_type: str = F32,
+    *,
+    nullable: bool = True,
+    default: Optional[bytes] = None,
+    name: Optional[str] = None,
+) -> SQLString:
+    """
+    VECTOR type specification.
+
+    Parameters
+    ----------
+    n : int
+        Number of elements in vector
+    element_type : str, optional
+        Type of the elements in the vector:
+        F16, F32, F64, I8, I16, I32, I64
+    nullable : bool, optional
+        Can the value be NULL?
+    default : str, optional
+        Default value
+    name : str, optional
+        Name of the column / parameter
+
+    Returns
+    -------
+    SQLString
+
+    """
+    if element_type.upper() not in (F16, F32, F64, I8, I16, I32, I64):
+        raise ValueError(f'unsupported element type: {element_type}')
+    out = f'VECTOR({int(length)}, {element_type})'
+    out = SQLString(
+        out + _modifiers(
+            nullable=nullable, default=default,
+        ),
+    )
+    out.name = name
+    return out

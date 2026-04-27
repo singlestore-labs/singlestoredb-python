@@ -1,7 +1,16 @@
 
 #include <math.h>
+#ifndef __wasi__
+#include <poll.h>
+#endif
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
+#ifndef __wasi__
+#include <sys/mman.h>
+#include <sys/socket.h>
+#endif
+#include <unistd.h>
 #include <Python.h>
 
 #ifndef Py_LIMITED_API
@@ -509,6 +518,16 @@ typedef struct {
     PyObject *unpack;
     PyObject *decode;
     PyObject *frombuffer;
+    PyObject *year_attr;
+    PyObject *month_attr;
+    PyObject *day_attr;
+    PyObject *hour_attr;
+    PyObject *minute_attr;
+    PyObject *second_attr;
+    PyObject *microsecond_attr;
+    PyObject *days_attr;
+    PyObject *seconds_attr;
+    PyObject *microseconds_attr;
 } PyStrings;
 
 static PyStrings PyStr = {0};
@@ -550,6 +569,205 @@ typedef struct {
 } PyObjects;
 
 static PyObjects PyObj = {0};
+
+//
+// rowdat_1 type descriptor table
+//
+
+typedef struct {
+    int fixed_size;
+    int is_variable;
+    const char *fmt;
+    const char *fmt_unsigned;
+} RowdatTypeInfo;
+
+static RowdatTypeInfo get_rowdat_type_info(int ctype) {
+    int abs_ctype = (ctype < 0) ? -ctype : ctype;
+    switch (abs_ctype) {
+    case MYSQL_TYPE_TINY:
+        return (RowdatTypeInfo){1, 0, "b", "B"};
+    case MYSQL_TYPE_SHORT:
+        return (RowdatTypeInfo){2, 0, "h", "H"};
+    case MYSQL_TYPE_LONG:
+    case MYSQL_TYPE_INT24:
+        return (RowdatTypeInfo){4, 0, "i", "I"};
+    case MYSQL_TYPE_LONGLONG:
+        return (RowdatTypeInfo){8, 0, "q", "Q"};
+    case MYSQL_TYPE_FLOAT:
+        return (RowdatTypeInfo){4, 0, "f", "f"};
+    case MYSQL_TYPE_DOUBLE:
+        return (RowdatTypeInfo){8, 0, "d", "d"};
+    case MYSQL_TYPE_YEAR:
+        return (RowdatTypeInfo){2, 0, "H", "H"};
+    case MYSQL_TYPE_DATE:
+    case MYSQL_TYPE_NEWDATE:
+    case MYSQL_TYPE_TIME:
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_TIMESTAMP:
+        return (RowdatTypeInfo){8, 0, "Q", "Q"};
+    case MYSQL_TYPE_DECIMAL:
+    case MYSQL_TYPE_NEWDECIMAL:
+    case MYSQL_TYPE_VARCHAR:
+    case MYSQL_TYPE_JSON:
+    case MYSQL_TYPE_SET:
+    case MYSQL_TYPE_ENUM:
+    case MYSQL_TYPE_VAR_STRING:
+    case MYSQL_TYPE_STRING:
+    case MYSQL_TYPE_GEOMETRY:
+    case MYSQL_TYPE_TINY_BLOB:
+    case MYSQL_TYPE_MEDIUM_BLOB:
+    case MYSQL_TYPE_LONG_BLOB:
+    case MYSQL_TYPE_BLOB:
+        return (RowdatTypeInfo){0, 1, "Q", "Q"};
+    default:
+        return (RowdatTypeInfo){-1, 0, NULL, NULL};
+    }
+}
+
+//
+// rowdat_1 case-label macros for string/binary type groups
+//
+
+#define CASE_STRING_TYPES \
+    case MYSQL_TYPE_VARCHAR: \
+    case MYSQL_TYPE_JSON: \
+    case MYSQL_TYPE_SET: \
+    case MYSQL_TYPE_ENUM: \
+    case MYSQL_TYPE_VAR_STRING: \
+    case MYSQL_TYPE_STRING: \
+    case MYSQL_TYPE_GEOMETRY: \
+    case MYSQL_TYPE_TINY_BLOB: \
+    case MYSQL_TYPE_MEDIUM_BLOB: \
+    case MYSQL_TYPE_LONG_BLOB: \
+    case MYSQL_TYPE_BLOB
+
+#define CASE_BINARY_TYPES \
+    case -MYSQL_TYPE_VARCHAR: \
+    case -MYSQL_TYPE_JSON: \
+    case -MYSQL_TYPE_SET: \
+    case -MYSQL_TYPE_ENUM: \
+    case -MYSQL_TYPE_VAR_STRING: \
+    case -MYSQL_TYPE_STRING: \
+    case -MYSQL_TYPE_GEOMETRY: \
+    case -MYSQL_TYPE_TINY_BLOB: \
+    case -MYSQL_TYPE_MEDIUM_BLOB: \
+    case -MYSQL_TYPE_LONG_BLOB: \
+    case -MYSQL_TYPE_BLOB
+
+//
+// rowdat_1 datetime decode helpers (binary -> PyObject)
+//
+
+static inline PyObject *decode_rowdat_date(int64_t i64) {
+    int dy = (int)(i64 % 100); int64_t tmp = i64 / 100;
+    int mo = (int)(tmp % 100); int yr = (int)(tmp / 100);
+    return PyObject_CallFunction(PyFunc.datetime_date, "iii", yr, mo, dy);
+}
+
+static inline PyObject *decode_rowdat_time(int64_t i64) {
+    int64_t sign_v = (i64 < 0) ? -1 : 1;
+    int64_t abs_v = (i64 < 0) ? -i64 : i64;
+    int64_t us_v = abs_v % 1000000;
+    int64_t packed_v = abs_v / 1000000;
+    int64_t ss_v = packed_v % 100;
+    int64_t mm_v = (packed_v / 100) % 100;
+    int64_t hh_v = packed_v / 10000;
+    int64_t total_secs = hh_v * 3600 + mm_v * 60 + ss_v;
+    if (sign_v < 0) { total_secs = -total_secs; us_v = -us_v; }
+    int days_v = (int)(total_secs / 86400);
+    int secs_v = (int)(total_secs % 86400);
+    if (secs_v < 0) { days_v--; secs_v += 86400; }
+    PyObject *py_d = PyLong_FromLong(days_v);
+    PyObject *py_s = PyLong_FromLong(secs_v);
+    PyObject *py_u = PyLong_FromLongLong(us_v);
+    if (!py_d || !py_s || !py_u) {
+        Py_XDECREF(py_d); Py_XDECREF(py_s); Py_XDECREF(py_u);
+        return NULL;
+    }
+    PyObject *py_td = PyObject_CallFunctionObjArgs(
+        PyFunc.datetime_timedelta, py_d, py_s, py_u, NULL);
+    Py_DECREF(py_d); Py_DECREF(py_s); Py_DECREF(py_u);
+    return py_td;
+}
+
+static inline PyObject *decode_rowdat_datetime(int64_t i64) {
+    int us_v = (int)(i64 & 0xFFFFF); i64 >>= 20;
+    int sec_v = (int)(i64 & 0x3F);   i64 >>= 6;
+    int min_v = (int)(i64 & 0x3F);   i64 >>= 6;
+    int hr_v  = (int)(i64 & 0x1F);   i64 >>= 5;
+    int dy_v  = (int)(i64 & 0x1F);   i64 >>= 5;
+    int mo_v  = (int)(i64 & 0xF);    i64 >>= 4;
+    int yr_v  = (int)i64;
+    return PyObject_CallFunction(
+        PyFunc.datetime_datetime, "iiiiiii",
+        yr_v, mo_v, dy_v, hr_v, min_v, sec_v, us_v);
+}
+
+//
+// rowdat_1 datetime encode helpers (PyObject -> packed int64)
+//
+
+static inline int64_t encode_rowdat_date(PyObject *py_obj) {
+    PyObject *yr = PyObject_GetAttr(py_obj, PyStr.year_attr);
+    PyObject *mo = PyObject_GetAttr(py_obj, PyStr.month_attr);
+    PyObject *dy = PyObject_GetAttr(py_obj, PyStr.day_attr);
+    if (!yr || !mo || !dy) {
+        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy);
+        return 0;
+    }
+    int64_t val = (int64_t)PyLong_AsLong(yr) * 10000
+                + (int64_t)PyLong_AsLong(mo) * 100
+                + (int64_t)PyLong_AsLong(dy);
+    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+    return val;
+}
+
+static inline int64_t encode_rowdat_time(PyObject *py_obj) {
+    PyObject *py_days = PyObject_GetAttr(py_obj, PyStr.days_attr);
+    PyObject *py_secs = PyObject_GetAttr(py_obj, PyStr.seconds_attr);
+    PyObject *py_us = PyObject_GetAttr(py_obj, PyStr.microseconds_attr);
+    if (!py_days || !py_secs || !py_us) {
+        Py_XDECREF(py_days); Py_XDECREF(py_secs); Py_XDECREF(py_us);
+        return 0;
+    }
+    long days_val = PyLong_AsLong(py_days);
+    long secs_val = PyLong_AsLong(py_secs);
+    long us_val = PyLong_AsLong(py_us);
+    Py_DECREF(py_days); Py_DECREF(py_secs); Py_DECREF(py_us);
+    int64_t total_secs = (int64_t)days_val * 86400 + (int64_t)secs_val;
+    int64_t total_us = (int64_t)us_val;
+    int64_t sign_v = (total_secs < 0 || (total_secs == 0 && total_us < 0)) ? -1 : 1;
+    if (sign_v < 0) { total_secs = -total_secs; total_us = -total_us; }
+    int64_t hh = total_secs / 3600;
+    int64_t mm = (total_secs % 3600) / 60;
+    int64_t ss = total_secs % 60;
+    return sign_v * (hh * 10000 + mm * 100 + ss) * 1000000 + sign_v * total_us;
+}
+
+static inline int64_t encode_rowdat_datetime(PyObject *py_obj) {
+    PyObject *yr = PyObject_GetAttr(py_obj, PyStr.year_attr);
+    PyObject *mo = PyObject_GetAttr(py_obj, PyStr.month_attr);
+    PyObject *dy = PyObject_GetAttr(py_obj, PyStr.day_attr);
+    PyObject *hr = PyObject_GetAttr(py_obj, PyStr.hour_attr);
+    PyObject *mi = PyObject_GetAttr(py_obj, PyStr.minute_attr);
+    PyObject *se = PyObject_GetAttr(py_obj, PyStr.second_attr);
+    PyObject *us = PyObject_GetAttr(py_obj, PyStr.microsecond_attr);
+    if (!yr || !mo || !dy || !hr || !mi || !se || !us) {
+        Py_XDECREF(yr); Py_XDECREF(mo); Py_XDECREF(dy);
+        Py_XDECREF(hr); Py_XDECREF(mi); Py_XDECREF(se); Py_XDECREF(us);
+        return 0;
+    }
+    int64_t val = (int64_t)PyLong_AsLong(yr);
+    val = (val << 4) | (int64_t)PyLong_AsLong(mo);
+    val = (val << 5) | (int64_t)PyLong_AsLong(dy);
+    val = (val << 5) | (int64_t)PyLong_AsLong(hr);
+    val = (val << 6) | (int64_t)PyLong_AsLong(mi);
+    val = (val << 6) | (int64_t)PyLong_AsLong(se);
+    val = (val << 20) | (int64_t)PyLong_AsLong(us);
+    Py_DECREF(yr); Py_DECREF(mo); Py_DECREF(dy);
+    Py_DECREF(hr); Py_DECREF(mi); Py_DECREF(se); Py_DECREF(us);
+    return val;
+}
 
 //
 // State
@@ -2267,7 +2485,11 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
     orig_data = data;
 
     // Get number of columns
-    n_cols = PyObject_Length(py_colspec);
+    {
+        Py_ssize_t tmp = PyObject_Length(py_colspec);
+        if (tmp < 0) goto error;
+        n_cols = (unsigned long long)tmp;
+    }
 
     // Determine column types
     ctypes = calloc(sizeof(int), n_cols);
@@ -2289,152 +2511,37 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
         goto error; \
     }
 
-    // Determine number of rows
+    // Determine number of rows using type descriptor table
     item_sizes = malloc(sizeof(int) * n_cols);
     if (!item_sizes) goto error;
     data_formats = malloc(sizeof(char*) * n_cols);
     if (!data_formats) goto error;
     while (end > data) {
-        // Row ID
         CHECKSIZE(8);
         data += 8;
 
         for (i = 0; i < n_cols; i++) {
-            // Null slot
             CHECKSIZE(1);
             data += 1;
 
-            // Data row
-            switch (ctypes[i]) {
-            case MYSQL_TYPE_NULL:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: NULL");
+            RowdatTypeInfo info = get_rowdat_type_info(ctypes[i]);
+            if (info.fixed_size < 0) {
+                PyErr_Format(PyExc_TypeError, "unsupported data type: %d", ctypes[i]);
                 goto error;
-                break;
-
-            case MYSQL_TYPE_BIT:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: BIT");
-                goto error;
-                break;
-
-            case MYSQL_TYPE_TINY:
-            case -MYSQL_TYPE_TINY:
-                CHECKSIZE(1);
-                item_sizes[i] = 1;
-                data_formats[i] = (ctypes[i] < 0) ? "B" : "b";
-                data += 1;
-                break;
-
-            case MYSQL_TYPE_SHORT:
-            case -MYSQL_TYPE_SHORT:
-                CHECKSIZE(2);
-                item_sizes[i] = 2;
-                data_formats[i] = (ctypes[i] < 0) ? "H" : "h";
-                data += 2;
-                break;
-
-            case MYSQL_TYPE_LONG:
-            case -MYSQL_TYPE_LONG:
-            case MYSQL_TYPE_INT24:
-            case -MYSQL_TYPE_INT24:
-                CHECKSIZE(4);
-                item_sizes[i] = 4;
-                data_formats[i] = (ctypes[i] < 0) ? "I" : "i";
-                data += 4;
-                break;
-
-            case MYSQL_TYPE_LONGLONG:
-            case -MYSQL_TYPE_LONGLONG:
+            }
+            if (n_rows == 0) {
+                item_sizes[i] = info.is_variable ? 8 : info.fixed_size;
+                data_formats[i] = (char*)((ctypes[i] < 0) ? info.fmt_unsigned : info.fmt);
+            }
+            if (info.is_variable) {
                 CHECKSIZE(8);
-                item_sizes[i] = 8;
-                data_formats[i] = (ctypes[i] < 0) ? "Q" : "q";
-                data += 8;
-                break;
-
-            case MYSQL_TYPE_FLOAT:
-                CHECKSIZE(4);
-                item_sizes[i] = 4;
-                data_formats[i] = "f";
-                data += 4;
-                break;
-
-            case MYSQL_TYPE_DOUBLE:
-                CHECKSIZE(8);
-                item_sizes[i] = 8;
-                data_formats[i] = "d";
-                data += 8;
-                break;
-
-            case MYSQL_TYPE_DECIMAL:
-            case MYSQL_TYPE_NEWDECIMAL:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: DECIMAL");
-                goto error;
-                break;
-
-            case MYSQL_TYPE_DATE:
-            case MYSQL_TYPE_NEWDATE:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: DATE");
-                goto error;
-                break;
-
-            case MYSQL_TYPE_TIME:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: TIME");
-                goto error;
-                break;
-
-            case MYSQL_TYPE_DATETIME:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: DATETIME");
-                goto error;
-                break;
-
-            case MYSQL_TYPE_TIMESTAMP:
-                PyErr_SetString(PyExc_TypeError, "unsupported data type: TIMESTAMP");
-                goto error;
-                break;
-
-            case MYSQL_TYPE_YEAR:
-                CHECKSIZE(2);
-                data += 2;
-                break;
-
-            case MYSQL_TYPE_VARCHAR:
-            case MYSQL_TYPE_JSON:
-            case MYSQL_TYPE_SET:
-            case MYSQL_TYPE_ENUM:
-            case MYSQL_TYPE_VAR_STRING:
-            case MYSQL_TYPE_STRING:
-            case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_TINY_BLOB:
-            case MYSQL_TYPE_MEDIUM_BLOB:
-            case MYSQL_TYPE_LONG_BLOB:
-            case MYSQL_TYPE_BLOB:
-                CHECKSIZE(8);
-                item_sizes[i] = 8;
-                data_formats[i] = "Q";
-                i64 = *(int64_t*)data;
+                memcpy(&i64, data, 8);
                 data += 8;
                 CHECKSIZE(i64);
                 data += i64;
-                break;
-
-            // Use negative to indicate binary
-            case -MYSQL_TYPE_VARCHAR:
-            case -MYSQL_TYPE_JSON:
-            case -MYSQL_TYPE_SET:
-            case -MYSQL_TYPE_ENUM:
-            case -MYSQL_TYPE_VAR_STRING:
-            case -MYSQL_TYPE_STRING:
-            case -MYSQL_TYPE_GEOMETRY:
-            case -MYSQL_TYPE_TINY_BLOB:
-            case -MYSQL_TYPE_MEDIUM_BLOB:
-            case -MYSQL_TYPE_LONG_BLOB:
-                CHECKSIZE(8);
-                item_sizes[i] = 8;
-                data_formats[i] = "Q";
-                i64 = *(int64_t*)data;
-                data += 8;
-                CHECKSIZE(i64);
-                data += i64;
-                break;
+            } else {
+                CHECKSIZE(info.fixed_size);
+                data += info.fixed_size;
             }
         }
 
@@ -2470,7 +2577,7 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
     while (end > data) {
         if (j >= n_rows) goto error;
 
-        out_row_ids[j] = *(int64_t*)data; data += 8;
+        memcpy(&out_row_ids[j], data, 8); data += 8;
 
         for (i = 0; i < n_cols; i++) {
             is_null = (data[0] == '\x01');
@@ -2480,6 +2587,7 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
 
             switch (ctypes[i]) {
             case MYSQL_TYPE_NULL:
+                CHECKSIZE(1);
                 i8 = 0; data += 1;
                 memcpy(out_cols[i] + j * 1, &i8, 1);
                 break;
@@ -2489,100 +2597,149 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 break;
 
             case MYSQL_TYPE_TINY:
-                i8 = (is_null) ? 0 : *(int8_t*)data; data += 1;
+                if (is_null) { i8 = 0; } else { memcpy(&i8, data, 1); }
+                data += 1;
                 memcpy(out_cols[i] + j * 1, &i8, 1);
                 break;
 
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_TINY:
-                u8 = (is_null) ? 0 : *(uint8_t*)data; data += 1;
+                if (is_null) { u8 = 0; } else { memcpy(&u8, data, 1); }
+                data += 1;
                 memcpy(out_cols[i] + j * 1, &u8, 1);
                 break;
 
             case MYSQL_TYPE_SHORT:
-                i16 = (is_null) ? 0 : *(int16_t*)data; data += 2;
+                if (is_null) { i16 = 0; } else { memcpy(&i16, data, 2); }
+                data += 2;
                 memcpy(out_cols[i] + j * 2, &i16, 2);
                 break;
 
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_SHORT:
-                u16 = (is_null) ? 0 : *(uint16_t*)data; data += 2;
+                if (is_null) { u16 = 0; } else { memcpy(&u16, data, 2); }
+                data += 2;
                 memcpy(out_cols[i] + j * 2, &u16, 2);
                 break;
 
             case MYSQL_TYPE_LONG:
             case MYSQL_TYPE_INT24:
-                i32 = (is_null) ? 0 : *(int32_t*)data; data += 4;
+                if (is_null) { i32 = 0; } else { memcpy(&i32, data, 4); }
+                data += 4;
                 memcpy(out_cols[i] + j * 4, &i32, 4);
                 break;
 
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_LONG:
             case -MYSQL_TYPE_INT24:
-                u32 = (is_null) ? 0 : *(uint32_t*)data; data += 4;
+                if (is_null) { u32 = 0; } else { memcpy(&u32, data, 4); }
+                data += 4;
                 memcpy(out_cols[i] + j * 4, &u32, 4);
                 break;
 
             case MYSQL_TYPE_LONGLONG:
-                i64 = (is_null) ? 0 : *(int64_t*)data; data += 8;
+                if (is_null) { i64 = 0; } else { memcpy(&i64, data, 8); }
+                data += 8;
                 memcpy(out_cols[i] + j * 8, &i64, 8);
                 break;
 
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_LONGLONG:
-                u64 = (is_null) ? 0 : *(uint64_t*)data; data += 8;
+                if (is_null) { u64 = 0; } else { memcpy(&u64, data, 8); }
+                data += 8;
                 memcpy(out_cols[i] + j * 8, &u64, 8);
                 break;
 
             case MYSQL_TYPE_FLOAT:
-                flt = (is_null) ? NAN : *(float*)data; data += 4;
+                if (is_null) { flt = NAN; } else { memcpy(&flt, data, 4); }
+                data += 4;
                 memcpy(out_cols[i] + j * 4, &flt, 4);
                 break;
 
             case MYSQL_TYPE_DOUBLE:
-                dbl = (is_null) ? NAN : *(double*)data; data += 8;
+                if (is_null) { dbl = NAN; } else { memcpy(&dbl, data, 8); }
+                data += 8;
                 memcpy(out_cols[i] + j * 8, &dbl, 8);
                 break;
 
             case MYSQL_TYPE_DECIMAL:
             case MYSQL_TYPE_NEWDECIMAL:
-                // TODO
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    u64 = 0;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                } else {
+                    py_str = PyUnicode_FromStringAndSize(data, (Py_ssize_t)i64);
+                    data += i64;
+                    if (!py_str) goto error;
+                    PyObject *py_dec = PyObject_CallFunctionObjArgs(PyFunc.decimal_Decimal, py_str, NULL);
+                    Py_CLEAR(py_str);
+                    if (!py_dec) goto error;
+                    u64 = (uint64_t)py_dec;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_dec));
+                    Py_CLEAR(py_dec);
+                }
                 break;
 
             case MYSQL_TYPE_DATE:
-            case MYSQL_TYPE_NEWDATE:
-                // TODO
+            case MYSQL_TYPE_NEWDATE: {
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    u64 = 0;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                } else {
+                    PyObject *py_dt = decode_rowdat_date(i64);
+                    if (!py_dt) goto error;
+                    u64 = (uint64_t)py_dt;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_dt));
+                    Py_CLEAR(py_dt);
+                }
                 break;
+            }
 
-            case MYSQL_TYPE_TIME:
-                // TODO
+            case MYSQL_TYPE_TIME: {
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    u64 = 0;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                } else {
+                    PyObject *py_td = decode_rowdat_time(i64);
+                    if (!py_td) goto error;
+                    u64 = (uint64_t)py_td;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_td));
+                    Py_CLEAR(py_td);
+                }
                 break;
+            }
 
             case MYSQL_TYPE_DATETIME:
-                // TODO
+            case MYSQL_TYPE_TIMESTAMP: {
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    u64 = 0;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                } else {
+                    PyObject *py_dt = decode_rowdat_datetime(i64);
+                    if (!py_dt) goto error;
+                    u64 = (uint64_t)py_dt;
+                    memcpy(out_cols[i] + j * 8, &u64, 8);
+                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_dt));
+                    Py_CLEAR(py_dt);
+                }
                 break;
-
-            case MYSQL_TYPE_TIMESTAMP:
-                // TODO
-                break;
+            }
 
             case MYSQL_TYPE_YEAR:
-                u16 = (is_null) ? 0 : *(uint16_t*)data; data += 2;
+                if (is_null) { u16 = 0; } else { memcpy(&u16, data, 2); }
+                data += 2;
                 memcpy(out_cols[i] + j * 2, &u16, 2);
                 break;
 
-            case MYSQL_TYPE_VARCHAR:
-            case MYSQL_TYPE_JSON:
-            case MYSQL_TYPE_SET:
-            case MYSQL_TYPE_ENUM:
-            case MYSQL_TYPE_VAR_STRING:
-            case MYSQL_TYPE_STRING:
-            case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_TINY_BLOB:
-            case MYSQL_TYPE_MEDIUM_BLOB:
-            case MYSQL_TYPE_LONG_BLOB:
-            case MYSQL_TYPE_BLOB:
-                i64 = *(int64_t*)data; data += 8;
+            CASE_STRING_TYPES:
+                memcpy(&i64, data, 8); data += 8;
                 if (is_null) {
                     u64 = 0;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
@@ -2597,19 +2754,8 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 }
                 break;
 
-            // Use negative to indicate binary
-            case -MYSQL_TYPE_VARCHAR:
-            case -MYSQL_TYPE_JSON:
-            case -MYSQL_TYPE_SET:
-            case -MYSQL_TYPE_ENUM:
-            case -MYSQL_TYPE_VAR_STRING:
-            case -MYSQL_TYPE_STRING:
-            case -MYSQL_TYPE_GEOMETRY:
-            case -MYSQL_TYPE_TINY_BLOB:
-            case -MYSQL_TYPE_MEDIUM_BLOB:
-            case -MYSQL_TYPE_LONG_BLOB:
-            case -MYSQL_TYPE_BLOB:
-                i64 = *(int64_t*)data; data += 8;
+            CASE_BINARY_TYPES:
+                memcpy(&i64, data, 8); data += 8;
                 if (is_null) {
                     u64 = 0;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
@@ -2911,19 +3057,27 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
         goto error;
     }
 
-    if (PyObject_Length(py_returns) != PyObject_Length(py_cols)) {
-        PyErr_SetString(PyExc_ValueError, "number of return values does not match number of returned columns");
-        goto error;
+    {
+        Py_ssize_t tmp_returns_l = PyObject_Length(py_returns);
+        if (tmp_returns_l < 0) goto error;
+        Py_ssize_t tmp_cols_l = PyObject_Length(py_cols);
+        if (tmp_cols_l < 0) goto error;
+        if (tmp_returns_l != tmp_cols_l) {
+            PyErr_SetString(PyExc_ValueError, "number of return values does not match number of returned columns");
+            goto error;
+        }
+        n_cols = (unsigned long long)tmp_returns_l;
     }
 
-    n_rows = (unsigned long long)PyObject_Length(py_row_ids);
+    {
+        Py_ssize_t tmp = PyObject_Length(py_row_ids);
+        if (tmp < 0) goto error;
+        n_rows = (unsigned long long)tmp;
+    }
     if (n_rows == 0) {
         py_out = PyBytes_FromStringAndSize("", 0);
         goto exit;
     }
-
-    // Verify all data lengths agree
-    n_cols = (unsigned long long)PyObject_Length(py_returns);
     if (n_cols == 0) {
         py_out = PyBytes_FromStringAndSize("", 0);
         goto exit;
@@ -2935,17 +3089,25 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
         PyObject *py_data = PyTuple_GetItem(py_item, 0);
         if (!py_data) goto error;
 
-        if ((unsigned long long)PyObject_Length(py_data) != n_rows) {
-            PyErr_SetString(PyExc_ValueError, "mismatched lengths of column values");
-            goto error;
+        {
+            Py_ssize_t tmp = PyObject_Length(py_data);
+            if (tmp < 0) goto error;
+            if ((unsigned long long)tmp != n_rows) {
+                PyErr_SetString(PyExc_ValueError, "mismatched lengths of column values");
+                goto error;
+            }
         }
 
         PyObject *py_mask = PyTuple_GetItem(py_item, 1);
         if (!py_mask) goto error;
 
-        if (py_mask != Py_None && (unsigned long long)PyObject_Length(py_mask) != n_rows) {
-            PyErr_SetString(PyExc_ValueError, "length of mask values does not match the length of data rows");
-            goto error;
+        if (py_mask != Py_None) {
+            Py_ssize_t tmp = PyObject_Length(py_mask);
+            if (tmp < 0) goto error;
+            if ((unsigned long long)tmp != n_rows) {
+                PyErr_SetString(PyExc_ValueError, "length of mask values does not match the length of data rows");
+                goto error;
+            }
         }
     }
 
@@ -3858,35 +4020,73 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 break;
 
             case MYSQL_TYPE_DECIMAL:
-                // TODO
-                PyErr_SetString(PyExc_ValueError, "unsupported data type: DECIMAL");
-                goto error;
+            case MYSQL_TYPE_NEWDECIMAL: {
+                u64 = *(uint64_t*)(cols[i] + j * 8);
+                if (is_null || u64 == 0) {
+                    CHECKMEM(8);
+                    i64 = 0;
+                    memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                } else {
+                    PyObject *py_obj = (PyObject*)u64;
+                    PyObject *str_obj = PyObject_Str(py_obj);
+                    if (!str_obj) goto error;
+                    PyObject *encoded = PyUnicode_AsEncodedString(str_obj, "utf-8", "strict");
+                    Py_DECREF(str_obj);
+                    if (!encoded) goto error;
+                    char *str = NULL;
+                    Py_ssize_t str_l = 0;
+                    if (PyBytes_AsStringAndSize(encoded, &str, &str_l) < 0) {
+                        Py_DECREF(encoded); goto error;
+                    }
+                    CHECKMEM(8+str_l);
+                    i64 = str_l;
+                    memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                    memcpy(out+out_idx, str, str_l); out_idx += str_l;
+                    Py_DECREF(encoded);
+                }
                 break;
+            }
 
             case MYSQL_TYPE_DATE:
-            case MYSQL_TYPE_NEWDATE:
-                // TODO
-                PyErr_SetString(PyExc_ValueError, "unsupported data type: DATE");
-                goto error;
+            case MYSQL_TYPE_NEWDATE: {
+                CHECKMEM(8);
+                u64 = *(uint64_t*)(cols[i] + j * 8);
+                if (is_null || u64 == 0) {
+                    i64 = 0;
+                } else {
+                    i64 = encode_rowdat_date((PyObject*)u64);
+                    if (PyErr_Occurred()) goto error;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
+            }
 
-            case MYSQL_TYPE_TIME:
-                // TODO
-                PyErr_SetString(PyExc_ValueError, "unsupported data type: TIME");
-                goto error;
+            case MYSQL_TYPE_TIME: {
+                CHECKMEM(8);
+                u64 = *(uint64_t*)(cols[i] + j * 8);
+                if (is_null || u64 == 0) {
+                    i64 = 0;
+                } else {
+                    i64 = encode_rowdat_time((PyObject*)u64);
+                    if (PyErr_Occurred()) goto error;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
+            }
 
             case MYSQL_TYPE_DATETIME:
-                // TODO
-                PyErr_SetString(PyExc_ValueError, "unsupported data type: DATETIME");
-                goto error;
+            case MYSQL_TYPE_TIMESTAMP: {
+                CHECKMEM(8);
+                u64 = *(uint64_t*)(cols[i] + j * 8);
+                if (is_null || u64 == 0) {
+                    i64 = 0;
+                } else {
+                    i64 = encode_rowdat_datetime((PyObject*)u64);
+                    if (PyErr_Occurred()) goto error;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
-
-            case MYSQL_TYPE_TIMESTAMP:
-                // TODO
-                PyErr_SetString(PyExc_ValueError, "unsupported data type: TIMESTAMP");
-                goto error;
-                break;
+            }
 
             case MYSQL_TYPE_YEAR:
                 CHECKMEM(2);
@@ -3954,17 +4154,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 out_idx += 2;
                 break;
 
-            case MYSQL_TYPE_VARCHAR:
-            case MYSQL_TYPE_JSON:
-            case MYSQL_TYPE_SET:
-            case MYSQL_TYPE_ENUM:
-            case MYSQL_TYPE_VAR_STRING:
-            case MYSQL_TYPE_STRING:
-            case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_TINY_BLOB:
-            case MYSQL_TYPE_MEDIUM_BLOB:
-            case MYSQL_TYPE_LONG_BLOB:
-            case MYSQL_TYPE_BLOB:
+            CASE_STRING_TYPES:
                 if  (col_types[i].type != NUMPY_OBJECT && col_types[i].type != NUMPY_FIXED_STRING) {
                     PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for character output types");
                     goto error;
@@ -4036,18 +4226,7 @@ static PyObject *dump_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                 }
                 break;
 
-            // Use negative to indicate binary
-            case -MYSQL_TYPE_VARCHAR:
-            case -MYSQL_TYPE_JSON:
-            case -MYSQL_TYPE_SET:
-            case -MYSQL_TYPE_ENUM:
-            case -MYSQL_TYPE_VAR_STRING:
-            case -MYSQL_TYPE_STRING:
-            case -MYSQL_TYPE_GEOMETRY:
-            case -MYSQL_TYPE_TINY_BLOB:
-            case -MYSQL_TYPE_MEDIUM_BLOB:
-            case -MYSQL_TYPE_LONG_BLOB:
-            case -MYSQL_TYPE_BLOB:
+            CASE_BINARY_TYPES:
                 if  (col_types[i].type != NUMPY_OBJECT && col_types[i].type != NUMPY_BYTES) {
                     PyErr_SetString(PyExc_ValueError, "unsupported numpy data type for binary output types");
                     goto error;
@@ -4170,7 +4349,11 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     CHECKRC(PyBytes_AsStringAndSize(py_data, &data, &length));
     end = data + (unsigned long long)length;
 
-    colspec_l = PyObject_Length(py_colspec);
+    {
+        Py_ssize_t tmp = PyObject_Length(py_colspec);
+        if (tmp < 0) goto error;
+        colspec_l = (unsigned long long)tmp;
+    }
     ctypes = malloc(sizeof(int) * colspec_l);
 
     for (i = 0; i < colspec_l; i++) {
@@ -4208,18 +4391,17 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
         py_row = PyTuple_New(colspec_l);
         if (!py_row) goto error;
 
-        row_id = *(int64_t*)data; data += 8;
+        memcpy(&row_id, data, 8); data += 8;
         CHECKRC(PyList_Append(py_out_row_ids, PyLong_FromLongLong(row_id)));
 
         for (unsigned long long i = 0; i < colspec_l; i++) {
             is_null = data[0] == '\x01'; data += 1;
-            if (is_null) Py_INCREF(Py_None);
 
             switch (ctypes[i]) {
             case MYSQL_TYPE_NULL:
                 data += 1;
-                CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 Py_INCREF(Py_None);
+                CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 break;
 
             case MYSQL_TYPE_BIT:
@@ -4227,10 +4409,10 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 break;
 
             case MYSQL_TYPE_TINY:
-                i8 = *(int8_t*)data; data += 1;
+                memcpy(&i8, data, 1); data += 1;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromLong((long)i8)));
                 }
@@ -4238,20 +4420,20 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_TINY:
-                u8 = *(uint8_t*)data; data += 1;
+                memcpy(&u8, data, 1); data += 1;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLong((unsigned long)u8)));
                 }
                 break;
 
             case MYSQL_TYPE_SHORT:
-                i16 = *(int16_t*)data; data += 2;
+                memcpy(&i16, data, 2); data += 2;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromLong((long)i16)));
                 }
@@ -4259,10 +4441,10 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_SHORT:
-                u16 = *(uint16_t*)data; data += 2;
+                memcpy(&u16, data, 2); data += 2;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLong((unsigned long)u16)));
                 }
@@ -4270,10 +4452,10 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
             case MYSQL_TYPE_LONG:
             case MYSQL_TYPE_INT24:
-                i32 = *(int32_t*)data; data += 4;
+                memcpy(&i32, data, 4); data += 4;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromLong((long)i32)));
                 }
@@ -4282,20 +4464,20 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_LONG:
             case -MYSQL_TYPE_INT24:
-                u32 = *(uint32_t*)data; data += 4;
+                memcpy(&u32, data, 4); data += 4;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLong((unsigned long)u32)));
                 }
                 break;
 
             case MYSQL_TYPE_LONGLONG:
-                i64 = *(int64_t*)data; data += 8;
+                memcpy(&i64, data, 8); data += 8;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromLongLong((long long)i64)));
                 }
@@ -4303,30 +4485,30 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
             // Use negative to indicate unsigned
             case -MYSQL_TYPE_LONGLONG:
-                u64 = *(uint64_t*)data; data += 8;
+                memcpy(&u64, data, 8); data += 8;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLongLong((unsigned long long)u64)));
                 }
                 break;
 
             case MYSQL_TYPE_FLOAT:
-                flt = *(float*)data; data += 4;
+                memcpy(&flt, data, 4); data += 4;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     CHECKRC(PyTuple_SetItem(py_row, i, PyFloat_FromDouble((double)flt)));
                 }
                 break;
 
             case MYSQL_TYPE_DOUBLE:
-                dbl = *(double*)data; data += 8;
+                memcpy(&dbl, data, 8); data += 8;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     CHECKRC(PyTuple_SetItem(py_row, i, PyFloat_FromDouble((double)dbl)));
                 }
@@ -4334,51 +4516,77 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
 
             case MYSQL_TYPE_DECIMAL:
             case MYSQL_TYPE_NEWDECIMAL:
-                // TODO
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    py_str = PyUnicode_FromStringAndSize(data, (Py_ssize_t)i64);
+                    data += i64;
+                    if (!py_str) goto error;
+                    PyObject *py_dec = PyObject_CallFunctionObjArgs(PyFunc.decimal_Decimal, py_str, NULL);
+                    Py_DECREF(py_str); py_str = NULL;
+                    if (!py_dec) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_dec));
+                }
                 break;
 
             case MYSQL_TYPE_DATE:
-            case MYSQL_TYPE_NEWDATE:
-                // TODO
+            case MYSQL_TYPE_NEWDATE: {
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    PyObject *py_dt = decode_rowdat_date(i64);
+                    if (!py_dt) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_dt));
+                }
                 break;
+            }
 
-            case MYSQL_TYPE_TIME:
-                // TODO
+            case MYSQL_TYPE_TIME: {
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    PyObject *py_td = decode_rowdat_time(i64);
+                    if (!py_td) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_td));
+                }
                 break;
+            }
 
             case MYSQL_TYPE_DATETIME:
-                // TODO
+            case MYSQL_TYPE_TIMESTAMP: {
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    PyObject *py_dt = decode_rowdat_datetime(i64);
+                    if (!py_dt) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_dt));
+                }
                 break;
-
-            case MYSQL_TYPE_TIMESTAMP:
-                // TODO
-                break;
+            }
 
             case MYSQL_TYPE_YEAR:
-                u16 = *(uint16_t*)data; data += 2;
+                memcpy(&u16, data, 2); data += 2;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLong((unsigned long)u16)));
                 }
                 break;
 
-            case MYSQL_TYPE_VARCHAR:
-            case MYSQL_TYPE_JSON:
-            case MYSQL_TYPE_SET:
-            case MYSQL_TYPE_ENUM:
-            case MYSQL_TYPE_VAR_STRING:
-            case MYSQL_TYPE_STRING:
-            case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_TINY_BLOB:
-            case MYSQL_TYPE_MEDIUM_BLOB:
-            case MYSQL_TYPE_LONG_BLOB:
-            case MYSQL_TYPE_BLOB:
-                i64 = *(int64_t*)data; data += 8;
+            CASE_STRING_TYPES:
+                memcpy(&i64, data, 8); data += 8;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     py_str = PyUnicode_FromStringAndSize(data, (Py_ssize_t)i64);
                     data += i64;
@@ -4387,22 +4595,11 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            // Use negative to indicate binary
-            case -MYSQL_TYPE_VARCHAR:
-            case -MYSQL_TYPE_JSON:
-            case -MYSQL_TYPE_SET:
-            case -MYSQL_TYPE_ENUM:
-            case -MYSQL_TYPE_VAR_STRING:
-            case -MYSQL_TYPE_STRING:
-            case -MYSQL_TYPE_GEOMETRY:
-            case -MYSQL_TYPE_TINY_BLOB:
-            case -MYSQL_TYPE_MEDIUM_BLOB:
-            case -MYSQL_TYPE_LONG_BLOB:
-            case -MYSQL_TYPE_BLOB:
-                i64 = *(int64_t*)data; data += 8;
+            CASE_BINARY_TYPES:
+                memcpy(&i64, data, 8); data += 8;
                 if (is_null) {
-                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                     Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
                 } else {
                     py_blob = PyBytes_FromStringAndSize(data, (Py_ssize_t)i64);
                     data += i64;
@@ -4472,7 +4669,11 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
         goto error;
     }
 
-    n_rows = (unsigned long long)PyObject_Length(py_rows);
+    {
+        Py_ssize_t tmp = PyObject_Length(py_rows);
+        if (tmp < 0) goto error;
+        n_rows = (unsigned long long)tmp;
+    }
     if (n_rows == 0) {
         py_out = PyBytes_FromStringAndSize("", 0);
         goto exit;
@@ -4485,7 +4686,11 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!out) goto error;
 
     // Get return types
-    n_cols = (unsigned long long)PyObject_Length(py_returns);
+    {
+        Py_ssize_t tmp = PyObject_Length(py_returns);
+        if (tmp < 0) goto error;
+        n_cols = (unsigned long long)tmp;
+    }
     if (n_cols == 0) {
         PyErr_SetString(PyExc_ValueError, "no return values specified");
         goto error;
@@ -4632,44 +4837,76 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 break;
 
             case MYSQL_TYPE_DECIMAL:
-                // TODO
+            case MYSQL_TYPE_NEWDECIMAL:
+                if (is_null) {
+                    CHECKMEM(8);
+                    i64 = 0;
+                    memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                } else {
+                    PyObject *str_obj = PyObject_Str(py_item);
+                    if (!str_obj) goto error;
+                    PyObject *encoded = PyUnicode_AsEncodedString(str_obj, "utf-8", "strict");
+                    Py_DECREF(str_obj);
+                    if (!encoded) goto error;
+                    char *str = NULL;
+                    Py_ssize_t str_l = 0;
+                    if (PyBytes_AsStringAndSize(encoded, &str, &str_l) < 0) {
+                        Py_DECREF(encoded); goto error;
+                    }
+                    CHECKMEM(8+str_l);
+                    i64 = str_l;
+                    memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                    memcpy(out+out_idx, str, str_l); out_idx += str_l;
+                    Py_DECREF(encoded);
+                }
                 break;
 
             case MYSQL_TYPE_DATE:
-            case MYSQL_TYPE_NEWDATE:
-                // TODO
+            case MYSQL_TYPE_NEWDATE: {
+                CHECKMEM(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    i64 = encode_rowdat_date(py_item);
+                    if (PyErr_Occurred()) goto error;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
+            }
 
-            case MYSQL_TYPE_TIME:
-                // TODO
+            case MYSQL_TYPE_TIME: {
+                CHECKMEM(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    i64 = encode_rowdat_time(py_item);
+                    if (PyErr_Occurred()) goto error;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
+            }
 
             case MYSQL_TYPE_DATETIME:
-                // TODO
+            case MYSQL_TYPE_TIMESTAMP: {
+                CHECKMEM(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    i64 = encode_rowdat_datetime(py_item);
+                    if (PyErr_Occurred()) goto error;
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
                 break;
-
-            case MYSQL_TYPE_TIMESTAMP:
-                // TODO
-                break;
+            }
 
             case MYSQL_TYPE_YEAR:
                 CHECKMEM(2);
-                i16 = (is_null) ? 0 : (int16_t)PyLong_AsLong(py_item);
-                memcpy(out+out_idx, &i16, 2);
+                u16 = (is_null) ? 0 : (uint16_t)PyLong_AsUnsignedLong(py_item);
+                memcpy(out+out_idx, &u16, 2);
                 out_idx += 2;
                 break;
 
-            case MYSQL_TYPE_VARCHAR:
-            case MYSQL_TYPE_JSON:
-            case MYSQL_TYPE_SET:
-            case MYSQL_TYPE_ENUM:
-            case MYSQL_TYPE_VAR_STRING:
-            case MYSQL_TYPE_STRING:
-            case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_TINY_BLOB:
-            case MYSQL_TYPE_MEDIUM_BLOB:
-            case MYSQL_TYPE_LONG_BLOB:
-            case MYSQL_TYPE_BLOB:
+            CASE_STRING_TYPES:
                 if (is_null) {
                     CHECKMEM(8);
                     i64 = 0;
@@ -4700,18 +4937,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
                 }
                 break;
 
-            // Use negative to indicate binary
-            case -MYSQL_TYPE_VARCHAR:
-            case -MYSQL_TYPE_JSON:
-            case -MYSQL_TYPE_SET:
-            case -MYSQL_TYPE_ENUM:
-            case -MYSQL_TYPE_VAR_STRING:
-            case -MYSQL_TYPE_STRING:
-            case -MYSQL_TYPE_GEOMETRY:
-            case -MYSQL_TYPE_TINY_BLOB:
-            case -MYSQL_TYPE_MEDIUM_BLOB:
-            case -MYSQL_TYPE_LONG_BLOB:
-            case -MYSQL_TYPE_BLOB:
+            CASE_BINARY_TYPES:
                 if (is_null) {
                     CHECKMEM(8);
                     i64 = 0;
@@ -4774,12 +5000,860 @@ error:
 }
 
 
+static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *kwargs) {
+    PyObject *py_colspec = NULL, *py_returns = NULL, *py_data = NULL, *py_func = NULL;
+    PyObject *py_out = NULL, *py_row = NULL, *py_result = NULL, *py_result_item = NULL;
+    PyObject *py_str = NULL, *py_blob = NULL, *py_bytes = NULL;
+    Py_ssize_t length = 0;
+    uint64_t row_id = 0;
+    uint8_t is_null = 0;
+    int8_t i8 = 0; int16_t i16 = 0; int32_t i32 = 0; int64_t i64 = 0;
+    uint8_t u8 = 0; uint16_t u16 = 0; uint32_t u32 = 0; uint64_t u64 = 0;
+    float flt = 0; double dbl = 0;
+    int *ctypes = NULL, *rtypes = NULL;
+    char *data = NULL, *end = NULL, *out = NULL;
+    unsigned long long out_l = 0, out_idx = 0, colspec_l = 0, returns_l = 0, i = 0;
+    char *keywords[] = {"colspec", "returns", "data", "func", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOOO", keywords,
+            &py_colspec, &py_returns, &py_data, &py_func)) goto error;
+    if (!PyCallable_Check(py_func)) {
+        PyErr_SetString(PyExc_TypeError, "func must be callable"); goto error;
+    }
+
+    CHECKRC(PyBytes_AsStringAndSize(py_data, &data, &length));
+    end = data + (unsigned long long)length;
+    if (length == 0) { py_out = PyBytes_FromStringAndSize("", 0); goto exit; }
+
+    // Parse colspec types
+    {
+        Py_ssize_t tmp = PyObject_Length(py_colspec);
+        if (tmp < 0) goto error;
+        colspec_l = (unsigned long long)tmp;
+    }
+    ctypes = malloc(sizeof(int) * colspec_l);
+    if (!ctypes) goto error;
+    for (i = 0; i < colspec_l; i++) {
+        PyObject *py_cspec = PySequence_GetItem(py_colspec, i);
+        if (!py_cspec) goto error;
+        PyObject *py_ctype = PySequence_GetItem(py_cspec, 1);
+        if (!py_ctype) { Py_DECREF(py_cspec); goto error; }
+        ctypes[i] = (int)PyLong_AsLong(py_ctype);
+        Py_DECREF(py_ctype); Py_DECREF(py_cspec);
+        if (PyErr_Occurred()) { goto error; }
+    }
+
+    // Parse return types
+    {
+        Py_ssize_t tmp = PyObject_Length(py_returns);
+        if (tmp < 0) goto error;
+        returns_l = (unsigned long long)tmp;
+    }
+    rtypes = malloc(sizeof(int) * returns_l);
+    if (!rtypes) goto error;
+    for (i = 0; i < returns_l; i++) {
+        PyObject *py_item = PySequence_GetItem(py_returns, i);
+        if (!py_item) goto error;
+        rtypes[i] = (int)PyLong_AsLong(py_item);
+        Py_DECREF(py_item);
+        if (PyErr_Occurred()) { goto error; }
+    }
+
+    out_l = 256;
+    out = malloc(out_l);
+    if (!out) goto error;
+
+#define CHECKMEM_CFA(x) \
+    if ((out_idx + (x)) > out_l) { \
+        out_l = out_l * 2 + (x); \
+        char *new_out = realloc(out, out_l); \
+        if (!new_out) { \
+            PyErr_SetString(PyExc_MemoryError, "failed to reallocate output buffer"); \
+            goto error; \
+        } \
+        out = new_out; \
+    }
+
+    // Bounds-check macro for input buffer reads
+#define CHECK_REMAINING(n) do { \
+    if ((size_t)(end - data) < (size_t)(n)) { \
+        PyErr_SetString(PyExc_ValueError, "truncated rowdat_1 input"); \
+        goto error; \
+    } \
+} while(0)
+
+    // Main loop: parse input rows, call function, serialize output
+    while (end > data) {
+        py_row = PyTuple_New(colspec_l);
+        if (!py_row) goto error;
+
+        // Read row ID
+        CHECK_REMAINING(8);
+        memcpy(&row_id, data, 8); data += 8;
+
+        // Parse input columns
+        for (i = 0; i < colspec_l; i++) {
+            CHECK_REMAINING(1);
+            is_null = data[0] == '\x01'; data += 1;
+
+            switch (ctypes[i]) {
+            case MYSQL_TYPE_NULL:
+                CHECK_REMAINING(1);
+                data += 1;
+                Py_INCREF(Py_None);
+                CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                break;
+
+            case MYSQL_TYPE_TINY:
+                CHECK_REMAINING(1);
+                memcpy(&i8, data, 1); data += 1;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromLong((long)i8)));
+                }
+                break;
+
+            case -MYSQL_TYPE_TINY:
+                CHECK_REMAINING(1);
+                memcpy(&u8, data, 1); data += 1;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLong((unsigned long)u8)));
+                }
+                break;
+
+            case MYSQL_TYPE_SHORT:
+                CHECK_REMAINING(2);
+                memcpy(&i16, data, 2); data += 2;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromLong((long)i16)));
+                }
+                break;
+
+            case -MYSQL_TYPE_SHORT:
+                CHECK_REMAINING(2);
+                memcpy(&u16, data, 2); data += 2;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLong((unsigned long)u16)));
+                }
+                break;
+
+            case MYSQL_TYPE_LONG:
+            case MYSQL_TYPE_INT24:
+                CHECK_REMAINING(4);
+                memcpy(&i32, data, 4); data += 4;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromLong((long)i32)));
+                }
+                break;
+
+            case -MYSQL_TYPE_LONG:
+            case -MYSQL_TYPE_INT24:
+                CHECK_REMAINING(4);
+                memcpy(&u32, data, 4); data += 4;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLong((unsigned long)u32)));
+                }
+                break;
+
+            case MYSQL_TYPE_LONGLONG:
+                CHECK_REMAINING(8);
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromLongLong((long long)i64)));
+                }
+                break;
+
+            case -MYSQL_TYPE_LONGLONG:
+                CHECK_REMAINING(8);
+                memcpy(&u64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLongLong((unsigned long long)u64)));
+                }
+                break;
+
+            case MYSQL_TYPE_FLOAT:
+                CHECK_REMAINING(4);
+                memcpy(&flt, data, 4); data += 4;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECKRC(PyTuple_SetItem(py_row, i, PyFloat_FromDouble((double)flt)));
+                }
+                break;
+
+            case MYSQL_TYPE_DOUBLE:
+                CHECK_REMAINING(8);
+                memcpy(&dbl, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECKRC(PyTuple_SetItem(py_row, i, PyFloat_FromDouble((double)dbl)));
+                }
+                break;
+
+            case MYSQL_TYPE_DECIMAL:
+            case MYSQL_TYPE_NEWDECIMAL:
+                CHECK_REMAINING(8);
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECK_REMAINING((size_t)i64);
+                    py_str = PyUnicode_FromStringAndSize(data, (Py_ssize_t)i64);
+                    data += i64;
+                    if (!py_str) goto error;
+                    PyObject *py_dec = PyObject_CallFunctionObjArgs(PyFunc.decimal_Decimal, py_str, NULL);
+                    Py_DECREF(py_str); py_str = NULL;
+                    if (!py_dec) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_dec));
+                }
+                break;
+
+            case MYSQL_TYPE_DATE:
+            case MYSQL_TYPE_NEWDATE: {
+                CHECK_REMAINING(8);
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    PyObject *py_dt = decode_rowdat_date(i64);
+                    if (!py_dt) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_dt));
+                }
+                break;
+            }
+
+            case MYSQL_TYPE_TIME: {
+                CHECK_REMAINING(8);
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    PyObject *py_td = decode_rowdat_time(i64);
+                    if (!py_td) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_td));
+                }
+                break;
+            }
+
+            case MYSQL_TYPE_DATETIME:
+            case MYSQL_TYPE_TIMESTAMP: {
+                CHECK_REMAINING(8);
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    PyObject *py_dt = decode_rowdat_datetime(i64);
+                    if (!py_dt) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_dt));
+                }
+                break;
+            }
+
+            case MYSQL_TYPE_YEAR:
+                CHECK_REMAINING(2);
+                memcpy(&u16, data, 2); data += 2;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECKRC(PyTuple_SetItem(py_row, i, PyLong_FromUnsignedLong((unsigned long)u16)));
+                }
+                break;
+
+            CASE_STRING_TYPES:
+                CHECK_REMAINING(8);
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECK_REMAINING((size_t)i64);
+                    py_str = PyUnicode_FromStringAndSize(data, (Py_ssize_t)i64);
+                    data += i64;
+                    if (!py_str) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_str));
+                    py_str = NULL;
+                }
+                break;
+
+            CASE_BINARY_TYPES:
+                CHECK_REMAINING(8);
+                memcpy(&i64, data, 8); data += 8;
+                if (is_null) {
+                    Py_INCREF(Py_None);
+                    CHECKRC(PyTuple_SetItem(py_row, i, Py_None));
+                } else {
+                    CHECK_REMAINING((size_t)i64);
+                    py_blob = PyBytes_FromStringAndSize(data, (Py_ssize_t)i64);
+                    data += i64;
+                    if (!py_blob) goto error;
+                    CHECKRC(PyTuple_SetItem(py_row, i, py_blob));
+                    py_blob = NULL;
+                }
+                break;
+
+            default:
+                PyErr_Format(PyExc_TypeError,
+                    "unsupported input column type: %d", ctypes[i]);
+                goto error;
+            }
+        }
+
+#undef CHECK_REMAINING
+
+        // Call the user function
+        py_result = PyObject_Call(py_func, py_row, NULL);
+        Py_DECREF(py_row);
+        py_row = NULL;
+        if (!py_result) goto error;
+
+        // Normalize result: wrap scalar in a tuple
+        if (!PyList_Check(py_result) && !PyTuple_Check(py_result)) {
+            PyObject *py_wrapped = PyTuple_Pack(1, py_result);
+            Py_DECREF(py_result);
+            py_result = py_wrapped;
+            if (!py_result) goto error;
+        }
+
+        // Write row ID to output
+        CHECKMEM_CFA(8);
+        memcpy(out+out_idx, &row_id, 8);
+        out_idx += 8;
+
+        // Serialize output columns
+        for (i = 0; i < returns_l; i++) {
+            py_result_item = PySequence_GetItem(py_result, i);
+            if (!py_result_item) goto error;
+
+            is_null = (uint8_t)(py_result_item == Py_None);
+
+            CHECKMEM_CFA(1);
+            memcpy(out+out_idx, &is_null, 1);
+            out_idx += 1;
+
+            switch (rtypes[i]) {
+            case MYSQL_TYPE_BIT:
+                Py_DECREF(py_result_item);
+                py_result_item = NULL;
+                PyErr_SetString(PyExc_NotImplementedError,
+                    "BIT type not yet supported in call_function_accel");
+                goto error;
+
+            case MYSQL_TYPE_TINY:
+                CHECKMEM_CFA(1);
+                if (is_null) {
+                    i8 = 0;
+                } else {
+                    i8 = (int8_t)PyLong_AsLong(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &i8, 1);
+                out_idx += 1;
+                break;
+
+            case -MYSQL_TYPE_TINY:
+                CHECKMEM_CFA(1);
+                if (is_null) {
+                    u8 = 0;
+                } else {
+                    u8 = (uint8_t)PyLong_AsUnsignedLong(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &u8, 1);
+                out_idx += 1;
+                break;
+
+            case MYSQL_TYPE_SHORT:
+                CHECKMEM_CFA(2);
+                if (is_null) {
+                    i16 = 0;
+                } else {
+                    i16 = (int16_t)PyLong_AsLong(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &i16, 2);
+                out_idx += 2;
+                break;
+
+            case -MYSQL_TYPE_SHORT:
+                CHECKMEM_CFA(2);
+                if (is_null) {
+                    u16 = 0;
+                } else {
+                    u16 = (uint16_t)PyLong_AsUnsignedLong(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &u16, 2);
+                out_idx += 2;
+                break;
+
+            case MYSQL_TYPE_LONG:
+            case MYSQL_TYPE_INT24:
+                CHECKMEM_CFA(4);
+                if (is_null) {
+                    i32 = 0;
+                } else {
+                    i32 = (int32_t)PyLong_AsLong(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &i32, 4);
+                out_idx += 4;
+                break;
+
+            case -MYSQL_TYPE_LONG:
+            case -MYSQL_TYPE_INT24:
+                CHECKMEM_CFA(4);
+                if (is_null) {
+                    u32 = 0;
+                } else {
+                    u32 = (uint32_t)PyLong_AsUnsignedLong(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &u32, 4);
+                out_idx += 4;
+                break;
+
+            case MYSQL_TYPE_LONGLONG:
+                CHECKMEM_CFA(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    i64 = (int64_t)PyLong_AsLongLong(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &i64, 8);
+                out_idx += 8;
+                break;
+
+            case -MYSQL_TYPE_LONGLONG:
+                CHECKMEM_CFA(8);
+                if (is_null) {
+                    u64 = 0;
+                } else {
+                    u64 = (uint64_t)PyLong_AsUnsignedLongLong(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &u64, 8);
+                out_idx += 8;
+                break;
+
+            case MYSQL_TYPE_FLOAT:
+                CHECKMEM_CFA(4);
+                if (is_null) {
+                    flt = 0;
+                } else {
+                    flt = (float)PyFloat_AsDouble(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &flt, 4);
+                out_idx += 4;
+                break;
+
+            case MYSQL_TYPE_DOUBLE:
+                CHECKMEM_CFA(8);
+                if (is_null) {
+                    dbl = 0;
+                } else {
+                    dbl = (double)PyFloat_AsDouble(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &dbl, 8);
+                out_idx += 8;
+                break;
+
+            case MYSQL_TYPE_DECIMAL:
+            case MYSQL_TYPE_NEWDECIMAL:
+                if (is_null) {
+                    CHECKMEM_CFA(8);
+                    i64 = 0;
+                    memcpy(out+out_idx, &i64, 8);
+                    out_idx += 8;
+                } else {
+                    PyObject *str_obj = PyObject_Str(py_result_item);
+                    if (!str_obj) {
+                        Py_DECREF(py_result_item); py_result_item = NULL; goto error;
+                    }
+                    PyObject *encoded = PyUnicode_AsEncodedString(str_obj, "utf-8", "strict");
+                    Py_DECREF(str_obj);
+                    if (!encoded) {
+                        Py_DECREF(py_result_item); py_result_item = NULL; goto error;
+                    }
+                    char *str = NULL;
+                    Py_ssize_t str_l = 0;
+                    if (PyBytes_AsStringAndSize(encoded, &str, &str_l) < 0) {
+                        Py_DECREF(encoded);
+                        Py_DECREF(py_result_item); py_result_item = NULL; goto error;
+                    }
+                    CHECKMEM_CFA(8+str_l);
+                    i64 = str_l;
+                    memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                    memcpy(out+out_idx, str, str_l); out_idx += str_l;
+                    Py_DECREF(encoded);
+                }
+                break;
+
+            case MYSQL_TYPE_DATE:
+            case MYSQL_TYPE_NEWDATE: {
+                CHECKMEM_CFA(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    i64 = encode_rowdat_date(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                break;
+            }
+
+            case MYSQL_TYPE_TIME: {
+                CHECKMEM_CFA(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    i64 = encode_rowdat_time(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                break;
+            }
+
+            case MYSQL_TYPE_DATETIME:
+            case MYSQL_TYPE_TIMESTAMP: {
+                CHECKMEM_CFA(8);
+                if (is_null) {
+                    i64 = 0;
+                } else {
+                    i64 = encode_rowdat_datetime(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &i64, 8); out_idx += 8;
+                break;
+            }
+
+            case MYSQL_TYPE_YEAR:
+                CHECKMEM_CFA(2);
+                if (is_null) {
+                    u16 = 0;
+                } else {
+                    u16 = (uint16_t)PyLong_AsUnsignedLong(py_result_item);
+                    if (PyErr_Occurred()) { Py_DECREF(py_result_item); py_result_item = NULL; goto error; }
+                }
+                memcpy(out+out_idx, &u16, 2);
+                out_idx += 2;
+                break;
+
+            CASE_STRING_TYPES:
+                if (is_null) {
+                    CHECKMEM_CFA(8);
+                    i64 = 0;
+                    memcpy(out+out_idx, &i64, 8);
+                    out_idx += 8;
+                } else {
+                    py_bytes = PyUnicode_AsEncodedString(py_result_item, "utf-8", "strict");
+                    if (!py_bytes) {
+                        Py_DECREF(py_result_item);
+                        py_result_item = NULL;
+                        goto error;
+                    }
+
+                    char *str = NULL;
+                    Py_ssize_t str_l = 0;
+                    if (PyBytes_AsStringAndSize(py_bytes, &str, &str_l) < 0) {
+                        Py_DECREF(py_bytes);
+                        py_bytes = NULL;
+                        Py_DECREF(py_result_item);
+                        py_result_item = NULL;
+                        goto error;
+                    }
+
+                    CHECKMEM_CFA(8+str_l);
+                    i64 = str_l;
+                    memcpy(out+out_idx, &i64, 8);
+                    out_idx += 8;
+                    memcpy(out+out_idx, str, str_l);
+                    out_idx += str_l;
+                    Py_DECREF(py_bytes);
+                    py_bytes = NULL;
+                }
+                break;
+
+            CASE_BINARY_TYPES:
+                if (is_null) {
+                    CHECKMEM_CFA(8);
+                    i64 = 0;
+                    memcpy(out+out_idx, &i64, 8);
+                    out_idx += 8;
+                } else {
+                    char *str = NULL;
+                    Py_ssize_t str_l = 0;
+                    if (PyBytes_AsStringAndSize(py_result_item, &str, &str_l) < 0) {
+                        Py_DECREF(py_result_item);
+                        py_result_item = NULL;
+                        goto error;
+                    }
+
+                    CHECKMEM_CFA(8+str_l);
+                    i64 = str_l;
+                    memcpy(out+out_idx, &i64, 8);
+                    out_idx += 8;
+                    memcpy(out+out_idx, str, str_l);
+                    out_idx += str_l;
+                }
+                break;
+
+            default:
+                Py_DECREF(py_result_item);
+                py_result_item = NULL;
+                PyErr_Format(PyExc_TypeError,
+                    "unsupported output column type: %d", rtypes[i]);
+                goto error;
+            }
+
+            Py_DECREF(py_result_item);
+            py_result_item = NULL;
+        }
+
+        Py_DECREF(py_result);
+        py_result = NULL;
+    }
+
+#undef CHECKMEM_CFA
+
+    py_out = PyBytes_FromStringAndSize(out, out_idx);
+
+exit:
+    if (out) free(out);
+    if (ctypes) free(ctypes);
+    if (rtypes) free(rtypes);
+
+    Py_XDECREF(py_row);
+    Py_XDECREF(py_result);
+    Py_XDECREF(py_result_item);
+    Py_XDECREF(py_str);
+    Py_XDECREF(py_blob);
+    Py_XDECREF(py_bytes);
+
+    return py_out;
+
+error:
+    Py_XDECREF(py_out);
+    py_out = NULL;
+
+    goto exit;
+}
+
+#ifndef __wasi__
+/*
+ * mmap_read(fd, length) -> bytes
+ *
+ * Maps the given fd with MAP_SHARED|PROT_READ for `length` bytes,
+ * copies into a Python bytes object, and unmaps in a single C call.
+ * Eliminates Python mmap object creation/destruction overhead.
+ */
+static PyObject *accel_mmap_read(PyObject *self, PyObject *args) {
+    int fd;
+    Py_ssize_t length;
+
+    if (!PyArg_ParseTuple(args, "in", &fd, &length))
+        return NULL;
+
+    if (length <= 0) {
+        return PyBytes_FromStringAndSize(NULL, 0);
+    }
+
+    void *addr = mmap(NULL, (size_t)length, PROT_READ, MAP_SHARED, fd, 0);
+    if (addr == MAP_FAILED) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+
+    PyObject *result = PyBytes_FromStringAndSize((const char *)addr, length);
+    munmap(addr, (size_t)length);
+    return result;
+}
+
+/*
+ * mmap_write(fd, data, min_size) -> None
+ *
+ * Writes `data` to the file descriptor, combining ftruncate + lseek + write
+ * into a single C call. If min_size > 0, ftruncate is called with
+ * max(min_size, len(data)); if min_size == 0, ftruncate is skipped
+ * (caller manages file size).
+ */
+static PyObject *accel_mmap_write(PyObject *self, PyObject *args) {
+    int fd;
+    const char *data;
+    Py_ssize_t data_len;
+    Py_ssize_t min_size;
+
+    if (!PyArg_ParseTuple(args, "iy#n", &fd, &data, &data_len, &min_size))
+        return NULL;
+
+    if (min_size > 0) {
+        Py_ssize_t trunc_size = data_len > min_size ? data_len : min_size;
+        if (ftruncate(fd, (off_t)trunc_size) < 0) {
+            PyErr_SetFromErrno(PyExc_OSError);
+            return NULL;
+        }
+    }
+
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        return NULL;
+    }
+
+    const char *p = data;
+    Py_ssize_t remaining = data_len;
+    while (remaining > 0) {
+        ssize_t written = write(fd, p, (size_t)remaining);
+        if (written < 0) {
+            PyErr_SetFromErrno(PyExc_OSError);
+            return NULL;
+        }
+        p += written;
+        remaining -= written;
+    }
+
+    Py_RETURN_NONE;
+}
+
+/*
+ * recv_exact(fd, n, timeout_ms=-1) -> bytes or None
+ *
+ * Receives exactly `n` bytes from a socket fd using blocking recv.
+ * Returns None on EOF (peer closed). Operates on raw fd to avoid
+ * Python socket object overhead. Releases the GIL during recv.
+ *
+ * When timeout_ms >= 0, uses poll() before each recv() to wait for
+ * data with a timeout. Raises TimeoutError on timeout. This allows
+ * the fd to remain in blocking mode while still supporting timeouts,
+ * avoiding the interaction between Python's settimeout() (which sets
+ * O_NONBLOCK) and direct fd-level recv().
+ */
+static PyObject *accel_recv_exact(PyObject *self, PyObject *args) {
+    int fd, timeout_ms = -1;
+    Py_ssize_t n;
+
+    if (!PyArg_ParseTuple(args, "in|i", &fd, &n, &timeout_ms))
+        return NULL;
+
+    if (n <= 0) {
+        return PyBytes_FromStringAndSize(NULL, 0);
+    }
+
+    char *buf = (char *)malloc((size_t)n);
+    if (!buf) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+
+    Py_ssize_t pos = 0;
+    while (pos < n) {
+        if (timeout_ms >= 0) {
+            struct pollfd pfd = {fd, POLLIN, 0};
+            int poll_rc;
+            Py_BEGIN_ALLOW_THREADS
+            poll_rc = poll(&pfd, 1, timeout_ms);
+            Py_END_ALLOW_THREADS
+            if (poll_rc == 0) {
+                if (pos > 0) {
+                    /* Partial message already consumed — must finish it.
+                       Block indefinitely to avoid protocol desync. */
+                    timeout_ms = -1;
+                    continue;
+                }
+                free(buf);
+                PyErr_SetString(PyExc_TimeoutError, "recv_exact timed out");
+                return NULL;
+            }
+            if (poll_rc < 0) {
+                free(buf);
+                PyErr_SetFromErrno(PyExc_OSError);
+                return NULL;
+            }
+        }
+
+        ssize_t received;
+        Py_BEGIN_ALLOW_THREADS
+        received = recv(fd, buf + pos, (size_t)(n - pos), 0);
+        Py_END_ALLOW_THREADS
+
+        if (received < 0) {
+            free(buf);
+            PyErr_SetFromErrno(PyExc_OSError);
+            return NULL;
+        }
+        if (received == 0) {
+            /* EOF */
+            free(buf);
+            Py_RETURN_NONE;
+        }
+        pos += received;
+    }
+
+    PyObject *result = PyBytes_FromStringAndSize(buf, n);
+    free(buf);
+    return result;
+}
+#else /* __wasi__ stubs — importable but raise NotImplementedError if called */
+
+static PyObject *accel_mmap_read(PyObject *self, PyObject *args) {
+    PyErr_SetString(PyExc_NotImplementedError, "mmap_read is not available in WASM");
+    return NULL;
+}
+
+static PyObject *accel_mmap_write(PyObject *self, PyObject *args) {
+    PyErr_SetString(PyExc_NotImplementedError, "mmap_write is not available in WASM");
+    return NULL;
+}
+
+static PyObject *accel_recv_exact(PyObject *self, PyObject *args) {
+    PyErr_SetString(PyExc_NotImplementedError, "recv_exact is not available in WASM");
+    return NULL;
+}
+
+#endif /* !__wasi__ */
+
 static PyMethodDef PyMySQLAccelMethods[] = {
     {"read_rowdata_packet", (PyCFunction)read_rowdata_packet, METH_VARARGS | METH_KEYWORDS, "PyMySQL row data packet reader"},
     {"dump_rowdat_1", (PyCFunction)dump_rowdat_1, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 formatter for external functions"},
     {"load_rowdat_1", (PyCFunction)load_rowdat_1, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions"},
     {"dump_rowdat_1_numpy", (PyCFunction)dump_rowdat_1_numpy, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 formatter for external functions which takes numpy.arrays"},
     {"load_rowdat_1_numpy", (PyCFunction)load_rowdat_1_numpy, METH_VARARGS | METH_KEYWORDS, "ROWDAT_1 parser for external functions which creates numpy.arrays"},
+    {"call_function_accel", (PyCFunction)call_function_accel, METH_VARARGS | METH_KEYWORDS, "Combined load/call/dump for UDF function calls"},
+    {"mmap_read", (PyCFunction)accel_mmap_read, METH_VARARGS, "mmap read: maps fd, copies data, unmaps"},
+    {"mmap_write", (PyCFunction)accel_mmap_write, METH_VARARGS, "mmap write: ftruncate+lseek+write in one call"},
+    {"recv_exact", (PyCFunction)accel_recv_exact, METH_VARARGS, "Receive exactly N bytes from a socket fd"},
     {NULL, NULL, 0, NULL}
 };
 
@@ -4854,6 +5928,16 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     PyStr.unpack = PyUnicode_FromString("unpack");
     PyStr.decode = PyUnicode_FromString("decode");
     PyStr.frombuffer = PyUnicode_FromString("frombuffer");
+    PyStr.year_attr = PyUnicode_FromString("year");
+    PyStr.month_attr = PyUnicode_FromString("month");
+    PyStr.day_attr = PyUnicode_FromString("day");
+    PyStr.hour_attr = PyUnicode_FromString("hour");
+    PyStr.minute_attr = PyUnicode_FromString("minute");
+    PyStr.second_attr = PyUnicode_FromString("second");
+    PyStr.microsecond_attr = PyUnicode_FromString("microsecond");
+    PyStr.days_attr = PyUnicode_FromString("days");
+    PyStr.seconds_attr = PyUnicode_FromString("seconds");
+    PyStr.microseconds_attr = PyUnicode_FromString("microseconds");
 
     PyObject *decimal_mod = PyImport_ImportModule("decimal");
     if (!decimal_mod) goto error;

@@ -18,8 +18,6 @@ from typing import TypeVar
 from typing import Union
 from urllib.parse import urlparse
 
-import jwt
-
 from .. import converters
 from ..config import get_option
 from ..utils import events
@@ -151,6 +149,7 @@ def _setup_authentication_info_handler() -> Callable[..., Dict[str, Any]]:
 
     def retrieve_current_authentication_info() -> List[Tuple[str, Any]]:
         """Retrieve JWT if not expired."""
+        import jwt
         nonlocal authentication_info
         password = authentication_info.get('password')
         if password:
@@ -193,11 +192,20 @@ def _setup_authentication_info_handler() -> Callable[..., Dict[str, Any]]:
     return get_authentication_info
 
 
-get_authentication_info = _setup_authentication_info_handler()
+_get_authentication_info: Optional[Callable[..., Dict[str, Any]]] = None
+
+
+def get_authentication_info(include_env: bool = True) -> Dict[str, Any]:
+    """Return authentication info, initializing on first call."""
+    global _get_authentication_info
+    if _get_authentication_info is None:
+        _get_authentication_info = _setup_authentication_info_handler()
+    return _get_authentication_info(include_env=include_env)
 
 
 def get_token() -> Optional[str]:
     """Return the token for the Management API."""
+    import jwt
     # See if an API key is configured
     tok = get_option('management.token')
     if tok:

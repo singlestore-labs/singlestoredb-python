@@ -25,12 +25,6 @@ from urllib.parse import unquote_plus
 from urllib.parse import urlparse
 
 import sqlparams
-try:
-    from pandas import DataFrame
-except ImportError:
-    class DataFrame(object):  # type: ignore
-        def itertuples(self, *args: Any, **kwargs: Any) -> None:
-            pass
 
 from . import auth
 from . import exceptions
@@ -1032,7 +1026,7 @@ class ShowAccessor(object):
             for j, (k, v) in enumerate(row.items()):
                 if j == 0:
                     k = 'Name'
-                new_row[under2camel(k)] = v
+                new_row[k] = v
             out[i] = new_row
         return ShowResult(out)
 
@@ -1172,17 +1166,59 @@ class Connection(metaclass=abc.ABCMeta):
             cur.execute(oper, params)
             if not re.match(r'^\s*(select|show|call|echo)\s+', oper, flags=re.I):
                 return []
-            out = list(cur.fetchall())
-            if not out:
+            raw = cur.fetchall()
+            if raw is None:
                 return []
-            if isinstance(out, DataFrame):
-                out = out.to_dict(orient='records')
-            elif isinstance(out[0], (tuple, list)):
+            # pandas DataFrame
+            if hasattr(raw, 'to_dict') and hasattr(raw, 'columns'):
+                out = raw.to_dict(orient='records')
+            # polars DataFrame
+            elif hasattr(raw, 'to_dicts') and callable(raw.to_dicts):
+                out = raw.to_dicts()
+            # arrow Table
+            elif hasattr(raw, 'to_pydict') and callable(raw.to_pydict):
+                d = raw.to_pydict()
+                cols = list(d.keys())
+                n = len(next(iter(d.values()))) if d else 0
+                out = [{c: d[c][i] for c in cols} for i in range(n)]
+            # numpy ndarray
+            elif hasattr(raw, 'tolist') and hasattr(raw, 'ndim'):
+                rows = raw.tolist()
                 if cur.description:
                     names = [x[0] for x in cur.description]
-                    if fix_names:
-                        names = [under2camel(str(x).replace(' ', '')) for x in names]
-                    out = [{k: v for k, v in zip(names, row)} for row in out]
+                    out = [
+                        {k: v for k, v in zip(names, row)}
+                        for row in rows
+                    ]
+                else:
+                    return []
+            # list of tuples/namedtuples/dicts
+            else:
+                out = list(raw)
+                if not out:
+                    return []
+                if isinstance(out[0], dict):
+                    pass  # already dicts
+                elif isinstance(out[0], (tuple, list)):
+                    if cur.description:
+                        names = [x[0] for x in cur.description]
+                        out = [
+                            {k: v for k, v in zip(names, row)}
+                            for row in out
+                        ]
+                    else:
+                        return []
+            if not out:
+                return []
+            # Apply camelCase name conversion if requested
+            if fix_names:
+                out = [
+                    {
+                        under2camel(str(k).replace(' ', '')): v
+                        for k, v in row.items()
+                    }
+                    for row in out
+                ]
             return out
 
     @abc.abstractmethod
