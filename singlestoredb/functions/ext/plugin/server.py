@@ -13,6 +13,7 @@ import os
 import select
 import signal
 import socket
+import stat
 import struct
 import sys
 import threading
@@ -201,6 +202,11 @@ class Server:
         """Create, bind, and listen on the Unix domain socket."""
         sock_path = self.config['socket']
         if os.path.exists(sock_path):
+            mode = os.stat(sock_path).st_mode
+            if not stat.S_ISSOCK(mode):
+                raise RuntimeError(
+                    f'Path exists but is not a socket: {sock_path}',
+                )
             os.unlink(sock_path)
 
         server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

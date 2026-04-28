@@ -11,7 +11,7 @@ def get_numpy() -> Optional[Any]:
     """Return numpy module or None if not installed."""
     try:
         return importlib.import_module('numpy')
-    except ImportError:
+    except (ImportError, OSError):
         return None
 
 
@@ -20,7 +20,7 @@ def get_pandas() -> Optional[Any]:
     """Return pandas module or None if not installed."""
     try:
         return importlib.import_module('pandas')
-    except ImportError:
+    except (ImportError, OSError):
         return None
 
 
@@ -29,7 +29,7 @@ def get_polars() -> Optional[Any]:
     """Return polars module or None if not installed."""
     try:
         return importlib.import_module('polars')
-    except ImportError:
+    except (ImportError, OSError):
         return None
 
 
@@ -38,5 +38,5 @@ def get_pyarrow() -> Optional[Any]:
     """Return pyarrow module or None if not installed."""
     try:
         return importlib.import_module('pyarrow')
-    except ImportError:
+    except (ImportError, OSError):
         return None
