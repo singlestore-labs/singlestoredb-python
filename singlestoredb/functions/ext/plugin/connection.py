@@ -97,6 +97,13 @@ def _handle_connection_inner(
         socket.CMSG_LEN(2 * fd_model.itemsize),
     )
 
+    if len(msg) != namelen:
+        logger.warning(
+            f'Short read on function name: expected {namelen}, '
+            f'got {len(msg)}',
+        )
+        return
+
     # Validate ancdata and extract FDs
     received_fds: list[int] = []
     try:

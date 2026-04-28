@@ -1385,10 +1385,8 @@ class TestCallFunctionAccel(unittest.TestCase):
             colspec=colspec, returns=[NEWDECIMAL],
             data=input_data, func=lambda x: x,
         )
-        # accel reads as Decimal, writes back as length-prefixed string;
-        # _load treats 246 as string_types, so we get a string back
         _, rows = rowdat_1._load([('r0', NEWDECIMAL)], output_data)
-        assert rows[0][0] == '123.456'
+        assert rows[0][0] == decimal.Decimal('123.456')
 
     def test_decimal_negative(self):
         colspec = [('d', NEWDECIMAL)]
@@ -1402,7 +1400,7 @@ class TestCallFunctionAccel(unittest.TestCase):
             data=input_data, func=lambda x: x,
         )
         _, rows = rowdat_1._load([('r0', NEWDECIMAL)], output_data)
-        assert rows[0][0] == '-99.99'
+        assert rows[0][0] == decimal.Decimal('-99.99')
 
     def test_decimal_null(self):
         colspec = [('d', NEWDECIMAL)]

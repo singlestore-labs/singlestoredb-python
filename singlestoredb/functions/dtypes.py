@@ -1783,7 +1783,8 @@ def VECTOR(
     SQLString
 
     """
-    if element_type.upper() not in (F16, F32, F64, I8, I16, I32, I64):
+    element_type = element_type.upper()
+    if element_type not in (F16, F32, F64, I8, I16, I32, I64):
         raise ValueError(f'unsupported element type: {element_type}')
     out = f'VECTOR({int(length)}, {element_type})'
     out = SQLString(

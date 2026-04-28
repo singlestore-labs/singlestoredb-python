@@ -85,7 +85,7 @@ int_types = set([
     ft.TINY, -ft.TINY, ft.SHORT, -ft.SHORT, ft.INT24, -ft.INT24,
     ft.LONG, -ft.LONG, ft.LONGLONG, -ft.LONGLONG,
 ])
-string_types = set([15, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254])
+string_types = set([15, 245, 247, 248, 249, 250, 251, 252, 253, 254])
 binary_types = set([-x for x in string_types])
 datetime_types = {ft.DATETIME, ft.TIMESTAMP}
 date_types = {ft.DATE}
@@ -139,7 +139,7 @@ def _unpack_date(v: int) -> _dt.date:
 
 def _pack_time(td: _dt.timedelta) -> int:
     """Pack a timedelta into int64 per rowdat_1 spec."""
-    total_us = int(td.total_seconds() * 1_000_000)
+    total_us = td.days * 86_400_000_000 + td.seconds * 1_000_000 + td.microseconds
     sign = -1 if total_us < 0 else 1
     total_us = abs(total_us)
     us = total_us % 1_000_000

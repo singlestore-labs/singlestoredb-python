@@ -433,7 +433,10 @@ def normalize_dtype(dtype: Any) -> str:
     if issubclass(dtype, datetime.date):
         return 'date'
     if issubclass(dtype, datetime.time):
-        return 'time'
+        raise TypeError(
+            'datetime.time is not supported for UDF annotations; '
+            'use datetime.timedelta instead',
+        )
     if issubclass(dtype, datetime.timedelta):
         return 'time'
 

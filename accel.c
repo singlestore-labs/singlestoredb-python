@@ -2570,7 +2570,13 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
     // Create dict for strings/blobs
     py_objs = PyDict_New();
     if (!py_objs) goto error;
-    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(0), Py_None));
+    {
+        PyObject *py_key = PyLong_FromUnsignedLongLong(0);
+        if (!py_key) goto error;
+        int rc = PyDict_SetItem(py_objs, py_key, Py_None);
+        Py_DECREF(py_key);
+        CHECKRC(rc);
+    }
 
     // Build output arrays
     j = 0;
@@ -2677,8 +2683,14 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     if (!py_dec) goto error;
                     u64 = (uint64_t)py_dec;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
-                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_dec));
-                    Py_CLEAR(py_dec);
+                    {
+                        PyObject *py_key = PyLong_FromUnsignedLongLong(u64);
+                        if (!py_key) { Py_CLEAR(py_dec); goto error; }
+                        int rc = PyDict_SetItem(py_objs, py_key, py_dec);
+                        Py_DECREF(py_key);
+                        Py_CLEAR(py_dec);
+                        CHECKRC(rc);
+                    }
                 }
                 break;
 
@@ -2693,8 +2705,14 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     if (!py_dt) goto error;
                     u64 = (uint64_t)py_dt;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
-                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_dt));
-                    Py_CLEAR(py_dt);
+                    {
+                        PyObject *py_key = PyLong_FromUnsignedLongLong(u64);
+                        if (!py_key) { Py_CLEAR(py_dt); goto error; }
+                        int rc = PyDict_SetItem(py_objs, py_key, py_dt);
+                        Py_DECREF(py_key);
+                        Py_CLEAR(py_dt);
+                        CHECKRC(rc);
+                    }
                 }
                 break;
             }
@@ -2709,8 +2727,14 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     if (!py_td) goto error;
                     u64 = (uint64_t)py_td;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
-                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_td));
-                    Py_CLEAR(py_td);
+                    {
+                        PyObject *py_key = PyLong_FromUnsignedLongLong(u64);
+                        if (!py_key) { Py_CLEAR(py_td); goto error; }
+                        int rc = PyDict_SetItem(py_objs, py_key, py_td);
+                        Py_DECREF(py_key);
+                        Py_CLEAR(py_td);
+                        CHECKRC(rc);
+                    }
                 }
                 break;
             }
@@ -2726,8 +2750,14 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     if (!py_dt) goto error;
                     u64 = (uint64_t)py_dt;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
-                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_dt));
-                    Py_CLEAR(py_dt);
+                    {
+                        PyObject *py_key = PyLong_FromUnsignedLongLong(u64);
+                        if (!py_key) { Py_CLEAR(py_dt); goto error; }
+                        int rc = PyDict_SetItem(py_objs, py_key, py_dt);
+                        Py_DECREF(py_key);
+                        Py_CLEAR(py_dt);
+                        CHECKRC(rc);
+                    }
                 }
                 break;
             }
@@ -2749,8 +2779,14 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     if (!py_str) goto error;
                     u64 = (uint64_t)py_str;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
-                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_str));
-                    Py_CLEAR(py_str);
+                    {
+                        PyObject *py_key = PyLong_FromUnsignedLongLong(u64);
+                        if (!py_key) { Py_CLEAR(py_str); goto error; }
+                        int rc = PyDict_SetItem(py_objs, py_key, py_str);
+                        Py_DECREF(py_key);
+                        Py_CLEAR(py_str);
+                        CHECKRC(rc);
+                    }
                 }
                 break;
 
@@ -2765,8 +2801,14 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
                     if (!py_blob) goto error;
                     u64 = (uint64_t)py_blob;
                     memcpy(out_cols[i] + j * 8, &u64, 8);
-                    CHECKRC(PyDict_SetItem(py_objs, PyLong_FromUnsignedLongLong(u64), py_blob));
-                    Py_CLEAR(py_blob);
+                    {
+                        PyObject *py_key = PyLong_FromUnsignedLongLong(u64);
+                        if (!py_key) { Py_CLEAR(py_blob); goto error; }
+                        int rc = PyDict_SetItem(py_objs, py_key, py_blob);
+                        Py_DECREF(py_key);
+                        Py_CLEAR(py_blob);
+                        CHECKRC(rc);
+                    }
                 }
                 break;
 

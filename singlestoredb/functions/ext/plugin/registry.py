@@ -380,7 +380,7 @@ class FunctionRegistry:
 
         full_code = self._build_python_code(sig, code)
 
-        name = '__main__'
+        name = 'singlestoredb.functions.ext.plugin._dynamic'
         compiled = compile(full_code, f'<{name}>', 'exec')
 
         if name in sys.modules:
