@@ -1,4 +1,5 @@
 
+#define PY_SSIZE_T_CLEAN
 #include <math.h>
 #ifndef __wasi__
 #include <poll.h>
