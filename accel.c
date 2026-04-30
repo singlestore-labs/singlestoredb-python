@@ -4365,7 +4365,7 @@ static PyObject *load_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     PyObject *py_str = NULL;
     PyObject *py_blob = NULL;
     Py_ssize_t length = 0;
-    uint64_t row_id = 0;
+    int64_t row_id = 0;
     uint8_t is_null = 0;
     int8_t i8 = 0;
     int16_t i16 = 0;
@@ -4686,7 +4686,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
     PyObject *py_row_ids = NULL;
     PyObject *py_row_ids_iter = NULL;
     PyObject *py_item = NULL;
-    uint64_t row_id = 0;
+    int64_t row_id = 0;
     uint8_t is_null = 0;
     int8_t i8 = 0;
     int16_t i16 = 0;
@@ -4781,7 +4781,7 @@ static PyObject *dump_rowdat_1(PyObject *self, PyObject *args, PyObject *kwargs)
             Py_DECREF(py_row);
             goto error;
         }
-        row_id = (int64_t)PyLong_AsLongLong(py_item);
+        row_id = PyLong_AsLongLong(py_item);
         Py_DECREF(py_item);
 
         CHECKMEM(8);
@@ -5048,7 +5048,7 @@ static PyObject *call_function_accel(PyObject *self, PyObject *args, PyObject *k
     PyObject *py_out = NULL, *py_row = NULL, *py_result = NULL, *py_result_item = NULL;
     PyObject *py_str = NULL, *py_blob = NULL, *py_bytes = NULL;
     Py_ssize_t length = 0;
-    uint64_t row_id = 0;
+    int64_t row_id = 0;
     uint8_t is_null = 0;
     int8_t i8 = 0; int16_t i16 = 0; int32_t i32 = 0; int64_t i64 = 0;
     uint8_t u8 = 0; uint16_t u16 = 0; uint32_t u32 = 0; uint64_t u64 = 0;
