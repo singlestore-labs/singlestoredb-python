@@ -97,21 +97,29 @@ def _handle_connection_inner(
         socket.CMSG_LEN(2 * fd_model.itemsize),
     )
 
-    if len(msg) != namelen:
-        logger.warning(
-            f'Short read on function name: expected {namelen}, '
-            f'got {len(msg)}',
-        )
-        return
-
-    # Validate ancdata and extract FDs
+    # Extract FDs from ancdata eagerly so the finally block can close them
+    # on any error path.
     received_fds: list[int] = []
     try:
+        for cmsg_level, cmsg_type, cmsg_data in ancdata:
+            if cmsg_level == socket.SOL_SOCKET \
+                    and cmsg_type == socket.SCM_RIGHTS:
+                fd_array = array.array('i')
+                fd_array.frombytes(cmsg_data)
+                received_fds.extend(fd_array)
+
+        if len(msg) != namelen:
+            logger.warning(
+                f'Short read on function name: expected {namelen}, '
+                f'got {len(msg)}',
+            )
+            return
+
         if len(ancdata) != 1:
             logger.warning(f'Expected 1 ancdata, got {len(ancdata)}')
             return
 
-        level, type_, fd_data = ancdata[0]
+        level, type_, _ = ancdata[0]
         if level != socket.SOL_SOCKET or type_ != socket.SCM_RIGHTS:
             logger.warning(
                 f'Unexpected ancdata level={level} type={type_}',
@@ -122,10 +130,6 @@ def _handle_connection_inner(
             logger.warning('Ancillary data was truncated (MSG_CTRUNC)')
             return
 
-        fd_array = array.array('i')
-        fd_array.frombytes(fd_data)
-        received_fds = list(fd_array)
-
         if len(received_fds) != 2:
             logger.warning(
                 f'Expected 2 FDs, got {len(received_fds)}',
@@ -134,10 +138,8 @@ def _handle_connection_inner(
 
         function_name = msg.decode('utf8')
         input_fd, output_fd = received_fds[0], received_fds[1]
-        # Clear so finally doesn't close FDs we're handing off
         received_fds = []
     finally:
-        # Close any received FDs if we're returning early
         for fd in received_fds:
             try:
                 os.close(fd)
