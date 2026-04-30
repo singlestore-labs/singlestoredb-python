@@ -180,15 +180,10 @@ class FunctionRegistry:
     def _discover_udf_functions(self) -> None:
         """Discover @udf functions by scanning sys.modules.
 
-        Uses a two-pass approach: first, identify candidate modules
-        that import Plugin (the convention for UDF modules).
-        Then extract @udf-decorated functions from those modules.
-        Modules without a __file__ (built-in/frozen) and stdlib/
-        infrastructure modules are skipped automatically.
+        Scans all non-stdlib, non-infrastructure modules for objects
+        bearing the ``_singlestoredb_attrs`` marker set by the ``@udf``
+        decorator, then extracts and registers matching functions.
         """
-        # Import here to avoid circular dependency at module level
-        from .wasm import Plugin
-
         found_modules = []
         for mod_name, mod in list(sys.modules.items()):
             if mod is None:
@@ -199,24 +194,17 @@ class FunctionRegistry:
             if mod_file is None:
                 continue
 
-            # Short-circuit: only scan modules that import
-            # Plugin (the convention for UDF modules)
+            if self._is_stdlib_or_infra(mod_name, mod_file):
+                continue
+
             if not any(
-                obj is Plugin
+                hasattr(obj, '_singlestoredb_attrs')
                 for obj in vars(mod).values()
             ):
                 continue
 
-            if self._is_stdlib_or_infra(mod_name, mod_file):
-                continue
-
             self._extract_functions(mod)
-            if any(
-                hasattr(obj, '_singlestoredb_attrs')
-                for _, obj in inspect.getmembers(mod)
-                if inspect.isfunction(obj)
-            ):
-                found_modules.append(mod_name)
+            found_modules.append(mod_name)
 
         if found_modules:
             logger.info(
