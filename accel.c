@@ -2389,6 +2389,13 @@ static PyObject *create_numpy_array(PyObject *py_memview, char *data_format, int
     // Add series to the output, remapping string values as needed
     if (py_objs) {
         switch(data_type) {
+        case MYSQL_TYPE_DECIMAL:
+        case MYSQL_TYPE_NEWDECIMAL:
+        case MYSQL_TYPE_DATE:
+        case MYSQL_TYPE_NEWDATE:
+        case MYSQL_TYPE_TIME:
+        case MYSQL_TYPE_DATETIME:
+        case MYSQL_TYPE_TIMESTAMP:
         case MYSQL_TYPE_VARCHAR:
         case MYSQL_TYPE_JSON:
         case MYSQL_TYPE_SET:
