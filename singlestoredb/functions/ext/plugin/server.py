@@ -487,11 +487,11 @@ class Server:
 
         # Import the plugin module
         logger.info(f'Importing plugin module: {plugin_name}')
-        importlib.import_module(plugin_name)
+        mod = importlib.import_module(plugin_name)
 
-        # Initialize registry (discovers @udf functions from sys.modules)
+        # Initialize registry (discovers @udf functions from the plugin module)
         registry = FunctionRegistry()
-        registry.initialize()
+        registry.initialize(plugin_module=mod)
 
         func_count = len(registry.functions)
         if func_count == 0:
