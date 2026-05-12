@@ -13,6 +13,7 @@ import os
 import sys
 import traceback
 import types
+import typing
 from datetime import datetime
 from datetime import timezone
 from typing import Any
@@ -22,9 +23,11 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+from singlestoredb.functions.ext import rowdat_1 as _rowdat_1
 from singlestoredb.functions.ext.rowdat_1 import dump as _dump_rowdat_1
 from singlestoredb.functions.ext.rowdat_1 import load as _load_rowdat_1
 from singlestoredb.functions.signature import get_signature
+from singlestoredb.functions.typing import Masked
 from singlestoredb.mysql.constants import FIELD_TYPE as ft
 
 _accel_error: Optional[str] = None
@@ -453,6 +456,96 @@ class FunctionRegistry:
         }
 
 
+def _get_masked_params(func: Callable[..., Any]) -> List[bool]:
+    """Determine which parameters expect (data, mask) tuples vs just data."""
+    params = inspect.signature(func).parameters
+    return [typing.get_origin(x.annotation) is Masked for x in params.values()]
+
+
+def _get_vector_loader(fmt: str) -> Callable[..., Any]:
+    """Return the appropriate rowdat_1 loader for the given data format."""
+    loaders: Dict[str, str] = {
+        'numpy': 'load_numpy',
+        'pandas': 'load_pandas',
+        'polars': 'load_polars',
+        'arrow': 'load_arrow',
+        'list': 'load_list',
+    }
+    attr = loaders.get(fmt)
+    if attr is None:
+        raise ValueError(f'unsupported vector data format: {fmt!r}')
+    return getattr(_rowdat_1, attr)
+
+
+def _get_vector_dumper(fmt: str) -> Callable[..., Any]:
+    """Return the appropriate rowdat_1 dumper for the given data format."""
+    dumpers: Dict[str, str] = {
+        'numpy': 'dump_numpy',
+        'pandas': 'dump_pandas',
+        'polars': 'dump_polars',
+        'arrow': 'dump_arrow',
+        'list': 'dump_list',
+    }
+    attr = dumpers.get(fmt)
+    if attr is None:
+        raise ValueError(f'unsupported vector data format: {fmt!r}')
+    return getattr(_rowdat_1, attr)
+
+
+def _normalize_vector_output(
+    out: Any,
+    num_returns: int,
+) -> List[Tuple[Any, Any]]:
+    """Normalize vectorized UDF output to List[(data, mask_or_None)]."""
+    if num_returns == 1:
+        if isinstance(out, tuple) and len(out) == 2:
+            # Could be a Masked (data, mask) or a 2-element tuple of columns
+            # Check if it looks like Masked: second element is a boolean mask
+            import numpy as np
+            if hasattr(out[1], 'dtype') and out[1].dtype == np.bool_:
+                return [out]
+        return [(out, None)]
+
+    # Multiple return columns
+    if not isinstance(out, (tuple, list)):
+        raise TypeError(
+            f'vectorized UDF with {num_returns} return columns must '
+            f'return a tuple or list, got {type(out).__name__}',
+        )
+    result_cols = []
+    for x in out:
+        if isinstance(x, tuple) and len(x) == 2:
+            result_cols.append(x)
+        else:
+            result_cols.append((x, None))
+    return result_cols
+
+
+def _call_function_vector(
+    func: Callable[..., Any],
+    arg_types: List[Tuple[str, int]],
+    return_types: List[int],
+    input_data: bytes,
+    args_data_format: str,
+    returns_data_format: str,
+    masks: List[bool],
+) -> bytes:
+    """Call a vectorized UDF with columnar data."""
+    loader = _get_vector_loader(args_data_format)
+    dumper = _get_vector_dumper(returns_data_format)
+
+    row_ids, cols = loader(arg_types, input_data)
+
+    # Masked params get the full (data, mask) tuple, others get just data
+    func_args = [col if m else col[0] for col, m in zip(cols, masks)]
+
+    out = func(*func_args)
+
+    result_cols = _normalize_vector_output(out, len(return_types))
+
+    return bytes(dumper(return_types, row_ids, result_cols))
+
+
 def call_function(
     registry: FunctionRegistry,
     name: str,
@@ -470,8 +563,24 @@ def call_function(
     func = func_info['func']
     arg_types = func_info['arg_types']
     return_types = func_info['return_types']
+    sig = func_info['signature']
+
+    args_data_format = sig.get('args_data_format') or 'scalar'
+    returns_data_format = sig.get('returns_data_format') or 'scalar'
 
     try:
+        # Vector path: columnar processing
+        if args_data_format not in ('scalar',):
+            masks = func_info.get('_masks')
+            if masks is None:
+                masks = _get_masked_params(func)
+                func_info['_masks'] = masks
+            return _call_function_vector(
+                func, arg_types, return_types, input_data,
+                args_data_format, returns_data_format, masks,
+            )
+
+        # Scalar path: row-by-row processing
         if _has_accel:
             return _call_function_accel(
                 colspec=arg_types,
