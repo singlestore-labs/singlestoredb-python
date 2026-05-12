@@ -144,15 +144,29 @@ class FunctionRegistry:
     def __init__(self) -> None:
         self.functions: Dict[str, Dict[str, Any]] = {}
 
-    def initialize(self) -> None:
+    def initialize(self, plugin_module: Any = None) -> None:
         """Initialize and discover UDF functions from loaded modules.
 
-        Scans sys.modules for any module containing @udf-decorated
+        If plugin_module is provided, only that module is scanned.
+        Otherwise scans sys.modules for any module containing @udf-decorated
         functions. No _exports.py is needed -- modules just need to be
         imported before initialize() is called (componentize-py captures
         them at build time).
         """
-        self._discover_udf_functions()
+        if plugin_module is not None:
+            self._extract_functions(plugin_module)
+            if self.functions:
+                logger.info(
+                    f'Discovered UDF functions from module: '
+                    f'{plugin_module.__name__}',
+                )
+            else:
+                logger.warning(
+                    f'No @udf functions found in module: '
+                    f'{plugin_module.__name__}',
+                )
+        else:
+            self._discover_udf_functions()
 
     @staticmethod
     def _is_stdlib_or_infra(mod_name: str, mod_file: str) -> bool:
@@ -164,8 +178,9 @@ class FunctionRegistry:
         """
         _infra = frozenset({
             'udf_handler',
+            'singlestoredb',
         })
-        if mod_name in _infra:
+        if mod_name in _infra or mod_name.startswith('singlestoredb.'):
             return True
 
         real_file = os.path.realpath(mod_file)
@@ -197,10 +212,18 @@ class FunctionRegistry:
             if self._is_stdlib_or_infra(mod_name, mod_file):
                 continue
 
-            if not any(
-                hasattr(obj, '_singlestoredb_attrs')
-                for obj in vars(mod).values()
-            ):
+            def _has_udf_marker(obj: object) -> bool:
+                try:
+                    return hasattr(obj, '_singlestoredb_attrs')
+                except (TypeError, Exception):
+                    return False
+
+            try:
+                mod_vars = list(vars(mod).values())
+            except RuntimeError:
+                continue
+
+            if not any(_has_udf_marker(obj) for obj in mod_vars):
                 continue
 
             self._extract_functions(mod)
