@@ -197,8 +197,8 @@ jobs:
         run: |
           gh release create "${{ github.ref_name }}" \
             --prerelease \
-            --generate-notes \
             --title "${{ github.ref_name }}" \
+            --notes "" \
             dist/*
 
       - name: Upload assets to existing Release
