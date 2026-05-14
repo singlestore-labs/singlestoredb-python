@@ -22,8 +22,10 @@ except ImportError:
 try:
     import pandas as pd
     has_pandas = True
+    _pd_str_dtype = str(pd.DataFrame({'a': ['x']}).dtypes['a'])
 except ImportError:
     has_pandas = False
+    _pd_str_dtype = 'object'
 
 
 class TestConnection(unittest.TestCase):
@@ -1124,21 +1126,21 @@ class TestConnection(unittest.TestCase):
             ('timestamp', 'datetime64[us]'),
             ('timestamp_6', 'datetime64[us]'),
             ('year', 'float64'),
-            ('char_100', 'object'),
+            ('char_100', _pd_str_dtype),
             ('binary_100', 'object'),
-            ('varchar_200', 'object'),
+            ('varchar_200', _pd_str_dtype),
             ('varbinary_200', 'object'),
-            ('longtext', 'object'),
-            ('mediumtext', 'object'),
-            ('text', 'object'),
-            ('tinytext', 'object'),
+            ('longtext', _pd_str_dtype),
+            ('mediumtext', _pd_str_dtype),
+            ('text', _pd_str_dtype),
+            ('tinytext', _pd_str_dtype),
             ('longblob', 'object'),
             ('mediumblob', 'object'),
             ('blob', 'object'),
             ('tinyblob', 'object'),
             ('json', 'object'),
-            ('enum', 'object'),
-            ('set', 'object'),
+            ('enum', _pd_str_dtype),
+            ('set', _pd_str_dtype),
             ('bit', 'object'),
         ]
 
@@ -1266,21 +1268,21 @@ class TestConnection(unittest.TestCase):
             ('timestamp', 'datetime64[us]'),
             ('timestamp_6', 'datetime64[us]'),
             ('year', 'int16'),
-            ('char_100', 'object'),
+            ('char_100', _pd_str_dtype),
             ('binary_100', 'object'),
-            ('varchar_200', 'object'),
+            ('varchar_200', _pd_str_dtype),
             ('varbinary_200', 'object'),
-            ('longtext', 'object'),
-            ('mediumtext', 'object'),
-            ('text', 'object'),
-            ('tinytext', 'object'),
+            ('longtext', _pd_str_dtype),
+            ('mediumtext', _pd_str_dtype),
+            ('text', _pd_str_dtype),
+            ('tinytext', _pd_str_dtype),
             ('longblob', 'object'),
             ('mediumblob', 'object'),
             ('blob', 'object'),
             ('tinyblob', 'object'),
             ('json', 'object'),
-            ('enum', 'object'),
-            ('set', 'object'),
+            ('enum', _pd_str_dtype),
+            ('set', _pd_str_dtype),
             ('bit', 'object'),
         ]
 
