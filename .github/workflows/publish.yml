@@ -207,7 +207,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to PyPI
-        if: ${{ github.event_name == 'release' || github.event.inputs.publish_pypi == 'true' }}
+        if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_pypi == 'true') }}
         uses: pypa/gh-action-pypi-publish@release/v1
 
 #     - name: Publish Conda package
