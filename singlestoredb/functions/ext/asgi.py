@@ -1244,6 +1244,9 @@ class Application(object):
                     )
 
                 await cancel_all_tasks(pending)
+                if func_task in pending and udf_future is not None:
+                    cancel_event.set()
+                    udf_future.cancel()
 
                 for task in done:
                     if task is disconnect_task:
@@ -1320,6 +1323,9 @@ class Application(object):
                 await send(self.error_response_dict)
 
             finally:
+                if udf_future is not None:
+                    cancel_event.set()
+                    udf_future.cancel()
                 await cancel_all_tasks(all_tasks)
 
         # Handle api reflection
