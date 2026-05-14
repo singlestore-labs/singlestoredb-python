@@ -1061,6 +1061,8 @@ class Application(object):
             self._udf_loop.call_soon_threadsafe(self._udf_loop.stop)
         if self._udf_thread is not None:
             self._udf_thread.join(timeout=5)
+        self._udf_loop = None
+        self._udf_thread = None
 
     def get_uvicorn_log_config(self) -> Dict[str, Any]:
         """
