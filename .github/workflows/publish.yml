@@ -7,6 +7,12 @@
 name: Publish packages
 
 on:
+  push:
+    tags:
+      - 'v*-rc*'
+      - 'v*-test*'
+      - 'v*-alpha*'
+      - 'v*-beta*'
   release:
     types: [published]
   workflow_dispatch:
@@ -157,9 +163,9 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write   # Required for OIDC trusted publishing
-      actions: read     # Required for actions/download-artifact
-      contents: read    # Required for repository access
+      id-token: write    # Required for OIDC trusted publishing
+      actions: read      # Required for actions/download-artifact
+      contents: write    # Required for gh release create/upload
 
     environment:
       name: publish
@@ -184,8 +190,26 @@ jobs:
           name: artifacts-macOS
           path: dist
 
+      - name: Create GitHub Release (test tag)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --prerelease \
+            --generate-notes \
+            --title "${{ github.ref_name }}" \
+            dist/*
+
+      - name: Upload assets to existing Release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber
+
       - name: Publish to PyPI
-        if: ${{ github.event_name == 'release' || github.event.inputs.publish_pypi == 'true' }}
+        if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_pypi == 'true') }}
         uses: pypa/gh-action-pypi-publish@release/v1
 
 #     - name: Publish Conda package
