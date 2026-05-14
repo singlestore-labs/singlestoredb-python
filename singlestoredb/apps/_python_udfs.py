@@ -58,28 +58,32 @@ async def run_udf_app(
         log_level=log_level,
     )
 
-    if not app.endpoints:
-        raise ValueError('You must define at least one function.')
-    if len(app.endpoints) > MAX_UDFS_LIMIT:
-        raise ValueError(
-            f'You can only define a maximum of {MAX_UDFS_LIMIT} functions.',
+    try:
+        if not app.endpoints:
+            raise ValueError('You must define at least one function.')
+        if len(app.endpoints) > MAX_UDFS_LIMIT:
+            raise ValueError(
+                f'You can only define a maximum of {MAX_UDFS_LIMIT} functions.',
+            )
+
+        config = uvicorn.Config(
+            app,
+            host='0.0.0.0',
+            port=app_config.listen_port,
+            log_config=app.get_uvicorn_log_config(),
         )
 
-    config = uvicorn.Config(
-        app,
-        host='0.0.0.0',
-        port=app_config.listen_port,
-        log_config=app.get_uvicorn_log_config(),
-    )
+        # Register the functions only if the app is running interactively.
+        if app_config.running_interactively:
+            app.register_functions(replace=True)
 
-    # Register the functions only if the app is running interactively.
-    if app_config.running_interactively:
-        app.register_functions(replace=True)
-
-    _running_app = app
-    _running_server = AwaitableUvicornServer(config)
-    asyncio.create_task(_running_server.serve())
-    await _running_server.wait_for_startup()
+        _running_app = app
+        _running_server = AwaitableUvicornServer(config)
+        asyncio.create_task(_running_server.serve())
+        await _running_server.wait_for_startup()
+    except Exception:
+        app.shutdown()
+        raise
 
     print(f'Python UDF registered at {base_url}')
 
