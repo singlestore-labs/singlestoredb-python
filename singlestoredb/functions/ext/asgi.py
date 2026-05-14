@@ -24,6 +24,7 @@ Example
 """
 import argparse
 import asyncio
+import concurrent.futures
 import contextvars
 import dataclasses
 import datetime
@@ -1210,13 +1211,14 @@ class Application(object):
                     )
 
                 func_task: 'asyncio.Task[Any]'
+                udf_future: 'Optional[concurrent.futures.Future[Any]]' = None
                 if func_info['is_async']:
-                    future = asyncio.run_coroutine_threadsafe(
+                    udf_future = asyncio.run_coroutine_threadsafe(
                         func(cancel_event, call_timer, *inputs),
                         self._udf_loop,
                     )
                     func_task = asyncio.create_task(
-                        asyncio.wrap_future(future),  # type: ignore[arg-type]
+                        asyncio.wrap_future(udf_future),  # type: ignore[arg-type]
                     )
                 else:
                     func_task = asyncio.create_task(
@@ -1246,12 +1248,16 @@ class Application(object):
                 for task in done:
                     if task is disconnect_task:
                         cancel_event.set()
+                        if udf_future is not None:
+                            udf_future.cancel()
                         raise asyncio.CancelledError(
                             'Function call was cancelled by client disconnect',
                         )
 
                     elif task is timeout_task:
                         cancel_event.set()
+                        if udf_future is not None:
+                            udf_future.cancel()
                         raise asyncio.TimeoutError(
                             'Function call was cancelled due to timeout',
                         )
