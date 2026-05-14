@@ -172,6 +172,8 @@ jobs:
       url: https://pypi.org/p/singlestoredb
 
     steps:
+      - uses: actions/checkout@v3
+
       - name: Download Linux wheels and sdist
         uses: actions/download-artifact@v4
         with:
