@@ -1006,6 +1006,15 @@ class Application(object):
         self.log_level = log_level
         self.disable_metrics = disable_metrics
 
+        # Dedicated event loop for async UDF execution, isolated from the server loop
+        self._udf_loop = asyncio.new_event_loop()
+        self._udf_thread = threading.Thread(
+            target=self._udf_loop.run_forever,
+            daemon=True,
+            name='async-udf-loop',
+        )
+        self._udf_thread.start()
+
         # Configure logging
         self._configure_logging()
 
@@ -1038,6 +1047,11 @@ class Application(object):
 
         # Prevent propagation to avoid duplicate or differently formatted messages
         self.logger.propagate = False
+
+    def shutdown(self) -> None:
+        """Shut down the dedicated UDF event loop."""
+        self._udf_loop.call_soon_threadsafe(self._udf_loop.stop)
+        self._udf_thread.join(timeout=5)
 
     def get_uvicorn_log_config(self) -> Dict[str, Any]:
         """
@@ -1195,15 +1209,23 @@ class Application(object):
                         func_info['colspec'], b''.join(data),
                     )
 
-                func_task = asyncio.create_task(
-                    func(cancel_event, call_timer, *inputs)
-                    if func_info['is_async']
-                    else to_thread(
-                        lambda: asyncio.run(
-                            func(cancel_event, call_timer, *inputs),
+                func_task: 'asyncio.Task[Any]'
+                if func_info['is_async']:
+                    future = asyncio.run_coroutine_threadsafe(
+                        func(cancel_event, call_timer, *inputs),
+                        self._udf_loop,
+                    )
+                    func_task = asyncio.create_task(
+                        asyncio.wrap_future(future),  # type: ignore[arg-type]
+                    )
+                else:
+                    func_task = asyncio.create_task(
+                        to_thread(
+                            lambda: asyncio.run(
+                                func(cancel_event, call_timer, *inputs),
+                            ),
                         ),
-                    ),
-                )
+                    )
                 disconnect_task = asyncio.create_task(
                     asyncio.sleep(int(1e9))
                     if ignore_cancel else cancel_on_disconnect(receive),
