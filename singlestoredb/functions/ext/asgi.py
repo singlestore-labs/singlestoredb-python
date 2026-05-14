@@ -1217,8 +1217,8 @@ class Application(object):
                         func(cancel_event, call_timer, *inputs),
                         self._udf_loop,
                     )
-                    func_task = asyncio.create_task(
-                        asyncio.wrap_future(udf_future),  # type: ignore[arg-type]
+                    func_task = asyncio.ensure_future(
+                        asyncio.wrap_future(udf_future),
                     )
                 else:
                     func_task = asyncio.create_task(
