@@ -1007,14 +1007,8 @@ class Application(object):
         self.log_level = log_level
         self.disable_metrics = disable_metrics
 
-        # Dedicated event loop for async UDF execution, isolated from the server loop
-        self._udf_loop = asyncio.new_event_loop()
-        self._udf_thread = threading.Thread(
-            target=self._udf_loop.run_forever,
-            daemon=True,
-            name='async-udf-loop',
-        )
-        self._udf_thread.start()
+        self._udf_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._udf_thread: Optional[threading.Thread] = None
 
         # Configure logging
         self._configure_logging()
@@ -1049,10 +1043,24 @@ class Application(object):
         # Prevent propagation to avoid duplicate or differently formatted messages
         self.logger.propagate = False
 
+    def _get_udf_loop(self) -> asyncio.AbstractEventLoop:
+        """Get or create the dedicated UDF event loop."""
+        if self._udf_loop is None:
+            self._udf_loop = asyncio.new_event_loop()
+            self._udf_thread = threading.Thread(
+                target=self._udf_loop.run_forever,
+                daemon=True,
+                name='async-udf-loop',
+            )
+            self._udf_thread.start()
+        return self._udf_loop
+
     def shutdown(self) -> None:
         """Shut down the dedicated UDF event loop."""
-        self._udf_loop.call_soon_threadsafe(self._udf_loop.stop)
-        self._udf_thread.join(timeout=5)
+        if self._udf_loop is not None:
+            self._udf_loop.call_soon_threadsafe(self._udf_loop.stop)
+        if self._udf_thread is not None:
+            self._udf_thread.join(timeout=5)
 
     def get_uvicorn_log_config(self) -> Dict[str, Any]:
         """
@@ -1202,6 +1210,7 @@ class Application(object):
             try:
                 all_tasks = []
                 result = []
+                udf_future: 'Optional[concurrent.futures.Future[Any]]' = None
 
                 cancel_event = threading.Event()
 
@@ -1211,11 +1220,10 @@ class Application(object):
                     )
 
                 func_task: 'asyncio.Task[Any]'
-                udf_future: 'Optional[concurrent.futures.Future[Any]]' = None
                 if func_info['is_async']:
                     udf_future = asyncio.run_coroutine_threadsafe(
                         func(cancel_event, call_timer, *inputs),
-                        self._udf_loop,
+                        self._get_udf_loop(),
                     )
                     func_task = asyncio.ensure_future(
                         asyncio.wrap_future(udf_future),
