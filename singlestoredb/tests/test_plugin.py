@@ -7,12 +7,16 @@ These are unit tests that do not require a database connection.
 """
 import json
 import socket
+import struct
 import threading
 import unittest
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+from singlestoredb.functions.ext.plugin.connection import _handle_connection_inner
+from singlestoredb.functions.ext.plugin.connection import _MAX_FUNCTION_NAME_LEN
 from singlestoredb.functions.ext.plugin.connection import _recv_exact_py
+from singlestoredb.functions.ext.plugin.connection import PROTOCOL_VERSION
 from singlestoredb.functions.ext.plugin.control import dispatch_control_signal
 from singlestoredb.utils._lazy_import import get_numpy
 from singlestoredb.utils._lazy_import import get_pandas
@@ -213,6 +217,78 @@ class TestLazyImport(unittest.TestCase):
         result1 = get_numpy()
         result2 = get_numpy()
         assert result1 is result2
+
+
+class TestHandshakeProtocol(unittest.TestCase):
+    """Tests for the binary handshake protocol in _handle_connection_inner."""
+
+    def _make_shared_registry(self):
+        mock_reg = MagicMock()
+        mock_reg.functions = {}
+        mock_shared = MagicMock()
+        mock_shared.get_thread_local_registry.return_value = mock_reg
+        return mock_shared
+
+    def test_eof_on_header(self):
+        a, b = socket.socketpair()
+        try:
+            b.close()
+            _handle_connection_inner(
+                a, self._make_shared_registry(), threading.Event(),
+            )
+        finally:
+            a.close()
+
+    def test_bad_protocol_version(self):
+        a, b = socket.socketpair()
+        try:
+            header = struct.pack('<QQ', 999, 5)
+            b.sendall(header)
+            b.close()
+            _handle_connection_inner(
+                a, self._make_shared_registry(), threading.Event(),
+            )
+        finally:
+            a.close()
+
+    def test_namelen_too_large(self):
+        a, b = socket.socketpair()
+        try:
+            header = struct.pack('<QQ', PROTOCOL_VERSION, _MAX_FUNCTION_NAME_LEN + 1)
+            b.sendall(header)
+            b.close()
+            _handle_connection_inner(
+                a, self._make_shared_registry(), threading.Event(),
+            )
+        finally:
+            a.close()
+
+    def test_namelen_at_limit_accepted(self):
+        a, b = socket.socketpair()
+        try:
+            header = struct.pack('<QQ', PROTOCOL_VERSION, _MAX_FUNCTION_NAME_LEN)
+            b.sendall(header)
+            b.close()
+            # Will fail at recvmsg (no ancdata) but header was accepted
+            try:
+                _handle_connection_inner(
+                    a, self._make_shared_registry(), threading.Event(),
+                )
+            except (OSError, ValueError):
+                pass
+        finally:
+            a.close()
+
+    def test_short_header(self):
+        a, b = socket.socketpair()
+        try:
+            b.sendall(b'\x00' * 8)
+            b.close()
+            _handle_connection_inner(
+                a, self._make_shared_registry(), threading.Event(),
+            )
+        finally:
+            a.close()
 
 
 if __name__ == '__main__':

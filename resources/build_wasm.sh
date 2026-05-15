@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eou pipefail
+set -euo pipefail
 
 # CPYTHON_ROOT must contain a build of cpython for wasm32-wasip2
 
