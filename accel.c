@@ -1,17 +1,17 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <math.h>
-#ifndef __wasi__
+#if !defined(__wasi__) && !defined(_WIN32)
 #include <poll.h>
 #endif
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef __wasi__
+#if !defined(__wasi__) && !defined(_WIN32)
 #include <sys/mman.h>
 #include <sys/socket.h>
-#endif
 #include <unistd.h>
+#endif
 #include <Python.h>
 
 #ifndef Py_LIMITED_API
@@ -5722,7 +5722,7 @@ error:
     goto exit;
 }
 
-#ifndef __wasi__
+#if !defined(__wasi__) && !defined(_WIN32)
 /*
  * mmap_read(fd, length) -> bytes
  *
@@ -5875,24 +5875,24 @@ static PyObject *accel_recv_exact(PyObject *self, PyObject *args) {
     free(buf);
     return result;
 }
-#else /* __wasi__ stubs — importable but raise NotImplementedError if called */
+#else /* __wasi__ / _WIN32 stubs */
 
 static PyObject *accel_mmap_read(PyObject *self, PyObject *args) {
-    PyErr_SetString(PyExc_NotImplementedError, "mmap_read is not available in WASM");
+    PyErr_SetString(PyExc_NotImplementedError, "mmap_read is not available on this platform");
     return NULL;
 }
 
 static PyObject *accel_mmap_write(PyObject *self, PyObject *args) {
-    PyErr_SetString(PyExc_NotImplementedError, "mmap_write is not available in WASM");
+    PyErr_SetString(PyExc_NotImplementedError, "mmap_write is not available on this platform");
     return NULL;
 }
 
 static PyObject *accel_recv_exact(PyObject *self, PyObject *args) {
-    PyErr_SetString(PyExc_NotImplementedError, "recv_exact is not available in WASM");
+    PyErr_SetString(PyExc_NotImplementedError, "recv_exact is not available on this platform");
     return NULL;
 }
 
-#endif /* !__wasi__ */
+#endif /* !__wasi__ && !_WIN32 */
 
 static PyMethodDef PyMySQLAccelMethods[] = {
     {"read_rowdata_packet", (PyCFunction)read_rowdata_packet, METH_VARARGS | METH_KEYWORDS, "PyMySQL row data packet reader"},
