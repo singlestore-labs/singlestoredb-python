@@ -24,7 +24,6 @@ Example
 """
 import argparse
 import asyncio
-import concurrent.futures
 import contextvars
 import dataclasses
 import datetime
@@ -1001,9 +1000,6 @@ class Application(object):
         self.log_level = log_level
         self.disable_metrics = disable_metrics
 
-        self._udf_loop: Optional[asyncio.AbstractEventLoop] = None
-        self._udf_thread: Optional[threading.Thread] = None
-
         # Configure logging
         self._configure_logging()
 
@@ -1036,27 +1032,6 @@ class Application(object):
 
         # Prevent propagation to avoid duplicate or differently formatted messages
         self.logger.propagate = False
-
-    def _get_udf_loop(self) -> asyncio.AbstractEventLoop:
-        """Get or create the dedicated UDF event loop."""
-        if self._udf_loop is None:
-            self._udf_loop = asyncio.new_event_loop()
-            self._udf_thread = threading.Thread(
-                target=self._udf_loop.run_forever,
-                daemon=True,
-                name='async-udf-loop',
-            )
-            self._udf_thread.start()
-        return self._udf_loop
-
-    def shutdown(self) -> None:
-        """Shut down the dedicated UDF event loop."""
-        if self._udf_loop is not None:
-            self._udf_loop.call_soon_threadsafe(self._udf_loop.stop)
-        if self._udf_thread is not None:
-            self._udf_thread.join(timeout=5)
-        self._udf_loop = None
-        self._udf_thread = None
 
     def get_uvicorn_log_config(self) -> Dict[str, Any]:
         """
@@ -1206,7 +1181,6 @@ class Application(object):
             try:
                 all_tasks = []
                 result = []
-                udf_future: 'Optional[concurrent.futures.Future[Any]]' = None
 
                 cancel_event = threading.Event()
 
@@ -1215,23 +1189,13 @@ class Application(object):
                         func_info['colspec'], b''.join(data),
                     )
 
-                func_task: 'asyncio.Task[Any]'
-                if func_info['is_async']:
-                    udf_future = asyncio.run_coroutine_threadsafe(
-                        func(cancel_event, call_timer, *inputs),
-                        self._get_udf_loop(),
-                    )
-                    func_task = asyncio.ensure_future(
-                        asyncio.wrap_future(udf_future),
-                    )
-                else:
-                    func_task = asyncio.create_task(
-                        to_thread(
-                            lambda: asyncio.run(
-                                func(cancel_event, call_timer, *inputs),
-                            ),
+                func_task = asyncio.create_task(
+                    to_thread(
+                        lambda: asyncio.run(
+                            func(cancel_event, call_timer, *inputs),
                         ),
-                    )
+                    ),
+                )
                 disconnect_task = asyncio.create_task(
                     asyncio.sleep(int(1e9))
                     if ignore_cancel else cancel_on_disconnect(receive),
@@ -1248,23 +1212,18 @@ class Application(object):
                     )
 
                 await cancel_all_tasks(pending)
-                if func_task in pending and udf_future is not None:
+                if func_task in pending:
                     cancel_event.set()
-                    udf_future.cancel()
 
                 for task in done:
                     if task is disconnect_task:
                         cancel_event.set()
-                        if udf_future is not None:
-                            udf_future.cancel()
                         raise asyncio.CancelledError(
                             'Function call was cancelled by client disconnect',
                         )
 
                     elif task is timeout_task:
                         cancel_event.set()
-                        if udf_future is not None:
-                            udf_future.cancel()
                         raise asyncio.TimeoutError(
                             'Function call was cancelled due to timeout',
                         )
@@ -1327,9 +1286,7 @@ class Application(object):
                 await send(self.error_response_dict)
 
             finally:
-                if udf_future is not None:
-                    cancel_event.set()
-                    udf_future.cancel()
+                cancel_event.set()
                 await cancel_all_tasks(all_tasks)
 
         # Handle api reflection
