@@ -113,6 +113,28 @@ async def to_thread(
     return await loop.run_in_executor(None, func_call)
 
 
+async def _poll_cancel(cancel_event: threading.Event) -> None:
+    while not cancel_event.is_set():
+        await asyncio.sleep(0.1)
+
+
+async def _cancellable_run(
+    cancel_event: threading.Event,
+    coro: Any,
+) -> Any:
+    task = asyncio.create_task(coro)
+    cancel_check = asyncio.create_task(_poll_cancel(cancel_event))
+    done, pending = await asyncio.wait(
+        [task, cancel_check], return_when=asyncio.FIRST_COMPLETED,
+    )
+    for p in pending:
+        p.cancel()
+    if cancel_check in done:
+        task.cancel()
+        raise asyncio.CancelledError()
+    return task.result()
+
+
 # Use negative values to indicate unsigned ints / binary data / usec time precision
 rowdat_1_type_map = {
     'bool': ft.LONGLONG,
@@ -1192,7 +1214,10 @@ class Application(object):
                 func_task = asyncio.create_task(
                     to_thread(
                         lambda: asyncio.run(
-                            func(cancel_event, call_timer, *inputs),
+                            _cancellable_run(
+                                cancel_event,
+                                func(cancel_event, call_timer, *inputs),
+                            ),
                         ),
                     ),
                 )
