@@ -10,9 +10,8 @@ from ._process import kill_process_by_port
 if typing.TYPE_CHECKING:
     from ._uvicorn_util import AwaitableUvicornServer
 
-# Keep track of currently running server and app
+# Keep track of currently running server
 _running_server: 'typing.Optional[AwaitableUvicornServer]' = None
-_running_app: typing.Optional[Application] = None
 
 # Maximum number of UDFs allowed
 MAX_UDFS_LIMIT = 10
@@ -22,7 +21,7 @@ async def run_udf_app(
     log_level: str = 'error',
     kill_existing_app_server: bool = True,
 ) -> UdfConnectionInfo:
-    global _running_server, _running_app
+    global _running_server
     from ._uvicorn_util import AwaitableUvicornServer
 
     try:
@@ -39,9 +38,6 @@ async def run_udf_app(
         if _running_server is not None:
             await _running_server.shutdown()
             _running_server = None
-        if _running_app is not None:
-            _running_app.shutdown()
-            _running_app = None
 
         # Kill if any other process is occupying the port
         kill_process_by_port(app_config.listen_port)
@@ -58,46 +54,34 @@ async def run_udf_app(
         log_level=log_level,
     )
 
-    try:
-        if not app.endpoints:
-            raise ValueError('You must define at least one function.')
-        if len(app.endpoints) > MAX_UDFS_LIMIT:
-            raise ValueError(
-                f'You can only define a maximum of {MAX_UDFS_LIMIT} functions.',
-            )
-
-        config = uvicorn.Config(
-            app,
-            host='0.0.0.0',
-            port=app_config.listen_port,
-            log_config=app.get_uvicorn_log_config(),
+    if not app.endpoints:
+        raise ValueError('You must define at least one function.')
+    if len(app.endpoints) > MAX_UDFS_LIMIT:
+        raise ValueError(
+            f'You can only define a maximum of {MAX_UDFS_LIMIT} functions.',
         )
 
-        # Increase the timeout so the uvicorn server is not the one closing idle connections.
-        # Avoiding TIME_WAIT state, rendering the client_port unusable for 60s (default TIME_WAIT duration).
-        keep_alive_timeout = int(
-            os.environ.get('SINGLESTOREDB_UDF_KEEPALIVE_TIMEOUT', '120'),
-        )
+    # Increase the timeout so the uvicorn server is not the one closing idle connections.
+    # Avoiding TIME_WAIT state, rendering the client_port unusable for 60s (default TIME_WAIT duration).
+    keep_alive_timeout = int(
+        os.environ.get('SINGLESTOREDB_UDF_KEEPALIVE_TIMEOUT', '120'),
+    )
 
-        config = uvicorn.Config(
-            app,
-            host='0.0.0.0',
-            port=app_config.listen_port,
-            log_config=app.get_uvicorn_log_config(),
-            timeout_keep_alive=keep_alive_timeout,
-        )
+    config = uvicorn.Config(
+        app,
+        host='0.0.0.0',
+        port=app_config.listen_port,
+        log_config=app.get_uvicorn_log_config(),
+        timeout_keep_alive=keep_alive_timeout,
+    )
 
-        # Register the functions only if the app is running interactively.
-        if app_config.running_interactively:
-            app.register_functions(replace=True)
+    # Register the functions only if the app is running interactively.
+    if app_config.running_interactively:
+        app.register_functions(replace=True)
 
-        _running_app = app
-        _running_server = AwaitableUvicornServer(config)
-        asyncio.create_task(_running_server.serve())
-        await _running_server.wait_for_startup()
-    except Exception:
-        app.shutdown()
-        raise
+    _running_server = AwaitableUvicornServer(config)
+    asyncio.create_task(_running_server.serve())
+    await _running_server.wait_for_startup()
 
     print(f'Python UDF registered at {base_url}')
 
