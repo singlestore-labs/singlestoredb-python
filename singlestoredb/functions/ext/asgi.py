@@ -135,6 +135,34 @@ async def _cancellable_run(
     return task.result()
 
 
+def _run_with_graceful_shutdown(coro: Any) -> Any:
+    """Run a coroutine in a new event loop, draining callbacks before close.
+
+    Unlike asyncio.run(), this prevents 'Event loop is closed' errors from
+    libraries (httpx/anyio) that schedule cleanup callbacks during teardown.
+    """
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(coro)
+    finally:
+        try:
+            pending = asyncio.all_tasks(loop)
+            if pending:
+                for task in pending:
+                    task.cancel()
+                loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True),
+                )
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.run_until_complete(loop.shutdown_default_executor())
+        finally:
+            loop.call_soon(loop.stop)
+            loop.run_forever()
+            asyncio.set_event_loop(None)
+            loop.close()
+
+
 # Use negative values to indicate unsigned ints / binary data / usec time precision
 rowdat_1_type_map = {
     'bool': ft.LONGLONG,
@@ -1213,7 +1241,7 @@ class Application(object):
 
                 func_task = asyncio.create_task(
                     to_thread(
-                        lambda: asyncio.run(
+                        lambda: _run_with_graceful_shutdown(
                             _cancellable_run(
                                 cancel_event,
                                 func(cancel_event, call_timer, *inputs),
