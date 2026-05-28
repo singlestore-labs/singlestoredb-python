@@ -75,6 +75,33 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Patch version for pre-release tag
+        if: github.event_name == 'push'
+        shell: python
+        run: |
+          import re, os, pathlib
+          tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          patterns = [
+              (r"^(\d+\.\d+\.\d+)-test(\d+)$", r"\1.dev\2"),
+              (r"^(\d+\.\d+\.\d+)-alpha(\d+)$", r"\1a\2"),
+              (r"^(\d+\.\d+\.\d+)-beta(\d+)$", r"\1b\2"),
+              (r"^(\d+\.\d+\.\d+)-rc(\d+)$", r"\1rc\2"),
+          ]
+          version = None
+          for pattern, repl in patterns:
+              m = re.match(pattern, tag)
+              if m:
+                  version = re.sub(pattern, repl, tag)
+                  break
+          if version is None:
+              print("No pre-release suffix, keeping version as-is")
+          else:
+              print(f"Patching version to: {version}")
+              p = pathlib.Path("pyproject.toml")
+              content = p.read_text()
+              content = re.sub(r'^version = ".*"', f'version = "{version}"', content, count=1, flags=re.MULTILINE)
+              p.write_text(content)
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
