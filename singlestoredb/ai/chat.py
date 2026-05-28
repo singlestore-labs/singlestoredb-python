@@ -35,6 +35,7 @@ def SingleStoreChatFactory(
     api_key: Optional[str] = None,
     streaming: bool = True,
     http_client: Optional[httpx.Client] = None,
+    http_async_client: Optional[httpx.AsyncClient] = None,
     obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
     base_url: Optional[str] = None,
     hosting_platform: Optional[str] = None,
@@ -155,7 +156,7 @@ def SingleStoreChatFactory(
     token_env = os.environ.get('SINGLESTOREDB_USER_TOKEN')
     token = api_key if api_key is not None else token_env
 
-    openai_kwargs = dict(
+    openai_kwargs: dict = dict(
         base_url=info.internal_connection_url,
         api_key=token,
         model=model_name,
@@ -163,6 +164,25 @@ def SingleStoreChatFactory(
     )
     if http_client is not None:
         openai_kwargs['http_client'] = http_client
+
+    # TEMP: default async client with HTTP keep-alive fully disabled.
+    # The external-function dispatcher in
+    # singlestoredb.functions.ext.asgi._run_with_graceful_shutdown spins up a
+    # fresh asyncio event loop per UDF invocation and closes it on the way
+    # out. A cached ChatOpenAI instance reused across UDF calls can otherwise
+    # retain an httpx connection whose underlying asyncio transport is bound
+    # to a closed loop, producing 'RuntimeError: Event loop is closed' on the
+    # next call. Forcing each request to open and close its own connection
+    # inside the current loop avoids that.
+    if http_async_client is None:
+        http_async_client = httpx.AsyncClient(
+            limits=httpx.Limits(
+                max_keepalive_connections=0,
+                keepalive_expiry=0,
+            ),
+        )
+    openai_kwargs['http_async_client'] = http_async_client
+
     return ChatOpenAI(
         **openai_kwargs,
         **kwargs,
