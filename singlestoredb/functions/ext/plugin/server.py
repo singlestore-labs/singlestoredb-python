@@ -116,6 +116,44 @@ class SharedRegistry:
             )
             return new_names
 
+    def delete_function(self, function_name: str) -> None:
+        """Delete a dynamically registered function by name.
+
+        Raises ValueError if the function was not dynamically registered
+        or does not exist at all.
+        """
+        with self._lock:
+            # Find matching code blocks by parsing signature_json
+            indices_to_remove = []
+            for i, (sig_json, _code, _replace) in enumerate(self._code_blocks):
+                sig = json.loads(sig_json)
+                if sig.get('name') == function_name:
+                    indices_to_remove.append(i)
+
+            if not indices_to_remove:
+                # Check if it's a base function
+                if (
+                    self._base_registry is not None
+                    and function_name in self._base_registry.functions
+                ):
+                    raise ValueError(
+                        f"Cannot delete '{function_name}': "
+                        f'not a dynamically registered function',
+                    )
+                raise ValueError(
+                    f"Function '{function_name}' not found",
+                )
+
+            # Remove in reverse order to preserve indices
+            for i in reversed(indices_to_remove):
+                self._code_blocks.pop(i)
+            self._generation += 1
+            logger.info(
+                f'SharedRegistry: deleted function {function_name!r}, '
+                f'generation={self._generation}, '
+                f'code_blocks={len(self._code_blocks)}',
+            )
+
     def get_thread_local_registry(self) -> FunctionRegistry:
         """Get or refresh the thread-local cached registry.
 
@@ -339,7 +377,7 @@ class Server:
 
                 events = poller.poll(500)  # 500ms timeout
 
-                registration_received = False
+                registry_changed = False
                 for fd, event in events:
                     if fd not in fd_to_wid:
                         continue
@@ -348,32 +386,49 @@ class Server:
                     if event & select.POLLIN:
                         msg = _read_pipe_message(fd)
                         if msg is not None:
-                            # Apply registration to main's registry
                             try:
                                 body = json.loads(msg)
-                                self.shared_registry.create_function(
-                                    body['signature_json'],
-                                    body['code'],
-                                    body['replace'],
-                                )
-                                logger.info(
-                                    'Main process: applied '
-                                    '@@register from worker '
-                                    f'{wid}, will re-fork all '
-                                    'workers',
-                                )
-                                registration_received = True
+                                action = body.get('action', 'register')
+                                if action == 'register':
+                                    self.shared_registry.create_function(
+                                        body['signature_json'],
+                                        body['code'],
+                                        body['replace'],
+                                    )
+                                    logger.info(
+                                        'Main process: applied '
+                                        '@@register from worker '
+                                        f'{wid}, will re-fork all '
+                                        'workers',
+                                    )
+                                elif action == 'delete':
+                                    self.shared_registry.delete_function(
+                                        body['function_name'],
+                                    )
+                                    logger.info(
+                                        'Main process: applied '
+                                        '@@delete from worker '
+                                        f'{wid}, will re-fork all '
+                                        'workers',
+                                    )
+                                else:
+                                    logger.error(
+                                        'Main process: unknown '
+                                        f'pipe action: {action}',
+                                    )
+                                    continue
+                                registry_changed = True
                             except Exception:
                                 logger.error(
                                     'Main process: failed to '
-                                    'apply @@register:\n'
+                                    'apply pipe message:\n'
                                     f'{traceback.format_exc()}',
                                 )
                     elif event & select.POLLHUP:
                         # Worker died — will be respawned below
                         pass
 
-                if registration_received:
+                if registry_changed:
                     _respawn_all_workers()
                     continue
 

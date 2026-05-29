@@ -18,6 +18,7 @@ from singlestoredb.functions.ext.plugin.connection import _MAX_FUNCTION_NAME_LEN
 from singlestoredb.functions.ext.plugin.connection import _recv_exact_py
 from singlestoredb.functions.ext.plugin.connection import PROTOCOL_VERSION
 from singlestoredb.functions.ext.plugin.control import dispatch_control_signal
+from singlestoredb.functions.ext.plugin.registry import FunctionRegistry
 from singlestoredb.utils._lazy_import import get_numpy
 from singlestoredb.utils._lazy_import import get_pandas
 from singlestoredb.utils._lazy_import import get_polars
@@ -189,6 +190,107 @@ class TestControlSignalDispatch(unittest.TestCase):
         result = dispatch_control_signal('@@register', payload, shared)
         assert result.ok is False
         assert 'args' in result.data
+
+    def test_delete_missing_payload(self):
+        shared = self._make_shared_registry()
+        result = dispatch_control_signal('@@delete', b'', shared)
+        assert result.ok is False
+        assert 'Missing deletion payload' in result.data
+
+    def test_delete_invalid_json(self):
+        shared = self._make_shared_registry()
+        result = dispatch_control_signal('@@delete', b'not json', shared)
+        assert result.ok is False
+        assert 'Invalid JSON' in result.data
+
+    def test_delete_missing_function_name(self):
+        shared = self._make_shared_registry()
+        payload = json.dumps({}).encode()
+        result = dispatch_control_signal('@@delete', payload, shared)
+        assert result.ok is False
+        assert 'function_name' in result.data
+
+    def test_delete_nonexistent_function(self):
+        shared = self._make_shared_registry()
+        shared.delete_function.side_effect = ValueError(
+            "Function 'no_such' not found",
+        )
+        payload = json.dumps({'function_name': 'no_such'}).encode()
+        result = dispatch_control_signal('@@delete', payload, shared)
+        assert result.ok is False
+        assert 'not found' in result.data
+
+    def test_delete_base_function(self):
+        shared = self._make_shared_registry()
+        shared.delete_function.side_effect = ValueError(
+            "Cannot delete 'base_fn': not a dynamically registered function",
+        )
+        payload = json.dumps({'function_name': 'base_fn'}).encode()
+        result = dispatch_control_signal('@@delete', payload, shared)
+        assert result.ok is False
+        assert 'not a dynamically registered function' in result.data
+
+    def test_delete_success(self):
+        shared = self._make_shared_registry()
+        shared.delete_function.return_value = None
+        payload = json.dumps({'function_name': 'my_func'}).encode()
+        result = dispatch_control_signal('@@delete', payload, shared)
+        assert result.ok is True
+        data = json.loads(result.data)
+        assert data['status'] == 'ok'
+        shared.delete_function.assert_called_once_with('my_func')
+
+
+class TestDeleteFunctionIntegration(unittest.TestCase):
+    """Integration tests for @@delete using a real SharedRegistry."""
+
+    def _make_real_shared_registry(self):
+        from singlestoredb.functions.ext.plugin.server import SharedRegistry
+        shared = SharedRegistry()
+        base_reg = FunctionRegistry()
+        base_reg.functions = {'base_fn': {'signature': {}, 'func': lambda: None}}
+        shared.set_base_registry(base_reg)
+        return shared
+
+    def test_register_then_delete(self):
+        shared = self._make_real_shared_registry()
+        sig = json.dumps({
+            'name': 'dyn_fn',
+            'args': [{'name': 'x', 'dtype': 'int', 'sql': 'INT'}],
+            'returns': [{'name': '', 'dtype': 'int', 'sql': 'INT'}],
+        })
+        shared.create_function(sig, 'return x + 1', False)
+        reg = shared.get_thread_local_registry()
+        assert 'dyn_fn' in reg.functions
+
+        shared.delete_function('dyn_fn')
+        reg = shared.get_thread_local_registry()
+        assert 'dyn_fn' not in reg.functions
+
+    def test_delete_base_function_errors(self):
+        shared = self._make_real_shared_registry()
+        with self.assertRaises(ValueError) as ctx:
+            shared.delete_function('base_fn')
+        assert 'not a dynamically registered function' in str(ctx.exception)
+
+    def test_delete_nonexistent_errors(self):
+        shared = self._make_real_shared_registry()
+        with self.assertRaises(ValueError) as ctx:
+            shared.delete_function('ghost')
+        assert 'not found' in str(ctx.exception)
+
+    def test_register_delete_reregister(self):
+        shared = self._make_real_shared_registry()
+        sig = json.dumps({
+            'name': 'dyn_fn',
+            'args': [{'name': 'x', 'dtype': 'int', 'sql': 'INT'}],
+            'returns': [{'name': '', 'dtype': 'int', 'sql': 'INT'}],
+        })
+        shared.create_function(sig, 'return x + 1', False)
+        shared.delete_function('dyn_fn')
+        shared.create_function(sig, 'return x + 2', False)
+        reg = shared.get_thread_local_registry()
+        assert 'dyn_fn' in reg.functions
 
 
 class TestLazyImport(unittest.TestCase):
