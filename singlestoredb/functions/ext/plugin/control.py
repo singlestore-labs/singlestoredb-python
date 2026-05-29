@@ -1,5 +1,5 @@
 """
-Control signal dispatch for @@health, @@functions, @@register.
+Control signal dispatch for @@health, @@functions, @@register, @@delete.
 
 Matches the Rust wasm-udf-server's dispatch_control_signal behavior.
 """
@@ -39,6 +39,10 @@ def dispatch_control_signal(
             return _handle_functions(shared_registry)
         elif signal_name == '@@register':
             return _handle_register(
+                request_data, shared_registry, pipe_write_fd,
+            )
+        elif signal_name == '@@delete':
+            return _handle_delete(
                 request_data, shared_registry, pipe_write_fd,
             )
         else:
@@ -129,6 +133,7 @@ def _handle_register(
     if pipe_write_fd is not None:
         from .server import _write_pipe_message
         payload = json.dumps({
+            'action': 'register',
             'signature_json': signature,
             'code': func_body,
             'replace': replace,
@@ -136,4 +141,42 @@ def _handle_register(
         _write_pipe_message(pipe_write_fd, payload)
 
     logger.info(f"@@register: added function '{function_name}'")
+    return ControlResult(ok=True, data='{"status":"ok"}')
+
+
+def _handle_delete(
+    request_data: bytes,
+    shared_registry: SharedRegistry,
+    pipe_write_fd: int | None = None,
+) -> ControlResult:
+    """Handle @@delete: delete a dynamically registered function."""
+    if not request_data:
+        return ControlResult(ok=False, data='Missing deletion payload')
+
+    try:
+        body = json.loads(request_data)
+    except json.JSONDecodeError as e:
+        return ControlResult(ok=False, data=f'Invalid JSON: {e}')
+
+    function_name = body.get('function_name')
+    if not function_name:
+        return ControlResult(
+            ok=False, data='Missing required field: function_name',
+        )
+
+    try:
+        shared_registry.delete_function(function_name)
+    except ValueError as e:
+        return ControlResult(ok=False, data=str(e))
+
+    # Notify main process so it can re-fork workers with updated state
+    if pipe_write_fd is not None:
+        from .server import _write_pipe_message
+        payload = json.dumps({
+            'action': 'delete',
+            'function_name': function_name,
+        }).encode()
+        _write_pipe_message(pipe_write_fd, payload)
+
+    logger.info(f"@@delete: removed function '{function_name}'")
     return ControlResult(ok=True, data='{"status":"ok"}')
