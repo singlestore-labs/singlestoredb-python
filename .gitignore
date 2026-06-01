@@ -83,7 +83,7 @@ dev-docs
 **/.ipynb_checkpoints
 **/.benchmarks
 *.ipynb
-test*.py
+/test*.py
 certs
 **/*.prof
 **/*.pprof
