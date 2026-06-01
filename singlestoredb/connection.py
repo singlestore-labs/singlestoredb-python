@@ -1187,7 +1187,12 @@ class Connection(metaclass=abc.ABCMeta):
                 if cur.description:
                     names = [x[0] for x in cur.description]
                     out = [
-                        {k: v for k, v in zip(names, row)}
+                        {
+                            k: v for k, v in zip(
+                                names,
+                                row if isinstance(row, (tuple, list)) else (row,),
+                            )
+                        }
                         for row in rows
                     ]
                 else:

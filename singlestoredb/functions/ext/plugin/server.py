@@ -32,6 +32,9 @@ from .registry import FunctionRegistry
 logger = logging.getLogger('plugin.server')
 
 
+_MAX_PIPE_MESSAGE = 16 * 1024 * 1024  # 16 MiB sanity cap
+
+
 def _read_pipe_message(fd: int) -> Optional[bytes]:
     """Read a length-prefixed message from a pipe fd.
 
@@ -46,13 +49,21 @@ def _read_pipe_message(fd: int) -> Optional[bytes]:
                 return None
             len_buf += chunk
         length = struct.unpack('<I', len_buf)[0]
-        payload = b''
-        while len(payload) < length:
-            chunk = os.read(fd, length - len(payload))
+        if length > _MAX_PIPE_MESSAGE:
+            logger.error(
+                f'Pipe message too large: {length} bytes '
+                f'(max {_MAX_PIPE_MESSAGE})',
+            )
+            return None
+        payload = bytearray(length)
+        pos = 0
+        while pos < length:
+            chunk = os.read(fd, length - pos)
             if not chunk:
                 return None
-            payload += chunk
-        return payload
+            payload[pos:pos + len(chunk)] = chunk
+            pos += len(chunk)
+        return bytes(payload)
     except OSError:
         return None
 

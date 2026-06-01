@@ -501,9 +501,14 @@ def _normalize_vector_output(
         if isinstance(out, tuple) and len(out) == 2:
             # Could be a Masked (data, mask) or a 2-element tuple of columns
             # Check if it looks like Masked: second element is a boolean mask
-            import numpy as np
-            if hasattr(out[1], 'dtype') and out[1].dtype == np.bool_:
-                return [out]
+            mask_candidate = out[1]
+            if hasattr(mask_candidate, 'dtype'):
+                try:
+                    import numpy as np
+                    if mask_candidate.dtype == np.bool_:
+                        return [out]
+                except ImportError:
+                    pass
         return [(out, None)]
 
     # Multiple return columns
