@@ -392,6 +392,7 @@ int ucs4_to_utf8(const uint32_t *ucs4_str, size_t ucs4_len, char **utf8_str) {
     }
 
     // Allocate a buffer for the UTF-8 string (worst-case: 4 bytes per UCS-4 character)
+    if (ucs4_len > (SIZE_MAX - 1) / 4) return -1;
     size_t utf8_max_len = ucs4_len * 4 + 1; // +1 for null terminator
     *utf8_str = malloc(utf8_max_len);
     if (!*utf8_str) {
@@ -2239,10 +2240,10 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
 
         PyObject *py_args = PyTuple_New(2);
         if (!py_args) goto error;
-        PyTuple_SetItem(py_args, 0, py_res);
-        PyTuple_SetItem(py_args, 1, py_requested_n_rows);
         Py_INCREF(py_res);
         Py_INCREF(py_requested_n_rows);
+        CHECKRC(PyTuple_SetItem(py_args, 0, py_res));
+        CHECKRC(PyTuple_SetItem(py_args, 1, py_requested_n_rows));
 
         py_state = (StateObject*)PyObject_CallObject((PyObject*)StateType, py_args);
         if (!py_state) { Py_DECREF(py_args); goto error; }
@@ -2514,7 +2515,7 @@ static PyObject *load_rowdat_1_numpy(PyObject *self, PyObject *args, PyObject *k
     }
 
 #define CHECKSIZE(x) \
-    if ((data + x) > end) { \
+    if ((size_t)(x) > (size_t)(end - data)) { \
         PyErr_SetString(PyExc_ValueError, "data length does not align with specified column values"); \
         goto error; \
     }
