@@ -53,6 +53,9 @@ pip install 'singlestoredb[rsa]'
 # Ed25519 key authentication
 pip install 'singlestoredb[ed22519]'
 
+# Pytest plugin with Docker test containers
+pip install 'singlestoredb[pytest,docker]'
+
 # Multiple extras can be combined
 pip install 'singlestoredb[vectorstore,sqlalchemy]'
 ```
@@ -66,6 +69,8 @@ pip install 'singlestoredb[vectorstore,sqlalchemy]'
 | `kerberos` / `gssapi` | Kerberos/GSSAPI authentication support |
 | `rsa` | RSA key exchange for encrypted connections |
 | `ed22519` | Ed25519 key authentication |
+| `docker` | Docker SDK for automated test container management |
+| `pytest` | Pytest plugin with SingleStoreDB Docker test fixtures |
 
 ## Documentation
 
@@ -249,6 +254,59 @@ conn.execute("""
 
 See [singlestoredb/fusion/README.md](singlestoredb/fusion/README.md)
 for details on writing custom Fusion SQL handlers.
+
+## Pytest Plugin
+
+The SDK includes a pytest plugin that automatically manages SingleStoreDB Docker
+containers for integration testing. Install with:
+
+```bash
+pip install 'singlestoredb[pytest,docker]'
+```
+
+The plugin provides these fixtures:
+
+- `singlestoredb_test_container` (session-scoped): Starts and stops a
+  SingleStoreDB Dev container, or reuses an existing server if
+  `SINGLESTOREDB_URL` is set
+- `singlestoredb_connection` (session-scoped): Database connection to the
+  test container
+- `singlestoredb_tempdb` (function-scoped): Cursor with a fresh temporary
+  database, dropped after the test
+
+The plugin supports `pytest-xdist` parallel execution with leader/follower
+coordination for container lifecycle.
+
+```python
+def test_query(singlestoredb_tempdb):
+    singlestoredb_tempdb.execute('CREATE TABLE t (id INT)')
+    singlestoredb_tempdb.execute('INSERT INTO t VALUES (1)')
+    singlestoredb_tempdb.execute('SELECT * FROM t')
+    assert singlestoredb_tempdb.fetchone() == (1,)
+```
+
+## Plugin UDF Server
+
+The SDK ships a high-performance plugin-mode UDF server that runs as a
+standalone process, communicating with SingleStoreDB over a Unix socket.
+
+```bash
+# Via the installed CLI entry point
+python-udf-server --plugin-name myfuncs --search-path /path/to/modules
+
+# Or as a Python module
+python -m singlestoredb.functions.ext.plugin --plugin-name myfuncs
+```
+
+| Option | Env Variable | Default | Description |
+|--------|-------------|---------|-------------|
+| `--plugin-name` | `PLUGIN_NAME` | (required) | Python module to import |
+| `--search-path` | `PLUGIN_SEARCH_PATH` | `""` | Colon-separated module search dirs |
+| `--socket` | `PLUGIN_SOCKET_PATH` | auto-generated | Unix socket path |
+| `--n-workers` | `PLUGIN_N_WORKERS` | `0` (CPU count) | Worker threads/processes |
+| `--max-connections` | `PLUGIN_MAX_CONNECTIONS` | `32` | Socket backlog |
+| `--log-level` | `PLUGIN_LOG_LEVEL` | `info` | Logging level |
+| `--process-mode` | `PLUGIN_PROCESS_MODE` | `process` | `thread` or `process` concurrency |
 
 ## Advanced Options
 
