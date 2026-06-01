@@ -43,7 +43,11 @@ class JSONEncoder(json.JSONEncoder):
         if isinstance(obj, datetime.date):
             return obj.isoformat()
         if isinstance(obj, datetime.timedelta):
-            total_us = int(obj.total_seconds() * 1_000_000)
+            total_us = (
+                obj.days * 86_400_000_000
+                + obj.seconds * 1_000_000
+                + obj.microseconds
+            )
             sign = '-' if total_us < 0 else ''
             total_us = abs(total_us)
             us = total_us % 1_000_000
