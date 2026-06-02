@@ -182,6 +182,10 @@ pytest -v --cov=singlestoredb.connection singlestoredb/tests/test_connection.py
 # Test UDF functionality
 pytest singlestoredb/tests/test_udf.py
 
+# Manual testing of the plugin UDF server
+python -m singlestoredb.functions.ext.plugin \
+    --plugin-name myfuncs --search-path /path/to/modules
+
 # Test against specific server (skips Docker)
 SINGLESTOREDB_URL=admin:pass@localhost:3306 pytest -v singlestoredb/tests
 

@@ -99,7 +99,14 @@ singlestoredb/
 │       ├── mmap.py          # Memory-mapped execution
 │       ├── json.py          # JSON serialization
 │       ├── rowdat_1.py      # ROWDAT_1 format
-│       └── arrow.py         # Apache Arrow format
+│       ├── arrow.py         # Apache Arrow format
+│       └── plugin/          # Plugin UDF server (Unix socket)
+│           ├── __main__.py  # CLI entry point
+│           ├── server.py    # Socket server with thread/process pool
+│           ├── connection.py # Connection handling
+│           ├── control.py   # Control protocol
+│           ├── registry.py  # Function registry & discovery
+│           └── wasm.py      # WASM component interface
 │
 ├── ai/                      # AI/ML integration
 │   ├── chat.py              # Chat completion factory
@@ -603,9 +610,9 @@ Located in `singlestoredb/fusion/handlers/`:
 ## External Functions (UDFs)
 
 The functions module (`singlestoredb/functions/`) enables deploying Python functions
-as SingleStore external functions. UDF servers can be deployed as HTTP using
-an ASGI application or a collocated socket server that uses mmap files to
-transfer data.
+as SingleStore external functions. UDF servers can be deployed in three modes: as HTTP using an ASGI application
+(remote), a memory-mapped collocated server (lowest latency), or as a plugin
+server using Unix sockets with a thread/process pool (CLI-driven).
 
 ### Architecture
 
@@ -629,6 +636,7 @@ transfer data.
 ├─────────────────────────────────────────────────────────────────────┤
 │  asgi.py    │  HTTP server via ASGI (Uvicorn; JSON or ROWDAT_1)     │
 │  mmap.py    │  Memory-mapped shared memory (collocated; ROWDAT_1)   │
+│  plugin/    │  Plugin UDF server (Unix socket + thread/process pool) │
 │  json.py    │  JSON serialization over HTTP                         │
 │  rowdat_1.py│  ROWDAT_1 binary format                               │
 │  arrow.py   │  Apache Arrow columnar format                         │
@@ -659,6 +667,33 @@ python -m singlestoredb.functions.ext.asgi \
     my_functions
 ```
 
+### Plugin Server CLI
+
+The plugin server can be launched via the CLI for Unix socket-based UDF serving:
+
+```bash
+# Launch the plugin server
+python -m singlestoredb.functions.ext.plugin \
+    --plugin-name myfuncs \
+    --search-path /home/user/libs \
+    --socket /tmp/my-udf.sock
+
+# Or use the console_scripts entry point
+python-udf-server --plugin-name myfuncs
+```
+
+**CLI Arguments:**
+
+| Argument | Env Variable | Default | Description |
+|----------|-------------|---------|-------------|
+| `--plugin-name` | `PLUGIN_NAME` | (required) | Python module to import |
+| `--search-path` | `PLUGIN_SEARCH_PATH` | `""` | Colon-separated search dirs for the module |
+| `--socket` | `PLUGIN_SOCKET_PATH` | auto-generated | Unix socket path |
+| `--n-workers` | `PLUGIN_N_WORKERS` | `0` (CPU count) | Worker threads/processes |
+| `--max-connections` | `PLUGIN_MAX_CONNECTIONS` | `32` | Socket backlog |
+| `--log-level` | `PLUGIN_LOG_LEVEL` | `info` | Logging level (debug/info/warning/error) |
+| `--process-mode` | `PLUGIN_PROCESS_MODE` | `process` | Concurrency mode: `thread` or `process` |
+
 ### Type Mapping
 
 The `signature.py` module maps Python types to SQL types:
@@ -682,29 +717,30 @@ The `signature.py` module maps Python types to SQL types:
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      SingleStore Database                           │
 └─────────────────────────────────────────────────────────────────────┘
-                   │                    │
-                   │ ASGI/HTTP          │ Memory-mapped
-                   │ (remote)           │ (collocated)
-                   ▼                    ▼
-             ┌─────────────┐      ┌─────────────┐
-             │   asgi.py   │      │   mmap.py   │
-             │   Uvicorn   │      │   Shared    │
-             │   HTTP/2    │      │   Memory    │
-             └─────────────┘      └─────────────┘
-                   │                    │
-                   └────────────────────┘
-                              │
-                              ▼
-                      ┌─────────────────┐
-                      │  Python UDF     │
-                      │  Functions      │
-                      └─────────────────┘
+                   │                    │                    │
+                   │ ASGI/HTTP          │ Memory-mapped      │ Plugin
+                   │ (remote)           │ (collocated)       │ (Unix socket)
+                   ▼                    ▼                    ▼
+             ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
+             │   asgi.py   │      │   mmap.py   │      │   plugin/   │
+             │   Uvicorn   │      │   Shared    │      │   Unix sock │
+             │   HTTP/2    │      │   Memory    │      │   + pool    │
+             └─────────────┘      └─────────────┘      └─────────────┘
+                   │                    │                    │
+                   └────────────────────┴────────────────────┘
+                                        │
+                                        ▼
+                                ┌─────────────────┐
+                                │  Python UDF     │
+                                │  Functions      │
+                                └─────────────────┘
 ```
 
 | Mode | File | Use Case |
 |------|------|----------|
 | ASGI | `asgi.py` | Remote execution via HTTP, scalable |
 | Memory-mapped | `mmap.py` | Collocated execution, lowest latency |
+| Plugin | `plugin/` | Unix socket server, thread/process pool, CLI-driven |
 | JSON | `json.py` | Simple serialization, debugging |
 | ROWDAT_1 | `rowdat_1.py` | Binary format, efficient |
 | Arrow | `arrow.py` | Columnar format, analytics |
@@ -1043,6 +1079,13 @@ with free_tier.start() as server:
 | `SINGLESTOREDB_MANAGEMENT_TOKEN` | Management API token | None |
 | `SINGLESTORE_LICENSE` | License key for Docker | None |
 | `USE_DATA_API` | Use HTTP API for tests | 0 |
+| `PLUGIN_NAME` | Plugin server: Python module to import | None |
+| `PLUGIN_SEARCH_PATH` | Plugin server: colon-separated module search dirs | `""` |
+| `PLUGIN_SOCKET_PATH` | Plugin server: Unix socket path | auto-generated |
+| `PLUGIN_N_WORKERS` | Plugin server: worker count (0 = CPU count) | `0` |
+| `PLUGIN_MAX_CONNECTIONS` | Plugin server: socket backlog | `32` |
+| `PLUGIN_LOG_LEVEL` | Plugin server: logging level | `info` |
+| `PLUGIN_PROCESS_MODE` | Plugin server: `thread` or `process` | `process` |
 
 ### B. Cursor Type Matrix
 
@@ -1096,4 +1139,5 @@ Feature options:
 | Management API | `singlestoredb/management/workspace.py` |
 | Fusion handlers | `singlestoredb/fusion/handler.py` |
 | UDF decorator | `singlestoredb/functions/decorator.py` |
+| Plugin UDF server | `singlestoredb/functions/ext/plugin/server.py` |
 | Test fixtures | `singlestoredb/pytest.py` |

@@ -4,14 +4,24 @@ from typing import Callable
 from typing import Dict
 from typing import Set
 
-try:
-    from IPython import get_ipython
-    has_ipython = True
-except ImportError:
-    has_ipython = False
-
 
 _subscribers: Set[Callable[[Dict[str, Any]], None]] = set()
+_initialized = False
+
+
+def _ensure_initialized() -> None:
+    """Lazily detect IPython and register the control handler."""
+    global _initialized
+    if _initialized:
+        return
+    _initialized = True
+
+    try:
+        from IPython import get_ipython
+        _handlers = get_ipython().kernel.control_handlers
+        _handlers['singlestore_portal_request'] = _event_handler
+    except (ImportError, OSError, AttributeError):
+        pass
 
 
 def subscribe(func: Callable[[Dict[str, Any]], None]) -> None:
@@ -24,6 +34,7 @@ def subscribe(func: Callable[[Dict[str, Any]], None]) -> None:
         The function to call when an event is received
 
     """
+    _ensure_initialized()
     _subscribers.add(func)
 
 
@@ -54,12 +65,3 @@ def _event_handler(stream: Any, ident: Any, msg: Dict[str, Any]) -> None:
 
     for func in _subscribers:
         func(content)
-
-
-# Inject a control handler to receive SingleStore events
-if has_ipython:
-    try:
-        _handlers = get_ipython().kernel.control_handlers
-        _handlers['singlestore_portal_request'] = _event_handler
-    except AttributeError:
-        pass

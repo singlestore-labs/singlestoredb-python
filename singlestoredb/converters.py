@@ -26,11 +26,7 @@ try:
 except (AttributeError, ImportError):
     has_pygeos = False
 
-try:
-    import numpy
-    has_numpy = True
-except ImportError:
-    has_numpy = False
+from .utils._lazy_import import get_numpy
 
 try:
     import bson
@@ -563,8 +559,9 @@ def float32_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.array(json_loads(x), dtype=numpy.float32)
+    np = get_numpy()
+    if np is not None:
+        return np.array(json_loads(x), dtype=np.float32)
 
     return map(float, json_loads(x))
 
@@ -591,8 +588,9 @@ def float32_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.frombuffer(x, dtype=numpy.float32)
+    np = get_numpy()
+    if np is not None:
+        return np.frombuffer(x, dtype=np.float32)
 
     return struct.unpack(f'<{len(x)//4}f', x)
 
@@ -619,8 +617,9 @@ def float16_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.array(json_loads(x), dtype=numpy.float16)
+    np = get_numpy()
+    if np is not None:
+        return np.array(json_loads(x), dtype=np.float16)
 
     return map(float, json_loads(x))
 
@@ -647,8 +646,9 @@ def float16_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.frombuffer(x, dtype=numpy.float16)
+    np = get_numpy()
+    if np is not None:
+        return np.frombuffer(x, dtype=np.float16)
 
     return struct.unpack(f'<{len(x)//2}e', x)
 
@@ -675,8 +675,9 @@ def float64_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.array(json_loads(x), dtype=numpy.float64)
+    np = get_numpy()
+    if np is not None:
+        return np.array(json_loads(x), dtype=np.float64)
 
     return map(float, json_loads(x))
 
@@ -703,8 +704,9 @@ def float64_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.frombuffer(x, dtype=numpy.float64)
+    np = get_numpy()
+    if np is not None:
+        return np.frombuffer(x, dtype=np.float64)
 
     return struct.unpack(f'<{len(x)//8}d', x)
 
@@ -731,8 +733,9 @@ def int8_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.array(json_loads(x), dtype=numpy.int8)
+    np = get_numpy()
+    if np is not None:
+        return np.array(json_loads(x), dtype=np.int8)
 
     return map(int, json_loads(x))
 
@@ -759,8 +762,9 @@ def int8_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.frombuffer(x, dtype=numpy.int8)
+    np = get_numpy()
+    if np is not None:
+        return np.frombuffer(x, dtype=np.int8)
 
     return struct.unpack(f'<{len(x)}b', x)
 
@@ -787,8 +791,9 @@ def int16_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.array(json_loads(x), dtype=numpy.int16)
+    np = get_numpy()
+    if np is not None:
+        return np.array(json_loads(x), dtype=np.int16)
 
     return map(int, json_loads(x))
 
@@ -815,8 +820,9 @@ def int16_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.frombuffer(x, dtype=numpy.int16)
+    np = get_numpy()
+    if np is not None:
+        return np.frombuffer(x, dtype=np.int16)
 
     return struct.unpack(f'<{len(x)//2}h', x)
 
@@ -843,8 +849,9 @@ def int32_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.array(json_loads(x), dtype=numpy.int32)
+    np = get_numpy()
+    if np is not None:
+        return np.array(json_loads(x), dtype=np.int32)
 
     return map(int, json_loads(x))
 
@@ -871,8 +878,9 @@ def int32_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.frombuffer(x, dtype=numpy.int32)
+    np = get_numpy()
+    if np is not None:
+        return np.frombuffer(x, dtype=np.int32)
 
     return struct.unpack(f'<{len(x)//4}l', x)
 
@@ -899,8 +907,9 @@ def int64_vector_json_or_none(x: Optional[str]) -> Optional[Any]:
     if x is None:
         return None
 
-    if has_numpy:
-        return numpy.array(json_loads(x), dtype=numpy.int64)
+    np = get_numpy()
+    if np is not None:
+        return np.array(json_loads(x), dtype=np.int64)
 
     return map(int, json_loads(x))
 
@@ -928,8 +937,9 @@ def int64_vector_or_none(x: Optional[bytes]) -> Optional[Any]:
         return None
 
     # Bytes
-    if has_numpy:
-        return numpy.frombuffer(x, dtype=numpy.int64)
+    np = get_numpy()
+    if np is not None:
+        return np.frombuffer(x, dtype=np.int64)
 
     return struct.unpack(f'<{len(x)//8}l', x)
 

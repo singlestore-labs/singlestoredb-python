@@ -7,6 +7,12 @@
 name: Publish packages
 
 on:
+  push:
+    tags:
+      - 'v*-rc*'
+      - 'v*-test*'
+      - 'v*-alpha*'
+      - 'v*-beta*'
   release:
     types: [published]
   workflow_dispatch:
@@ -159,13 +165,15 @@ jobs:
     permissions:
       id-token: write   # Required for OIDC trusted publishing
       actions: read     # Required for actions/download-artifact
-      contents: read    # Required for repository access
+      contents: write   # Required for gh release create/upload
 
     environment:
       name: publish
       url: https://pypi.org/p/singlestoredb
 
     steps:
+      - uses: actions/checkout@v3
+
       - name: Download Linux wheels and sdist
         uses: actions/download-artifact@v4
         with:
@@ -183,6 +191,20 @@ jobs:
         with:
           name: artifacts-macOS
           path: dist
+
+      - name: Create GitHub Release
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          gh release create ${{ github.ref_name }} dist/* --prerelease --title "${{ github.ref_name }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release assets
+        if: ${{ github.event_name == 'release' }}
+        run: |
+          gh release upload ${{ github.event.release.tag_name }} dist/* --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to PyPI
         if: ${{ github.event_name == 'release' || github.event.inputs.publish_pypi == 'true' }}

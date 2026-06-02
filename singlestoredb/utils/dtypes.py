@@ -1,22 +1,11 @@
 #!/usr/bin/env python3
+from functools import lru_cache
+from typing import Any
+from typing import Dict
 
-try:
-    import numpy as np
-    has_numpy = True
-except ImportError:
-    has_numpy = False
-
-try:
-    import polars as pl
-    has_polars = True
-except ImportError:
-    has_polars = False
-
-try:
-    import pyarrow as pa
-    has_pyarrow = True
-except ImportError:
-    has_pyarrow = False
+from ._lazy_import import get_numpy
+from ._lazy_import import get_polars
+from ._lazy_import import get_pyarrow
 
 
 DEFAULT_VALUES = {
@@ -64,8 +53,13 @@ DEFAULT_VALUES = {
 }
 
 
-if has_numpy:
-    NUMPY_TYPE_MAP = {
+@lru_cache(maxsize=None)
+def get_numpy_type_map() -> Dict[int, Any]:
+    """Return numpy type map, or empty dict if numpy is not installed."""
+    np = get_numpy()
+    if np is None:
+        return {}
+    return {
         0: object,  # Decimal
         1: np.int8,  # Tiny
         -1: np.uint8,  # Unsigned Tiny
@@ -107,13 +101,15 @@ if has_numpy:
         -254: object,  # Binary
         255: object,  # Geometry
     }
-else:
-    NUMPY_TYPE_MAP = {}
 
-PANDAS_TYPE_MAP = NUMPY_TYPE_MAP
 
-if has_pyarrow:
-    PYARROW_TYPE_MAP = {
+@lru_cache(maxsize=None)
+def get_pyarrow_type_map() -> Dict[int, Any]:
+    """Return pyarrow type map, or empty dict if pyarrow is not installed."""
+    pa = get_pyarrow()
+    if pa is None:
+        return {}
+    return {
         0: pa.decimal128(18, 6),  # Decimal
         1: pa.int8(),  # Tiny
         -1: pa.uint8(),  # Unsigned Tiny
@@ -155,11 +151,15 @@ if has_pyarrow:
         -254: pa.binary(),  # Binary
         255: pa.string(),  # Geometry
     }
-else:
-    PYARROW_TYPE_MAP = {}
 
-if has_polars:
-    POLARS_TYPE_MAP = {
+
+@lru_cache(maxsize=None)
+def get_polars_type_map() -> Dict[int, Any]:
+    """Return polars type map, or empty dict if polars is not installed."""
+    pl = get_polars()
+    if pl is None:
+        return {}
+    return {
         0: pl.Decimal(10, 6),  # Decimal
         1: pl.Int8,  # Tiny
         -1: pl.UInt8,  # Unsigned Tiny
@@ -201,5 +201,3 @@ if has_polars:
         -254: pl.Binary,  # Binary
         255: pl.Utf8,  # Geometry
     }
-else:
-    POLARS_TYPE_MAP = {}

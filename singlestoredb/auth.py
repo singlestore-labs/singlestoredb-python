@@ -5,8 +5,6 @@ from typing import List
 from typing import Optional
 from typing import Union
 
-import jwt
-
 
 # Credential types
 PASSWORD = 'password'
@@ -42,6 +40,7 @@ class JSONWebToken(object):
     @classmethod
     def from_token(cls, token: bytes, verify_signature: bool = False) -> 'JSONWebToken':
         """Validate the contents of the JWT."""
+        import jwt
         info = jwt.decode(token, options={'verify_signature': verify_signature})
 
         if not info.get('sub', None) and not info.get('username', None):
