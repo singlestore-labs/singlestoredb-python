@@ -1,4 +1,4 @@
-"""Tests for async UDF event loop graceful shutdown."""
+"""Tests for the async UDF persistent per-thread event loop."""
 import asyncio
 import contextvars
 import threading
@@ -8,132 +8,9 @@ from typing import Any
 from typing import List
 
 from ..functions.ext.asgi import _cancellable_run
-from ..functions.ext.asgi import _run_with_graceful_shutdown
+from ..functions.ext.asgi import _get_thread_loop
+from ..functions.ext.asgi import _run_on_thread_loop
 from ..functions.ext.asgi import to_thread
-
-
-class TestRunWithGracefulShutdown(unittest.TestCase):
-    """Test _run_with_graceful_shutdown handles loop cleanup properly."""
-
-    def test_basic_coroutine(self) -> None:
-        async def simple() -> int:
-            return 42
-
-        result = _run_with_graceful_shutdown(simple())
-        self.assertEqual(result, 42)
-
-    def test_callbacks_drained_before_close(self) -> None:
-        """Simulate httpx/anyio scheduling call_soon during teardown.
-
-        This is the exact pattern that causes 'Event loop is closed' with
-        asyncio.run() -- a library schedules a callback in its __del__ or
-        aclose() that fires after the loop is closed.
-        """
-        callback_executed: List[bool] = []
-
-        async def coroutine_with_cleanup_callback() -> str:
-            loop = asyncio.get_running_loop()
-            loop.call_soon(lambda: callback_executed.append(True))
-            return 'done'
-
-        result = _run_with_graceful_shutdown(coroutine_with_cleanup_callback())
-        self.assertEqual(result, 'done')
-        self.assertEqual(callback_executed, [True])
-
-    def test_no_event_loop_closed_error(self) -> None:
-        """Verify no RuntimeError when cleanup schedules on the loop."""
-        errors: List[RuntimeError] = []
-
-        async def simulate_httpx_teardown() -> str:
-            loop = asyncio.get_running_loop()
-
-            def deferred_cleanup() -> None:
-                try:
-                    loop.call_soon(lambda: None)
-                except RuntimeError as e:
-                    errors.append(e)
-
-            loop.call_soon(deferred_cleanup)
-            return 'ok'
-
-        result = _run_with_graceful_shutdown(simulate_httpx_teardown())
-        self.assertEqual(result, 'ok')
-        self.assertEqual(errors, [])
-
-    def test_exception_propagates(self) -> None:
-        async def failing() -> None:
-            raise ValueError('test error')
-
-        with self.assertRaises(ValueError) as ctx:
-            _run_with_graceful_shutdown(failing())
-        self.assertEqual(str(ctx.exception), 'test error')
-
-    def test_callbacks_drained_even_on_exception(self) -> None:
-        """Cleanup callbacks still run even if coroutine raises."""
-        callback_executed: List[bool] = []
-
-        async def failing_with_callback() -> None:
-            loop = asyncio.get_running_loop()
-            loop.call_soon(lambda: callback_executed.append(True))
-            raise ValueError('boom')
-
-        with self.assertRaises(ValueError):
-            _run_with_graceful_shutdown(failing_with_callback())
-        self.assertEqual(callback_executed, [True])
-
-    def test_pending_tasks_cancelled(self) -> None:
-        """Background tasks are cancelled during shutdown."""
-        async def background() -> None:
-            await asyncio.sleep(999)
-
-        async def main_with_background_task() -> str:
-            asyncio.create_task(background())
-            return 'done'
-
-        result = _run_with_graceful_shutdown(main_with_background_task())
-        self.assertEqual(result, 'done')
-
-    def test_isolation_between_calls(self) -> None:
-        """Each call gets its own event loop that is closed after use."""
-        loops: List[asyncio.AbstractEventLoop] = []
-
-        async def capture_loop() -> bool:
-            loops.append(asyncio.get_running_loop())
-            return True
-
-        _run_with_graceful_shutdown(capture_loop())
-        first_loop = loops[0]
-        self.assertTrue(first_loop.is_closed())
-
-        _run_with_graceful_shutdown(capture_loop())
-        second_loop = loops[1]
-        self.assertTrue(second_loop.is_closed())
-
-    def test_cancellable_run_integration(self) -> None:
-        """Verify _cancellable_run works inside _run_with_graceful_shutdown."""
-        cancel_event = threading.Event()
-
-        async def slow_func() -> str:
-            return 'completed'
-
-        result = _run_with_graceful_shutdown(
-            _cancellable_run(cancel_event, slow_func()),
-        )
-        self.assertEqual(result, 'completed')
-
-    def test_cancellation_via_event(self) -> None:
-        """Verify cancellation propagates through the full stack."""
-        cancel_event = threading.Event()
-        cancel_event.set()
-
-        async def blocked_func() -> str:
-            await asyncio.sleep(999)
-            return 'should not reach'
-
-        with self.assertRaises(asyncio.CancelledError):
-            _run_with_graceful_shutdown(
-                _cancellable_run(cancel_event, blocked_func()),
-            )
 
 
 class TestUDFDispatchEdgeCases(unittest.TestCase):
@@ -156,7 +33,7 @@ class TestUDFDispatchEdgeCases(unittest.TestCase):
 
         start = time.monotonic()
         with self.assertRaises(asyncio.CancelledError):
-            _run_with_graceful_shutdown(
+            _run_on_thread_loop(
                 _cancellable_run(cancel_event, long_running()),
             )
         elapsed = time.monotonic() - start
@@ -175,7 +52,7 @@ class TestUDFDispatchEdgeCases(unittest.TestCase):
             raise CustomUDFError('embedding service unavailable')
 
         with self.assertRaises(CustomUDFError) as ctx:
-            _run_with_graceful_shutdown(
+            _run_on_thread_loop(
                 _cancellable_run(cancel_event, failing_udf()),
             )
         self.assertEqual(str(ctx.exception), 'embedding service unavailable')
@@ -197,7 +74,7 @@ class TestUDFDispatchEdgeCases(unittest.TestCase):
 
         start = time.monotonic()
         with self.assertRaises(asyncio.CancelledError):
-            _run_with_graceful_shutdown(
+            _run_on_thread_loop(
                 _cancellable_run(cancel_event, blocked()),
             )
         elapsed = time.monotonic() - start
@@ -221,7 +98,7 @@ class TestUDFDispatchEdgeCases(unittest.TestCase):
         async def run_in_thread() -> str:
             return await to_thread(read_context_var)
 
-        result = _run_with_graceful_shutdown(run_in_thread())
+        result = _run_on_thread_loop(run_in_thread())
         self.assertEqual(result, 'hello_from_parent')
         self.assertEqual(captured, ['hello_from_parent'])
 
@@ -234,7 +111,7 @@ class TestUDFDispatchEdgeCases(unittest.TestCase):
                 await asyncio.sleep(0.05)
                 return index * 10
 
-            results[index] = _run_with_graceful_shutdown(compute())
+            results[index] = _run_on_thread_loop(compute())
 
         threads = [
             threading.Thread(target=run_isolated, args=(i,))
@@ -255,7 +132,7 @@ class TestUDFDispatchEdgeCases(unittest.TestCase):
             # Simulates what decorator.py's async_wrapper does for sync UDFs
             return 42 + 1
 
-        result = _run_with_graceful_shutdown(
+        result = _run_on_thread_loop(
             _cancellable_run(cancel_event, sync_as_async()),
         )
         self.assertEqual(result, 43)
@@ -267,29 +144,148 @@ class TestUDFDispatchEdgeCases(unittest.TestCase):
         async def quick() -> str:
             return 'fast'
 
-        result = _run_with_graceful_shutdown(
+        result = _run_on_thread_loop(
             _cancellable_run(cancel_event, quick()),
         )
         self.assertEqual(result, 'fast')
         self.assertFalse(cancel_event.is_set())
 
-    def test_callbacks_from_cancelled_tasks_still_drain(self) -> None:
-        """Background task callbacks drain even when task is cancelled."""
-        drained: List[bool] = []
 
-        async def bg_with_callback() -> None:
+class TestRunOnThreadLoop(unittest.TestCase):
+    """Test _run_on_thread_loop reuses a persistent per-thread event loop."""
+
+    def test_basic_coroutine(self) -> None:
+        async def simple() -> int:
+            return 42
+
+        self.assertEqual(_run_on_thread_loop(simple()), 42)
+
+    def test_loop_reused_across_calls(self) -> None:
+        """The same loop object is reused for successive calls in a thread."""
+        loops: List[asyncio.AbstractEventLoop] = []
+
+        async def capture_loop() -> bool:
+            loops.append(asyncio.get_running_loop())
+            return True
+
+        _run_on_thread_loop(capture_loop())
+        _run_on_thread_loop(capture_loop())
+
+        self.assertIs(loops[0], loops[1])
+
+    def test_loop_not_closed_between_calls(self) -> None:
+        """The persistent loop stays open so resources survive requests."""
+        captured: List[asyncio.AbstractEventLoop] = []
+
+        async def capture_loop() -> bool:
+            captured.append(asyncio.get_running_loop())
+            return True
+
+        _run_on_thread_loop(capture_loop())
+        loop = captured[0]
+        self.assertFalse(loop.is_closed())
+
+        # Still usable for the next request.
+        _run_on_thread_loop(capture_loop())
+        self.assertFalse(loop.is_closed())
+
+    def test_async_resource_survives_between_calls(self) -> None:
+        """An object bound to the loop can be reused on the next call.
+
+        This mirrors caching e.g. an httpx.AsyncClient keyed by the loop and
+        reusing its connection pool on subsequent requests.
+        """
+        clients: dict = {}
+
+        async def get_or_create_client() -> int:
             loop = asyncio.get_running_loop()
-            loop.call_soon(lambda: drained.append(True))
+            if loop not in clients:
+                clients[loop] = object()
+            return id(clients[loop])
+
+        first = _run_on_thread_loop(get_or_create_client())
+        second = _run_on_thread_loop(get_or_create_client())
+
+        self.assertEqual(first, second)
+        self.assertEqual(len(clients), 1)
+
+    def test_separate_threads_get_separate_loops(self) -> None:
+        """Each worker thread owns its own persistent loop."""
+        loops: List[asyncio.AbstractEventLoop] = []
+        lock = threading.Lock()
+
+        def run_in_thread() -> None:
+            async def capture() -> bool:
+                with lock:
+                    loops.append(asyncio.get_running_loop())
+                return True
+
+            _run_on_thread_loop(capture())
+
+        threads = [threading.Thread(target=run_in_thread) for _ in range(3)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(len(loops), 3)
+        self.assertEqual(len({id(loop) for loop in loops}), 3)
+
+    def test_get_thread_loop_idempotent(self) -> None:
+        """_get_thread_loop returns the same loop on repeated calls."""
+        def run_in_thread(out: List[asyncio.AbstractEventLoop]) -> None:
+            out.append(_get_thread_loop())
+            out.append(_get_thread_loop())
+
+        out: List[asyncio.AbstractEventLoop] = []
+        t = threading.Thread(target=run_in_thread, args=(out,))
+        t.start()
+        t.join()
+
+        self.assertIs(out[0], out[1])
+
+    def test_exception_propagates(self) -> None:
+        async def failing() -> None:
+            raise ValueError('test error')
+
+        with self.assertRaises(ValueError) as ctx:
+            _run_on_thread_loop(failing())
+        self.assertEqual(str(ctx.exception), 'test error')
+
+    def test_cancellable_run_integration(self) -> None:
+        """_cancellable_run works on the persistent loop."""
+        cancel_event = threading.Event()
+
+        async def slow_func() -> str:
+            return 'completed'
+
+        result = _run_on_thread_loop(
+            _cancellable_run(cancel_event, slow_func()),
+        )
+        self.assertEqual(result, 'completed')
+
+    def test_cancellation_via_event(self) -> None:
+        """Cancellation propagates through the persistent-loop stack."""
+        cancel_event = threading.Event()
+        cancel_event.set()
+
+        async def blocked_func() -> str:
             await asyncio.sleep(999)
+            return 'should not reach'
 
-        async def main() -> str:
-            asyncio.create_task(bg_with_callback())
-            await asyncio.sleep(0.05)  # Let background task start
-            return 'done'
+        with self.assertRaises(asyncio.CancelledError):
+            _run_on_thread_loop(
+                _cancellable_run(cancel_event, blocked_func()),
+            )
 
-        result = _run_with_graceful_shutdown(main())
-        self.assertEqual(result, 'done')
-        self.assertEqual(drained, [True])
+        # Loop must remain usable after a cancelled request.
+        async def quick() -> str:
+            return 'ok'
+
+        self.assertEqual(
+            _run_on_thread_loop(_cancellable_run(threading.Event(), quick())),
+            'ok',
+        )
 
 
 if __name__ == '__main__':
