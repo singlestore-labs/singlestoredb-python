@@ -24,6 +24,7 @@ Example
 """
 import argparse
 import asyncio
+import atexit
 import contextvars
 import dataclasses
 import datetime
@@ -135,32 +136,67 @@ async def _cancellable_run(
     return task.result()
 
 
-def _run_with_graceful_shutdown(coro: Any) -> Any:
-    """Run a coroutine in a new event loop, draining callbacks before close.
+# Each `to_thread` worker thread owns a long-lived event loop reused across
+# requests, so loop-bound resources (HTTP pools, DB sessions, sockets) can
+# survive between calls handled by the same thread.
+_thread_local = threading.local()
+_loop_registry: 'Set[asyncio.AbstractEventLoop]' = set()
+_loop_registry_lock = threading.Lock()
 
-    Unlike asyncio.run(), this prevents 'Event loop is closed' errors from
-    libraries (httpx/anyio) that schedule cleanup callbacks during teardown.
-    """
-    loop = asyncio.new_event_loop()
-    try:
+
+def _get_thread_loop() -> asyncio.AbstractEventLoop:
+    """Return (creating if needed) the calling thread's persistent loop."""
+    loop = getattr(_thread_local, 'loop', None)
+    if loop is None or loop.is_closed():
+        loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        return loop.run_until_complete(coro)
-    finally:
+        _thread_local.loop = loop
+        with _loop_registry_lock:
+            _loop_registry.add(loop)
+    return loop
+
+
+def _run_on_thread_loop(coro: Any) -> Any:
+    """
+    Run ``coro`` on the calling thread's persistent loop.
+
+    The loop is never closed between calls, so loop-bound resources (e.g.
+    httpx keep-alive pools) survive across requests and the deferred
+    "Event loop is closed" errors thrown by httpx/anyio at teardown do not
+    occur.
+
+    Caveat: tasks the user code spawns via ``asyncio.create_task`` and
+    leaves running outlive the current call too. That is the price of
+    keeping shared resources alive; ``cancel_event`` does not reach them.
+    """
+    loop = _get_thread_loop()
+    return loop.run_until_complete(coro)
+
+
+def _shutdown_thread_loops() -> None:
+    """Best-effort cleanup of all persistent worker-thread loops at exit."""
+    with _loop_registry_lock:
+        loops = list(_loop_registry)
+        _loop_registry.clear()
+
+    for loop in loops:
+        if loop.is_closed():
+            continue
         try:
-            pending = asyncio.all_tasks(loop)
-            if pending:
-                for task in pending:
-                    task.cancel()
-                loop.run_until_complete(
-                    asyncio.gather(*pending, return_exceptions=True),
-                )
+            # Owning thread is no longer running the loop; safe to drive
+            # teardown from this (exiting) thread.
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.run_until_complete(loop.shutdown_default_executor())
+        except Exception:
+            pass
         finally:
-            loop.call_soon(loop.stop)
-            loop.run_forever()
-            asyncio.set_event_loop(None)
-            loop.close()
+            try:
+                loop.close()
+            except Exception:
+                pass
+
+
+atexit.register(_shutdown_thread_loops)
 
 
 # Use negative values to indicate unsigned ints / binary data / usec time precision
@@ -1247,7 +1283,7 @@ class Application(object):
 
                 func_task = asyncio.create_task(
                     to_thread(
-                        lambda: _run_with_graceful_shutdown(
+                        lambda: _run_on_thread_loop(
                             _cancellable_run(
                                 cancel_event,
                                 func(cancel_event, call_timer, *inputs),
@@ -1270,19 +1306,21 @@ class Application(object):
                         all_tasks, return_when=asyncio.FIRST_COMPLETED,
                     )
 
-                await cancel_all_tasks(pending)
+                # Signal the worker before awaiting cancellation: cancelling
+                # func_task only flips its asyncio wrapper, not the executor
+                # work; only cancel_event reaches the worker loop.
                 if func_task in pending:
                     cancel_event.set()
 
+                await cancel_all_tasks(pending)
+
                 for task in done:
                     if task is disconnect_task:
-                        cancel_event.set()
                         raise asyncio.CancelledError(
                             'Function call was cancelled by client disconnect',
                         )
 
                     elif task is timeout_task:
-                        cancel_event.set()
                         raise asyncio.TimeoutError(
                             'Function call was cancelled due to timeout',
                         )
