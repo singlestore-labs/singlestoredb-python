@@ -288,6 +288,7 @@ class TestDeleteFunctionIntegration(unittest.TestCase):
         shared = SharedRegistry()
         base_reg = FunctionRegistry()
         base_reg.functions = {'base_fn': {'signature': {}, 'func': lambda: None}}
+        base_reg._base_function_names = {'base_fn'}
         shared.set_base_registry(base_reg)
         return shared
 
@@ -317,6 +318,17 @@ class TestDeleteFunctionIntegration(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             shared.delete_function('ghost')
         assert 'not found' in str(ctx.exception)
+
+    def test_replace_base_via_shared_rejected(self):
+        shared = self._make_real_shared_registry()
+        sig = json.dumps({
+            'name': 'base_fn',
+            'args': [{'name': 'x', 'dtype': 'int', 'sql': 'INT'}],
+            'returns': [{'name': '', 'dtype': 'int', 'sql': 'INT'}],
+        })
+        with self.assertRaises(ValueError) as ctx:
+            shared.create_function(sig, 'return x + 1', True)
+        assert 'not a dynamically registered function' in str(ctx.exception)
 
     def test_register_delete_reregister(self):
         shared = self._make_real_shared_registry()

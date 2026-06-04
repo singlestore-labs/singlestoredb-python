@@ -194,6 +194,7 @@ class SharedRegistry:
         # Copy base functions
         if self._base_registry is not None:
             registry.functions = dict(self._base_registry.functions)
+            registry._base_function_names = set(self._base_registry._base_function_names)
         # Replay code blocks
         for sig_json, code, replace in self._code_blocks:
             registry.create_function(sig_json, code, replace)
