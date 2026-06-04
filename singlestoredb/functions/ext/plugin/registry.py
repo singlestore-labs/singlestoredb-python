@@ -146,6 +146,7 @@ class FunctionRegistry:
 
     def __init__(self) -> None:
         self.functions: Dict[str, Dict[str, Any]] = {}
+        self._base_function_names: set[str] = set()
 
     def initialize(self, plugin_module: Any = None) -> None:
         """Initialize and discover UDF functions from loaded modules.
@@ -170,6 +171,8 @@ class FunctionRegistry:
                 )
         else:
             self._discover_udf_functions()
+
+        self._base_function_names = set(self.functions.keys())
 
     @staticmethod
     def _is_stdlib_or_infra(mod_name: str, mod_file: str) -> bool:
@@ -389,6 +392,12 @@ class FunctionRegistry:
                 f'(use replace=true to overwrite)',
             )
 
+        if func_name in self._base_function_names:
+            raise ValueError(
+                f"Cannot replace '{func_name}': "
+                f'not a dynamically registered function',
+            )
+
         if replace and func_name in self.functions:
             del self.functions[func_name]
 
@@ -420,6 +429,35 @@ class FunctionRegistry:
             f'{len(new_names)} function(s): {", ".join(new_names)}',
         )
         return new_names
+
+    def delete_function(self, signature_json: str) -> None:
+        """Delete a dynamically registered function by its signature.
+
+        Args:
+            signature_json: JSON object matching the describe-functions
+                element schema (must contain a 'name' field). Currently
+                only the name is used for matching.
+
+        Raises ValueError if the function does not exist.
+        """
+        sig = json.loads(signature_json)
+        name = sig.get('name')
+        if not name:
+            raise ValueError(
+                'signature JSON must contain a "name" field',
+            )
+        if name not in self.functions:
+            raise ValueError(f"Function '{name}' not found")
+        if name in self._base_function_names:
+            raise ValueError(
+                f"Cannot delete '{name}': not a dynamically registered function",
+            )
+        del self.functions[name]
+        dyn_module_name = 'singlestoredb.functions.ext.plugin._dynamic'
+        dyn_module = sys.modules.get(dyn_module_name)
+        if dyn_module is not None and hasattr(dyn_module, name):
+            delattr(dyn_module, name)
+        logger.info(f'delete_function: removed {name!r}')
 
     def _register_function(
         self,

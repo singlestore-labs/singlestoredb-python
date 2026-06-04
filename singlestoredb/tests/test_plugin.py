@@ -152,12 +152,12 @@ class TestControlSignalDispatch(unittest.TestCase):
         payload = json.dumps({'args': [], 'returns': [], 'body': 'x'}).encode()
         result = dispatch_control_signal('@@register', payload, shared)
         assert result.ok is False
-        assert 'function_name' in result.data
+        assert 'name' in result.data
 
     def test_register_missing_args(self):
         shared = self._make_shared_registry()
         payload = json.dumps({
-            'function_name': 'f', 'returns': [], 'body': 'x',
+            'name': 'f', 'returns': [], 'body': 'x',
         }).encode()
         result = dispatch_control_signal('@@register', payload, shared)
         assert result.ok is False
@@ -166,7 +166,7 @@ class TestControlSignalDispatch(unittest.TestCase):
     def test_register_missing_returns(self):
         shared = self._make_shared_registry()
         payload = json.dumps({
-            'function_name': 'f', 'args': [], 'body': 'x',
+            'name': 'f', 'args': [], 'body': 'x',
         }).encode()
         result = dispatch_control_signal('@@register', payload, shared)
         assert result.ok is False
@@ -175,7 +175,7 @@ class TestControlSignalDispatch(unittest.TestCase):
     def test_register_missing_body(self):
         shared = self._make_shared_registry()
         payload = json.dumps({
-            'function_name': 'f', 'args': [], 'returns': [],
+            'name': 'f', 'args': [], 'returns': [],
         }).encode()
         result = dispatch_control_signal('@@register', payload, shared)
         assert result.ok is False
@@ -184,7 +184,7 @@ class TestControlSignalDispatch(unittest.TestCase):
     def test_register_args_not_list(self):
         shared = self._make_shared_registry()
         payload = json.dumps({
-            'function_name': 'f', 'args': 'notalist',
+            'name': 'f', 'args': 'notalist',
             'returns': [], 'body': 'x',
         }).encode()
         result = dispatch_control_signal('@@register', payload, shared)
@@ -208,14 +208,14 @@ class TestControlSignalDispatch(unittest.TestCase):
         payload = json.dumps({}).encode()
         result = dispatch_control_signal('@@delete', payload, shared)
         assert result.ok is False
-        assert 'function_name' in result.data
+        assert 'name' in result.data
 
     def test_delete_nonexistent_function(self):
         shared = self._make_shared_registry()
         shared.delete_function.side_effect = ValueError(
             "Function 'no_such' not found",
         )
-        payload = json.dumps({'function_name': 'no_such'}).encode()
+        payload = json.dumps({'name': 'no_such'}).encode()
         result = dispatch_control_signal('@@delete', payload, shared)
         assert result.ok is False
         assert 'not found' in result.data
@@ -225,7 +225,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         shared.delete_function.side_effect = ValueError(
             "Cannot delete 'base_fn': not a dynamically registered function",
         )
-        payload = json.dumps({'function_name': 'base_fn'}).encode()
+        payload = json.dumps({'name': 'base_fn'}).encode()
         result = dispatch_control_signal('@@delete', payload, shared)
         assert result.ok is False
         assert 'not a dynamically registered function' in result.data
@@ -233,12 +233,51 @@ class TestControlSignalDispatch(unittest.TestCase):
     def test_delete_success(self):
         shared = self._make_shared_registry()
         shared.delete_function.return_value = None
-        payload = json.dumps({'function_name': 'my_func'}).encode()
+        payload = json.dumps({'name': 'my_func'}).encode()
         result = dispatch_control_signal('@@delete', payload, shared)
         assert result.ok is True
         data = json.loads(result.data)
         assert data['status'] == 'ok'
         shared.delete_function.assert_called_once_with('my_func')
+
+
+class TestFunctionRegistryDeleteGuard(unittest.TestCase):
+    """Unit tests for FunctionRegistry.delete_function base-function guard."""
+
+    def _make_registry_with_base(self):
+        reg = FunctionRegistry()
+        reg.functions = {'base_fn': {'signature': {}, 'func': lambda: None}}
+        reg._base_function_names = {'base_fn'}
+        return reg
+
+    def test_delete_base_function_rejected(self):
+        reg = self._make_registry_with_base()
+        with self.assertRaises(ValueError) as ctx:
+            reg.delete_function(json.dumps({'name': 'base_fn'}))
+        assert 'not a dynamically registered function' in str(ctx.exception)
+
+    def test_delete_dynamic_function_allowed(self):
+        reg = self._make_registry_with_base()
+        reg.functions['dyn_fn'] = {'signature': {}, 'func': lambda: None}
+        reg.delete_function(json.dumps({'name': 'dyn_fn'}))
+        assert 'dyn_fn' not in reg.functions
+
+    def test_delete_nonexistent_raises(self):
+        reg = self._make_registry_with_base()
+        with self.assertRaises(ValueError) as ctx:
+            reg.delete_function(json.dumps({'name': 'ghost'}))
+        assert 'not found' in str(ctx.exception)
+
+    def test_replace_base_function_rejected(self):
+        reg = self._make_registry_with_base()
+        sig = json.dumps({
+            'name': 'base_fn',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+        })
+        with self.assertRaises(ValueError) as ctx:
+            reg.create_function(sig, 'return x + 1', replace=True)
+        assert 'not a dynamically registered function' in str(ctx.exception)
 
 
 class TestDeleteFunctionIntegration(unittest.TestCase):
@@ -249,6 +288,7 @@ class TestDeleteFunctionIntegration(unittest.TestCase):
         shared = SharedRegistry()
         base_reg = FunctionRegistry()
         base_reg.functions = {'base_fn': {'signature': {}, 'func': lambda: None}}
+        base_reg._base_function_names = {'base_fn'}
         shared.set_base_registry(base_reg)
         return shared
 
@@ -279,6 +319,17 @@ class TestDeleteFunctionIntegration(unittest.TestCase):
             shared.delete_function('ghost')
         assert 'not found' in str(ctx.exception)
 
+    def test_replace_base_via_shared_rejected(self):
+        shared = self._make_real_shared_registry()
+        sig = json.dumps({
+            'name': 'base_fn',
+            'args': [{'name': 'x', 'dtype': 'int', 'sql': 'INT'}],
+            'returns': [{'name': '', 'dtype': 'int', 'sql': 'INT'}],
+        })
+        with self.assertRaises(ValueError) as ctx:
+            shared.create_function(sig, 'return x + 1', True)
+        assert 'not a dynamically registered function' in str(ctx.exception)
+
     def test_register_delete_reregister(self):
         shared = self._make_real_shared_registry()
         sig = json.dumps({
@@ -291,6 +342,27 @@ class TestDeleteFunctionIntegration(unittest.TestCase):
         shared.create_function(sig, 'return x + 2', False)
         reg = shared.get_thread_local_registry()
         assert 'dyn_fn' in reg.functions
+
+    def test_deleted_function_does_not_reappear(self):
+        shared = self._make_real_shared_registry()
+        sig_a = json.dumps({
+            'name': 'fn_a',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+        })
+        shared.create_function(sig_a, 'return x + 1', False)
+        shared.delete_function('fn_a')
+
+        sig_b = json.dumps({
+            'name': 'fn_b',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+        })
+        shared.create_function(sig_b, 'return x + 2', False)
+
+        reg = shared.get_thread_local_registry()
+        assert 'fn_a' not in reg.functions
+        assert 'fn_b' in reg.functions
 
 
 class TestLazyImport(unittest.TestCase):

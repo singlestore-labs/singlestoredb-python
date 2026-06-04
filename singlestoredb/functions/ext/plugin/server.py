@@ -18,6 +18,7 @@ import struct
 import sys
 import threading
 import traceback
+import types
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from typing import Dict
@@ -194,6 +195,17 @@ class SharedRegistry:
         # Copy base functions
         if self._base_registry is not None:
             registry.functions = dict(self._base_registry.functions)
+            registry._base_function_names = (
+                set(self._base_registry._base_function_names)
+                | set(self._base_registry.functions.keys())
+            )
+        # Swap in a fresh dynamic module so replayed code blocks get a clean
+        # namespace. Existing function objects keep their original __globals__.
+        dyn_module_name = 'singlestoredb.functions.ext.plugin._dynamic'
+        fresh_dyn = types.ModuleType(dyn_module_name)
+        fresh_dyn.__file__ = f'<{dyn_module_name}>'
+        sys.modules[dyn_module_name] = fresh_dyn
+
         # Replay code blocks
         for sig_json, code, replace in self._code_blocks:
             registry.create_function(sig_json, code, replace)
