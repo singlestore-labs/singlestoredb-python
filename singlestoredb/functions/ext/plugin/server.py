@@ -194,7 +194,10 @@ class SharedRegistry:
         # Copy base functions
         if self._base_registry is not None:
             registry.functions = dict(self._base_registry.functions)
-            registry._base_function_names = set(self._base_registry._base_function_names)
+            registry._base_function_names = (
+                set(self._base_registry._base_function_names)
+                | set(self._base_registry.functions.keys())
+            )
         # Clear the shared dynamic module so only current code blocks
         # contribute functions (prevents deleted UDFs from reappearing)
         dyn_module_name = 'singlestoredb.functions.ext.plugin._dynamic'
