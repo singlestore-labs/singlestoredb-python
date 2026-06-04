@@ -70,3 +70,11 @@ class Plugin:
         except Exception as e:
             tb = traceback.format_exc()
             raise RuntimeError(f'{e}\n{tb}')
+
+    def delete_function(self, signature: str) -> None:
+        """Delete a dynamically registered function by its signature."""
+        try:
+            _registry.delete_function(signature)
+        except Exception as e:
+            tb = traceback.format_exc()
+            raise RuntimeError(f'{e}\n{tb}')

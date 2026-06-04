@@ -421,6 +421,27 @@ class FunctionRegistry:
         )
         return new_names
 
+    def delete_function(self, signature_json: str) -> None:
+        """Delete a dynamically registered function by its signature.
+
+        Args:
+            signature_json: JSON object matching the describe-functions
+                element schema (must contain a 'name' field). Currently
+                only the name is used for matching.
+
+        Raises ValueError if the function does not exist.
+        """
+        sig = json.loads(signature_json)
+        name = sig.get('name')
+        if not name:
+            raise ValueError(
+                'signature JSON must contain a "name" field',
+            )
+        if name not in self.functions:
+            raise ValueError(f"Function '{name}' not found")
+        del self.functions[name]
+        logger.info(f'delete_function: removed {name!r}')
+
     def _register_function(
         self,
         func: Callable[..., Any],

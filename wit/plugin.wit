@@ -19,6 +19,12 @@ interface plugin {
     /// `code` is the function body (not a full `def` statement).
     /// `replace` controls whether an existing function of the same name is overwritten.
     create-function: func(signature: string, code: string, replace: bool) -> result<_, string>;
+
+    /// Delete a dynamically registered function by its signature.
+    /// `signature` is a JSON object matching the describe-functions element schema.
+    /// Currently uses only the `name` field; full signature matching reserved for
+    /// future overload support.
+    delete-function: func(signature: string) -> result<_, string>;
 }
 
 world plugin-server {

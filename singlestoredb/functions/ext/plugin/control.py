@@ -90,10 +90,10 @@ def _handle_register(
     except json.JSONDecodeError as e:
         return ControlResult(ok=False, data=f'Invalid JSON: {e}')
 
-    function_name = body.get('function_name')
+    function_name = body.get('name')
     if not function_name:
         return ControlResult(
-            ok=False, data='Missing required field: function_name',
+            ok=False, data='Missing required field: name',
         )
 
     args = body.get('args')
@@ -158,10 +158,10 @@ def _handle_delete(
     except json.JSONDecodeError as e:
         return ControlResult(ok=False, data=f'Invalid JSON: {e}')
 
-    function_name = body.get('function_name')
+    function_name = body.get('name')
     if not function_name:
         return ControlResult(
-            ok=False, data='Missing required field: function_name',
+            ok=False, data='Missing required field: name',
         )
 
     try:
