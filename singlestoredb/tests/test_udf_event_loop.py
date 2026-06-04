@@ -195,7 +195,7 @@ class TestRunOnThreadLoop(unittest.TestCase):
         This mirrors caching e.g. an httpx.AsyncClient keyed by the loop and
         reusing its connection pool on subsequent requests.
         """
-        clients: dict = {}
+        clients: dict[asyncio.AbstractEventLoop, object] = {}
 
         async def get_or_create_client() -> int:
             loop = asyncio.get_running_loop()
