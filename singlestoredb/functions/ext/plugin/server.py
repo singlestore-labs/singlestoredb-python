@@ -195,6 +195,14 @@ class SharedRegistry:
         if self._base_registry is not None:
             registry.functions = dict(self._base_registry.functions)
             registry._base_function_names = set(self._base_registry._base_function_names)
+        # Clear the shared dynamic module so only current code blocks
+        # contribute functions (prevents deleted UDFs from reappearing)
+        dyn_module_name = 'singlestoredb.functions.ext.plugin._dynamic'
+        if dyn_module_name in sys.modules:
+            dyn = sys.modules[dyn_module_name]
+            for attr in [a for a in dir(dyn) if not a.startswith('_')]:
+                delattr(dyn, attr)
+
         # Replay code blocks
         for sig_json, code, replace in self._code_blocks:
             registry.create_function(sig_json, code, replace)

@@ -343,6 +343,27 @@ class TestDeleteFunctionIntegration(unittest.TestCase):
         reg = shared.get_thread_local_registry()
         assert 'dyn_fn' in reg.functions
 
+    def test_deleted_function_does_not_reappear(self):
+        shared = self._make_real_shared_registry()
+        sig_a = json.dumps({
+            'name': 'fn_a',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+        })
+        shared.create_function(sig_a, 'return x + 1', False)
+        shared.delete_function('fn_a')
+
+        sig_b = json.dumps({
+            'name': 'fn_b',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+        })
+        shared.create_function(sig_b, 'return x + 2', False)
+
+        reg = shared.get_thread_local_registry()
+        assert 'fn_a' not in reg.functions
+        assert 'fn_b' in reg.functions
+
 
 class TestLazyImport(unittest.TestCase):
 

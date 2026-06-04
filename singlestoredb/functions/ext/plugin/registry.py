@@ -453,6 +453,10 @@ class FunctionRegistry:
                 f"Cannot delete '{name}': not a dynamically registered function",
             )
         del self.functions[name]
+        dyn_module_name = 'singlestoredb.functions.ext.plugin._dynamic'
+        dyn_module = sys.modules.get(dyn_module_name)
+        if dyn_module is not None and hasattr(dyn_module, name):
+            delattr(dyn_module, name)
         logger.info(f'delete_function: removed {name!r}')
 
     def _register_function(
