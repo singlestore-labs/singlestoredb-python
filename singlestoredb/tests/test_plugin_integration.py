@@ -339,7 +339,7 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         """@@register a function, then call it via call_function."""
         shared = self._make_shared()
         payload = json.dumps({
-            'function_name': 'double_it',
+            'name': 'double_it',
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'body': 'return x * 2',
@@ -360,7 +360,7 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         """@@register with replace=true overwrites existing function."""
         shared = self._make_shared()
         payload1 = json.dumps({
-            'function_name': 'myfunc',
+            'name': 'myfunc',
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'body': 'return x + 1',
@@ -369,7 +369,7 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         assert result.ok
 
         payload2 = json.dumps({
-            'function_name': 'myfunc',
+            'name': 'myfunc',
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'body': 'return x + 100',
@@ -388,7 +388,7 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         """@@register without replace=true fails for existing function."""
         shared = self._make_shared()
         payload = json.dumps({
-            'function_name': 'dup_fn',
+            'name': 'dup_fn',
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'body': 'return x',
@@ -404,14 +404,14 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         """@@delete removes a function so it's no longer callable."""
         shared = self._make_shared()
         payload = json.dumps({
-            'function_name': 'temp_fn',
+            'name': 'temp_fn',
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'body': 'return x',
         }).encode()
         dispatch_control_signal('@@register', payload, shared)
 
-        del_payload = json.dumps({'function_name': 'temp_fn'}).encode()
+        del_payload = json.dumps({'name': 'temp_fn'}).encode()
         result = dispatch_control_signal('@@delete', del_payload, shared)
         assert result.ok
 
@@ -422,7 +422,7 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         """Delete a function and re-register it with new behavior."""
         shared = self._make_shared()
         sig = {
-            'function_name': 'morph',
+            'name': 'morph',
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'body': 'return x + 1',
@@ -431,7 +431,7 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
 
         dispatch_control_signal(
             '@@delete',
-            json.dumps({'function_name': 'morph'}).encode(),
+            json.dumps({'name': 'morph'}).encode(),
             shared,
         )
 
@@ -450,7 +450,7 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         r_fd, w_fd = os.pipe()
         try:
             payload = json.dumps({
-                'function_name': 'piped_fn',
+                'name': 'piped_fn',
                 'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
                 'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
                 'body': 'return x',
@@ -474,7 +474,7 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         """@@delete with pipe_write_fd sends message to parent."""
         shared = self._make_shared()
         sig = json.dumps({
-            'function_name': 'pipe_del',
+            'name': 'pipe_del',
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'body': 'return x',
@@ -483,7 +483,7 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
 
         r_fd, w_fd = os.pipe()
         try:
-            del_payload = json.dumps({'function_name': 'pipe_del'}).encode()
+            del_payload = json.dumps({'name': 'pipe_del'}).encode()
             result = dispatch_control_signal(
                 '@@delete', del_payload, shared, pipe_write_fd=w_fd,
             )
