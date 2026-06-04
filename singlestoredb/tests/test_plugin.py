@@ -268,16 +268,16 @@ class TestFunctionRegistryDeleteGuard(unittest.TestCase):
             reg.delete_function(json.dumps({'name': 'ghost'}))
         assert 'not found' in str(ctx.exception)
 
-    def test_replace_base_then_delete_allowed(self):
+    def test_replace_base_function_rejected(self):
         reg = self._make_registry_with_base()
         sig = json.dumps({
             'name': 'base_fn',
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
         })
-        reg.create_function(sig, 'return x + 1', replace=True)
-        reg.delete_function(json.dumps({'name': 'base_fn'}))
-        assert 'base_fn' not in reg.functions
+        with self.assertRaises(ValueError) as ctx:
+            reg.create_function(sig, 'return x + 1', replace=True)
+        assert 'not a dynamically registered function' in str(ctx.exception)
 
 
 class TestDeleteFunctionIntegration(unittest.TestCase):

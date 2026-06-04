@@ -392,9 +392,14 @@ class FunctionRegistry:
                 f'(use replace=true to overwrite)',
             )
 
+        if func_name in self._base_function_names:
+            raise ValueError(
+                f"Cannot replace '{func_name}': "
+                f'not a dynamically registered function',
+            )
+
         if replace and func_name in self.functions:
             del self.functions[func_name]
-            self._base_function_names.discard(func_name)
 
         full_code = self._build_python_code(sig, code)
 
