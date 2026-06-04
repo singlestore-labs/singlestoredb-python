@@ -18,6 +18,7 @@ import struct
 import sys
 import threading
 import traceback
+import types
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from typing import Dict
@@ -198,13 +199,12 @@ class SharedRegistry:
                 set(self._base_registry._base_function_names)
                 | set(self._base_registry.functions.keys())
             )
-        # Clear the shared dynamic module so only current code blocks
-        # contribute functions (prevents deleted UDFs from reappearing)
+        # Swap in a fresh dynamic module so replayed code blocks get a clean
+        # namespace. Existing function objects keep their original __globals__.
         dyn_module_name = 'singlestoredb.functions.ext.plugin._dynamic'
-        if dyn_module_name in sys.modules:
-            dyn = sys.modules[dyn_module_name]
-            for attr in [a for a in dir(dyn) if not a.startswith('_')]:
-                delattr(dyn, attr)
+        fresh_dyn = types.ModuleType(dyn_module_name)
+        fresh_dyn.__file__ = f'<{dyn_module_name}>'
+        sys.modules[dyn_module_name] = fresh_dyn
 
         # Replay code blocks
         for sig_json, code, replace in self._code_blocks:
