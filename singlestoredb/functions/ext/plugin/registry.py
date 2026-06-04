@@ -394,6 +394,7 @@ class FunctionRegistry:
 
         if replace and func_name in self.functions:
             del self.functions[func_name]
+            self._base_function_names.discard(func_name)
 
         full_code = self._build_python_code(sig, code)
 

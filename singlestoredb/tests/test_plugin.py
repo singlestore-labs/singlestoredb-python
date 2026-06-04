@@ -268,6 +268,17 @@ class TestFunctionRegistryDeleteGuard(unittest.TestCase):
             reg.delete_function(json.dumps({'name': 'ghost'}))
         assert 'not found' in str(ctx.exception)
 
+    def test_replace_base_then_delete_allowed(self):
+        reg = self._make_registry_with_base()
+        sig = json.dumps({
+            'name': 'base_fn',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+        })
+        reg.create_function(sig, 'return x + 1', replace=True)
+        reg.delete_function(json.dumps({'name': 'base_fn'}))
+        assert 'base_fn' not in reg.functions
+
 
 class TestDeleteFunctionIntegration(unittest.TestCase):
     """Integration tests for @@delete using a real SharedRegistry."""
