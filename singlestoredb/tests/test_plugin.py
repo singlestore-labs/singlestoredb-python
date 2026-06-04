@@ -241,6 +241,34 @@ class TestControlSignalDispatch(unittest.TestCase):
         shared.delete_function.assert_called_once_with('my_func')
 
 
+class TestFunctionRegistryDeleteGuard(unittest.TestCase):
+    """Unit tests for FunctionRegistry.delete_function base-function guard."""
+
+    def _make_registry_with_base(self):
+        reg = FunctionRegistry()
+        reg.functions = {'base_fn': {'signature': {}, 'func': lambda: None}}
+        reg._base_function_names = {'base_fn'}
+        return reg
+
+    def test_delete_base_function_rejected(self):
+        reg = self._make_registry_with_base()
+        with self.assertRaises(ValueError) as ctx:
+            reg.delete_function(json.dumps({'name': 'base_fn'}))
+        assert 'not a dynamically registered function' in str(ctx.exception)
+
+    def test_delete_dynamic_function_allowed(self):
+        reg = self._make_registry_with_base()
+        reg.functions['dyn_fn'] = {'signature': {}, 'func': lambda: None}
+        reg.delete_function(json.dumps({'name': 'dyn_fn'}))
+        assert 'dyn_fn' not in reg.functions
+
+    def test_delete_nonexistent_raises(self):
+        reg = self._make_registry_with_base()
+        with self.assertRaises(ValueError) as ctx:
+            reg.delete_function(json.dumps({'name': 'ghost'}))
+        assert 'not found' in str(ctx.exception)
+
+
 class TestDeleteFunctionIntegration(unittest.TestCase):
     """Integration tests for @@delete using a real SharedRegistry."""
 

@@ -146,6 +146,7 @@ class FunctionRegistry:
 
     def __init__(self) -> None:
         self.functions: Dict[str, Dict[str, Any]] = {}
+        self._base_function_names: set[str] = set()
 
     def initialize(self, plugin_module: Any = None) -> None:
         """Initialize and discover UDF functions from loaded modules.
@@ -170,6 +171,8 @@ class FunctionRegistry:
                 )
         else:
             self._discover_udf_functions()
+
+        self._base_function_names = set(self.functions.keys())
 
     @staticmethod
     def _is_stdlib_or_infra(mod_name: str, mod_file: str) -> bool:
@@ -439,6 +442,10 @@ class FunctionRegistry:
             )
         if name not in self.functions:
             raise ValueError(f"Function '{name}' not found")
+        if name in self._base_function_names:
+            raise ValueError(
+                f"Cannot delete '{name}': not a dynamically registered function",
+            )
         del self.functions[name]
         logger.info(f'delete_function: removed {name!r}')
 
