@@ -20,7 +20,7 @@ We needed a way to:
 
 Versioned modules live in `management/v1/`, `management/v2/`, etc. Each version folder is a **complete set** — every class that should be accessible in that version must exist in its folder. There is no cross-version fallback; requesting a class from a version where it doesn't exist raises an error.
 
-Top-level modules (`management/workspace.py`, etc.) become thin re-export shims that import from the default version (controlled by `config.get_option('management.version')`).
+Top-level modules (`management/workspace.py`, etc.) become thin re-export shims that always import from v1 for stable import paths. Dynamic version routing (controlled by `config.get_option('management.version')`) happens in the `manage_*()` factory functions.
 
 Shared infrastructure (`manager.py`, `utils.py`, `versioned.py`) stays at the top level outside version folders.
 
