@@ -74,11 +74,6 @@ class TestImportVersionedModule(unittest.TestCase):
         self.assertTrue(hasattr(mod, 'Workspace'))
         self.assertTrue(hasattr(mod, 'WorkspaceManager'))
 
-    def test_import_v1_cluster(self):
-        mod = _import_versioned_module('v1', 'cluster')
-        self.assertTrue(hasattr(mod, 'Cluster'))
-        self.assertTrue(hasattr(mod, 'ClusterManager'))
-
     def test_import_nonexistent_version_raises(self):
         with self.assertRaises(ManagementError) as ctx:
             _import_versioned_module('v99', 'workspace')
@@ -116,10 +111,10 @@ class TestManagerVersionSwitching(unittest.TestCase):
         mgr = self._make_manager()
         self.assertIn('/v1/', mgr._base_url)
 
-    def test_api_version_class_attribute(self):
-        """Manager has api_version class attribute defaulting to 'v1'."""
+    def test_default_version_class_attribute(self):
+        """Manager has default_version class attribute defaulting to 'v1'."""
         from singlestoredb.management.manager import Manager
-        self.assertEqual(Manager.api_version, 'v1')
+        self.assertEqual(Manager.default_version, 'v1')
 
     def test_version_switch_creates_new_manager(self):
         """mgr.v2 returns a WorkspaceManager from the v2 module."""
@@ -220,13 +215,6 @@ class TestTopLevelShims(unittest.TestCase):
         self.assertIs(ws_shim.WorkspaceGroup, v1_ws.WorkspaceGroup)
         self.assertIs(ws_shim.WorkspaceManager, v1_ws.WorkspaceManager)
 
-    def test_cluster_shim_exports_v1_classes(self):
-        """Top-level cluster module re-exports from v1."""
-        from singlestoredb.management import cluster as cl_shim
-        from singlestoredb.management.v1 import cluster as v1_cl
-        self.assertIs(cl_shim.Cluster, v1_cl.Cluster)
-        self.assertIs(cl_shim.ClusterManager, v1_cl.ClusterManager)
-
     def test_region_shim_exports_v1_classes(self):
         """Top-level region module re-exports from v1."""
         from singlestoredb.management import region as rg_shim
@@ -270,11 +258,6 @@ class TestV2InheritanceModel(unittest.TestCase):
     def test_v2_workspace_group_is_v1_workspace_group(self):
         from singlestoredb.management.v1.workspace import WorkspaceGroup as V1
         from singlestoredb.management.v2.workspace import WorkspaceGroup as V2
-        self.assertTrue(issubclass(V2, V1))
-
-    def test_v2_cluster_is_v1_cluster(self):
-        from singlestoredb.management.v1.cluster import Cluster as V1
-        from singlestoredb.management.v2.cluster import Cluster as V2
         self.assertTrue(issubclass(V2, V1))
 
     def test_v2_region_is_v1_region(self):
@@ -346,11 +329,6 @@ class TestModuleNameConvention(unittest.TestCase):
         from singlestoredb.management.v1.workspace import Workspace
         ws = Workspace.__new__(Workspace)
         self.assertEqual(ws._module_name, 'workspace')
-
-    def test_module_name_for_cluster(self):
-        from singlestoredb.management.v1.cluster import Cluster
-        cl = Cluster.__new__(Cluster)
-        self.assertEqual(cl._module_name, 'cluster')
 
     def test_module_name_for_region(self):
         from singlestoredb.management.v1.region import Region

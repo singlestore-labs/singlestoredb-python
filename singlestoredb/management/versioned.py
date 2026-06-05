@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Version switching mixin for management API objects."""
 import importlib
+import inspect
 import re
 from typing import Any
 from typing import Dict
@@ -54,9 +55,18 @@ class VersionedMixin:
                 organization_id=self._organization_id,
             )
         elif hasattr(self, '_manager') and self._response is not None:
-            # Entity path: construct versioned entity with versioned manager
+            # Entity path: reconstruct from stored response with versioned
+            # manager. Pass manager to from_dict only if its signature
+            # accepts one (named 'manager').
             versioned_mgr = self._manager._get_versioned(version)
-            return target_cls.from_dict(self._response, versioned_mgr)
+            sig = inspect.signature(target_cls.from_dict)
+            params = list(sig.parameters.keys())
+            if 'manager' in params:
+                out = target_cls.from_dict(self._response, versioned_mgr)
+            else:
+                out = target_cls.from_dict(self._response)
+                out._manager = versioned_mgr
+            return out
         elif hasattr(self, '_manager'):
             # Wrapper manager path (e.g., JobsManager, InferenceAPIManager):
             # clone with versioned parent manager
