@@ -71,6 +71,11 @@ class VersionedMixin:
             else:
                 out = target_cls.from_dict(self._response)
                 out._manager = versioned_mgr
+            # Propagate context that from_dict can't reconstruct alone
+            if hasattr(self, '_location') and self._location is not None:
+                out._location = self._location
+            if hasattr(self, 'region') and hasattr(out, 'region'):
+                out.region = self.region
             return out
         elif hasattr(self, '_manager'):
             # Wrapper manager path (e.g., JobsManager, InferenceAPIManager):

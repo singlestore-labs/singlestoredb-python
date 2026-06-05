@@ -8,6 +8,7 @@ from typing import Optional
 
 from ..manager import Manager
 from ..utils import camel_to_snake
+from ..utils import to_datetime_strict
 from ..utils import vars_to_str
 from ..versioned import VersionedMixin
 
@@ -78,12 +79,12 @@ class UsageItem(VersionedMixin):
 
         """
         out = cls(
-            end_time=datetime.datetime.fromisoformat(obj['endTime']),
-            start_time=datetime.datetime.fromisoformat(obj['startTime']),
+            end_time=to_datetime_strict(obj['endTime']),
+            start_time=to_datetime_strict(obj['startTime']),
             owner_id=obj['ownerId'],
             resource_id=obj['resourceId'],
             resource_name=obj['resourceName'],
-            resource_type=obj['resource_type'],
+            resource_type=obj['resourceType'],
             value=obj['value'],
         )
         out._manager = manager
@@ -144,7 +145,7 @@ class BillingUsageItem(VersionedMixin):
         out = cls(
             description=obj['description'],
             metric=str(camel_to_snake(obj['metric'])),
-            usage=[UsageItem.from_dict(x, manager) for x in obj['Usage']],
+            usage=[UsageItem.from_dict(x, manager) for x in obj['usage']],
         )
         out._manager = manager
         out._response = obj

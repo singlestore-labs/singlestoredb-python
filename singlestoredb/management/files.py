@@ -30,11 +30,11 @@ def manage_files(
     Parameters
     ----------
     access_token : str, optional
-        The API key or other access token for the management API
+        The API key or other access token for the files management API
     version : str, optional
         Version of the API to use
     base_url : str, optional
-        Base URL of the management API
+        Base URL of the files management API
     organization_id : str, optional
         ID of organization, if using a JWT for authentication
 

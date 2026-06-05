@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""SingleStoreDB Cluster Management."""
+"""SingleStoreDB Region Management."""
 from typing import Dict
 from typing import Optional
 
