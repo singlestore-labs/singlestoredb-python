@@ -193,7 +193,7 @@ class InferenceAPIInfo(VersionedMixin):
 
         Returns
         -------
-        :class:`Job`
+        :class:`InferenceAPIInfo`
 
         """
         out = cls(
