@@ -51,9 +51,6 @@ class Manager(VersionedMixin):
     default_base_url = config.get_option('management.base_url') \
         or 'https://api.singlestore.com'
 
-    #: API version for this manager class (overridden by versioned subclasses).
-    api_version = 'v1'
-
     #: Object type
     obj_type = ''
 
@@ -89,7 +86,7 @@ class Manager(VersionedMixin):
 
         self._base_url = urljoin(
             self._base_url_root,
-            version or type(self).api_version,
+            version or type(self).default_version,
         ) + '/'
 
         self._params: Dict[str, str] = {}

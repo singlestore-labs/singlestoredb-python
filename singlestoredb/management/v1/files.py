@@ -90,12 +90,13 @@ class FilesObject(VersionedMixin):
         self.content: List[str] = content or []
 
         self._location: Optional[FileLocation] = None
+        self._manager: Optional[Manager] = None
 
     @classmethod
     def from_dict(
         cls,
         obj: Dict[str, Any],
-        location: FileLocation,
+        location: Optional[FileLocation] = None,
     ) -> FilesObject:
         """
         Construct a FilesObject from a dictionary of values.
@@ -124,6 +125,9 @@ class FilesObject(VersionedMixin):
             writable=bool(obj['writable']),
         )
         out._location = location
+        out._response = obj
+        if location is not None:
+            out._manager = location._manager
         return out
 
     def __str__(self) -> str:
@@ -352,6 +356,8 @@ class FilesObjectBytesReader(io.BytesIO):
 
 
 class FileLocation(ABC):
+
+    _manager: Manager
 
     @abstractmethod
     def open(

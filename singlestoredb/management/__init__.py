@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from .cluster import manage_cluster
 from .files import manage_files
 from .manager import get_token
 from .region import manage_regions
