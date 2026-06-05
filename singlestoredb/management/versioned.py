@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Version switching mixin for management API objects."""
+import copy
 import importlib
 import inspect
 import re
@@ -76,7 +77,9 @@ class VersionedMixin:
                 out._manager = versioned_mgr
             # Propagate context that from_dict can't reconstruct alone
             if hasattr(self, '_location') and self._location is not None:
-                out._location = self._location
+                out._location = copy.copy(self._location)
+                if hasattr(out._location, '_manager'):
+                    out._location._manager = versioned_mgr
             if hasattr(self, 'region') and hasattr(out, 'region'):
                 out.region = self.region
             return out
