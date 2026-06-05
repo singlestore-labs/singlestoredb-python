@@ -10,6 +10,9 @@ from .v1.files import FilesObjectBytesWriter as FilesObjectBytesWriter
 from .v1.files import FilesObjectTextReader as FilesObjectTextReader
 from .v1.files import FilesObjectTextWriter as FilesObjectTextWriter
 from .v1.files import FileSpace as FileSpace
+from .v1.files import MODELS_SPACE as MODELS_SPACE
+from .v1.files import PERSONAL_SPACE as PERSONAL_SPACE
+from .v1.files import SHARED_SPACE as SHARED_SPACE
 from .versioned import _import_versioned_module
 # Re-export from default version for backward compatibility
 

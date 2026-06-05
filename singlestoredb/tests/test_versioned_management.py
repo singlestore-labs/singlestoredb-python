@@ -358,5 +358,88 @@ class TestModuleNameConvention(unittest.TestCase):
         self.assertEqual(rg._module_name, 'region')
 
 
+class TestWrapperManagerVersionSwitching(unittest.TestCase):
+    """Test version switching on wrapper managers (JobsManager, InferenceAPIManager)."""
+
+    def _make_workspace_manager(self):
+        from singlestoredb.management.v1.workspace import WorkspaceManager
+        with patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN):
+            mgr = WorkspaceManager(
+                access_token=FAKE_TOKEN,
+                base_url=FAKE_BASE_URL,
+                version='v1',
+                organization_id=FAKE_ORG_ID,
+            )
+        return mgr
+
+    def test_jobs_manager_version_switch(self):
+        """JobsManager.v2 returns a v2 JobsManager with a versioned parent."""
+        from singlestoredb.management.v1.job import JobsManager
+
+        parent = self._make_workspace_manager()
+        jobs_mgr = JobsManager(parent)
+
+        with patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN):
+            v2_jobs = jobs_mgr.v2
+
+        from singlestoredb.management.v2.job import JobsManager as V2JobsManager
+        self.assertIsInstance(v2_jobs, V2JobsManager)
+        self.assertIn('/v2/', v2_jobs._manager._base_url)
+
+    def test_inference_api_manager_version_switch(self):
+        """InferenceAPIManager.v2 returns a v2 InferenceAPIManager."""
+        from singlestoredb.management.v1.inference_api import InferenceAPIManager
+
+        parent = self._make_workspace_manager()
+        inf_mgr = InferenceAPIManager(parent)
+
+        with patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN):
+            v2_inf = inf_mgr.v2
+
+        from singlestoredb.management.v2.inference_api import (
+            InferenceAPIManager as V2InfMgr,
+        )
+        self.assertIsInstance(v2_inf, V2InfMgr)
+
+    def test_wrapper_manager_version_switch_is_cached(self):
+        """Repeated .v2 on wrapper manager returns same object."""
+        from singlestoredb.management.v1.job import JobsManager
+
+        parent = self._make_workspace_manager()
+        jobs_mgr = JobsManager(parent)
+
+        with patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN):
+            first = jobs_mgr.v2
+            second = jobs_mgr.v2
+        self.assertIs(first, second)
+
+
+class TestTokenStorageFix(unittest.TestCase):
+    """Test that Manager stores the resolved token, not the passed-in value."""
+
+    @patch('singlestoredb.management.manager.is_jwt', return_value=False)
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_none_token_resolves_and_stores(self, _mock_token, _mock_jwt):
+        """When access_token=None, _access_token stores the resolved token."""
+        from singlestoredb.management.v1.workspace import WorkspaceManager
+        mgr = WorkspaceManager(
+            access_token=None,
+            base_url=FAKE_BASE_URL,
+            version='v1',
+        )
+        self.assertEqual(mgr._access_token, FAKE_TOKEN)
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_explicit_token_stored_as_is(self, _mock_token):
+        """When access_token is provided, it's stored directly."""
+        from singlestoredb.management.v1.workspace import WorkspaceManager
+        mgr = WorkspaceManager(
+            access_token='my-explicit-token',
+            base_url=FAKE_BASE_URL,
+            version='v1',
+        )
+        self.assertEqual(mgr._access_token, 'my-explicit-token')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -2,6 +2,7 @@
 """SingleStoreDB Workspace Management."""
 from typing import Optional
 
+from .v1.organization import Organization as Organization
 from .v1.workspace import Billing as Billing
 from .v1.workspace import get_organization as get_organization
 from .v1.workspace import get_secret as get_secret
