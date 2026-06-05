@@ -16,6 +16,7 @@ from .. import config
 from ..exceptions import ManagementError
 from ..exceptions import OperationalError
 from .utils import get_token
+from .versioned import VersionedMixin
 
 
 def set_organization(kwargs: Dict[str, Any]) -> None:
@@ -40,7 +41,7 @@ def is_jwt(token: str) -> bool:
         return False
 
 
-class Manager(object):
+class Manager(VersionedMixin):
     """SingleStoreDB manager base class."""
 
     #: Management API version if none is specified.
@@ -49,6 +50,9 @@ class Manager(object):
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url') \
         or 'https://api.singlestore.com'
+
+    #: API version for this manager class (overridden by versioned subclasses).
+    api_version = 'v1'
 
     #: Object type
     obj_type = ''
@@ -64,6 +68,16 @@ class Manager(object):
         if not new_access_token:
             raise ManagementError(msg='No management token was configured.')
 
+        # Store credentials for version cloning
+        self._access_token = access_token
+        self._base_url_root = (
+            base_url
+            or config.get_option('management.base_url')
+            or type(self).default_base_url
+        )
+        self._organization_id = organization_id
+        self._version_cache: Dict[str, Any] = {}
+
         self._is_jwt = not access_token and new_access_token and is_jwt(new_access_token)
         self._sess = requests.Session()
         self._sess.headers.update({
@@ -74,10 +88,8 @@ class Manager(object):
         })
 
         self._base_url = urljoin(
-            base_url
-            or config.get_option('management.base_url')
-            or type(self).default_base_url,
-            version or type(self).default_version,
+            self._base_url_root,
+            version or type(self).api_version,
         ) + '/'
 
         self._params: Dict[str, str] = {}

@@ -12,4 +12,14 @@ per-file-ignores =
     singlestoredb/fusion/grammar.py:E501
     singlestoredb/http/__init__.py:F401
     singlestoredb/management/__init__.py:F401
+    singlestoredb/management/billing_usage.py:F401
+    singlestoredb/management/cluster.py:F401
+    singlestoredb/management/export.py:F401
+    singlestoredb/management/files.py:F401
+    singlestoredb/management/inference_api.py:F401
+    singlestoredb/management/job.py:F401
+    singlestoredb/management/organization.py:F401
+    singlestoredb/management/region.py:F401
+    singlestoredb/management/workspace.py:F401
+    singlestoredb/management/v2/*.py:F401
     singlestoredb/mysql/__init__.py:F401
