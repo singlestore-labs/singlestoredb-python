@@ -63,7 +63,7 @@ class VersionedMixin:
                     msg=f"Cannot version-switch '{type(self).__name__}': "
                         f'manager reference is None',
                 )
-            versioned_mgr = self._manager._get_versioned(version)
+            versioned_mgr = getattr(self._manager, version)
             sig = inspect.signature(target_cls.from_dict)
             params = list(sig.parameters.keys())
             if 'manager' in params:
@@ -80,7 +80,7 @@ class VersionedMixin:
                     msg=f"Cannot version-switch '{type(self).__name__}': "
                         f'manager reference is None',
                 )
-            versioned_mgr = self._manager._get_versioned(version)
+            versioned_mgr = getattr(self._manager, version)
             return target_cls(versioned_mgr)
         else:
             raise ManagementError(
