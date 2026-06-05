@@ -292,4 +292,7 @@ def _get_exports(
         json=dict(scope=scope),
     )
 
-    return out.json()
+    return [
+        ExportStatus(item['egressID'], workspace_group)
+        for item in out.json()
+    ]
