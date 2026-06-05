@@ -48,12 +48,15 @@ class VersionedMixin:
 
         if hasattr(self, '_access_token'):
             # Manager path: clone with same credentials at new version
-            return target_cls(
+            mgr = target_cls(
                 access_token=self._access_token,
                 version=version,
                 base_url=self._base_url_root,
                 organization_id=self._organization_id,
             )
+            # Propagate JWT state so the clone continues refreshing tokens
+            mgr._is_jwt = self._is_jwt
+            return mgr
         elif hasattr(self, '_manager') and self._response is not None:
             # Entity path: reconstruct from stored response with versioned
             # manager. Pass manager to from_dict only if its signature
