@@ -58,6 +58,11 @@ class VersionedMixin:
             # Entity path: reconstruct from stored response with versioned
             # manager. Pass manager to from_dict only if its signature
             # accepts one (named 'manager').
+            if self._manager is None:
+                raise ManagementError(
+                    msg=f"Cannot version-switch '{type(self).__name__}': "
+                        f'manager reference is None',
+                )
             versioned_mgr = self._manager._get_versioned(version)
             sig = inspect.signature(target_cls.from_dict)
             params = list(sig.parameters.keys())
@@ -70,6 +75,11 @@ class VersionedMixin:
         elif hasattr(self, '_manager'):
             # Wrapper manager path (e.g., JobsManager, InferenceAPIManager):
             # clone with versioned parent manager
+            if self._manager is None:
+                raise ManagementError(
+                    msg=f"Cannot version-switch '{type(self).__name__}': "
+                        f'manager reference is None',
+                )
             versioned_mgr = self._manager._get_versioned(version)
             return target_cls(versioned_mgr)
         else:
@@ -81,10 +91,16 @@ class VersionedMixin:
 
 def _import_versioned_module(version: str, module_name: str) -> Any:
     """Import a versioned module, raising a friendly error if not found."""
+    if not _VERSION_RE.match(version):
+        raise ManagementError(
+            msg=f"Invalid API version format: '{version}'",
+        )
     path = f'singlestoredb.management.{version}.{module_name}'
     try:
         return importlib.import_module(path)
-    except ImportError:
-        raise ManagementError(
-            msg=f"Unsupported API version: '{version}'",
-        )
+    except ModuleNotFoundError as e:
+        if e.name and (e.name == path or path.startswith(e.name)):
+            raise ManagementError(
+                msg=f"Unsupported API version: '{version}'",
+            )
+        raise
