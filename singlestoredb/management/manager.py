@@ -69,7 +69,7 @@ class Manager(VersionedMixin):
             raise ManagementError(msg='No management token was configured.')
 
         # Store credentials for version cloning
-        self._access_token = access_token
+        self._access_token = new_access_token
         self._base_url_root = (
             base_url
             or config.get_option('management.base_url')

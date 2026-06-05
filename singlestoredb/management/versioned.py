@@ -45,17 +45,27 @@ class VersionedMixin:
                 msg=f"'{type(self).__name__}' is not available in API {version}",
             )
 
-        if hasattr(self, '_manager'):
-            # Entity path: construct versioned entity with versioned manager
-            versioned_mgr = self._manager._get_versioned(version)
-            return target_cls.from_dict(self._response, versioned_mgr)
-        else:
+        if hasattr(self, '_access_token'):
             # Manager path: clone with same credentials at new version
             return target_cls(
                 access_token=self._access_token,
                 version=version,
                 base_url=self._base_url_root,
                 organization_id=self._organization_id,
+            )
+        elif hasattr(self, '_manager') and self._response is not None:
+            # Entity path: construct versioned entity with versioned manager
+            versioned_mgr = self._manager._get_versioned(version)
+            return target_cls.from_dict(self._response, versioned_mgr)
+        elif hasattr(self, '_manager'):
+            # Wrapper manager path (e.g., JobsManager, InferenceAPIManager):
+            # clone with versioned parent manager
+            versioned_mgr = self._manager._get_versioned(version)
+            return target_cls(versioned_mgr)
+        else:
+            raise ManagementError(
+                msg=f"Cannot version-switch '{type(self).__name__}': "
+                    f'no credentials or manager reference',
             )
 
 

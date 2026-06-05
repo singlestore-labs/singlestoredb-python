@@ -7,4 +7,4 @@ from ..v1.files import FilesObjectBytesReader as FilesObjectBytesReader
 from ..v1.files import FilesObjectBytesWriter as FilesObjectBytesWriter
 from ..v1.files import FilesObjectTextReader as FilesObjectTextReader
 from ..v1.files import FilesObjectTextWriter as FilesObjectTextWriter
-from ..v1.files import manage_files as manage_files
+from ..v1.files import FileSpace as FileSpace
