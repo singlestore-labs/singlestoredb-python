@@ -69,7 +69,7 @@ class UsageItem(VersionedMixin):
         Parameters
         ----------
         obj : dict
-            Key-value pairs to retrieve billling usage information from
+            Key-value pairs to retrieve billing usage information from
         manager : WorkspaceManager, optional
             The WorkspaceManager the UsageItem belongs to
 
@@ -133,7 +133,7 @@ class BillingUsageItem(VersionedMixin):
         Parameters
         ----------
         obj : dict
-            Key-value pairs to retrieve billling usage information from
+            Key-value pairs to retrieve billing usage information from
         manager : WorkspaceManager, optional
             The WorkspaceManager the BillingUsageItem belongs to
 
