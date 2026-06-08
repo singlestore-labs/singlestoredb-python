@@ -34,8 +34,12 @@ class WorkspaceGroup(V1WorkspaceGroup):
         Calls ``GET /v2/organizations/{organizationID}/workspaceGroups/
         {workspaceGroupID}/metrics``. The organization ID is taken from the
         manager's configured ID, falling back to
-        :attr:`WorkspaceManager.organization` (which calls
-        ``/v1/organizations/current``) if not set.
+        ``self._manager.v1.organization.id`` if not set.
+
+        The fallback intentionally drops to v1 because the v2 API has no
+        ``organizations/current`` endpoint; the OpenAPI spec for this v2
+        metrics endpoint explicitly directs callers to
+        ``/v1/organizations/current`` to resolve the organization ID.
 
         Returns
         -------
@@ -58,7 +62,7 @@ class WorkspaceGroup(V1WorkspaceGroup):
             or self._manager._params.get('organizationID')
         )
         if not org_id:
-            org_id = self._manager.organization.id
+            org_id = self._manager.v1.organization.id
         if not org_id:
             raise ManagementError(
                 msg='Could not resolve organization ID for metrics request.',
