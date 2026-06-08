@@ -23,6 +23,7 @@ from ... import connection
 from ...exceptions import ManagementError
 from ..manager import Manager
 from ..utils import camel_to_snake_dict
+from ..utils import ensure_within
 from ..utils import from_datetime
 from ..utils import NamedList
 from ..utils import PathLike
@@ -645,7 +646,7 @@ class Stage(FileLocation):
         for f in self.listdir(stage_path, recursive=True, return_objects=False):
             if self.is_dir(f):
                 continue
-            target = os.path.normpath(os.path.join(local_path, f))
+            target = ensure_within(local_path, os.path.join(local_path, f))
             os.makedirs(os.path.dirname(target), exist_ok=True)
             self.download_file(f, target, overwrite=overwrite)
 
@@ -2181,7 +2182,11 @@ def manage_workspaces(
     :class:`WorkspaceManager`
 
     """
-    return WorkspaceManager(
+    from ... import config
+    from ..versioned import _import_versioned_module
+    ver = version or config.get_option('management.version') or 'v1'
+    mod = _import_versioned_module(ver, 'workspace')
+    return mod.WorkspaceManager(
         access_token=access_token, base_url=base_url,
-        version=version, organization_id=organization_id,
+        version=ver, organization_id=organization_id,
     )

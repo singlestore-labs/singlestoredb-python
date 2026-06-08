@@ -6,10 +6,10 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from ...exceptions import ManagementError
+from ..manager import Manager
 from ..utils import vars_to_str
 from ..versioned import VersionedMixin
-from singlestoredb.exceptions import ManagementError
-from singlestoredb.management.manager import Manager
 
 
 class ModelOperationResult(object):

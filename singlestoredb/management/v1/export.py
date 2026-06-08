@@ -82,12 +82,12 @@ class ExportService(object):
 
     @classmethod
     def from_export_id(
-        self,
+        cls,
         workspace_group: WorkspaceGroup,
         export_id: str,
     ) -> ExportService:
         """Create export service from export ID."""
-        out = ExportService(
+        out = cls(
             workspace_group=workspace_group,
             database='',
             table='',
