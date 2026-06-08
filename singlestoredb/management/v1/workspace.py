@@ -1227,10 +1227,29 @@ class WorkspaceGroup(VersionedMixin):
         :class:`WorkspaceGroup`
 
         """
-        try:
-            region = [x for x in manager.regions if x.id == obj['regionID']][0]
-        except IndexError:
-            region = Region('<unknown>', '<unknown>', obj.get('regionID', '<unknown>'))
+        region_id = obj.get('regionID')
+        region_name = obj.get('regionName')
+        provider = obj.get('provider')
+        region = None
+        if region_id is not None:
+            region = next(
+                (x for x in manager.regions if x.id == region_id), None,
+            )
+        if region is None and region_name is not None:
+            region = next(
+                (
+                    x for x in manager.regions
+                    if x.region_name == region_name and x.provider == provider
+                ),
+                None,
+            )
+        if region is None:
+            region = Region(
+                name=region_name or '<unknown>',
+                provider=provider or '<unknown>',
+                id=region_id,
+                region_name=region_name,
+            )
         out = cls(
             name=obj['name'],
             id=obj['workspaceGroupID'],
