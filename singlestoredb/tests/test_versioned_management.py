@@ -1007,9 +1007,8 @@ class TestSecretFromDictTimestamps(unittest.TestCase):
 
 class TestV2RegionBehavior(unittest.TestCase):
     """
-    Coverage for the staged ``v2/region.py`` overrides:
-    ``list_regions`` hits ``/v2/regions`` and ``list_shared_tier_regions``
-    raises ``ManagementError`` (no v2 counterpart).
+    Coverage for the staged ``v2/region.py`` override:
+    ``list_regions`` hits ``/v2/regions``.
     """
 
     def _make_v2_region_manager(self):
@@ -1039,12 +1038,6 @@ class TestV2RegionBehavior(unittest.TestCase):
         # v2 region entries have id=None (no regionID in the v2 response)
         for r in regions:
             self.assertIsNone(r.id)
-
-    def test_list_shared_tier_regions_raises(self):
-        mgr = self._make_v2_region_manager()
-        with self.assertRaises(ManagementError) as ctx:
-            mgr.list_shared_tier_regions()
-        self.assertIn('not available in API v2', str(ctx.exception))
 
     def test_v2_region_manager_inherits_v1(self):
         from singlestoredb.management.v1.region import RegionManager as V1
