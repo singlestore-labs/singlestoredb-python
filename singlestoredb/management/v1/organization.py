@@ -8,6 +8,7 @@ from typing import Union
 
 from ...exceptions import ManagementError
 from ..manager import Manager
+from ..utils import to_datetime
 from ..utils import vars_to_str
 from ..versioned import VersionedMixin
 from .inference_api import InferenceAPIManager
@@ -39,9 +40,9 @@ class Secret(object):
         id: str,
         name: str,
         created_by: str,
-        created_at: Union[str, datetime.datetime],
+        created_at: Optional[Union[str, datetime.datetime]],
         last_updated_by: str,
-        last_updated_at: Union[str, datetime.datetime],
+        last_updated_at: Optional[Union[str, datetime.datetime]],
         value: Optional[str] = None,
         deleted_by: Optional[str] = None,
         deleted_at: Optional[Union[str, datetime.datetime]] = None,
@@ -92,12 +93,12 @@ class Secret(object):
             id=obj['secretID'],
             name=obj['name'],
             created_by=obj['createdBy'],
-            created_at=obj['createdAt'],
+            created_at=to_datetime(obj.get('createdAt')),
             last_updated_by=obj['lastUpdatedBy'],
-            last_updated_at=obj['lastUpdatedAt'],
+            last_updated_at=to_datetime(obj.get('lastUpdatedAt')),
             value=obj.get('value'),
             deleted_by=obj.get('deletedBy'),
-            deleted_at=obj.get('deletedAt'),
+            deleted_at=to_datetime(obj.get('deletedAt')),
         )
 
         return out
