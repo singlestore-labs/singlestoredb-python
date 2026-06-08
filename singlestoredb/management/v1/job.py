@@ -701,6 +701,7 @@ class JobsManager(VersionedMixin):
         runtime_name: Optional[str] = None,
         resume_target: Optional[bool] = None,
         parameters: Optional[Dict[str, Any]] = None,
+        max_allowed_execution_duration_in_minutes: Optional[int] = None,
     ) -> Job:
         """Creates and returns a scheduled notebook job."""
         if self._manager is None:
@@ -723,6 +724,10 @@ class JobsManager(VersionedMixin):
 
         if runtime_name is not None:
             execution_config['runtimeName'] = runtime_name
+
+        if max_allowed_execution_duration_in_minutes is not None:
+            execution_config['maxAllowedExecutionDurationInMinutes'] = \
+                max_allowed_execution_duration_in_minutes
 
         target_config = None  # type: Optional[Dict[str, Any]]
         database_name = get_database_name()

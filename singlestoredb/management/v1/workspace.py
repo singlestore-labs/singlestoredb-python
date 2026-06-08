@@ -736,11 +736,14 @@ class Workspace(VersionedMixin):
     terminated_at: Optional[datetime.datetime]
     endpoint: Optional[str]
     auto_suspend: Optional[Dict[str, Any]]
-    cache_config: Optional[int]
+    cache_config: Optional[float]
     deployment_type: Optional[str]
     resume_attachments: Optional[List[Dict[str, Any]]]
     scaling_progress: Optional[int]
     last_resumed_at: Optional[datetime.datetime]
+    auto_scale: Optional[Dict[str, Any]]
+    kai_enabled: Optional[bool]
+    scale_factor: Optional[float]
 
     def __init__(
         self,
@@ -753,11 +756,14 @@ class Workspace(VersionedMixin):
         terminated_at: Optional[Union[str, datetime.datetime]] = None,
         endpoint: Optional[str] = None,
         auto_suspend: Optional[Dict[str, Any]] = None,
-        cache_config: Optional[int] = None,
+        cache_config: Optional[float] = None,
         deployment_type: Optional[str] = None,
         resume_attachments: Optional[List[Dict[str, Any]]] = None,
         scaling_progress: Optional[int] = None,
         last_resumed_at: Optional[Union[str, datetime.datetime]] = None,
+        auto_scale: Optional[Dict[str, Any]] = None,
+        kai_enabled: Optional[bool] = None,
+        scale_factor: Optional[float] = None,
     ):
         #: Name of the workspace
         self.name = name
@@ -809,6 +815,15 @@ class Workspace(VersionedMixin):
         #: Timestamp when workspace was last resumed
         self.last_resumed_at = to_datetime(last_resumed_at)
 
+        #: Auto-scale settings for the workspace
+        self.auto_scale = camel_to_snake_dict(auto_scale)
+
+        #: Whether Kai is enabled on this workspace
+        self.kai_enabled = kai_enabled
+
+        #: Current scale factor for the workspace
+        self.scale_factor = scale_factor
+
         self._manager: Optional[WorkspaceManager] = None
 
     def __str__(self) -> str:
@@ -851,6 +866,9 @@ class Workspace(VersionedMixin):
             last_resumed_at=obj.get('lastResumedAt'),
             resume_attachments=obj.get('resumeAttachments'),
             scaling_progress=obj.get('scalingProgress'),
+            auto_scale=obj.get('autoScale'),
+            kai_enabled=obj.get('kaiEnabled'),
+            scale_factor=obj.get('scaleFactor'),
         )
         out._manager = manager
         out._response = obj
@@ -859,9 +877,12 @@ class Workspace(VersionedMixin):
     def update(
         self,
         auto_suspend: Optional[Dict[str, Any]] = None,
-        cache_config: Optional[int] = None,
+        cache_config: Optional[float] = None,
         deployment_type: Optional[str] = None,
         size: Optional[str] = None,
+        auto_scale: Optional[Dict[str, Any]] = None,
+        enable_kai: Optional[bool] = None,
+        scale_factor: Optional[float] = None,
     ) -> None:
         """
         Update the workspace definition.
@@ -870,7 +891,7 @@ class Workspace(VersionedMixin):
         ----------
         auto_suspend : Dict[str, Any], optional
             Auto-suspend mode for the workspace: IDLE, SCHEDULED, DISABLED
-        cache_config : int, optional
+        cache_config : float, optional
             Specifies the multiplier for the persistent cache associated
             with the workspace. If specified, it enables the cache configuration
             multiplier. It can have one of the following values: 1, 2, or 4.
@@ -879,6 +900,12 @@ class Workspace(VersionedMixin):
             within the group
         size : str, optional
             Size of the workspace (in workspace size notation), such as "S-1".
+        auto_scale : Dict[str, Any], optional
+            Auto-scale settings for the workspace.
+        enable_kai : bool, optional
+            Whether to enable SingleStore Kai on this workspace.
+        scale_factor : float, optional
+            Scale factor for the workspace.
 
         """
         if self._manager is None:
@@ -891,6 +918,9 @@ class Workspace(VersionedMixin):
                 cacheConfig=cache_config,
                 deploymentType=deployment_type,
                 size=size,
+                autoScale=snake_to_camel_dict(auto_scale),
+                enableKai=enable_kai,
+                scaleFactor=scale_factor,
             ).items() if v is not None
         }
         self._manager._patch(f'workspaces/{self.id}', json=data)
@@ -1076,6 +1106,18 @@ class WorkspaceGroup(VersionedMixin):
     firewall_ranges: List[str]
     terminated_at: Optional[datetime.datetime]
     allow_all_traffic: bool
+    deployment_type: Optional[str]
+    expires_at: Optional[datetime.datetime]
+    high_availability_two_zones: Optional[bool]
+    opt_in_preview_feature: Optional[bool]
+    outbound_allow_list: Optional[str]
+    project_id: Optional[str]
+    project_name: Optional[str]
+    smart_dr_status: Optional[str]
+    state: Optional[str]
+    update_window: Optional[Dict[str, Any]]
+    provider: Optional[str]
+    region_name: Optional[str]
 
     def __init__(
         self,
@@ -1086,6 +1128,18 @@ class WorkspaceGroup(VersionedMixin):
         firewall_ranges: List[str],
         terminated_at: Optional[Union[str, datetime.datetime]],
         allow_all_traffic: Optional[bool],
+        deployment_type: Optional[str] = None,
+        expires_at: Optional[Union[str, datetime.datetime]] = None,
+        high_availability_two_zones: Optional[bool] = None,
+        opt_in_preview_feature: Optional[bool] = None,
+        outbound_allow_list: Optional[str] = None,
+        project_id: Optional[str] = None,
+        project_name: Optional[str] = None,
+        smart_dr_status: Optional[str] = None,
+        state: Optional[str] = None,
+        update_window: Optional[Dict[str, Any]] = None,
+        provider: Optional[str] = None,
+        region_name: Optional[str] = None,
     ):
         #: Name of the workspace group
         self.name = name
@@ -1107,6 +1161,42 @@ class WorkspaceGroup(VersionedMixin):
 
         #: Should all traffic be allowed?
         self.allow_all_traffic = allow_all_traffic or False
+
+        #: Deployment type of the workspace group (PRODUCTION | NON-PRODUCTION)
+        self.deployment_type = deployment_type
+
+        #: Timestamp of when the workspace group will expire
+        self.expires_at = to_datetime(expires_at)
+
+        #: Whether high availability across two zones is enabled
+        self.high_availability_two_zones = high_availability_two_zones
+
+        #: Whether preview features are opted in
+        self.opt_in_preview_feature = opt_in_preview_feature
+
+        #: Account ID for outbound connections
+        self.outbound_allow_list = outbound_allow_list
+
+        #: Project ID associated with the workspace group
+        self.project_id = project_id
+
+        #: Project name associated with the workspace group
+        self.project_name = project_name
+
+        #: SmartDR status of the workspace group (ACTIVE | STANDBY)
+        self.smart_dr_status = smart_dr_status
+
+        #: State of the workspace group (ACTIVE | PENDING | FAILED | TERMINATED)
+        self.state = state
+
+        #: Update window settings: dict(day=0-6, hour=0-23)
+        self.update_window = update_window
+
+        #: Cloud provider as returned by the API (raw)
+        self.provider = provider
+
+        #: Cloud provider region name as returned by the API (raw)
+        self.region_name = region_name
 
         self._manager: Optional[WorkspaceManager] = None
 
@@ -1149,6 +1239,18 @@ class WorkspaceGroup(VersionedMixin):
             firewall_ranges=obj.get('firewallRanges', []),
             terminated_at=obj.get('terminatedAt'),
             allow_all_traffic=obj.get('allowAllTraffic'),
+            deployment_type=obj.get('deploymentType'),
+            expires_at=obj.get('expiresAt'),
+            high_availability_two_zones=obj.get('highAvailabilityTwoZones'),
+            opt_in_preview_feature=obj.get('optInPreviewFeature'),
+            outbound_allow_list=obj.get('outboundAllowList'),
+            project_id=obj.get('projectID'),
+            project_name=obj.get('projectName'),
+            smart_dr_status=obj.get('smartDRStatus'),
+            state=obj.get('state'),
+            update_window=obj.get('updateWindow'),
+            provider=obj.get('provider'),
+            region_name=obj.get('regionName'),
         )
         out._manager = manager
         out._response = obj
@@ -1195,6 +1297,7 @@ class WorkspaceGroup(VersionedMixin):
         expires_at: Optional[str] = None,
         allow_all_traffic: Optional[bool] = None,
         update_window: Optional[Dict[str, int]] = None,
+        deployment_type: Optional[str] = None,
     ) -> None:
         """
         Update the workspace group definition.
@@ -1220,6 +1323,9 @@ class WorkspaceGroup(VersionedMixin):
             Allow all traffic to the workspace group
         update_window : Dict[str, int], optional
             Specify the day and hour of an update window: dict(day=0-6, hour=0-23)
+        deployment_type : str, optional
+            The deployment type that will be applied to all the workspaces
+            within the group (PRODUCTION | NON-PRODUCTION)
 
         """
         if self._manager is None:
@@ -1234,6 +1340,7 @@ class WorkspaceGroup(VersionedMixin):
                 expiresAt=expires_at,
                 allowAllTraffic=allow_all_traffic,
                 updateWindow=snake_to_camel_dict(update_window),
+                deploymentType=deployment_type,
             ).items() if v is not None
         }
         self._manager._patch(f'workspaceGroups/{self.id}', json=data)
@@ -1287,11 +1394,13 @@ class WorkspaceGroup(VersionedMixin):
         name: str,
         size: Optional[str] = None,
         auto_suspend: Optional[Dict[str, Any]] = None,
-        cache_config: Optional[int] = None,
+        cache_config: Optional[float] = None,
         enable_kai: Optional[bool] = None,
         wait_on_active: bool = False,
         wait_interval: int = 10,
         wait_timeout: int = 600,
+        auto_scale: Optional[Dict[str, Any]] = None,
+        scale_factor: Optional[float] = None,
     ) -> Workspace:
         """
         Create a new workspace.
@@ -1305,7 +1414,7 @@ class WorkspaceGroup(VersionedMixin):
         auto_suspend : Dict[str, Any], optional
             Auto suspend settings for the workspace. If this field is not
             provided, no settings will be enabled.
-        cache_config : int, optional
+        cache_config : float, optional
             Specifies the multiplier for the persistent cache associated
             with the workspace. If specified, it enables the cache configuration
             multiplier. It can have one of the following values: 1, 2, or 4.
@@ -1318,6 +1427,10 @@ class WorkspaceGroup(VersionedMixin):
             if wait=True
         wait_interval : int, optional
             Number of seconds between each polling interval
+        auto_scale : Dict[str, Any], optional
+            Auto-scale settings for the workspace.
+        scale_factor : float, optional
+            Scale factor for the workspace.
 
         Returns
         -------
@@ -1339,6 +1452,8 @@ class WorkspaceGroup(VersionedMixin):
             wait_on_active=wait_on_active,
             wait_interval=wait_interval,
             wait_timeout=wait_timeout,
+            auto_scale=snake_to_camel_dict(auto_scale),
+            scale_factor=scale_factor,
         )
 
         return out
@@ -1379,6 +1494,9 @@ class StarterWorkspace(VersionedMixin):
     id: str
     database_name: str
     endpoint: Optional[str]
+    mysql_dml_port: Optional[int]
+    websocket_port: Optional[int]
+    project_id: Optional[str]
 
     def __init__(
         self,
@@ -1386,6 +1504,9 @@ class StarterWorkspace(VersionedMixin):
         id: str,
         database_name: str,
         endpoint: Optional[str] = None,
+        mysql_dml_port: Optional[int] = None,
+        websocket_port: Optional[int] = None,
+        project_id: Optional[str] = None,
     ):
         #: Name of the starter workspace
         self.name = name
@@ -1399,6 +1520,15 @@ class StarterWorkspace(VersionedMixin):
         #: Endpoint to connect to the starter workspace. The endpoint is in the form
         #: of ``hostname:port``
         self.endpoint = endpoint
+
+        #: MySQL DML port for the starter workspace
+        self.mysql_dml_port = mysql_dml_port
+
+        #: WebSocket port for the starter workspace
+        self.websocket_port = websocket_port
+
+        #: Project ID associated with the starter workspace
+        self.project_id = project_id
 
         self._manager: Optional[WorkspaceManager] = None
 
@@ -1434,6 +1564,9 @@ class StarterWorkspace(VersionedMixin):
             id=obj['virtualWorkspaceID'],
             database_name=obj['databaseName'],
             endpoint=obj.get('endpoint'),
+            mysql_dml_port=obj.get('mysqlDmlPort'),
+            websocket_port=obj.get('websocketPort'),
+            project_id=obj.get('projectID'),
         )
         out._manager = manager
         out._response = obj
@@ -1625,7 +1758,7 @@ class Billing(object):
                     metric=snake_to_camel(metric),
                     startTime=from_datetime(start_time),
                     endTime=from_datetime(end_time),
-                    aggregate_by=aggregate_by.lower() if aggregate_by else None,
+                    aggregateBy=aggregate_by.lower() if aggregate_by else None,
                 ).items() if v is not None
             },
         )
@@ -1732,6 +1865,12 @@ class WorkspaceManager(Manager):
         smart_dr: Optional[bool] = None,
         allow_all_traffic: Optional[bool] = None,
         update_window: Optional[Dict[str, int]] = None,
+        provider: Optional[str] = None,
+        region_name: Optional[str] = None,
+        deployment_type: Optional[str] = None,
+        high_availability_two_zones: Optional[bool] = None,
+        opt_in_preview_feature: Optional[bool] = None,
+        project_id: Optional[str] = None,
     ) -> WorkspaceGroup:
         """
         Create a new workspace group.
@@ -1774,6 +1913,21 @@ class WorkspaceManager(Manager):
             Allow all traffic to the workspace group
         update_window : Dict[str, int], optional
             Specify the day and hour of an update window: dict(day=0-6, hour=0-23)
+        provider : str, optional
+            Cloud provider for the workspace group (e.g., 'AWS', 'GCP', 'AZURE').
+            Used together with ``region_name`` as an alternative to ``region``.
+        region_name : str, optional
+            Cloud provider region name for the workspace group. Used together
+            with ``provider`` as an alternative to ``region``.
+        deployment_type : str, optional
+            Deployment type for workspaces in this group (PRODUCTION |
+            NON-PRODUCTION).
+        high_availability_two_zones : bool, optional
+            Whether to enable high availability across two zones.
+        opt_in_preview_feature : bool, optional
+            Whether to opt in to preview features.
+        project_id : str, optional
+            Project ID to associate the workspace group with.
 
         Returns
         -------
@@ -1793,6 +1947,12 @@ class WorkspaceManager(Manager):
                 smartDR=smart_dr,
                 allowAllTraffic=allow_all_traffic,
                 updateWindow=snake_to_camel_dict(update_window),
+                provider=provider,
+                regionName=region_name,
+                deploymentType=deployment_type,
+                highAvailabilityTwoZones=high_availability_two_zones,
+                optInPreviewFeature=opt_in_preview_feature,
+                projectID=project_id,
             ),
         )
         return self.get_workspace_group(res.json()['workspaceGroupID'])
@@ -1803,11 +1963,13 @@ class WorkspaceManager(Manager):
         workspace_group: Union[str, WorkspaceGroup],
         size: Optional[str] = None,
         auto_suspend: Optional[Dict[str, Any]] = None,
-        cache_config: Optional[int] = None,
+        cache_config: Optional[float] = None,
         enable_kai: Optional[bool] = None,
         wait_on_active: bool = False,
         wait_interval: int = 10,
         wait_timeout: int = 600,
+        auto_scale: Optional[Dict[str, Any]] = None,
+        scale_factor: Optional[float] = None,
     ) -> Workspace:
         """
         Create a new workspace.
@@ -1823,7 +1985,7 @@ class WorkspaceManager(Manager):
         auto_suspend : Dict[str, Any], optional
             Auto suspend settings for the workspace. If this field is not
             provided, no settings will be enabled.
-        cache_config : int, optional
+        cache_config : float, optional
             Specifies the multiplier for the persistent cache associated
             with the workspace. If specified, it enables the cache configuration
             multiplier. It can have one of the following values: 1, 2, or 4.
@@ -1836,6 +1998,10 @@ class WorkspaceManager(Manager):
             if wait=True
         wait_interval : int, optional
             Number of seconds between each polling interval
+        auto_scale : Dict[str, Any], optional
+            Auto-scale settings for the workspace.
+        scale_factor : float, optional
+            Scale factor for the workspace.
 
         Returns
         -------
@@ -1852,6 +2018,8 @@ class WorkspaceManager(Manager):
                 autoSuspend=snake_to_camel_dict(auto_suspend),
                 cacheConfig=cache_config,
                 enableKai=enable_kai,
+                autoScale=snake_to_camel_dict(auto_scale),
+                scaleFactor=scale_factor,
             ),
         )
         out = self.get_workspace(res.json()['workspaceID'])
@@ -1927,6 +2095,7 @@ class WorkspaceManager(Manager):
         database_name: str,
         provider: str,
         region_name: str,
+        project_id: Optional[str] = None,
     ) -> 'StarterWorkspace':
         """
         Create a new starter (shared tier) workspace.
@@ -1941,18 +2110,22 @@ class WorkspaceManager(Manager):
             Cloud provider for the starter workspace (e.g., 'aws', 'gcp', 'azure')
         region_name : str
             Cloud provider region for the starter workspace (e.g., 'us-east-1')
+        project_id : str, optional
+            Project ID to associate the starter workspace with.
 
         Returns
         -------
         :class:`StarterWorkspace`
         """
 
-        payload = {
+        payload: Dict[str, Any] = {
             'name': name,
             'databaseName': database_name,
             'provider': provider,
             'regionName': region_name,
         }
+        if project_id is not None:
+            payload['projectID'] = project_id
 
         res = self._post('sharedtier/virtualWorkspaces', json=payload)
         virtual_workspace_id = res.json().get('virtualWorkspaceID')
