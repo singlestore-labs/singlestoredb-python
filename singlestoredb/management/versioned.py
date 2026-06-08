@@ -106,12 +106,22 @@ def _import_versioned_module(version: str, module_name: str) -> Any:
         raise ManagementError(
             msg=f"Invalid API version format: '{version}'",
         )
-    path = f'singlestoredb.management.{version}.{module_name}'
+    version_pkg = f'singlestoredb.management.{version}'
+    path = f'{version_pkg}.{module_name}'
     try:
         return importlib.import_module(path)
     except ModuleNotFoundError as e:
-        if e.name and (e.name == path or path.startswith(e.name)):
+        if e.name is None or (e.name != path and not path.startswith(e.name)):
+            # Failure originated deeper than the requested module
+            # (e.g., a transitive import inside a valid module). Don't mask.
+            raise
+        try:
+            importlib.import_module(version_pkg)
+        except ModuleNotFoundError:
             raise ManagementError(
                 msg=f"Unsupported API version: '{version}'",
             )
-        raise
+        raise ManagementError(
+            msg=f"API version '{version}' does not provide "
+                f"module '{module_name}'",
+        )

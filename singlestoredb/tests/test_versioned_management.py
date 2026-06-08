@@ -149,8 +149,14 @@ class TestImportVersionedModule(unittest.TestCase):
         self.assertIn('v99', str(ctx.exception))
 
     def test_import_nonexistent_module_raises(self):
-        with self.assertRaises(ManagementError):
+        with self.assertRaises(ManagementError) as ctx:
             _import_versioned_module('v1', 'nonexistent_module')
+        msg = str(ctx.exception)
+        # Should NOT claim the version is unsupported when the version
+        # package itself imports cleanly; should name the missing module.
+        self.assertNotIn('Unsupported API version', msg)
+        self.assertIn('nonexistent_module', msg)
+        self.assertIn('v1', msg)
 
 
 class TestManagerVersionSwitching(unittest.TestCase):
@@ -1177,24 +1183,39 @@ class TestV2WorkspaceGroupGetMetrics(unittest.TestCase):
         self.assertIn('org-from-params', args[0])
 
     def test_falls_back_to_manager_organization(self):
+        """Fallback resolves org ID via the v1 clone (per OpenAPI spec).
+
+        v2 has no ``organizations/current`` endpoint, so the metrics method
+        must drop to ``self._manager.v1.organization.id``.
+        """
         v2_wg, v2_mgr = self._make_v2_wg_with_org(organization_id=None)
         v2_mgr._organization_id = None
         v2_mgr._params = {}
-        # Stub the .organization property to avoid hitting the network
+
+        # Build a fake v1 clone whose `.organization.id` returns the value
+        # we want to see in the eventual metrics URL.
         fake_org = MagicMock()
         fake_org.id = 'org-from-current'
-        with patch.object(
-            type(v2_mgr), 'organization',
-            new_callable=unittest.mock.PropertyMock,
-            return_value=fake_org,
-        ):
-            get_response = MagicMock()
-            get_response.text = ''
-            v2_mgr._get = MagicMock(return_value=get_response)
-            v2_wg.get_metrics()
+        fake_v1 = MagicMock()
+        fake_v1.organization = fake_org
+
+        get_response = MagicMock()
+        get_response.text = ''
+        v2_mgr._get = MagicMock(return_value=get_response)
+
+        # Inject the v1 clone into VersionedMixin's cache so attribute
+        # access for `.v1` returns it without spinning up a real manager.
+        v2_mgr._version_cache = {'v1': fake_v1}
+        v2_wg.get_metrics()
 
         args, _ = v2_mgr._get.call_args
         self.assertIn('org-from-current', args[0])
+        # The metrics request itself must still go to the v2-cloned manager.
+        self.assertEqual(
+            args[0],
+            'organizations/org-from-current'
+            '/workspaceGroups/wsg-456/metrics',
+        )
 
     def test_raises_when_manager_is_none(self):
         from singlestoredb.management.v2.workspace import WorkspaceGroup as V2WG
@@ -1211,16 +1232,14 @@ class TestV2WorkspaceGroupGetMetrics(unittest.TestCase):
         v2_wg, v2_mgr = self._make_v2_wg_with_org(organization_id=None)
         v2_mgr._organization_id = None
         v2_mgr._params = {}
-        # Stub organization to return one whose id is empty
+        # Stub the v1 clone's organization to return one whose id is empty
         fake_org = MagicMock()
         fake_org.id = ''
-        with patch.object(
-            type(v2_mgr), 'organization',
-            new_callable=unittest.mock.PropertyMock,
-            return_value=fake_org,
-        ):
-            with self.assertRaises(ManagementError) as ctx:
-                v2_wg.get_metrics()
+        fake_v1 = MagicMock()
+        fake_v1.organization = fake_org
+        v2_mgr._version_cache = {'v1': fake_v1}
+        with self.assertRaises(ManagementError) as ctx:
+            v2_wg.get_metrics()
         self.assertIn('organization ID', str(ctx.exception))
 
 
