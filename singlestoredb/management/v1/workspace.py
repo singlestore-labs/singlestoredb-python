@@ -248,15 +248,22 @@ class Stage(FileLocation):
             else:
                 ignore_files.update(glob.glob(str(ignore), recursive=recursive))
 
-        parent_dir = os.path.basename(os.getcwd())
+        local_root = os.path.normpath(str(local_path))
+        root_name = os.path.basename(local_root)
+        stage_prefix = str(stage_path)
 
-        files = glob.glob(os.path.join(local_path, '**'), recursive=recursive)
-
-        for src in files:
-            if ignore_files and src in ignore_files:
-                continue
-            target = os.path.join(parent_dir, src) if include_root else src
-            self.upload_file(src, target, overwrite=overwrite)
+        for dir_path, _, files in os.walk(local_root):
+            for fname in files:
+                local_file_path = os.path.join(dir_path, fname)
+                if ignore_files and local_file_path in ignore_files:
+                    continue
+                rel = os.path.relpath(local_file_path, local_root)
+                if include_root:
+                    rel = os.path.join(root_name, rel)
+                target = os.path.join(stage_prefix, rel) if stage_prefix else rel
+                self.upload_file(local_file_path, target, overwrite=overwrite)
+            if not recursive:
+                break
 
         return self.info(stage_path)
 

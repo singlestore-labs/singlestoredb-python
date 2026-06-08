@@ -744,21 +744,26 @@ class FileSpace(FileLocation):
             else:
                 ignore_files.update(glob.glob(str(ignore), recursive=recursive))
 
-        for dir_path, _, files in os.walk(str(local_path)):
+        local_root = os.path.normpath(str(local_path))
+        root_name = os.path.basename(local_root)
+
+        for dir_path, _, files in os.walk(local_root):
             for fname in files:
-                if ignore_files and fname in ignore_files:
+                local_file_path = os.path.join(dir_path, fname)
+                if ignore_files and local_file_path in ignore_files:
                     continue
 
-                local_file_path = os.path.join(dir_path, fname)
-                remote_path = os.path.join(
-                    path,
-                    local_file_path.lstrip(str(local_path)),
-                )
+                rel = os.path.relpath(local_file_path, local_root)
+                if include_root:
+                    rel = os.path.join(root_name, rel)
+                remote_path = os.path.join(str(path), rel) if path else rel
                 self.upload_file(
                     local_path=local_file_path,
                     path=remote_path,
                     overwrite=overwrite,
                 )
+            if not recursive:
+                break
         return self.info(path)
 
     def _upload(
