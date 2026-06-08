@@ -164,8 +164,12 @@ def manage_regions(
     :class:`RegionManager`
 
     """
-    return RegionManager(
+    from ... import config
+    from ..versioned import _import_versioned_module
+    ver = version or config.get_option('management.version') or 'v1'
+    mod = _import_versioned_module(ver, 'region')
+    return mod.RegionManager(
         access_token=access_token,
-        version=version,
+        version=ver,
         base_url=base_url,
     )

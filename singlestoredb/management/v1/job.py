@@ -636,9 +636,9 @@ class Job(VersionedMixin):
         return self._manager._wait_for_job(self, timeout)
 
     def get_executions(
-            self,
-            start_execution_number: int,
-            end_execution_number: int,
+        self,
+        start_execution_number: int,
+        end_execution_number: int,
     ) -> ExecutionsData:
         """Get executions for the job."""
         if self._manager is None:
@@ -850,10 +850,10 @@ class JobsManager(VersionedMixin):
         return Job.from_dict(res, self)
 
     def get_executions(
-            self,
-            job_id: str,
-            start_execution_number: int,
-            end_execution_number: int,
+        self,
+        job_id: str,
+        start_execution_number: int,
+        end_execution_number: int,
     ) -> ExecutionsData:
         """Get executions for a job by its ID."""
         if self._manager is None:

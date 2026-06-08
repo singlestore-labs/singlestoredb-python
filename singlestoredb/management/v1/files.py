@@ -21,6 +21,7 @@ from typing import Union
 from ... import config
 from ...exceptions import ManagementError
 from ..manager import Manager
+from ..utils import ensure_within
 from ..utils import PathLike
 from ..utils import to_datetime
 from ..utils import vars_to_str
@@ -576,9 +577,13 @@ def manage_files(
     :class:`FilesManager`
 
     """
-    return FilesManager(
+    from ... import config
+    from ..versioned import _import_versioned_module
+    ver = version or config.get_option('management.version') or 'v1'
+    mod = _import_versioned_module(ver, 'files')
+    return mod.FilesManager(
         access_token=access_token, base_url=base_url,
-        version=version, organization_id=organization_id,
+        version=ver, organization_id=organization_id,
     )
 
 
@@ -1173,12 +1178,14 @@ class FileSpace(FileLocation):
             rel_path = entry.path
             if entry.type == 'directory':
                 # Ensure local directory exists; no remote call needed
-                target_dir = os.path.normpath(os.path.join(local_path, rel_path))
+                target_dir = ensure_within(
+                    local_path, os.path.join(local_path, rel_path),
+                )
                 os.makedirs(target_dir, exist_ok=True)
                 continue
             remote_path = os.path.join(path, rel_path)
-            target_file = os.path.normpath(
-                os.path.join(local_path, rel_path),
+            target_file = ensure_within(
+                local_path, os.path.join(local_path, rel_path),
             )
             os.makedirs(os.path.dirname(target_file), exist_ok=True)
             self._download_file(

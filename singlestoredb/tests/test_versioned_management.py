@@ -1318,5 +1318,118 @@ class TestManageRoutingForAllFactories(unittest.TestCase):
         )
 
 
+class TestV1FactoryRoutesByVersion(unittest.TestCase):
+    """The duplicate ``manage_*`` factories in ``v1/*.py`` must route by
+    ``version`` the same way the top-level shims do, so callers using
+    ``from singlestoredb.management.v1.region import manage_regions`` with
+    ``version='v2'`` still get a v2 manager."""
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_v1_namespace_manage_regions_routes_v2(self, _mock_token):
+        from singlestoredb.management.v1.region import manage_regions
+        from singlestoredb.management.v2.region import RegionManager as V2RM
+        mgr = manage_regions(
+            access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v2',
+        )
+        self.assertIsInstance(mgr, V2RM)
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_v1_namespace_manage_workspaces_routes_v2(self, _mock_token):
+        from singlestoredb.management.v1.workspace import manage_workspaces
+        from singlestoredb.management.v2.workspace import (
+            WorkspaceManager as V2WM,
+        )
+        mgr = manage_workspaces(
+            access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v2',
+        )
+        self.assertIsInstance(mgr, V2WM)
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_v1_namespace_manage_files_routes_v2(self, _mock_token):
+        from singlestoredb.management.v1.files import manage_files
+        from singlestoredb.management.v2.files import FilesManager as V2FM
+        mgr = manage_files(
+            access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v2',
+        )
+        self.assertIsInstance(mgr, V2FM)
+
+
+class TestRecursiveDownloadPathTraversal(unittest.TestCase):
+    """Recursive download helpers must refuse to write outside ``local_path``
+    when the remote listing contains traversal segments (``..``)."""
+
+    def _make_file_location(self):
+        # FileSpace is a concrete FileLocation subclass; instantiate via
+        # __new__ to skip its constructor (which expects a real FilesManager).
+        from singlestoredb.management.v1.files import FileSpace
+        loc = FileSpace.__new__(FileSpace)
+        loc._manager = MagicMock()
+        return loc
+
+    def _make_files_object(self, path, type_='file'):
+        from singlestoredb.management.v1.files import FilesObject
+        return FilesObject(
+            name=path.rsplit('/', 1)[-1],
+            path=path,
+            size=0,
+            type=type_,
+            format='',
+            mimetype='',
+            created=None,
+            last_modified=None,
+            writable=True,
+        )
+
+    def test_files_download_folder_rejects_traversal(self):
+        import tempfile
+        loc = self._make_file_location()
+        # Listing returns an entry whose path escapes via '..'
+        loc.listdir = MagicMock(
+            return_value=[self._make_files_object('../escape.txt')],
+        )
+        loc._download_file = MagicMock()
+        with tempfile.TemporaryDirectory() as tmp:
+            target = f'{tmp}/dest'
+            import os
+            os.makedirs(target)
+            with self.assertRaises(ManagementError) as ctx:
+                loc.download_folder('remote', target, overwrite=True)
+            self.assertIn('outside destination', str(ctx.exception))
+            loc._download_file.assert_not_called()
+
+    def test_files_download_folder_rejects_traversal_directory(self):
+        import tempfile
+        loc = self._make_file_location()
+        # Directory entry that escapes
+        loc.listdir = MagicMock(
+            return_value=[self._make_files_object('../evil', type_='directory')],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            target = f'{tmp}/dest'
+            import os
+            os.makedirs(target)
+            with self.assertRaises(ManagementError) as ctx:
+                loc.download_folder('remote', target, overwrite=True)
+            self.assertIn('outside destination', str(ctx.exception))
+
+    def test_stage_download_folder_rejects_traversal(self):
+        import tempfile
+        from singlestoredb.management.v1.workspace import Stage
+        stage = Stage.__new__(Stage)
+        stage.listdir = MagicMock(return_value=['../escape.txt'])
+        # is_dir(stage_path) must return True (it's a directory); each
+        # listing entry returns False (so it's treated as a file).
+        stage.is_dir = MagicMock(side_effect=lambda p: p == 'remote')
+        stage.download_file = MagicMock()
+        with tempfile.TemporaryDirectory() as tmp:
+            target = f'{tmp}/dest'
+            import os
+            os.makedirs(target)
+            with self.assertRaises(ManagementError) as ctx:
+                stage.download_folder('remote', target, overwrite=True)
+            self.assertIn('outside destination', str(ctx.exception))
+            stage.download_file.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
