@@ -1046,6 +1046,88 @@ class TestV2RegionBehavior(unittest.TestCase):
         self.assertTrue(issubclass(V2, V1))
 
 
+class TestWorkspaceGroupRegionResolution(unittest.TestCase):
+    """``WorkspaceGroup.from_dict`` must resolve regions from v2 managers,
+    where ``Region.id`` is ``None`` and only ``(region_name, provider)``
+    identify a region."""
+
+    def _v2_region(self, name, provider, region_name):
+        from singlestoredb.management.v1.region import Region
+        return Region(
+            name=name, provider=provider, id=None, region_name=region_name,
+        )
+
+    def _wg_payload(self, **overrides):
+        obj = {
+            'name': 'test-group',
+            'workspaceGroupID': 'wsg-1',
+            'createdAt': '2024-01-01T00:00:00Z',
+            'regionID': 'region-uuid-1',
+            'regionName': 'us-west1',
+            'provider': 'GCP',
+        }
+        obj.update(overrides)
+        return obj
+
+    def test_v2_resolves_by_region_name_and_provider(self):
+        from singlestoredb.management.v1.workspace import (
+            WorkspaceGroup, WorkspaceManager,
+        )
+        mgr = MagicMock(spec=WorkspaceManager)
+        mgr.regions = [
+            self._v2_region('us-west1', 'GCP', 'us-west1'),
+            self._v2_region('eu-central-1', 'AWS', 'eu-central-1'),
+        ]
+        wg = WorkspaceGroup.from_dict(self._wg_payload(), mgr)
+        self.assertEqual(wg.region.name, 'us-west1')
+        self.assertEqual(wg.region.provider, 'GCP')
+        self.assertEqual(wg.region.region_name, 'us-west1')
+
+    def test_v1_match_by_id_still_wins(self):
+        from singlestoredb.management.v1.region import Region
+        from singlestoredb.management.v1.workspace import (
+            WorkspaceGroup, WorkspaceManager,
+        )
+        mgr = MagicMock(spec=WorkspaceManager)
+        mgr.regions = [
+            Region(
+                name='us-west1', provider='GCP',
+                id='region-uuid-1', region_name='us-west1',
+            ),
+        ]
+        wg = WorkspaceGroup.from_dict(self._wg_payload(), mgr)
+        self.assertEqual(wg.region.id, 'region-uuid-1')
+        self.assertEqual(wg.region.name, 'us-west1')
+
+    def test_no_match_falls_back_to_payload_fields(self):
+        from singlestoredb.management.v1.workspace import (
+            WorkspaceGroup, WorkspaceManager,
+        )
+        mgr = MagicMock(spec=WorkspaceManager)
+        mgr.regions = []
+        wg = WorkspaceGroup.from_dict(self._wg_payload(), mgr)
+        self.assertEqual(wg.region.name, 'us-west1')
+        self.assertEqual(wg.region.provider, 'GCP')
+        self.assertEqual(wg.region.id, 'region-uuid-1')
+        self.assertEqual(wg.region.region_name, 'us-west1')
+
+    def test_no_match_no_payload_fields_uses_unknown(self):
+        from singlestoredb.management.v1.workspace import (
+            WorkspaceGroup, WorkspaceManager,
+        )
+        mgr = MagicMock(spec=WorkspaceManager)
+        mgr.regions = []
+        obj = {
+            'name': 'test-group',
+            'workspaceGroupID': 'wsg-1',
+            'createdAt': '2024-01-01T00:00:00Z',
+        }
+        wg = WorkspaceGroup.from_dict(obj, mgr)
+        self.assertEqual(wg.region.name, '<unknown>')
+        self.assertEqual(wg.region.provider, '<unknown>')
+        self.assertIsNone(wg.region.id)
+
+
 class TestV2WorkspaceGroupGetMetrics(unittest.TestCase):
     """Coverage for ``v2/workspace.py:WorkspaceGroup.get_metrics``."""
 
