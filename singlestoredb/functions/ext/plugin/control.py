@@ -39,8 +39,10 @@ def _err(message: str, code: str) -> ControlResult:
 
 def _register_code_for(message: str) -> str:
     """Pick a code for an exception raised by ``SharedRegistry.create_function``."""
-    if 'already exists' in message \
-            or 'not a dynamically registered function' in message:
+    if 'Cannot replace' in message \
+            and 'not a dynamically registered function' in message:
+        return 'REGISTER_FUNC_NOT_DYNAMIC'
+    if 'already exists' in message:
         return 'REGISTER_FUNC_EXISTS'
     return 'REGISTER_INVALID_PAYLOAD'
 

@@ -221,6 +221,21 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert body['code'] == 'REGISTER_FUNC_EXISTS'
         assert 'already exists' in body['message']
 
+    def test_register_replace_base_function(self):
+        shared = self._make_shared_registry()
+        shared.create_function.side_effect = ValueError(
+            "Cannot replace 'base_fn': not a dynamically registered function",
+        )
+        payload = json.dumps({
+            'name': 'base_fn', 'args': [], 'returns': [],
+            'body': 'x', 'replace': True,
+        }).encode()
+        result = dispatch_control_signal('@@register', payload, shared)
+        assert result.ok is False
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_FUNC_NOT_DYNAMIC'
+        assert 'not a dynamically registered function' in body['message']
+
     def test_delete_missing_payload(self):
         shared = self._make_shared_registry()
         result = dispatch_control_signal('@@delete', b'', shared)
