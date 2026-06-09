@@ -34,6 +34,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .registry import describe_functions_json
+from .registry import FunctionExistsError
+from .registry import FunctionNotDynamicError
+from .registry import FunctionNotFoundError
 
 if TYPE_CHECKING:
     from .server import SharedRegistry
@@ -58,25 +61,6 @@ def _err(message: str, code: str) -> ControlResult:
         ok=False,
         data=json.dumps({'message': message, 'code': code}),
     )
-
-
-def _register_code_for(message: str) -> str:
-    """Pick a code for an exception raised by ``SharedRegistry.create_function``."""
-    if 'Cannot replace' in message \
-            and 'not a dynamically registered function' in message:
-        return 'REGISTER_FUNC_NOT_DYNAMIC'
-    if 'already exists' in message:
-        return 'REGISTER_FUNC_EXISTS'
-    return 'REGISTER_INVALID_PAYLOAD'
-
-
-def _delete_code_for(message: str) -> str:
-    """Pick a code for an exception raised by ``SharedRegistry.delete_function``."""
-    if 'not a dynamically registered function' in message:
-        return 'DELETE_FUNC_NOT_REGISTERED'
-    if 'not found' in message:
-        return 'DELETE_FUNC_NOT_FOUND'
-    return 'DELETE_INVALID_PAYLOAD'
 
 
 def dispatch_control_signal(
@@ -181,9 +165,12 @@ def _handle_register(
 
     try:
         shared_registry.create_function(signature, func_body, replace)
+    except FunctionExistsError as e:
+        return _err(str(e), 'REGISTER_FUNC_EXISTS')
+    except FunctionNotDynamicError as e:
+        return _err(str(e), 'REGISTER_FUNC_NOT_DYNAMIC')
     except Exception as e:
-        msg = str(e)
-        return _err(msg, _register_code_for(msg))
+        return _err(str(e), 'REGISTER_INVALID_PAYLOAD')
 
     # Notify main process so it can re-fork workers with updated state
     if pipe_write_fd is not None:
@@ -222,9 +209,12 @@ def _handle_delete(
 
     try:
         shared_registry.delete_function(function_name)
+    except FunctionNotDynamicError as e:
+        return _err(str(e), 'DELETE_FUNC_NOT_REGISTERED')
+    except FunctionNotFoundError as e:
+        return _err(str(e), 'DELETE_FUNC_NOT_FOUND')
     except ValueError as e:
-        msg = str(e)
-        return _err(msg, _delete_code_for(msg))
+        return _err(str(e), 'DELETE_INVALID_PAYLOAD')
 
     # Notify main process so it can re-fork workers with updated state
     if pipe_write_fd is not None:

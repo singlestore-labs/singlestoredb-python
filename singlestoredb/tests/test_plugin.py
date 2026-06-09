@@ -18,6 +18,9 @@ from singlestoredb.functions.ext.plugin.connection import _MAX_FUNCTION_NAME_LEN
 from singlestoredb.functions.ext.plugin.connection import _recv_exact_py
 from singlestoredb.functions.ext.plugin.connection import PROTOCOL_VERSION
 from singlestoredb.functions.ext.plugin.control import dispatch_control_signal
+from singlestoredb.functions.ext.plugin.registry import FunctionExistsError
+from singlestoredb.functions.ext.plugin.registry import FunctionNotDynamicError
+from singlestoredb.functions.ext.plugin.registry import FunctionNotFoundError
 from singlestoredb.functions.ext.plugin.registry import FunctionRegistry
 from singlestoredb.utils._lazy_import import get_numpy
 from singlestoredb.utils._lazy_import import get_pandas
@@ -222,7 +225,7 @@ class TestControlSignalDispatch(unittest.TestCase):
 
     def test_register_func_exists(self):
         shared = self._make_shared_registry()
-        shared.create_function.side_effect = ValueError(
+        shared.create_function.side_effect = FunctionExistsError(
             'Function "f" already exists (use replace=true to overwrite)',
         )
         payload = json.dumps({
@@ -236,7 +239,7 @@ class TestControlSignalDispatch(unittest.TestCase):
 
     def test_register_replace_base_function(self):
         shared = self._make_shared_registry()
-        shared.create_function.side_effect = ValueError(
+        shared.create_function.side_effect = FunctionNotDynamicError(
             "Cannot replace 'base_fn': not a dynamically registered function",
         )
         payload = json.dumps({
@@ -276,7 +279,7 @@ class TestControlSignalDispatch(unittest.TestCase):
 
     def test_delete_nonexistent_function(self):
         shared = self._make_shared_registry()
-        shared.delete_function.side_effect = ValueError(
+        shared.delete_function.side_effect = FunctionNotFoundError(
             "Function 'no_such' not found",
         )
         payload = json.dumps({'name': 'no_such'}).encode()
@@ -288,7 +291,7 @@ class TestControlSignalDispatch(unittest.TestCase):
 
     def test_delete_base_function(self):
         shared = self._make_shared_registry()
-        shared.delete_function.side_effect = ValueError(
+        shared.delete_function.side_effect = FunctionNotDynamicError(
             "Cannot delete 'base_fn': not a dynamically registered function",
         )
         payload = json.dumps({'name': 'base_fn'}).encode()

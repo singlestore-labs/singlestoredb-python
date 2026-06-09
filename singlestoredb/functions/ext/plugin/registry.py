@@ -141,6 +141,18 @@ _dtype_to_python: Dict[str, str] = {
 logger = logging.getLogger('udf_handler')
 
 
+class FunctionExistsError(ValueError):
+    """Raised when a function name is already registered and replace=False."""
+
+
+class FunctionNotDynamicError(ValueError):
+    """Raised when replacing/deleting a function that was not dynamically registered."""
+
+
+class FunctionNotFoundError(ValueError):
+    """Raised when the target function does not exist (delete only)."""
+
+
 class FunctionRegistry:
     """Registry of discovered UDF functions."""
 
@@ -387,13 +399,13 @@ class FunctionRegistry:
             )
 
         if not replace and func_name in self.functions:
-            raise ValueError(
+            raise FunctionExistsError(
                 f'Function "{func_name}" already exists '
                 f'(use replace=true to overwrite)',
             )
 
         if func_name in self._base_function_names:
-            raise ValueError(
+            raise FunctionNotDynamicError(
                 f"Cannot replace '{func_name}': "
                 f'not a dynamically registered function',
             )
@@ -447,9 +459,9 @@ class FunctionRegistry:
                 'signature JSON must contain a "name" field',
             )
         if name not in self.functions:
-            raise ValueError(f"Function '{name}' not found")
+            raise FunctionNotFoundError(f"Function '{name}' not found")
         if name in self._base_function_names:
-            raise ValueError(
+            raise FunctionNotDynamicError(
                 f"Cannot delete '{name}': not a dynamically registered function",
             )
         del self.functions[name]
