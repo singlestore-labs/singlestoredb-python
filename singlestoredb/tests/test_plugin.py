@@ -223,6 +223,62 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
         assert 'args' in body['message']
 
+    def test_register_name_not_string(self):
+        shared = self._make_shared_registry()
+        payload = json.dumps({
+            'name': 123, 'args': [], 'returns': [], 'body': 'return 1',
+        }).encode()
+        result = dispatch_control_signal('@@register', payload, shared)
+        assert result.ok is False
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
+        assert 'name' in body['message']
+
+    def test_register_body_not_string(self):
+        shared = self._make_shared_registry()
+        payload = json.dumps({
+            'name': 'f', 'args': [], 'returns': [], 'body': 12345,
+        }).encode()
+        result = dispatch_control_signal('@@register', payload, shared)
+        assert result.ok is False
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
+        assert 'body' in body['message']
+
+    def test_register_arg_missing_dtype(self):
+        """An arg dict missing 'dtype' is a client-shape error and must
+        surface as REGISTER_INVALID_PAYLOAD, not INTERNAL_ERROR."""
+        shared = self._make_shared_registry()
+        shared.create_function.side_effect = ValueError(
+            '"args[0].dtype" must be a string',
+        )
+        payload = json.dumps({
+            'name': 'f', 'args': [{'name': 'x'}], 'returns': [],
+            'body': 'return 1',
+        }).encode()
+        result = dispatch_control_signal('@@register', payload, shared)
+        assert result.ok is False
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
+        assert 'dtype' in body['message']
+
+    def test_register_return_missing_dtype(self):
+        """A returns dict missing 'dtype' is a client-shape error and must
+        surface as REGISTER_INVALID_PAYLOAD, not INTERNAL_ERROR."""
+        shared = self._make_shared_registry()
+        shared.create_function.side_effect = ValueError(
+            '"returns[0].dtype" must be a string',
+        )
+        payload = json.dumps({
+            'name': 'f', 'args': [], 'returns': [{'name': ''}],
+            'body': 'return 1',
+        }).encode()
+        result = dispatch_control_signal('@@register', payload, shared)
+        assert result.ok is False
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
+        assert 'dtype' in body['message']
+
     def test_register_func_exists(self):
         shared = self._make_shared_registry()
         shared.create_function.side_effect = FunctionExistsError(
@@ -285,6 +341,17 @@ class TestControlSignalDispatch(unittest.TestCase):
     def test_delete_missing_function_name(self):
         shared = self._make_shared_registry()
         payload = json.dumps({}).encode()
+        result = dispatch_control_signal('@@delete', payload, shared)
+        assert result.ok is False
+        body = json.loads(result.data)
+        assert body['code'] == 'DELETE_INVALID_PAYLOAD'
+        assert 'name' in body['message']
+
+    def test_delete_name_not_string(self):
+        """A non-string name (e.g. dict) must surface as
+        DELETE_INVALID_PAYLOAD, not INTERNAL_ERROR."""
+        shared = self._make_shared_registry()
+        payload = json.dumps({'name': {'x': 1}}).encode()
         result = dispatch_control_signal('@@delete', payload, shared)
         assert result.ok is False
         body = json.loads(result.data)
@@ -363,6 +430,33 @@ class TestFunctionRegistryDeleteGuard(unittest.TestCase):
         with self.assertRaises(FunctionNotDynamicError) as ctx:
             reg.create_function(sig, 'return x + 1', replace=True)
         assert 'reserved by a built-in' in str(ctx.exception)
+
+    def test_create_function_arg_missing_dtype_raises_value_error(self):
+        reg = FunctionRegistry()
+        sig = json.dumps({
+            'name': 'f', 'args': [{'name': 'x'}], 'returns': [],
+        })
+        with self.assertRaises(ValueError) as ctx:
+            reg.create_function(sig, 'return 1', replace=False)
+        assert 'dtype' in str(ctx.exception)
+
+    def test_create_function_return_missing_dtype_raises_value_error(self):
+        reg = FunctionRegistry()
+        sig = json.dumps({
+            'name': 'f', 'args': [], 'returns': [{'name': ''}],
+        })
+        with self.assertRaises(ValueError) as ctx:
+            reg.create_function(sig, 'return 1', replace=False)
+        assert 'dtype' in str(ctx.exception)
+
+    def test_create_function_arg_item_not_dict_raises_value_error(self):
+        reg = FunctionRegistry()
+        sig = json.dumps({
+            'name': 'f', 'args': [1, 2], 'returns': [],
+        })
+        with self.assertRaises(ValueError) as ctx:
+            reg.create_function(sig, 'return 1', replace=False)
+        assert 'args[0]' in str(ctx.exception)
 
     def test_register_base_name_without_replace_returns_not_dynamic(self):
         """A @@register colliding with a base (non-dynamic) function name

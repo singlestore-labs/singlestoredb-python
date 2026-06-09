@@ -401,6 +401,27 @@ class FunctionRegistry:
                 'signature JSON must contain a "name" field',
             )
 
+        for kind in ('args', 'returns'):
+            items = sig.get(kind, [])
+            if not isinstance(items, list):
+                raise ValueError(f'"{kind}" must be a list')
+            for i, item in enumerate(items):
+                if not isinstance(item, dict):
+                    raise ValueError(
+                        f'"{kind}[{i}]" must be a JSON object',
+                    )
+                dtype = item.get('dtype')
+                if not isinstance(dtype, str):
+                    raise ValueError(
+                        f'"{kind}[{i}].dtype" must be a string',
+                    )
+                if kind == 'args':
+                    name = item.get('name')
+                    if not isinstance(name, str) or not name:
+                        raise ValueError(
+                            f'"{kind}[{i}].name" must be a non-empty string',
+                        )
+
         if func_name in self._base_function_names:
             raise FunctionNotDynamicError(
                 f"Cannot register '{func_name}': "

@@ -141,6 +141,10 @@ def _handle_register(
         return _err(
             'Missing required field: name', 'REGISTER_INVALID_PAYLOAD',
         )
+    if not isinstance(function_name, str):
+        return _err(
+            'Field "name" must be a string', 'REGISTER_INVALID_PAYLOAD',
+        )
 
     args = body.get('args')
     if not isinstance(args, list):
@@ -160,6 +164,10 @@ def _handle_register(
     if not func_body:
         return _err(
             'Missing required field: body', 'REGISTER_INVALID_PAYLOAD',
+        )
+    if not isinstance(func_body, str):
+        return _err(
+            'Field "body" must be a string', 'REGISTER_INVALID_PAYLOAD',
         )
 
     replace = body.get('replace', False)
@@ -224,6 +232,10 @@ def _handle_delete(
     if not function_name:
         return _err(
             'Missing required field: name', 'DELETE_INVALID_PAYLOAD',
+        )
+    if not isinstance(function_name, str):
+        return _err(
+            'Field "name" must be a string', 'DELETE_INVALID_PAYLOAD',
         )
 
     try:
