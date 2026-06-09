@@ -128,6 +128,12 @@ def _handle_register(
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         return _err(f'Invalid JSON: {e}', 'REGISTER_INVALID_PAYLOAD')
 
+    if not isinstance(body, dict):
+        return _err(
+            'Request body must be a JSON object',
+            'REGISTER_INVALID_PAYLOAD',
+        )
+
     function_name = body.get('name')
     if not function_name:
         return _err(
@@ -205,6 +211,12 @@ def _handle_delete(
         body = json.loads(request_data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         return _err(f'Invalid JSON: {e}', 'DELETE_INVALID_PAYLOAD')
+
+    if not isinstance(body, dict):
+        return _err(
+            'Request body must be a JSON object',
+            'DELETE_INVALID_PAYLOAD',
+        )
 
     function_name = body.get('name')
     if not function_name:
