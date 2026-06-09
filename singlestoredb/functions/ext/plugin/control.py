@@ -3,7 +3,9 @@ Control signal dispatch for @@health, @@functions, @@register, @@delete.
 
 Matches the Rust wasm-udf-server's dispatch_control_signal behavior, including
 the structured-error-code shape from ADR 0001
-(``{"message": "...", "code": "SCREAMING_SNAKE"}`` on errors). The
+(``{"message": "...", "code": "SCREAMING_SNAKE"}`` on errors). ``UNKNOWN_SIGNAL``
+is reserved for unrecognized ``@@``-prefixed signal names; ``INTERNAL_ERROR``
+is the cross-cutting fallback for unexpected handler exceptions. The
 ``REGISTER_DISABLED`` and ``DELETE_DISABLED`` codes from that catalog have no
 call site here because this server has no registration enable/disable flag.
 """
@@ -82,7 +84,7 @@ def dispatch_control_signal(
                 'UNKNOWN_SIGNAL',
             )
     except Exception as e:
-        return _err(str(e), 'UNKNOWN_SIGNAL')
+        return _err(str(e), 'INTERNAL_ERROR')
 
 
 def _handle_health() -> ControlResult:

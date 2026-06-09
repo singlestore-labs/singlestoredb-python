@@ -137,6 +137,19 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert body['code'] == 'UNKNOWN_SIGNAL'
         assert 'Unknown control signal' in body['message']
 
+    def test_internal_error_on_handler_failure(self):
+        shared = self._make_shared_registry()
+        with patch(
+            'singlestoredb.functions.ext.plugin.control'
+            '.describe_functions_json',
+            side_effect=RuntimeError('boom'),
+        ):
+            result = dispatch_control_signal('@@functions', b'', shared)
+        assert result.ok is False
+        body = json.loads(result.data)
+        assert body['code'] == 'INTERNAL_ERROR'
+        assert 'boom' in body['message']
+
     def test_register_missing_payload(self):
         shared = self._make_shared_registry()
         result = dispatch_control_signal('@@register', b'', shared)
