@@ -3,11 +3,28 @@ Control signal dispatch for @@health, @@functions, @@register, @@delete.
 
 Matches the Rust wasm-udf-server's dispatch_control_signal behavior, including
 the structured-error-code shape from ADR 0001
-(``{"message": "...", "code": "SCREAMING_SNAKE"}`` on errors). ``UNKNOWN_SIGNAL``
-is reserved for unrecognized ``@@``-prefixed signal names; ``INTERNAL_ERROR``
-is the cross-cutting fallback for unexpected handler exceptions. The
-``REGISTER_DISABLED`` and ``DELETE_DISABLED`` codes from that catalog have no
-call site here because this server has no registration enable/disable flag.
+(``{"message": "...", "code": "SCREAMING_SNAKE"}`` on errors). The authoritative
+catalog of codes lives in ADR 0001 in the ``wasm-udf-server`` repo; the codes
+emitted from this module are:
+
+- ``UNKNOWN_SIGNAL`` — unrecognized ``@@``-prefixed signal name.
+- ``INTERNAL_ERROR`` — cross-cutting fallback for unexpected handler exceptions.
+- ``REGISTER_MISSING_PAYLOAD`` — ``@@register`` called with an empty body.
+- ``REGISTER_INVALID_PAYLOAD`` — ``@@register`` body failed JSON parsing or
+  field validation.
+- ``REGISTER_FUNC_EXISTS`` — function with the same name is already registered
+  and ``replace`` was not requested.
+- ``REGISTER_FUNC_NOT_DYNAMIC`` — ``replace`` requested for a function that was
+  not dynamically registered (e.g., a built-in).
+- ``DELETE_MISSING_PAYLOAD`` — ``@@delete`` called with an empty body.
+- ``DELETE_INVALID_PAYLOAD`` — ``@@delete`` body failed JSON parsing or field
+  validation.
+- ``DELETE_FUNC_NOT_REGISTERED`` — target function exists but was not
+  dynamically registered, so it cannot be deleted.
+- ``DELETE_FUNC_NOT_FOUND`` — target function does not exist.
+
+The ``REGISTER_DISABLED`` and ``DELETE_DISABLED`` codes from that catalog have
+no call site here because this server has no registration enable/disable flag.
 """
 from __future__ import annotations
 
@@ -28,7 +45,11 @@ logger = logging.getLogger('plugin.control')
 class ControlResult:
     """Result of a control signal dispatch."""
     ok: bool
-    data: str  # JSON response on success or failure (per ADR 0001)
+    # JSON response. On success (``ok=True``) this is a handler-specific
+    # document such as ``{"status":"ok"}`` or ``{"functions":[...]}``. On
+    # failure (``ok=False``) this is the ADR 0001 error shape
+    # ``{"message":"...","code":"..."}``.
+    data: str
 
 
 def _err(message: str, code: str) -> ControlResult:
