@@ -146,7 +146,8 @@ class FunctionExistsError(ValueError):
 
 
 class FunctionNotDynamicError(ValueError):
-    """Raised when replacing/deleting a function that was not dynamically registered."""
+    """Raised when an operation targets a function that exists but was not
+    dynamically registered (e.g., replacing or deleting a built-in)."""
 
 
 class FunctionNotFoundError(ValueError):
@@ -398,16 +399,16 @@ class FunctionRegistry:
                 'signature JSON must contain a "name" field',
             )
 
-        if func_name in self._base_function_names:
-            raise FunctionNotDynamicError(
-                f"Cannot replace '{func_name}': "
-                f'not a dynamically registered function',
-            )
-
         if not replace and func_name in self.functions:
             raise FunctionExistsError(
                 f'Function "{func_name}" already exists '
                 f'(use replace=true to overwrite)',
+            )
+
+        if replace and func_name in self._base_function_names:
+            raise FunctionNotDynamicError(
+                f"Cannot replace '{func_name}': "
+                f'not a dynamically registered function',
             )
 
         if replace and func_name in self.functions:

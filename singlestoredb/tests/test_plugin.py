@@ -364,6 +364,23 @@ class TestFunctionRegistryDeleteGuard(unittest.TestCase):
             reg.create_function(sig, 'return x + 1', replace=True)
         assert 'not a dynamically registered function' in str(ctx.exception)
 
+    def test_register_base_name_without_replace_returns_exists(self):
+        """Regression: a first-time @@register colliding with a base
+        function name must raise FunctionExistsError (so the dispatcher
+        emits REGISTER_FUNC_EXISTS), not FunctionNotDynamicError. The
+        NOT_DYNAMIC code is reserved for replace=True against a
+        non-dynamic function, per ADR-0001.
+        """
+        reg = self._make_registry_with_base()
+        sig = json.dumps({
+            'name': 'base_fn',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+        })
+        with self.assertRaises(FunctionExistsError) as ctx:
+            reg.create_function(sig, 'return x + 1', replace=False)
+        assert 'already exists' in str(ctx.exception)
+
 
 class TestDeleteFunctionIntegration(unittest.TestCase):
     """Integration tests for @@delete using a real SharedRegistry."""
