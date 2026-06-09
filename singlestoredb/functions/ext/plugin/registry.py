@@ -146,8 +146,10 @@ class FunctionExistsError(ValueError):
 
 
 class FunctionNotDynamicError(ValueError):
-    """Raised when an operation targets a function that exists but was not
-    dynamically registered (e.g., replacing or deleting a built-in)."""
+    """Raised when an operation (register, replace, or delete) targets a
+    function name reserved by a base/built-in (non-dynamic) function. This
+    covers registering a new function whose name collides with a base
+    function as well as attempts to replace or delete a base function."""
 
 
 class FunctionNotFoundError(ValueError):

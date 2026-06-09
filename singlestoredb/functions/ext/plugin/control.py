@@ -14,8 +14,10 @@ emitted from this module are:
   field validation.
 - ``REGISTER_FUNC_EXISTS`` — function with the same name is already registered
   and ``replace`` was not requested.
-- ``REGISTER_FUNC_NOT_DYNAMIC`` — ``replace`` requested for a function that was
-  not dynamically registered (e.g., a built-in).
+- ``REGISTER_FUNC_NOT_DYNAMIC`` — registration targets a name reserved by a
+  base/built-in function. This covers both replacing a base function (when
+  ``replace`` is requested) and registering a new function whose name collides
+  with a base function (even when ``replace`` is not requested).
 - ``DELETE_MISSING_PAYLOAD`` — ``@@delete`` called with an empty body.
 - ``DELETE_INVALID_PAYLOAD`` — ``@@delete`` body failed JSON parsing or field
   validation.
@@ -230,8 +232,8 @@ def _handle_delete(
         return _err(str(e), 'DELETE_FUNC_NOT_REGISTERED')
     except FunctionNotFoundError as e:
         return _err(str(e), 'DELETE_FUNC_NOT_FOUND')
-    except ValueError as e:
-        return _err(str(e), 'DELETE_INVALID_PAYLOAD')
+    except Exception as e:
+        return _err(str(e), 'INTERNAL_ERROR')
 
     # Notify main process so it can re-fork workers with updated state
     if pipe_write_fd is not None:
