@@ -133,26 +133,34 @@ class TestControlSignalDispatch(unittest.TestCase):
         shared = self._make_shared_registry()
         result = dispatch_control_signal('@@unknown', b'', shared)
         assert result.ok is False
-        assert 'Unknown control signal' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'UNKNOWN_SIGNAL'
+        assert 'Unknown control signal' in body['message']
 
     def test_register_missing_payload(self):
         shared = self._make_shared_registry()
         result = dispatch_control_signal('@@register', b'', shared)
         assert result.ok is False
-        assert 'Missing registration payload' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_MISSING_PAYLOAD'
+        assert 'Missing registration payload' in body['message']
 
     def test_register_invalid_json(self):
         shared = self._make_shared_registry()
         result = dispatch_control_signal('@@register', b'not json', shared)
         assert result.ok is False
-        assert 'Invalid JSON' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
+        assert 'Invalid JSON' in body['message']
 
     def test_register_missing_function_name(self):
         shared = self._make_shared_registry()
         payload = json.dumps({'args': [], 'returns': [], 'body': 'x'}).encode()
         result = dispatch_control_signal('@@register', payload, shared)
         assert result.ok is False
-        assert 'name' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
+        assert 'name' in body['message']
 
     def test_register_missing_args(self):
         shared = self._make_shared_registry()
@@ -161,7 +169,9 @@ class TestControlSignalDispatch(unittest.TestCase):
         }).encode()
         result = dispatch_control_signal('@@register', payload, shared)
         assert result.ok is False
-        assert 'args' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
+        assert 'args' in body['message']
 
     def test_register_missing_returns(self):
         shared = self._make_shared_registry()
@@ -170,7 +180,9 @@ class TestControlSignalDispatch(unittest.TestCase):
         }).encode()
         result = dispatch_control_signal('@@register', payload, shared)
         assert result.ok is False
-        assert 'returns' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
+        assert 'returns' in body['message']
 
     def test_register_missing_body(self):
         shared = self._make_shared_registry()
@@ -179,7 +191,9 @@ class TestControlSignalDispatch(unittest.TestCase):
         }).encode()
         result = dispatch_control_signal('@@register', payload, shared)
         assert result.ok is False
-        assert 'body' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
+        assert 'body' in body['message']
 
     def test_register_args_not_list(self):
         shared = self._make_shared_registry()
@@ -189,26 +203,48 @@ class TestControlSignalDispatch(unittest.TestCase):
         }).encode()
         result = dispatch_control_signal('@@register', payload, shared)
         assert result.ok is False
-        assert 'args' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
+        assert 'args' in body['message']
+
+    def test_register_func_exists(self):
+        shared = self._make_shared_registry()
+        shared.create_function.side_effect = ValueError(
+            'Function "f" already exists (use replace=true to overwrite)',
+        )
+        payload = json.dumps({
+            'name': 'f', 'args': [], 'returns': [], 'body': 'x',
+        }).encode()
+        result = dispatch_control_signal('@@register', payload, shared)
+        assert result.ok is False
+        body = json.loads(result.data)
+        assert body['code'] == 'REGISTER_FUNC_EXISTS'
+        assert 'already exists' in body['message']
 
     def test_delete_missing_payload(self):
         shared = self._make_shared_registry()
         result = dispatch_control_signal('@@delete', b'', shared)
         assert result.ok is False
-        assert 'Missing deletion payload' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'DELETE_MISSING_PAYLOAD'
+        assert 'Missing deletion payload' in body['message']
 
     def test_delete_invalid_json(self):
         shared = self._make_shared_registry()
         result = dispatch_control_signal('@@delete', b'not json', shared)
         assert result.ok is False
-        assert 'Invalid JSON' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'DELETE_INVALID_PAYLOAD'
+        assert 'Invalid JSON' in body['message']
 
     def test_delete_missing_function_name(self):
         shared = self._make_shared_registry()
         payload = json.dumps({}).encode()
         result = dispatch_control_signal('@@delete', payload, shared)
         assert result.ok is False
-        assert 'name' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'DELETE_INVALID_PAYLOAD'
+        assert 'name' in body['message']
 
     def test_delete_nonexistent_function(self):
         shared = self._make_shared_registry()
@@ -218,7 +254,9 @@ class TestControlSignalDispatch(unittest.TestCase):
         payload = json.dumps({'name': 'no_such'}).encode()
         result = dispatch_control_signal('@@delete', payload, shared)
         assert result.ok is False
-        assert 'not found' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'DELETE_FUNC_NOT_FOUND'
+        assert 'not found' in body['message']
 
     def test_delete_base_function(self):
         shared = self._make_shared_registry()
@@ -228,7 +266,9 @@ class TestControlSignalDispatch(unittest.TestCase):
         payload = json.dumps({'name': 'base_fn'}).encode()
         result = dispatch_control_signal('@@delete', payload, shared)
         assert result.ok is False
-        assert 'not a dynamically registered function' in result.data
+        body = json.loads(result.data)
+        assert body['code'] == 'DELETE_FUNC_NOT_REGISTERED'
+        assert 'not a dynamically registered function' in body['message']
 
     def test_delete_success(self):
         shared = self._make_shared_registry()
