@@ -380,15 +380,45 @@ class TestDeleteFunctionIntegration(unittest.TestCase):
 
     def test_delete_base_function_errors(self):
         shared = self._make_real_shared_registry()
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(FunctionNotDynamicError) as ctx:
             shared.delete_function('base_fn')
         assert 'not a dynamically registered function' in str(ctx.exception)
 
     def test_delete_nonexistent_errors(self):
         shared = self._make_real_shared_registry()
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(FunctionNotFoundError) as ctx:
             shared.delete_function('ghost')
         assert 'not found' in str(ctx.exception)
+
+    def test_dispatch_delete_nonexistent_returns_func_not_found(self):
+        """End-to-end @@delete on a real registry returns the typed code.
+
+        Regression test: prior to the typed-exception fix in
+        SharedRegistry.delete_function, this scenario fell through to
+        the generic ValueError branch and returned DELETE_INVALID_PAYLOAD.
+        """
+        shared = self._make_real_shared_registry()
+        payload = json.dumps({'name': 'ghost'}).encode()
+        result = dispatch_control_signal('@@delete', payload, shared)
+        assert result.ok is False
+        body = json.loads(result.data)
+        assert body['code'] == 'DELETE_FUNC_NOT_FOUND'
+        assert 'not found' in body['message']
+
+    def test_dispatch_delete_base_function_returns_not_registered(self):
+        """End-to-end @@delete on a base function returns the typed code.
+
+        Regression test: prior to the typed-exception fix in
+        SharedRegistry.delete_function, this scenario fell through to
+        the generic ValueError branch and returned DELETE_INVALID_PAYLOAD.
+        """
+        shared = self._make_real_shared_registry()
+        payload = json.dumps({'name': 'base_fn'}).encode()
+        result = dispatch_control_signal('@@delete', payload, shared)
+        assert result.ok is False
+        body = json.loads(result.data)
+        assert body['code'] == 'DELETE_FUNC_NOT_REGISTERED'
+        assert 'not a dynamically registered function' in body['message']
 
     def test_replace_base_via_shared_rejected(self):
         shared = self._make_real_shared_registry()
