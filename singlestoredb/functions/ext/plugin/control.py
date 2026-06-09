@@ -125,7 +125,7 @@ def _handle_register(
 
     try:
         body = json.loads(request_data)
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
         return _err(f'Invalid JSON: {e}', 'REGISTER_INVALID_PAYLOAD')
 
     function_name = body.get('name')
@@ -155,6 +155,11 @@ def _handle_register(
         )
 
     replace = body.get('replace', False)
+    if not isinstance(replace, bool):
+        return _err(
+            'Field "replace" must be a boolean',
+            'REGISTER_INVALID_PAYLOAD',
+        )
 
     # Build signature JSON matching describe-functions schema
     signature = json.dumps({
@@ -198,7 +203,7 @@ def _handle_delete(
 
     try:
         body = json.loads(request_data)
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
         return _err(f'Invalid JSON: {e}', 'DELETE_INVALID_PAYLOAD')
 
     function_name = body.get('name')

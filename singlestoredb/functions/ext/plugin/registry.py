@@ -450,7 +450,11 @@ class FunctionRegistry:
                 element schema (must contain a 'name' field). Currently
                 only the name is used for matching.
 
-        Raises ValueError if the function does not exist.
+        Raises:
+            ValueError: if the signature JSON is missing a "name" field.
+            FunctionNotFoundError: if no function with that name is registered.
+            FunctionNotDynamicError: if the function exists but was not
+                dynamically registered (e.g., a built-in).
         """
         sig = json.loads(signature_json)
         name = sig.get('name')
