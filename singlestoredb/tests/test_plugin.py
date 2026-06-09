@@ -252,6 +252,20 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert body['code'] == 'REGISTER_FUNC_NOT_DYNAMIC'
         assert 'not a dynamically registered function' in body['message']
 
+    def test_register_unexpected_internal_error(self):
+        shared = self._make_shared_registry()
+        shared.create_function.side_effect = RuntimeError(
+            'simulated infrastructure failure',
+        )
+        payload = json.dumps({
+            'name': 'f', 'args': [], 'returns': [], 'body': 'x',
+        }).encode()
+        result = dispatch_control_signal('@@register', payload, shared)
+        assert result.ok is False
+        body = json.loads(result.data)
+        assert body['code'] == 'INTERNAL_ERROR'
+        assert 'simulated infrastructure failure' in body['message']
+
     def test_delete_missing_payload(self):
         shared = self._make_shared_registry()
         result = dispatch_control_signal('@@delete', b'', shared)

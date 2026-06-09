@@ -169,7 +169,7 @@ def _handle_register(
         return _err(str(e), 'REGISTER_FUNC_EXISTS')
     except FunctionNotDynamicError as e:
         return _err(str(e), 'REGISTER_FUNC_NOT_DYNAMIC')
-    except Exception as e:
+    except (ValueError, SyntaxError, TypeError) as e:
         return _err(str(e), 'REGISTER_INVALID_PAYLOAD')
 
     # Notify main process so it can re-fork workers with updated state
