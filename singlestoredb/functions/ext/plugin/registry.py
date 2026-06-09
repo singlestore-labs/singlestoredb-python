@@ -399,16 +399,16 @@ class FunctionRegistry:
                 'signature JSON must contain a "name" field',
             )
 
+        if func_name in self._base_function_names:
+            raise FunctionNotDynamicError(
+                f"Cannot register '{func_name}': "
+                f'name is reserved by a built-in (non-dynamic) function',
+            )
+
         if not replace and func_name in self.functions:
             raise FunctionExistsError(
                 f'Function "{func_name}" already exists '
                 f'(use replace=true to overwrite)',
-            )
-
-        if replace and func_name in self._base_function_names:
-            raise FunctionNotDynamicError(
-                f"Cannot replace '{func_name}': "
-                f'not a dynamically registered function',
             )
 
         if replace and func_name in self.functions:

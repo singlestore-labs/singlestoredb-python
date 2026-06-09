@@ -360,16 +360,16 @@ class TestFunctionRegistryDeleteGuard(unittest.TestCase):
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
         })
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(FunctionNotDynamicError) as ctx:
             reg.create_function(sig, 'return x + 1', replace=True)
-        assert 'not a dynamically registered function' in str(ctx.exception)
+        assert 'reserved by a built-in' in str(ctx.exception)
 
-    def test_register_base_name_without_replace_returns_exists(self):
-        """Regression: a first-time @@register colliding with a base
-        function name must raise FunctionExistsError (so the dispatcher
-        emits REGISTER_FUNC_EXISTS), not FunctionNotDynamicError. The
-        NOT_DYNAMIC code is reserved for replace=True against a
-        non-dynamic function, per ADR-0001.
+    def test_register_base_name_without_replace_returns_not_dynamic(self):
+        """A @@register colliding with a base (non-dynamic) function name
+        must raise FunctionNotDynamicError regardless of ``replace``, so
+        the dispatcher emits REGISTER_FUNC_NOT_DYNAMIC. Suggesting
+        ``replace=true`` would be misleading since base names cannot be
+        overwritten by either path.
         """
         reg = self._make_registry_with_base()
         sig = json.dumps({
@@ -377,9 +377,9 @@ class TestFunctionRegistryDeleteGuard(unittest.TestCase):
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
         })
-        with self.assertRaises(FunctionExistsError) as ctx:
+        with self.assertRaises(FunctionNotDynamicError) as ctx:
             reg.create_function(sig, 'return x + 1', replace=False)
-        assert 'already exists' in str(ctx.exception)
+        assert 'reserved by a built-in' in str(ctx.exception)
 
 
 class TestDeleteFunctionIntegration(unittest.TestCase):
@@ -458,9 +458,9 @@ class TestDeleteFunctionIntegration(unittest.TestCase):
             'args': [{'name': 'x', 'dtype': 'int', 'sql': 'INT'}],
             'returns': [{'name': '', 'dtype': 'int', 'sql': 'INT'}],
         })
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(FunctionNotDynamicError) as ctx:
             shared.create_function(sig, 'return x + 1', True)
-        assert 'not a dynamically registered function' in str(ctx.exception)
+        assert 'reserved by a built-in' in str(ctx.exception)
 
     def test_register_delete_reregister(self):
         shared = self._make_real_shared_registry()
