@@ -1411,9 +1411,15 @@ class Application(object):
 
                 cancel_event = threading.Event()
 
-                with timer('parse_input'):
-                    inputs = input_handler['load'](  # type: ignore
-                        func_info['colspec'], b''.join(data),
+                # Parsing the request body can be CPU heavy (esp. for
+                # rowdat_1 / arrow payloads). Run it in the default
+                # executor thread pool so the main uvicorn loop is not
+                # blocked while inputs are being decoded.
+                load_input = input_handler['load']  # type: ignore
+                colspec = func_info['colspec']
+                async with timer('parse_input'):
+                    inputs = await to_thread(
+                        lambda: load_input(colspec, b''.join(data)),
                     )
 
                 # Async user UDFs share a single dedicated event-loop thread
@@ -1480,9 +1486,15 @@ class Application(object):
                     elif task is func_task:
                         result.extend(task.result())
 
-                with timer('format_output'):
-                    body = output_handler['dump'](
-                        [x[1] for x in func_info['returns']], *result,  # type: ignore
+                # Serializing the response can also be CPU heavy. Run it
+                # in the default executor thread pool so the main
+                # uvicorn loop stays responsive to other connections
+                # while this request is being encoded.
+                dump_output = output_handler['dump']  # type: ignore
+                return_types = [x[1] for x in func_info['returns']]
+                async with timer('format_output'):
+                    body = await to_thread(
+                        dump_output, return_types, *result,
                     )
 
                 await send(output_handler['response'])
