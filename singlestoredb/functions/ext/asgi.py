@@ -139,6 +139,10 @@ async def _cancellable_run(
 # Each `to_thread` worker thread owns a long-lived event loop reused across
 # requests, so loop-bound resources (HTTP pools, DB sessions, sockets) can
 # survive between calls handled by the same thread.
+#
+# This per-thread loop is only used for SYNC user UDFs: a sync UDF blocks
+# its worker thread for the duration of the call, so giving each worker
+# thread its own loop avoids cross-thread loop sharing for those calls.
 _thread_local = threading.local()
 _loop_registry: 'Set[asyncio.AbstractEventLoop]' = set()
 _loop_registry_lock = threading.Lock()
@@ -197,6 +201,137 @@ def _shutdown_thread_loops() -> None:
 
 
 atexit.register(_shutdown_thread_loops)
+
+
+# Dedicated event loop used for ALL async UDF requests.
+#
+# Async UDFs commonly create resources that are bound to the event loop
+# they are first used on (httpx connection pools, async DB clients, anyio
+# streams, ...). Dispatching async requests to ad-hoc worker threads —
+# each with its own loop — produced "<asyncio.locks.Event ...> is bound
+# to a different event loop" errors when those cached resources were
+# reused by a request that landed on a different worker thread.
+#
+# Routing every async UDF onto a single dedicated loop fixes that, and
+# also gives true concurrency across requests: ``run_coroutine_threadsafe``
+# schedules each new coroutine immediately so that incoming requests do
+# not queue behind in-flight ones.
+#
+# Sync UDFs intentionally still go through the worker-thread / per-thread
+# loop path above: a sync UDF would block this dedicated loop and starve
+# every other in-flight async request.
+_async_dispatch_loop: 'Optional[asyncio.AbstractEventLoop]' = None
+_async_dispatch_thread: 'Optional[threading.Thread]' = None
+_async_dispatch_lock = threading.Lock()
+
+
+def _get_async_dispatch_loop() -> asyncio.AbstractEventLoop:
+    """
+    Return (lazily creating) the singleton async-dispatch event loop.
+
+    The loop is owned by a dedicated daemon thread that runs ``run_forever``
+    for the lifetime of the process. All async UDF coroutines are scheduled
+    on this loop so that loop-bound resources can be safely reused across
+    requests.
+    """
+    global _async_dispatch_loop, _async_dispatch_thread
+
+    loop = _async_dispatch_loop
+    if loop is not None and not loop.is_closed():
+        return loop
+
+    with _async_dispatch_lock:
+        if _async_dispatch_loop is not None and \
+                not _async_dispatch_loop.is_closed():
+            return _async_dispatch_loop
+
+        ready = threading.Event()
+        captured: List[asyncio.AbstractEventLoop] = []
+
+        def run_loop() -> None:
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            captured.append(new_loop)
+            ready.set()
+            try:
+                new_loop.run_forever()
+            finally:
+                try:
+                    new_loop.run_until_complete(new_loop.shutdown_asyncgens())
+                except Exception:
+                    pass
+                try:
+                    new_loop.run_until_complete(
+                        new_loop.shutdown_default_executor(),
+                    )
+                except Exception:
+                    pass
+                try:
+                    new_loop.close()
+                except Exception:
+                    pass
+
+        thread = threading.Thread(
+            target=run_loop,
+            name='singlestoredb-udf-async-dispatch',
+            daemon=True,
+        )
+        thread.start()
+        ready.wait()
+
+        _async_dispatch_loop = captured[0]
+        _async_dispatch_thread = thread
+        return _async_dispatch_loop
+
+
+def _get_async_dispatch_thread() -> 'Optional[threading.Thread]':
+    """Return the dedicated dispatch thread (or ``None`` if not started)."""
+    return _async_dispatch_thread
+
+
+async def _dispatch_to_async_loop(coro: Any) -> Any:
+    """
+    Schedule ``coro`` on the dedicated async-dispatch loop and await its result.
+
+    The coroutine begins running immediately on the dispatch loop — it does
+    NOT wait for any earlier in-flight async UDF to complete — so concurrent
+    async requests run in parallel on a single shared loop.
+
+    Cancellation of the awaiting task on the caller's loop is propagated
+    best-effort to the work scheduled on the dispatch loop. The user code's
+    ``cancel_event`` (set by the request handler on timeout / disconnect)
+    remains the authoritative cancellation signal because it is observed by
+    ``_cancellable_run`` from inside the dispatch loop.
+    """
+    loop = _get_async_dispatch_loop()
+    cf = asyncio.run_coroutine_threadsafe(coro, loop)
+    try:
+        return await asyncio.wrap_future(cf)
+    except asyncio.CancelledError:
+        cf.cancel()
+        raise
+
+
+def _shutdown_async_dispatch_loop() -> None:
+    """Best-effort cleanup of the dedicated async-dispatch loop at exit."""
+    global _async_dispatch_loop, _async_dispatch_thread
+    with _async_dispatch_lock:
+        loop = _async_dispatch_loop
+        thread = _async_dispatch_thread
+        _async_dispatch_loop = None
+        _async_dispatch_thread = None
+
+    if loop is not None and not loop.is_closed():
+        try:
+            loop.call_soon_threadsafe(loop.stop)
+        except Exception:
+            pass
+
+    if thread is not None:
+        thread.join(timeout=5)
+
+
+atexit.register(_shutdown_async_dispatch_loop)
 
 
 # Use negative values to indicate unsigned ints / binary data / usec time precision
@@ -1281,16 +1416,33 @@ class Application(object):
                         func_info['colspec'], b''.join(data),
                     )
 
-                func_task = asyncio.create_task(
-                    to_thread(
-                        lambda: _run_on_thread_loop(
+                # Async user UDFs share a single dedicated event-loop thread
+                # so that loop-bound resources (httpx pools, async clients,
+                # ...) can be reused across requests; new requests are
+                # scheduled immediately and run concurrently on that loop.
+                # Sync user UDFs continue to use the worker-thread pool (one
+                # persistent loop per thread) because a sync call would
+                # block the shared dispatch loop and starve other requests.
+                if func_info.get('is_async'):
+                    func_task = asyncio.create_task(
+                        _dispatch_to_async_loop(
                             _cancellable_run(
                                 cancel_event,
                                 func(cancel_event, call_timer, *inputs),
                             ),
                         ),
-                    ),
-                )
+                    )
+                else:
+                    func_task = asyncio.create_task(
+                        to_thread(
+                            lambda: _run_on_thread_loop(
+                                _cancellable_run(
+                                    cancel_event,
+                                    func(cancel_event, call_timer, *inputs),
+                                ),
+                            ),
+                        ),
+                    )
                 disconnect_task = asyncio.create_task(
                     asyncio.sleep(int(1e9))
                     if ignore_cancel else cancel_on_disconnect(receive),
