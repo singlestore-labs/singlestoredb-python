@@ -3,7 +3,7 @@ Control signal dispatch for @@health, @@functions, @@register, @@delete.
 
 Matches the Rust wasm-udf-server's dispatch_control_signal behavior, including
 the structured-error-code shape from ADR 0001
-(``{"message": "...", "code": "SCREAMING_SNAKE"}`` on errors). The authoritative
+(``{"error": "...", "code": "SCREAMING_SNAKE"}`` on errors). The authoritative
 catalog of codes lives in ADR 0001 in the ``wasm-udf-server`` repo; the codes
 emitted from this module are:
 
@@ -53,7 +53,7 @@ class ControlResult:
     # JSON response. On success (``ok=True``) this is a handler-specific
     # document such as ``{"status":"ok"}`` or ``{"functions":[...]}``. On
     # failure (``ok=False``) this is the ADR 0001 error shape
-    # ``{"message":"...","code":"..."}``.
+    # ``{"error":"...","code":"..."}``.
     data: str
 
 
@@ -61,7 +61,7 @@ def _err(message: str, code: str) -> ControlResult:
     """Build an error ControlResult with the ADR 0001 JSON shape."""
     return ControlResult(
         ok=False,
-        data=json.dumps({'message': message, 'code': code}),
+        data=json.dumps({'error': message, 'code': code}),
     )
 
 

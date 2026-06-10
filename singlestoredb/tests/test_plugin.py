@@ -138,7 +138,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'UNKNOWN_SIGNAL'
-        assert 'Unknown control signal' in body['message']
+        assert 'Unknown control signal' in body['error']
 
     def test_internal_error_on_handler_failure(self):
         shared = self._make_shared_registry()
@@ -151,7 +151,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'INTERNAL_ERROR'
-        assert 'boom' in body['message']
+        assert 'boom' in body['error']
 
     def test_register_missing_payload(self):
         shared = self._make_shared_registry()
@@ -159,7 +159,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_MISSING_PAYLOAD'
-        assert 'Missing registration payload' in body['message']
+        assert 'Missing registration payload' in body['error']
 
     def test_register_invalid_json(self):
         shared = self._make_shared_registry()
@@ -167,7 +167,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
-        assert 'Invalid JSON' in body['message']
+        assert 'Invalid JSON' in body['error']
 
     def test_register_missing_function_name(self):
         shared = self._make_shared_registry()
@@ -176,7 +176,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
-        assert 'name' in body['message']
+        assert 'name' in body['error']
 
     def test_register_missing_args(self):
         shared = self._make_shared_registry()
@@ -187,7 +187,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
-        assert 'args' in body['message']
+        assert 'args' in body['error']
 
     def test_register_missing_returns(self):
         shared = self._make_shared_registry()
@@ -198,7 +198,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
-        assert 'returns' in body['message']
+        assert 'returns' in body['error']
 
     def test_register_missing_body(self):
         shared = self._make_shared_registry()
@@ -209,7 +209,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
-        assert 'body' in body['message']
+        assert 'body' in body['error']
 
     def test_register_args_not_list(self):
         shared = self._make_shared_registry()
@@ -221,7 +221,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
-        assert 'args' in body['message']
+        assert 'args' in body['error']
 
     def test_register_name_not_string(self):
         shared = self._make_shared_registry()
@@ -232,7 +232,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
-        assert 'name' in body['message']
+        assert 'name' in body['error']
 
     def test_register_body_not_string(self):
         shared = self._make_shared_registry()
@@ -243,7 +243,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
-        assert 'body' in body['message']
+        assert 'body' in body['error']
 
     def test_register_arg_missing_dtype(self):
         """An arg dict missing 'dtype' is a client-shape error and must
@@ -260,7 +260,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
-        assert 'dtype' in body['message']
+        assert 'dtype' in body['error']
 
     def test_register_return_missing_dtype(self):
         """A returns dict missing 'dtype' is a client-shape error and must
@@ -277,7 +277,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_INVALID_PAYLOAD'
-        assert 'dtype' in body['message']
+        assert 'dtype' in body['error']
 
     def test_register_func_exists(self):
         shared = self._make_shared_registry()
@@ -291,7 +291,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_FUNC_EXISTS'
-        assert 'already exists' in body['message']
+        assert 'already exists' in body['error']
 
     def test_register_replace_base_function(self):
         shared = self._make_shared_registry()
@@ -306,7 +306,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'REGISTER_FUNC_NOT_DYNAMIC'
-        assert 'not a dynamically registered function' in body['message']
+        assert 'not a dynamically registered function' in body['error']
 
     def test_register_unexpected_internal_error(self):
         shared = self._make_shared_registry()
@@ -320,7 +320,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'INTERNAL_ERROR'
-        assert 'simulated infrastructure failure' in body['message']
+        assert 'simulated infrastructure failure' in body['error']
 
     def test_delete_missing_payload(self):
         shared = self._make_shared_registry()
@@ -328,7 +328,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'DELETE_MISSING_PAYLOAD'
-        assert 'Missing deletion payload' in body['message']
+        assert 'Missing deletion payload' in body['error']
 
     def test_delete_invalid_json(self):
         shared = self._make_shared_registry()
@@ -336,7 +336,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'DELETE_INVALID_PAYLOAD'
-        assert 'Invalid JSON' in body['message']
+        assert 'Invalid JSON' in body['error']
 
     def test_delete_missing_function_name(self):
         shared = self._make_shared_registry()
@@ -345,7 +345,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'DELETE_INVALID_PAYLOAD'
-        assert 'name' in body['message']
+        assert 'name' in body['error']
 
     def test_delete_name_not_string(self):
         """A non-string name (e.g. dict) must surface as
@@ -356,7 +356,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'DELETE_INVALID_PAYLOAD'
-        assert 'name' in body['message']
+        assert 'name' in body['error']
 
     def test_delete_nonexistent_function(self):
         shared = self._make_shared_registry()
@@ -368,7 +368,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'DELETE_FUNC_NOT_FOUND'
-        assert 'not found' in body['message']
+        assert 'not found' in body['error']
 
     def test_delete_base_function(self):
         shared = self._make_shared_registry()
@@ -380,7 +380,7 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'DELETE_FUNC_NOT_REGISTERED'
-        assert 'not a dynamically registered function' in body['message']
+        assert 'not a dynamically registered function' in body['error']
 
     def test_delete_success(self):
         shared = self._make_shared_registry()
@@ -528,7 +528,7 @@ class TestDeleteFunctionIntegration(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'DELETE_FUNC_NOT_FOUND'
-        assert 'not found' in body['message']
+        assert 'not found' in body['error']
 
     def test_dispatch_delete_base_function_returns_not_registered(self):
         """End-to-end @@delete on a base function returns the typed code.
@@ -543,7 +543,7 @@ class TestDeleteFunctionIntegration(unittest.TestCase):
         assert result.ok is False
         body = json.loads(result.data)
         assert body['code'] == 'DELETE_FUNC_NOT_REGISTERED'
-        assert 'not a dynamically registered function' in body['message']
+        assert 'not a dynamically registered function' in body['error']
 
     def test_replace_base_via_shared_rejected(self):
         shared = self._make_real_shared_registry()
