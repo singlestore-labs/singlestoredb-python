@@ -61,11 +61,18 @@ async def run_udf_app(
             f'You can only define a maximum of {MAX_UDFS_LIMIT} functions.',
         )
 
+    # Increase the timeout so the uvicorn server is not the one closing idle connections.
+    # Avoiding TIME_WAIT state, rendering the client_port unusable for 60s (default TIME_WAIT duration).
+    keep_alive_timeout = int(
+        os.environ.get('SINGLESTOREDB_UDF_KEEPALIVE_TIMEOUT', '120'),
+    )
+
     config = uvicorn.Config(
         app,
         host='0.0.0.0',
         port=app_config.listen_port,
         log_config=app.get_uvicorn_log_config(),
+        timeout_keep_alive=keep_alive_timeout,
     )
 
     # Register the functions only if the app is running interactively.
