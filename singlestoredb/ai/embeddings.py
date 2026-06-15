@@ -33,21 +33,6 @@ http_trace_id: 'contextvars.ContextVar[str]' = contextvars.ContextVar(
 _http_log = logging.getLogger('singlestoredb.ai.embeddings.http')
 
 
-def _fmt_addr(addr: Any) -> str:
-    """Format a ``(host, port, ...)`` sockaddr tuple as ``host:port``."""
-    if not addr:
-        return '?'
-    try:
-        return f'{addr[0]}:{addr[1]}'
-    except Exception:
-        return str(addr)
-
-
-# Hosts already logged as transport-pinned, so we only emit one line per host
-# instead of one per request.
-_pin_logged_hosts: 'set[str]' = set()
-
-
 class HttpTraceIdFilter(logging.Filter):
     """
     Stamps every log record with the current :data:`http_trace_id` value
@@ -126,43 +111,6 @@ class TracingAsyncTransport(httpx.AsyncBaseTransport):
     ) -> httpx.Response:
         tid = http_trace_id.get()
         rid = uuid.uuid4().hex[:6]
-
-        # Deterministic, resolver-independent IP pin. A DNS pin (monkeypatching
-        # socket.getaddrinfo) is bypassed by httpx/anyio's resolution path, so
-        # connections still spread across every NLB IP and hit the cross-AZ
-        # source-port collision. Here we instead dial a fixed IP at the
-        # transport while preserving TLS SNI + certificate validation + the
-        # Host header, so every embedding request lands on one endpoint
-        # regardless of how DNS is resolved. Enabled via
-        # SINGLESTOREDB_EMBEDDINGS_PIN_IP (optionally restricted to
-        # SINGLESTOREDB_EMBEDDINGS_PIN_HOST). Read per-request so a pin set
-        # after this client was constructed (e.g. by the EMBED_TEXT notebook)
-        # still takes effect.
-        pin_ip = os.environ.get('SINGLESTOREDB_EMBEDDINGS_PIN_IP')
-        if pin_ip:
-            pin_host = os.environ.get('SINGLESTOREDB_EMBEDDINGS_PIN_HOST')
-            host = request.url.host
-            if host and host != pin_ip and (not pin_host or host == pin_host):
-                try:
-                    # Preserve the original Host header (httpx set it to the
-                    # hostname at build time); only ensure it is present.
-                    if 'host' not in request.headers:
-                        request.headers['Host'] = host
-                    request.extensions = {
-                        **request.extensions, 'sni_hostname': host,
-                    }
-                    request.url = request.url.copy_with(host=pin_ip)
-                    if host not in _pin_logged_hosts:
-                        _pin_logged_hosts.add(host)
-                        _http_log.warning(
-                            '[%s/%s] TRANSPORT IP PIN active: dialing %s via %s '
-                            '(SNI/cert/Host preserved)', tid, rid, host, pin_ip,
-                        )
-                except Exception as e:
-                    _http_log.warning(
-                        '[%s/%s] TRANSPORT IP PIN failed: %r', tid, rid, e,
-                    )
-
         try:
             body_len = len(request.content or b'')
         except httpx.RequestNotRead:
@@ -182,28 +130,9 @@ class TracingAsyncTransport(httpx.AsyncBaseTransport):
             raise
 
         t_headers = time.perf_counter()
-        # Surface the actual local/remote socket addresses for this request so
-        # the (src_ip:src_port -> dst_ip:dst_port) 4-tuple can be correlated
-        # with node-side tcpdump/conntrack captures. ``src`` here is the pod's
-        # chosen ephemeral port (the one Cilium masquerade normally preserves),
-        # and ``dst`` is the resolved endpoint IP actually connected to.
-        local_addr = remote_addr = None
-        try:
-            stream = response.extensions.get('network_stream')
-            if stream is not None:
-                local_addr = stream.get_extra_info('client_addr')
-                remote_addr = stream.get_extra_info('server_addr')
-                if local_addr is None or remote_addr is None:
-                    sock = stream.get_extra_info('socket')
-                    if sock is not None:
-                        local_addr = local_addr or sock.getsockname()
-                        remote_addr = remote_addr or sock.getpeername()
-        except Exception:
-            pass
         _http_log.info(
-            '[%s/%s] <- headers status=%d ttfb=%.3fs src=%s dst=%s',
+            '[%s/%s] <- headers status=%d ttfb=%.3fs',
             tid, rid, response.status_code, t_headers - t0,
-            _fmt_addr(local_addr), _fmt_addr(remote_addr),
         )
 
         # Wrap the body stream so we also time how long the body download
