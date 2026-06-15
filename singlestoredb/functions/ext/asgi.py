@@ -115,6 +115,14 @@ async def to_thread(
 
 
 async def _poll_cancel(cancel_event: threading.Event) -> None:
+    """
+    Return once ``cancel_event`` is set, polling it on the running loop.
+
+    ``threading.Event`` has no awaitable interface, so this bridges the
+    cross-thread cancellation signal into the dispatch loop by polling on a
+    short interval. Used as a sibling task to the UDF coroutine in
+    ``_cancellable_run``.
+    """
     while not cancel_event.is_set():
         await asyncio.sleep(0.1)
 
@@ -123,6 +131,16 @@ async def _cancellable_run(
     cancel_event: threading.Event,
     coro: Any,
 ) -> Any:
+    """
+    Run ``coro`` but abandon it if ``cancel_event`` is tripped.
+
+    The coroutine races ``_poll_cancel``; whichever finishes first wins. If
+    the cancel signal wins, the coroutine's task is cancelled and
+    ``CancelledError`` is raised, otherwise its result (or exception) is
+    propagated. This is the authoritative cancellation path for async UDFs:
+    they run on the shared dispatch loop, where ordinary task cancellation
+    from the request loop does not reach them.
+    """
     task = asyncio.create_task(coro)
     cancel_check = asyncio.create_task(_poll_cancel(cancel_event))
     done, pending = await asyncio.wait(

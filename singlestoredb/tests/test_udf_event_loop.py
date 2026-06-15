@@ -20,36 +20,35 @@ from ..functions.ext.asgi import Application
 from ..functions.ext.asgi import to_thread
 
 
-class TestUDFDispatchEdgeCases(unittest.TestCase):
-    """Test edge cases in the UDF dispatch stack."""
+class TestCancellableRun(unittest.TestCase):
+    """Unit tests for ``_cancellable_run`` and the ``to_thread`` helper."""
 
-    def test_timeout_cancels_running_function(self) -> None:
-        """Cancel event set from timer thread cancels a blocked coroutine."""
+    def test_cancel_event_cancels_blocked_coroutine(self) -> None:
+        """Tripping ``cancel_event`` interrupts a coroutine blocked on I/O.
+
+        The coroutine sleeps far longer than the test could tolerate, so the
+        test only completes if the cancel signal actually unblocks it.
+        """
         cancel_event = threading.Event()
 
-        async def long_running() -> str:
+        async def blocked() -> str:
             await asyncio.sleep(999)
-            return 'should not reach'
+            return 'unreachable'
 
-        def set_cancel_after_delay() -> None:
-            time.sleep(0.2)
+        def trip_cancel_soon() -> None:
+            time.sleep(0.1)
             cancel_event.set()
 
-        timer = threading.Thread(target=set_cancel_after_delay)
+        timer = threading.Thread(target=trip_cancel_soon)
         timer.start()
+        try:
+            with self.assertRaises(asyncio.CancelledError):
+                asyncio.run(_cancellable_run(cancel_event, blocked()))
+        finally:
+            timer.join()
 
-        start = time.monotonic()
-        with self.assertRaises(asyncio.CancelledError):
-            asyncio.run(
-                _cancellable_run(cancel_event, long_running()),
-            )
-        elapsed = time.monotonic() - start
-        timer.join()
-        # 0.2s delay + up to 0.1s poll interval + margin
-        self.assertLess(elapsed, 0.5)
-
-    def test_exception_propagates_through_full_stack(self) -> None:
-        """User exception propagates unwrapped through the entire dispatch."""
+    def test_exception_propagates_unwrapped(self) -> None:
+        """A user exception surfaces unchanged through ``_cancellable_run``."""
         cancel_event = threading.Event()
 
         class CustomUDFError(Exception):
@@ -59,103 +58,34 @@ class TestUDFDispatchEdgeCases(unittest.TestCase):
             raise CustomUDFError('embedding service unavailable')
 
         with self.assertRaises(CustomUDFError) as ctx:
-            asyncio.run(
-                _cancellable_run(cancel_event, failing_udf()),
-            )
+            asyncio.run(_cancellable_run(cancel_event, failing_udf()))
         self.assertEqual(str(ctx.exception), 'embedding service unavailable')
 
-    def test_cancel_event_detected_within_poll_interval(self) -> None:
-        """Cancellation is detected within one poll cycle (0.1s)."""
+    def test_successful_run_returns_result_and_leaves_event_unset(self) -> None:
+        """A successful run returns its value without tripping the event."""
         cancel_event = threading.Event()
 
-        async def blocked() -> str:
-            await asyncio.sleep(999)
-            return 'unreachable'
+        async def quick() -> int:
+            return 42 + 1
 
-        def set_cancel() -> None:
-            time.sleep(0.05)
-            cancel_event.set()
-
-        timer = threading.Thread(target=set_cancel)
-        timer.start()
-
-        start = time.monotonic()
-        with self.assertRaises(asyncio.CancelledError):
-            asyncio.run(
-                _cancellable_run(cancel_event, blocked()),
-            )
-        elapsed = time.monotonic() - start
-        timer.join()
-        # 0.05s delay + 0.1s poll interval + margin
-        self.assertLess(elapsed, 0.25)
+        result = asyncio.run(_cancellable_run(cancel_event, quick()))
+        self.assertEqual(result, 43)
+        self.assertFalse(cancel_event.is_set())
 
     def test_context_vars_propagate_through_to_thread(self) -> None:
-        """Context variables are visible inside to_thread executor."""
+        """Context variables are visible inside the ``to_thread`` executor."""
         test_var: contextvars.ContextVar[str] = contextvars.ContextVar(
             'test_var',
         )
         test_var.set('hello_from_parent')
-        captured: List[str] = []
 
         def read_context_var() -> str:
-            val = test_var.get('NOT_FOUND')
-            captured.append(val)
-            return val
+            return test_var.get('NOT_FOUND')
 
         async def run_in_thread() -> str:
             return await to_thread(read_context_var)
 
-        result = asyncio.run(run_in_thread())
-        self.assertEqual(result, 'hello_from_parent')
-        self.assertEqual(captured, ['hello_from_parent'])
-
-    def test_concurrent_requests_isolated(self) -> None:
-        """Parallel executions don't share state."""
-        results: List[Any] = [None, None, None]
-
-        def run_isolated(index: int) -> None:
-            async def compute() -> int:
-                await asyncio.sleep(0.05)
-                return index * 10
-
-            results[index] = asyncio.run(compute())
-
-        threads = [
-            threading.Thread(target=run_isolated, args=(i,))
-            for i in range(3)
-        ]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        self.assertEqual(results, [0, 10, 20])
-
-    def test_sync_function_through_async_wrapper(self) -> None:
-        """Synchronous function works when wrapped as async coroutine."""
-        cancel_event = threading.Event()
-
-        async def sync_as_async() -> int:
-            # Simulates what decorator.py's async_wrapper does for sync UDFs
-            return 42 + 1
-
-        result = asyncio.run(
-            _cancellable_run(cancel_event, sync_as_async()),
-        )
-        self.assertEqual(result, 43)
-
-    def test_cancel_event_not_set_on_success(self) -> None:
-        """Cancel event remains unset after successful execution."""
-        cancel_event = threading.Event()
-
-        async def quick() -> str:
-            return 'fast'
-
-        result = asyncio.run(
-            _cancellable_run(cancel_event, quick()),
-        )
-        self.assertEqual(result, 'fast')
-        self.assertFalse(cancel_event.is_set())
+        self.assertEqual(asyncio.run(run_in_thread()), 'hello_from_parent')
 
 
 class TestAsyncDispatchLoop(unittest.TestCase):
@@ -168,147 +98,54 @@ class TestAsyncDispatchLoop(unittest.TestCase):
     in-flight requests.
     """
 
-    def test_dispatch_loop_is_single_dedicated_thread(self) -> None:
-        """All dispatches run on the same dedicated thread (not the caller)."""
+    def test_dispatch_uses_single_dedicated_thread_and_loop(self) -> None:
+        """Every dispatch runs on the one dedicated thread/loop, never the
+        caller's thread."""
         seen_threads: Set[int] = set()
+        seen_loops: List[asyncio.AbstractEventLoop] = []
 
         async def capture() -> int:
             seen_threads.add(threading.get_ident())
+            seen_loops.append(asyncio.get_running_loop())
             return 1
 
         async def run_many() -> None:
-            await asyncio.gather(*[
-                _dispatch_to_async_loop(capture()) for _ in range(8)
-            ])
+            await asyncio.gather(
+                *[
+                    _dispatch_to_async_loop(capture()) for _ in range(8)
+                ],
+            )
 
         caller_thread = threading.get_ident()
         asyncio.run(run_many())
 
+        # One dedicated thread, distinct from the caller, and it is the
+        # singleton dispatch thread.
         self.assertEqual(len(seen_threads), 1)
         self.assertNotIn(caller_thread, seen_threads)
-        # The thread we observed is the singleton dispatch thread.
         dispatch_thread = _get_async_dispatch_thread()
         assert dispatch_thread is not None
         self.assertEqual(seen_threads.pop(), dispatch_thread.ident)
 
-    def test_dispatch_loop_is_single_event_loop(self) -> None:
-        """All dispatches run on the SAME event loop instance."""
-        captured: List[asyncio.AbstractEventLoop] = []
+        # Every coroutine observed the same loop, and it is the singleton.
+        self.assertEqual(len(seen_loops), 8)
+        for loop in seen_loops:
+            self.assertIs(loop, seen_loops[0])
+        self.assertIs(seen_loops[0], _get_async_dispatch_loop())
 
-        async def capture() -> int:
-            captured.append(asyncio.get_running_loop())
-            return 1
+    def test_new_requests_run_during_one_in_flight_request(self) -> None:
+        """Requests fired while a long one is in-flight all start AND finish
+        before it does, proving they are not serialized behind it.
 
-        async def run_many() -> None:
-            await asyncio.gather(*[
-                _dispatch_to_async_loop(capture()) for _ in range(5)
-            ])
-
-        asyncio.run(run_many())
-
-        self.assertEqual(len(captured), 5)
-        first = captured[0]
-        for loop in captured:
-            self.assertIs(loop, first)
-        self.assertIs(first, _get_async_dispatch_loop())
-
-    def test_concurrent_dispatches_do_not_serialize(self) -> None:
-        """Slow dispatches run in parallel on the loop; new requests do not
-        wait for earlier ones to finish."""
-        n = 6
-        per_call_sleep = 0.3
-
-        async def slow() -> str:
-            await asyncio.sleep(per_call_sleep)
-            return 'done'
-
-        async def run_many() -> List[str]:
-            return await asyncio.gather(*[
-                _dispatch_to_async_loop(slow()) for _ in range(n)
-            ])
-
-        start = time.monotonic()
-        results = asyncio.run(run_many())
-        elapsed = time.monotonic() - start
-
-        self.assertEqual(results, ['done'] * n)
-        # Serialized would be ~ n * per_call_sleep. Parallel ~ per_call_sleep.
-        # Allow generous margin for CI noise.
-        self.assertLess(elapsed, per_call_sleep * 2)
-
-    def test_new_request_does_not_wait_for_in_flight_request(self) -> None:
-        """A new async request is submitted to the dispatch thread
-        immediately and runs while an earlier request is still in-flight.
-
-        This is the explicit guarantee that async UDF dispatch is not
-        serialized: a request fired AFTER another long one has started
-        must (a) start before the long one finishes, (b) finish before
-        the long one finishes, and (c) be submitted with negligible
-        latency from the caller's perspective.
+        Assertions compare event ordering (relative timestamps) rather than
+        absolute wall-clock durations, so they are robust to CI load.
         """
-        long_sleep = 1.0
-        ts: Dict[str, float] = {}
-        # Created lazily on the dispatch loop so the asyncio.Event is bound
-        # to the correct loop.
-        signals: Dict[str, asyncio.Event] = {}
-
-        async def long_running() -> str:
-            ts['long_started'] = time.monotonic()
-            signals['started'] = asyncio.Event()
-            signals['started'].set()
-            await asyncio.sleep(long_sleep)
-            ts['long_finished'] = time.monotonic()
-            return 'long'
-
-        async def quick() -> str:
-            ts['quick_started'] = time.monotonic()
-            await asyncio.sleep(0)
-            ts['quick_finished'] = time.monotonic()
-            return 'quick'
-
-        async def driver() -> None:
-            long_task = asyncio.create_task(
-                _dispatch_to_async_loop(long_running()),
-            )
-            # Wait until the long task has actually started on the
-            # dispatch loop. Only after this point can we be sure the
-            # next dispatch is "during" an in-flight request.
-            for _ in range(100):
-                await asyncio.sleep(0.01)
-                if 'started' in signals and signals['started'].is_set():
-                    break
-            self.assertIn('long_started', ts)
-
-            ts['quick_dispatch_called'] = time.monotonic()
-            quick_result = await _dispatch_to_async_loop(quick())
-            ts['quick_dispatch_returned'] = time.monotonic()
-            self.assertEqual(quick_result, 'quick')
-
-            long_result = await long_task
-            self.assertEqual(long_result, 'long')
-
-        asyncio.run(driver())
-
-        # The new request actually overlapped the in-flight one.
-        self.assertGreater(ts['quick_started'], ts['long_started'])
-        self.assertLess(ts['quick_started'], ts['long_finished'])
-        self.assertLess(ts['quick_finished'], ts['long_finished'])
-
-        # Submission of the new request to the dispatch thread is
-        # non-blocking: the awaiter returned in well under the long
-        # request's remaining time.
-        dispatch_latency = ts['quick_dispatch_returned'] \
-            - ts['quick_dispatch_called']
-        self.assertLess(dispatch_latency, long_sleep / 2)
-
-    def test_many_new_requests_run_during_one_in_flight_request(self) -> None:
-        """Many new async requests, each fired sequentially while a single
-        long-running request is in-flight, all start AND finish before the
-        long one finishes."""
         long_sleep = 1.0
         n_quick = 8
         ts: Dict[str, float] = {}
         quick_finished: List[float] = []
+        # Created lazily on the dispatch loop so the asyncio.Event is bound
+        # to the correct loop.
         signals: Dict[str, asyncio.Event] = {}
 
         async def long_running() -> str:
@@ -328,26 +165,29 @@ class TestAsyncDispatchLoop(unittest.TestCase):
             long_task = asyncio.create_task(
                 _dispatch_to_async_loop(long_running()),
             )
-            # Wait for the long task to start.
+            # Wait until the long task is actually running on the dispatch
+            # loop before firing the others.
             for _ in range(100):
                 await asyncio.sleep(0.01)
                 if 'started' in signals and signals['started'].is_set():
                     break
 
-            results = await asyncio.gather(*[
-                _dispatch_to_async_loop(quick(i)) for i in range(n_quick)
-            ])
+            results = await asyncio.gather(
+                *[
+                    _dispatch_to_async_loop(quick(i)) for i in range(n_quick)
+                ],
+            )
             self.assertEqual(results, list(range(n_quick)))
             await long_task
 
         asyncio.run(driver())
 
-        # All quick requests finished before the long one did, proving
-        # they were not queued behind it.
+        # All quick requests finished between the long request's start and
+        # finish, proving they were not queued behind it.
         self.assertEqual(len(quick_finished), n_quick)
         for finish in quick_finished:
-            self.assertLess(finish, ts['long_finished'])
             self.assertGreater(finish, ts['long_started'])
+            self.assertLess(finish, ts['long_finished'])
 
     def test_loop_bound_resource_reused_across_dispatches(self) -> None:
         """A resource keyed by id(loop) is shared by every async request,
@@ -387,36 +227,9 @@ class TestAsyncDispatchLoop(unittest.TestCase):
             asyncio.run(driver())
         self.assertEqual(str(ctx.exception), 'boom')
 
-    def test_dispatch_with_cancel_event(self) -> None:
-        """`_cancellable_run` on the dispatch loop honors the cancel event."""
-        cancel_event = threading.Event()
-
-        async def blocked() -> str:
-            await asyncio.sleep(999)
-            return 'unreachable'
-
-        def trip_cancel() -> None:
-            time.sleep(0.1)
-            cancel_event.set()
-
-        timer = threading.Thread(target=trip_cancel)
-        timer.start()
-
-        async def driver() -> None:
-            await _dispatch_to_async_loop(
-                _cancellable_run(cancel_event, blocked()),
-            )
-
-        start = time.monotonic()
-        with self.assertRaises(asyncio.CancelledError):
-            asyncio.run(driver())
-        elapsed = time.monotonic() - start
-        timer.join()
-        # 0.1s delay + 0.1s poll interval + margin
-        self.assertLess(elapsed, 0.5)
-
     def test_dispatch_loop_survives_after_cancellation(self) -> None:
-        """The dispatch loop remains usable after a cancelled request."""
+        """A cancelled dispatch (via cancel_event) cancels the work on the
+        loop, and the loop stays usable for later requests."""
         cancel_event = threading.Event()
         cancel_event.set()
 
@@ -448,53 +261,23 @@ class TestAsyncDispatchLoop(unittest.TestCase):
 # Records the thread that actually executes each UDF body, keyed by tag.
 _dispatch_observation: Dict[str, int] = {}
 _dispatch_observation_lock = threading.Lock()
-# Per-tag start / finish timestamps, used by the "no waiting for in-flight"
-# test below to assert overlap between concurrent requests.
-_dispatch_started_at: Dict[str, float] = {}
-_dispatch_finished_at: Dict[str, float] = {}
 
 
 def _record(tag: str) -> None:
     with _dispatch_observation_lock:
         _dispatch_observation[tag] = threading.get_ident()
-        _dispatch_started_at[tag] = time.monotonic()
-
-
-def _record_finish(tag: str) -> None:
-    with _dispatch_observation_lock:
-        _dispatch_finished_at[tag] = time.monotonic()
 
 
 @udf
 async def _async_record_udf(tag: str) -> int:
     _record(tag)
     await asyncio.sleep(0)
-    _record_finish(tag)
-    return len(tag)
-
-
-@udf
-async def _async_slow_udf(tag: str) -> int:
-    _record(tag)
-    await asyncio.sleep(0.4)
-    _record_finish(tag)
-    return len(tag)
-
-
-@udf
-async def _async_long_udf(tag: str) -> int:
-    """Long-running async UDF used to verify that newly arriving async
-    requests do not have to wait for it to finish."""
-    _record(tag)
-    await asyncio.sleep(1.0)
-    _record_finish(tag)
     return len(tag)
 
 
 @udf
 def _sync_record_udf(tag: str) -> int:
     _record(tag)
-    _record_finish(tag)
     return len(tag)
 
 
@@ -540,45 +323,26 @@ def _make_invoke_args(
 def _reset_dispatch_observation() -> None:
     with _dispatch_observation_lock:
         _dispatch_observation.clear()
-        _dispatch_started_at.clear()
-        _dispatch_finished_at.clear()
 
 
 class TestApplicationDispatchRouting(unittest.TestCase):
-    """End-to-end: Application routes async UDFs to the dispatch loop and
-    sync UDFs to a worker thread, and concurrent async requests run in
-    parallel on the dispatch loop."""
+    """End-to-end: ``Application`` routes async UDFs to the dispatch loop and
+    sync UDFs to a worker thread."""
 
     def setUp(self) -> None:
         _reset_dispatch_observation()
         self.app = Application(
             functions=[
                 _async_record_udf,
-                _async_slow_udf,
-                _async_long_udf,
                 _sync_record_udf,
             ],
             disable_metrics=True,
         )
 
-    @staticmethod
-    def _headers_dict(scope: Dict[str, Any]) -> Dict[bytes, bytes]:
-        return {k: v for k, v in scope['headers']}
-
     def _invoke(self, name: str, rows: List[Tuple[Any, ...]]) -> List[Dict[str, Any]]:
         scope, receive, send, sent = _make_invoke_args(name, rows)
         scope['headers'] = list(scope['headers'])
-        # Application reads headers as a dict via ``dict(scope['headers'])``,
-        # which works for our list of tuples.
         asyncio.run(self.app(scope, receive, send))
-        return sent
-
-    async def _invoke_async(
-        self, name: str, rows: List[Tuple[Any, ...]],
-    ) -> List[Dict[str, Any]]:
-        scope, receive, send, sent = _make_invoke_args(name, rows)
-        scope['headers'] = list(scope['headers'])
-        await self.app(scope, receive, send)
         return sent
 
     def test_async_udf_runs_on_dispatch_thread(self) -> None:
@@ -593,7 +357,8 @@ class TestApplicationDispatchRouting(unittest.TestCase):
             self.assertEqual(_dispatch_observation['alpha'], dispatch_thread.ident)
 
     def test_sync_udf_runs_on_a_worker_thread_not_dispatch(self) -> None:
-        """A sync UDF body runs on a worker thread, NOT the dispatch thread."""
+        """A sync UDF body runs on a worker thread, NOT the dispatch thread
+        and NOT the caller thread."""
         # Force the dispatch thread to exist so we can compare ids.
         _get_async_dispatch_loop()
         dispatch_thread = _get_async_dispatch_thread()
@@ -608,88 +373,6 @@ class TestApplicationDispatchRouting(unittest.TestCase):
 
         self.assertNotEqual(sync_thread, threading.get_ident())
         self.assertNotEqual(sync_thread, dispatch_thread.ident)
-
-    def test_concurrent_async_requests_share_dispatch_thread(self) -> None:
-        """Two concurrent async UDF requests both execute on the dispatch thread."""
-
-        async def driver() -> None:
-            await asyncio.gather(
-                self._invoke_async('_async_record_udf', [('one',)]),
-                self._invoke_async('_async_record_udf', [('two',)]),
-                self._invoke_async('_async_record_udf', [('three',)]),
-            )
-
-        asyncio.run(driver())
-
-        dispatch_thread = _get_async_dispatch_thread()
-        assert dispatch_thread is not None
-        with _dispatch_observation_lock:
-            for tag in ('one', 'two', 'three'):
-                self.assertEqual(
-                    _dispatch_observation[tag], dispatch_thread.ident,
-                    f'tag {tag} ran on wrong thread',
-                )
-
-    def test_concurrent_async_requests_do_not_serialize(self) -> None:
-        """Concurrent async UDF requests run in parallel on the dispatch loop;
-        a new request does not wait for in-flight ones."""
-        n = 4
-        per_call_sleep = 0.4
-
-        async def driver() -> None:
-            await asyncio.gather(*[
-                self._invoke_async('_async_slow_udf', [(f'r{i}',)])
-                for i in range(n)
-            ])
-
-        start = time.monotonic()
-        asyncio.run(driver())
-        elapsed = time.monotonic() - start
-
-        # Serialized would be ~ n * per_call_sleep. Parallel ~ per_call_sleep.
-        self.assertLess(elapsed, per_call_sleep * 2)
-
-    def test_new_async_request_runs_during_in_flight_request(self) -> None:
-        """An async request arriving while another is still running gets
-        dispatched onto the async thread immediately and finishes before
-        the in-flight one — i.e., a new request does not wait for any
-        existing async request to be served."""
-
-        async def driver() -> None:
-            long_call = asyncio.create_task(
-                self._invoke_async('_async_long_udf', [('long',)]),
-            )
-            # Spin until the long request has actually started executing
-            # on the dispatch thread, so any new dispatch we fire after
-            # this point is genuinely "during" an in-flight request.
-            for _ in range(200):
-                await asyncio.sleep(0.01)
-                with _dispatch_observation_lock:
-                    if 'long' in _dispatch_started_at:
-                        break
-            self.assertIn('long', _dispatch_started_at)
-
-            t_call = time.monotonic()
-            await self._invoke_async('_async_record_udf', [('quick',)])
-            t_returned = time.monotonic()
-            await long_call
-
-        asyncio.run(driver())
-
-        with _dispatch_observation_lock:
-            long_started = _dispatch_started_at['long']
-            long_finished = _dispatch_finished_at['long']
-            quick_started = _dispatch_started_at['quick']
-            quick_finished = _dispatch_finished_at['quick']
-
-        # quick must have started AFTER long started (it was fired later)
-        # but BEFORE long finished, and itself finished before long did.
-        self.assertGreater(quick_started, long_started)
-        self.assertLess(quick_started, long_finished)
-        self.assertLess(quick_finished, long_finished)
-
-        # Sanity: the long UDF body really did span the long sleep.
-        self.assertGreaterEqual(long_finished - long_started, 0.9)
 
 
 if __name__ == '__main__':

@@ -9,7 +9,6 @@ import httpx
 from singlestoredb import manage_workspaces
 from singlestoredb.management.inference_api import InferenceAPIInfo
 
-
 try:
     from langchain_openai import OpenAIEmbeddings
 except ImportError:
@@ -35,7 +34,6 @@ def SingleStoreEmbeddingsFactory(
     model_name: str,
     api_key: Optional[str] = None,
     http_client: Optional[httpx.Client] = None,
-    http_async_client: Optional[httpx.AsyncClient] = None,
     obo_token_getter: Optional[Callable[[], Optional[str]]] = None,
     base_url: Optional[str] = None,
     hosting_platform: Optional[str] = None,
@@ -154,65 +152,6 @@ def SingleStoreEmbeddingsFactory(
     )
     if http_client is not None:
         openai_kwargs['http_client'] = http_client
-
-    if http_async_client is None:
-        # Explicit timeouts: without these, httpx falls back to its 5s
-        # default at the client level, but the OpenAI SDK overrides that
-        # with a per-request 600s read timeout, so a stalled response can
-        # sit on the socket for ~10 minutes before httpx notices. We use a
-        # tighter read timeout so a dead/half-open connection fails fast
-        # instead of waiting for the application-level defensive timeout
-        # (e.g. EMBED_TEXT's asyncio.wait_for) to fire.
-        client_timeout = httpx.Timeout(
-            connect=float(
-                os.environ.get(
-                    'SINGLESTOREDB_EMBEDDINGS_CONNECT_TIMEOUT', '10',
-                ),
-            ),
-            read=float(
-                os.environ.get(
-                    'SINGLESTOREDB_EMBEDDINGS_READ_TIMEOUT', '60',
-                ),
-            ),
-            write=float(
-                os.environ.get(
-                    'SINGLESTOREDB_EMBEDDINGS_WRITE_TIMEOUT', '30',
-                ),
-            ),
-            pool=float(
-                os.environ.get(
-                    'SINGLESTOREDB_EMBEDDINGS_POOL_TIMEOUT', '10',
-                ),
-            ),
-        )
-        # Allow connection reuse. The previous configuration
-        # (max_keepalive_connections=0) forced a fresh TCP+TLS handshake
-        # for every request, which under heavy concurrency churns sockets
-        # and occasionally yields one connection that the upstream accepts
-        # but never finishes responding on.
-        client_limits = httpx.Limits(
-            max_connections=int(
-                os.environ.get(
-                    'SINGLESTOREDB_EMBEDDINGS_MAX_CONNECTIONS', '64',
-                ),
-            ),
-            max_keepalive_connections=int(
-                os.environ.get(
-                    'SINGLESTOREDB_EMBEDDINGS_MAX_KEEPALIVE', '16',
-                ),
-            ),
-            keepalive_expiry=float(
-                os.environ.get(
-                    'SINGLESTOREDB_EMBEDDINGS_KEEPALIVE_EXPIRY', '30',
-                ),
-            ),
-        )
-        http_async_client = httpx.AsyncClient(
-            timeout=client_timeout,
-            limits=client_limits,
-        )
-    openai_kwargs['http_async_client'] = http_async_client
-
     return OpenAIEmbeddings(
         **openai_kwargs,
         **kwargs,
