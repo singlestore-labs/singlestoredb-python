@@ -12,10 +12,10 @@ from typing import Set
 from typing import Tuple
 
 from ..functions import udf
+from ..functions.ext import asgi
 from ..functions.ext.asgi import _cancellable_run
 from ..functions.ext.asgi import _dispatch_to_async_loop
 from ..functions.ext.asgi import _get_async_dispatch_loop
-from ..functions.ext.asgi import _get_async_dispatch_thread
 from ..functions.ext.asgi import Application
 from ..functions.ext.asgi import to_thread
 
@@ -24,7 +24,7 @@ class TestCancellableRun(unittest.TestCase):
     """Unit tests for ``_cancellable_run`` and the ``to_thread`` helper."""
 
     def test_cancel_event_cancels_blocked_coroutine(self) -> None:
-        """Tripping ``cancel_event`` interrupts a coroutine blocked on I/O.
+        """Tripping ``cancel_event`` interrupts a coroutine stuck in a long await.
 
         The coroutine sleeps far longer than the test could tolerate, so the
         test only completes if the cancel signal actually unblocks it.
@@ -123,7 +123,7 @@ class TestAsyncDispatchLoop(unittest.TestCase):
         # singleton dispatch thread.
         self.assertEqual(len(seen_threads), 1)
         self.assertNotIn(caller_thread, seen_threads)
-        dispatch_thread = _get_async_dispatch_thread()
+        dispatch_thread = asgi._async_dispatch_thread
         assert dispatch_thread is not None
         self.assertEqual(seen_threads.pop(), dispatch_thread.ident)
 
@@ -134,8 +134,8 @@ class TestAsyncDispatchLoop(unittest.TestCase):
         self.assertIs(seen_loops[0], _get_async_dispatch_loop())
 
     def test_new_requests_run_during_one_in_flight_request(self) -> None:
-        """Requests fired while a long one is in-flight all start AND finish
-        before it does, proving they are not serialized behind it.
+        """Requests fired while a long one is in-flight all finish before it
+        does, proving they are not serialized behind it.
 
         Assertions compare event ordering (relative timestamps) rather than
         absolute wall-clock durations, so they are robust to CI load.
@@ -351,7 +351,7 @@ class TestApplicationDispatchRouting(unittest.TestCase):
         statuses = [m for m in sent if m.get('type') == 'http.response.start']
         self.assertTrue(statuses and statuses[0]['status'] == 200, sent)
 
-        dispatch_thread = _get_async_dispatch_thread()
+        dispatch_thread = asgi._async_dispatch_thread
         assert dispatch_thread is not None
         with _dispatch_observation_lock:
             self.assertEqual(_dispatch_observation['alpha'], dispatch_thread.ident)
@@ -361,7 +361,7 @@ class TestApplicationDispatchRouting(unittest.TestCase):
         and NOT the caller thread."""
         # Force the dispatch thread to exist so we can compare ids.
         _get_async_dispatch_loop()
-        dispatch_thread = _get_async_dispatch_thread()
+        dispatch_thread = asgi._async_dispatch_thread
         assert dispatch_thread is not None
 
         sent = self._invoke('_sync_record_udf', [('beta',)])

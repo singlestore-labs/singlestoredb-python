@@ -228,11 +228,6 @@ def _get_async_dispatch_loop() -> asyncio.AbstractEventLoop:
         return _async_dispatch_loop
 
 
-def _get_async_dispatch_thread() -> 'Optional[threading.Thread]':
-    """Return the dedicated dispatch thread (or ``None`` if not started)."""
-    return _async_dispatch_thread
-
-
 async def _dispatch_to_async_loop(coro: Any) -> Any:
     """
     Schedule ``coro`` on the dedicated async-dispatch loop and await it.
