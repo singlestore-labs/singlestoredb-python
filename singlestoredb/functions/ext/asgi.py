@@ -25,6 +25,7 @@ Example
 import argparse
 import asyncio
 import atexit
+import contextlib
 import contextvars
 import dataclasses
 import datetime
@@ -143,15 +144,27 @@ async def _cancellable_run(
     """
     task = asyncio.create_task(coro)
     cancel_check = asyncio.create_task(_poll_cancel(cancel_event))
-    done, pending = await asyncio.wait(
-        [task, cancel_check], return_when=asyncio.FIRST_COMPLETED,
-    )
-    for p in pending:
-        p.cancel()
-    if cancel_check in done:
-        task.cancel()
+    try:
+        done, _ = await asyncio.wait(
+            [task, cancel_check], return_when=asyncio.FIRST_COMPLETED,
+        )
+        # Prefer a completed result: if the work finished, return (or raise)
+        # its outcome even when the cancel signal fired in the same wakeup
+        # (both tasks can land in ``done``). This stops a racing
+        # timeout/disconnect from discarding an already-successful result.
+        if task in done:
+            return task.result()
+        # Otherwise the cancel poll won the race; abandon the work.
         raise asyncio.CancelledError()
-    return task.result()
+    finally:
+        # Cancel and await both helper tasks so neither is left pending
+        # (which would emit "Task was destroyed but it is pending!"
+        # warnings during loop teardown).
+        for t in (task, cancel_check):
+            if not t.done():
+                t.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await t
 
 
 # Dedicated event loop used for ALL async UDF requests.
@@ -191,11 +204,19 @@ def _get_async_dispatch_loop() -> asyncio.AbstractEventLoop:
 
         ready = threading.Event()
         captured: List[asyncio.AbstractEventLoop] = []
+        startup_error: List[BaseException] = []
 
         def run_loop() -> None:
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            captured.append(new_loop)
+            try:
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                captured.append(new_loop)
+            except BaseException as e:  # noqa: B902
+                # Surface startup failures to the caller instead of leaving
+                # it blocked forever on ``ready``.
+                startup_error.append(e)
+                ready.set()
+                return
             ready.set()
             try:
                 new_loop.run_forever()
@@ -223,6 +244,15 @@ def _get_async_dispatch_loop() -> asyncio.AbstractEventLoop:
         thread.start()
         ready.wait()
 
+        if startup_error:
+            raise RuntimeError(
+                'Failed to start the async UDF dispatch event loop',
+            ) from startup_error[0]
+        if not captured:
+            raise RuntimeError(
+                'Async UDF dispatch event loop failed to start',
+            )
+
         _async_dispatch_loop = captured[0]
         _async_dispatch_thread = thread
         return _async_dispatch_loop
@@ -232,12 +262,27 @@ async def _dispatch_to_async_loop(coro: Any) -> Any:
     """
     Schedule ``coro`` on the dedicated async-dispatch loop and await it.
 
+    The caller's ``contextvars`` context is copied and re-established on the
+    dispatch loop so values such as tracing/tenant context propagate across
+    the thread boundary (``run_coroutine_threadsafe`` would otherwise run the
+    work in the dispatch thread's empty context).
+
     Cancelling the awaiting task best-effort cancels the scheduled work, but
     ``cancel_event`` (observed by ``_cancellable_run`` from inside the
     dispatch loop) remains the authoritative cancellation signal.
     """
     loop = _get_async_dispatch_loop()
-    cf = asyncio.run_coroutine_threadsafe(coro, loop)
+    ctx = contextvars.copy_context()
+
+    async def _runner() -> Any:
+        # Creating the task inside ``ctx.run`` makes it copy ``ctx`` as its
+        # context (asyncio copies the active context at task creation), so the
+        # UDF coroutine sees the caller's context variables. ``context=`` on
+        # ``create_task`` would be cleaner but is only available on 3.11+.
+        task = ctx.run(asyncio.create_task, coro)
+        return await task
+
+    cf = asyncio.run_coroutine_threadsafe(_runner(), loop)
     try:
         return await asyncio.wrap_future(cf)
     except asyncio.CancelledError:

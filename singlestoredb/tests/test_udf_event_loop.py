@@ -72,6 +72,76 @@ class TestCancellableRun(unittest.TestCase):
         self.assertEqual(result, 43)
         self.assertFalse(cancel_event.is_set())
 
+    def test_completed_result_wins_over_simultaneous_cancel(self) -> None:
+        """A finished result wins when the cancel signal fires in the same
+        wakeup.
+
+        With the event already set and a coroutine that completes without
+        ever suspending, both the work task and the cancel poll land in
+        ``done`` together. The result must be returned rather than discarded
+        as a cancellation (a racing timeout/disconnect must not throw away an
+        already-successful value).
+        """
+        cancel_event = threading.Event()
+        cancel_event.set()
+
+        async def quick() -> int:
+            return 43
+
+        result = asyncio.run(_cancellable_run(cancel_event, quick()))
+        self.assertEqual(result, 43)
+
+    def test_completed_exception_wins_over_simultaneous_cancel(self) -> None:
+        """A finished error also wins over a simultaneous cancel signal.
+
+        The user's exception (not ``CancelledError``) must surface when the
+        work raised in the same wakeup the cancel poll completed.
+        """
+        cancel_event = threading.Event()
+        cancel_event.set()
+
+        class CustomUDFError(Exception):
+            pass
+
+        async def failing() -> None:
+            raise CustomUDFError('boom')
+
+        with self.assertRaises(CustomUDFError) as ctx:
+            asyncio.run(_cancellable_run(cancel_event, failing()))
+        self.assertEqual(str(ctx.exception), 'boom')
+
+    def test_cancelled_work_task_is_awaited_before_raising(self) -> None:
+        """On cancellation the work task is cancelled *and awaited*.
+
+        The coroutine records, in its ``finally``, that its cancellation was
+        delivered. That cleanup must have run by the time ``_cancellable_run``
+        raises ``CancelledError`` -- otherwise the task would be left pending
+        and emit "Task was destroyed but it is pending!" during teardown.
+        """
+        cancel_event = threading.Event()
+        cleanup_ran = threading.Event()
+        observed: Dict[str, bool] = {}
+
+        async def blocked() -> None:
+            try:
+                await asyncio.sleep(999)
+            finally:
+                cleanup_ran.set()
+
+        async def driver() -> None:
+            # Already tripped, but the work is suspended on a long sleep, so
+            # the cancel poll wins and the work must be torn down.
+            cancel_event.set()
+            try:
+                await _cancellable_run(cancel_event, blocked())
+            except asyncio.CancelledError:
+                observed['cleanup_done_at_raise'] = cleanup_ran.is_set()
+                raise
+
+        with self.assertRaises(asyncio.CancelledError):
+            asyncio.run(driver())
+        self.assertTrue(observed.get('cleanup_done_at_raise'))
+
     def test_context_vars_propagate_through_to_thread(self) -> None:
         """Context variables are visible inside the ``to_thread`` executor."""
         test_var: contextvars.ContextVar[str] = contextvars.ContextVar(
@@ -171,6 +241,12 @@ class TestAsyncDispatchLoop(unittest.TestCase):
                 await asyncio.sleep(0.01)
                 if 'started' in signals and signals['started'].is_set():
                     break
+            # Fail loudly (and deterministically) if it never started rather
+            # than continuing and failing in a confusing way later.
+            self.assertTrue(
+                'started' in signals and signals['started'].is_set(),
+                'long-running task did not start on the dispatch loop',
+            )
 
             results = await asyncio.gather(
                 *[
