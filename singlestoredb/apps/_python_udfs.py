@@ -24,7 +24,6 @@ MAX_UDFS_LIMIT = 10
 DEFAULT_UDF_KEEPALIVE_TIMEOUT = 120
 
 
-
 async def run_udf_app(
     log_level: str = 'error',
     kill_existing_app_server: bool = True,
@@ -69,13 +68,11 @@ async def run_udf_app(
             f'You can only define a maximum of {MAX_UDFS_LIMIT} functions.',
         )
 
-
     config = uvicorn.Config(
         app,
         host='0.0.0.0',
         port=app_config.listen_port,
         log_config=app.get_uvicorn_log_config(),
-
         timeout_keep_alive=get_keep_alive_timeout(),
     )
 
@@ -109,6 +106,7 @@ def generate_base_url(app_config: AppConfig) -> str:
             )
 
     return f'{gateway_url}/pythonudfs/{app_config.notebook_server_id}/interactive/'
+
 
 def get_keep_alive_timeout() -> int:
     raw = os.environ.get('SINGLESTOREDB_UDF_KEEPALIVE_TIMEOUT')
