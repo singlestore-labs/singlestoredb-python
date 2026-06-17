@@ -1,6 +1,7 @@
 import asyncio
 import os
 import typing
+import warnings
 
 from ..functions.ext.asgi import Application
 from ._config import AppConfig
@@ -15,6 +16,12 @@ _running_server: 'typing.Optional[AwaitableUvicornServer]' = None
 
 # Maximum number of UDFs allowed
 MAX_UDFS_LIMIT = 10
+
+# Default uvicorn keep-alive timeout (seconds) for managed UDF servers.
+# The high keep-alive timeout makes sure uvicorn does not close idle connections so
+# eagerly. Whichever side closes first holds the socket in TIME_WAIT (~60s on
+# Linux), so server-initiated closes churn sockets under load.
+DEFAULT_UDF_KEEPALIVE_TIMEOUT = 120
 
 
 async def run_udf_app(
@@ -66,6 +73,7 @@ async def run_udf_app(
         host='0.0.0.0',
         port=app_config.listen_port,
         log_config=app.get_uvicorn_log_config(),
+        timeout_keep_alive=get_keep_alive_timeout(),
     )
 
     # Register the functions only if the app is running interactively.
@@ -98,3 +106,24 @@ def generate_base_url(app_config: AppConfig) -> str:
             )
 
     return f'{gateway_url}/pythonudfs/{app_config.notebook_server_id}/interactive/'
+
+
+def get_keep_alive_timeout() -> int:
+    raw = os.environ.get('SINGLESTOREDB_UDF_KEEPALIVE_TIMEOUT')
+    if raw is None:
+        return DEFAULT_UDF_KEEPALIVE_TIMEOUT
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        warnings.warn(
+            f'Invalid SINGLESTOREDB_UDF_KEEPALIVE_TIMEOUT={raw!r}; '
+            f'falling back to {DEFAULT_UDF_KEEPALIVE_TIMEOUT}s.',
+        )
+        return DEFAULT_UDF_KEEPALIVE_TIMEOUT
+    if value < 0:
+        warnings.warn(
+            f'Negative SINGLESTOREDB_UDF_KEEPALIVE_TIMEOUT={value}; '
+            f'falling back to {DEFAULT_UDF_KEEPALIVE_TIMEOUT}s.',
+        )
+        return DEFAULT_UDF_KEEPALIVE_TIMEOUT
+    return value
