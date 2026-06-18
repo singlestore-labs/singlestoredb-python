@@ -12,6 +12,9 @@ jobs:
   test-coverage:
     runs-on: ubuntu-latest
     environment: Base
+    permissions:
+      contents: read
+      actions: write
 
     services:
       singlestore:
