@@ -141,6 +141,21 @@ _dtype_to_python: Dict[str, str] = {
 logger = logging.getLogger('udf_handler')
 
 
+class FunctionExistsError(ValueError):
+    """Raised when a function name is already registered and replace=False."""
+
+
+class FunctionNotDynamicError(ValueError):
+    """Raised when an operation (register, replace, or delete) targets a
+    function name reserved by a base/built-in (non-dynamic) function. This
+    covers registering a new function whose name collides with a base
+    function as well as attempts to replace or delete a base function."""
+
+
+class FunctionNotFoundError(ValueError):
+    """Raised when the target function does not exist (delete only)."""
+
+
 class FunctionRegistry:
     """Registry of discovered UDF functions."""
 
@@ -386,16 +401,37 @@ class FunctionRegistry:
                 'signature JSON must contain a "name" field',
             )
 
-        if not replace and func_name in self.functions:
-            raise ValueError(
-                f'Function "{func_name}" already exists '
-                f'(use replace=true to overwrite)',
-            )
+        for kind in ('args', 'returns'):
+            items = sig.get(kind, [])
+            if not isinstance(items, list):
+                raise ValueError(f'"{kind}" must be a list')
+            for i, item in enumerate(items):
+                if not isinstance(item, dict):
+                    raise ValueError(
+                        f'"{kind}[{i}]" must be a JSON object',
+                    )
+                dtype = item.get('dtype')
+                if not isinstance(dtype, str):
+                    raise ValueError(
+                        f'"{kind}[{i}].dtype" must be a string',
+                    )
+                if kind == 'args':
+                    name = item.get('name')
+                    if not isinstance(name, str) or not name:
+                        raise ValueError(
+                            f'"{kind}[{i}].name" must be a non-empty string',
+                        )
 
         if func_name in self._base_function_names:
-            raise ValueError(
-                f"Cannot replace '{func_name}': "
-                f'not a dynamically registered function',
+            raise FunctionNotDynamicError(
+                f"Cannot register '{func_name}': "
+                f'name is reserved by a built-in (non-dynamic) function',
+            )
+
+        if not replace and func_name in self.functions:
+            raise FunctionExistsError(
+                f'Function "{func_name}" already exists '
+                f'(use replace=true to overwrite)',
             )
 
         if replace and func_name in self.functions:
@@ -438,7 +474,11 @@ class FunctionRegistry:
                 element schema (must contain a 'name' field). Currently
                 only the name is used for matching.
 
-        Raises ValueError if the function does not exist.
+        Raises:
+            ValueError: if the signature JSON is missing a "name" field.
+            FunctionNotFoundError: if no function with that name is registered.
+            FunctionNotDynamicError: if the function exists but was not
+                dynamically registered (e.g., a built-in).
         """
         sig = json.loads(signature_json)
         name = sig.get('name')
@@ -447,9 +487,9 @@ class FunctionRegistry:
                 'signature JSON must contain a "name" field',
             )
         if name not in self.functions:
-            raise ValueError(f"Function '{name}' not found")
+            raise FunctionNotFoundError(f"Function '{name}' not found")
         if name in self._base_function_names:
-            raise ValueError(
+            raise FunctionNotDynamicError(
                 f"Cannot delete '{name}': not a dynamically registered function",
             )
         del self.functions[name]
