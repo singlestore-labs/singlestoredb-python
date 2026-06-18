@@ -5,6 +5,11 @@ This document outlines features and improvements from each release.
 .. note:: All releases before v1.0.0 are considered pre-release and
    are for non-production testing and evaluation, and may include
    changes to the API.
+v1.17.0 - June 18, 2026
+-----------------------
+* Add changes for compatibility with WASM components (#121)
+* Stabilize fusion workspace-group drop test (#128)
+* Run async UDFs on a dedicated event-loop thread (#124)
 v1.16.10 - April 13, 2026
 -------------------------
 * set keep alive probes for mysql connection (#122)
