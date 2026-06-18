@@ -444,7 +444,10 @@ class TestWorkspaceFusion(unittest.TestCase):
                 f'create workspace group "{wg_name}" '
                 f'in region "{reg.name}"',
             )
-            wg = [x for x in mgr.workspace_groups if x.name == wg_name]
+            wg = [
+                x for x in mgr.workspace_groups
+                if x.name == wg_name and x.terminated_at is None
+            ]
             assert len(wg) == 1
 
             # Drop it by name
@@ -458,7 +461,10 @@ class TestWorkspaceFusion(unittest.TestCase):
             self.cur.execute(
                 f'create workspace group "{wg_name}" in region "{reg.name}"',
             )
-            wg = [x for x in mgr.workspace_groups if x.name == wg_name]
+            wg = [
+                x for x in mgr.workspace_groups
+                if x.name == wg_name and x.terminated_at is None
+            ]
             assert len(wg) == 1
 
             # Drop it by ID
