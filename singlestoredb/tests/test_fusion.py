@@ -417,6 +417,22 @@ class TestWorkspaceFusion(unittest.TestCase):
             f'in group "A Fusion Testing {self.id}"',
         )
 
+    def _wait_workspace_group_gone(self, mgr, wg_name, timeout=60, interval=2):
+        # WAIT ON TERMINATED polls /workspaceGroups/{id}; the LIST endpoint
+        # /workspaceGroups can lag briefly behind it, so poll until the listed
+        # record is either absent or shows terminated_at.
+        deadline = time.time() + timeout
+        while True:
+            wg = [x for x in mgr.workspace_groups if x.name == wg_name]
+            if not wg or all(x.terminated_at is not None for x in wg):
+                return
+            if time.time() >= deadline:
+                self.fail(
+                    f'workspace group {wg_name!r} still active in list endpoint '
+                    f'after {timeout}s: {wg!r}',
+                )
+            time.sleep(interval)
+
     def test_create_drop_workspace_group(self):
         mgr = s2.manage_workspaces()
 
@@ -428,7 +444,10 @@ class TestWorkspaceFusion(unittest.TestCase):
                 f'create workspace group "{wg_name}" '
                 f'in region "{reg.name}"',
             )
-            wg = [x for x in mgr.workspace_groups if x.name == wg_name]
+            wg = [
+                x for x in mgr.workspace_groups
+                if x.name == wg_name and x.terminated_at is None
+            ]
             assert len(wg) == 1
 
             # Drop it by name
@@ -436,21 +455,22 @@ class TestWorkspaceFusion(unittest.TestCase):
                 f'drop workspace group "{wg_name}" '
                 'wait on terminated',
             )
-            wg = [x for x in mgr.workspace_groups if x.name == wg_name]
-            assert len(wg) == 0
+            self._wait_workspace_group_gone(mgr, wg_name)
 
             # Create it again
             self.cur.execute(
                 f'create workspace group "{wg_name}" in region "{reg.name}"',
             )
-            wg = [x for x in mgr.workspace_groups if x.name == wg_name]
+            wg = [
+                x for x in mgr.workspace_groups
+                if x.name == wg_name and x.terminated_at is None
+            ]
             assert len(wg) == 1
 
             # Drop it by ID
             wg_id = wg[0].id
             self.cur.execute(f'drop workspace group id {wg_id} wait on terminated')
-            wg = [x for x in mgr.workspace_groups if x.name == wg_name]
-            assert len(wg) == 0
+            self._wait_workspace_group_gone(mgr, wg_name)
 
             # Drop non-existent
             with self.assertRaises(KeyError):
