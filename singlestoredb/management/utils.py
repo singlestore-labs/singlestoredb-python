@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 
 from .. import converters
 from ..config import get_option
+from ..exceptions import ManagementError
 from ..utils import events
 
 JSON = Union[str, List[str], Dict[str, 'JSON']]
@@ -241,6 +242,26 @@ def get_virtual_workspace_id() -> Optional[str]:
 def get_database_name() -> Optional[str]:
     """Return the default database name for the current token or environment."""
     return os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE') or None
+
+
+def ensure_within(local_root: PathLike, target: PathLike) -> str:
+    """Verify ``target`` resolves inside ``local_root``.
+
+    Returns the normalized (but unresolved) path on success. The
+    containment check uses :func:`os.path.realpath` so symlink trickery
+    can't escape ``local_root``. Raises :class:`ManagementError` if
+    ``target`` would escape ``local_root``, e.g. via ``..`` segments
+    coming from an untrusted remote listing.
+    """
+    target_str = os.fspath(target)
+    normalized = os.path.normpath(target_str)
+    base = os.path.realpath(os.fspath(local_root))
+    resolved = os.path.realpath(target_str)
+    if resolved != base and not resolved.startswith(base + os.sep):
+        raise ManagementError(
+            msg=f'Refusing to write outside destination: {target_str}',
+        )
+    return normalized
 
 
 def enable_http_tracing() -> None:
