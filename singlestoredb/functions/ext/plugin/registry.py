@@ -147,6 +147,9 @@ class FunctionRegistry:
     def __init__(self) -> None:
         self.functions: Dict[str, Dict[str, Any]] = {}
         self._base_function_names: set[str] = set()
+        # Maps server-supplied id -> registered function name. Populated by
+        # create_function and consulted by delete_function.
+        self._id_to_name: Dict[str, str] = {}
 
     def initialize(self, plugin_module: Any = None) -> None:
         """Initialize and discover UDF functions from loaded modules.
@@ -364,6 +367,7 @@ class FunctionRegistry:
 
     def create_function(
         self,
+        id: str,
         signature_json: str,
         code: str,
         replace: bool,
@@ -371,6 +375,8 @@ class FunctionRegistry:
         """Register a function from its signature and function body.
 
         Args:
+            id: Server-supplied identifier recorded so the function can
+                later be removed via delete_function
             signature_json: JSON object matching the describe-functions
                 element schema (must contain a 'name' field)
             code: Function body (e.g. "return x * 3"), not full source
@@ -400,6 +406,10 @@ class FunctionRegistry:
 
         if replace and func_name in self.functions:
             del self.functions[func_name]
+            # Drop any prior id mapping that pointed at this name.
+            for prior_id, prior_name in list(self._id_to_name.items()):
+                if prior_name == func_name:
+                    del self._id_to_name[prior_id]
 
         full_code = self._build_python_code(sig, code)
 
@@ -424,40 +434,37 @@ class FunctionRegistry:
                 f'Check that the signature dtypes are supported.',
             )
 
+        self._id_to_name[id] = func_name
+
         logger.info(
-            f'create_function({func_name}): registered '
+            f'create_function({func_name}, id={id}): registered '
             f'{len(new_names)} function(s): {", ".join(new_names)}',
         )
         return new_names
 
-    def delete_function(self, signature_json: str) -> None:
-        """Delete a dynamically registered function by its signature.
+    def delete_function(self, id: str) -> None:
+        """Delete a previously registered function by its id.
 
         Args:
-            signature_json: JSON object matching the describe-functions
-                element schema (must contain a 'name' field). Currently
-                only the name is used for matching.
+            id: Server-supplied identifier previously passed to
+                create_function.
 
-        Raises ValueError if the function does not exist.
+        Raises ValueError if the id is unknown.
         """
-        sig = json.loads(signature_json)
-        name = sig.get('name')
-        if not name:
-            raise ValueError(
-                'signature JSON must contain a "name" field',
-            )
-        if name not in self.functions:
-            raise ValueError(f"Function '{name}' not found")
+        name = self._id_to_name.pop(id, None)
+        if name is None:
+            raise ValueError(f"No registered function with id '{id}'")
         if name in self._base_function_names:
             raise ValueError(
                 f"Cannot delete '{name}': not a dynamically registered function",
             )
-        del self.functions[name]
+        if name in self.functions:
+            del self.functions[name]
         dyn_module_name = 'singlestoredb.functions.ext.plugin._dynamic'
         dyn_module = sys.modules.get(dyn_module_name)
         if dyn_module is not None and hasattr(dyn_module, name):
             delattr(dyn_module, name)
-        logger.info(f'delete_function: removed {name!r}')
+        logger.info(f'delete_function: removed {name!r} (id={id})')
 
     def _register_function(
         self,

@@ -15,16 +15,15 @@ interface plugin {
     describe-functions: func() -> result<string, string>;
 
     /// Register a function from its signature and source code.
+    /// `id` is an opaque server-supplied identifier the handler must record so
+    /// the same function can later be removed via `delete-function`.
     /// `signature` is a JSON object matching the describe-functions element schema.
     /// `code` is the function body (not a full `def` statement).
     /// `replace` controls whether an existing function of the same name is overwritten.
-    create-function: func(signature: string, code: string, replace: bool) -> result<_, string>;
+    create-function: func(id: string, signature: string, code: string, replace: bool) -> result<_, string>;
 
-    /// Delete a dynamically registered function by its signature.
-    /// `signature` is a JSON object matching the describe-functions element schema.
-    /// Currently uses only the `name` field; full signature matching reserved for
-    /// future overload support.
-    delete-function: func(signature: string) -> result<_, string>;
+    /// Delete a previously registered function by the `id` it was created with.
+    delete-function: func(id: string) -> result<_, string>;
 }
 
 world plugin-server {

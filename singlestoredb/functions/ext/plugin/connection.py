@@ -7,6 +7,7 @@ handshake, control signal dispatch, and UDF request loop with mmap I/O.
 from __future__ import annotations
 
 import array
+import json
 import logging
 import mmap
 import os
@@ -15,6 +16,9 @@ import struct
 import threading
 import time
 import traceback
+from typing import Any
+from typing import Dict
+from typing import Optional
 from typing import TYPE_CHECKING
 
 from .control import dispatch_control_signal
@@ -29,8 +33,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger('plugin.connection')
 
-# Protocol constants
-PROTOCOL_VERSION = 1
+# Supported handshake protocol versions.
+SUPPORTED_VERSIONS = (1, 2, 3)
 STATUS_OK = 200
 STATUS_BAD_REQUEST = 400
 STATUS_ERROR = 500
@@ -82,8 +86,11 @@ def _handle_connection_inner(
         return
     version, namelen = struct.unpack('<QQ', header)
 
-    if version != PROTOCOL_VERSION:
-        logger.warning(f'Unsupported protocol version: {version}')
+    if version not in SUPPORTED_VERSIONS:
+        logger.warning(
+            f'Unsupported protocol version: {version} '
+            f'(supported: {SUPPORTED_VERSIONS})',
+        )
         return
 
     if namelen > _MAX_FUNCTION_NAME_LEN:
@@ -146,6 +153,53 @@ def _handle_connection_inner(
             except OSError:
                 pass
 
+    # v2 carries the parameter type list as a length-prefixed string here.
+    # v3 drops this segment entirely — the type list moves into the
+    # envelope (Part 4) under the top-level key "param_types".
+    v2_input_param_types: Optional[str] = None
+    if version == 2:
+        len_buf = _recv_exact_py(conn, 8)
+        if len_buf is None:
+            return
+        in_types_len = struct.unpack('<Q', len_buf)[0]
+        types_bytes = _recv_exact_py(conn, in_types_len) if in_types_len else b''
+        if types_bytes is None:
+            return
+        v2_input_param_types = types_bytes.decode('utf8')
+
+    # v3: read the JSON envelope (Part 4).
+    envelope: Optional[Dict[str, Any]] = None
+    if version == 3:
+        len_buf = _recv_exact_py(conn, 4)
+        if len_buf is None:
+            return
+        envelope_len = struct.unpack('<I', len_buf)[0]
+        env_bytes = _recv_exact_py(conn, envelope_len) if envelope_len else b''
+        if env_bytes is None:
+            return
+        try:
+            envelope = json.loads(env_bytes)
+        except json.JSONDecodeError as e:
+            logger.warning(f'Invalid v3 envelope JSON: {e}')
+            return
+        if not isinstance(envelope, dict):
+            logger.warning('v3 envelope must be a JSON object')
+            return
+
+    # input_param_types is currently unused on the Python side but is
+    # parsed off the wire so the protocol stays in sync. v1 → None,
+    # v2 → drained string, v3 → envelope["param_types"] if present.
+    if version == 1:
+        input_param_types: Optional[str] = None
+    elif version == 2:
+        input_param_types = v2_input_param_types
+    else:
+        param_types_val = envelope.get('param_types') if envelope else None
+        input_param_types = (
+            param_types_val if isinstance(param_types_val, str) else None
+        )
+    _ = input_param_types  # reserved for future use
+
     # --- Control signal path ---
     if function_name.startswith('@@'):
         logger.info(f"Received control signal '{function_name}'")
@@ -155,12 +209,95 @@ def _handle_connection_inner(
         )
         return
 
+    # v3: install any function definition shipped in the handshake
+    # envelope before entering the request loop. Cache hit ⇒ no work;
+    # miss ⇒ compile and remember it for future replays.
+    if envelope is not None:
+        definition = envelope.get('definition')
+        if isinstance(definition, dict):
+            try:
+                _install_v3_definition(
+                    definition, shared_registry, pipe_write_fd,
+                )
+            except Exception as e:
+                logger.error(
+                    f'Failed to install v3 definition: {e}\n'
+                    f'{traceback.format_exc()}',
+                )
+                os.close(input_fd)
+                os.close(output_fd)
+                return
+
     # --- UDF request loop ---
     logger.info(f"Received request for function '{function_name}'")
     _handle_udf_loop(
         conn, function_name, input_fd, output_fd,
         shared_registry, shutdown_event,
     )
+
+
+def _install_v3_definition(
+    definition: Dict[str, Any],
+    shared_registry: SharedRegistry,
+    pipe_write_fd: int | None,
+) -> None:
+    """Install a function definition shipped in the v3 handshake envelope.
+
+    Cache hit (id already registered) → no-op. Cache miss → call
+    ``SharedRegistry.create_function`` and notify the main process so
+    workers can be re-forked.
+    """
+    id = definition.get('id')
+    if not isinstance(id, str) or not id:
+        raise ValueError("v3 definition missing required string field 'id'")
+
+    if shared_registry.has_definition(id):
+        return
+
+    function_name = definition.get('name')
+    if not isinstance(function_name, str) or not function_name:
+        raise ValueError("v3 definition missing required string field 'name'")
+
+    args = definition.get('args')
+    if not isinstance(args, list):
+        raise ValueError(
+            "v3 definition missing required array field 'args'",
+        )
+
+    returns = definition.get('returns')
+    if not isinstance(returns, list):
+        raise ValueError(
+            "v3 definition missing required array field 'returns'",
+        )
+
+    body = definition.get('body')
+    if not isinstance(body, str) or not body:
+        raise ValueError("v3 definition missing required string field 'body'")
+
+    replace = bool(definition.get('replace', False))
+
+    signature = json.dumps({
+        'name': function_name,
+        'args': args,
+        'returns': returns,
+    })
+
+    shared_registry.create_function(id, signature, body, replace)
+    logger.info(
+        f'v3 definition installed: function={function_name!r} id={id!r}',
+    )
+
+    # Notify main process so it can re-fork workers with updated state.
+    if pipe_write_fd is not None:
+        from .server import _write_pipe_message
+        payload = json.dumps({
+            'action': 'register',
+            'id': id,
+            'signature_json': signature,
+            'code': body,
+            'replace': replace,
+        }).encode()
+        _write_pipe_message(pipe_write_fd, payload)
 
 
 def _handle_control_signal(

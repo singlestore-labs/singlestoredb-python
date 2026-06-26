@@ -24,10 +24,10 @@ import unittest
 from singlestoredb.functions.ext import rowdat_1
 from singlestoredb.functions.ext.plugin.connection import _handle_connection_inner
 from singlestoredb.functions.ext.plugin.connection import handle_connection
-from singlestoredb.functions.ext.plugin.connection import PROTOCOL_VERSION
 from singlestoredb.functions.ext.plugin.connection import STATUS_BAD_REQUEST  # noqa: F401
 from singlestoredb.functions.ext.plugin.connection import STATUS_ERROR
 from singlestoredb.functions.ext.plugin.connection import STATUS_OK
+from singlestoredb.functions.ext.plugin.connection import SUPPORTED_VERSIONS
 from singlestoredb.functions.ext.plugin.control import dispatch_control_signal
 from singlestoredb.functions.ext.plugin.registry import call_function
 from singlestoredb.functions.ext.plugin.registry import FunctionRegistry
@@ -51,14 +51,14 @@ def _make_shared_registry_with_func():
         'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
         'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
     })
-    shared.create_function(sig, 'return x * 3', False)
+    shared.create_function('id-triple', sig, 'return x * 3', False)
     return shared
 
 
 def _send_handshake(sock, function_name, input_fd, output_fd):
     """Send the binary handshake from client side."""
     name_bytes = function_name.encode('utf8')
-    header = struct.pack('<QQ', PROTOCOL_VERSION, len(name_bytes))
+    header = struct.pack('<QQ', SUPPORTED_VERSIONS[0], len(name_bytes))
     sock.sendall(header)
 
     # Send function name + 2 FDs via SCM_RIGHTS
@@ -322,12 +322,15 @@ class TestProtocolIntegration(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# P0: @@register success path and @@delete + re-register
+# P0: @@delete via dispatch_control_signal
 # ---------------------------------------------------------------------------
 
 class TestRegisterDeleteIntegration(unittest.TestCase):
-    """Test @@register and @@delete through dispatch_control_signal with
-    a real SharedRegistry (not mocked)."""
+    """Test @@delete through dispatch_control_signal with a real
+    SharedRegistry (not mocked).  @@register no longer exists as a
+    control signal; new function definitions arrive only via the
+    in-band v3 envelope.  Functions are seeded directly through
+    ``SharedRegistry.create_function``."""
 
     def _make_shared(self):
         shared = SharedRegistry()
@@ -335,108 +338,38 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         shared.set_base_registry(base_reg)
         return shared
 
-    def test_register_success_and_callable(self):
-        """@@register a function, then call it via call_function."""
-        shared = self._make_shared()
-        payload = json.dumps({
-            'name': 'double_it',
+    def _seed(self, shared, name, body, replace=False):
+        sig = json.dumps({
+            'name': name,
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x * 2',
-        }).encode()
-
-        result = dispatch_control_signal('@@register', payload, shared)
-        assert result.ok is True, f'Expected ok, got: {result.data}'
-
-        # Verify callable
-        reg = shared.get_thread_local_registry()
-        assert 'double_it' in reg.functions
-        input_data = bytes(rowdat_1._dump([ft.LONGLONG], [1], [[5]]))
-        output = call_function(reg, 'double_it', input_data)
-        _, rows = rowdat_1._load([('r', ft.LONGLONG)], output)
-        assert rows[0][0] == 10
-
-    def test_register_with_replace(self):
-        """@@register with replace=true overwrites existing function."""
-        shared = self._make_shared()
-        payload1 = json.dumps({
-            'name': 'myfunc',
-            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x + 1',
-        }).encode()
-        result = dispatch_control_signal('@@register', payload1, shared)
-        assert result.ok
-
-        payload2 = json.dumps({
-            'name': 'myfunc',
-            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x + 100',
-            'replace': True,
-        }).encode()
-        result = dispatch_control_signal('@@register', payload2, shared)
-        assert result.ok
-
-        reg = shared.get_thread_local_registry()
-        input_data = bytes(rowdat_1._dump([ft.LONGLONG], [1], [[5]]))
-        output = call_function(reg, 'myfunc', input_data)
-        _, rows = rowdat_1._load([('r', ft.LONGLONG)], output)
-        assert rows[0][0] == 105
-
-    def test_register_without_replace_fails(self):
-        """@@register without replace=true fails for existing function."""
-        shared = self._make_shared()
-        payload = json.dumps({
-            'name': 'dup_fn',
-            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x',
-        }).encode()
-        result = dispatch_control_signal('@@register', payload, shared)
-        assert result.ok
-
-        result2 = dispatch_control_signal('@@register', payload, shared)
-        assert result2.ok is False
-        assert 'already exists' in result2.data
+        })
+        shared.create_function(f'id-{name}', sig, body, replace)
 
     def test_delete_then_gone(self):
         """@@delete removes a function so it's no longer callable."""
         shared = self._make_shared()
-        payload = json.dumps({
-            'name': 'temp_fn',
-            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x',
-        }).encode()
-        dispatch_control_signal('@@register', payload, shared)
+        self._seed(shared, 'temp_fn', 'return x')
 
-        del_payload = json.dumps({'name': 'temp_fn'}).encode()
+        del_payload = json.dumps({'id': 'id-temp_fn'}).encode()
         result = dispatch_control_signal('@@delete', del_payload, shared)
         assert result.ok
 
         reg = shared.get_thread_local_registry()
         assert 'temp_fn' not in reg.functions
 
-    def test_delete_then_reregister(self):
-        """Delete a function and re-register it with new behavior."""
+    def test_delete_then_recreate(self):
+        """Delete a function and re-create it with new behavior."""
         shared = self._make_shared()
-        sig = {
-            'name': 'morph',
-            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x + 1',
-        }
-        dispatch_control_signal('@@register', json.dumps(sig).encode(), shared)
+        self._seed(shared, 'morph', 'return x + 1')
 
         dispatch_control_signal(
             '@@delete',
-            json.dumps({'name': 'morph'}).encode(),
+            json.dumps({'id': 'id-morph'}).encode(),
             shared,
         )
 
-        sig['body'] = 'return x + 999'
-        dispatch_control_signal('@@register', json.dumps(sig).encode(), shared)
+        self._seed(shared, 'morph', 'return x + 999')
 
         reg = shared.get_thread_local_registry()
         input_data = bytes(rowdat_1._dump([ft.LONGLONG], [1], [[1]]))
@@ -444,46 +377,14 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         _, rows = rowdat_1._load([('r', ft.LONGLONG)], output)
         assert rows[0][0] == 1000
 
-    def test_register_writes_to_pipe(self):
-        """@@register with pipe_write_fd sends message to parent."""
-        shared = self._make_shared()
-        r_fd, w_fd = os.pipe()
-        try:
-            payload = json.dumps({
-                'name': 'piped_fn',
-                'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-                'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-                'body': 'return x',
-            }).encode()
-            result = dispatch_control_signal(
-                '@@register', payload, shared, pipe_write_fd=w_fd,
-            )
-            assert result.ok
-
-            msg = _read_pipe_message(r_fd)
-            assert msg is not None
-            body = json.loads(msg)
-            assert body['action'] == 'register'
-            assert body['signature_json'] is not None
-            assert body['code'] == 'return x'
-        finally:
-            os.close(r_fd)
-            os.close(w_fd)
-
     def test_delete_writes_to_pipe(self):
         """@@delete with pipe_write_fd sends message to parent."""
         shared = self._make_shared()
-        sig = json.dumps({
-            'name': 'pipe_del',
-            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x',
-        }).encode()
-        dispatch_control_signal('@@register', sig, shared)
+        self._seed(shared, 'pipe_del', 'return x')
 
         r_fd, w_fd = os.pipe()
         try:
-            del_payload = json.dumps({'name': 'pipe_del'}).encode()
+            del_payload = json.dumps({'id': 'id-pipe_del'}).encode()
             result = dispatch_control_signal(
                 '@@delete', del_payload, shared, pipe_write_fd=w_fd,
             )
@@ -493,7 +394,7 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
             assert msg is not None
             body = json.loads(msg)
             assert body['action'] == 'delete'
-            assert body['function_name'] == 'pipe_del'
+            assert body['id'] == 'id-pipe_del'
         finally:
             os.close(r_fd)
             os.close(w_fd)
@@ -816,7 +717,7 @@ class TestCallFunctionDispatch(unittest.TestCase):
                 for i, d in enumerate(ret_dtypes)
             ],
         })
-        shared.create_function(sig, body, False)
+        shared.create_function(f'id-{name}', sig, body, False)
         return shared.get_thread_local_registry()
 
     def test_int64_passthrough(self):
@@ -1014,7 +915,7 @@ class TestSharedRegistryGeneration(unittest.TestCase):
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
         })
-        shared.create_function(sig, 'return x', False)
+        shared.create_function('id-f1', sig, 'return x', False)
         assert shared.generation == 1
 
     def test_generation_increments_on_delete(self):
@@ -1025,10 +926,10 @@ class TestSharedRegistryGeneration(unittest.TestCase):
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
         })
-        shared.create_function(sig, 'return x', False)
+        shared.create_function('id-f1', sig, 'return x', False)
         assert shared.generation == 1
 
-        shared.delete_function('f1')
+        shared.delete_function('id-f1')
         assert shared.generation == 2
 
     def test_thread_local_cache_refreshes(self):
@@ -1040,11 +941,11 @@ class TestSharedRegistryGeneration(unittest.TestCase):
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
         })
-        shared.create_function(sig, 'return x', False)
+        shared.create_function('id-f1', sig, 'return x', False)
         reg1 = shared.get_thread_local_registry()
         assert 'f1' in reg1.functions
 
-        shared.delete_function('f1')
+        shared.delete_function('id-f1')
         reg2 = shared.get_thread_local_registry()
         assert 'f1' not in reg2.functions
 
@@ -1056,7 +957,7 @@ class TestSharedRegistryGeneration(unittest.TestCase):
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
         })
-        shared.create_function(sig, 'return x', False)
+        shared.create_function('id-f1', sig, 'return x', False)
 
         reg1 = shared.get_thread_local_registry()
         reg2 = shared.get_thread_local_registry()

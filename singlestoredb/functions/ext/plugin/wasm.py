@@ -56,25 +56,27 @@ class Plugin:
 
     def create_function(
         self,
+        id: str,
         signature: str,
         code: str,
         replace: bool,
     ) -> None:
         """Register a function from its signature and function body.
 
-        The ``code`` parameter should contain the function body, not a
-        full ``def`` statement or ``@udf``-decorated source.
+        ``id`` is the server-supplied identifier used later to delete
+        this function. The ``code`` parameter should contain the function
+        body, not a full ``def`` statement or ``@udf``-decorated source.
         """
         try:
-            _registry.create_function(signature, code, replace)
+            _registry.create_function(id, signature, code, replace)
         except Exception as e:
             tb = traceback.format_exc()
             raise RuntimeError(f'{e}\n{tb}')
 
-    def delete_function(self, signature: str) -> None:
-        """Delete a dynamically registered function by its signature."""
+    def delete_function(self, id: str) -> None:
+        """Delete a previously registered function by its id."""
         try:
-            _registry.delete_function(signature)
+            _registry.delete_function(id)
         except Exception as e:
             tb = traceback.format_exc()
             raise RuntimeError(f'{e}\n{tb}')

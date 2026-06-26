@@ -82,14 +82,21 @@ class SharedRegistry:
     """Thread-safe wrapper around FunctionRegistry with generation caching.
 
     Each worker thread caches a (generation, FunctionRegistry) pair in
-    thread-local storage. When @@register bumps the generation, workers
-    create a fresh registry and replay all code blocks on next call.
+    thread-local storage. When a v3 handshake envelope installs a new
+    definition (or @@delete removes one), the generation is bumped and
+    workers create a fresh registry and replay all code blocks on next
+    call.
+
+    Code blocks are keyed by an opaque content-addressed id supplied in
+    the v3 handshake envelope. Deletion is also keyed by id so callers
+    never need to recover a function name from a stored signature.
     """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._generation: int = 0
-        self._code_blocks: List[Tuple[str, str, bool]] = []
+        # id -> (signature_json, code, replace)
+        self._code_blocks: Dict[str, Tuple[str, str, bool]] = {}
         self._base_registry: Optional[FunctionRegistry] = None
         self._local = threading.local()
 
@@ -102,8 +109,14 @@ class SharedRegistry:
     def generation(self) -> int:
         return self._generation
 
+    def has_definition(self, id: str) -> bool:
+        """Return True if a definition with this id is already cached."""
+        with self._lock:
+            return id in self._code_blocks
+
     def create_function(
         self,
+        id: str,
         signature_json: str,
         code: str,
         replace: bool,
@@ -111,16 +124,17 @@ class SharedRegistry:
         """Register a new function and bump the generation counter.
 
         Thread-safe: acquires the lock, validates via a temporary
-        registry, stores the code block, and increments generation.
+        registry, stores the code block keyed by id, and increments
+        generation.
         """
         with self._lock:
             # Validate on a temporary registry first
             test_registry = self._build_fresh_registry()
             new_names = test_registry.create_function(
-                signature_json, code, replace,
+                id, signature_json, code, replace,
             )
             # Success: store the code block and bump generation
-            self._code_blocks.append((signature_json, code, replace))
+            self._code_blocks[id] = (signature_json, code, replace)
             self._generation += 1
             logger.info(
                 f'SharedRegistry: generation={self._generation}, '
@@ -128,40 +142,20 @@ class SharedRegistry:
             )
             return new_names
 
-    def delete_function(self, function_name: str) -> None:
-        """Delete a dynamically registered function by name.
+    def delete_function(self, id: str) -> None:
+        """Delete a dynamically registered function by its id.
 
-        Raises ValueError if the function was not dynamically registered
-        or does not exist at all.
+        Raises ValueError if the id is unknown.
         """
         with self._lock:
-            # Find matching code blocks by parsing signature_json
-            indices_to_remove = []
-            for i, (sig_json, _code, _replace) in enumerate(self._code_blocks):
-                sig = json.loads(sig_json)
-                if sig.get('name') == function_name:
-                    indices_to_remove.append(i)
-
-            if not indices_to_remove:
-                # Check if it's a base function
-                if (
-                    self._base_registry is not None
-                    and function_name in self._base_registry.functions
-                ):
-                    raise ValueError(
-                        f"Cannot delete '{function_name}': "
-                        f'not a dynamically registered function',
-                    )
+            if id not in self._code_blocks:
                 raise ValueError(
-                    f"Function '{function_name}' not found",
+                    f"No registered function with id '{id}'",
                 )
-
-            # Remove in reverse order to preserve indices
-            for i in reversed(indices_to_remove):
-                self._code_blocks.pop(i)
+            del self._code_blocks[id]
             self._generation += 1
             logger.info(
-                f'SharedRegistry: deleted function {function_name!r}, '
+                f'SharedRegistry: deleted function id={id!r}, '
                 f'generation={self._generation}, '
                 f'code_blocks={len(self._code_blocks)}',
             )
@@ -207,8 +201,8 @@ class SharedRegistry:
         sys.modules[dyn_module_name] = fresh_dyn
 
         # Replay code blocks
-        for sig_json, code, replace in self._code_blocks:
-            registry.create_function(sig_json, code, replace)
+        for id, (sig_json, code, replace) in self._code_blocks.items():
+            registry.create_function(id, sig_json, code, replace)
         return registry
 
 
@@ -315,10 +309,11 @@ class Server:
         """Pre-fork worker pool for true CPU parallelism.
 
         Each worker gets a pipe back to the main process. When a worker
-        receives @@register, it writes the registration payload to its
-        pipe. The main process reads it, updates its own registry, then
-        kills and re-forks all workers so every worker has the updated
-        registry state.
+        installs a v3 envelope definition (or handles @@delete), it
+        writes the registration/deletion payload to its pipe. The main
+        process reads it, updates its own registry, then kills and
+        re-forks all workers so every worker has the updated registry
+        state.
         """
         try:
             ctx = multiprocessing.get_context('fork')
@@ -414,19 +409,20 @@ class Server:
                                 action = body.get('action', 'register')
                                 if action == 'register':
                                     self.shared_registry.create_function(
+                                        body['id'],
                                         body['signature_json'],
                                         body['code'],
                                         body['replace'],
                                     )
                                     logger.info(
-                                        'Main process: applied '
-                                        '@@register from worker '
-                                        f'{wid}, will re-fork all '
-                                        'workers',
+                                        'Main process: applied v3 '
+                                        'envelope registration from '
+                                        f'worker {wid}, will re-fork '
+                                        'all workers',
                                     )
                                 elif action == 'delete':
                                     self.shared_registry.delete_function(
-                                        body['function_name'],
+                                        body['id'],
                                     )
                                     logger.info(
                                         'Main process: applied '
@@ -484,8 +480,8 @@ class Server:
 
         Uses ``self.shared_registry`` inherited via fork (contains the
         main process's current state). ``pipe_w`` is used to notify the
-        main process when @@register is handled so it can re-fork all
-        workers.
+        main process when a v3 envelope definition is installed (or
+        @@delete is handled) so it can re-fork all workers.
         """
         try:
             local_shutdown = threading.Event()
