@@ -152,13 +152,13 @@ def SingleStoreEmbeddingsFactory(
     )
     if http_client is not None:
         openai_kwargs['http_client'] = http_client
-    # Non-OpenAI models behind an OpenAI-compatible endpoint (e.g. Qwen) get wrong
-    # embeddings under langchain's default client-side tiktoken tokenization, which
-    # sends OpenAI token IDs instead of raw text. Default to raw text so the server
-    # tokenizes correctly; this is a no-op for genuine OpenAI models. Callers can
-    # opt back in with check_embedding_ctx_length=True. Scoped to this OpenAI path;
-    # the Bedrock branch above never receives this kwarg.
-    kwargs.setdefault('check_embedding_ctx_length', False)
+    # Genuine OpenAI/Azure models tokenize with tiktoken correctly, so keep langchain's
+    # default (client-side tokenization + long-input chunking). For every other platform
+    # (e.g. 'Nova' self-hosted models like Qwen), tiktoken sends OpenAI token IDs instead
+    # of the raw text, which the model can't interpret -> nonsensical embeddings. For
+    # those, send raw text and let the server tokenize. Callers can override explicitly.
+    if info.hosting_platform not in ('Azure', 'OpenAI'):
+        kwargs.setdefault('check_embedding_ctx_length', False)
     return OpenAIEmbeddings(
         **openai_kwargs,
         **kwargs,
