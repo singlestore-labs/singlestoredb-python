@@ -186,9 +186,14 @@ class SharedRegistry:
         Must be called with self._lock held.
         """
         registry = FunctionRegistry()
-        # Copy base functions
+        # Copy base functions. Each value is a list of variants — copy the
+        # list so worker-local mutations (e.g. dynamic create_function) don't
+        # bleed into the shared base registry.
         if self._base_registry is not None:
-            registry.functions = dict(self._base_registry.functions)
+            registry.functions = {
+                k: list(v)
+                for k, v in self._base_registry.functions.items()
+            }
             registry._base_function_names = (
                 set(self._base_registry._base_function_names)
                 | set(self._base_registry.functions.keys())

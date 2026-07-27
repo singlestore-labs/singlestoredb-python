@@ -187,7 +187,12 @@ class TestFunctionRegistryDeleteGuard(unittest.TestCase):
 
     def _make_registry_with_base(self):
         reg = FunctionRegistry()
-        reg.functions = {'base_fn': {'signature': {}, 'func': lambda: None}}
+        reg.functions = {
+            'base_fn': [{
+                'signature': {}, 'func': lambda: None,
+                'param_sql_types': [],
+            }],
+        }
         reg._base_function_names = {'base_fn'}
         return reg
 
@@ -199,17 +204,20 @@ class TestFunctionRegistryDeleteGuard(unittest.TestCase):
 
     def test_delete_dynamic_function_by_id(self):
         reg = self._make_registry_with_base()
-        reg.functions['dyn_fn'] = {'signature': {}, 'func': lambda: None}
-        reg._id_to_name['dyn-id'] = 'dyn_fn'
+        reg.functions['dyn_fn'] = [{
+            'signature': {}, 'func': lambda: None,
+            'param_sql_types': [],
+        }]
+        reg._id_to_variant['dyn-id'] = ('dyn_fn', '')
         reg.delete_function('dyn-id')
         assert 'dyn_fn' not in reg.functions
-        assert 'dyn-id' not in reg._id_to_name
+        assert 'dyn-id' not in reg._id_to_variant
 
     def test_delete_base_function_via_id_rejected(self):
         # Manually map an id at a base function name — registry must
         # still refuse to delete base functions.
         reg = self._make_registry_with_base()
-        reg._id_to_name['fake-id'] = 'base_fn'
+        reg._id_to_variant['fake-id'] = ('base_fn', '')
         with self.assertRaises(ValueError) as ctx:
             reg.delete_function('fake-id')
         assert 'not a dynamically registered function' in str(ctx.exception)
@@ -233,7 +241,12 @@ class TestDeleteFunctionIntegration(unittest.TestCase):
         from singlestoredb.functions.ext.plugin.server import SharedRegistry
         shared = SharedRegistry()
         base_reg = FunctionRegistry()
-        base_reg.functions = {'base_fn': {'signature': {}, 'func': lambda: None}}
+        base_reg.functions = {
+            'base_fn': [{
+                'signature': {}, 'func': lambda: None,
+                'param_sql_types': [],
+            }],
+        }
         base_reg._base_function_names = {'base_fn'}
         shared.set_base_registry(base_reg)
         return shared

@@ -23,6 +23,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+from . import overload as _overload
 from singlestoredb.functions.ext import rowdat_1 as _rowdat_1
 from singlestoredb.functions.ext.rowdat_1 import dump as _dump_rowdat_1
 from singlestoredb.functions.ext.rowdat_1 import load as _load_rowdat_1
@@ -142,14 +143,23 @@ logger = logging.getLogger('udf_handler')
 
 
 class FunctionRegistry:
-    """Registry of discovered UDF functions."""
+    """Registry of discovered UDF functions.
+
+    A name may map to multiple variants when SingleStoreDB-style overloads
+    are registered (same name, different parameter signatures). Each entry
+    in ``self.functions`` is therefore a *list* of variant dicts. Use
+    ``lookup_variant(name, param_types)`` to pick the right one for a call.
+    """
 
     def __init__(self) -> None:
-        self.functions: Dict[str, Dict[str, Any]] = {}
+        # name -> list of variant dicts. Each variant carries `func`,
+        # `arg_types`, `return_types`, `signature`, and `param_sql_types`
+        # (normalized SQL keys used for overload resolution).
+        self.functions: Dict[str, List[Dict[str, Any]]] = {}
         self._base_function_names: set[str] = set()
-        # Maps server-supplied id -> registered function name. Populated by
-        # create_function and consulted by delete_function.
-        self._id_to_name: Dict[str, str] = {}
+        # Maps server-supplied id -> (name, signature_key) for the variant
+        # this id registered. Consulted by delete_function.
+        self._id_to_variant: Dict[str, Tuple[str, str]] = {}
 
     def initialize(self, plugin_module: Any = None) -> None:
         """Initialize and discover UDF functions from loaded modules.
@@ -268,6 +278,9 @@ class FunctionRegistry:
                 if sig and sig.get('args') is not None and sig.get('returns'):
                     self._register_function(obj, name, sig)
             except (TypeError, ValueError) as exc:
+                # ValueError here covers duplicate-variant detection, so a
+                # second @udf with the same normalized signature is dropped
+                # with a warning rather than killing initialization.
                 logger.warning(
                     f'Skipping {name}: {exc}',
                 )
@@ -276,36 +289,42 @@ class FunctionRegistry:
         self,
         func_names: List[str],
     ) -> List[Dict[str, Any]]:
-        """Build JSON-serializable descriptions for the given function names."""
+        """Build JSON-serializable descriptions for the given function names.
+
+        Emits one entry per variant — overloaded names appear multiple times
+        in the returned list, each with its own argument/return signature.
+        """
         descriptions = []
         for func_name in func_names:
-            func_info = self.functions[func_name]
-            sig = func_info['signature']
-            args = []
-            for arg in sig['args']:
-                args.append({
-                    'name': arg['name'],
-                    'dtype': arg['dtype'],
-                    'sql': arg['sql'],
+            for variant in self.functions[func_name]:
+                sig = variant['signature']
+                args = []
+                for arg in sig['args']:
+                    args.append({
+                        'name': arg['name'],
+                        'dtype': arg['dtype'],
+                        'sql': arg['sql'],
+                    })
+                returns = []
+                for ret in sig['returns']:
+                    returns.append({
+                        'name': ret.get('name') or None,
+                        'dtype': ret['dtype'],
+                        'sql': ret['sql'],
+                    })
+                descriptions.append({
+                    'name': func_name,
+                    'args': args,
+                    'returns': returns,
+                    'args_data_format': (
+                        sig.get('args_data_format') or 'scalar'
+                    ),
+                    'returns_data_format': (
+                        sig.get('returns_data_format') or 'scalar'
+                    ),
+                    'function_type': sig.get('function_type') or 'udf',
+                    'doc': sig.get('doc'),
                 })
-            returns = []
-            for ret in sig['returns']:
-                returns.append({
-                    'name': ret.get('name') or None,
-                    'dtype': ret['dtype'],
-                    'sql': ret['sql'],
-                })
-            descriptions.append({
-                'name': func_name,
-                'args': args,
-                'returns': returns,
-                'args_data_format': sig.get('args_data_format') or 'scalar',
-                'returns_data_format': (
-                    sig.get('returns_data_format') or 'scalar'
-                ),
-                'function_type': sig.get('function_type') or 'udf',
-                'doc': sig.get('doc'),
-            })
         return descriptions
 
     @staticmethod
@@ -372,18 +391,25 @@ class FunctionRegistry:
         code: str,
         replace: bool,
     ) -> List[str]:
-        """Register a function from its signature and function body.
+        """Register a function variant from its signature and body.
+
+        Multiple variants may share a name as long as their normalized
+        parameter signatures differ — see :mod:`overload`. ``replace=True``
+        swaps the *matching* variant (same name and signature key); it does
+        not wipe out other variants registered under the same name.
 
         Args:
-            id: Server-supplied identifier recorded so the function can
+            id: Server-supplied identifier recorded so the variant can
                 later be removed via delete_function
             signature_json: JSON object matching the describe-functions
                 element schema (must contain a 'name' field)
             code: Function body (e.g. "return x * 3"), not full source
-            replace: If False, raise an error if the function already exists
+            replace: If False, raise an error if a variant with the same
+                signature already exists
 
         Returns:
-            List of newly registered function names
+            List of newly registered function names (always a single
+            element today, but kept as a list for backwards compatibility).
         """
         sig = json.loads(signature_json)
         func_name = sig.get('name')
@@ -392,24 +418,50 @@ class FunctionRegistry:
                 'signature JSON must contain a "name" field',
             )
 
-        if not replace and func_name in self.functions:
+        # Compute the canonical signature key from the incoming sig so we
+        # can detect collisions before compiling.
+        try:
+            incoming_key = _overload.signature_key([
+                _overload.normalize_sql_type(a['sql']) for a in sig.get('args', [])
+            ])
+        except KeyError as e:
             raise ValueError(
-                f'Function "{func_name}" already exists '
-                f'(use replace=true to overwrite)',
+                f'signature arg missing "sql" field: {e}',
             )
 
         if func_name in self._base_function_names:
+            # Built-in @udf functions are immutable from the wire.
             raise ValueError(
                 f"Cannot replace '{func_name}': "
                 f'not a dynamically registered function',
             )
 
-        if replace and func_name in self.functions:
-            del self.functions[func_name]
-            # Drop any prior id mapping that pointed at this name.
-            for prior_id, prior_name in list(self._id_to_name.items()):
-                if prior_name == func_name:
-                    del self._id_to_name[prior_id]
+        existing_variants = self.functions.get(func_name, [])
+        collision = next(
+            (
+                v for v in existing_variants
+                if _overload.signature_key(v['param_sql_types']) == incoming_key
+            ),
+            None,
+        )
+        if collision is not None and not replace:
+            raise ValueError(
+                f'Function "{func_name}({incoming_key})" already exists '
+                f'(use replace=true to overwrite)',
+            )
+
+        if collision is not None and replace:
+            existing_variants.remove(collision)
+            if not existing_variants:
+                self.functions.pop(func_name, None)
+            else:
+                self.functions[func_name] = existing_variants
+            # Drop any prior id that pointed at the colliding variant.
+            for prior_id, (prior_name, prior_key) in list(
+                self._id_to_variant.items(),
+            ):
+                if prior_name == func_name and prior_key == incoming_key:
+                    del self._id_to_variant[prior_id]
 
         full_code = self._build_python_code(sig, code)
 
@@ -422,28 +474,51 @@ class FunctionRegistry:
             module = types.ModuleType(name)
             module.__file__ = f'<{name}>'
             sys.modules[name] = module
+
+        # The dynamic module is reused across many create_function calls.
+        # Each call defines a Python function under `func_name`, which
+        # overwrites the previous one — that's fine since the variants
+        # themselves keep references to the function objects in their
+        # closures (via `self.functions[name][i]['func']`). But we need
+        # `_extract_functions` to see this as a new variant: it picks up
+        # the just-defined function regardless of whether func_name was
+        # already a key in `self.functions`. The duplicate-signature guard
+        # in `_register_function` is what enforces uniqueness now.
         exec(compiled, module.__dict__)  # noqa: S102
 
-        before_names = set(self.functions.keys())
-        self._extract_functions(module)
-        new_names = [k for k in self.functions if k not in before_names]
-
-        if not new_names:
+        # Identify the freshly defined Python function and register it as a
+        # new variant. We can't rely on `_extract_functions` to do this for
+        # us because that helper would loop over every attribute of the
+        # dynamic module — including stale ones from earlier calls.
+        compiled_func = module.__dict__.get(func_name)
+        if not callable(compiled_func):
             raise ValueError(
                 f'Function "{func_name}" was not registered. '
                 f'Check that the signature dtypes are supported.',
             )
 
-        self._id_to_name[id] = func_name
+        try:
+            variant_sig = get_signature(compiled_func)
+        except Exception as exc:
+            raise ValueError(
+                f'Failed to read signature of compiled function: {exc}',
+            )
+        if not variant_sig or variant_sig.get('args') is None:
+            raise ValueError(
+                f'Compiled function "{func_name}" has no usable signature',
+            )
+
+        self._register_function(compiled_func, func_name, variant_sig)
+        self._id_to_variant[id] = (func_name, incoming_key)
 
         logger.info(
-            f'create_function({func_name}, id={id}): registered '
-            f'{len(new_names)} function(s): {", ".join(new_names)}',
+            f'create_function({func_name}({incoming_key}), id={id}): '
+            f'registered',
         )
-        return new_names
+        return [func_name]
 
     def delete_function(self, id: str) -> None:
-        """Delete a previously registered function by its id.
+        """Delete a previously registered variant by its id.
 
         Args:
             id: Server-supplied identifier previously passed to
@@ -451,31 +526,47 @@ class FunctionRegistry:
 
         Raises ValueError if the id is unknown.
         """
-        name = self._id_to_name.pop(id, None)
-        if name is None:
+        entry = self._id_to_variant.pop(id, None)
+        if entry is None:
             raise ValueError(f"No registered function with id '{id}'")
+        name, sig_key = entry
         if name in self._base_function_names:
             raise ValueError(
                 f"Cannot delete '{name}': not a dynamically registered function",
             )
-        if name in self.functions:
-            del self.functions[name]
-        dyn_module_name = 'singlestoredb.functions.ext.plugin._dynamic'
-        dyn_module = sys.modules.get(dyn_module_name)
-        if dyn_module is not None and hasattr(dyn_module, name):
-            delattr(dyn_module, name)
-        logger.info(f'delete_function: removed {name!r} (id={id})')
+        variants = self.functions.get(name, [])
+        variants = [
+            v for v in variants
+            if _overload.signature_key(v['param_sql_types']) != sig_key
+        ]
+        if variants:
+            self.functions[name] = variants
+        else:
+            self.functions.pop(name, None)
+            # No remaining variants — the dynamic-module attribute can go.
+            dyn_module_name = 'singlestoredb.functions.ext.plugin._dynamic'
+            dyn_module = sys.modules.get(dyn_module_name)
+            if dyn_module is not None and hasattr(dyn_module, name):
+                delattr(dyn_module, name)
+        logger.info(f'delete_function: removed {name}({sig_key}) (id={id})')
 
     def _register_function(
         self,
         func: Callable[..., Any],
         func_name: str,
         sig: Dict[str, Any],
-    ) -> None:
-        """Register a function under its bare name."""
+    ) -> Dict[str, Any]:
+        """Register a function variant under its bare name.
+
+        Returns the variant dict that was appended. Raises ValueError if a
+        variant with an equivalent normalized signature is already present
+        (per SingleStoreDB's type-equivalence rules) — callers that want
+        replace semantics must remove the colliding variant first.
+        """
         full_name = sig.get('name') or func_name
 
         arg_types: List[Tuple[str, int]] = []
+        param_sql_types: List[str] = []
         for arg in sig['args']:
             dtype = arg['dtype'].replace('?', '')
             if dtype not in rowdat_1_type_map:
@@ -483,6 +574,7 @@ class FunctionRegistry:
                     f"unsupported arg dtype '{dtype}' for function '{full_name}'",
                 )
             arg_types.append((arg['name'], rowdat_1_type_map[dtype]))
+            param_sql_types.append(_overload.normalize_sql_type(arg['sql']))
 
         return_types: List[int] = []
         for ret in sig['returns']:
@@ -493,12 +585,46 @@ class FunctionRegistry:
                 )
             return_types.append(rowdat_1_type_map[dtype])
 
-        self.functions[full_name] = {
+        sig_key = _overload.signature_key(param_sql_types)
+        existing = self.functions.get(full_name, [])
+        for v in existing:
+            if _overload.signature_key(v['param_sql_types']) == sig_key:
+                raise ValueError(
+                    f"function '{full_name}' already has a variant with "
+                    f'signature ({sig_key})',
+                )
+
+        variant: Dict[str, Any] = {
             'func': func,
             'arg_types': arg_types,
             'return_types': return_types,
             'signature': sig,
+            'param_sql_types': param_sql_types,
         }
+        existing.append(variant)
+        self.functions[full_name] = existing
+        return variant
+
+    def lookup_variant(
+        self,
+        name: str,
+        param_types: Optional[str],
+    ) -> Dict[str, Any]:
+        """Resolve a call to a single variant.
+
+        ``param_types`` is the comma-separated SQL parameter type list from
+        the wire (envelope `param_types` or v2 segment). Empty/None means
+        no type info available; resolution falls back to the sole variant
+        or raises if ambiguous.
+        """
+        variants = self.functions.get(name)
+        if not variants:
+            raise ValueError(f'unknown function: {name}')
+        if param_types is None or not param_types.strip():
+            req = None
+        else:
+            req = _overload.parse_param_types(param_types)
+        return _overload.resolve(name, variants, req)
 
 
 def _get_masked_params(func: Callable[..., Any]) -> List[bool]:
@@ -600,16 +726,15 @@ def call_function(
     registry: FunctionRegistry,
     name: str,
     input_data: bytes,
+    param_types: Optional[str] = None,
 ) -> bytes:
     """Call a registered UDF by name using the C accelerator or fallback.
 
     This is the hot-path function used by both the WASM handler and
-    the plugin server.
+    the plugin server. ``param_types`` is the comma-separated SQL type
+    list from the wire and is required when a name has multiple variants.
     """
-    if name not in registry.functions:
-        raise ValueError(f'unknown function: {name}')
-
-    func_info = registry.functions[name]
+    func_info = registry.lookup_variant(name, param_types)
     func = func_info['func']
     arg_types = func_info['arg_types']
     return_types = func_info['return_types']

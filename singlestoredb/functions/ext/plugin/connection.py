@@ -186,8 +186,7 @@ def _handle_connection_inner(
             logger.warning('v3 envelope must be a JSON object')
             return
 
-    # input_param_types is currently unused on the Python side but is
-    # parsed off the wire so the protocol stays in sync. v1 → None,
+    # Parameter type list used for overload resolution. v1 → None,
     # v2 → drained string, v3 → envelope["param_types"] if present.
     if version == 1:
         input_param_types: Optional[str] = None
@@ -198,7 +197,6 @@ def _handle_connection_inner(
         input_param_types = (
             param_types_val if isinstance(param_types_val, str) else None
         )
-    _ = input_param_types  # reserved for future use
 
     # --- Control signal path ---
     if function_name.startswith('@@'):
@@ -233,6 +231,7 @@ def _handle_connection_inner(
     _handle_udf_loop(
         conn, function_name, input_fd, output_fd,
         shared_registry, shutdown_event,
+        input_param_types,
     )
 
 
@@ -379,6 +378,7 @@ def _handle_udf_loop(
     output_fd: int,
     shared_registry: SharedRegistry,
     shutdown_event: threading.Event,
+    param_types: Optional[str],
 ) -> None:
     """Handle the UDF request loop for a single function."""
     # Track output mmap size to avoid repeated ftruncate
@@ -464,6 +464,7 @@ def _handle_udf_loop(
                     t0 = time.monotonic()
                 output_data = call_function(
                     registry, function_name, input_data,
+                    param_types,
                 )
                 if profile:
                     t_call += time.monotonic() - t0

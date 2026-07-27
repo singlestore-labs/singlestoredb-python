@@ -38,9 +38,19 @@ class Plugin:
                 )
         _registry.initialize()
 
-    def call_function(self, name: str, input_data: bytes) -> bytes:
-        """Call a function by its registered name."""
-        return call_function(_registry, name, input_data)
+    def call_function(
+        self,
+        name: str,
+        param_types: str,
+        input_data: bytes,
+    ) -> bytes:
+        """Call a function by its registered name.
+
+        ``param_types`` is the comma-separated SQL parameter type list of
+        the call (e.g. ``"BIGINT,VARCHAR"``) used to resolve overloads.
+        Pass an empty string when no type info is available.
+        """
+        return call_function(_registry, name, input_data, param_types or None)
 
     def describe_functions(self) -> str:
         """Describe all functions as a JSON array.
