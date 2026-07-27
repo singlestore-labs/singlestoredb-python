@@ -1961,11 +1961,20 @@ class WorkspaceManager(Manager):
         :class:`WorkspaceGroup`
 
         """
-        if isinstance(region, Region) and region.id:
-            region = region.id
+        region_id: Optional[str] = None
+        if isinstance(region, Region):
+            if region.id:
+                region_id = region.id
+            else:
+                if provider is None:
+                    provider = region.provider
+                if region_name is None:
+                    region_name = region.region_name
+        else:
+            region_id = region
         res = self._post(
             'workspaceGroups', json=dict(
-                name=name, regionID=region,
+                name=name, regionID=region_id,
                 adminPassword=admin_password,
                 backupBucketKMSKeyID=backup_bucket_kms_key_id,
                 dataBucketKMSKeyID=data_bucket_kms_key_id,
