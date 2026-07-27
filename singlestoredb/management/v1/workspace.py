@@ -8,7 +8,6 @@ import io
 import os
 import re
 import time
-from collections.abc import Mapping
 from typing import Any
 from typing import cast
 from typing import Dict
@@ -942,10 +941,8 @@ class Workspace(VersionedMixin):
             )
         new_obj = self._manager.get_workspace(self.id)
         for name, value in vars(new_obj).items():
-            if isinstance(value, Mapping):
-                setattr(self, name, snake_to_camel_dict(value))
-            else:
-                setattr(self, name, value)
+            setattr(self, name, value)
+        self._version_cache = None
         return self
 
     def terminate(
@@ -1310,10 +1307,8 @@ class WorkspaceGroup(VersionedMixin):
             )
         new_obj = self._manager.get_workspace_group(self.id)
         for name, value in vars(new_obj).items():
-            if isinstance(value, Mapping):
-                setattr(self, name, camel_to_snake_dict(value))
-            else:
-                setattr(self, name, value)
+            setattr(self, name, value)
+        self._version_cache = None
         return self
 
     def update(
@@ -1641,10 +1636,8 @@ class StarterWorkspace(VersionedMixin):
             )
         new_obj = self._manager.get_starter_workspace(self.id)
         for name, value in vars(new_obj).items():
-            if isinstance(value, Mapping):
-                setattr(self, name, snake_to_camel_dict(value))
-            else:
-                setattr(self, name, value)
+            setattr(self, name, value)
+        self._version_cache = None
         return self
 
     @property
