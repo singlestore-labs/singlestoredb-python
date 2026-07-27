@@ -653,7 +653,7 @@ class Stage(FileLocation):
             if self.is_dir(f):
                 continue
             target = ensure_within(local_path, os.path.join(local_path, f))
-            os.makedirs(os.path.dirname(target), exist_ok=True)
+            os.makedirs(os.path.dirname(target) or '.', exist_ok=True)
             self.download_file(f, target, overwrite=overwrite)
 
     def remove(self, stage_path: PathLike) -> None:

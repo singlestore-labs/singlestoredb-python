@@ -1192,7 +1192,7 @@ class FileSpace(FileLocation):
             target_file = ensure_within(
                 local_path, os.path.join(local_path, rel_path),
             )
-            os.makedirs(os.path.dirname(target_file), exist_ok=True)
+            os.makedirs(os.path.dirname(target_file) or '.', exist_ok=True)
             self._download_file(
                 remote_path, target_file,
                 overwrite=overwrite, _skip_dir_check=True,
