@@ -97,11 +97,14 @@ def _handle_connection_inner(
         logger.warning(f'Function name too long: {namelen}')
         return
 
-    # Receive function name + 2 FDs via SCM_RIGHTS
-    fd_model = array.array('i', [0, 0])
+    # Receive function name + FDs via SCM_RIGHTS.
+    # v1/v2 pass 2 FDs (input, output); v3 passes 3 FDs (input, output,
+    # metadata memfd carrying the JSON envelope).
+    expected_fd_count = 3 if version == 3 else 2
+    fd_model = array.array('i', [0] * expected_fd_count)
     msg, ancdata, flags, addr = conn.recvmsg(
         namelen,
-        socket.CMSG_LEN(2 * fd_model.itemsize),
+        socket.CMSG_LEN(expected_fd_count * fd_model.itemsize),
     )
 
     # Extract FDs from ancdata eagerly so the finally block can close them
@@ -137,14 +140,17 @@ def _handle_connection_inner(
             logger.warning('Ancillary data was truncated (MSG_CTRUNC)')
             return
 
-        if len(received_fds) != 2:
+        if len(received_fds) != expected_fd_count:
             logger.warning(
-                f'Expected 2 FDs, got {len(received_fds)}',
+                f'Expected {expected_fd_count} FDs, got {len(received_fds)}',
             )
             return
 
         function_name = msg.decode('utf8')
         input_fd, output_fd = received_fds[0], received_fds[1]
+        metadata_fd: Optional[int] = (
+            received_fds[2] if version == 3 else None
+        )
         received_fds = []
     finally:
         for fd in received_fds:
@@ -155,7 +161,8 @@ def _handle_connection_inner(
 
     # v2 carries the parameter type list as a length-prefixed string here.
     # v3 drops this segment entirely — the type list moves into the
-    # envelope (Part 4) under the top-level key "param_types".
+    # envelope carried on the metadata memfd under the top-level key
+    # "param_types".
     v2_input_param_types: Optional[str] = None
     if version == 2:
         len_buf = _recv_exact_py(conn, 8)
@@ -167,18 +174,33 @@ def _handle_connection_inner(
             return
         v2_input_param_types = types_bytes.decode('utf8')
 
-    # v3: read the JSON envelope (Part 4).
+    # v3: read the JSON envelope from the sealed metadata memfd. The
+    # engine seals it (SHRINK|GROW|WRITE) before sending, so its size is
+    # fstat(fd).st_size and the payload is raw UTF-8 JSON bytes with no
+    # in-band length prefix.
     envelope: Optional[Dict[str, Any]] = None
     if version == 3:
-        len_buf = _recv_exact_py(conn, 4)
-        if len_buf is None:
-            return
-        envelope_len = struct.unpack('<I', len_buf)[0]
-        env_bytes = _recv_exact_py(conn, envelope_len) if envelope_len else b''
-        if env_bytes is None:
-            return
+        assert metadata_fd is not None
         try:
-            envelope = json.loads(env_bytes)
+            env_size = os.fstat(metadata_fd).st_size
+            if env_size == 0:
+                env_bytes = b''
+            else:
+                mem = mmap.mmap(
+                    metadata_fd, env_size,
+                    mmap.MAP_SHARED, mmap.PROT_READ,
+                )
+                try:
+                    env_bytes = bytes(mem[:env_size])
+                finally:
+                    mem.close()
+        finally:
+            try:
+                os.close(metadata_fd)
+            except OSError:
+                pass
+        try:
+            envelope = json.loads(env_bytes) if env_bytes else {}
         except json.JSONDecodeError as e:
             logger.warning(f'Invalid v3 envelope JSON: {e}')
             return
@@ -269,9 +291,14 @@ def _install_v3_definition(
             "v3 definition missing required array field 'returns'",
         )
 
+    # Body is optional. Signature-only CREATE PLUGIN FUNCTION omits it —
+    # the function is expected to be provided out-of-band (a builtin of
+    # the plugin module loaded at server startup). Nothing to install.
     body = definition.get('body')
-    if not isinstance(body, str) or not body:
-        raise ValueError("v3 definition missing required string field 'body'")
+    if body is None or body == '':
+        return
+    if not isinstance(body, str):
+        raise ValueError("v3 definition field 'body' must be a string")
 
     replace = bool(definition.get('replace', False))
 

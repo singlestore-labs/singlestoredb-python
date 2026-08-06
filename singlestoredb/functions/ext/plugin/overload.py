@@ -111,14 +111,15 @@ def normalize_sql_type(raw: str) -> str:
 
 
 def parse_param_types(s: str) -> List[str]:
-    """Parse a comma-separated SQL parameter type list into canonical keys.
+    """Parse a SQL parameter type list into canonical keys.
 
-    Empty / whitespace-only input → empty list. Each element is run
-    through `normalize_sql_type`.
+    Accepts semicolon- or comma-separated input (v3 uses ``;``, older
+    paths used ``,``). Empty / whitespace-only input → empty list. Each
+    element is run through `normalize_sql_type`.
     """
     if not s or not s.strip():
         return []
-    return [normalize_sql_type(t) for t in s.split(',')]
+    return [normalize_sql_type(t) for t in re.split(r'[;,]', s)]
 
 
 def match_kind(declared: str, requested: str) -> MatchKind:
