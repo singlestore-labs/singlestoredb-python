@@ -45,9 +45,10 @@ class _ChunkedOpenAIEmbeddings(OpenAIEmbeddings):
     """
 
     max_chunk_chars: int = 24000
-    """Maximum characters per chunk. Conservative (~6-8k tokens for typical text) so a
-    chunk fits even deployments capped at 8192 tokens. Override per model if the
-    deployment's context window is known to be larger."""
+    """Maximum characters per chunk. This is a coarse character-based guard for
+    models whose exact tokenizer/context metadata is not yet available to the client.
+    Override per model if the deployment's context window is known to be smaller or
+    larger."""
 
     def _chunks(self, text: str) -> List[str]:
         n = max(1, self.max_chunk_chars)
