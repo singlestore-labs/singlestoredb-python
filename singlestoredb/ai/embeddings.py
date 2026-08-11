@@ -1,7 +1,9 @@
 import os
 from typing import Any
 from typing import Callable
+from typing import List
 from typing import Optional
+from typing import Tuple
 from typing import Union
 
 import httpx
@@ -28,6 +30,89 @@ except ImportError:
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
+
+
+class _ChunkedOpenAIEmbeddings(OpenAIEmbeddings):
+    """OpenAIEmbeddings for non-OpenAI models behind an OpenAI-compatible endpoint.
+
+    These models (e.g. Qwen served on the 'Nova' platform) tokenize server-side with
+    their own tokenizer, so inputs are sent as raw text (``check_embedding_ctx_length``
+    should be False). Because the server rejects (or silently truncates) inputs longer
+    than its context window, this class splits long inputs into character-bounded chunks
+    itself, embeds each chunk, and length-weighted-averages them back into a single
+    vector per input -- irrespective of the flag -- so long texts never hit the server's
+    hard limit.
+    """
+
+    max_chunk_chars: int = 24000
+    """Maximum characters per chunk. This is a coarse character-based guard for
+    models whose exact tokenizer/context metadata is not yet available to the client.
+    Override per model if the deployment's context window is known to be smaller or
+    larger."""
+
+    def _chunks(self, text: str) -> List[str]:
+        n = max(1, self.max_chunk_chars)
+        if len(text) <= n:
+            return [text]
+        return [text[i:i + n] for i in range(0, len(text), n)]
+
+    @staticmethod
+    def _average(vectors: List[List[float]], weights: List[int]) -> List[float]:
+        total = float(sum(weights)) or 1.0
+        dim = len(vectors[0])
+        avg = [0.0] * dim
+        for vec, w in zip(vectors, weights):
+            for k in range(dim):
+                avg[k] += vec[k] * w
+        avg = [x / total for x in avg]
+        norm = sum(x * x for x in avg) ** 0.5
+        if norm > 0:
+            avg = [x / norm for x in avg]
+        return avg
+
+    def _plan(self, texts: List[str]) -> Tuple[List[str], List[int]]:
+        flat: List[str] = []
+        owner: List[int] = []
+        for i, text in enumerate(texts):
+            for chunk in self._chunks(text):
+                flat.append(chunk)
+                owner.append(i)
+        return flat, owner
+
+    def _reduce(
+        self,
+        num_texts: int,
+        owner: List[int],
+        flat: List[str],
+        embeddings: List[List[float]],
+    ) -> List[List[float]]:
+        out: List[List[float]] = []
+        for i in range(num_texts):
+            idxs = [j for j, o in enumerate(owner) if o == i]
+            if len(idxs) == 1:
+                out.append(embeddings[idxs[0]])
+            else:
+                out.append(
+                    self._average(
+                        [embeddings[j] for j in idxs],
+                        [max(1, len(flat[j])) for j in idxs],
+                    ),
+                )
+        return out
+
+    def embed_documents(
+        self, texts: List[str], chunk_size: Optional[int] = None, **kwargs: Any,
+    ) -> List[List[float]]:
+        flat, owner = self._plan(texts)
+        embeddings = super().embed_documents(flat, chunk_size=chunk_size, **kwargs)
+        return self._reduce(len(texts), owner, flat, embeddings)
+
+    async def aembed_documents(
+        self, texts: List[str], chunk_size: Optional[int] = None, **kwargs: Any,
+    ) -> List[List[float]]:
+        flat, owner = self._plan(texts)
+        embeddings = await super().aembed_documents(flat, chunk_size=chunk_size, **kwargs)
+        return self._reduce(len(texts), owner, flat, embeddings)
 
 
 def SingleStoreEmbeddingsFactory(
@@ -152,7 +237,23 @@ def SingleStoreEmbeddingsFactory(
     )
     if http_client is not None:
         openai_kwargs['http_client'] = http_client
-    return OpenAIEmbeddings(
+
+    if info.hosting_platform == 'Azure':
+        # Genuine OpenAI (Azure) models: tiktoken is the correct tokenizer, and the
+        # model name is passed above so it selects the right encoding. Keep langchain's
+        # client-side tokenization + long-input chunking (all correct for these models).
+        kwargs.setdefault('check_embedding_ctx_length', True)
+        return OpenAIEmbeddings(
+            **openai_kwargs,
+            **kwargs,
+        )
+
+    # Non-OpenAI models (e.g. Qwen on 'Nova'): tiktoken would send OpenAI token IDs the
+    # model can't interpret -> nonsensical embeddings. Send raw text so the server
+    # tokenizes with the model's own tokenizer, and chunk long inputs ourselves (the
+    # server otherwise rejects or silently truncates over-context input).
+    kwargs.setdefault('check_embedding_ctx_length', False)
+    return _ChunkedOpenAIEmbeddings(
         **openai_kwargs,
         **kwargs,
     )
