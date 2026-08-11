@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.17.1 - August 11, 2026
+-------------------------
+* embeddings: default check_embedding_ctx_length=False for OpenAI-compa… (#129)
+
 v1.17.0 - June 18, 2026
 -----------------------
 * Add changes for compatibility with WASM components (#121)
