@@ -5,13 +5,28 @@ interface plugin {
     /// Must be called before any other functions.
     initialize: func() -> result<_, string>;
 
-    /// Call a function by its registered name (e.g., "my_func")
-    /// Input/output are rowdat_1 binary format
-    call-function: func(name: string, input: list<u8>) -> result<list<u8>, string>;
+    /// Call a function by its registered name and the SQL parameter type list
+    /// of the call. The handler resolves overloads among variants registered
+    /// under the same name using SingleStoreDB's resolution rules (see
+    /// docs/protocol.md).
+    ///
+    /// The separator is ";" (e.g. "BIGINT;VARCHAR"), exactly as the database
+    /// engine emits it — the host passes the list through unchanged. A comma
+    /// is not a separator, since it can appear inside a type's own syntax
+    /// (e.g. "DECIMAL(10,2)").
+    ///
+    /// `some("")` means a zero-arg call — the engine sends an empty list for a
+    /// function with no parameters. `none` means no type list was supplied at
+    /// all (v1 clients, which carry no such segment); the handler then falls
+    /// back to the sole variant or returns an ambiguity error. These two cases
+    /// are distinct and must not be conflated.
+    /// Input/output are rowdat_1 binary format.
+    call-function: func(name: string, param-types: option<string>, input: list<u8>) -> result<list<u8>, string>;
 
     /// Describe all registered functions as a JSON array of objects.
     /// Each object has: name, args [{name, dtype, sql}], returns [{name, dtype, sql}],
     /// args_data_format, returns_data_format, function_type, doc
+    /// Overloaded names appear once per registered variant.
     describe-functions: func() -> result<string, string>;
 
     /// Register a function from its signature and source code.

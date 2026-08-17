@@ -142,6 +142,31 @@ _dtype_to_python: Dict[str, str] = {
 logger = logging.getLogger('udf_handler')
 
 
+def _restore_declared_sql_types(
+    compiled_sig: Dict[str, Any],
+    declared_sig: Dict[str, Any],
+) -> None:
+    """Copy the caller's SQL types over the ones re-derived from Python.
+
+    A dynamically created function is compiled from a Python annotation, so
+    its signature comes back with whatever SQL type that annotation maps to:
+    a declared ``INT`` returns as ``BIGINT``, ``VARCHAR(50)`` as ``TEXT``,
+    ``FLOAT`` as ``DOUBLE``. The declaration is the authority — it decides
+    which overload slot the variant occupies and it is what we must report
+    from ``describe_functions``. Modifies ``compiled_sig`` in place, leaving
+    dtypes (which drive the rowdat_1 encoding) alone.
+    """
+    for key in ('args', 'returns'):
+        compiled = compiled_sig.get(key) or []
+        declared = declared_sig.get(key) or []
+        if len(compiled) != len(declared):
+            continue
+        for c, d in zip(compiled, declared):
+            sql = d.get('sql') if isinstance(d, dict) else None
+            if isinstance(sql, str) and sql.strip():
+                c['sql'] = sql
+
+
 class FunctionRegistry:
     """Registry of discovered UDF functions.
 
@@ -421,9 +446,10 @@ class FunctionRegistry:
         # Compute the canonical signature key from the incoming sig so we
         # can detect collisions before compiling.
         try:
-            incoming_key = _overload.signature_key([
+            incoming_sql_types = [
                 _overload.normalize_sql_type(a['sql']) for a in sig.get('args', [])
-            ])
+            ]
+            incoming_key = _overload.signature_key(incoming_sql_types)
         except KeyError as e:
             raise ValueError(
                 f'signature arg missing "sql" field: {e}',
@@ -508,6 +534,13 @@ class FunctionRegistry:
                 f'Compiled function "{func_name}" has no usable signature',
             )
 
+        # Restore the declared SQL types. Going through a Python annotation
+        # is lossy — a declared INT becomes `int` becomes BIGINT, VARCHAR(50)
+        # becomes `str` becomes TEXT — and the caller's declaration is the
+        # authority for both overload dispatch and what we report back from
+        # describe_functions.
+        _restore_declared_sql_types(variant_sig, sig)
+
         self._register_function(compiled_func, func_name, variant_sig)
         self._id_to_variant[id] = (func_name, incoming_key)
 
@@ -557,6 +590,12 @@ class FunctionRegistry:
         sig: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Register a function variant under its bare name.
+
+        Dispatch keys come from ``sig``'s SQL types, so callers that compile
+        a function from a wire definition must restore the declared types
+        first (see ``_restore_declared_sql_types``) — the trip through a
+        Python annotation turns a declared ``INT`` into ``BIGINT``, which
+        would collide the variant with a real ``BIGINT`` sibling.
 
         Returns the variant dict that was appended. Raises ValueError if a
         variant with an equivalent normalized signature is already present
@@ -612,18 +651,22 @@ class FunctionRegistry:
     ) -> Dict[str, Any]:
         """Resolve a call to a single variant.
 
-        ``param_types`` is the comma-separated SQL parameter type list from
-        the wire (envelope `param_types` or v2 segment). Empty/None means
-        no type info available; resolution falls back to the sole variant
-        or raises if ambiguous.
+        ``param_types`` is the semicolon-separated SQL parameter type list
+        from the wire (v3 envelope ``param_types`` or the v2 segment).
+
+        The engine always sends the list for v2/v3 and uses the *empty
+        string* for a zero-arg call, so ``''`` means "zero arguments" — it
+        must not be conflated with "no type info". Only ``None`` means no
+        type info (v1, which carries no type list at all); resolution then
+        falls back to the sole variant or raises if ambiguous.
         """
         variants = self.functions.get(name)
         if not variants:
             raise ValueError(f'unknown function: {name}')
-        if param_types is None or not param_types.strip():
-            req = None
-        else:
-            req = _overload.parse_param_types(param_types)
+        req = (
+            None if param_types is None
+            else _overload.parse_param_types(param_types)
+        )
         return _overload.resolve(name, variants, req)
 
 
@@ -731,8 +774,9 @@ def call_function(
     """Call a registered UDF by name using the C accelerator or fallback.
 
     This is the hot-path function used by both the WASM handler and
-    the plugin server. ``param_types`` is the comma-separated SQL type
+    the plugin server. ``param_types`` is the semicolon-separated SQL type
     list from the wire and is required when a name has multiple variants.
+    ``''`` denotes a zero-arg call; ``None`` denotes no type info at all.
     """
     func_info = registry.lookup_variant(name, param_types)
     func = func_info['func']

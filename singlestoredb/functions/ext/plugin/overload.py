@@ -113,13 +113,20 @@ def normalize_sql_type(raw: str) -> str:
 def parse_param_types(s: str) -> List[str]:
     """Parse a SQL parameter type list into canonical keys.
 
-    Accepts semicolon- or comma-separated input (v3 uses ``;``, older
-    paths used ``,``). Empty / whitespace-only input → empty list. Each
+    ``;`` is the one and only separator, matching what the engine emits
+    (e.g. ``BIGINT;BIGINT``). Both transports carry it unchanged: the
+    collocated socket server reads it straight out of the v3 envelope, and
+    the WASM host passes it across the WIT boundary as-is.
+
+    A comma is deliberately *not* a separator, since it can appear inside a
+    type's own syntax (``DECIMAL(10,2)``).
+
+    Empty / whitespace-only input (a zero-arg call) → empty list. Each
     element is run through `normalize_sql_type`.
     """
     if not s or not s.strip():
         return []
-    return [normalize_sql_type(t) for t in re.split(r'[;,]', s)]
+    return [normalize_sql_type(t) for t in s.split(';')]
 
 
 def match_kind(declared: str, requested: str) -> MatchKind:

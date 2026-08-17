@@ -232,6 +232,7 @@ def _handle_connection_inner(
     # v3: install any function definition shipped in the handshake
     # envelope before entering the request loop. Cache hit ⇒ no work;
     # miss ⇒ compile and remember it for future replays.
+    install_error: Optional[str] = None
     if envelope is not None:
         definition = envelope.get('definition')
         if isinstance(definition, dict):
@@ -240,20 +241,22 @@ def _handle_connection_inner(
                     definition, shared_registry, pipe_write_fd,
                 )
             except Exception as e:
+                # Don't drop the connection: the engine is waiting on a
+                # response frame and would report a bare "connection reset
+                # by peer" instead of the reason. Carry the message into the
+                # request loop and fail the first request with it.
+                install_error = f'failed to install function definition: {e}'
                 logger.error(
                     f'Failed to install v3 definition: {e}\n'
                     f'{traceback.format_exc()}',
                 )
-                os.close(input_fd)
-                os.close(output_fd)
-                return
 
     # --- UDF request loop ---
     logger.info(f"Received request for function '{function_name}'")
     _handle_udf_loop(
         conn, function_name, input_fd, output_fd,
         shared_registry, shutdown_event,
-        input_param_types,
+        input_param_types, install_error,
     )
 
 
@@ -406,8 +409,13 @@ def _handle_udf_loop(
     shared_registry: SharedRegistry,
     shutdown_event: threading.Event,
     param_types: Optional[str],
+    install_error: Optional[str] = None,
 ) -> None:
-    """Handle the UDF request loop for a single function."""
+    """Handle the UDF request loop for a single function.
+
+    ``install_error`` reports a v3 definition that failed to install: the
+    first request is answered with that message rather than left unanswered.
+    """
     # Track output mmap size to avoid repeated ftruncate
     current_output_size = 0
 
@@ -464,6 +472,28 @@ def _handle_udf_loop(
                 break
             length = struct.unpack('<Q', len_buf)[0]
             if length == 0:
+                # Surface a deferred install error even when the client
+                # closes cleanly without ever issuing a request (the
+                # `create` path of the debug client does exactly this),
+                # matching the Rust server.
+                if install_error is not None:
+                    err_bytes = install_error.encode('utf8')
+                    conn.sendall(
+                        struct.pack(
+                            f'<QQ{len(err_bytes)}s',
+                            STATUS_ERROR, len(err_bytes), err_bytes,
+                        ),
+                    )
+                break
+
+            if install_error is not None:
+                err_bytes = install_error.encode('utf8')
+                conn.sendall(
+                    struct.pack(
+                        f'<QQ{len(err_bytes)}s',
+                        STATUS_ERROR, len(err_bytes), err_bytes,
+                    ),
+                )
                 break
 
             # Read input from mmap

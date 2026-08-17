@@ -7,6 +7,7 @@ shared FunctionRegistry in registry.py.
 """
 import logging
 import traceback
+from typing import Optional
 
 from .registry import _accel_error
 from .registry import _has_accel
@@ -41,16 +42,19 @@ class Plugin:
     def call_function(
         self,
         name: str,
-        param_types: str,
+        param_types: Optional[str],
         input_data: bytes,
     ) -> bytes:
         """Call a function by its registered name.
 
-        ``param_types`` is the comma-separated SQL parameter type list of
-        the call (e.g. ``"BIGINT,VARCHAR"``) used to resolve overloads.
-        Pass an empty string when no type info is available.
+        ``param_types`` is the semicolon-separated SQL parameter type list
+        of the call (e.g. ``"BIGINT;VARCHAR"``) used to resolve overloads.
+        It maps the WIT ``option<string>``: ``''`` denotes a *zero-arg*
+        call — matching what the engine puts on the wire — while ``None``
+        means no type list was supplied at all (v1 clients). The two are
+        distinct and are passed through as-is.
         """
-        return call_function(_registry, name, input_data, param_types or None)
+        return call_function(_registry, name, input_data, param_types)
 
     def describe_functions(self) -> str:
         """Describe all functions as a JSON array.
