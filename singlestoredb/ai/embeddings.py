@@ -1,9 +1,9 @@
 """LangChain embeddings models for SingleStore-hosted inference APIs.
 
-Models served on the 'Nova' platforms are not OpenAI models, so tiktoken is the wrong
-tokenizer for them. Where this module knows a model's real tokenizer it chunks and
-encodes client-side and puts model-native token IDs on the wire; otherwise it falls
-back to sending raw text in character-bounded chunks.
+Nova-hosted models are not OpenAI models, so tiktoken is the wrong tokenizer for them.
+For models in the registry below, this module encodes with the model's own tokenizer
+and sends token IDs. For everything else it sends raw text in character-sized chunks
+and lets the server tokenize.
 """
 import os
 import warnings
@@ -45,6 +45,36 @@ from botocore.config import Config
 
 _DEFAULT_TOKEN_ID_PLATFORMS = frozenset({'Nova', 'NovaMultiTenant'})
 
+_AFFIX_PROBE = 'x'
+"""Throwaway text used to compare a bare encode against a wrapped one."""
+
+_WINDOW_SAFETY_MARGIN = 1
+"""Tokens held back so a full chunk stays strictly under the context window.
+
+Without it a full chunk is exactly ``max_input_tokens`` long, so an off-by-one in the
+server's length check would reject only the longest inputs.
+"""
+
+
+class TokenizationFallbackWarning(UserWarning):
+    """A model could not use client-side tokenization.
+
+    Embeddings stay correct, since the server tokenizes the raw text itself, but long
+    inputs are split on a coarse character budget instead of the real context window.
+    Every fallback warns, because a silent one looks exactly like success. Silence with
+    ``warnings.filterwarnings('ignore', category=TokenizationFallbackWarning)``.
+    """
+
+
+def _warn_fallback(model_name: str, reason: str) -> None:
+    warnings.warn(
+        f'Using character-based chunking with raw text for model {model_name!r} '
+        f'because {reason}. Embeddings remain correct, but long inputs are split on a '
+        f'coarse character budget rather than on the model context window.',
+        TokenizationFallbackWarning,
+        stacklevel=3,
+    )
+
 
 @dataclass(frozen=True)
 class _ModelPolicy:
@@ -56,31 +86,32 @@ class _ModelPolicy:
     """HuggingFace repo to load the tokenizer from. None means use the model name."""
 
     token_id_platforms: FrozenSet[str] = _DEFAULT_TOKEN_ID_PLATFORMS
-    """Hosting platforms whose route accepts token IDs for this model.
+    """Platforms whose route accepts token IDs for this model.
 
-    This is per-model-and-route rather than global: the 'Amazon' route decodes integer
-    ``input`` arrays with tiktoken, so model-native IDs sent that way are decoded into
-    unrelated text and embedded without error.
+    Default-deny, so a platform added later does not inherit the token path untested.
+    'Amazon' and 'Azure' return earlier in the factory and never reach this check.
+
+    'NovaMultiTenant' is verified by a live parity run (Qwen3-Embedding-0.6B). 'Nova'
+    is inferred from serving the same image: tenancy changes routing and auth, not the
+    tokenizer inside the container.
     """
 
 
 # Keyed on a lowercased HuggingFace repo id, which is what InferenceAPIInfo.model_name
-# resolves to, so entries survive deployment alias renames.
+# resolves to when the factory looks the model up through the management API.
 #
-# Entries are explicit opt-in: there is no family-prefix or wildcard matching, even
-# for models known to share a tokenizer. A model that reaches the token path without a
-# parity run is the failure mode this registry exists to prevent -- mismatched special
-# tokens return a well-formed, unit-norm, plausible-looking vector and raise nothing.
-# To add a model:
+# Opt-in only: no prefix or wildcard matching, even between models that share a
+# tokenizer. Wrong token IDs do not raise -- they return a well-formed, unit-norm
+# vector -- so no model reaches the token path unverified. To add one:
 #
-#   1. Confirm the serving stack accepts token IDs on that route. vLLM types the
-#      embeddings input as list[int] | list[list[int]] | str | list[str]; Bedrock
-#      does not.
-#   2. Confirm the context window actually served, including any --max-model-len
-#      override at launch, rather than the window the model card advertises.
-#   3. Run test_live_token_id_parity from singlestoredb/tests/test_embeddings.py
-#      against a real deployment and require cosine > 0.9999.
-#   4. Add the entry plus a unit test asserting its resolved budget and affixes.
+#   1. Confirm the route accepts token IDs. vLLM does; Bedrock decodes them with
+#      tiktoken instead, turning them into unrelated text.
+#   2. Confirm the window actually served, including any --max-model-len override at
+#      launch, not the one on the model card. Record the full window; the affixes and
+#      _WINDOW_SAFETY_MARGIN are subtracted from it.
+#   3. Run tests/test_embeddings_live.py against a real deployment (set
+#      SINGLESTOREDB_EMBEDDINGS_LIVE_MODEL) and require cosine > 0.9999.
+#   4. Add a unit test for the resolved budget and affixes.
 _MODEL_POLICIES: Dict[str, _ModelPolicy] = {
     'qwen/qwen3-embedding-0.6b': _ModelPolicy(
         max_input_tokens=32768,
@@ -91,11 +122,10 @@ _MODEL_POLICIES: Dict[str, _ModelPolicy] = {
 
 @lru_cache(maxsize=None)
 def _load_tokenizer(tokenizer_name: str) -> Any:
-    """Load and memoize a HuggingFace tokenizer.
+    """Load a HuggingFace tokenizer, once per name per process.
 
-    Memoized because parsing Qwen3's ~11 MB tokenizer.json is slow, and because there
-    is no baked tokenizer cache in the serving image, so the first load in a container
-    fetches from huggingface.co over the network.
+    Memoized because parsing Qwen3's ~11 MB tokenizer.json is slow, and the serving
+    image bakes in no tokenizer cache, so the first load fetches from huggingface.co.
     """
     from transformers import AutoTokenizer  # type: ignore[import-not-found]
     return AutoTokenizer.from_pretrained(tokenizer_name)
@@ -104,41 +134,71 @@ def _load_tokenizer(tokenizer_name: str) -> Any:
 def _derive_special_affixes(tokenizer: Any) -> Tuple[List[int], List[int]]:
     """Return the token IDs a tokenizer adds before and after content.
 
-    Derived by diffing a probe encode rather than hardcoded, so this holds for
-    BOS-style models too and self-corrects if a model revision or a ``transformers``
-    upgrade changes special-token handling.
+    Measured by diffing a bare encode against a wrapped one instead of hardcoded, so
+    it covers BOS-style models too and follows any change in the model revision or in
+    ``transformers``.
+
+    Raises:
+        ValueError: if the tokenizer does not wrap content in a fixed prefix and
+            suffix. Assuming no affixes here would cause the exact mispooling this
+            function prevents, so the caller must fall back instead.
     """
-    bare = list(tokenizer.encode('x', add_special_tokens=False))
-    wrapped = list(tokenizer.encode('x', add_special_tokens=True))
+    bare = list(tokenizer.encode(_AFFIX_PROBE, add_special_tokens=False))
+    wrapped = list(tokenizer.encode(_AFFIX_PROBE, add_special_tokens=True))
     if not bare:
-        return [], []
+        raise ValueError(
+            f'tokenizer encoded the probe {_AFFIX_PROBE!r} to no tokens, so its '
+            'special-token affixes cannot be derived',
+        )
     for start in range(len(wrapped) - len(bare) + 1):
         if wrapped[start:start + len(bare)] == bare:
             return wrapped[:start], wrapped[start + len(bare):]
-    return [], []
+    raise ValueError(
+        f'could not locate the bare probe encoding {bare} inside its wrapped form '
+        f'{wrapped}, so this tokenizer does not simply surround content with a fixed '
+        'prefix and suffix; per-chunk special tokens cannot be reproduced safely',
+    )
 
 
 @dataclass(frozen=True)
 class _TokenChunker:
-    """Splits text into model-native token ID chunks that fit the context window."""
+    """Splits text into token ID chunks that fit the model's context window."""
 
     tokenizer: Any
     max_input_tokens: int
     prefix: List[int]
     suffix: List[int]
 
+    def __post_init__(self) -> None:
+        if self.budget < 1:
+            raise ValueError(
+                f'max_input_tokens={self.max_input_tokens} leaves no room for content '
+                f'after {len(self.prefix) + len(self.suffix)} special token(s) and a '
+                f'{_WINDOW_SAFETY_MARGIN}-token safety margin',
+            )
+
     @property
     def budget(self) -> int:
-        """Content tokens allowed per chunk, after reserving room for the affixes."""
-        return max(1, self.max_input_tokens - len(self.prefix) - len(self.suffix))
+        """Content tokens per chunk, after the affixes and the safety margin.
+
+        Not clamped on purpose: a window too small for the affixes means the caller or
+        the registry is wrong, and clamping would emit chunks larger than the window
+        it was asked to respect.
+        """
+        return (
+            self.max_input_tokens
+            - len(self.prefix)
+            - len(self.suffix)
+            - _WINDOW_SAFETY_MARGIN
+        )
 
     def chunks(self, text: str) -> List[List[int]]:
         """Encode ``text`` into wrapped, in-budget token ID chunks."""
         content = list(self.tokenizer.encode(text, add_special_tokens=False))
         budget = self.budget
-        # Every chunk is wrapped individually. Slicing an already-wrapped encoding
-        # would put the special suffix on the last chunk only, leaving every earlier
-        # chunk pooled at the wrong position.
+        # Wrap each chunk on its own. Slicing an already-wrapped encoding would leave
+        # the suffix on the last chunk only, so every earlier chunk pools at the wrong
+        # position.
         return [
             self.prefix + content[i:i + budget] + self.suffix
             for i in range(0, max(len(content), 1), budget)
@@ -150,11 +210,10 @@ def _resolve_max_input_tokens(
     info: Any,
     override: Optional[int],
 ) -> int:
-    """Resolve the context window, preferring caller and server values over the policy.
+    """Resolve the context window: caller override first, then server, then policy.
 
-    ``max_input_tokens`` is read off ``info`` defensively so that the registry constant
-    is superseded automatically if the inference API ever starts reporting the window,
-    without needing another SDK release.
+    ``info`` is read defensively so the registry constant gives way automatically if
+    the inference API ever starts reporting the window, with no new SDK release.
     """
     if override is not None:
         return int(override)
@@ -172,39 +231,48 @@ def _token_chunker_for(
 ) -> Optional[_TokenChunker]:
     """Build a token chunker for a model, or None to keep character chunking.
 
-    Returns None when the model is not in the registry, when its route does not accept
-    token IDs, or when the tokenizer cannot be loaded.
+    Returns None if the model is not registered, if its route does not accept token
+    IDs, or if the tokenizer cannot be loaded or inspected. All three warn, since none
+    of them is visible in the embeddings themselves.
     """
-    policy = _MODEL_POLICIES.get(model_name.strip().lower())
+    key = model_name.strip().lower()
+    policy = _MODEL_POLICIES.get(key)
     if policy is None or not policy.send_token_ids:
+        _warn_fallback(
+            model_name,
+            f'no tokenization policy is registered under {key!r}. If this is a '
+            'deployment alias rather than a HuggingFace repo id, the registry cannot '
+            'match it',
+        )
         return None
     if hosting_platform not in policy.token_id_platforms:
+        _warn_fallback(
+            model_name,
+            f'hosting platform {hosting_platform!r} is not known to accept token IDs '
+            f'for this model (allowed: {sorted(policy.token_id_platforms)})',
+        )
         return None
 
     tokenizer_name = policy.tokenizer_name or model_name
     try:
         tokenizer = _load_tokenizer(tokenizer_name)
+        prefix, suffix = _derive_special_affixes(tokenizer)
+        return _TokenChunker(
+            tokenizer=tokenizer,
+            max_input_tokens=_resolve_max_input_tokens(policy, info, max_input_tokens),
+            prefix=prefix,
+            suffix=suffix,
+        )
     except Exception as exc:
-        # Any failure -- transformers missing, blocked egress, hub outage, renamed
-        # repo -- degrades to character chunking with text on the wire. That is
-        # correct, just coarser. Warn so the degradation is not silent: an egress
-        # change switching this feature off invisibly is the failure class this
-        # tokenization work exists to eliminate.
-        warnings.warn(
-            f'Could not load tokenizer {tokenizer_name!r} for model '
-            f'{model_name!r} ({type(exc).__name__}: {exc}). Falling back to '
-            'character-based chunking with raw text; long inputs may be chunked '
-            'less precisely.',
+        # transformers missing, blocked egress, hub outage, renamed repo, unreadable
+        # special tokens, unusable window: all degrade to character chunking with text
+        # on the wire, which is correct but coarser.
+        _warn_fallback(
+            model_name,
+            f'tokenizer {tokenizer_name!r} could not be prepared '
+            f'({type(exc).__name__}: {exc})',
         )
         return None
-
-    prefix, suffix = _derive_special_affixes(tokenizer)
-    return _TokenChunker(
-        tokenizer=tokenizer,
-        max_input_tokens=_resolve_max_input_tokens(policy, info, max_input_tokens),
-        prefix=prefix,
-        suffix=suffix,
-    )
 
 
 _Chunk = Union[str, List[int]]
@@ -213,26 +281,23 @@ _Chunk = Union[str, List[int]]
 class _ChunkedOpenAIEmbeddings(OpenAIEmbeddings):
     """OpenAIEmbeddings for non-OpenAI models behind an OpenAI-compatible endpoint.
 
-    tiktoken is the wrong tokenizer for these models (e.g. Qwen served on the 'Nova'
-    platforms), so ``check_embedding_ctx_length`` should be False to keep langchain
-    from encoding with it. Because the server rejects (or silently truncates) inputs
-    longer than its context window, this class splits long inputs into chunks itself,
-    embeds each chunk, and weighted-averages them back into a single vector per input
-    -- irrespective of the flag -- so long texts never hit the server's hard limit.
+    tiktoken is the wrong tokenizer for these models (e.g. Qwen on the 'Nova'
+    platforms), so ``check_embedding_ctx_length`` should be False to stop langchain
+    encoding with it. That also turns off langchain's own long-input handling, so this
+    class always chunks inputs itself, embeds each chunk, and weighted-averages them
+    back into one vector per input. Otherwise the server rejects, or silently
+    truncates, anything over its context window.
 
-    With a ``token_chunker`` set, chunking uses the model's own tokenizer and sends
-    token IDs. Without one, it falls back to a coarse character split and sends text
-    for the server to tokenize.
+    With a ``token_chunker`` it chunks by real tokens and sends token IDs. Without one
+    it splits on characters and sends text for the server to tokenize.
     """
 
     max_chunk_chars: int = 6000
-    """Maximum characters per chunk, used only when ``token_chunker`` is None.
+    """Characters per chunk when ``token_chunker`` is None.
 
-    Coarse character-based guard used because the client does not have the model's
-    tokenizer. Sized to stay under common ~8k-token Nova embedding windows even when
-    characters map roughly 1:1 to tokens (code / CJK). Models with larger windows
-    (e.g. Qwen3 Embedding ~32k) can raise this; models with smaller windows (e.g.
-    ~4k) should lower it.
+    A coarse stand-in for a token count, since the client has no tokenizer here. Sized
+    to stay under a common ~8k-token Nova window even when characters map nearly 1:1
+    to tokens, as in code or CJK. Raise it for larger windows, lower it for ~4k ones.
     """
 
     token_chunker: Optional[Any] = None
@@ -247,7 +312,7 @@ class _ChunkedOpenAIEmbeddings(OpenAIEmbeddings):
         return [text[i:i + n] for i in range(0, len(text), n)]
 
     def _weight(self, chunk: _Chunk) -> int:
-        """Weight of a chunk in the reduction, in units of content."""
+        """How much this chunk counts for in the average, in units of content."""
         if self.token_chunker is None:
             return max(1, len(chunk))
         affix_len = len(self.token_chunker.prefix) + len(self.token_chunker.suffix)
@@ -270,7 +335,7 @@ class _ChunkedOpenAIEmbeddings(OpenAIEmbeddings):
     def _plan(
         self, texts: List[str],
     ) -> Tuple[List[_Chunk], List[int], List[int]]:
-        """Split every input into chunks, tracking which input each chunk came from."""
+        """Chunk every input, tracking which input each chunk came from."""
         flat: List[_Chunk] = []
         owner: List[int] = []
         weights: List[int] = []
@@ -306,8 +371,9 @@ class _ChunkedOpenAIEmbeddings(OpenAIEmbeddings):
         self, texts: List[str], chunk_size: Optional[int] = None, **kwargs: Any,
     ) -> List[List[float]]:
         flat, owner, weights = self._plan(texts)
-        # langchain forwards batch elements untouched when check_embedding_ctx_length
-        # is False, so token ID lists reach the wire as-is despite the str signature.
+        # langchain passes batch elements through untouched when
+        # check_embedding_ctx_length is False, so token ID lists reach the wire as-is
+        # despite the str signature.
         embeddings = super().embed_documents(
             flat, chunk_size=chunk_size, **kwargs,  # type: ignore[arg-type]
         )
@@ -448,9 +514,9 @@ def SingleStoreEmbeddingsFactory(
         openai_kwargs['http_client'] = http_client
 
     if info.hosting_platform == 'Azure':
-        # Genuine OpenAI (Azure) models: tiktoken is the correct tokenizer, and the
-        # model name is passed above so it selects the right encoding. Keep langchain's
-        # client-side tokenization + long-input chunking (all correct for these models).
+        # Real OpenAI models: tiktoken is the right tokenizer, and the model name passed
+        # above picks the right encoding. Keep langchain's own tokenization and
+        # long-input chunking, which are both correct here.
         kwargs.setdefault('check_embedding_ctx_length', True)
         return OpenAIEmbeddings(
             **openai_kwargs,
@@ -458,10 +524,10 @@ def SingleStoreEmbeddingsFactory(
         )
 
     # Non-OpenAI models (e.g. Qwen on 'Nova'): tiktoken would send OpenAI token IDs the
-    # model can't interpret -> nonsensical embeddings. Either encode with the model's
-    # own tokenizer client-side, or send raw text and let the server tokenize. Either
-    # way chunk long inputs ourselves, since the server otherwise rejects or silently
-    # truncates over-context input.
+    # model cannot read, giving meaningless embeddings. So either encode with the
+    # model's own tokenizer, or send raw text for the server to tokenize. Either way we
+    # chunk long inputs here, since the server rejects or silently truncates anything
+    # over its window.
     kwargs.setdefault('check_embedding_ctx_length', False)
     token_chunker = _token_chunker_for(
         info.model_name,

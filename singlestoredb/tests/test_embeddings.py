@@ -9,13 +9,11 @@ import sys
 import types
 import unittest
 
-# Arbitrary IDs outside the fake tokenizers' character-derived range, standing in for
-# a model's BOS/EOS. The real Qwen3 EOS (151643) is deliberately not used here: the
-# affixes are derived from the tokenizer, so no test should know a real special ID.
+# Stand-ins for a model's BOS/EOS, outside the fake tokenizers' ord()-derived range.
+# Not the real Qwen3 EOS (151643): affixes come from the tokenizer, so no test should
+# know a real special ID.
 FAKE_BOS = 900001
 FAKE_EOS = 900002
-
-LIVE_MODEL_ENV = 'SINGLESTOREDB_EMBEDDINGS_LIVE_MODEL'
 
 INJECTED_MODULES = (
     'httpx',
@@ -113,6 +111,22 @@ class FakeTokenizer:
         return tokens
 
 
+class RewritingTokenizer:
+    """Rewrites content when adding specials instead of wrapping it."""
+
+    def encode(self, text, add_special_tokens=True):
+        if add_special_tokens:
+            return [FAKE_BOS, FAKE_EOS]
+        return [ord(char) for char in text]
+
+
+class EmptyTokenizer:
+    """Encodes the probe to nothing, so no affixes can be located."""
+
+    def encode(self, text, add_special_tokens=True):
+        return []
+
+
 class FakeAutoTokenizer:
     """Stands in for ``transformers.AutoTokenizer`` so unit tests stay offline."""
 
@@ -174,8 +188,8 @@ class TestEmbeddings(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        # The live check below, and anything else importing these for real, must not
-        # inherit the fakes.
+        # Any later real import of these must not get the fakes. test_embeddings_live
+        # would pass against a constant vector if it did.
         sys.modules.pop('_test_embeddings_module', None)
         for name, module in cls.saved_modules.items():
             if module is None:
@@ -205,15 +219,21 @@ class TestEmbeddings(unittest.TestCase):
         )
 
     def test_unregistered_model_sends_raw_strings_and_uses_chunk_cap(self):
-        # A model with no registry entry keeps the pre-tokenization behavior: text on
-        # the wire, split on characters.
-        embedding = self.embeddings.SingleStoreEmbeddingsFactory(
-            model_name='shared-qwen3-embed-0-6b',
-            api_key='token',
-            base_url='http://localhost:8000',
-            hosting_platform='NovaMultiTenant',
-        )
+        # No registry entry keeps the old behavior: text on the wire, split on
+        # characters. A deployment alias lands here, so it must warn rather than look
+        # like success.
+        with self.assertWarns(
+            self.embeddings.TokenizationFallbackWarning,
+        ) as caught:
+            embedding = self.embeddings.SingleStoreEmbeddingsFactory(
+                model_name='shared-qwen3-embed-0-6b',
+                api_key='token',
+                base_url='http://localhost:8000',
+                hosting_platform='NovaMultiTenant',
+            )
 
+        assert 'no tokenization policy is registered' in str(caught.warning)
+        assert 'deployment alias' in str(caught.warning)
         assert isinstance(embedding, self.embeddings._ChunkedOpenAIEmbeddings)
         assert embedding.kwargs['check_embedding_ctx_length'] is False
         assert embedding.token_chunker is None
@@ -282,42 +302,46 @@ class TestEmbeddings(unittest.TestCase):
         assert chunker.max_input_tokens == 32768, chunker.max_input_tokens
         assert chunker.prefix == []
         assert chunker.suffix == [FAKE_EOS]
-        assert chunker.budget == 32767, chunker.budget
+        # 32768 window - 1 suffix token - 1 safety margin.
+        assert chunker.budget == 32766, chunker.budget
 
     def test_token_path_wraps_every_chunk_and_stays_within_budget(self):
         self.use_tokenizer(suffix=[FAKE_EOS])
         embedding = self.qwen_embedding(max_input_tokens=4)
 
         assert embedding.token_chunker is not None
-        assert embedding.token_chunker.budget == 3
+        assert embedding.token_chunker.budget == 2
 
         embedding.embed_documents(['abcdefg'])
 
         sent = embedding.seen_documents
-        assert len(sent) == 3, sent
+        assert len(sent) == 4, sent
         for chunk in sent:
             assert isinstance(chunk, list), chunk
             assert all(isinstance(token, int) for token in chunk), chunk
-            assert len(chunk) <= 4, chunk
-            # Every chunk carries the affix, not just the last one. Slicing a wrapped
-            # encoding instead would mispool every chunk but the final one.
+            # Strictly under the window, so an off-by-one in the server's length check
+            # cannot reject the longest chunks.
+            assert len(chunk) < 4, chunk
+            # Every chunk carries the affix. Slicing a wrapped encoding would mispool
+            # all but the last one.
             assert chunk[-1] == FAKE_EOS, chunk
         assert sent == [
-            [ord('a'), ord('b'), ord('c'), FAKE_EOS],
-            [ord('d'), ord('e'), ord('f'), FAKE_EOS],
+            [ord('a'), ord('b'), FAKE_EOS],
+            [ord('c'), ord('d'), FAKE_EOS],
+            [ord('e'), ord('f'), FAKE_EOS],
             [ord('g'), FAKE_EOS],
         ], sent
 
     def test_token_path_weights_reduction_by_content_tokens_only(self):
         self.use_tokenizer(prefix=[FAKE_BOS], suffix=[FAKE_EOS])
-        embedding = self.qwen_embedding(max_input_tokens=5)
+        embedding = self.qwen_embedding(max_input_tokens=6)
 
         assert embedding.token_chunker.budget == 3
 
         out = embedding.embed_documents(['aaab'])
 
-        # Chunks weigh 3 and 1 content tokens; counting the two affix tokens as well
-        # would weigh them 5 and 3 and pull the result toward the shorter chunk.
+        # Content weights are 3 and 1. Counting the two affix tokens too would make
+        # them 5 and 3, pulling the result toward the shorter chunk.
         assert len(out) == 1, out
         assert math.isclose(out[0][0], 3.0 / math.sqrt(10.0)), out[0]
         assert math.isclose(out[0][1], 1.0 / math.sqrt(10.0)), out[0]
@@ -330,16 +354,57 @@ class TestEmbeddings(unittest.TestCase):
         assert derive(
             FakeTokenizer(prefix=[FAKE_BOS], suffix=[FAKE_EOS]),
         ) == ([FAKE_BOS], [FAKE_EOS])
+        # A tokenizer that adds nothing is a real match, not a failure.
         assert derive(FakeTokenizer()) == ([], [])
+
+    def test_affix_derivation_refuses_unrecognizable_tokenizers(self):
+        # Empty affixes here would send token IDs with no special tokens, the exact
+        # mispooling this derivation prevents.
+        derive = self.embeddings._derive_special_affixes
+
+        with self.assertRaises(ValueError):
+            derive(RewritingTokenizer())
+        with self.assertRaises(ValueError):
+            derive(EmptyTokenizer())
+
+    def test_unrecognizable_tokenizer_falls_back_and_warns(self):
+        self.embeddings._load_tokenizer.cache_clear()
+        FakeAutoTokenizer.tokenizer = RewritingTokenizer()
+
+        with self.assertWarns(
+            self.embeddings.TokenizationFallbackWarning,
+        ) as caught:
+            embedding = self.qwen_embedding()
+
+        assert 'could not be prepared' in str(caught.warning)
+        assert embedding.token_chunker is None
+
+    def test_window_too_small_for_affixes_falls_back_and_warns(self):
+        # Clamping the budget instead would quietly emit chunks larger than the window.
+        self.use_tokenizer(prefix=[FAKE_BOS], suffix=[FAKE_EOS])
+
+        with self.assertWarns(
+            self.embeddings.TokenizationFallbackWarning,
+        ) as caught:
+            embedding = self.qwen_embedding(max_input_tokens=3)
+
+        assert 'leaves no room for content' in str(caught.warning)
+        assert embedding.token_chunker is None
 
     def test_token_ids_refused_on_platforms_outside_the_allowlist(self):
         self.use_tokenizer(suffix=[FAKE_EOS])
 
-        # The Bedrock route decodes integer inputs with tiktoken, so model-native IDs
-        # would be silently decoded into unrelated text and embedded.
-        assert self.embeddings._token_chunker_for(
-            'Qwen/Qwen3-Embedding-0.6B', 'Amazon',
-        ) is None
+        # Bedrock decodes integer inputs with tiktoken, so model-native IDs would
+        # quietly become unrelated text and get embedded.
+        with self.assertWarns(
+            self.embeddings.TokenizationFallbackWarning,
+        ) as caught:
+            refused = self.embeddings._token_chunker_for(
+                'Qwen/Qwen3-Embedding-0.6B', 'Amazon',
+            )
+
+        assert refused is None
+        assert 'not known to accept token IDs' in str(caught.warning)
         assert self.embeddings._token_chunker_for(
             'Qwen/Qwen3-Embedding-0.6B', 'Nova',
         ) is not None
@@ -347,7 +412,9 @@ class TestEmbeddings(unittest.TestCase):
     def test_tokenizer_load_failure_falls_back_and_warns(self):
         self.fail_tokenizer_load(RuntimeError('huggingface.co unreachable'))
 
-        with self.assertWarns(UserWarning) as caught:
+        with self.assertWarns(
+            self.embeddings.TokenizationFallbackWarning,
+        ) as caught:
             embedding = self.qwen_embedding()
 
         assert 'huggingface.co unreachable' in str(caught.warning)
@@ -372,106 +439,6 @@ class TestEmbeddings(unittest.TestCase):
         assert chunker_for(
             'Qwen/Qwen3-Embedding-0.6B', 'Nova', info=info, max_input_tokens=256,
         ).max_input_tokens == 256
-
-
-@unittest.skipUnless(
-    os.environ.get(LIVE_MODEL_ENV),
-    f'set {LIVE_MODEL_ENV} to a deployed embedding model name to run the live '
-    'server-contract check',
-)
-class TestLiveTokenIdParity(unittest.TestCase):
-    """Server-contract tripwire against a real deployment; never runs in CI.
-
-    Now that the client owns tokenization, this is what detects a vLLM upgrade, an
-    ``--hf-overrides`` change, or a model revision that alters tokenization or
-    pooling. Needs ``SINGLESTOREDB_USER_TOKEN`` plus either an org context or
-    ``SINGLESTOREDB_INFERENCE_API_BASE_URL`` and
-    ``SINGLESTOREDB_INFERENCE_API_HOSTING_PLATFORM``.
-    """
-
-    text = (
-        'SingleStore is a distributed SQL database that supports both '
-        'transactional and analytical workloads over the same data, with '
-        'vector search built in.'
-    )
-
-    @staticmethod
-    def cosine(left, right):
-        dot = sum(a * b for a, b in zip(left, right))
-        left_norm = sum(a * a for a in left) ** 0.5
-        right_norm = sum(b * b for b in right) ** 0.5
-        return dot / (left_norm * right_norm)
-
-    def native_embedding(self):
-        """An embeddings model on the token path, as the factory built it."""
-        from singlestoredb.ai.embeddings import SingleStoreEmbeddingsFactory
-
-        model_name = os.environ[LIVE_MODEL_ENV]
-        embedding = SingleStoreEmbeddingsFactory(model_name=model_name)
-        assert embedding.token_chunker is not None, (
-            f'{model_name} did not take the token path; check its registry entry '
-            'and that the tokenizer loaded'
-        )
-        return embedding
-
-    def text_embedding(self):
-        """An embeddings model that puts raw text on the wire, as the baseline."""
-        embedding = self.native_embedding()
-        embedding.token_chunker = None
-        return embedding
-
-    def retokenized_embedding(self, tokenizer, prefix, suffix):
-        """An embeddings model that puts ``tokenizer``'s IDs on the wire."""
-        import dataclasses
-
-        embedding = self.native_embedding()
-        embedding.token_chunker = dataclasses.replace(
-            embedding.token_chunker,
-            tokenizer=tokenizer,
-            prefix=prefix,
-            suffix=suffix,
-        )
-        return embedding
-
-    def cosine_against_text(self, embedding):
-        return self.cosine(
-            self.text_embedding().embed_documents([self.text])[0],
-            embedding.embed_documents([self.text])[0],
-        )
-
-    def test_native_token_ids_match_raw_text(self):
-        cos = self.cosine_against_text(self.native_embedding())
-        assert cos > 0.9999, cos
-
-    def test_dropping_special_affixes_breaks_parity(self):
-        # Guards the LAST-pooling assumption: without the trailing special token the
-        # sentence vector becomes the hidden state of the last content token instead.
-        unwrapped = self.retokenized_embedding(
-            self.native_embedding().token_chunker.tokenizer, [], [],
-        )
-
-        cos = self.cosine_against_text(unwrapped)
-        assert cos < 0.99, (
-            f'dropping the special affixes still matched raw text (cos={cos}); the '
-            'server-side tokenization or pooling contract has changed'
-        )
-
-    def test_tiktoken_ids_are_not_equivalent(self):
-        import tiktoken
-
-        encoding = tiktoken.get_encoding('cl100k_base')
-
-        class TiktokenShim:
-            def encode(self, text, add_special_tokens=True):
-                return encoding.encode(text)
-
-        cos = self.cosine_against_text(
-            self.retokenized_embedding(TiktokenShim(), [], []),
-        )
-        assert cos < 0.9, (
-            f'tiktoken IDs matched raw text (cos={cos}); the server is no longer '
-            'interpreting the input as model-native token IDs'
-        )
 
 
 if __name__ == '__main__':
