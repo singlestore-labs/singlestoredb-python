@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 # type: ignore
 """Tests for versioned management API wrappers (ADR 0001)."""
+import ast
 import datetime
+import importlib
+import os
+import sys
 import unittest
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -1294,57 +1298,49 @@ class TestManageRoutingForAllFactories(unittest.TestCase):
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
     def test_manage_files(self, _mock_token):
         from singlestoredb.management.files import manage_files
-        from singlestoredb.management.v1.files import FilesManager as V1FM
-        from singlestoredb.management.v2.files import FilesManager as V2FM
 
-        self.assertIsInstance(
-            manage_files(
-                access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v2',
-            ),
-            V2FM,
-        )
-        self.assertIsInstance(
-            manage_files(
-                access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v1',
-            ),
-            V1FM,
-        )
+        # The Files API is unchanged at v2, so both versions share one
+        # ``FilesManager`` class; the version shows up only in the base URL.
+        for ver in ('v1', 'v2'):
+            mgr = manage_files(
+                access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version=ver,
+            )
+            self.assertTrue(
+                mgr._base_url.endswith(f'/{ver}/'),
+                f'expected base URL to end with /{ver}/, got {mgr._base_url}',
+            )
 
 
-class TestV1FactoryRoutesByVersion(unittest.TestCase):
-    """The duplicate ``manage_*`` factories in ``v1/*.py`` must route by
-    ``version`` the same way the top-level shims do, so callers using
-    ``from singlestoredb.management.v1.region import manage_regions`` with
-    ``version='v2'`` still get a v2 manager."""
+class TestFactoriesAreNotDuplicated(unittest.TestCase):
+    """
+    The ``manage_*`` factories must live in exactly one place.
 
-    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
-    def test_v1_namespace_manage_regions_routes_v2(self, _mock_token):
-        from singlestoredb.management.v1.region import manage_regions
-        from singlestoredb.management.v2.region import RegionManager as V2RM
-        mgr = manage_regions(
-            access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v2',
-        )
-        self.assertIsInstance(mgr, V2RM)
+    They are version-neutral -- they take ``version`` as an argument and
+    dispatch -- so duplicating them into ``v1/`` (as an earlier layout did)
+    both invites the two copies to drift and makes ``v1/`` un-deletable.
+    """
 
-    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
-    def test_v1_namespace_manage_workspaces_routes_v2(self, _mock_token):
-        from singlestoredb.management.v1.workspace import manage_workspaces
-        from singlestoredb.management.v2.workspace import (
-            WorkspaceManager as V2WM,
-        )
-        mgr = manage_workspaces(
-            access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v2',
-        )
-        self.assertIsInstance(mgr, V2WM)
-
-    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
-    def test_v1_namespace_manage_files_routes_v2(self, _mock_token):
-        from singlestoredb.management.v1.files import manage_files
-        from singlestoredb.management.v2.files import FilesManager as V2FM
-        mgr = manage_files(
-            access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v2',
-        )
-        self.assertIsInstance(mgr, V2FM)
+    def test_factories_defined_only_at_top_level(self):
+        factories = {
+            'manage_files': 'files',
+            'manage_regions': 'region',
+            'manage_workspaces': 'workspace',
+        }
+        for func, mod_name in factories.items():
+            shared = importlib.import_module(f'singlestoredb.management.{mod_name}')
+            self.assertTrue(
+                callable(getattr(shared, func, None)),
+                f'{func} should be defined in management/{mod_name}.py',
+            )
+            for ver in ('v1', 'v2'):
+                mod = importlib.import_module(
+                    f'singlestoredb.management.{ver}.{mod_name}',
+                )
+                self.assertNotIn(
+                    func, vars(mod),
+                    f'{func} must not be duplicated into '
+                    f'management/{ver}/{mod_name}.py',
+                )
 
 
 class TestRecursiveDownloadPathTraversal(unittest.TestCase):
@@ -1709,6 +1705,102 @@ class TestFolderTransferPaths(unittest.TestCase):
                 for call in space.upload_file.call_args_list
             ]
             self.assertEqual(uploaded, ['keep.py'])
+
+
+class TestV1IsDeletable(unittest.TestCase):
+    """
+    Guard the invariant that makes v1 removable.
+
+    The v1 endpoints will eventually be abandoned, at which point
+    ``management/v1/`` should be deletable by ``rm -rf`` plus removal of the
+    back-compat shims. That only holds while nothing under ``management/v2/``
+    imports from ``management/v1/``: version-neutral code belongs in the
+    shared top-level ``management/`` modules, which both version packages
+    import sideways.
+
+    If this test fails, the fix is to move the shared code up to
+    ``management/`` -- not to add a v1 import to v2.
+    """
+
+    def _v2_module_paths(self):
+        from singlestoredb.management import v2
+        v2_dir = os.path.dirname(v2.__file__)
+        return sorted(
+            os.path.join(v2_dir, f)
+            for f in os.listdir(v2_dir)
+            if f.endswith('.py')
+        )
+
+    def test_no_v2_module_imports_from_v1(self):
+        """No module under management/v2/ may import from management/v1/."""
+        offenders = []
+        for path in self._v2_module_paths():
+            with open(path) as f:
+                tree = ast.parse(f.read(), filename=path)
+            for node in ast.walk(tree):
+                # Relative ``from ..v1.x import y`` shows up as level=2 with
+                # module='v1.x'; absolute imports show up with the full path.
+                if isinstance(node, ast.ImportFrom):
+                    mod = node.module or ''
+                    if mod == 'v1' or mod.startswith('v1.') or \
+                            'management.v1' in mod:
+                        offenders.append(
+                            f'{os.path.basename(path)}:{node.lineno}: '
+                            f'from {"." * node.level}{mod}',
+                        )
+                elif isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if 'management.v1' in alias.name:
+                            offenders.append(
+                                f'{os.path.basename(path)}:{node.lineno}: '
+                                f'import {alias.name}',
+                            )
+
+        self.assertEqual(
+            offenders, [],
+            'management/v2/ must not import from management/v1/; move the '
+            'shared code up to management/ instead:\n  ' +
+            '\n  '.join(offenders),
+        )
+
+    def test_v2_imports_survive_v1_removal(self):
+        """Importing every v2 module works with management.v1 blocked."""
+        v2_names = [
+            'singlestoredb.management.v2.' + os.path.basename(p)[:-3]
+            for p in self._v2_module_paths()
+            if not os.path.basename(p).startswith('__')
+        ]
+
+        # Drop anything already imported so the blocker actually gets
+        # consulted, then forbid the v1 package outright.
+        saved = {
+            k: v for k, v in sys.modules.items()
+            if k.startswith('singlestoredb.management.v1')
+            or k in v2_names
+        }
+        for k in saved:
+            del sys.modules[k]
+
+        class _BlockV1:
+            def find_module(self, fullname, path=None):
+                return self.find_spec(fullname, path)
+
+            def find_spec(self, fullname, path=None, target=None):
+                if fullname.startswith('singlestoredb.management.v1'):
+                    raise AssertionError(
+                        f'v2 import chain reached {fullname}; v1 is supposed '
+                        'to be removable',
+                    )
+                return None
+
+        blocker = _BlockV1()
+        sys.meta_path.insert(0, blocker)
+        try:
+            for name in v2_names:
+                importlib.import_module(name)
+        finally:
+            sys.meta_path.remove(blocker)
+            sys.modules.update(saved)
 
 
 if __name__ == '__main__':

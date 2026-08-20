@@ -1,31 +1,41 @@
 #!/usr/bin/env python
 """SingleStoreDB Region Management API v2."""
+from ...exceptions import ManagementError
+from ..region import Region as Region
+from ..region import RegionManager as _RegionManager
 from ..utils import NamedList
-from ..v1.region import Region as Region
-from ..v1.region import RegionManager as V1RegionManager
 
 
-class RegionManager(V1RegionManager):
+class RegionManager(_RegionManager):
     """
     SingleStoreDB region manager (API v2).
 
-    Calls ``GET /v2/regions``, which returns ``RegionV2`` entries containing
-    ``provider``, ``region``, and ``regionName`` only — no ``regionID``.
-    Region instances therefore have ``id is None`` and ``region_name`` set.
+    ``GET /v2/regions`` returns entries containing ``provider``, ``region``,
+    and ``regionName`` only -- no ``regionID``. :class:`Region` instances
+    therefore have ``id is None`` and ``region_name`` set; v2 identifies a
+    region by ``(provider, region_name)``.
+
+    There is no v2 shared-tier region route, so
+    :meth:`list_shared_tier_regions` raises here rather than returning a
+    misleading empty list.
     """
 
-    def list_regions(self) -> NamedList[Region]:
+    def list_shared_tier_regions(self) -> NamedList[Region]:
         """
-        List all available regions via ``GET /v2/regions``.
+        Not available at API v2.
 
-        Returns
-        -------
-        NamedList[Region]
-            List of available regions. Each entry has ``id=None`` and
-            ``region_name`` populated; v2 identifies regions by
-            ``(provider, region_name)``.
+        Raises
+        ------
+        ManagementError
+            Always. ``GET /v2/regions/sharedtier`` does not exist, and neither
+            does any alternate spelling (``sharedTier/regions``,
+            ``regions/sharedTier``, ``sharedtier/virtualClusters/regions``,
+            ``clusters/regions``, ...) -- all return ``404 page not found`` or
+            are swallowed by the ``virtualClusters/{id}`` route.
         """
-        res = self._get('regions')
-        return NamedList(
-            [Region.from_dict(item, self) for item in res.json()],
+        raise ManagementError(
+            msg='Listing shared tier regions is not supported by management '
+                'API v2; there is no v2 equivalent of '
+                'GET /v1/regions/sharedtier. Use a v1 region manager '
+                "(manage_regions(version='v1')) for this call.",
         )

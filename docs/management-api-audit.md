@@ -470,8 +470,22 @@ test churn:
    - `WorkspaceManager.create_starter_workspace`: `project_id`.
 4. **v2/ override layer** — v2 classes subclass v1 (per ADR 0001) and only
    override what differs. Adding fields in v1 propagates to v2 automatically
-   through inheritance — **no v2 changes are needed for any work in this
-   audit**.
+   through inheritance, so the *field* additions in this audit need no v2
+   counterpart.
+
+   > **Correction.** An earlier revision of this section concluded that "no v2
+   > changes are needed for any work in this audit." That was drawn from the
+   > stale, partial `dev-docs/management_api.openapi` snapshot and is wrong.
+   > v2 is not a field-compatible overlay on v1: it replaces the two-level
+   > `workspaceGroups` → `workspaces` hierarchy with a single flat `clusters`
+   > resource, and it moves the Stage, shared-tier, egress, and metrics paths.
+   > Inheritance alone therefore leaves v2 sending v1 paths to `/v2/`, which
+   > 404s. See `docs/adr/0001-versioned-management-api-wrappers.md`.
+   >
+   > `dev-docs/management_api.openapi` is **not authoritative** — it omits the
+   > whole `egress` family and misreports which v2 routes exist. Confirm
+   > endpoint existence by probing the live API (see the header comment in that
+   > file), not by reading the spec.
 
 ---
 
