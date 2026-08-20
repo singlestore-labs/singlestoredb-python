@@ -45,15 +45,13 @@ from botocore.config import Config
 
 _DEFAULT_TOKEN_ID_PLATFORMS = frozenset({'Nova', 'NovaMultiTenant'})
 
+# Throwaway text used to compare a bare encode against a wrapped one.
 _AFFIX_PROBE = 'x'
-"""Throwaway text used to compare a bare encode against a wrapped one."""
 
+# Tokens held back so a full chunk stays strictly under the context window. Without it
+# a full chunk is exactly max_input_tokens long, so an off-by-one in the server's
+# length check would reject only the longest inputs.
 _WINDOW_SAFETY_MARGIN = 1
-"""Tokens held back so a full chunk stays strictly under the context window.
-
-Without it a full chunk is exactly ``max_input_tokens`` long, so an off-by-one in the
-server's length check would reject only the longest inputs.
-"""
 
 
 class TokenizationFallbackWarning(UserWarning):
