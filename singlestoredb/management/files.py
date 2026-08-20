@@ -26,14 +26,13 @@ from .utils import PathLike
 from .utils import resolve_ignore_files
 from .utils import to_datetime
 from .utils import vars_to_str
-from .versioned import VersionedMixin
 
 PERSONAL_SPACE = 'personal'
 SHARED_SPACE = 'shared'
 MODELS_SPACE = 'models'
 
 
-class FilesObject(VersionedMixin):
+class FilesObject:
     """
     File / folder object.
 
@@ -127,7 +126,6 @@ class FilesObject(VersionedMixin):
             writable=bool(obj['writable']),
         )
         out._location = location
-        out._response = obj
         if location is not None:
             out._manager = location._manager
         return out
@@ -581,7 +579,7 @@ def manage_files(
 
     """
     from .. import config
-    from .versioned import _import_versioned_module
+    from ._version_import import _import_versioned_module
     ver = version or config.get_option('management.version') or 'v1'
     mod = _import_versioned_module(ver, 'files')
     return mod.FilesManager(

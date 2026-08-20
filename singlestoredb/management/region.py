@@ -6,10 +6,9 @@ from typing import Optional
 from .manager import Manager
 from .utils import NamedList
 from .utils import vars_to_str
-from .versioned import VersionedMixin
 
 
-class Region(VersionedMixin):
+class Region:
     """
     Cluster region information.
 
@@ -76,7 +75,6 @@ class Region(VersionedMixin):
             region_name=region_name,
         )
         out._manager = manager
-        out._response = obj
         return out
 
 
@@ -170,7 +168,7 @@ def manage_regions(
 
     """
     from .. import config
-    from .versioned import _import_versioned_module
+    from ._version_import import _import_versioned_module
     ver = version or config.get_option('management.version') or 'v1'
     mod = _import_versioned_module(ver, 'region')
     return mod.RegionManager(

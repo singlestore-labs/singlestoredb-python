@@ -13,7 +13,6 @@ from .job import JobsManager
 from .manager import Manager
 from .utils import to_datetime
 from .utils import vars_to_str
-from .versioned import VersionedMixin
 
 
 def listify(x: Union[str, List[str]]) -> List[str]:
@@ -113,7 +112,7 @@ class Secret(object):
         return str(self)
 
 
-class Organization(VersionedMixin):
+class Organization:
     """
     Organization in SingleStoreDB Cloud portal.
 
@@ -201,7 +200,6 @@ class Organization(VersionedMixin):
             firewall_ranges=listify(obj.get('firewallRanges', [])),
         )
         out._manager = manager
-        out._response = obj
         return out
 
     @property

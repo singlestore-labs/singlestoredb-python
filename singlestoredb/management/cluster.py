@@ -8,6 +8,7 @@ no v1 cluster resource; :func:`manage_clusters` defaults to v2 accordingly.
 """
 from typing import Optional
 
+from ._version_import import _import_versioned_module
 from .v2.cluster import Cluster as Cluster
 from .v2.cluster import CLUSTER_ENV_VARS as CLUSTER_ENV_VARS
 from .v2.cluster import ClusterManager as ClusterManager
@@ -19,7 +20,6 @@ from .v2.cluster import SHAREDTIER_PATH as SHAREDTIER_PATH
 from .v2.cluster import Stage as Stage
 from .v2.cluster import StageObject as StageObject
 from .v2.cluster import StarterCluster as StarterCluster
-from .versioned import _import_versioned_module
 
 #: API version used by :func:`manage_clusters` when none is given. Clusters
 #: do not exist at v1, so this is not tied to the ``management.version``

@@ -21,7 +21,6 @@ from .utils import get_workspace_id
 from .utils import to_datetime
 from .utils import to_datetime_strict
 from .utils import vars_to_str
-from .versioned import VersionedMixin
 
 
 type_to_parameter_conversion_map = {
@@ -568,7 +567,7 @@ class TargetConfig(object):
         return str(self)
 
 
-class Job(VersionedMixin):
+class Job:
     """
     Scheduled Notebook Job definition.
 
@@ -648,7 +647,6 @@ class Job(VersionedMixin):
             terminated_at=to_datetime(obj.get('terminatedAt')),
         )
         out._manager = manager
-        out._response = obj
         return out
 
     def wait(self, timeout: Optional[int] = None) -> bool:
@@ -692,7 +690,7 @@ class Job(VersionedMixin):
         return str(self)
 
 
-class JobsManager(VersionedMixin):
+class JobsManager:
     """
     SingleStoreDB scheduled notebook jobs manager.
 

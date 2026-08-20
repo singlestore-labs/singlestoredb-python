@@ -38,9 +38,6 @@ from ..utils import snake_to_camel_dict
 from ..utils import to_datetime
 from ..utils import ttl_property
 from ..utils import vars_to_str
-from ..versioned import VersionedMixin
-from ._translate import starter_workspace_to_starter_cluster
-from ._translate import workspace_to_cluster
 
 #: Base management API path for the shared-tier resource.
 SHAREDTIER_PATH = 'sharedtier/virtualWorkspaces'
@@ -97,7 +94,7 @@ def get_workspace(
     raise RuntimeError('no workspace group specified')
 
 
-class Workspace(VersionedMixin):
+class Workspace:
     """
     SingleStoreDB workspace definition.
 
@@ -114,9 +111,6 @@ class Workspace(VersionedMixin):
     :attr:`WorkspaceManager.workspaces`
 
     """
-
-    #: A workspace is a cluster from v2 onward.
-    _version_map = {'v2': ('cluster', 'Cluster')}
 
     name: str
     id: str
@@ -262,13 +256,7 @@ class Workspace(VersionedMixin):
             scale_factor=obj.get('scaleFactor'),
         )
         out._manager = manager
-        out._response = obj
         return out
-
-    def _version_response(self, version: str) -> Optional[Dict[str, Any]]:
-        if version == 'v1' or self._response is None:
-            return self._response
-        return workspace_to_cluster(self._response)
 
     def update(
         self,
@@ -331,7 +319,6 @@ class Workspace(VersionedMixin):
         new_obj = self._manager.get_workspace(self.id)
         for name, value in vars(new_obj).items():
             setattr(self, name, value)
-        self._version_cache = None
         return self
 
     def terminate(
@@ -475,7 +462,7 @@ class Workspace(VersionedMixin):
             self.refresh()
 
 
-class WorkspaceGroup(VersionedMixin):
+class WorkspaceGroup:
     """
     SingleStoreDB workspace group definition.
 
@@ -492,13 +479,6 @@ class WorkspaceGroup(VersionedMixin):
     :attr:`WorkspaceManager.workspace_groups`
 
     """
-
-    #: A workspace group has no counterpart from v2 onward: the grouping
-    #: collapsed into the cluster itself, and one group may correspond to
-    #: several clusters. ``v2/cluster.py`` deliberately does not define a
-    #: ``WorkspaceGroup``, so resolving ``wg.v2`` raises a
-    #: :class:`ManagementError` saying so.
-    _version_map = {'v2': ('cluster', 'WorkspaceGroup')}
 
     name: str
     id: str
@@ -673,7 +653,6 @@ class WorkspaceGroup(VersionedMixin):
             region_name=obj.get('regionName'),
         )
         out._manager = manager
-        out._response = obj
         return out
 
     @property
@@ -704,7 +683,6 @@ class WorkspaceGroup(VersionedMixin):
         new_obj = self._manager.get_workspace_group(self.id)
         for name, value in vars(new_obj).items():
             setattr(self, name, value)
-        self._version_cache = None
         return self
 
     def update(
@@ -889,7 +867,7 @@ class WorkspaceGroup(VersionedMixin):
         )
 
 
-class StarterWorkspace(VersionedMixin):
+class StarterWorkspace:
     """
     SingleStoreDB starter workspace definition.
 
@@ -907,9 +885,6 @@ class StarterWorkspace(VersionedMixin):
     :attr:`WorkspaceManager.starter_workspaces`
 
     """
-
-    #: A starter workspace is a starter cluster from v2 onward.
-    _version_map = {'v2': ('cluster', 'StarterCluster')}
 
     name: str
     id: str
@@ -990,13 +965,7 @@ class StarterWorkspace(VersionedMixin):
             project_id=obj.get('projectID'),
         )
         out._manager = manager
-        out._response = obj
         return out
-
-    def _version_response(self, version: str) -> Optional[Dict[str, Any]]:
-        if version == 'v1' or self._response is None:
-            return self._response
-        return starter_workspace_to_starter_cluster(self._response)
 
     def connect(self, **kwargs: Any) -> connection.Connection:
         """
@@ -1041,7 +1010,6 @@ class StarterWorkspace(VersionedMixin):
         new_obj = self._manager.get_starter_workspace(self.id)
         for name, value in vars(new_obj).items():
             setattr(self, name, value)
-        self._version_cache = None
         return self
 
     @property
@@ -1165,9 +1133,6 @@ class WorkspaceManager(Manager):
 
     #: Object type
     obj_type = 'workspace'
-
-    #: The workspace manager is the cluster manager from v2 onward.
-    _version_map = {'v2': ('cluster', 'ClusterManager')}
 
     @property
     def workspace_groups(self) -> NamedList[WorkspaceGroup]:

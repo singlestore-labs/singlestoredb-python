@@ -9,7 +9,6 @@ from typing import Optional
 from ..exceptions import ManagementError
 from .manager import Manager
 from .utils import vars_to_str
-from .versioned import VersionedMixin
 
 
 class ModelOperationResult(object):
@@ -141,7 +140,7 @@ class ModelOperationResult(object):
         return str(self)
 
 
-class InferenceAPIInfo(VersionedMixin):
+class InferenceAPIInfo:
     """
     Inference API definition.
 
@@ -205,7 +204,6 @@ class InferenceAPIInfo(VersionedMixin):
             internal_connection_url=obj['internalConnectionURL'],
             hosting_platform=obj['hostingPlatform'],
         )
-        out._response = obj
         return out
 
     def __str__(self) -> str:
@@ -259,7 +257,7 @@ class InferenceAPIInfo(VersionedMixin):
         return self._manager.drop(self.name)
 
 
-class InferenceAPIManager(VersionedMixin):
+class InferenceAPIManager:
     """
     SingleStoreDB Inference APIs manager.
 

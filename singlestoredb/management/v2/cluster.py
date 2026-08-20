@@ -12,10 +12,9 @@ This module deliberately shares no code and no vocabulary with
 :mod:`singlestoredb.management.v1`. The v1 package is intended to be deletable
 in one step once the v1 endpoints are retired (see ``TestV1IsDeletable``), so
 everything here either is written fresh or is imported from the version-neutral
-modules directly under :mod:`singlestoredb.management`. The v1 names and the
-v1-to-v2 field translation live in :mod:`singlestoredb.management.v1._translate`
-and are reached through :attr:`VersionedMixin._version_map`, so nothing in this
-module has to know what a workspace was.
+modules directly under :mod:`singlestoredb.management`. The v1 names live
+entirely in :mod:`singlestoredb.management.v1`, so nothing in this module has to
+know what a workspace was.
 """
 from __future__ import annotations
 
@@ -45,7 +44,6 @@ from ..utils import snake_to_camel_dict
 from ..utils import to_datetime
 from ..utils import ttl_property
 from ..utils import vars_to_str
-from ..versioned import VersionedMixin
 
 #: Base management API path for the shared-tier resource.
 SHAREDTIER_PATH = 'sharedtier/virtualClusters'
@@ -116,7 +114,7 @@ def get_stage(
     return get_cluster(cluster).stage
 
 
-class Cluster(VersionedMixin):
+class Cluster:
     """
     SingleStoreDB cluster definition.
 
@@ -355,7 +353,6 @@ class Cluster(VersionedMixin):
             smart_dr_status=obj.get('smartDRStatus'),
         )
         out._manager = manager
-        out._response = obj
         return out
 
     def _require_manager(self) -> 'ClusterManager':
@@ -383,7 +380,6 @@ class Cluster(VersionedMixin):
         new_obj = manager.get_cluster(self.id)
         for name, value in vars(new_obj).items():
             setattr(self, name, value)
-        self._version_cache = None
         return self
 
     def update(
@@ -607,7 +603,7 @@ class Cluster(VersionedMixin):
             self.refresh()
 
 
-class StarterCluster(VersionedMixin):
+class StarterCluster:
     """
     SingleStoreDB starter (shared tier) cluster definition.
 
@@ -702,7 +698,6 @@ class StarterCluster(VersionedMixin):
             project_id=obj.get('projectID'),
         )
         out._manager = manager
-        out._response = obj
         return out
 
     def _require_manager(self) -> 'ClusterManager':
@@ -746,7 +741,6 @@ class StarterCluster(VersionedMixin):
         new_obj = manager.get_starter_cluster(self.id)
         for name, value in vars(new_obj).items():
             setattr(self, name, value)
-        self._version_cache = None
         return self
 
     @property

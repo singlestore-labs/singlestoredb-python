@@ -2,6 +2,7 @@
 """SingleStoreDB Workspace Management."""
 from typing import Optional
 
+from ._version_import import _import_versioned_module
 from .v1.organization import Organization as Organization
 from .v1.workspace import Billing as Billing
 from .v1.workspace import get_organization as get_organization
@@ -15,7 +16,6 @@ from .v1.workspace import StarterWorkspace as StarterWorkspace
 from .v1.workspace import Workspace as Workspace
 from .v1.workspace import WorkspaceGroup as WorkspaceGroup
 from .v1.workspace import WorkspaceManager as WorkspaceManager
-from .versioned import _import_versioned_module
 # Re-export from default version for backward compatibility
 
 

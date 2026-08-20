@@ -5,8 +5,7 @@ SingleStoreDB Files Management API v1.
 The Files API is identical at v1 and v2 -- ``files/fs/{space}/...`` is
 live-confirmed at both versions -- so the implementation lives in the shared
 :mod:`singlestoredb.management.files` module and this package only re-exports
-it. That is what lets ``VersionedMixin`` resolve ``obj.v1`` by looking up the
-same class name in this module.
+it, so ``manage_files(version='v1')`` can resolve this module by name.
 """
 from ..files import FileLocation as FileLocation
 from ..files import FilesManager as FilesManager

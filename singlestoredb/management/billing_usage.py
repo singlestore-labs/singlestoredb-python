@@ -10,10 +10,9 @@ from .manager import Manager
 from .utils import camel_to_snake
 from .utils import to_datetime_strict
 from .utils import vars_to_str
-from .versioned import VersionedMixin
 
 
-class UsageItem(VersionedMixin):
+class UsageItem:
     """Usage statistics."""
 
     def __init__(
@@ -88,11 +87,10 @@ class UsageItem(VersionedMixin):
             value=obj['value'],
         )
         out._manager = manager
-        out._response = obj
         return out
 
 
-class BillingUsageItem(VersionedMixin):
+class BillingUsageItem:
     """Billing usage item."""
 
     def __init__(
@@ -148,5 +146,4 @@ class BillingUsageItem(VersionedMixin):
             usage=[UsageItem.from_dict(x, manager) for x in obj['usage']],
         )
         out._manager = manager
-        out._response = obj
         return out
