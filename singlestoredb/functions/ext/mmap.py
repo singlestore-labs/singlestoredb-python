@@ -62,8 +62,8 @@ from typing import Optional
 
 from . import asgi
 from . import utils
-from ... import manage_workspaces
 from ...config import get_option
+from ...management.workspace import _manage_workspaces_v1
 
 
 logger = utils.get_logger('singlestoredb.functions.ext.mmap')
@@ -266,7 +266,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 if url.path.endswith('/'):
                     raise ValueError(f'an environment file must be specified: {f}')
 
-                mgr = manage_workspaces()
+                mgr = _manage_workspaces_v1()
                 if url.hostname:
                     wsg = mgr.get_workspace_group(url.hostname)
                 elif os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP'):

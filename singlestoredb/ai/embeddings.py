@@ -8,8 +8,8 @@ from typing import Union
 
 import httpx
 
-from singlestoredb import manage_workspaces
 from singlestoredb.management.inference_api import InferenceAPIInfo
+from singlestoredb.management.workspace import _manage_workspaces_v1
 
 try:
     from langchain_openai import OpenAIEmbeddings
@@ -133,7 +133,7 @@ def SingleStoreEmbeddingsFactory(
         hosting_platform = os.environ.get('SINGLESTOREDB_INFERENCE_API_HOSTING_PLATFORM')
     if base_url is None or hosting_platform is None:
         inference_api_manager = (
-            manage_workspaces().organizations.current.inference_apis
+            _manage_workspaces_v1().organizations.current.inference_apis
         )
         info = inference_api_manager.get(model_name=model_name)
         if not info.internal_connection_url:

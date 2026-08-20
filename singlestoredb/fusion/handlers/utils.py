@@ -8,12 +8,12 @@ from typing import Union
 
 from ...exceptions import ManagementError
 from ...management import files as mgmt_files
-from ...management import manage_workspaces
 from ...management.files import FilesManager
 from ...management.files import FileSpace
 from ...management.files import manage_files
 from ...management.inference_api import InferenceAPIInfo
 from ...management.inference_api import InferenceAPIManager
+from ...management.workspace import _manage_workspaces_v1
 from ...management.workspace import StarterWorkspace
 from ...management.workspace import Workspace
 from ...management.workspace import WorkspaceGroup
@@ -22,7 +22,7 @@ from ...management.workspace import WorkspaceManager
 
 def get_workspace_manager() -> WorkspaceManager:
     """Return a new workspace manager."""
-    return manage_workspaces()
+    return _manage_workspaces_v1()
 
 
 def get_files_manager() -> FilesManager:

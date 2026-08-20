@@ -45,8 +45,8 @@ SHAREDTIER_PATH = 'sharedtier/virtualWorkspaces'
 
 def get_organization() -> Organization:
     """Get the organization."""
-    from ..workspace import manage_workspaces
-    return manage_workspaces().organization
+    from ..workspace import _manage_workspaces_v1
+    return _manage_workspaces_v1().organization
 
 
 def get_secret(name: str) -> Optional[str]:
@@ -58,13 +58,13 @@ def get_workspace_group(
     workspace_group: Optional[Union[WorkspaceGroup, str]] = None,
 ) -> WorkspaceGroup:
     """Get the stage for the workspace group."""
-    from ..workspace import manage_workspaces
+    from ..workspace import _manage_workspaces_v1
     if isinstance(workspace_group, WorkspaceGroup):
         return workspace_group
     elif workspace_group:
-        return manage_workspaces().workspace_groups[workspace_group]
+        return _manage_workspaces_v1().workspace_groups[workspace_group]
     elif 'SINGLESTOREDB_WORKSPACE_GROUP' in os.environ:
-        return manage_workspaces().workspace_groups[
+        return _manage_workspaces_v1().workspace_groups[
             os.environ['SINGLESTOREDB_WORKSPACE_GROUP']
         ]
     raise RuntimeError('no workspace group specified')

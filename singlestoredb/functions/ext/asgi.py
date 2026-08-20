@@ -68,8 +68,8 @@ from . import json as jdata
 from . import rowdat_1
 from . import utils
 from ... import connection
-from ... import manage_workspaces
 from ...config import get_option
+from ...management.workspace import _manage_workspaces_v1
 from ...mysql.constants import FIELD_TYPE as ft
 from ..signature import get_signature
 from ..signature import signature_to_sql
@@ -1992,7 +1992,7 @@ class Application(object):
             if not url.path or url.path == '/':
                 raise ValueError(f'no stage path was specified: {destination}')
 
-            mgr = manage_workspaces()
+            mgr = _manage_workspaces_v1()
             if url.hostname:
                 wsg = mgr.get_workspace_group(url.hostname)
             elif os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP'):
@@ -2205,7 +2205,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 if url.path.endswith('/'):
                     raise ValueError(f'an environment file must be specified: {f}')
 
-                mgr = manage_workspaces()
+                mgr = _manage_workspaces_v1()
                 if url.hostname:
                     wsg = mgr.get_workspace_group(url.hostname)
                 elif os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP'):

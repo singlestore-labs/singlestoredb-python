@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """SingleStoreDB Workspace Management."""
+import warnings
 from typing import Optional
 
 from ._version_import import _import_versioned_module
@@ -19,6 +20,41 @@ from .v1.workspace import WorkspaceManager as WorkspaceManager
 # Re-export from default version for backward compatibility
 
 
+def _manage_workspaces_v1(
+    access_token: Optional[str] = None,
+    version: Optional[str] = None,
+    base_url: Optional[str] = None,
+    *,
+    organization_id: Optional[str] = None,
+) -> 'WorkspaceManager':
+    """
+    Retrieve a SingleStoreDB workspace manager without warning.
+
+    This is the body of :func:`manage_workspaces` minus the deprecation
+    warning. Internal callers that are v1-only by design -- Fusion, the UDF
+    ``stage://`` handling, the AI inference helpers -- go through here so they
+    do not emit a warning the caller can do nothing about.
+    """
+    from ..exceptions import ManagementError
+    # Deliberately not routed through the ``management.version`` option:
+    # workspaces are a v1-only resource, so a global preference for another
+    # version has nothing to say about them. Only an explicit ``version``
+    # argument is an error, because only that is a caller asking for a
+    # workspace manager that cannot exist.
+    ver = version or 'v1'
+    if ver != 'v1':
+        raise ManagementError(
+            msg=f'workspaces do not exist in management API {ver}; '
+                'they were replaced by clusters. Use manage_clusters() '
+                'instead, or request version="v1".',
+        )
+    mod = _import_versioned_module(ver, 'workspace')
+    return mod.WorkspaceManager(
+        access_token=access_token, base_url=base_url,
+        version=ver, organization_id=organization_id,
+    )
+
+
 def manage_workspaces(
     access_token: Optional[str] = None,
     version: Optional[str] = None,
@@ -28,6 +64,11 @@ def manage_workspaces(
 ) -> 'WorkspaceManager':
     """
     Retrieve a SingleStoreDB workspace manager.
+
+    .. deprecated::
+       Workspaces and workspace groups were replaced by the flat ``Cluster``
+       resource in management API v2. Use
+       :func:`singlestoredb.manage_clusters` instead.
 
     Parameters
     ----------
@@ -53,21 +94,13 @@ def manage_workspaces(
         :func:`singlestoredb.manage_clusters` instead.
 
     """
-    from ..exceptions import ManagementError
-    # Deliberately not routed through the ``management.version`` option:
-    # workspaces are a v1-only resource, so a global preference for another
-    # version has nothing to say about them. Only an explicit ``version``
-    # argument is an error, because only that is a caller asking for a
-    # workspace manager that cannot exist.
-    ver = version or 'v1'
-    if ver != 'v1':
-        raise ManagementError(
-            msg=f'workspaces do not exist in management API {ver}; '
-                'they were replaced by clusters. Use manage_clusters() '
-                'instead, or request version="v1".',
-        )
-    mod = _import_versioned_module(ver, 'workspace')
-    return mod.WorkspaceManager(
-        access_token=access_token, base_url=base_url,
-        version=ver, organization_id=organization_id,
+    warnings.warn(
+        'manage_workspaces() is deprecated: workspaces and workspace groups '
+        'were replaced by the flat Cluster resource in management API v2. '
+        'Use manage_clusters() instead.',
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _manage_workspaces_v1(
+        access_token, version, base_url, organization_id=organization_id,
     )
