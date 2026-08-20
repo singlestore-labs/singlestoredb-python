@@ -21,6 +21,7 @@ from ... import config
 from ...exceptions import ManagementError
 from ..manager import Manager
 from ..utils import ensure_within
+from ..utils import normalize_remote_path
 from ..utils import PathLike
 from ..utils import resolve_ignore_files
 from ..utils import to_datetime
@@ -742,7 +743,7 @@ class FileSpace(FileLocation):
 
         local_root = os.path.normpath(str(local_path))
         root_name = os.path.basename(local_root)
-        remote_prefix = re.sub(r'/+$', r'', str(path))
+        remote_prefix = normalize_remote_path(path)
 
         for dir_path, dirs, files in os.walk(local_root):
             if ignore_files:
@@ -772,7 +773,7 @@ class FileSpace(FileLocation):
                 )
             if not recursive:
                 break
-        return self.info(path)
+        return self.info(remote_prefix)
 
     def _upload(
         self,
@@ -1045,8 +1046,7 @@ class FileSpace(FileLocation):
         List[str] or List[FilesObject]
 
         """
-        path = re.sub(r'^(\./|/)+', r'', str(path))
-        path = re.sub(r'/+$', r'', path) + '/'
+        path = normalize_remote_path(path, strip_leading=True) + '/'
 
         # Validate via listing GET; if response lacks 'content', it's not a directory
         try:
@@ -1183,8 +1183,7 @@ class FileSpace(FileLocation):
 
         """
         # Remote paths always use '/', whatever the local platform
-        remote_prefix = re.sub(r'^(\./|/)+', r'', str(path))
-        remote_prefix = re.sub(r'/+$', r'', remote_prefix)
+        remote_prefix = normalize_remote_path(path, strip_leading=True)
 
         if local_path is None:
             local_path = os.path.basename(remote_prefix)
@@ -1198,7 +1197,7 @@ class FileSpace(FileLocation):
             raise OSError('target path already exists; use overwrite=True to replace')
 
         # listdir validates directory; no extra info call needed
-        entries = self.listdir(path, recursive=True, return_objects=True)
+        entries = self.listdir(remote_prefix, recursive=True, return_objects=True)
         for entry in entries:
             # Each entry is a FilesObject with path relative to root and type
             if not isinstance(entry, FilesObject):  # defensive: skip unexpected

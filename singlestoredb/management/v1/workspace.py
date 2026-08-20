@@ -24,6 +24,7 @@ from ..utils import camel_to_snake_dict
 from ..utils import ensure_within
 from ..utils import from_datetime
 from ..utils import NamedList
+from ..utils import normalize_remote_path
 from ..utils import PathLike
 from ..utils import resolve_ignore_files
 from ..utils import snake_to_camel
@@ -238,14 +239,16 @@ class Stage(FileLocation):
         """
         if not os.path.isdir(local_path):
             raise NotADirectoryError(f'local path is not a directory: {local_path}')
-        if self.exists(stage_path) and not self.is_dir(stage_path):
+
+        stage_prefix = normalize_remote_path(stage_path)
+
+        if self.exists(stage_prefix) and not self.is_dir(stage_prefix):
             raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
 
         ignore_files = resolve_ignore_files(local_path, ignore)
 
         local_root = os.path.normpath(str(local_path))
         root_name = os.path.basename(local_root)
-        stage_prefix = re.sub(r'/+$', r'', str(stage_path))
 
         for dir_path, dirs, files in os.walk(local_root):
             if ignore_files:
@@ -271,7 +274,7 @@ class Stage(FileLocation):
             if not recursive:
                 break
 
-        return self.info(stage_path)
+        return self.info(stage_prefix)
 
     def _upload(
         self,
@@ -555,8 +558,7 @@ class Stage(FileLocation):
 
         """
         from .files import FilesObject
-        stage_path = re.sub(r'^(\./|/)+', r'', str(stage_path))
-        stage_path = re.sub(r'/+$', r'', stage_path) + '/'
+        stage_path = normalize_remote_path(stage_path, strip_leading=True) + '/'
 
         if self.is_dir(stage_path):
             out = self._listdir(
@@ -694,8 +696,7 @@ class Stage(FileLocation):
         """
         # ``listdir`` returns paths relative to ``stage_path``, so the folder
         # prefix has to be added back on before making any remote calls.
-        stage_prefix = re.sub(r'^(\./|/)+', r'', str(stage_path))
-        stage_prefix = re.sub(r'/+$', r'', stage_prefix)
+        stage_prefix = normalize_remote_path(stage_path, strip_leading=True)
 
         if local_path is None:
             local_path = os.path.basename(stage_prefix)
@@ -710,12 +711,12 @@ class Stage(FileLocation):
                 'target directory already exists; '
                 'use overwrite=True to replace',
             )
-        if not self.is_dir(stage_path):
+        if not self.is_dir(stage_prefix):
             raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
 
         # Request objects so the file / directory type comes from the listing
         # rather than an extra is_dir call per entry.
-        for entry in self.listdir(stage_path, recursive=True, return_objects=True):
+        for entry in self.listdir(stage_prefix, recursive=True, return_objects=True):
             rel_path = entry.path
             target = ensure_within(local_path, os.path.join(local_path, rel_path))
             if entry.type == 'directory':

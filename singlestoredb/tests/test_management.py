@@ -15,6 +15,7 @@ from singlestoredb.management.job import Status
 from singlestoredb.management.job import TargetType
 from singlestoredb.management.region import Region
 from singlestoredb.management.utils import NamedList
+from singlestoredb.management.utils import normalize_remote_path
 
 
 TEST_DIR = pathlib.Path(os.path.dirname(__file__))
@@ -1485,3 +1486,39 @@ class TestRegions(unittest.TestCase):
 
         # Test __repr__
         assert repr(region) == str(region)
+
+
+class TestRemotePathUtils(unittest.TestCase):
+    """Test cases for remote path normalization (no server required)."""
+
+    def test_local_separators_converted(self):
+        # A prefix built with os.path.join on Windows keeps a trailing '\'
+        assert normalize_remote_path('llama3\\') == 'llama3'
+        assert normalize_remote_path('a\\b\\c.txt') == 'a/b/c.txt'
+        assert normalize_remote_path(pathlib.PurePosixPath('a/b')) == 'a/b'
+
+    def test_duplicate_and_trailing_separators_collapsed(self):
+        assert normalize_remote_path('a//b/') == 'a/b'
+        assert normalize_remote_path('a/b///') == 'a/b'
+        assert normalize_remote_path('a\\\\b\\') == 'a/b'
+
+    def test_strip_leading(self):
+        assert normalize_remote_path('./a/b', strip_leading=True) == 'a/b'
+        assert normalize_remote_path('/a/b', strip_leading=True) == 'a/b'
+        assert normalize_remote_path('.\\a\\b', strip_leading=True) == 'a/b'
+        assert normalize_remote_path('/', strip_leading=True) == ''
+        assert normalize_remote_path('', strip_leading=True) == ''
+
+    def test_strip_leading_off_by_default(self):
+        assert normalize_remote_path('/a/b') == '/a/b'
+
+    def test_joining_produces_valid_remote_path(self):
+        # Regression: 'llama3\/file' was produced before normalization
+        prefix = normalize_remote_path('llama3\\')
+        assert f'{prefix}/file' == 'llama3/file'
+
+    def test_listdir_style_suffix(self):
+        # The listdir call sites append '/' after normalizing
+        assert normalize_remote_path('llama3\\', strip_leading=True) + '/' \
+            == 'llama3/'
+        assert normalize_remote_path('/', strip_leading=True) + '/' == '/'

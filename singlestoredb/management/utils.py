@@ -246,6 +246,35 @@ def get_database_name() -> Optional[str]:
     return os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE') or None
 
 
+def normalize_remote_path(path: PathLike, *, strip_leading: bool = False) -> str:
+    """Normalize a caller-supplied remote path to POSIX form.
+
+    Remote FileSpace / Stage paths always use ``/``. Callers may build a
+    path with :func:`os.path.join`, which uses the local separator, so
+    backslashes are converted to ``/`` before the path is used. Duplicate
+    separators are collapsed and the trailing separator is removed, so the
+    result can safely be concatenated with ``'/' + rel``.
+
+    Parameters
+    ----------
+    path : Path or str
+        Remote path to normalize
+    strip_leading : bool, optional
+        Also remove leading ``./`` and ``/`` segments, making the path
+        relative to the remote root
+
+    Returns
+    -------
+    str
+
+    """
+    out = str(path).replace('\\', '/')
+    if strip_leading:
+        out = re.sub(r'^(\./|/)+', r'', out)
+    out = re.sub(r'/{2,}', r'/', out)
+    return re.sub(r'/+$', r'', out)
+
+
 def ensure_within(local_root: PathLike, target: PathLike) -> str:
     """Verify ``target`` resolves inside ``local_root``.
 

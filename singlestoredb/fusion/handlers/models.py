@@ -5,6 +5,7 @@ from typing import Dict
 from typing import Optional
 
 from .. import result
+from ...management.utils import normalize_remote_path
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
 from .files import ShowFilesHandler
@@ -130,16 +131,17 @@ class UploadCustomModelHandler(SQLHandler):
 
         file_space = get_file_space(params)
 
+        # Remote paths always use '/', so they can't be built with os.path.join
         if os.path.isdir(local_path):
             file_space.upload_folder(
                 local_path=local_path,
-                path=os.path.join(model_name, ''),
+                path=model_name,
                 overwrite=params['overwrite'],
             )
         else:
             file_space.upload_file(
                 local_path=local_path,
-                path=os.path.join(model_name, local_path),
+                path=normalize_remote_path(f'{model_name}/{local_path}'),
                 overwrite=params['overwrite'],
             )
 
@@ -206,7 +208,7 @@ class DownloadCustomModelHandler(SQLHandler):
 
         model_name = params['model_name']
         file_space.download_folder(
-            path=os.path.join(model_name, ''),
+            path=model_name,
             local_path=params['local_path'] or model_name,
             overwrite=params['overwrite'],
         )
@@ -242,7 +244,8 @@ class DropCustomModelHandler(SQLHandler):
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         params['file_location'] = 'MODELS'
-        path = os.path.join(params['model_name'], '')
+        # Remote paths always use '/', so they can't be built with os.path.join
+        path = normalize_remote_path(params['model_name']) + '/'
 
         file_space = get_file_space(params)
         file_space.removedirs(path=path)
