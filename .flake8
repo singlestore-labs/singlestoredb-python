@@ -14,10 +14,11 @@ per-file-ignores =
     singlestoredb/management/__init__.py:F401
     singlestoredb/management/cluster.py:F401
     singlestoredb/management/export.py:F401
+    singlestoredb/management/inference_api.py:F401
     singlestoredb/management/workspace.py:F401
     # The v1/ and v2/ modules are version namespaces: they re-export the
-    # shared implementations under the names VersionedMixin looks up when
-    # resolving obj.v1 / obj.v2, so unused-import is expected there.
+    # shared implementations under the names the manage_* factories look up,
+    # so unused-import is expected there.
     singlestoredb/management/v1/*.py:F401
     singlestoredb/management/v2/*.py:F401
     singlestoredb/mysql/__init__.py:F401

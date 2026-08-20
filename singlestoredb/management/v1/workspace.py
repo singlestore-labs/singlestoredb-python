@@ -21,8 +21,6 @@ from ... import connection
 from ...exceptions import ManagementError
 from ..billing import Billing as Billing
 from ..manager import Manager
-from ..organization import Organization
-from ..organization import Organizations as Organizations
 from ..region import Region
 from ..stage import StageObject as StageObject
 from ..utils import camel_to_snake_dict
@@ -37,6 +35,8 @@ from ..utils import snake_to_camel_dict
 from ..utils import to_datetime
 from ..utils import ttl_property
 from ..utils import vars_to_str
+from .organization import Organization
+from .organization import Organizations as Organizations
 from .stage import Stage as Stage
 
 #: Base management API path for the shared-tier resource.

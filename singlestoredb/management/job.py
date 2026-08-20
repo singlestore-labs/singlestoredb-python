@@ -708,16 +708,18 @@ class JobsManager:
 
     #: ``targetType`` sent for a regular deployment. This is the only part of
     #: the jobs API whose vocabulary changed at v2 (``'Workspace'`` became
-    #: ``'Cluster'``), so the version subclasses override these three
-    #: attributes instead of reimplementing ``schedule``.
-    _deployment_target_type = TargetType.WORKSPACE
+    #: ``'Cluster'``), so the v1 subclass overrides these three attributes
+    #: instead of reimplementing ``schedule``.
+    _deployment_target_type = TargetType.CLUSTER
 
     #: ``targetType`` sent for a starter / shared-tier deployment.
-    _starter_target_type = TargetType.VIRTUAL_WORKSPACE
+    _starter_target_type = TargetType.VIRTUAL_CLUSTER
 
     #: ``targetType`` sent for a legacy self-managed cluster, or ``None`` if
-    #: the version has no such concept.
-    _legacy_cluster_target_type: Optional[TargetType] = TargetType.CLUSTER
+    #: the version has no such concept. There is no such concept from v2
+    #: onward -- everything is a cluster -- so ``SINGLESTOREDB_CLUSTER`` is
+    #: not a distinct target here.
+    _legacy_cluster_target_type: Optional[TargetType] = None
 
     def __init__(self, manager: Optional[Manager]):
         self._manager = manager

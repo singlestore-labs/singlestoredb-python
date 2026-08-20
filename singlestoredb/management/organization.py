@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """SingleStoreDB Cloud Organization."""
 import datetime
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -8,7 +9,6 @@ from typing import Type
 from typing import Union
 
 from ..exceptions import ManagementError
-from .inference_api import InferenceAPIManager
 from .job import JobsManager
 from .manager import Manager
 from .utils import to_datetime
@@ -132,9 +132,13 @@ class Organization:
     #: Sub-manager classes reached through this organization. The
     #: ``organizations/current`` and ``secrets`` routes are identical at v1 and
     #: v2, so ``Organization`` itself is version-neutral; only the managers it
-    #: hands out differ, and the version subclasses just repoint these.
+    #: hands out differ. These name the current-version managers, and
+    #: ``v1/organization.py`` repoints them back to the v1 classes.
     _jobs_manager_class: Type[JobsManager] = JobsManager
-    _inference_api_manager_class: Type[InferenceAPIManager] = InferenceAPIManager
+
+    #: Inference API manager class, or ``None`` if the version has no
+    #: inference routes. There are none from v2 onward.
+    _inference_api_manager_class: Optional[Type[Any]] = None
 
     def __init__(self, id: str, name: str, firewall_ranges: List[str]):
         """Use :attr:`ClusterManager.organization` instead."""
@@ -219,24 +223,35 @@ class Organization:
         return self._jobs_manager_class(self._manager)
 
     @property
-    def inference_apis(self) -> InferenceAPIManager:
+    def inference_apis(self) -> Any:
         """
         Retrieve a SingleStoreDB inference api manager.
-
-        Parameters
-        ----------
-        manager : ClusterManager, optional
-            The ClusterManager the InferenceAPIManager belongs to
 
         Returns
         -------
         :class:`InferenceAPIManager`
+
+        Raises
+        ------
+        ManagementError
+            If the API version has no inference routes
+
         """
+        if self._inference_api_manager_class is None:
+            raise ManagementError(
+                msg='The inference API is not available in this version of '
+                    'the management API. None of the inferenceapis/ routes '
+                    'exist past v1.',
+            )
         return self._inference_api_manager_class(self._manager)
 
 
 class Organizations(object):
     """Organizations."""
+
+    #: The ``Organization`` class this hands out. Version subclasses repoint
+    #: this so the organization carries the right sub-managers.
+    _organization_class: Type[Organization] = Organization
 
     def __init__(self, manager: Manager):
         self._manager = manager
@@ -245,4 +260,4 @@ class Organizations(object):
     def current(self) -> Organization:
         """Get current organization."""
         res = self._manager._get('organizations/current').json()
-        return Organization.from_dict(res, self._manager)
+        return self._organization_class.from_dict(res, self._manager)
