@@ -6,7 +6,7 @@ The Files API is unchanged at v2 -- ``files/fs/{space}/...`` returns identical
 responses at both versions -- so the implementation lives in the shared
 :mod:`singlestoredb.management.files` module and this module only re-exports it.
 Nothing here may import from :mod:`singlestoredb.management.v1`; see
-``TestV1IsDeletable``.
+``TestVersionPackagesAreIndependent``.
 """
 from ..files import FileLocation as FileLocation
 from ..files import FilesManager as FilesManager

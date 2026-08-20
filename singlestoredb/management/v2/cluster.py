@@ -10,9 +10,10 @@ There is no ``/v2/workspaceGroups`` and no ``/v2/workspaces`` -- both return
 
 This module deliberately shares no code and no vocabulary with
 :mod:`singlestoredb.management.v1`. The v1 package is intended to be deletable
-in one step once the v1 endpoints are retired (see ``TestV1IsDeletable``), so
-everything here either is written fresh or is imported from the version-neutral
-modules directly under :mod:`singlestoredb.management`. The v1 names live
+in one step once the v1 endpoints are retired (see
+``TestVersionPackagesAreIndependent``), so everything here either is written
+fresh or is imported from the version-neutral modules directly under
+:mod:`singlestoredb.management`. The v1 names live
 entirely in :mod:`singlestoredb.management.v1`, so nothing in this module has to
 know what a workspace was.
 """
