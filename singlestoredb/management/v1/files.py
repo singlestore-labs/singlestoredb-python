@@ -16,6 +16,7 @@ from typing import List
 from typing import Literal
 from typing import Optional
 from typing import overload
+from typing import Set
 from typing import Union
 
 from ... import config
@@ -736,13 +737,15 @@ class FileSpace(FileLocation):
         if not path:
             path = local_path
 
-        ignore_files = set()
+        ignore_files: Set[str] = set()
         if ignore:
-            if isinstance(ignore, list):
-                for item in ignore:
-                    ignore_files.update(glob.glob(str(item), recursive=recursive))
-            else:
-                ignore_files.update(glob.glob(str(ignore), recursive=recursive))
+            patterns = ignore if isinstance(ignore, list) else [ignore]
+            for item in patterns:
+                # Normalize so matches line up with the os.walk paths below
+                ignore_files.update(
+                    os.path.normpath(x)
+                    for x in glob.glob(str(item), recursive=recursive)
+                )
 
         local_root = os.path.normpath(str(local_path))
         root_name = os.path.basename(local_root)

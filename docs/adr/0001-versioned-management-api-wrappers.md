@@ -60,7 +60,7 @@ No registry or registration is needed — the folder structure is the registry.
 
 ### API version in URL
 
-Each manager class has an `api_version` class attribute (defaults to `'v1'` on the base `Manager`). The URL is built as `urljoin(base_url_root, api_version) + '/'`. The `version` constructor parameter overrides this for dynamic version selection.
+Each manager class has a `default_version` class attribute (resolved from `config.get_option('management.version')`, falling back to `'v1'`). The URL is built as `urljoin(base_url_root, version or default_version) + '/'`, so the `version` constructor parameter overrides the default for dynamic version selection.
 
 ### Response storage
 
