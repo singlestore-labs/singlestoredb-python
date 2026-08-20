@@ -1124,7 +1124,8 @@ class WorkspaceManager(Manager):
     """
 
     #: Workspace management API version if none is specified. Workspaces
-    #: are v1-only, so this is a literal.
+    #: are v1-only, so this is a literal and it does *not* flip in Part 7 --
+    #: it disappears with this package.
     default_version = 'v1'
 
     #: Base URL if none is specified.

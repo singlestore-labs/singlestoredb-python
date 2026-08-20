@@ -309,6 +309,10 @@ register_option(
     environ=['SINGLESTOREDB_MANAGEMENT_BASE_URL'],
 )
 
+# PART 7: the default is held at 'v1' so the v1 test suite stays a valid
+# regression gate while the management base classes are level-set to v2. It
+# flips to 'v2' together with Manager.default_version and
+# FilesManager.default_version.
 register_option(
     'management.version', 'string', check_str, 'v1',
     'Specifies the version for the management API.',
