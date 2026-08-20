@@ -619,10 +619,19 @@ class TestV2RegionBehavior(unittest.TestCase):
         for r in regions:
             self.assertIsNone(r.id)
 
-    def test_v2_region_manager_inherits_v1(self):
+    def test_v1_region_manager_extends_the_shared_base(self):
+        """v1 subclasses the level-set base, not the other way around."""
+        from singlestoredb.management.region import RegionManager as Base
         from singlestoredb.management.v1.region import RegionManager as V1
         from singlestoredb.management.v2.region import RegionManager as V2
-        self.assertTrue(issubclass(V2, V1))
+        self.assertTrue(issubclass(V1, Base))
+        self.assertIs(V2, Base)
+        self.assertFalse(issubclass(V2, V1))
+
+    def test_shared_tier_regions_raises_at_v2(self):
+        mgr = self._make_v2_region_manager()
+        with self.assertRaises(ManagementError):
+            mgr.list_shared_tier_regions()
 
 
 class TestWorkspaceGroupRegionResolution(unittest.TestCase):

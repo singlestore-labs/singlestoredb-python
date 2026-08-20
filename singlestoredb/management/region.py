@@ -3,6 +3,7 @@
 from typing import Dict
 from typing import Optional
 
+from ..exceptions import ManagementError
 from .manager import Manager
 from .utils import NamedList
 from .utils import vars_to_str
@@ -122,26 +123,26 @@ class RegionManager(Manager):
 
     def list_shared_tier_regions(self) -> NamedList[Region]:
         """
-        List regions that support shared tier workspaces.
+        Not available past API v1.
 
-        .. note:: This route exists at v1 only. There is no v2 equivalent --
-           ``GET /v2/regions/sharedtier`` returns ``404 page not found``, and
-           no alternate spelling responds either. The v2 ``RegionManager``
-           overrides this method to raise :class:`ManagementError`.
-
-        Returns
-        -------
-        NamedList[Region]
-            List of regions that support shared tier workspaces
+        The shared-tier region route exists at v1 only. There is no later
+        equivalent -- ``GET /v2/regions/sharedtier`` returns
+        ``404 page not found``, and no alternate spelling responds either
+        (``sharedTier/regions``, ``regions/sharedTier``,
+        ``sharedtier/virtualClusters/regions``, ``clusters/regions``, ...) --
+        so this raises rather than returning a misleading empty list. The v1
+        ``RegionManager`` overrides it with the real implementation.
 
         Raises
         ------
         ManagementError
-            If there is an error getting the regions
+            Always.
+
         """
-        res = self._get('regions/sharedtier')
-        return NamedList(
-            [Region.from_dict(item, self) for item in res.json()],
+        raise ManagementError(
+            msg='Listing shared tier regions is not supported by this version '
+                'of the management API; there is no equivalent of '
+                'GET /v1/regions/sharedtier past v1.',
         )
 
 
