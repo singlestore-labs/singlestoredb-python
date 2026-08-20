@@ -1571,6 +1571,60 @@ class TestFolderTransferPaths(unittest.TestCase):
             ]
             self.assertEqual(uploaded, [keep])
 
+    def test_download_folder_defaults_to_remote_folder_name(self):
+        """With no local_path, the destination is the remote folder's name
+        in the current directory."""
+        import os
+        import tempfile
+        cwd = os.getcwd()
+        for name, obj, attr in (
+            ('Stage', self._make_stage(), '_download_file'),
+            ('FileSpace', self._make_file_space(), '_download_file'),
+        ):
+            obj.listdir = MagicMock(
+                return_value=[self._make_files_object('a.txt')],
+            )
+            obj.is_dir = MagicMock(return_value=True)
+            setattr(obj, attr, MagicMock())
+            with tempfile.TemporaryDirectory() as tmp:
+                try:
+                    os.chdir(tmp)
+                    obj.download_folder('remote/folder')
+                finally:
+                    os.chdir(cwd)
+                target = getattr(obj, attr).call_args_list[0].args[1]
+                self.assertEqual(
+                    os.path.normpath(target),
+                    os.path.join('folder', 'a.txt'),
+                    f'{name} wrote to {target}',
+                )
+
+    def test_download_folder_root_without_local_path_raises(self):
+        for obj in (self._make_stage(), self._make_file_space()):
+            obj.listdir = MagicMock(return_value=[])
+            obj.is_dir = MagicMock(return_value=True)
+            with self.assertRaises(ValueError) as ctx:
+                obj.download_folder('/')
+            self.assertIn('local_path must be specified', str(ctx.exception))
+
+    def test_download_folder_explicit_local_path_unchanged(self):
+        """Explicit local_path keeps writing directly into that directory."""
+        import os
+        import tempfile
+        for obj in (self._make_stage(), self._make_file_space()):
+            obj.listdir = MagicMock(
+                return_value=[self._make_files_object('a.txt')],
+            )
+            obj.is_dir = MagicMock(return_value=True)
+            obj._download_file = MagicMock()
+            with tempfile.TemporaryDirectory() as tmp:
+                dest = os.path.join(tmp, 'dest')
+                obj.download_folder('remote/folder', dest, overwrite=True)
+                self.assertEqual(
+                    obj._download_file.call_args_list[0].args[1],
+                    os.path.join(dest, 'a.txt'),
+                )
+
     def test_upload_folder_builds_slash_separated_remote_paths(self):
         """Remote paths must use '/' even when the local platform uses '\\'."""
         import tempfile

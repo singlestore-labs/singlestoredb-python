@@ -477,7 +477,7 @@ class FileLocation(ABC):
     def download_folder(
         self,
         path: PathLike,
-        local_path: PathLike = '.',
+        local_path: Optional[PathLike] = None,
         *,
         overwrite: bool = False,
     ) -> None:
@@ -1161,29 +1161,41 @@ class FileSpace(FileLocation):
     def download_folder(
         self,
         path: PathLike,
-        local_path: PathLike = '.',
+        local_path: Optional[PathLike] = None,
         *,
         overwrite: bool = False,
     ) -> None:
         """
         Download a FileSpace folder to a local directory.
 
+        The contents of ``path`` are written into ``local_path``, which is
+        created as the destination folder.
+
         Parameters
         ----------
         path : Path or str
             Directory path
-        local_path : Path or str
-            Path to local directory target location
+        local_path : Path or str, optional
+            Local directory to create and download into. Defaults to the
+            name of the ``path`` folder in the current directory.
         overwrite : bool, optional
             Should an existing directory / files be overwritten if they exist?
 
         """
-
-        if local_path is not None and not overwrite and os.path.exists(local_path):
-            raise OSError('target path already exists; use overwrite=True to replace')
-
         # Remote paths always use '/', whatever the local platform
-        remote_prefix = re.sub(r'/+$', r'', str(path))
+        remote_prefix = re.sub(r'^(\./|/)+', r'', str(path))
+        remote_prefix = re.sub(r'/+$', r'', remote_prefix)
+
+        if local_path is None:
+            local_path = os.path.basename(remote_prefix)
+            if not local_path:
+                raise ValueError(
+                    'local_path must be specified when downloading '
+                    'the root folder',
+                )
+
+        if not overwrite and os.path.exists(local_path):
+            raise OSError('target path already exists; use overwrite=True to replace')
 
         # listdir validates directory; no extra info call needed
         entries = self.listdir(path, recursive=True, return_objects=True)

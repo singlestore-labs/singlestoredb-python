@@ -671,35 +671,47 @@ class Stage(FileLocation):
     def download_folder(
         self,
         stage_path: PathLike,
-        local_path: PathLike = '.',
+        local_path: Optional[PathLike] = None,
         *,
         overwrite: bool = False,
     ) -> None:
         """
         Download a Stage folder to a local directory.
 
+        The contents of ``stage_path`` are written into ``local_path``,
+        which is created as the destination folder.
+
         Parameters
         ----------
         stage_path : Path or str
-            Path to the stage file
-        local_path : Path or str
-            Path to local directory target location
+            Path to the stage folder
+        local_path : Path or str, optional
+            Local directory to create and download into. Defaults to the
+            name of the ``stage_path`` folder in the current directory.
         overwrite : bool, optional
             Should an existing directory / files be overwritten if they exist?
 
         """
-        if local_path is not None and not overwrite and os.path.exists(local_path):
+        # ``listdir`` returns paths relative to ``stage_path``, so the folder
+        # prefix has to be added back on before making any remote calls.
+        stage_prefix = re.sub(r'^(\./|/)+', r'', str(stage_path))
+        stage_prefix = re.sub(r'/+$', r'', stage_prefix)
+
+        if local_path is None:
+            local_path = os.path.basename(stage_prefix)
+            if not local_path:
+                raise ValueError(
+                    'local_path must be specified when downloading '
+                    'the root folder',
+                )
+
+        if not overwrite and os.path.exists(local_path):
             raise OSError(
                 'target directory already exists; '
                 'use overwrite=True to replace',
             )
         if not self.is_dir(stage_path):
             raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
-
-        # ``listdir`` returns paths relative to ``stage_path``, so the folder
-        # prefix has to be added back on before making any remote calls.
-        stage_prefix = re.sub(r'^(\./|/)+', r'', str(stage_path))
-        stage_prefix = re.sub(r'/+$', r'', stage_prefix)
 
         # Request objects so the file / directory type comes from the listing
         # rather than an extra is_dir call per entry.
