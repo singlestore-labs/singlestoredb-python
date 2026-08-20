@@ -275,8 +275,9 @@ def resolve_ignore_files(
     Relative patterns are resolved against ``local_root`` rather than the
     process working directory, so patterns like ``**/*.pyc`` match the tree
     actually being uploaded. Absolute patterns are used as given. Results are
-    normalized with :func:`os.path.normpath` so they compare equal to the
-    paths produced by :func:`os.walk` over ``local_root``.
+    normalized with :func:`os.path.normpath`, so callers must normalize the
+    paths they test for membership too — a raw ``os.walk`` result such as
+    ``./a.pyc`` will not compare equal to the normalized ``a.pyc``.
 
     Parameters
     ----------

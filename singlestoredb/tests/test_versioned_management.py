@@ -1494,6 +1494,26 @@ class TestFolderTransferPaths(unittest.TestCase):
             ]
             self.assertEqual(uploaded, [keep])
 
+    def test_stage_upload_folder_applies_ignore_globs_to_cwd(self):
+        import os
+        import tempfile
+        stage = self._make_stage()
+        stage.exists = MagicMock(return_value=False)
+        stage.upload_file = MagicMock()
+        stage.info = MagicMock()
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _, _ = self._make_local_tree(tmp)
+            try:
+                os.chdir(root)
+                stage.upload_folder('.', 'dest', ignore='**/*.pyc')
+            finally:
+                os.chdir(cwd)
+            uploaded = [
+                call.args[0] for call in stage.upload_file.call_args_list
+            ]
+            self.assertEqual(uploaded, ['keep.py'])
+
     def test_file_space_upload_folder_applies_ignore_globs(self):
         import tempfile
         space = self._make_file_space()
@@ -1507,6 +1527,26 @@ class TestFolderTransferPaths(unittest.TestCase):
                 for call in space.upload_file.call_args_list
             ]
             self.assertEqual(uploaded, [keep])
+
+    def test_file_space_upload_folder_applies_ignore_globs_to_cwd(self):
+        import os
+        import tempfile
+        space = self._make_file_space()
+        space.upload_file = MagicMock()
+        space.info = MagicMock()
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _, _ = self._make_local_tree(tmp)
+            try:
+                os.chdir(root)
+                space.upload_folder('.', 'dest', ignore='**/*.pyc')
+            finally:
+                os.chdir(cwd)
+            uploaded = [
+                call.kwargs['local_path']
+                for call in space.upload_file.call_args_list
+            ]
+            self.assertEqual(uploaded, ['keep.py'])
 
 
 if __name__ == '__main__':

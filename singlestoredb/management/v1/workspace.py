@@ -247,7 +247,9 @@ class Stage(FileLocation):
 
         for dir_path, _, files in os.walk(local_root):
             for fname in files:
-                local_file_path = os.path.join(dir_path, fname)
+                # Normalized so it compares equal to the normalized
+                # glob results in ignore_files (e.g. local_path='.')
+                local_file_path = os.path.normpath(os.path.join(dir_path, fname))
                 if ignore_files and local_file_path in ignore_files:
                     continue
                 rel = os.path.relpath(local_file_path, local_root)
