@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""SingleStoreDB Cluster Management."""
+"""Version-neutral helpers shared by the SingleStoreDB management API."""
 import datetime
 import functools
 import glob

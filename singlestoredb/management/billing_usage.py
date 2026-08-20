@@ -69,8 +69,8 @@ class UsageItem:
         ----------
         obj : dict
             Key-value pairs to retrieve billing usage information from
-        manager : WorkspaceManager, optional
-            The WorkspaceManager the UsageItem belongs to
+        manager : ClusterManager, optional
+            The ClusterManager the UsageItem belongs to
 
         Returns
         -------
@@ -99,7 +99,7 @@ class BillingUsageItem:
         metric: str,
         usage: List[UsageItem],
     ):
-        """Use :attr:`WorkspaceManager.billing.usage` instead."""
+        """Use :attr:`ClusterManager.billing.usage` instead."""
         #: Description of the usage metric
         self.description = description
 
@@ -132,8 +132,8 @@ class BillingUsageItem:
         ----------
         obj : dict
             Key-value pairs to retrieve billing usage information from
-        manager : WorkspaceManager, optional
-            The WorkspaceManager the BillingUsageItem belongs to
+        manager : ClusterManager, optional
+            The ClusterManager the BillingUsageItem belongs to
 
         Returns
         -------

@@ -13,11 +13,11 @@ class Region:
     Cluster region information.
 
     This object is not directly instantiated. It is used in results
-    of ``WorkspaceManager`` API calls.
+    of ``ClusterManager`` API calls.
 
     See Also
     --------
-    :attr:`WorkspaceManager.regions`
+    :attr:`ClusterManager.regions`
 
     """
 
@@ -25,7 +25,7 @@ class Region:
         self, name: str, provider: str, id: Optional[str] = None,
         region_name: Optional[str] = None,
     ) -> None:
-        """Use :attr:`WorkspaceManager.regions` instead."""
+        """Use :attr:`ClusterManager.regions` instead."""
         #: Unique ID of the region
         self.id = id
 
@@ -57,8 +57,8 @@ class Region:
         ----------
         obj : dict
             Key-value pairs to retrieve region information from
-        manager : WorkspaceManager, optional
-            The WorkspaceManager the Region belongs to
+        manager : ClusterManager, optional
+            The ClusterManager the Region belongs to
 
         Returns
         -------
@@ -87,11 +87,11 @@ class RegionManager(Manager):
     Parameters
     ----------
     access_token : str, optional
-        The API key or other access token for the workspace management API
+        The API key or other access token for the management API
     version : str, optional
         Version of the API to use
     base_url : str, optional
-        Base URL of the workspace management API
+        Base URL of the management API
 
     See Also
     --------
@@ -156,11 +156,11 @@ def manage_regions(
     Parameters
     ----------
     access_token : str, optional
-        The API key or other access token for the workspace management API
+        The API key or other access token for the management API
     version : str, optional
         Version of the API to use
     base_url : str, optional
-        Base URL of the workspace management API
+        Base URL of the management API
 
     Returns
     -------

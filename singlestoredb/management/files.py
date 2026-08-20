@@ -36,7 +36,7 @@ class FilesObject:
     """
     File / folder object.
 
-    It can belong to either a workspace stage or personal/shared space.
+    It can belong to either a deployment's stage or personal/shared space.
 
     This object is not instantiated directly. It is used in the results
     of various operations in ``WorkspaceGroup.stage``, ``FilesManager.personal_space``,

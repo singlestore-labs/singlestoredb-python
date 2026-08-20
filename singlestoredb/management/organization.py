@@ -117,11 +117,11 @@ class Organization:
     Organization in SingleStoreDB Cloud portal.
 
     This object is not directly instantiated. It is used in results
-    of ``WorkspaceManager`` API calls.
+    of ``ClusterManager`` API calls.
 
     See Also
     --------
-    :attr:`WorkspaceManager.organization`
+    :attr:`ClusterManager.organization`
 
     """
 
@@ -137,7 +137,7 @@ class Organization:
     _inference_api_manager_class: Type[InferenceAPIManager] = InferenceAPIManager
 
     def __init__(self, id: str, name: str, firewall_ranges: List[str]):
-        """Use :attr:`WorkspaceManager.organization` instead."""
+        """Use :attr:`ClusterManager.organization` instead."""
         #: Unique ID of the organization
         self.id = id
 
@@ -186,8 +186,8 @@ class Organization:
         ----------
         obj : dict
             Key-value pairs to retrieve organization information from
-        manager : WorkspaceManager, optional
-            The WorkspaceManager the Organization belongs to
+        manager : ClusterManager, optional
+            The ClusterManager the Organization belongs to
 
         Returns
         -------
@@ -209,8 +209,8 @@ class Organization:
 
         Parameters
         ----------
-        manager : WorkspaceManager, optional
-            The WorkspaceManager the JobsManager belongs to
+        manager : ClusterManager, optional
+            The ClusterManager the JobsManager belongs to
 
         Returns
         -------
@@ -225,8 +225,8 @@ class Organization:
 
         Parameters
         ----------
-        manager : WorkspaceManager, optional
-            The WorkspaceManager the InferenceAPIManager belongs to
+        manager : ClusterManager, optional
+            The ClusterManager the InferenceAPIManager belongs to
 
         Returns
         -------

@@ -698,8 +698,8 @@ class JobsManager:
 
     Parameters
     ----------
-    manager : WorkspaceManager, optional
-        The WorkspaceManager the JobsManager belongs to
+    manager : ClusterManager, optional
+        The ClusterManager the JobsManager belongs to
 
     See Also
     --------
@@ -731,21 +731,21 @@ class JobsManager:
         ``targetType`` string names each kind of deployment is
         version-specific; see the ``_*_target_type`` class attributes.
         """
-        virtual_workspace_id = get_virtual_workspace_id()
-        workspace_id = get_workspace_id()
-        cluster_id = get_cluster_id()
+        starter_id = get_virtual_workspace_id()
+        deployment_id = get_workspace_id()
+        legacy_cluster_id = get_cluster_id()
 
-        if virtual_workspace_id is not None:
-            target_config['targetID'] = virtual_workspace_id
+        if starter_id is not None:
+            target_config['targetID'] = starter_id
             target_config['targetType'] = self._starter_target_type.value
 
-        elif workspace_id is not None:
-            target_config['targetID'] = workspace_id
+        elif deployment_id is not None:
+            target_config['targetID'] = deployment_id
             target_config['targetType'] = self._deployment_target_type.value
 
-        elif cluster_id is not None and \
+        elif legacy_cluster_id is not None and \
                 self._legacy_cluster_target_type is not None:
-            target_config['targetID'] = cluster_id
+            target_config['targetID'] = legacy_cluster_id
             target_config['targetType'] = self._legacy_cluster_target_type.value
 
     def schedule(
