@@ -230,8 +230,10 @@ class Stage(FileLocation):
         include_root : bool, optional
             Should the local root folder itself be uploaded as the top folder?
         ignore : Path or str or List[Path] or List[str], optional
-            Glob patterns of files to ignore, for example, ``**/*.pyc`` will
-            ignore all ``*.pyc`` files in the directory tree
+            Glob patterns of files or folders to ignore, for example,
+            ``**/*.pyc`` will ignore all ``*.pyc`` files in the directory
+            tree, and ``**/__pycache__`` will ignore those folders entirely.
+            Relative patterns are resolved against ``local_path``.
 
         """
         if not os.path.isdir(local_path):
@@ -243,9 +245,16 @@ class Stage(FileLocation):
 
         local_root = os.path.normpath(str(local_path))
         root_name = os.path.basename(local_root)
-        stage_prefix = str(stage_path)
+        stage_prefix = re.sub(r'/+$', r'', str(stage_path))
 
-        for dir_path, _, files in os.walk(local_root):
+        for dir_path, dirs, files in os.walk(local_root):
+            if ignore_files:
+                # Prune ignored folders so their contents are skipped too
+                dirs[:] = [
+                    d for d in dirs
+                    if os.path.normpath(os.path.join(dir_path, d))
+                    not in ignore_files
+                ]
             for fname in files:
                 # Normalized so it compares equal to the normalized
                 # glob results in ignore_files (e.g. local_path='.')
@@ -255,7 +264,9 @@ class Stage(FileLocation):
                 rel = os.path.relpath(local_file_path, local_root)
                 if include_root:
                     rel = os.path.join(root_name, rel)
-                target = os.path.join(stage_prefix, rel) if stage_prefix else rel
+                # Remote paths always use '/', whatever the local platform
+                rel = rel.replace(os.sep, '/')
+                target = f'{stage_prefix}/{rel}' if stage_prefix else rel
                 self.upload_file(local_file_path, target, overwrite=overwrite)
             if not recursive:
                 break
@@ -598,9 +609,49 @@ class Stage(FileLocation):
         None - ``local_path`` is a Path or str
 
         """
+        return self._download_file(
+            stage_path,
+            local_path=local_path,
+            overwrite=overwrite,
+            encoding=encoding,
+            _skip_dir_check=False,
+        )
+
+    def _download_file(
+        self,
+        stage_path: PathLike,
+        local_path: Optional[PathLike] = None,
+        *,
+        overwrite: bool = False,
+        encoding: Optional[str] = None,
+        _skip_dir_check: bool = False,
+    ) -> Optional[Union[bytes, str]]:
+        """
+        Internal method to download the content of a stage path.
+
+        Parameters
+        ----------
+        stage_path : Path or str
+            Path to the stage file
+        local_path : Path or str
+            Path to local file target location
+        overwrite : bool, optional
+            Should an existing file be overwritten if it exists?
+        encoding : str, optional
+            Encoding used to convert the resulting data
+        _skip_dir_check : bool, optional
+            Skip the remote directory check when the caller already knows
+            ``stage_path`` refers to a file (e.g. from a directory listing)
+
+        Returns
+        -------
+        bytes or str - ``local_path`` is None
+        None - ``local_path`` is a Path or str
+
+        """
         if local_path is not None and not overwrite and os.path.exists(local_path):
             raise OSError('target file already exists; use overwrite=True to replace')
-        if self.is_dir(stage_path):
+        if not _skip_dir_check and self.is_dir(stage_path):
             raise IsADirectoryError(f'stage path is a directory: {stage_path}')
 
         out = self._manager._get(
@@ -650,13 +701,22 @@ class Stage(FileLocation):
         stage_prefix = re.sub(r'^(\./|/)+', r'', str(stage_path))
         stage_prefix = re.sub(r'/+$', r'', stage_prefix)
 
-        for f in self.listdir(stage_path, recursive=True, return_objects=False):
-            target = ensure_within(local_path, os.path.join(local_path, f))
-            remote_path = f'{stage_prefix}/{f}' if stage_prefix else f
-            if self.is_dir(remote_path):
+        # Request objects so the file / directory type comes from the listing
+        # rather than an extra is_dir call per entry.
+        for entry in self.listdir(stage_path, recursive=True, return_objects=True):
+            rel_path = entry.path
+            target = ensure_within(local_path, os.path.join(local_path, rel_path))
+            if entry.type == 'directory':
+                os.makedirs(target, exist_ok=True)
                 continue
+            remote_path = (
+                f'{stage_prefix}/{rel_path}' if stage_prefix else rel_path
+            )
             os.makedirs(os.path.dirname(target) or '.', exist_ok=True)
-            self.download_file(remote_path, target, overwrite=overwrite)
+            self._download_file(
+                remote_path, target,
+                overwrite=overwrite, _skip_dir_check=True,
+            )
 
     def remove(self, stage_path: PathLike) -> None:
         """

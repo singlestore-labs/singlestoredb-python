@@ -1409,11 +1409,13 @@ class TestRecursiveDownloadPathTraversal(unittest.TestCase):
         import tempfile
         from singlestoredb.management.v1.workspace import Stage
         stage = Stage.__new__(Stage)
-        stage.listdir = MagicMock(return_value=['../escape.txt'])
-        # is_dir(stage_path) must return True (it's a directory); each
-        # listing entry returns False (so it's treated as a file).
+        stage.listdir = MagicMock(
+            return_value=[self._make_files_object('../escape.txt')],
+        )
+        # is_dir(stage_path) must return True (it's a directory); the entry
+        # type in the listing marks each entry as a file.
         stage.is_dir = MagicMock(side_effect=lambda p: p == 'remote')
-        stage.download_file = MagicMock()
+        stage._download_file = MagicMock()
         with tempfile.TemporaryDirectory() as tmp:
             target = f'{tmp}/dest'
             import os
@@ -1421,7 +1423,7 @@ class TestRecursiveDownloadPathTraversal(unittest.TestCase):
             with self.assertRaises(ManagementError) as ctx:
                 stage.download_folder('remote', target, overwrite=True)
             self.assertIn('outside destination', str(ctx.exception))
-            stage.download_file.assert_not_called()
+            stage._download_file.assert_not_called()
 
 
 class TestFolderTransferPaths(unittest.TestCase):
@@ -1440,6 +1442,20 @@ class TestFolderTransferPaths(unittest.TestCase):
         space._manager = MagicMock()
         return space
 
+    def _make_files_object(self, path, type_='file'):
+        from singlestoredb.management.v1.files import FilesObject
+        return FilesObject(
+            name=path.rsplit('/', 1)[-1],
+            path=path,
+            size=0,
+            type=type_,
+            format='',
+            mimetype='',
+            created=None,
+            last_modified=None,
+            writable=True,
+        )
+
     def _make_local_tree(self, tmp):
         """Create ``<tmp>/src/keep.py`` and ``<tmp>/src/sub/skip.pyc``."""
         import os
@@ -1456,13 +1472,17 @@ class TestFolderTransferPaths(unittest.TestCase):
         import tempfile
         stage = self._make_stage()
         # listdir strips the stage_path prefix from its results
-        stage.listdir = MagicMock(return_value=['a.txt', 'sub/b.txt'])
-        # Only the folder itself is a directory; listing entries are files.
+        stage.listdir = MagicMock(
+            return_value=[
+                self._make_files_object('a.txt'),
+                self._make_files_object('sub/b.txt'),
+            ],
+        )
         stage.is_dir = MagicMock(side_effect=lambda p: p == 'remote/folder')
-        stage.download_file = MagicMock()
+        stage._download_file = MagicMock()
         with tempfile.TemporaryDirectory() as tmp:
             stage.download_folder('remote/folder', tmp, overwrite=True)
-        requested = [call.args[0] for call in stage.download_file.call_args_list]
+        requested = [call.args[0] for call in stage._download_file.call_args_list]
         self.assertEqual(
             requested, ['remote/folder/a.txt', 'remote/folder/sub/b.txt'],
         )
@@ -1470,15 +1490,103 @@ class TestFolderTransferPaths(unittest.TestCase):
     def test_stage_download_folder_normalizes_prefix(self):
         import tempfile
         stage = self._make_stage()
-        stage.listdir = MagicMock(return_value=['a.txt'])
+        stage.listdir = MagicMock(
+            return_value=[self._make_files_object('a.txt')],
+        )
         stage.is_dir = MagicMock(side_effect=lambda p: p == './remote/folder/')
-        stage.download_file = MagicMock()
+        stage._download_file = MagicMock()
         with tempfile.TemporaryDirectory() as tmp:
             stage.download_folder('./remote/folder/', tmp, overwrite=True)
         self.assertEqual(
-            stage.download_file.call_args_list[0].args[0],
+            stage._download_file.call_args_list[0].args[0],
             'remote/folder/a.txt',
         )
+
+    def test_stage_download_folder_uses_listing_type_not_is_dir(self):
+        """The entry type comes from the listing, so no per-entry is_dir
+        call is made, and empty remote folders are still created locally."""
+        import os
+        import tempfile
+        stage = self._make_stage()
+        stage.listdir = MagicMock(
+            return_value=[
+                self._make_files_object('empty', type_='directory'),
+                self._make_files_object('a.txt'),
+            ],
+        )
+        is_dir_calls = []
+
+        def is_dir(p):
+            is_dir_calls.append(p)
+            return p == 'remote'
+
+        stage.is_dir = is_dir
+        stage._download_file = MagicMock()
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = os.path.join(tmp, 'dest')
+            stage.download_folder('remote', dest, overwrite=True)
+            # Only the top-level folder check, nothing per entry
+            self.assertEqual(is_dir_calls, ['remote'])
+            self.assertTrue(os.path.isdir(os.path.join(dest, 'empty')))
+        requested = [call.args[0] for call in stage._download_file.call_args_list]
+        self.assertEqual(requested, ['remote/a.txt'])
+
+    def test_stage_upload_folder_ignores_folder_patterns(self):
+        import os
+        import tempfile
+        stage = self._make_stage()
+        stage.exists = MagicMock(return_value=False)
+        stage.upload_file = MagicMock()
+        stage.info = MagicMock()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = os.path.join(tmp, 'src')
+            os.makedirs(os.path.join(root, '__pycache__'))
+            keep = os.path.join(root, 'keep.py')
+            for path in (keep, os.path.join(root, '__pycache__', 'a.pyc')):
+                with open(path, 'w') as f:
+                    f.write('x')
+            stage.upload_folder(root, 'dest', ignore='**/__pycache__')
+            uploaded = [
+                call.args[0] for call in stage.upload_file.call_args_list
+            ]
+            self.assertEqual(uploaded, [keep])
+
+    def test_file_space_upload_folder_ignores_folder_patterns(self):
+        import os
+        import tempfile
+        space = self._make_file_space()
+        space.upload_file = MagicMock()
+        space.info = MagicMock()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = os.path.join(tmp, 'src')
+            os.makedirs(os.path.join(root, '__pycache__'))
+            keep = os.path.join(root, 'keep.py')
+            for path in (keep, os.path.join(root, '__pycache__', 'a.pyc')):
+                with open(path, 'w') as f:
+                    f.write('x')
+            space.upload_folder(root, 'dest', ignore='**/__pycache__')
+            uploaded = [
+                call.kwargs['local_path']
+                for call in space.upload_file.call_args_list
+            ]
+            self.assertEqual(uploaded, [keep])
+
+    def test_upload_folder_builds_slash_separated_remote_paths(self):
+        """Remote paths must use '/' even when the local platform uses '\\'."""
+        import tempfile
+        stage = self._make_stage()
+        stage.exists = MagicMock(return_value=False)
+        stage.upload_file = MagicMock()
+        stage.info = MagicMock()
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _, _ = self._make_local_tree(tmp)
+            stage.upload_folder(root, 'dest/')
+            targets = sorted(
+                call.args[1] for call in stage.upload_file.call_args_list
+            )
+            self.assertEqual(targets, ['dest/keep.py', 'dest/sub/skip.pyc'])
+            for target in targets:
+                self.assertNotIn('\\', target)
 
     def test_stage_upload_folder_applies_ignore_globs(self):
         import tempfile

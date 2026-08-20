@@ -726,8 +726,10 @@ class FileSpace(FileLocation):
         include_root : bool, optional
             Should the local root folder itself be uploaded as the top folder?
         ignore : Path or str or List[Path] or List[str], optional
-            Glob patterns of files to ignore, for example, '**/*.pyc` will
-            ignore all '*.pyc' files in the directory tree
+            Glob patterns of files or folders to ignore, for example,
+            ``**/*.pyc`` will ignore all ``*.pyc`` files in the directory
+            tree, and ``**/__pycache__`` will ignore those folders entirely.
+            Relative patterns are resolved against ``local_path``.
 
         """
         if not os.path.isdir(local_path):
@@ -740,8 +742,16 @@ class FileSpace(FileLocation):
 
         local_root = os.path.normpath(str(local_path))
         root_name = os.path.basename(local_root)
+        remote_prefix = re.sub(r'/+$', r'', str(path))
 
-        for dir_path, _, files in os.walk(local_root):
+        for dir_path, dirs, files in os.walk(local_root):
+            if ignore_files:
+                # Prune ignored folders so their contents are skipped too
+                dirs[:] = [
+                    d for d in dirs
+                    if os.path.normpath(os.path.join(dir_path, d))
+                    not in ignore_files
+                ]
             for fname in files:
                 # Normalized so it compares equal to the normalized
                 # glob results in ignore_files (e.g. local_path='.')
@@ -752,7 +762,9 @@ class FileSpace(FileLocation):
                 rel = os.path.relpath(local_file_path, local_root)
                 if include_root:
                     rel = os.path.join(root_name, rel)
-                remote_path = os.path.join(str(path), rel) if path else rel
+                # Remote paths always use '/', whatever the local platform
+                rel = rel.replace(os.sep, '/')
+                remote_path = f'{remote_prefix}/{rel}' if remote_prefix else rel
                 self.upload_file(
                     local_path=local_file_path,
                     path=remote_path,
@@ -1170,6 +1182,9 @@ class FileSpace(FileLocation):
         if local_path is not None and not overwrite and os.path.exists(local_path):
             raise OSError('target path already exists; use overwrite=True to replace')
 
+        # Remote paths always use '/', whatever the local platform
+        remote_prefix = re.sub(r'/+$', r'', str(path))
+
         # listdir validates directory; no extra info call needed
         entries = self.listdir(path, recursive=True, return_objects=True)
         for entry in entries:
@@ -1184,7 +1199,9 @@ class FileSpace(FileLocation):
                 )
                 os.makedirs(target_dir, exist_ok=True)
                 continue
-            remote_path = os.path.join(path, rel_path)
+            remote_path = (
+                f'{remote_prefix}/{rel_path}' if remote_prefix else rel_path
+            )
             target_file = ensure_within(
                 local_path, os.path.join(local_path, rel_path),
             )
