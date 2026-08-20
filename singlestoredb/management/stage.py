@@ -41,7 +41,7 @@ class Stage(FileLocation):
     Stage manager.
 
     This object is not instantiated directly.
-    It is returned by ``WorkspaceGroup.stage`` or ``StarterWorkspace.stage``.
+    It is returned by ``Cluster.stage`` or ``StarterCluster.stage``.
 
     """
 
@@ -53,9 +53,10 @@ class Stage(FileLocation):
         """
         Return the management API path for a Stage filesystem location.
 
-        Overridden by the v2 ``Stage``, where Stage moved under the cluster
-        resource. All Stage requests go through here so that the version
-        difference is a one-line override rather than a copy of every method.
+        Overridden by the v1 ``Stage``, where Stage was a top-level resource
+        rather than nested under the cluster. All Stage requests go through
+        here so that the version difference is a one-line override rather
+        than a copy of every method.
 
         Parameters
         ----------
@@ -67,7 +68,7 @@ class Stage(FileLocation):
         str
 
         """
-        return f'stage/{self._deployment_id}/fs/{path}'
+        return f'clusters/{self._deployment_id}/stage/fs/{path}'
 
     def open(
         self,

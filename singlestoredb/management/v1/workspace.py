@@ -24,7 +24,6 @@ from ..manager import Manager
 from ..organization import Organization
 from ..organization import Organizations as Organizations
 from ..region import Region
-from ..stage import Stage as Stage
 from ..stage import StageObject as StageObject
 from ..utils import camel_to_snake_dict
 from ..utils import ensure_within
@@ -38,6 +37,7 @@ from ..utils import snake_to_camel_dict
 from ..utils import to_datetime
 from ..utils import ttl_property
 from ..utils import vars_to_str
+from .stage import Stage as Stage
 
 #: Base management API path for the shared-tier resource.
 SHAREDTIER_PATH = 'sharedtier/virtualWorkspaces'

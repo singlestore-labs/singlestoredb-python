@@ -35,7 +35,7 @@ from ..manager import Manager
 from ..organization import Organization
 from ..organization import Organizations as Organizations
 from ..region import Region
-from ..stage import Stage as _Stage
+from ..stage import Stage as Stage
 from ..stage import StageObject as StageObject
 from ..utils import camel_to_snake_dict
 from ..utils import NamedList
@@ -53,17 +53,6 @@ SHAREDTIER_PATH = 'sharedtier/virtualClusters'
 #: notebook environment and are part of its external contract, so they keep
 #: their published names regardless of API version.
 CLUSTER_ENV_VARS = ('SINGLESTOREDB_CLUSTER', 'SINGLESTOREDB_WORKSPACE')
-
-
-class Stage(_Stage):
-    """
-    Stage file space for a v2 cluster.
-
-    The v2 route is nested under the cluster: ``clusters/{id}/stage/fs/``.
-    """
-
-    def _fs_path(self, path: PathLike = '') -> str:
-        return f'clusters/{self._deployment_id}/stage/fs/{path}'
 
 
 def get_organization() -> Organization:
