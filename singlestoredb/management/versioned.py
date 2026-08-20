@@ -7,6 +7,7 @@ import re
 from typing import Any
 from typing import Dict
 from typing import Optional
+from typing import Tuple
 
 from ..exceptions import ManagementError
 
@@ -20,9 +21,37 @@ class VersionedMixin:
     _version_cache: Optional[Dict[str, Any]] = None
     _response: Optional[Dict[str, Any]] = None
 
+    #: Where this class's counterpart lives in another API version, as
+    #: ``{version: (module basename, class name)}``. By default a class
+    #: resolves to the same class name in the same module of the target
+    #: version; classes that were renamed between versions declare the
+    #: mapping here.
+    #:
+    #: Always declare the mapping on the *older* class. That keeps the
+    #: knowledge of a retired version's vocabulary inside that version's
+    #: package, so deleting the package deletes the mapping with it and no
+    #: newer module ever has to name an older resource.
+    _version_map: Dict[str, Tuple[str, str]] = {}
+
     @property
     def _module_name(self) -> str:
         return self.__class__.__module__.rsplit('.', 1)[-1]
+
+    def _version_target(self, version: str) -> Tuple[str, str]:
+        """Return the (module basename, class name) to resolve for `version`."""
+        return type(self)._version_map.get(
+            version, (self._module_name, type(self).__name__),
+        )
+
+    def _version_response(self, version: str) -> Optional[Dict[str, Any]]:
+        """
+        Return this object's raw response re-keyed for `version`.
+
+        Subclasses whose field names changed between versions override this to
+        translate the payload. As with :attr:`_version_map`, the override
+        belongs on the older class.
+        """
+        return self._response
 
     def _get_version_cache(self) -> Dict[str, Any]:
         if self._version_cache is None:
@@ -40,8 +69,9 @@ class VersionedMixin:
         )
 
     def _get_versioned(self, version: str) -> Any:
-        mod = _import_versioned_module(version, self._module_name)
-        target_cls = getattr(mod, type(self).__name__, None)
+        module_name, class_name = self._version_target(version)
+        mod = _import_versioned_module(version, module_name)
+        target_cls = getattr(mod, class_name, None)
         if target_cls is None:
             raise ManagementError(
                 msg=f"'{type(self).__name__}' is not available in API {version}",
@@ -68,12 +98,13 @@ class VersionedMixin:
                         f'manager reference is None',
                 )
             versioned_mgr = getattr(self._manager, version)
+            response = self._version_response(version)
             sig = inspect.signature(target_cls.from_dict)
             params = list(sig.parameters.keys())
             if 'manager' in params:
-                out = target_cls.from_dict(self._response, versioned_mgr)
+                out = target_cls.from_dict(response, versioned_mgr)
             else:
-                out = target_cls.from_dict(self._response)
+                out = target_cls.from_dict(response)
                 out._manager = versioned_mgr
             # Propagate context that from_dict can't reconstruct alone
             if hasattr(self, '_location') and self._location is not None:

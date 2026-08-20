@@ -34,7 +34,7 @@ def manage_workspaces(
     access_token : str, optional
         The API key or other access token for the workspace management API
     version : str, optional
-        Version of the API to use
+        Version of the API to use. Workspaces only exist at ``v1``.
     base_url : str, optional
         Base URL of the workspace management API
     organization_id : str, optional
@@ -44,9 +44,23 @@ def manage_workspaces(
     -------
     :class:`WorkspaceManager`
 
+    Raises
+    ------
+    :class:`ManagementError`
+        If a version other than ``v1`` is requested. Workspaces and workspace
+        groups were replaced by clusters in v2; use
+        :func:`singlestoredb.manage_clusters` instead.
+
     """
     from .. import config
+    from ..exceptions import ManagementError
     ver = version or config.get_option('management.version') or 'v1'
+    if ver != 'v1':
+        raise ManagementError(
+            msg=f'workspaces do not exist in management API {ver}; '
+                'they were replaced by clusters. Use manage_clusters() '
+                'instead, or request version="v1".',
+        )
     mod = _import_versioned_module(ver, 'workspace')
     return mod.WorkspaceManager(
         access_token=access_token, base_url=base_url,

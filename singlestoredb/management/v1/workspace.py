@@ -39,10 +39,16 @@ from ..utils import to_datetime
 from ..utils import ttl_property
 from ..utils import vars_to_str
 from ..versioned import VersionedMixin
+from ._translate import starter_workspace_to_starter_cluster
+from ._translate import workspace_to_cluster
+
+#: Base management API path for the shared-tier resource.
+SHAREDTIER_PATH = 'sharedtier/virtualWorkspaces'
 
 
 def get_organization() -> Organization:
     """Get the organization."""
+    from ..workspace import manage_workspaces
     return manage_workspaces().organization
 
 
@@ -55,6 +61,7 @@ def get_workspace_group(
     workspace_group: Optional[Union[WorkspaceGroup, str]] = None,
 ) -> WorkspaceGroup:
     """Get the stage for the workspace group."""
+    from ..workspace import manage_workspaces
     if isinstance(workspace_group, WorkspaceGroup):
         return workspace_group
     elif workspace_group:
@@ -107,6 +114,9 @@ class Workspace(VersionedMixin):
     :attr:`WorkspaceManager.workspaces`
 
     """
+
+    #: A workspace is a cluster from v2 onward.
+    _version_map = {'v2': ('cluster', 'Cluster')}
 
     name: str
     id: str
@@ -254,6 +264,11 @@ class Workspace(VersionedMixin):
         out._manager = manager
         out._response = obj
         return out
+
+    def _version_response(self, version: str) -> Optional[Dict[str, Any]]:
+        if version == 'v1' or self._response is None:
+            return self._response
+        return workspace_to_cluster(self._response)
 
     def update(
         self,
@@ -477,6 +492,13 @@ class WorkspaceGroup(VersionedMixin):
     :attr:`WorkspaceManager.workspace_groups`
 
     """
+
+    #: A workspace group has no counterpart from v2 onward: the grouping
+    #: collapsed into the cluster itself, and one group may correspond to
+    #: several clusters. ``v2/cluster.py`` deliberately does not define a
+    #: ``WorkspaceGroup``, so resolving ``wg.v2`` raises a
+    #: :class:`ManagementError` saying so.
+    _version_map = {'v2': ('cluster', 'WorkspaceGroup')}
 
     name: str
     id: str
@@ -886,11 +908,8 @@ class StarterWorkspace(VersionedMixin):
 
     """
 
-    #: Base management API path for the shared-tier resource. v2 renamed this
-    #: from ``virtualWorkspaces`` to ``virtualClusters``; every shared-tier
-    #: request is built from this attribute so the rename is a one-line
-    #: override in the v2 subclass.
-    _sharedtier_path = 'sharedtier/virtualWorkspaces'
+    #: A starter workspace is a starter cluster from v2 onward.
+    _version_map = {'v2': ('cluster', 'StarterCluster')}
 
     name: str
     id: str
@@ -974,6 +993,11 @@ class StarterWorkspace(VersionedMixin):
         out._response = obj
         return out
 
+    def _version_response(self, version: str) -> Optional[Dict[str, Any]]:
+        if version == 'v1' or self._response is None:
+            return self._response
+        return starter_workspace_to_starter_cluster(self._response)
+
     def connect(self, **kwargs: Any) -> connection.Connection:
         """
         Create a connection to the database server for this starter workspace.
@@ -1006,7 +1030,7 @@ class StarterWorkspace(VersionedMixin):
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
-        self._manager._delete(f'{self._sharedtier_path}/{self.id}')
+        self._manager._delete(f'{SHAREDTIER_PATH}/{self.id}')
 
     def refresh(self) -> StarterWorkspace:
         """Update the object to the current state."""
@@ -1046,7 +1070,7 @@ class StarterWorkspace(VersionedMixin):
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
-        res = self._manager._get(self._sharedtier_path)
+        res = self._manager._get(SHAREDTIER_PATH)
         return NamedList(
             [type(self).from_dict(item, self._manager) for item in res.json()],
         )
@@ -1089,7 +1113,7 @@ class StarterWorkspace(VersionedMixin):
             payload['password'] = password
 
         res = self._manager._post(
-            f'{self._sharedtier_path}/{self.id}/users',
+            f'{SHAREDTIER_PATH}/{self.id}/users',
             json=payload,
         )
 
@@ -1141,9 +1165,8 @@ class WorkspaceManager(Manager):
     #: Object type
     obj_type = 'workspace'
 
-    #: Base management API path for the shared-tier resource. See
-    #: :attr:`StarterWorkspace._sharedtier_path`.
-    _sharedtier_path = 'sharedtier/virtualWorkspaces'
+    #: The workspace manager is the cluster manager from v2 onward.
+    _version_map = {'v2': ('cluster', 'ClusterManager')}
 
     @property
     def workspace_groups(self) -> NamedList[WorkspaceGroup]:
@@ -1154,7 +1177,7 @@ class WorkspaceManager(Manager):
     @property
     def starter_workspaces(self) -> NamedList[StarterWorkspace]:
         """Return a list of available starter workspaces."""
-        res = self._get(self._sharedtier_path)
+        res = self._get(SHAREDTIER_PATH)
         return NamedList([StarterWorkspace.from_dict(item, self) for item in res.json()])
 
     @property
@@ -1428,7 +1451,7 @@ class WorkspaceManager(Manager):
         :class:`StarterWorkspace`
 
         """
-        res = self._get(f'{self._sharedtier_path}/{id}')
+        res = self._get(f'{SHAREDTIER_PATH}/{id}')
         return StarterWorkspace.from_dict(res.json(), manager=self)
 
     def create_starter_workspace(
@@ -1469,46 +1492,10 @@ class WorkspaceManager(Manager):
         if project_id is not None:
             payload['projectID'] = project_id
 
-        res = self._post(self._sharedtier_path, json=payload)
+        res = self._post(SHAREDTIER_PATH, json=payload)
         virtual_workspace_id = res.json().get('virtualWorkspaceID')
         if not virtual_workspace_id:
             raise ManagementError(msg='No virtualWorkspaceID returned from API')
 
-        res = self._get(f'{self._sharedtier_path}/{virtual_workspace_id}')
+        res = self._get(f'{SHAREDTIER_PATH}/{virtual_workspace_id}')
         return StarterWorkspace.from_dict(res.json(), self)
-
-
-def manage_workspaces(
-    access_token: Optional[str] = None,
-    version: Optional[str] = None,
-    base_url: Optional[str] = None,
-    *,
-    organization_id: Optional[str] = None,
-) -> WorkspaceManager:
-    """
-    Retrieve a SingleStoreDB workspace manager.
-
-    Parameters
-    ----------
-    access_token : str, optional
-        The API key or other access token for the workspace management API
-    version : str, optional
-        Version of the API to use
-    base_url : str, optional
-        Base URL of the workspace management API
-    organization_id : str, optional
-        ID of organization, if using a JWT for authentication
-
-    Returns
-    -------
-    :class:`WorkspaceManager`
-
-    """
-    from ... import config
-    from ..versioned import _import_versioned_module
-    ver = version or config.get_option('management.version') or 'v1'
-    mod = _import_versioned_module(ver, 'workspace')
-    return mod.WorkspaceManager(
-        access_token=access_token, base_url=base_url,
-        version=ver, organization_id=organization_id,
-    )

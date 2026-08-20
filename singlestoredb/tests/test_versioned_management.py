@@ -37,16 +37,16 @@ def _make_workspace_manager(version='v1', organization_id=FAKE_ORG_ID):
 
 
 def _patch_no_network_regions():
-    """Patch the WorkspaceManager.regions property on both v1 and v2 to []."""
+    """Patch the ``regions`` property on the v1 and v2 managers to []."""
     from singlestoredb.management.v1.workspace import (
         WorkspaceManager as V1WM,
     )
-    from singlestoredb.management.v2.workspace import (
-        WorkspaceManager as V2WM,
+    from singlestoredb.management.v2.cluster import (
+        ClusterManager as V2CM,
     )
     return [
         patch.object(V1WM, 'regions', new_callable=PropertyMock, return_value=[]),
-        patch.object(V2WM, 'regions', new_callable=PropertyMock, return_value=[]),
+        patch.object(V2CM, 'regions', new_callable=PropertyMock, return_value=[]),
     ]
 
 
@@ -142,10 +142,18 @@ class TestImportVersionedModule(unittest.TestCase):
         self.assertTrue(hasattr(mod, 'Workspace'))
         self.assertTrue(hasattr(mod, 'WorkspaceManager'))
 
-    def test_import_v2_workspace(self):
-        mod = _import_versioned_module('v2', 'workspace')
-        self.assertTrue(hasattr(mod, 'Workspace'))
-        self.assertTrue(hasattr(mod, 'WorkspaceManager'))
+    def test_import_v2_cluster(self):
+        """v2 has clusters, not workspaces."""
+        mod = _import_versioned_module('v2', 'cluster')
+        self.assertTrue(hasattr(mod, 'Cluster'))
+        self.assertTrue(hasattr(mod, 'ClusterManager'))
+
+    def test_v2_has_no_workspace_module(self):
+        with self.assertRaises(ManagementError) as ctx:
+            _import_versioned_module('v2', 'workspace')
+        msg = str(ctx.exception)
+        self.assertIn('workspace', msg)
+        self.assertIn('v2', msg)
 
     def test_import_nonexistent_version_raises(self):
         with self.assertRaises(ManagementError) as ctx:
@@ -196,12 +204,12 @@ class TestManagerVersionSwitching(unittest.TestCase):
         self.assertEqual(Manager.default_version, 'v1')
 
     def test_version_switch_creates_new_manager(self):
-        """mgr.v2 returns a WorkspaceManager from the v2 module."""
+        """mgr.v2 returns a ClusterManager from the v2 cluster module."""
         mgr = self._make_manager()
         with patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN):
             v2_mgr = mgr.v2
-        from singlestoredb.management.v2.workspace import WorkspaceManager as V2WM
-        self.assertIsInstance(v2_mgr, V2WM)
+        from singlestoredb.management.v2.cluster import ClusterManager as V2CM
+        self.assertIsInstance(v2_mgr, V2CM)
 
     def test_version_switch_preserves_credentials(self):
         """Versioned manager clone has same credentials."""
@@ -258,14 +266,15 @@ class TestEntityVersionSwitching(unittest.TestCase):
         self.assertIs(ws._manager, mgr)
 
     def test_entity_version_switch(self):
-        """ws.v2 constructs target class via from_dict with versioned manager."""
+        """ws.v2 constructs the v2 Cluster via from_dict with a v2 manager."""
         ws, _, obj = self._make_workspace()
         with patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN):
             v2_ws = ws.v2
-        from singlestoredb.management.v2.workspace import Workspace as V2Workspace
-        self.assertIsInstance(v2_ws, V2Workspace)
+        from singlestoredb.management.v2.cluster import Cluster as V2Cluster
+        self.assertIsInstance(v2_ws, V2Cluster)
         self.assertEqual(v2_ws.name, 'test-ws')
         self.assertEqual(v2_ws.id, 'ws-123')
+        self.assertEqual(v2_ws.group_id, 'wsg-456')
 
     def test_entity_version_switch_cached(self):
         """Repeated entity.v2 access returns same object."""
@@ -302,16 +311,28 @@ class TestTopLevelShims(unittest.TestCase):
         self.assertIs(rg_shim.RegionManager, v1_rg.RegionManager)
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
-    def test_manage_workspaces_respects_version_param(self, _mock_token):
-        """manage_workspaces(version='v2') returns a v2 WorkspaceManager."""
+    def test_manage_workspaces_rejects_v2(self, _mock_token):
+        """manage_workspaces(version='v2') points the caller at clusters."""
         from singlestoredb.management.workspace import manage_workspaces
-        mgr = manage_workspaces(
+        with self.assertRaises(ManagementError) as ctx:
+            manage_workspaces(
+                access_token=FAKE_TOKEN,
+                version='v2',
+                base_url=FAKE_BASE_URL,
+            )
+        self.assertIn('manage_clusters', str(ctx.exception))
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_manage_clusters_returns_v2_manager(self, _mock_token):
+        """manage_clusters() defaults to a v2 ClusterManager."""
+        from singlestoredb.management.cluster import manage_clusters
+        from singlestoredb.management.v2.cluster import ClusterManager as V2CM
+        mgr = manage_clusters(
             access_token=FAKE_TOKEN,
-            version='v2',
             base_url=FAKE_BASE_URL,
         )
-        from singlestoredb.management.v2.workspace import WorkspaceManager as V2WM
-        self.assertIsInstance(mgr, V2WM)
+        self.assertIsInstance(mgr, V2CM)
+        self.assertIn('/v2/', mgr._base_url)
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
     def test_manage_workspaces_default_is_v1(self, _mock_token):
@@ -326,18 +347,13 @@ class TestTopLevelShims(unittest.TestCase):
 
 
 class TestV2InheritanceModel(unittest.TestCase):
-    """Test that v2 classes properly inherit from v1."""
+    """Test that v2 classes properly inherit from v1 where they share a shape."""
 
-    def test_v2_workspace_is_v1_workspace(self):
-        """v2 Workspace is the same as (or subclass of) v1 Workspace."""
+    def test_v2_cluster_does_not_inherit_from_v1(self):
+        """Clusters are a fresh v2 resource, not a subclass of Workspace."""
         from singlestoredb.management.v1.workspace import Workspace as V1
-        from singlestoredb.management.v2.workspace import Workspace as V2
-        self.assertTrue(issubclass(V2, V1))
-
-    def test_v2_workspace_group_is_v1_workspace_group(self):
-        from singlestoredb.management.v1.workspace import WorkspaceGroup as V1
-        from singlestoredb.management.v2.workspace import WorkspaceGroup as V2
-        self.assertTrue(issubclass(V2, V1))
+        from singlestoredb.management.v2.cluster import Cluster as V2
+        self.assertFalse(issubclass(V2, V1))
 
     def test_v2_region_is_v1_region(self):
         from singlestoredb.management.v1.region import Region as V1
@@ -382,20 +398,38 @@ class TestConfigOption(unittest.TestCase):
         self.assertIn(val, ('v1', 'v2', None, ''))
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
-    def test_config_option_routes_manage_workspaces(self, _mock_token):
+    def test_config_option_routes_manage_regions(self, _mock_token):
         """Setting management.version to v2 routes to v2."""
         from singlestoredb import config
-        from singlestoredb.management.workspace import manage_workspaces
-        from singlestoredb.management.v2.workspace import WorkspaceManager as V2WM
+        from singlestoredb.management.region import manage_regions
+        from singlestoredb.management.v2.region import RegionManager as V2RM
 
         original = config.get_option('management.version')
         try:
             config.set_option('management.version', 'v2')
-            mgr = manage_workspaces(
+            mgr = manage_regions(
                 access_token=FAKE_TOKEN,
                 base_url=FAKE_BASE_URL,
             )
-            self.assertIsInstance(mgr, V2WM)
+            self.assertIsInstance(mgr, V2RM)
+        finally:
+            config.set_option('management.version', original or 'v1')
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_config_option_cannot_force_workspaces_to_v2(self, _mock_token):
+        """management.version='v2' makes manage_workspaces() an error, not a v2 call."""
+        from singlestoredb import config
+        from singlestoredb.management.workspace import manage_workspaces
+
+        original = config.get_option('management.version')
+        try:
+            config.set_option('management.version', 'v2')
+            with self.assertRaises(ManagementError) as ctx:
+                manage_workspaces(
+                    access_token=FAKE_TOKEN,
+                    base_url=FAKE_BASE_URL,
+                )
+            self.assertIn('manage_clusters', str(ctx.exception))
         finally:
             config.set_option('management.version', original or 'v1')
 
@@ -502,33 +536,40 @@ class TestLocationManagerRebind(unittest.TestCase):
     """
     Regression test for commit 0cc6024f: when an entity that has a
     ``_location`` child manager is version-switched, the rebound
-    ``_location._manager`` must point at the v2 versioned manager, and
-    ``region`` must be preserved.
+    ``_location._manager`` must point at the versioned manager, and the
+    original entity's location must be left untouched.
     """
 
     def test_location_manager_rebound_to_versioned_clone(self):
-        from singlestoredb.management.v1.region import Region
+        from singlestoredb.management.v1.workspace import Workspace
 
         ws_mgr = _make_workspace_manager()
-        wg, _, _ = _make_workspace_group(manager=ws_mgr)
+        ws = Workspace.from_dict(
+            {
+                'name': 'test-ws',
+                'workspaceID': 'ws-123',
+                'workspaceGroupID': 'wsg-456',
+                'size': 'S-00',
+                'state': 'Active',
+                'createdAt': '2024-01-01T00:00:00Z',
+            },
+            ws_mgr,
+        )
 
         # Simulate a child location manager that points at the v1 manager.
         class _FakeLocation:
             pass
         loc = _FakeLocation()
         loc._manager = ws_mgr
-        wg._location = loc
-        wg.region = Region('reg-name', 'aws', 'region-789')
+        ws._location = loc
 
         with patch(
             'singlestoredb.management.manager.get_token',
             return_value=FAKE_TOKEN,
         ), _MultiPatch(_patch_no_network_regions()):
-            v2_wg = wg.v2
+            v2_ws = ws.v2
             v2_mgr = ws_mgr.v2
-        self.assertIs(v2_wg._location._manager, v2_mgr)
-        # region must be preserved across version switch
-        self.assertIs(v2_wg.region, wg.region)
+        self.assertIs(v2_ws._location._manager, v2_mgr)
         # Original entity's location is untouched (copy.copy was used)
         self.assertIs(loc._manager, ws_mgr)
 
@@ -648,20 +689,22 @@ class TestEntityRoundTripFidelity(unittest.TestCase):
         self.assertEqual(round_tripped.name, ws.name)
         self.assertEqual(round_tripped.id, ws.id)
         self.assertEqual(round_tripped.group_id, ws.group_id)
-        # Same _response payload (object identity preserved through chain)
-        self.assertIs(round_tripped._response, obj)
+        # Each hop re-keys the payload into a fresh dict, so identity is not
+        # preserved -- but the field names and values must survive intact.
+        self.assertIsNot(round_tripped._response, obj)
+        self.assertEqual(round_tripped._response, obj)
 
-    def test_workspace_group_round_trip(self):
-        from singlestoredb.management.v1.workspace import WorkspaceGroup as V1WG
-        wg, _, obj = _make_workspace_group()
+    def test_workspace_group_has_no_v2_counterpart(self):
+        """Workspace groups were dissolved into clusters; ``wg.v2`` must fail."""
+        wg, _, _ = _make_workspace_group()
         with patch(
             'singlestoredb.management.manager.get_token',
             return_value=FAKE_TOKEN,
         ), _MultiPatch(_patch_no_network_regions()):
-            round_tripped = wg.v2.v1
-        self.assertIsInstance(round_tripped, V1WG)
-        self.assertEqual(round_tripped.id, wg.id)
-        self.assertIs(round_tripped._response, obj)
+            with self.assertRaises(ManagementError) as ctx:
+                wg.v2
+        self.assertIn('WorkspaceGroup', str(ctx.exception))
+        self.assertIn('v2', str(ctx.exception))
 
 
 class TestWorkspaceFromDictNewFields(unittest.TestCase):
@@ -1131,115 +1174,6 @@ class TestWorkspaceGroupRegionResolution(unittest.TestCase):
         self.assertIsNone(wg.region.id)
 
 
-class TestV2WorkspaceGroupGetMetrics(unittest.TestCase):
-    """Coverage for ``v2/workspace.py:WorkspaceGroup.get_metrics``."""
-
-    def _make_v2_wg_with_org(self, organization_id=FAKE_ORG_ID, params=None):
-        ws_mgr = _make_workspace_manager(organization_id=organization_id)
-        if params is not None:
-            ws_mgr._params = params
-        wg, _, _ = _make_workspace_group(manager=ws_mgr)
-        with patch(
-            'singlestoredb.management.manager.get_token',
-            return_value=FAKE_TOKEN,
-        ), _MultiPatch(_patch_no_network_regions()):
-            v2_wg = wg.v2
-        return v2_wg, v2_wg._manager
-
-    def test_uses_organization_id_from_manager(self):
-        v2_wg, v2_mgr = self._make_v2_wg_with_org()
-        get_response = MagicMock()
-        get_response.text = 'metric_a 1\nmetric_b 2\n'
-        v2_mgr._get = MagicMock(return_value=get_response)
-
-        result = v2_wg.get_metrics()
-
-        self.assertEqual(result, 'metric_a 1\nmetric_b 2\n')
-        args, kwargs = v2_mgr._get.call_args
-        self.assertEqual(
-            args[0],
-            f'organizations/{FAKE_ORG_ID}/workspaceGroups/wsg-456/metrics',
-        )
-        self.assertEqual(kwargs['headers'], {'Accept': 'text/plain'})
-
-    def test_falls_back_to_params_organization_id(self):
-        v2_wg, v2_mgr = self._make_v2_wg_with_org(
-            organization_id=None, params={'organizationID': 'org-from-params'},
-        )
-        # Force fallback by clearing _organization_id on the clone too
-        v2_mgr._organization_id = None
-        v2_mgr._params = {'organizationID': 'org-from-params'}
-
-        get_response = MagicMock()
-        get_response.text = ''
-        v2_mgr._get = MagicMock(return_value=get_response)
-
-        v2_wg.get_metrics()
-
-        args, _ = v2_mgr._get.call_args
-        self.assertIn('org-from-params', args[0])
-
-    def test_falls_back_to_manager_organization(self):
-        """Fallback resolves org ID via the v1 clone (per OpenAPI spec).
-
-        v2 has no ``organizations/current`` endpoint, so the metrics method
-        must drop to ``self._manager.v1.organization.id``.
-        """
-        v2_wg, v2_mgr = self._make_v2_wg_with_org(organization_id=None)
-        v2_mgr._organization_id = None
-        v2_mgr._params = {}
-
-        # Build a fake v1 clone whose `.organization.id` returns the value
-        # we want to see in the eventual metrics URL.
-        fake_org = MagicMock()
-        fake_org.id = 'org-from-current'
-        fake_v1 = MagicMock()
-        fake_v1.organization = fake_org
-
-        get_response = MagicMock()
-        get_response.text = ''
-        v2_mgr._get = MagicMock(return_value=get_response)
-
-        # Inject the v1 clone into VersionedMixin's cache so attribute
-        # access for `.v1` returns it without spinning up a real manager.
-        v2_mgr._version_cache = {'v1': fake_v1}
-        v2_wg.get_metrics()
-
-        args, _ = v2_mgr._get.call_args
-        self.assertIn('org-from-current', args[0])
-        # The metrics request itself must still go to the v2-cloned manager.
-        self.assertEqual(
-            args[0],
-            'organizations/org-from-current'
-            '/workspaceGroups/wsg-456/metrics',
-        )
-
-    def test_raises_when_manager_is_none(self):
-        from singlestoredb.management.v2.workspace import WorkspaceGroup as V2WG
-        # Build a v2 group entirely detached from any manager
-        wg = V2WG.__new__(V2WG)
-        wg._manager = None
-        wg._response = {}
-        wg.id = 'wsg-x'
-        with self.assertRaises(ManagementError) as ctx:
-            wg.get_metrics()
-        self.assertIn('No workspace manager', str(ctx.exception))
-
-    def test_raises_when_org_id_unresolvable(self):
-        v2_wg, v2_mgr = self._make_v2_wg_with_org(organization_id=None)
-        v2_mgr._organization_id = None
-        v2_mgr._params = {}
-        # Stub the v1 clone's organization to return one whose id is empty
-        fake_org = MagicMock()
-        fake_org.id = ''
-        fake_v1 = MagicMock()
-        fake_v1.organization = fake_org
-        v2_mgr._version_cache = {'v1': fake_v1}
-        with self.assertRaises(ManagementError) as ctx:
-            v2_wg.get_metrics()
-        self.assertIn('organization ID', str(ctx.exception))
-
-
 class TestManageRoutingForAllFactories(unittest.TestCase):
     """
     ``manage_*`` factories must route to the correct version module:
@@ -1248,18 +1182,16 @@ class TestManageRoutingForAllFactories(unittest.TestCase):
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
     def test_manage_workspaces(self, _mock_token):
+        """Workspaces are v1-only; v2 callers are redirected to clusters."""
         from singlestoredb.management.workspace import manage_workspaces
         from singlestoredb.management.v1.workspace import (
             WorkspaceManager as V1WM,
         )
-        from singlestoredb.management.v2.workspace import (
-            WorkspaceManager as V2WM,
-        )
 
-        v2 = manage_workspaces(
-            access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v2',
-        )
-        self.assertIsInstance(v2, V2WM)
+        with self.assertRaises(ManagementError):
+            manage_workspaces(
+                access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v2',
+            )
         v1 = manage_workspaces(
             access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v1',
         )
@@ -1275,6 +1207,26 @@ class TestManageRoutingForAllFactories(unittest.TestCase):
             self.assertIsInstance(default, V1WM)
         finally:
             config.set_option('management.version', original or 'v1')
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_manage_clusters(self, _mock_token):
+        """Clusters are v2-only, so ``manage_clusters`` defaults to v2."""
+        from singlestoredb.management.cluster import manage_clusters
+        from singlestoredb.management.v2.cluster import ClusterManager as V2CM
+
+        v2 = manage_clusters(
+            access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v2',
+        )
+        self.assertIsInstance(v2, V2CM)
+        default = manage_clusters(
+            access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
+        )
+        self.assertIsInstance(default, V2CM)
+        self.assertIn('/v2/', default._base_url)
+        with self.assertRaises(ManagementError):
+            manage_clusters(
+                access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v1',
+            )
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
     def test_manage_regions(self, _mock_token):
@@ -1325,6 +1277,7 @@ class TestFactoriesAreNotDuplicated(unittest.TestCase):
             'manage_files': 'files',
             'manage_regions': 'region',
             'manage_workspaces': 'workspace',
+            'manage_clusters': 'cluster',
         }
         for func, mod_name in factories.items():
             shared = importlib.import_module(f'singlestoredb.management.{mod_name}')
@@ -1333,9 +1286,14 @@ class TestFactoriesAreNotDuplicated(unittest.TestCase):
                 f'{func} should be defined in management/{mod_name}.py',
             )
             for ver in ('v1', 'v2'):
-                mod = importlib.import_module(
-                    f'singlestoredb.management.{ver}.{mod_name}',
-                )
+                try:
+                    mod = importlib.import_module(
+                        f'singlestoredb.management.{ver}.{mod_name}',
+                    )
+                except ModuleNotFoundError:
+                    # Not every resource exists at every version; e.g. there
+                    # is no v2 ``workspace`` module.
+                    continue
                 self.assertNotIn(
                     func, vars(mod),
                     f'{func} must not be duplicated into '
@@ -1489,7 +1447,8 @@ class TestFolderTransferPaths(unittest.TestCase):
         stage.listdir = MagicMock(
             return_value=[self._make_files_object('a.txt')],
         )
-        stage.is_dir = MagicMock(side_effect=lambda p: p == './remote/folder/')
+        # download_folder normalizes './remote/folder/' before probing.
+        stage.is_dir = MagicMock(side_effect=lambda p: p == 'remote/folder')
         stage._download_file = MagicMock()
         with tempfile.TemporaryDirectory() as tmp:
             stage.download_folder('./remote/folder/', tmp, overwrite=True)
