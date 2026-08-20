@@ -146,7 +146,11 @@ class TestLiveTokenIdParity(unittest.TestCase):
         assert len(batched) == len(texts), len(batched)
         for text, got in zip(texts, batched):
             cos = self.cosine(embedding.embed_documents([text])[0], got)
-            assert cos > 0.9999, (text, cos)
+            # Looser than the native-vs-text check: a batched vLLM forward pads
+            # mixed-length sequences into one GEMM, so the vectors are not
+            # bit-identical to three solo calls. Wrong token IDs would land far
+            # below this, as in test_tiktoken_ids_are_not_equivalent.
+            assert cos > 0.999, (text, cos)
 
 
 if __name__ == '__main__':
