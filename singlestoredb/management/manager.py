@@ -44,8 +44,11 @@ def is_jwt(token: str) -> bool:
 class Manager(VersionedMixin):
     """SingleStoreDB manager base class."""
 
-    #: Management API version if none is specified.
-    default_version = config.get_option('management.version') or 'v1'
+    #: Management API version if none is specified. A literal, not the
+    #: ``management.version`` option: the option is read by the ``manage_*``
+    #: factories at call time, so reading it here would freeze it at import
+    #: and let a v1 class declare itself to be v2.
+    default_version = 'v1'
 
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url') \

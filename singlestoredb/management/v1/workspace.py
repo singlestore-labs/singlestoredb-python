@@ -1155,8 +1155,9 @@ class WorkspaceManager(Manager):
 
     """
 
-    #: Workspace management API version if none is specified.
-    default_version = config.get_option('management.version') or 'v1'
+    #: Workspace management API version if none is specified. Workspaces
+    #: are v1-only, so this is a literal.
+    default_version = 'v1'
 
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url') \

@@ -416,22 +416,47 @@ class TestConfigOption(unittest.TestCase):
             config.set_option('management.version', original or 'v1')
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
-    def test_config_option_cannot_force_workspaces_to_v2(self, _mock_token):
-        """management.version='v2' makes manage_workspaces() an error, not a v2 call."""
+    def test_config_option_does_not_reach_manage_workspaces(self, _mock_token):
+        """
+        A global preference for v2 must not break the v1-only workspace
+        factory. Workspaces do not exist at v2, so the option has nothing to
+        say about them; only an explicit ``version=`` is an error.
+        """
         from singlestoredb import config
         from singlestoredb.management.workspace import manage_workspaces
+        from singlestoredb.management.v1.workspace import (
+            WorkspaceManager as V1WM,
+        )
 
         original = config.get_option('management.version')
         try:
             config.set_option('management.version', 'v2')
+            mgr = manage_workspaces(
+                access_token=FAKE_TOKEN,
+                base_url=FAKE_BASE_URL,
+            )
+            self.assertIsInstance(mgr, V1WM)
+            self.assertIn('/v1/', mgr._base_url)
             with self.assertRaises(ManagementError) as ctx:
                 manage_workspaces(
                     access_token=FAKE_TOKEN,
                     base_url=FAKE_BASE_URL,
+                    version='v2',
                 )
             self.assertIn('manage_clusters', str(ctx.exception))
         finally:
             config.set_option('management.version', original or 'v1')
+
+    def test_v1_manager_default_version_ignores_config(self):
+        """
+        ``default_version`` must not be frozen from the config option at
+        import time -- that let a v1 class declare itself to be v2.
+        """
+        from singlestoredb.management.manager import Manager
+        from singlestoredb.management.v1.workspace import WorkspaceManager
+        from singlestoredb.management.files import FilesManager
+        for cls in (Manager, WorkspaceManager, FilesManager):
+            self.assertEqual(cls.default_version, 'v1', cls.__name__)
 
 
 class TestModuleNameConvention(unittest.TestCase):

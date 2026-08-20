@@ -526,8 +526,10 @@ class FilesManager(Manager):
 
     """
 
-    #: Management API version if none is specified.
-    default_version = config.get_option('management.version') or 'v1'
+    #: Management API version if none is specified. See the note on
+    #: ``Manager.default_version``; ``manage_files()`` reads the
+    #: ``management.version`` option at call time instead.
+    default_version = 'v1'
 
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url') \
