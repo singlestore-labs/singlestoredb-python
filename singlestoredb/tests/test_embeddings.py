@@ -237,11 +237,11 @@ class TestEmbeddings(unittest.TestCase):
         assert isinstance(embedding, self.embeddings._ChunkedOpenAIEmbeddings)
         assert embedding.kwargs['check_embedding_ctx_length'] is False
         assert embedding.token_chunker is None
-        assert embedding.max_chunk_chars == 6000, embedding.max_chunk_chars
+        assert embedding.max_chunk_chars == 24000, embedding.max_chunk_chars
 
-        embedding.embed_documents(['a' * 6001])
+        embedding.embed_documents(['a' * 24001])
         assert all(isinstance(x, str) for x in embedding.seen_documents)
-        assert [len(x) for x in embedding.seen_documents] == [6000, 1]
+        assert [len(x) for x in embedding.seen_documents] == [24000, 1]
 
     def test_azure_factory_keeps_langchain_tokenization(self):
         embedding = self.embeddings.SingleStoreEmbeddingsFactory(
@@ -419,11 +419,11 @@ class TestEmbeddings(unittest.TestCase):
 
         assert 'huggingface.co unreachable' in str(caught.warning)
         assert embedding.token_chunker is None
-        assert embedding.max_chunk_chars == 6000
+        assert embedding.max_chunk_chars == 24000
 
-        embedding.embed_documents(['a' * 6001])
+        embedding.embed_documents(['a' * 24001])
         assert all(isinstance(x, str) for x in embedding.seen_documents)
-        assert [len(x) for x in embedding.seen_documents] == [6000, 1]
+        assert [len(x) for x in embedding.seen_documents] == [24000, 1]
 
     def test_max_input_tokens_override_beats_registry_and_info(self):
         self.use_tokenizer(suffix=[FAKE_EOS])

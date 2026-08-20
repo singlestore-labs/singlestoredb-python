@@ -290,12 +290,11 @@ class _ChunkedOpenAIEmbeddings(OpenAIEmbeddings):
     it splits on characters and sends text for the server to tokenize.
     """
 
-    max_chunk_chars: int = 6000
+    max_chunk_chars: int = 24000
     """Characters per chunk when ``token_chunker`` is None.
 
-    A coarse stand-in for a token count, since the client has no tokenizer here. Sized
-    to stay under a common ~8k-token Nova window even when characters map nearly 1:1
-    to tokens, as in code or CJK. Raise it for larger windows, lower it for ~4k ones.
+    A coarse stand-in for a token count, since the client has no tokenizer here.
+    Override per model if the deployment's context window is known.
     """
 
     token_chunker: Optional[Any] = None
