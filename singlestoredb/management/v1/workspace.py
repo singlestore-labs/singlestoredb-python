@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import glob
 import io
 import os
 import re
@@ -15,7 +14,6 @@ from typing import List
 from typing import Literal
 from typing import Optional
 from typing import overload
-from typing import Set
 from typing import Union
 
 from ... import config
@@ -27,6 +25,7 @@ from ..utils import ensure_within
 from ..utils import from_datetime
 from ..utils import NamedList
 from ..utils import PathLike
+from ..utils import resolve_ignore_files
 from ..utils import snake_to_camel
 from ..utils import snake_to_camel_dict
 from ..utils import to_datetime
@@ -240,15 +239,7 @@ class Stage(FileLocation):
         if self.exists(stage_path) and not self.is_dir(stage_path):
             raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
 
-        ignore_files: Set[str] = set()
-        if ignore:
-            patterns = ignore if isinstance(ignore, list) else [ignore]
-            for item in patterns:
-                # Normalize so matches line up with the os.walk paths below
-                ignore_files.update(
-                    os.path.normpath(x)
-                    for x in glob.glob(str(item), recursive=recursive)
-                )
+        ignore_files = resolve_ignore_files(local_path, ignore)
 
         local_root = os.path.normpath(str(local_path))
         root_name = os.path.basename(local_root)
@@ -652,12 +643,18 @@ class Stage(FileLocation):
         if not self.is_dir(stage_path):
             raise NotADirectoryError(f'stage path is not a directory: {stage_path}')
 
+        # ``listdir`` returns paths relative to ``stage_path``, so the folder
+        # prefix has to be added back on before making any remote calls.
+        stage_prefix = re.sub(r'^(\./|/)+', r'', str(stage_path))
+        stage_prefix = re.sub(r'/+$', r'', stage_prefix)
+
         for f in self.listdir(stage_path, recursive=True, return_objects=False):
-            if self.is_dir(f):
-                continue
             target = ensure_within(local_path, os.path.join(local_path, f))
+            remote_path = f'{stage_prefix}/{f}' if stage_prefix else f
+            if self.is_dir(remote_path):
+                continue
             os.makedirs(os.path.dirname(target) or '.', exist_ok=True)
-            self.download_file(f, target, overwrite=overwrite)
+            self.download_file(remote_path, target, overwrite=overwrite)
 
     def remove(self, stage_path: PathLike) -> None:
         """

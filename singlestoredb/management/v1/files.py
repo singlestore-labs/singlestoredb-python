@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import glob
 import io
 import os
 import re
@@ -16,7 +15,6 @@ from typing import List
 from typing import Literal
 from typing import Optional
 from typing import overload
-from typing import Set
 from typing import Union
 
 from ... import config
@@ -24,6 +22,7 @@ from ...exceptions import ManagementError
 from ..manager import Manager
 from ..utils import ensure_within
 from ..utils import PathLike
+from ..utils import resolve_ignore_files
 from ..utils import to_datetime
 from ..utils import vars_to_str
 from ..versioned import VersionedMixin
@@ -737,15 +736,7 @@ class FileSpace(FileLocation):
         if not path:
             path = local_path
 
-        ignore_files: Set[str] = set()
-        if ignore:
-            patterns = ignore if isinstance(ignore, list) else [ignore]
-            for item in patterns:
-                # Normalize so matches line up with the os.walk paths below
-                ignore_files.update(
-                    os.path.normpath(x)
-                    for x in glob.glob(str(item), recursive=recursive)
-                )
+        ignore_files = resolve_ignore_files(local_path, ignore)
 
         local_root = os.path.normpath(str(local_path))
         root_name = os.path.basename(local_root)

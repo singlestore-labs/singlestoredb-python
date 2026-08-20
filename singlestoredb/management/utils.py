@@ -2,6 +2,7 @@
 """SingleStoreDB Cluster Management."""
 import datetime
 import functools
+import glob
 import itertools
 import os
 import re
@@ -12,6 +13,7 @@ from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import SupportsIndex
 from typing import Tuple
 from typing import TypeVar
@@ -262,6 +264,52 @@ def ensure_within(local_root: PathLike, target: PathLike) -> str:
             msg=f'Refusing to write outside destination: {target_str}',
         )
     return normalized
+
+
+def resolve_ignore_files(
+    local_root: PathLike,
+    ignore: Optional[Union[PathLike, List[PathLike]]],
+) -> Set[str]:
+    """Expand ``ignore`` glob patterns into a set of local file paths.
+
+    Relative patterns are resolved against ``local_root`` rather than the
+    process working directory, so patterns like ``**/*.pyc`` match the tree
+    actually being uploaded. Absolute patterns are used as given. Results are
+    normalized with :func:`os.path.normpath` so they compare equal to the
+    paths produced by :func:`os.walk` over ``local_root``.
+
+    Parameters
+    ----------
+    local_root : Path or str
+        Local directory the patterns are relative to
+    ignore : Path or str or List[Path] or List[str], optional
+        Glob pattern(s) of files to ignore
+
+    Returns
+    -------
+    Set[str]
+
+    """
+    out: Set[str] = set()
+
+    if not ignore:
+        return out
+
+    root = os.path.normpath(os.fspath(local_root))
+    patterns = ignore if isinstance(ignore, list) else [ignore]
+
+    for item in patterns:
+        pattern = os.fspath(item)
+        if not os.path.isabs(pattern):
+            pattern = os.path.join(root, pattern)
+        # Always recursive so '**' works regardless of the caller's
+        # recursion setting.
+        out.update(
+            os.path.normpath(x)
+            for x in glob.glob(pattern, recursive=True)
+        )
+
+    return out
 
 
 def enable_http_tracing() -> None:
