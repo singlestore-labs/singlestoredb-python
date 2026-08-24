@@ -730,7 +730,10 @@ class SQLHandler(NodeVisitor):
 
     def visit_number(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Numeric value."""
-        return float(flatten(visited_children)[0])
+        # Read the matched text rather than the children: the fraction group in
+        # the `number` regex is optional, so for a bare integer the first
+        # flattened child is the empty string it did not match.
+        return float(node.text.strip())
 
     def visit_integer(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Integer value."""
