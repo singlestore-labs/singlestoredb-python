@@ -1364,12 +1364,10 @@ class ClusterManager(Manager):
         """
         Return a list of regions that support starter clusters.
 
-        .. warning:: Not available at v2. ``GET /v2/regions/sharedtier``
-           returns ``404 page not found`` and no alternate spelling responds.
+        ``GET /v2/regions/sharedtier`` answers with the same shape as
+        ``GET /v2/regions`` (verified live 2026-08-24), so this returns
+        :class:`Region` objects just like :attr:`regions`.
 
         """
-        raise ManagementError(
-            msg='Listing shared tier regions is not supported by management '
-                'API v2; there is no v2 equivalent of '
-                'GET /v1/regions/sharedtier.',
-        )
+        res = self._get('regions/sharedtier')
+        return NamedList([Region.from_dict(item, self) for item in res.json()])

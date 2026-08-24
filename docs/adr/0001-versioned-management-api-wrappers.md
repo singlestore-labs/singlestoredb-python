@@ -66,7 +66,9 @@ Version differences are expressed as **class attributes on the shared class**, r
 - `Organizations._organization_class` — so a v1 manager hands out a v1-configured organization
 - `Stage._fs_path` — the one thing that differs about Stage
 
-A resource that exists at one version only lives in that version's folder, and the shared base raises a `ManagementError` explaining the absence if the operation has no equivalent. `inference_api.py` is v1-only for this reason; `RegionManager.list_shared_tier_regions` raises from the shared base and is implemented only in `v1/region.py`.
+A resource that exists at one version only lives in that version's folder, and the shared base raises a `ManagementError` explaining the absence if the operation has no equivalent. `inference_api.py` is v1-only for this reason, and `Organization.inference_apis` raises from the shared base for every version past v1.
+
+The inverse mistake is just as easy to make: an operation that looks version-specific but is not. `RegionManager.list_shared_tier_regions` was written as a v1-only override on the strength of a `GET /v2/regions/sharedtier` 404 that turned out not to happen — the route answers identically at both versions, so it now lives in the shared base and `v1/region.py` is a pure re-export. Confirm the absence against the live API before encoding it, because the OpenAPI dump does not describe v2.
 
 ### Convention-based module lookup
 

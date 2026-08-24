@@ -470,15 +470,20 @@ These are not in the scope of this audit pass but are worth noting:
    `create_starter_cluster` upper-cases it; `create_cluster` does not.
    The v1 starter route is a different path, and the v1 shared-tier region list
    reports only `AWS us-east-1`, so v1 never hit this.
-   **The missing v2 shared-tier region list is a real gap.** `GET /v1/regions/
-   sharedtier` has no v2 successor (`GET /v2/regions/sharedtier` and
-   `GET /v2/sharedtier/regions` both 404) and the 36 entries `GET /v2/regions`
-   returns carry only `region`, `provider`, `regionName` — nothing marks which
-   are shared-tier capable. Sending a non-shared-tier region fails at create
-   time with `500 error creating virtual workspace (<name>): no shared tier
-   region found for provider AWS and region us-east-2`, so a v2-only client has
-   to hard-code the list or discover it by failing. Worth raising with the API
-   team.
+   **Correction (verified live 2026-08-24): `GET /v2/regions/sharedtier` is
+   *not* missing.** An earlier pass of this audit recorded it as a 404 and a
+   "real gap"; that was wrong. The route returns **200** with
+   `[{"region": "US East 1 (N. Virginia)", "provider": "AWS",
+   "regionName": "us-east-1"}]` — the same shape and the same content as at v1.
+   So shared-tier regions *are* discoverable from v2 and a v2-only client need
+   not hard-code them. `RegionManager.list_shared_tier_regions` and
+   `ClusterManager.shared_tier_regions` both implement it, and neither raises.
+   The 36 entries `GET /v2/regions` returns still carry only `region`,
+   `provider`, `regionName` with nothing marking shared-tier capability, so the
+   `sharedtier` route remains the only way to tell: sending a region absent
+   from it fails at create time with `500 error creating virtual workspace
+   (<name>): no shared tier region found for provider AWS and region
+   us-east-2`.
 7. **v2 deployment name format.** `POST /v2/clusters` requires the name to match
    `[a-z0-9]([a-z0-9-]*[a-z0-9])?` at 1-32 characters: an uppercase letter, an
    underscore, a dot, a space, or a leading/trailing hyphen draws `400 name:

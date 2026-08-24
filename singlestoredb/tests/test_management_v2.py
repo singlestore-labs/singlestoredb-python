@@ -96,8 +96,9 @@ def _project_id(manager):
 
 class TestV2RegionBehavior(unittest.TestCase):
     """
-    ``RegionManager`` at v2: ``list_regions`` hits ``/v2/regions``, and the
-    shared-tier listing has no v2 equivalent.
+    ``RegionManager`` at v2: ``list_regions`` hits ``/v2/regions`` and
+    ``list_shared_tier_regions`` hits ``/v2/regions/sharedtier``, which
+    answers with the same shape.
     """
 
     def _make_region_manager(self):
@@ -115,10 +116,19 @@ class TestV2RegionBehavior(unittest.TestCase):
     def test_list_regions_uses_regions_endpoint(self):
         mgr = self._make_region_manager()
         get_response = MagicMock()
-        # UNVERIFIED: v2 region payload shape.
+        # Live shape (2026-08-24): ``region`` is the display name and
+        # ``regionName`` the provider slug -- not the other way round.
         get_response.json.return_value = [
-            {'provider': 'aws', 'region': 'us-east-1', 'regionName': 'US East 1'},
-            {'provider': 'gcp', 'region': 'us-west-2', 'regionName': 'US West 2'},
+            {
+                'provider': 'AWS',
+                'region': 'US East 1 (N. Virginia)',
+                'regionName': 'us-east-1',
+            },
+            {
+                'provider': 'GCP',
+                'region': 'US West 2 (Oregon)',
+                'regionName': 'us-west2',
+            },
         ]
         mgr._get = MagicMock(return_value=get_response)
 
@@ -129,11 +139,29 @@ class TestV2RegionBehavior(unittest.TestCase):
         # response, so a region is identified by (provider, region_name).
         for r in regions:
             self.assertIsNone(r.id)
+        self.assertEqual(regions[0].name, 'US East 1 (N. Virginia)')
+        self.assertEqual(regions[0].region_name, 'us-east-1')
 
-    def test_shared_tier_regions_raises(self):
+    def test_list_shared_tier_regions_uses_sharedtier_endpoint(self):
         mgr = self._make_region_manager()
-        with self.assertRaises(ManagementError):
-            mgr.list_shared_tier_regions()
+        get_response = MagicMock()
+        # Live shape (2026-08-24): ``GET /v2/regions/sharedtier`` returns 200
+        # with exactly the same keys as ``GET /v2/regions``.
+        get_response.json.return_value = [
+            {
+                'provider': 'AWS',
+                'region': 'US East 1 (N. Virginia)',
+                'regionName': 'us-east-1',
+            },
+        ]
+        mgr._get = MagicMock(return_value=get_response)
+
+        regions = mgr.list_shared_tier_regions()
+        mgr._get.assert_called_once_with('regions/sharedtier')
+        self.assertEqual(len(regions), 1)
+        self.assertEqual(regions[0].name, 'US East 1 (N. Virginia)')
+        self.assertEqual(regions[0].region_name, 'us-east-1')
+        self.assertIsNone(regions[0].id)
 
 
 class TestClusterManagerPosting(unittest.TestCase):
@@ -307,10 +335,23 @@ class TestClusterManagerPosting(unittest.TestCase):
                 provider='AWS', region_name='us-east-1',
             )
 
-    def test_shared_tier_regions_raises(self):
+    def test_shared_tier_regions_uses_sharedtier_endpoint(self):
         mgr = self._make_cluster_manager()
-        with self.assertRaises(ManagementError):
-            mgr.shared_tier_regions
+        get_response = MagicMock()
+        get_response.json.return_value = [
+            {
+                'provider': 'AWS',
+                'region': 'US East 1 (N. Virginia)',
+                'regionName': 'us-east-1',
+            },
+        ]
+        mgr._get = MagicMock(return_value=get_response)
+
+        regions = mgr.shared_tier_regions
+        mgr._get.assert_called_once_with('regions/sharedtier')
+        self.assertEqual(len(regions), 1)
+        self.assertEqual(regions[0].name, 'US East 1 (N. Virginia)')
+        self.assertEqual(regions[0].region_name, 'us-east-1')
 
 
 class TestClusterFirewallWaiting(unittest.TestCase):
@@ -911,23 +952,16 @@ class TestStarterCluster(unittest.TestCase):
     def setUpClass(cls):
         cls.manager = s2.manage_clusters(version='v2')
 
-        # v1 discovered starter regions through GET /regions/sharedtier; v2
-        # dropped the route without a replacement and GET /v2/regions carries
-        # no shared-tier flag, so there is no way to discover them from v2.
-        # Verified live: only the regions v1 publishes work -- anything else
-        # gets a 500 'no shared tier region found for provider X and region Y'
-        # out of POST /v2/sharedtier/virtualClusters. For this organization
-        # that list is exactly AWS us-east-1, so pin to it rather than
-        # sampling the full region list.
-        regions = [
-            x for x in _us_regions(cls.manager)
-            if x.provider.upper() == 'AWS'
-            and (x.region_name or x.name) == 'us-east-1'
-        ]
+        # Starter regions come from GET /v2/regions/sharedtier, which answers
+        # at v2 with the same shape as GET /v2/regions. Only regions on that
+        # list work -- anything else gets a 500 'no shared tier region found
+        # for provider X and region Y' out of POST /v2/sharedtier/
+        # virtualClusters -- so discover rather than sampling all regions.
+        regions = list(cls.manager.shared_tier_regions)
         if not regions:
             raise unittest.SkipTest(
-                'no shared-tier capable region (AWS us-east-1) is available '
-                'to this organization',
+                'no shared-tier capable region is available to this '
+                'organization',
             )
 
         cls.starter_username = 'starter_user'
@@ -1334,10 +1368,20 @@ class TestRegions(unittest.TestCase):
         assert region.id is None
         assert region.name
         assert region.provider
+        # ``region`` is the display name, ``regionName`` the provider slug.
+        assert region.region_name
 
-    def test_list_shared_tier_regions_is_gone(self):
-        with self.assertRaises(ManagementError):
-            self.manager.list_shared_tier_regions()
+    def test_list_shared_tier_regions(self):
+        regions = self.manager.list_shared_tier_regions()
+        assert isinstance(regions, NamedList)
+        assert len(regions) > 0
+
+        region = regions[0]
+        assert isinstance(region, Region)
+        assert region.id is None
+        assert region.name
+        assert region.provider
+        assert region.region_name
 
     def test_str_repr(self):
         regions = self.manager.list_regions()

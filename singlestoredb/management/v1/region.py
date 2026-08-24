@@ -1,34 +1,12 @@
 #!/usr/bin/env python
-"""SingleStoreDB Region Management API v1."""
+"""
+SingleStoreDB Region Management API v1.
+
+Both ``GET /v1/regions`` and ``GET /v1/regions/sharedtier`` behave exactly as
+the shared :mod:`singlestoredb.management.region` module implements them --
+``regions/sharedtier`` answers identically at v1 and v2 -- so this module only
+re-exports it. ``regionID`` is present at v1 and absent from v2, but
+:meth:`Region.from_dict` already treats it as optional.
+"""
 from ..region import Region as Region
-from ..region import RegionManager as _RegionManager
-from ..utils import NamedList
-
-
-class RegionManager(_RegionManager):
-    """
-    SingleStoreDB region manager (API v1).
-
-    ``GET /v1/regions`` is what the shared base implements. What v1 adds is
-    ``GET /v1/regions/sharedtier``, which has no equivalent from v2 onward.
-    """
-
-    def list_shared_tier_regions(self) -> NamedList[Region]:
-        """
-        List regions that support shared tier workspaces.
-
-        Returns
-        -------
-        NamedList[Region]
-            List of regions that support shared tier workspaces
-
-        Raises
-        ------
-        ManagementError
-            If there is an error getting the regions
-
-        """
-        res = self._get('regions/sharedtier')
-        return NamedList(
-            [Region.from_dict(item, self) for item in res.json()],
-        )
+from ..region import RegionManager as RegionManager
