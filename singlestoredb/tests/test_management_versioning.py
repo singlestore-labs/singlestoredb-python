@@ -444,16 +444,42 @@ class TestVersionPackagesAreIndependent(unittest.TestCase):
         """
         Inheritance runs shared base -> version subclass, never v1 -> v2.
 
-        ``RegionManager`` is the representative case: the base carries the v2
-        behavior and ``v1/`` holds the backward override, so ``v2/`` is a
-        plain re-export.
+        ``Organization`` is the representative case: the base carries the v2
+        behavior and ``v1/`` holds the backward override -- repointing the job
+        and inference sub-managers -- so ``v2/`` is a plain re-export.
+
+        ``RegionManager`` used to play this role, but no longer can: once
+        ``regions/sharedtier`` was found to answer at both versions the v1
+        override collapsed into a re-export, making ``V1 is V2 is Base`` and
+        the ``issubclass(V2, V1)`` assertion vacuously wrong.
+        """
+        from singlestoredb.management.organization import (
+            Organization as Base,
+        )
+        from singlestoredb.management.v1.organization import (
+            Organization as V1,
+        )
+        from singlestoredb.management.v2.organization import (
+            Organization as V2,
+        )
+        self.assertTrue(issubclass(V1, Base))
+        self.assertIsNot(V1, Base)
+        self.assertIs(V2, Base)
+        self.assertFalse(issubclass(V2, V1))
+
+    def test_a_version_package_that_only_re_exports_shares_the_base(self):
+        """
+        A version with no behavioral difference re-exports, not subclasses.
+
+        Both ``region`` modules are now pure re-exports, so all three names
+        are the same object. Asserted explicitly so that reintroducing a
+        subclass on one side has to be a deliberate edit to this test.
         """
         from singlestoredb.management.region import RegionManager as Base
         from singlestoredb.management.v1.region import RegionManager as V1
         from singlestoredb.management.v2.region import RegionManager as V2
-        self.assertTrue(issubclass(V1, Base))
+        self.assertIs(V1, Base)
         self.assertIs(V2, Base)
-        self.assertFalse(issubclass(V2, V1))
 
     def _module_paths(self, version):
         pkg = importlib.import_module(f'singlestoredb.management.{version}')
