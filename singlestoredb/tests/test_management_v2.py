@@ -6,7 +6,7 @@ SingleStoreDB v2 Management API testing.
 Everything here targets management API v2 -- the flat ``Cluster`` resource and
 the starter clusters, stages, secrets, jobs and regions hanging off it. No test
 in this file may branch on version; the v1 equivalents live in
-``test_management.py``, the version-neutral helper units in
+``test_management_v1.py``, the version-neutral helper units in
 ``test_management_utils.py``, and the structural cross-version invariants in
 ``test_management_versioning.py``.
 
@@ -42,8 +42,17 @@ FAKE_BASE_URL = 'https://api.example.com'
 
 
 def clean_name(s):
-    """Change all non-word characters to -."""
-    return re.sub(r'[^\w]', r'-', s).replace('_', '-').lower()
+    """
+    Return ``s`` as a valid v2 cluster name.
+
+    Verified against the live API: a cluster name has to match
+    ``[a-z0-9]([a-z0-9-]*[a-z0-9])?`` and be 1-32 characters. Lowercase letters,
+    digits and hyphens only -- an uppercase letter, an underscore, a dot, a
+    space, or a leading or trailing hyphen all draw
+    ``400 name: must be in a valid format``. Repeated hyphens are fine.
+    """
+    out = re.sub(r'[^\w]', r'-', s).replace('_', '-').lower().strip('-')
+    return out or 'x'
 
 
 def shared_database_name(s):
@@ -57,6 +66,28 @@ def _us_regions(manager):
     if not out:
         raise unittest.SkipTest('No US regions reported by the v2 API')
     return out
+
+
+def _project_id(manager):
+    """
+    Return the project ID the live v2 suites deploy into, or skip the test.
+
+    ``POST /v2/clusters`` requires ``projectID``, so a project has to be chosen
+    before anything can be created. ``SINGLESTOREDB_PROJECT`` wins if it is set;
+    otherwise the STANDARD-edition project is used, which is where every
+    workspace group the v1 suites create already lands.
+    """
+    from_env = os.environ.get('SINGLESTOREDB_PROJECT')
+    if from_env:
+        return from_env
+
+    standard = [x for x in manager.projects if x.edition == 'STANDARD']
+    if not standard:
+        raise unittest.SkipTest(
+            'No STANDARD project in this organization; set '
+            'SINGLESTOREDB_PROJECT to the project to deploy into',
+        )
+    return standard[0].id
 
 
 #
@@ -134,7 +165,8 @@ class TestClusterManagerPosting(unittest.TestCase):
         post_response = MagicMock()
         post_response.json.return_value = {'clusterID': 'cl-1'}
         mgr._post = MagicMock(return_value=post_response)
-        mgr.get_cluster = MagicMock(return_value='sentinel')
+        sentinel = MagicMock()
+        mgr.get_cluster = MagicMock(return_value=sentinel)
 
         out = mgr.create_cluster(
             'my-cluster',
@@ -145,9 +177,10 @@ class TestClusterManagerPosting(unittest.TestCase):
             firewall_ranges=['0.0.0.0/0'],
             admin_password='hunter2',
             update_window={'day': 3, 'hour': 4},
+            project_id='pr-1',
         )
 
-        self.assertEqual(out, 'sentinel')
+        self.assertIs(out, sentinel)
         mgr.get_cluster.assert_called_once_with('cl-1')
         path, kwargs = mgr._post.call_args[0][0], mgr._post.call_args[1]
         self.assertEqual(path, 'clusters')
@@ -163,6 +196,8 @@ class TestClusterManagerPosting(unittest.TestCase):
         self.assertEqual(body['firewallRanges'], ['0.0.0.0/0'])
         self.assertEqual(body['adminPassword'], 'hunter2')
         self.assertEqual(body['updateWindow'], {'day': 3, 'hour': 4})
+        # The API rejects a create without projectID.
+        self.assertEqual(body['projectID'], 'pr-1')
         # Unset options are dropped rather than sent as null.
         self.assertNotIn('kai', body)
         self.assertNotIn('autoSuspend', body)
@@ -180,6 +215,7 @@ class TestClusterManagerPosting(unittest.TestCase):
                 name='us-east-1', provider='AWS',
                 id=None, region_name='us-east-1',
             ),
+            project_id='pr-1',
         )
         body = mgr._post.call_args[1]['json']
         self.assertEqual(body['provider'], 'AWS')
@@ -209,6 +245,57 @@ class TestClusterManagerPosting(unittest.TestCase):
             },
         )
 
+    def test_create_cluster_returns_the_generated_admin_password(self):
+        """
+        The generated password is carried off the create response.
+
+        Verified live: ``POST /v2/clusters`` generates the admin password no
+        matter what ``adminPassword`` is sent, returns it in the create
+        response, and reports it nowhere else -- ``GET /v2/clusters/{id}`` has
+        no such field. Losing it means losing access to the cluster.
+        """
+        from singlestoredb.management.v2.cluster import Cluster
+        mgr = self._make_cluster_manager()
+        post_response = MagicMock()
+        post_response.json.return_value = {
+            'clusterID': 'cl-1', 'adminPassword': 'generated-not-hunter2',
+        }
+        mgr._post = MagicMock(return_value=post_response)
+        cluster = Cluster(name='my-cluster', id='cl-1', state='PENDING')
+        mgr.get_cluster = MagicMock(return_value=cluster)
+
+        out = mgr.create_cluster(
+            'my-cluster', provider='AWS', region_name='us-east-1',
+            admin_password='hunter2', project_id='pr-1',
+        )
+        self.assertEqual(out.admin_password, 'generated-not-hunter2')
+        # A cluster that did not come from a create has no password to report.
+        self.assertIsNone(Cluster(name='x', id='cl-2', state='ACTIVE').admin_password)
+        # And it must not leak into the string representations.
+        self.assertNotIn('generated-not-hunter2', str(out))
+        self.assertNotIn('generated-not-hunter2', repr(out))
+
+    def test_create_starter_cluster_upper_cases_the_provider(self):
+        """
+        The shared-tier route accepts only AWS | AZURE | GCP verbatim.
+
+        Verified live: 'Azure' -- the spelling ``GET /v2/regions`` itself
+        reports -- fails with ``500 Unspecified is not a valid
+        CloudServiceProvider``, so a region's ``provider`` cannot be passed
+        through as-is. ``POST /v2/clusters`` has no such restriction.
+        """
+        mgr = self._make_cluster_manager()
+        post_response = MagicMock()
+        post_response.json.return_value = {'virtualClusterID': 'vc-1'}
+        mgr._post = MagicMock(return_value=post_response)
+        mgr.get_starter_cluster = MagicMock()
+
+        mgr.create_starter_cluster(
+            'my-starter', database_name='db1',
+            provider='Azure', region_name='southcentralus',
+        )
+        self.assertEqual(mgr._post.call_args[1]['json']['provider'], 'AZURE')
+
     def test_create_starter_cluster_without_an_id_raises(self):
         mgr = self._make_cluster_manager()
         post_response = MagicMock()
@@ -224,6 +311,356 @@ class TestClusterManagerPosting(unittest.TestCase):
         mgr = self._make_cluster_manager()
         with self.assertRaises(ManagementError):
             mgr.shared_tier_regions
+
+
+class TestClusterFirewallWaiting(unittest.TestCase):
+    """
+    Waiting for the asynchronously-applied firewall.
+
+    Verified live: ``POST /v2/clusters`` and ``PATCH /v2/clusters/{id}`` apply
+    ``firewallRanges`` outside the state machine. The cluster reaches ACTIVE
+    with a resolvable endpoint while ``GET /v2/clusters/{id}`` still reports
+    ``firewallRanges: []`` and ``allowAllTraffic: null``, which denies all
+    inbound traffic, so a connect attempt in that window times out at the TCP
+    level.
+
+    Also verified live: a requested ``firewallRanges: ['0.0.0.0/0']`` is stored
+    as ``allowAllTraffic: True`` with ``firewallRanges: []`` -- and that
+    cluster does accept connections (port 3306 open) -- so "reachable" is
+    either one, not non-empty ranges.
+    """
+
+    def _make_cluster_manager(self):
+        from singlestoredb.management.v2.cluster import ClusterManager
+        with patch(
+            'singlestoredb.management.manager.get_token',
+            return_value=FAKE_TOKEN,
+        ):
+            return ClusterManager(
+                access_token=FAKE_TOKEN,
+                base_url=FAKE_BASE_URL,
+                version='v2',
+            )
+
+    def _cluster(
+        self, firewall_ranges=None, state='ACTIVE', manager=None,
+        allow_all_traffic=None,
+    ):
+        from singlestoredb.management.v2.cluster import Cluster
+        out = Cluster(
+            name='my-cluster', id='cl-1', state=state,
+            endpoint='svc.singlestore.com',
+            firewall_ranges=firewall_ranges,
+            allow_all_traffic=allow_all_traffic,
+        )
+        out._manager = manager
+        return out
+
+    def test_wait_on_firewall_polls_until_non_empty(self):
+        mgr = self._make_cluster_manager()
+        pending = self._cluster(firewall_ranges=[])
+        applied = self._cluster(firewall_ranges=['0.0.0.0/0'])
+        mgr.get_cluster = MagicMock(
+            side_effect=[self._cluster(firewall_ranges=[]), pending, applied],
+        )
+
+        with patch('singlestoredb.management.v2.cluster.time.sleep'):
+            out = mgr._wait_on_firewall(
+                self._cluster(firewall_ranges=[]), interval=1,
+            )
+
+        self.assertIs(out, applied)
+        self.assertEqual(mgr.get_cluster.call_count, 3)
+
+    def test_wait_on_firewall_times_out(self):
+        mgr = self._make_cluster_manager()
+        mgr.get_cluster = MagicMock(return_value=self._cluster(firewall_ranges=[]))
+
+        with patch('singlestoredb.management.v2.cluster.time.sleep'):
+            with self.assertRaises(ManagementError) as cm:
+                mgr._wait_on_firewall(
+                    self._cluster(firewall_ranges=[]), interval=1, timeout=3,
+                )
+        assert 'cl-1' in cm.exception.msg, cm.exception.msg
+        assert 'refuses all inbound' in cm.exception.msg, cm.exception.msg
+
+    def test_wait_on_firewall_expected_waits_for_the_new_ranges(self):
+        """
+        On an existing cluster, non-empty says nothing -- the pre-PATCH ranges
+        are already non-empty -- so the update path waits for the ranges asked
+        for.
+        """
+        mgr = self._make_cluster_manager()
+        new = self._cluster(firewall_ranges=['192.168.0.0/16'])
+        mgr.get_cluster = MagicMock(
+            side_effect=[self._cluster(firewall_ranges=['0.0.0.0/0']), new],
+        )
+
+        with patch('singlestoredb.management.v2.cluster.time.sleep'):
+            out = mgr._wait_on_firewall(
+                self._cluster(firewall_ranges=['0.0.0.0/0']),
+                interval=1, expected=['192.168.0.0/16'],
+            )
+
+        self.assertIs(out, new)
+        self.assertEqual(mgr.get_cluster.call_count, 2)
+
+    def _create(self, mgr, **kwargs):
+        post_response = MagicMock()
+        post_response.json.return_value = {'clusterID': 'cl-1'}
+        mgr._post = MagicMock(return_value=post_response)
+        with patch('singlestoredb.management.v2.cluster.time.sleep'), \
+                patch('singlestoredb.management.manager.time.sleep'):
+            return mgr.create_cluster(
+                'my-cluster', provider='AWS', region_name='us-east-1',
+                project_id='pr-1', wait_interval=1, **kwargs,
+            )
+
+    def test_create_cluster_waits_on_the_firewall(self):
+        mgr = self._make_cluster_manager()
+        applied = self._cluster(firewall_ranges=['0.0.0.0/0'])
+        mgr.get_cluster = MagicMock(
+            side_effect=[
+                self._cluster(firewall_ranges=[]),
+                self._cluster(firewall_ranges=[]),
+                applied,
+            ],
+        )
+
+        out = self._create(
+            mgr, firewall_ranges=['0.0.0.0/0'], wait_on_active=True,
+        )
+        self.assertIs(out, applied)
+        self.assertEqual(mgr.get_cluster.call_count, 3)
+
+    def test_create_cluster_waits_on_the_firewall_for_allow_all_traffic(self):
+        mgr = self._make_cluster_manager()
+        applied = self._cluster(firewall_ranges=[], allow_all_traffic=True)
+        mgr.get_cluster = MagicMock(
+            side_effect=[self._cluster(firewall_ranges=[]), applied],
+        )
+
+        out = self._create(mgr, allow_all_traffic=True, wait_on_active=True)
+        self.assertIs(out, applied)
+        self.assertEqual(mgr.get_cluster.call_count, 2)
+
+    def test_create_cluster_accepts_allow_all_traffic_as_the_applied_form(self):
+        """
+        ``firewall_ranges=['0.0.0.0/0']`` comes back as ``allowAllTraffic``.
+
+        Verified live: the API stores it that way and leaves ``firewallRanges``
+        empty, and the endpoint accepts connections. Waiting for non-empty
+        ranges here would hang for the full timeout on a cluster that is
+        already reachable.
+        """
+        mgr = self._make_cluster_manager()
+        applied = self._cluster(firewall_ranges=[], allow_all_traffic=True)
+        mgr.get_cluster = MagicMock(
+            side_effect=[self._cluster(firewall_ranges=[]), applied],
+        )
+
+        out = self._create(
+            mgr, firewall_ranges=['0.0.0.0/0'], wait_on_active=True,
+        )
+        self.assertIs(out, applied)
+        self.assertEqual(mgr.get_cluster.call_count, 2)
+
+    def test_wait_on_firewall_expected_accepts_allow_all_traffic(self):
+        """A requested 0.0.0.0/0 is satisfied by allow_all_traffic."""
+        mgr = self._make_cluster_manager()
+        applied = self._cluster(firewall_ranges=[], allow_all_traffic=True)
+        mgr.get_cluster = MagicMock(side_effect=[applied])
+
+        with patch('singlestoredb.management.v2.cluster.time.sleep'):
+            out = mgr._wait_on_firewall(
+                self._cluster(firewall_ranges=['10.0.0.0/8']),
+                interval=1, expected=['0.0.0.0/0'],
+            )
+        self.assertIs(out, applied)
+
+        # ...but a narrower range is not.
+        mgr.get_cluster = MagicMock(
+            return_value=self._cluster(
+                firewall_ranges=[], allow_all_traffic=True,
+            ),
+        )
+        with patch('singlestoredb.management.v2.cluster.time.sleep'):
+            with self.assertRaises(ManagementError):
+                mgr._wait_on_firewall(
+                    self._cluster(firewall_ranges=['10.0.0.0/8']),
+                    interval=1, timeout=3, expected=['192.168.0.0/16'],
+                )
+
+    def test_create_cluster_does_not_wait_without_a_firewall_request(self):
+        """
+        ``firewall_ranges=[]`` is a legitimate deny-all request -- the field
+        must be present and an empty list disallows all inbound traffic -- so
+        it must not hang waiting for a non-empty value that never comes.
+        """
+        for ranges in ([], None):
+            with self.subTest(firewall_ranges=ranges):
+                mgr = self._make_cluster_manager()
+                created = self._cluster(firewall_ranges=ranges)
+                mgr.get_cluster = MagicMock(return_value=created)
+
+                out = self._create(
+                    mgr, firewall_ranges=ranges, wait_on_active=True,
+                )
+                self.assertIs(out, created)
+                self.assertEqual(mgr.get_cluster.call_count, 1)
+
+    def test_create_cluster_does_not_wait_without_wait_on_active(self):
+        mgr = self._make_cluster_manager()
+        created = self._cluster(firewall_ranges=[])
+        mgr.get_cluster = MagicMock(return_value=created)
+
+        out = self._create(mgr, firewall_ranges=['0.0.0.0/0'])
+        self.assertIs(out, created)
+        self.assertEqual(mgr.get_cluster.call_count, 1)
+
+    def test_update_waits_only_when_asked(self):
+        mgr = self._make_cluster_manager()
+        mgr._patch = MagicMock()
+        cluster = self._cluster(firewall_ranges=['0.0.0.0/0'], manager=mgr)
+
+        # Without wait_on_active, only the trailing refresh() re-fetches, and
+        # it reports the pre-PATCH ranges.
+        stale = self._cluster(firewall_ranges=['0.0.0.0/0'], manager=mgr)
+        mgr.get_cluster = MagicMock(return_value=stale)
+        cluster.update(firewall_ranges=['192.168.0.0/16'])
+        self.assertEqual(mgr.get_cluster.call_count, 1)
+        self.assertEqual(cluster.firewall_ranges, ['0.0.0.0/0'])
+
+        # With it, the new ranges are polled for.
+        mgr.get_cluster = MagicMock(
+            side_effect=[
+                self._cluster(firewall_ranges=['0.0.0.0/0'], manager=mgr),
+                self._cluster(firewall_ranges=['192.168.0.0/16'], manager=mgr),
+                self._cluster(firewall_ranges=['192.168.0.0/16'], manager=mgr),
+            ],
+        )
+        with patch('singlestoredb.management.v2.cluster.time.sleep'), \
+                patch('singlestoredb.management.manager.time.sleep'):
+            cluster.update(
+                firewall_ranges=['192.168.0.0/16'],
+                wait_on_active=True, wait_interval=1,
+            )
+        self.assertEqual(mgr.get_cluster.call_count, 3)
+        self.assertEqual(cluster.firewall_ranges, ['192.168.0.0/16'])
+
+
+class TestProjects(unittest.TestCase):
+    """
+    Projects and the project ID ``create_cluster`` sends.
+
+    ``POST /v2/clusters`` rejects a body without ``projectID`` -- verified
+    against a live v2 organization -- where ``POST /v1/workspaceGroups``
+    assigned one implicitly. So a v2 create has to resolve a project first.
+    """
+
+    #: A ``GET /v2/projects`` response, as returned by the live API.
+    PROJECTS = [
+        {
+            'createdAt': '2025-10-15T11:22:33.454592Z',
+            'edition': 'SHARED',
+            'name': 'Shared Project',
+            'projectID': 'pr-shared',
+        },
+        {
+            'createdAt': '2025-10-15T11:22:33.454592Z',
+            'edition': 'STANDARD',
+            'name': 'Standard Project',
+            'projectID': 'pr-standard',
+        },
+    ]
+
+    def _make_cluster_manager(self, projects=None):
+        from singlestoredb.management.v2.cluster import ClusterManager
+        with patch(
+            'singlestoredb.management.manager.get_token',
+            return_value=FAKE_TOKEN,
+        ):
+            mgr = ClusterManager(
+                access_token=FAKE_TOKEN,
+                base_url=FAKE_BASE_URL,
+                version='v2',
+            )
+        if projects is not None:
+            get_response = MagicMock()
+            get_response.json.return_value = projects
+            mgr._get = MagicMock(return_value=get_response)
+        return mgr
+
+    def _without_env(self):
+        """Patch the environment with SINGLESTOREDB_PROJECT removed."""
+        ctx = patch.dict(os.environ)
+        ctx.start()
+        os.environ.pop('SINGLESTOREDB_PROJECT', None)
+        self.addCleanup(ctx.stop)
+
+    def test_projects_lists_from_the_projects_endpoint(self):
+        mgr = self._make_cluster_manager(self.PROJECTS)
+        projects = mgr.projects
+        mgr._get.assert_called_once_with('projects')
+        self.assertIsInstance(projects, NamedList)
+        self.assertEqual([x.id for x in projects], ['pr-shared', 'pr-standard'])
+        self.assertEqual([x.edition for x in projects], ['SHARED', 'STANDARD'])
+        # NamedList lookup works by name and by ID.
+        self.assertEqual(projects['Standard Project'].id, 'pr-standard')
+        self.assertEqual(projects['pr-shared'].name, 'Shared Project')
+        self.assertEqual(projects[0].created_at.year, 2025)
+
+    def test_get_project(self):
+        mgr = self._make_cluster_manager(self.PROJECTS[1])
+        project = mgr.get_project('pr-standard')
+        mgr._get.assert_called_once_with('projects/pr-standard')
+        self.assertEqual(project.name, 'Standard Project')
+
+    def test_explicit_project_id_wins_over_the_environment(self):
+        mgr = self._make_cluster_manager()
+        with patch.dict(os.environ, {'SINGLESTOREDB_PROJECT': 'pr-env'}):
+            self.assertEqual(mgr._resolve_project_id('pr-arg'), 'pr-arg')
+
+    def test_environment_used_when_no_project_id_is_passed(self):
+        mgr = self._make_cluster_manager(self.PROJECTS)
+        with patch.dict(os.environ, {'SINGLESTOREDB_PROJECT': 'pr-env'}):
+            self.assertEqual(mgr._resolve_project_id(), 'pr-env')
+        # The environment answers without listing projects.
+        mgr._get.assert_not_called()
+
+    def test_a_sole_project_is_the_default(self):
+        self._without_env()
+        mgr = self._make_cluster_manager(self.PROJECTS[:1])
+        self.assertEqual(mgr._resolve_project_id(), 'pr-shared')
+
+    def test_more_than_one_project_raises_and_names_them(self):
+        self._without_env()
+        mgr = self._make_cluster_manager(self.PROJECTS)
+        with self.assertRaises(ManagementError) as cm:
+            mgr._resolve_project_id()
+        msg = str(cm.exception)
+        self.assertIn('pr-shared', msg)
+        self.assertIn('Standard Project', msg)
+        self.assertIn('SINGLESTOREDB_PROJECT', msg)
+
+    def test_no_projects_raises(self):
+        self._without_env()
+        mgr = self._make_cluster_manager([])
+        with self.assertRaises(ManagementError):
+            mgr._resolve_project_id()
+
+    def test_create_cluster_resolves_the_project(self):
+        self._without_env()
+        mgr = self._make_cluster_manager(self.PROJECTS[:1])
+        post_response = MagicMock()
+        post_response.json.return_value = {'clusterID': 'cl-1'}
+        mgr._post = MagicMock(return_value=post_response)
+        mgr.get_cluster = MagicMock()
+
+        mgr.create_cluster('my-cluster', provider='AWS', region_name='us-east-1')
+        self.assertEqual(
+            mgr._post.call_args[1]['json']['projectID'], 'pr-shared',
+        )
 
 
 class TestClusterFromDict(unittest.TestCase):
@@ -305,10 +742,9 @@ class TestCluster(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_clusters()
+        cls.manager = s2.manage_clusters(version='v2')
 
         us_regions = _us_regions(cls.manager)
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
         region = random.choice(us_regions)
@@ -320,9 +756,29 @@ class TestCluster(unittest.TestCase):
             provider=region.provider,
             region_name=region.region_name or region.name,
             size='S-00',
-            admin_password=cls.password,
             firewall_ranges=['0.0.0.0/0'],
+            project_id=_project_id(cls.manager),
             wait_on_active=True,
+        )
+
+        # v2 generates the admin password and reports it only in the create
+        # response; anything passed as admin_password= is ignored. So the
+        # password has to be read back rather than chosen here.
+        cls.password = cls.cluster.admin_password
+
+        # The firewall is applied asynchronously, after the cluster is already
+        # ACTIVE with a resolvable endpoint; until it lands the cluster admits
+        # nothing and refuses every inbound connection, so test_connect would
+        # time out at the TCP level. wait_on_active covers that, and this
+        # asserts it did -- no polling needed here.
+        #
+        # Verified live: a requested firewall_ranges=['0.0.0.0/0'] is stored as
+        # allow_all_traffic=True with firewall_ranges == [], so either one
+        # means reachable.
+        assert cls.cluster.allow_all_traffic or cls.cluster.firewall_ranges, (
+            'create_cluster(wait_on_active=True) returned a cluster whose '
+            'firewall still admits nothing; every inbound connection would be '
+            'refused'
         )
 
     @classmethod
@@ -377,13 +833,46 @@ class TestCluster(unittest.TestCase):
             self.manager.get_cluster('bad id')
 
     def test_update(self):
-        assert self.cluster.name.startswith('cl-test-')
+        """
+        Update the firewall, and show that ``name`` is not updatable.
 
-        name = self.cluster.name.replace('cl-test-', 'cl-foo-')
-        self.cluster.update(name=name)
+        Both halves live in one test because each ``PATCH /v2/clusters/{id}``
+        cycles the cluster back through PENDING, and a second test issuing its
+        own PATCH while that is in flight is asking for trouble.
 
-        cluster = self.manager.get_cluster(self.cluster.id)
-        assert cluster.name == name, cluster.name
+        On the name: verified live that v2 clusters cannot be renamed, unlike
+        v1 workspace groups. ``name`` is a *known* field on the PATCH route --
+        an unknown field draws ``400 request body contains an unknown field``
+        and ``name`` does not -- and the request succeeds, even cycling the
+        cluster through PENDING, but the name never changes in either
+        ``GET /v2/clusters/{id}`` or ``GET /v2/clusters`` (polled for two
+        minutes). Pinned here so the API growing real rename support is
+        noticed rather than assumed.
+        """
+        # setUpClass asked for ['0.0.0.0/0'], which the API may store either
+        # verbatim or as allow_all_traffic with the ranges left empty.
+        opened = self.cluster.allow_all_traffic \
+            or self.cluster.firewall_ranges == ['0.0.0.0/0']
+        assert opened, (
+            self.cluster.allow_all_traffic, self.cluster.firewall_ranges,
+        )
+
+        # The PATCH is applied asynchronously: without wait_on_active the
+        # refresh() inside update() still reports the old ranges.
+        self.cluster.update(
+            firewall_ranges=['192.168.0.0/16'], wait_on_active=True,
+        )
+
+        cluster = self.cluster
+        assert cluster.firewall_ranges == ['192.168.0.0/16'], \
+            cluster.firewall_ranges
+
+        name = cluster.name.replace('cl-test-', 'cl-foo-')
+        assert name != cluster.name
+        cluster.update(name=name)
+
+        assert cluster.name != name, cluster.name
+        assert self.manager.get_cluster(cluster.id).name != name
 
     def test_no_manager(self):
         cluster = self.manager.get_cluster(self.cluster.id)
@@ -420,12 +909,26 @@ class TestStarterCluster(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_clusters()
+        cls.manager = s2.manage_clusters(version='v2')
 
-        # v1 discovered starter regions through GET /regions/sharedtier, which
-        # has no v2 equivalent; the full region list is all there is.
-        # UNVERIFIED: that every region in that list accepts a starter cluster.
-        regions = _us_regions(cls.manager)
+        # v1 discovered starter regions through GET /regions/sharedtier; v2
+        # dropped the route without a replacement and GET /v2/regions carries
+        # no shared-tier flag, so there is no way to discover them from v2.
+        # Verified live: only the regions v1 publishes work -- anything else
+        # gets a 500 'no shared tier region found for provider X and region Y'
+        # out of POST /v2/sharedtier/virtualClusters. For this organization
+        # that list is exactly AWS us-east-1, so pin to it rather than
+        # sampling the full region list.
+        regions = [
+            x for x in _us_regions(cls.manager)
+            if x.provider.upper() == 'AWS'
+            and (x.region_name or x.name) == 'us-east-1'
+        ]
+        if not regions:
+            raise unittest.SkipTest(
+                'no shared-tier capable region (AWS us-east-1) is available '
+                'to this organization',
+            )
 
         cls.starter_username = 'starter_user'
         cls.password = secrets.token_urlsafe(20)
@@ -528,10 +1031,9 @@ class TestStage(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_clusters()
+        cls.manager = s2.manage_clusters(version='v2')
 
         us_regions = _us_regions(cls.manager)
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
         region = random.choice(us_regions)
@@ -544,10 +1046,13 @@ class TestStage(unittest.TestCase):
             provider=region.provider,
             region_name=region.region_name or region.name,
             size='S-00',
-            admin_password=cls.password,
             firewall_ranges=['0.0.0.0/0'],
+            project_id=_project_id(cls.manager),
             wait_on_active=True,
         )
+
+        # v2 generates the admin password; see TestCluster.setUpClass.
+        cls.password = cls.cluster.admin_password
 
     @classmethod
     def tearDownClass(cls):
@@ -614,9 +1119,14 @@ class TestStage(unittest.TestCase):
         with st.open(open_test_sql, 'r') as f:
             assert f.read() == 'create table foo (id int);'
 
-        # Reading a missing object fails
-        with self.assertRaises(OSError):
+        # Reading a missing object fails. Note that this raises
+        # ManagementError rather than the FileNotFoundError the rest of
+        # Stage.open's builtin-open emulation would suggest -- the 404 from
+        # the download comes straight back out. Verified live; asserted here
+        # so a change to it is deliberate rather than accidental.
+        with self.assertRaises(s2.ManagementError) as cm:
             st.open(f'missing_{id(self)}.sql', 'r')
+        assert cm.exception.errno == 404, cm.exception.errno
 
     def test_listdir_and_remove(self):
         st = self.cluster.stage
@@ -646,10 +1156,15 @@ class TestStage(unittest.TestCase):
         st = self.cluster.stage
         d = f'dir_{id(self)}'
 
+        # mkdir() and rmdir() append the trailing slash themselves, but
+        # exists()/is_dir()/info() do not: without it the metadata GET 404s
+        # and is_dir() reports False. The v1 suite passes the slash
+        # explicitly for the same reason.
         st.mkdir(d)
-        assert st.is_dir(d)
+        assert st.is_dir(f'{d}/')
+        assert not st.is_file(f'{d}/')
         st.rmdir(d)
-        assert not st.exists(d)
+        assert not st.exists(f'{d}/')
 
 
 @pytest.mark.management
@@ -662,7 +1177,7 @@ class TestSecrets(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_clusters()
+        cls.manager = s2.manage_clusters(version='v2')
 
     @classmethod
     def tearDownClass(cls):
@@ -706,10 +1221,9 @@ class TestJob(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_clusters()
+        cls.manager = s2.manage_clusters(version='v2')
 
         us_regions = _us_regions(cls.manager)
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
         region = random.choice(us_regions)
@@ -719,10 +1233,13 @@ class TestJob(unittest.TestCase):
             provider=region.provider,
             region_name=region.region_name or region.name,
             size='S-00',
-            admin_password=cls.password,
             firewall_ranges=['0.0.0.0/0'],
+            project_id=_project_id(cls.manager),
             wait_on_active=True,
         )
+
+        # v2 generates the admin password; see TestCluster.setUpClass.
+        cls.password = cls.cluster.admin_password
 
     @classmethod
     def tearDownClass(cls):

@@ -14,6 +14,7 @@ from __future__ import annotations
 import io
 import os
 import re
+from typing import Any
 from typing import cast
 from typing import List
 from typing import Literal
@@ -22,6 +23,7 @@ from typing import overload
 from typing import Union
 
 from ..exceptions import ManagementError
+from ._version_import import _versioned_attr
 from .files import FileLocation
 from .files import FilesObject
 from .files import FilesObjectBytesReader
@@ -34,6 +36,34 @@ from .utils import normalize_remote_path
 from .utils import PathLike
 from .utils import resolve_ignore_files
 from .utils import vars_to_str
+
+
+def get_stage(
+    deployment: Optional[Any] = None,
+    version: Optional[str] = None,
+) -> 'Stage':
+    """
+    Get the stage of a deployment.
+
+    Parameters
+    ----------
+    deployment : Cluster or WorkspaceGroup or str, optional
+        The deployment whose stage is wanted, or its name or ID. What counts
+        as a deployment is version-specific: a cluster at v2, a workspace
+        group at v1. If not given, the deployment named by the environment is
+        used -- ``SINGLESTOREDB_WORKSPACE_GROUP`` at v1, one of the cluster
+        environment variables at v2.
+    version : str, optional
+        Version of the API to use. Defaults to the ``management.version``
+        option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
+        variable).
+
+    Returns
+    -------
+    :class:`Stage`
+
+    """
+    return _versioned_attr('get_stage', version)(deployment)
 
 
 class Stage(FileLocation):

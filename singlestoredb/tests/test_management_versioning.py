@@ -102,31 +102,45 @@ class TestConfigOption(unittest.TestCase):
             self.assertIsInstance(mgr, V2RM)
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
-    def test_config_option_does_not_reach_manage_workspaces(self, _mock_token):
+    def test_config_option_reaches_manage_workspaces(self, _mock_token):
         """
-        A global preference for v2 must not break the v1-only workspace
-        factory. Workspaces do not exist at v2, so the option has nothing to
-        say about them; only an explicit ``version=`` is an error.
+        The public factory follows the option; the internal one does not.
+
+        ``manage_workspaces()`` is a version-neutral entry point, so a global
+        preference for v2 redirects the caller to clusters rather than handing
+        back a v1 manager. ``_manage_workspaces_v1`` is what the v1-only
+        internals call, and it stays pinned.
         """
         from singlestoredb.management.workspace import manage_workspaces
+        from singlestoredb.management.workspace import _manage_workspaces_v1
         from singlestoredb.management.v1.workspace import (
             WorkspaceManager as V1WM,
         )
 
         with management_version('v2'):
-            mgr = manage_workspaces(
-                access_token=FAKE_TOKEN,
-                base_url=FAKE_BASE_URL,
-            )
-            self.assertIsInstance(mgr, V1WM)
-            self.assertIn('/v1/', mgr._base_url)
             with self.assertRaises(ManagementError) as ctx:
                 manage_workspaces(
                     access_token=FAKE_TOKEN,
                     base_url=FAKE_BASE_URL,
-                    version='v2',
                 )
             self.assertIn('manage_clusters', str(ctx.exception))
+
+            # An explicit v1 still overrides the option...
+            mgr = manage_workspaces(
+                access_token=FAKE_TOKEN,
+                base_url=FAKE_BASE_URL,
+                version='v1',
+            )
+            self.assertIsInstance(mgr, V1WM)
+            self.assertIn('/v1/', mgr._base_url)
+
+            # ...and the internal path is immune to the option entirely.
+            internal = _manage_workspaces_v1(
+                access_token=FAKE_TOKEN,
+                base_url=FAKE_BASE_URL,
+            )
+            self.assertIsInstance(internal, V1WM)
+            self.assertIn('/v1/', internal._base_url)
 
     def test_v1_manager_default_version_ignores_config(self):
         """
@@ -162,31 +176,69 @@ class TestManageRoutingForAllFactories(unittest.TestCase):
             access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v1',
         )
         self.assertIsInstance(v1, V1WM)
-        # default (no explicit version) falls back to v1 unless config overrides
-        with management_version('v1'):
-            default = manage_workspaces(
-                access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
-            )
-            self.assertIsInstance(default, V1WM)
+        # The option is followed; an unset option falls back to v1.
+        for value in ('v1', None):
+            with management_version(value):
+                default = manage_workspaces(
+                    access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
+                )
+                self.assertIsInstance(default, V1WM)
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
     def test_manage_clusters(self, _mock_token):
-        """Clusters are v2-only, so ``manage_clusters`` defaults to v2."""
+        """
+        ``manage_clusters`` follows ``management.version``.
+
+        Clusters are v2-only, so a resolved ``v1`` raises whether it came from
+        the caller or from the option. The option still defaults to ``v1``,
+        which is why the live v2 suites pass ``version='v2'`` explicitly.
+        """
         from singlestoredb.management.cluster import manage_clusters
+        from singlestoredb.management.cluster import DEFAULT_CLUSTER_VERSION
         from singlestoredb.management.v2.cluster import ClusterManager as V2CM
 
         v2 = manage_clusters(
             access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v2',
         )
         self.assertIsInstance(v2, V2CM)
-        default = manage_clusters(
-            access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
-        )
-        self.assertIsInstance(default, V2CM)
-        self.assertIn('/v2/', default._base_url)
+        self.assertIn('/v2/', v2._base_url)
+
+        # The option is followed, and beats DEFAULT_CLUSTER_VERSION.
+        with management_version('v2'):
+            default = manage_clusters(
+                access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
+            )
+            self.assertIsInstance(default, V2CM)
+            self.assertIn('/v2/', default._base_url)
+
+        # Unset option: DEFAULT_CLUSTER_VERSION is the fallback.
+        self.assertEqual(DEFAULT_CLUSTER_VERSION, 'v2')
+        with management_version(None):
+            self.assertIsInstance(
+                manage_clusters(
+                    access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
+                ),
+                V2CM,
+            )
+
+        # v1 raises, whether asked for outright...
         with self.assertRaises(ManagementError):
             manage_clusters(
                 access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v1',
+            )
+        # ...or inherited from the option.
+        with management_version('v1'):
+            with self.assertRaises(ManagementError):
+                manage_clusters(
+                    access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
+                )
+            # An explicit v2 still overrides it.
+            self.assertIsInstance(
+                manage_clusters(
+                    access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
+                    version='v2',
+                ),
+                V2CM,
             )
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
@@ -224,6 +276,87 @@ class TestManageRoutingForAllFactories(unittest.TestCase):
             )
 
 
+class TestVersionNeutralHelpers(unittest.TestCase):
+    """
+    ``get_organization``/``get_secret``/``get_stage`` exported from
+    ``singlestoredb.management`` follow ``management.version`` like the
+    factories do, instead of being the v1 implementations under a neutral name.
+    The version-locked ones remain reachable through the shim modules.
+    """
+
+    def test_top_level_names_are_the_neutral_ones(self):
+        import singlestoredb.management as m
+        self.assertEqual(
+            m.get_organization.__module__,
+            'singlestoredb.management.organization',
+        )
+        self.assertEqual(
+            m.get_secret.__module__,
+            'singlestoredb.management.organization',
+        )
+        self.assertEqual(
+            m.get_stage.__module__, 'singlestoredb.management.stage',
+        )
+
+    def test_shims_still_expose_their_own_version(self):
+        from singlestoredb.management import cluster, workspace
+        for name in ('get_organization', 'get_secret', 'get_stage'):
+            self.assertEqual(
+                getattr(workspace, name).__module__,
+                'singlestoredb.management.v1.workspace', name,
+            )
+            self.assertEqual(
+                getattr(cluster, name).__module__,
+                'singlestoredb.management.v2.cluster', name,
+            )
+
+    def test_helpers_dispatch_on_the_option(self):
+        from singlestoredb.management import get_organization
+        from singlestoredb.management import get_secret
+        from singlestoredb.management import get_stage
+        calls = []
+        for ver in ('v1', 'v2'):
+            with management_version(ver):
+                for name, call, expected in (
+                    ('get_organization', lambda: get_organization(), ()),
+                    ('get_secret', lambda: get_secret('s'), ('s',)),
+                    ('get_stage', lambda: get_stage('d'), ('d',)),
+                ):
+                    target = f'singlestoredb.management.{ver}.{name}'
+
+                    def record(*args, _n=name, _v=ver):
+                        calls.append((_v, _n, args))
+                        return 'ok'
+
+                    with patch(target, record):
+                        self.assertEqual(call(), 'ok')
+                    self.assertEqual(calls[-1], (ver, name, expected))
+        self.assertEqual(len(calls), 6)
+
+    def test_explicit_version_beats_the_option(self):
+        from singlestoredb.management import get_organization
+        with management_version('v1'):
+            with patch(
+                'singlestoredb.management.v2.get_organization',
+                lambda: 'from-v2',
+            ):
+                self.assertEqual(get_organization(version='v2'), 'from-v2')
+
+    def test_unknown_version_raises(self):
+        from singlestoredb.management import get_organization
+        with self.assertRaises(ManagementError) as ctx:
+            get_organization(version='v99')
+        self.assertIn('v99', str(ctx.exception))
+
+    def test_version_without_the_helper_raises(self):
+        from singlestoredb.management._version_import import _versioned_attr
+        with self.assertRaises(ManagementError) as ctx:
+            _versioned_attr('get_nothing', 'v1')
+        msg = str(ctx.exception)
+        self.assertIn('get_nothing', msg)
+        self.assertIn('v1', msg)
+
+
 class TestManageWorkspacesDeprecation(unittest.TestCase):
     """
     ``manage_workspaces()`` warns, but the internal v1-only path does not.
@@ -237,8 +370,10 @@ class TestManageWorkspacesDeprecation(unittest.TestCase):
     def test_public_factory_warns(self, _mock_token):
         from singlestoredb.management.workspace import manage_workspaces
         with self.assertWarns(DeprecationWarning) as ctx:
+            # Pinned so the assertion is about the warning rather than about
+            # whatever version the ambient option happens to name.
             manage_workspaces(
-                access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
+                access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v1',
             )
         self.assertIn('manage_clusters', str(ctx.warning))
 

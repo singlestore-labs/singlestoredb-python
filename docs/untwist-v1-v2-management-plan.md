@@ -21,7 +21,7 @@ groups and workspaces in favor of a flat `Cluster` resource**. The current desig
   **only** to serve that switching — renaming `workspaceID↔clusterID`,
   `workspaceGroupID↔groupID`, `kaiEnabled↔kai`, and folding/unfolding `size`/`scaleFactor`.
 - `tests/test_versioned_management.py` has grown to **1791 lines — larger than
-  `test_management.py` (1524)** — and roughly half tests that plumbing, not real behavior.
+  `test_management_v1.py` (1524)** — and roughly half tests that plumbing, not real behavior.
 
 Since v1 and the whole workspace-group concept are slated for deletion, this bridge is
 throwaway complexity that makes the code harder to read *now* and buys nothing later.
@@ -243,7 +243,7 @@ already satisfied for identifiers.
 | File | Lines | Version-aware? |
 |---|---|---|
 | `tests/test_versioned_management.py` | 1791 | Yes — exclusively; 100% mock-based |
-| `tests/test_management.py` | 1524 | No — entirely v1 |
+| `tests/test_management_v1.py` | 1524 | No — entirely v1 |
 | `tests/test_fusion.py` | 1547 | No — entirely v1 |
 | `tests/conftest.py` | 216 | No — Docker lifecycle only |
 
@@ -254,7 +254,7 @@ zero shared base test classes. All version content is quarantined in one mock-ba
 **`v2/cluster.py` has ZERO integration coverage.** Every live test builds workspace groups
 via `manage_workspaces()`; nothing calls `manage_clusters()` against a real endpoint.
 
-`test_management.py` classes, all gated only by `@pytest.mark.management` (registered at
+`test_management_v1.py` classes, all gated only by `@pytest.mark.management` (registered at
 `pyproject.toml:93-94`): `:35 TestWorkspace` (→ `:44 manage_workspaces()`),
 `:210 TestStarterWorkspace`, `:319 TestStage`, `:872 TestSecrets`, `:929 TestJob`,
 `:1082 TestFileSpaces` (`manage_files()`), `:1418 TestRegions` (`manage_regions()`),
@@ -366,6 +366,21 @@ imports `_get_exports`/`ExportService`/`ExportStatus` from it and Fusion is v1-o
 - `management/__init__.py` (9 lines) currently exports `get_organization`, `get_secret`,
   `get_stage`, `manage_workspaces` from `.workspace`. Add `manage_clusters` and list it
   first.
+- **Done differently, and further:** re-exporting the three `get_*` helpers from
+  `.workspace` left neutral names bound to v1 implementations that ignore
+  `management.version` and disappear with the v1 package. They are now version-neutral
+  functions of their own — `get_organization`/`get_secret` in `management/organization.py`,
+  `get_stage` in `management/stage.py` — dispatching through
+  `_versioned_attr()` to whichever version the option resolves to; each version package
+  re-exports its own from `__init__.py`. `manage_workspaces()` follows the option too and
+  raises for a non-v1 resolution, mirroring `manage_clusters()`; the pinned behavior lives
+  on in the private `_manage_workspaces_v1()` that Fusion and the other v1-only internals
+  call. The version-locked helpers stay reachable through the shims
+  (`management.workspace.get_stage` is v1's, `management.cluster.get_stage` is v2's). See
+  rule 2 in ADR 0001. Consequence: once the Part 7 flip sets the option to v2, a bare
+  `manage_workspaces()` raises instead of returning a v1 manager, so every remaining
+  workspace call site must pass `version='v1'` or move to clusters — the v1 and Fusion
+  suites already pin theirs.
 - Check `singlestoredb/__init__.py` for the same export set.
 - Update `resources/create_test_cluster.py` (188 lines) and `resources/drop_test_cluster.py`
   (52 lines), which use `manage_workspaces` under cluster-sounding filenames — they will
@@ -379,7 +394,7 @@ Layout (flat files, no new directories, no packaging churn — `pyproject.toml:8
 
 ```
 singlestoredb/tests/
-  test_management.py            # v1 suite — keeps its current scope
+  test_management_v1.py         # v1 suite — RENAMED from test_management.py
   test_management_v2.py         # NEW — cluster suite
   test_management_utils.py      # NEW — version-neutral unit tests
   test_management_versioning.py # NEW — small; factory pinning + v1-deletability
@@ -387,15 +402,24 @@ singlestoredb/tests/
   test_versioned_management.py  # DELETED
 ```
 
+The v1 suite keeps its scope but not its name: `test_management.py` was the only
+one of the four without a version suffix, so it read like the umbrella suite
+when it is version-specific — its own docstring already said "v1 Management API
+testing". `test_management_v1.py` also makes the Part 8 deletion an unambiguous
+file removal. Nothing in CI names the file (the workflows run the whole
+`singlestoredb/tests` directory), so the rename was a `git mv` plus these docs.
+Line counts and line numbers quoted elsewhere in this document predate the
+rename and the Part 5 restructure; they are historical.
+
 **Triage of `test_versioned_management.py`'s 29 classes — delete the file after:**
 
 *→ `test_management_utils.py`* (zero version content; they live in the versioned file only
 because that is where the bugs were found):
 `TestFolderTransferPaths` (`:1408`, 13 tests), `TestRecursiveDownloadPathTraversal`
 (`:1329`), `TestDateTimeParsingFixes` (`:652`), `TestSecretFromDictTimestamps` (`:1038`).
-Move `TestRemotePathUtils` (`test_management.py:1491`) here too for cohesion.
+Move `TestRemotePathUtils` (`test_management_v1.py:1491`) here too for cohesion.
 
-*→ `test_management.py`* (real v1 behavior): `TestWorkspaceFromDictNewFields` (`:735`),
+*→ `test_management_v1.py`* (real v1 behavior): `TestWorkspaceFromDictNewFields` (`:735`),
 `TestWorkspaceUpdatePosting` (`:789`), `TestWorkspaceGroupNewFields` (`:841`),
 `TestWorkspaceGroupCreateUpdatePosting` (`:904`), `TestJobsManagerScheduleDuration`
 (`:958`), `TestTokenStorageFix` (`:533`). Also `TestWorkspaceGroupRegionResolution`
@@ -428,7 +452,7 @@ purpose was patching two unrelated class hierarchies at once.
 (`TestLocationManagerRebind` and `TestJWTRefreshInClones` cite commit SHAs `0cc6024f` /
 `d52e8e40` that no longer exist in `git log` — rebased away. No loss.)
 
-**`test_management_v2.py` — new coverage.** Port the shape of `test_management.py`'s classes
+**`test_management_v2.py` — new coverage.** Port the shape of `test_management_v1.py`'s classes
 to cluster vocabulary against `manage_clusters()`: `TestCluster`, `TestStarterCluster`,
 `TestStage`, `TestSecrets`, `TestJob`, `TestRegions`, plus the rescued
 `TestV2RegionBehavior`. Gate with `@pytest.mark.management` like the v1 suite. Use §4.4 for
@@ -468,7 +492,7 @@ checkpoint). Deliberately small, because Parts 1-6 did the structural work:
   lands (see §3). Until then it stays v1.
 
 Then, as a **separate follow-up commit** once v2 is confirmed against a live endpoint:
-delete `management/v1/`, `management/workspace.py`, `tests/test_management.py`, and
+delete `management/v1/`, `management/workspace.py`, `tests/test_management_v1.py`, and
 `test_fusion.py`'s workspace grammar. Verification step 6 rehearses exactly this, so it
 should be mechanical.
 
@@ -492,7 +516,7 @@ should be mechanical.
 1. **Structural invariants** — `pytest -v singlestoredb/tests/test_management_versioning.py`.
    The AST scan plus `sys.meta_path` blocker must prove `v1/` and `v2/` do not import each
    other **in either direction**.
-2. **v1 unchanged** — `pytest -v -m management singlestoredb/tests/test_management.py` with
+2. **v1 unchanged** — `pytest -v -m management singlestoredb/tests/test_management_v1.py` with
    `SINGLESTOREDB_MANAGEMENT_TOKEN` set. This is the real regression gate for Part 2. Watch
    job scheduling specifically: a missed `_jobs_manager_class` repoint sends v2 `targetType`
    values on v1.

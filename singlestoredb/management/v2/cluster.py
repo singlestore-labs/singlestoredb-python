@@ -45,9 +45,15 @@ from ..utils import snake_to_camel_dict
 from ..utils import to_datetime
 from ..utils import ttl_property
 from ..utils import vars_to_str
+from .project import Project as Project
 
 #: Base management API path for the shared-tier resource.
 SHAREDTIER_PATH = 'sharedtier/virtualClusters'
+
+#: Environment variable naming the project new deployments belong to. Set by
+#: the SingleStore notebook environment; also read by the v1 inference API
+#: wrapper, so the name is shared rather than v2-specific.
+PROJECT_ENV_VAR = 'SINGLESTOREDB_PROJECT'
 
 #: Environment variables that name the deployment the current process is
 #: running against, in priority order. These are set by the SingleStore
@@ -59,7 +65,9 @@ CLUSTER_ENV_VARS = ('SINGLESTOREDB_CLUSTER', 'SINGLESTOREDB_WORKSPACE')
 def get_organization() -> Organization:
     """Get the organization."""
     from ..cluster import manage_clusters
-    return manage_clusters().organization
+    # Pinned: these helpers are the v2 module's own, so they must not follow
+    # the management.version option out of v2.
+    return manage_clusters(version='v2').organization
 
 
 def get_secret(name: str) -> Optional[str]:
@@ -88,7 +96,7 @@ def get_cluster(
     if isinstance(cluster, Cluster):
         return cluster
     from ..cluster import manage_clusters
-    mgr = manage_clusters()
+    mgr = manage_clusters(version='v2')
     if cluster:
         return mgr.clusters[cluster]
     for envvar in CLUSTER_ENV_VARS:
@@ -281,6 +289,25 @@ class Cluster:
 
         self._manager: Optional[ClusterManager] = None
 
+        # Set by ClusterManager.create_cluster only; see the admin_password
+        # property. Private so it stays out of str() / repr().
+        self._admin_password: Optional[str] = None
+
+    @property
+    def admin_password(self) -> Optional[str]:
+        """
+        Generated password for the ``admin`` database user.
+
+        ``POST /v2/clusters`` generates the admin password itself and returns it
+        in the create response -- the ``admin_password`` passed to
+        :meth:`ClusterManager.create_cluster` is ignored -- and no other route
+        reports it. So this is set on the cluster returned by ``create_cluster``
+        and is ``None`` everywhere else, including after :meth:`refresh`. Record
+        it when the cluster is created or it cannot be recovered.
+
+        """
+        return self._admin_password
+
     def __str__(self) -> str:
         """Return string representation."""
         return vars_to_str(self)
@@ -387,6 +414,9 @@ class Cluster:
         expires_at: Optional[str] = None,
         update_window: Optional[Dict[str, int]] = None,
         kai: Optional[bool] = None,
+        wait_on_active: bool = False,
+        wait_interval: int = 10,
+        wait_timeout: int = 600,
     ) -> None:
         """
         Update the cluster definition.
@@ -394,6 +424,11 @@ class Cluster:
         Both the compute settings (size, auto-suspend, cache) and the
         deployment-wide settings (firewall, update window, expiration) are
         changed through this one call.
+
+        The API applies the ``PATCH`` asynchronously: the cluster cycles back
+        through PENDING and the trailing :meth:`refresh` still reports the
+        pre-PATCH values. Pass ``wait_on_active=True`` to wait the change out
+        so the object reflects it on return.
 
         Parameters
         ----------
@@ -428,6 +463,20 @@ class Cluster:
             Day and hour of an update window: dict(day=0-6, hour=0-23)
         kai : bool, optional
             Whether SingleStore Kai is enabled on this cluster
+        wait_on_active : bool, optional
+            Wait for the cluster to be ACTIVE again -- and, if a firewall was
+            requested, for the new ranges to be reported -- before returning.
+            Defaults to ``False``, which returns as soon as the ``PATCH`` is
+            accepted and therefore reports pre-PATCH values.
+        wait_interval : int, optional
+            Number of seconds between each server check
+        wait_timeout : int, optional
+            Maximum number of seconds to wait before raising an exception
+
+        Raises
+        ------
+        ManagementError
+            If ``wait_on_active`` is given and the timeout is reached
 
         """
         manager = self._require_manager()
@@ -455,6 +504,18 @@ class Cluster:
             ).items() if v is not None
         }
         manager._patch(f'clusters/{self.id}', json=data)
+
+        if wait_on_active:
+            out = manager._wait_on_state(
+                manager.get_cluster(self.id), 'ACTIVE',
+                interval=wait_interval, timeout=wait_timeout,
+            )
+            if firewall_ranges or allow_all_traffic:
+                manager._wait_on_firewall(
+                    out, interval=wait_interval, timeout=wait_timeout,
+                    expected=firewall_ranges,
+                )
+
         self.refresh()
 
     def terminate(
@@ -885,6 +946,167 @@ class ClusterManager(Manager):
         res = self._get('regions')
         return NamedList([Region.from_dict(item, self) for item in res.json()])
 
+    @property
+    def projects(self) -> NamedList[Project]:
+        """Return a list of projects in the current organization."""
+        res = self._get('projects')
+        return NamedList([Project.from_dict(item, self) for item in res.json()])
+
+    def get_project(self, id: str) -> Project:
+        """
+        Retrieve a project definition.
+
+        Parameters
+        ----------
+        id : str
+            ID of the project
+
+        Returns
+        -------
+        :class:`Project`
+
+        """
+        res = self._get(f'projects/{id}')
+        return Project.from_dict(res.json(), manager=self)
+
+    def _wait_on_firewall(
+        self,
+        out: Cluster,
+        interval: int = 10,
+        timeout: int = 600,
+        expected: Optional[List[str]] = None,
+    ) -> Cluster:
+        """
+        Wait until the cluster reports the firewall that was asked for.
+
+        ``POST /v2/clusters`` and ``PATCH /v2/clusters/{id}`` apply
+        ``firewallRanges`` asynchronously and outside the state machine: the
+        cluster reaches ACTIVE with a resolvable endpoint while
+        ``GET /v2/clusters/{id}`` still reports ``firewallRanges: []`` and
+        ``allowAllTraffic: null``. That combination denies all inbound traffic,
+        so a connection attempt in that window times out at the TCP level
+        rather than failing authentication.
+
+        By default the wait is for the cluster to admit *anything* -- either
+        non-empty ``firewall_ranges`` or ``allow_all_traffic`` -- rather than
+        for set-equality with the ranges that were requested, because the
+        server normalizes: verified live, ``firewallRanges: ['0.0.0.0/0']``
+        comes back as ``allowAllTraffic: True`` with ``firewallRanges: []``,
+        and that cluster accepts connections. Admitting something is the
+        property that actually matters on a fresh cluster -- it is the
+        difference between deny-all and reachable.
+
+        On an *existing* cluster that already admits traffic, that says
+        nothing. Pass ``expected`` there to wait for the specific ranges
+        instead; a requested ``0.0.0.0/0`` is also satisfied by
+        ``allow_all_traffic``, which is how the server stores it.
+
+        This lives in the v2 package rather than in
+        :class:`~singlestoredb.management.manager.Manager` because it is a v2
+        API quirk; the v1 workspace path must not be affected.
+
+        Parameters
+        ----------
+        out : Cluster
+            Cluster to poll
+        interval : int, optional
+            Number of seconds between each server poll
+        timeout : int, optional
+            Maximum number of seconds to wait before raising an exception
+        expected : List[str], optional
+            Wait for exactly these ranges (compared as a set) rather than for
+            the firewall to admit anything at all
+
+        Raises
+        ------
+        ManagementError
+            If timeout is reached
+
+        Returns
+        -------
+        :class:`Cluster`
+
+        """
+        def done(cluster: Cluster) -> bool:
+            if expected is not None:
+                if set(cluster.firewall_ranges or []) == set(expected):
+                    return True
+                # The server stores a requested 0.0.0.0/0 as allowAllTraffic
+                # and leaves firewallRanges empty.
+                return bool(cluster.allow_all_traffic) \
+                    and set(expected) == {'0.0.0.0/0'}
+            return bool(cluster.firewall_ranges) \
+                or bool(cluster.allow_all_traffic)
+
+        waited = 0
+        while not done(out):
+            if timeout <= 0:
+                wanted = 'to become {}'.format(expected) \
+                    if expected is not None else 'to be applied'
+                raise ManagementError(
+                    msg=f'Exceeded waiting time for the firewall of cluster '
+                        f'{out.id} {wanted} ({waited}s); it reports '
+                        f'firewall_ranges={out.firewall_ranges!r}, '
+                        f'allow_all_traffic={out.allow_all_traffic!r}. While '
+                        'the firewall admits nothing the endpoint refuses all '
+                        'inbound connections.',
+                )
+            time.sleep(interval)
+            timeout -= interval
+            waited += interval
+            out = self.get_cluster(out.id)
+
+        return out
+
+    def _resolve_project_id(self, project_id: Optional[str] = None) -> str:
+        """
+        Return the project ID a new deployment should be created in.
+
+        ``POST /v2/clusters`` requires ``projectID``, where the v1 workspace
+        group route assigned one implicitly. In priority order: the ID passed
+        by the caller, the :data:`PROJECT_ENV_VAR` environment variable, or the
+        organization's only project. An organization with more than one project
+        has no default -- naming the candidates is more useful than picking one.
+
+        Parameters
+        ----------
+        project_id : str, optional
+            Project ID supplied by the caller
+
+        Returns
+        -------
+        str
+
+        Raises
+        ------
+        ManagementError
+            If no project ID can be determined
+
+        """
+        if project_id:
+            return project_id
+
+        from_env = os.environ.get(PROJECT_ENV_VAR)
+        if from_env:
+            return from_env
+
+        projects = self.projects
+        if len(projects) == 1:
+            return projects[0].id
+
+        if not projects:
+            raise ManagementError(
+                msg='A project ID is required to create a cluster, but the '
+                    'current organization reports no projects.',
+            )
+
+        raise ManagementError(
+            msg='A project ID is required to create a cluster and the current '
+                'organization has more than one project. Pass project_id= or '
+                f'set the {PROJECT_ENV_VAR} environment variable to one of: ' +
+                ', '.join(f'{x.name} ({x.id})' for x in projects) + '.',
+        )
+
     def create_cluster(
         self,
         name: str,
@@ -939,8 +1161,14 @@ class ClusterManager(Manager):
         allow_all_traffic : bool, optional
             Allow all traffic to the cluster
         admin_password : str, optional
-            Admin password for the cluster. If no password is supplied, a
-            password will be generated and returned in the response.
+            Admin password for the cluster.
+
+            .. warning:: v2 ignores this. ``POST /v2/clusters`` generates the
+               admin password regardless of what is sent and returns the
+               generated value, so read
+               :attr:`Cluster.admin_password` off the returned cluster instead
+               -- it is reported there and nowhere else. The field is still sent
+               in case the API starts honoring it.
         auto_suspend : Dict[str, Any], optional
             Auto-suspend settings for the cluster
         auto_scale : Dict[str, Any], optional
@@ -960,9 +1188,18 @@ class ClusterManager(Manager):
         opt_in_preview_feature : bool, optional
             Whether to opt in to preview features
         project_id : str, optional
-            Project ID to associate the cluster with
+            Project ID to create the cluster in. Required by the API; if it is
+            not given it is resolved by :meth:`_resolve_project_id` from the
+            ``SINGLESTOREDB_PROJECT`` environment variable or from the
+            organization's only project.
         wait_on_active : bool, optional
-            Wait for the cluster to be active before returning
+            Wait for the cluster to be usable before returning: first for the
+            state to become ACTIVE, then for the endpoint, then -- if a
+            firewall was requested -- for the firewall to be applied. The
+            firewall is included because the API applies it asynchronously and
+            outside the state machine, so an ACTIVE cluster with a resolvable
+            endpoint still refuses every inbound connection until the ranges
+            land. See :meth:`_wait_on_firewall`.
         wait_interval : int, optional
             Number of seconds between each polling interval
         wait_timeout : int, optional
@@ -978,6 +1215,8 @@ class ClusterManager(Manager):
             region_name = region_name or region.region_name or region.name
         elif region is not None:
             region_name = region_name or region
+
+        project_id = self._resolve_project_id(project_id)
 
         size_spec: Optional[Dict[str, Any]] = None
         if size is not None or scale_factor is not None:
@@ -1010,7 +1249,8 @@ class ClusterManager(Manager):
                 ).items() if v is not None
             },
         )
-        out = self.get_cluster(res.json()['clusterID'])
+        body = res.json()
+        out = self.get_cluster(body['clusterID'])
         if wait_on_active:
             out = self._wait_on_state(
                 out, 'ACTIVE', interval=wait_interval, timeout=wait_timeout,
@@ -1019,6 +1259,19 @@ class ClusterManager(Manager):
             out = self._wait_on_endpoint(
                 out, interval=wait_interval, timeout=wait_timeout,
             )
+            # ...and the endpoint refuses everything until the firewall lands.
+            # Only when a firewall was actually asked for: firewall_ranges=[]
+            # is a legitimate deny-all request and must not hang waiting for a
+            # non-empty value that is never coming.
+            if firewall_ranges or allow_all_traffic:
+                out = self._wait_on_firewall(
+                    out, interval=wait_interval, timeout=wait_timeout,
+                )
+        # The API generates the admin password and reports it here and nowhere
+        # else, and every wait above re-fetches the cluster, so this assignment
+        # must stay after all of them: carry the password over onto whichever
+        # object is being returned. See Cluster.admin_password.
+        out._admin_password = body.get('adminPassword')
         return out
 
     def get_cluster(self, id: str) -> Cluster:
@@ -1073,7 +1326,8 @@ class ClusterManager(Manager):
         database_name : str
             Name of the database for the starter cluster
         provider : str
-            Cloud provider for the starter cluster (e.g., 'aws', 'gcp', 'azure')
+            Cloud provider for the starter cluster (AWS | GCP | Azure). Any
+            capitalization is accepted; see below.
         region_name : str
             Cloud provider region for the starter cluster (e.g., 'us-east-1')
         project_id : str, optional
@@ -1087,7 +1341,12 @@ class ClusterManager(Manager):
         payload: Dict[str, Any] = {
             'name': name,
             'databaseName': database_name,
-            'provider': provider,
+            # The shared-tier route accepts only the exact spellings AWS,
+            # AZURE and GCP: anything else, including the mixed-case 'Azure'
+            # that GET /v2/regions itself reports, fails with
+            # '500 Unspecified is not a valid CloudServiceProvider'.
+            # POST /v2/clusters is case-insensitive, so this is local to here.
+            'provider': provider.upper(),
             'regionName': region_name,
         }
         if project_id is not None:

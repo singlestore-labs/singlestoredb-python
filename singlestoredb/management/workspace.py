@@ -4,6 +4,7 @@ import warnings
 from typing import Optional
 
 from ._version_import import _import_versioned_module
+from ._version_import import _resolve_version
 from .v1.organization import Organization as Organization
 from .v1.workspace import Billing as Billing
 from .v1.workspace import get_organization as get_organization
@@ -31,22 +32,21 @@ def _manage_workspaces_v1(
     Retrieve a SingleStoreDB workspace manager without warning.
 
     This is the body of :func:`manage_workspaces` minus the deprecation
-    warning. Internal callers that are v1-only by design -- Fusion, the UDF
-    ``stage://`` handling, the AI inference helpers -- go through here so they
-    do not emit a warning the caller can do nothing about.
+    warning and the version resolution. Internal callers that are v1-only by
+    design -- Fusion, the UDF ``stage://`` handling, the AI inference helpers --
+    go through here so they neither emit a warning the caller can do nothing
+    about nor break when the ``management.version`` option names another
+    version. They are asking for a workspace manager specifically, not for
+    whatever the environment prefers.
     """
     from ..exceptions import ManagementError
-    # Deliberately not routed through the ``management.version`` option:
-    # workspaces are a v1-only resource, so a global preference for another
-    # version has nothing to say about them. Only an explicit ``version``
-    # argument is an error, because only that is a caller asking for a
-    # workspace manager that cannot exist.
     ver = version or 'v1'
     if ver != 'v1':
         raise ManagementError(
-            msg=f'workspaces do not exist in management API {ver}; '
-                'they were replaced by clusters. Use manage_clusters() '
-                'instead, or request version="v1".',
+            msg=f'workspaces do not exist in management API {ver}; they were '
+                'replaced by clusters. Use manage_clusters() instead, or ask '
+                'for v1, either with version="v1" here or by setting the '
+                'management.version option.',
         )
     mod = _import_versioned_module(ver, 'workspace')
     return mod.WorkspaceManager(
@@ -75,8 +75,9 @@ def manage_workspaces(
     access_token : str, optional
         The API key or other access token for the workspace management API
     version : str, optional
-        Version of the API to use. Workspaces only exist at ``v1``, so this
-        defaults to ``v1`` regardless of the ``management.version`` option.
+        Version of the API to use. Defaults to the ``management.version``
+        option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
+        variable), or to ``v1`` when that is unset.
     base_url : str, optional
         Base URL of the workspace management API
     organization_id : str, optional
@@ -89,7 +90,8 @@ def manage_workspaces(
     Raises
     ------
     :class:`ManagementError`
-        If a version other than ``v1`` is explicitly requested. Workspaces and
+        If the resolved version is not ``v1``, whether it was requested by the
+        caller or by the ``management.version`` option. Workspaces and
         workspace groups were replaced by clusters in v2; use
         :func:`singlestoredb.manage_clusters` instead.
 
@@ -101,6 +103,11 @@ def manage_workspaces(
         DeprecationWarning,
         stacklevel=2,
     )
+    # Follows the management.version option like the other public entry
+    # points rather than pinning to v1, so that once the option names a version
+    # without workspaces the caller is told to move rather than quietly handed
+    # a v1 manager for an org that has outgrown it.
     return _manage_workspaces_v1(
-        access_token, version, base_url, organization_id=organization_id,
+        access_token, _resolve_version(version), base_url,
+        organization_id=organization_id,
     )

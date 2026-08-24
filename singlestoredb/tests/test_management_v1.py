@@ -5,8 +5,9 @@ SingleStoreDB v1 Management API testing.
 
 Everything here targets management API v1 -- workspaces, workspace groups and
 the resources hanging off them. No test in this file may branch on version;
-the v2 equivalents live in ``test_management_v2.py`` and the version-neutral
-helper units in ``test_management_utils.py``.
+the v2 equivalents live in ``test_management_v2.py``, the version-neutral
+helper units in ``test_management_utils.py``, and the structural cross-version
+invariants in ``test_management_versioning.py``.
 """
 import datetime
 import os
@@ -51,7 +52,9 @@ class TestWorkspace(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspaces()
+        # Pinned: manage_workspaces() follows the management.version
+        # option, and this is the v1 suite.
+        cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
         cls.password = secrets.token_urlsafe(20) + '-x&$'
@@ -224,7 +227,7 @@ class TestStarterWorkspace(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspaces()
+        cls.manager = s2.manage_workspaces(version='v1')
 
         shared_tier_regions: NamedList[Region] = [
             x for x in cls.manager.shared_tier_regions if 'US' in x.name
@@ -334,7 +337,7 @@ class TestStage(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspaces()
+        cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
         cls.password = secrets.token_urlsafe(20) + '-x&$'
@@ -887,7 +890,7 @@ class TestSecrets(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspaces()
+        cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
         cls.password = secrets.token_urlsafe(20) + '-x&$'
@@ -946,7 +949,7 @@ class TestJob(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspaces()
+        cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
         cls.password = secrets.token_urlsafe(20) + '-x&$'
@@ -1097,7 +1100,9 @@ class TestFileSpaces(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_files()
+        # Pinned: manage_files() follows the management.version option, and
+        # this is the v1 suite.
+        cls.manager = s2.manage_files(version='v1')
         cls.personal_space = cls.manager.personal_space
         cls.shared_space = cls.manager.shared_space
 
@@ -1433,7 +1438,9 @@ class TestRegions(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up the test environment."""
-        cls.manager = s2.manage_regions()
+        # Pinned: manage_regions() follows the management.version option, and
+        # this is the v1 suite.
+        cls.manager = s2.manage_regions(version='v1')
 
     @classmethod
     def tearDownClass(cls):

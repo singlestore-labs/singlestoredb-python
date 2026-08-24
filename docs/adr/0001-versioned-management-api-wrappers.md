@@ -30,7 +30,16 @@ Each version folder is a **complete set** for the resources that version has: ev
 
 **Rule 1: no cross-version imports, in either direction.** `management/v1/` must not import from `management/v2/` and vice versa. Shared code moves up to `management/`; it never travels sideways. This is what makes retiring a version an `rm -rf` of its folder plus removal of the back-compat shims, and it is enforced by `TestVersionPackagesAreIndependent` in `singlestoredb/tests/test_management_versioning.py` — an AST walk over each folder's imports plus a `sys.meta_path` blocker that imports every module of one version with the other forbidden.
 
-Top-level modules also serve as thin re-export shims for stable import paths (`from singlestoredb.management.workspace import Workspace` still resolves to the v1 class). Version routing happens in the `manage_*()` factory functions, which live at the top level only — duplicating a factory into a version folder both invites the copies to drift and makes the folder un-deletable.
+Top-level modules also serve as thin re-export shims for stable import paths (`from singlestoredb.management.workspace import Workspace` still resolves to the v1 class). Version routing happens in the top-level functions only — duplicating one into a version folder both invites the copies to drift and makes the folder un-deletable.
+
+**Rule 2: everything exported from `singlestoredb.management` is version-neutral.** A caller who does not name a version gets the version the `management.version` option names; an explicit `version=` argument always wins. That applies to the `manage_*()` factories and equally to the module-level helpers (`get_organization`, `get_secret`, `get_stage`), which were the v1 implementations under a neutral name until they were routed through `_versioned_attr()`. A resolved version that lacks the resource raises and names the replacement — `manage_clusters()` at v1 points at workspaces, `manage_workspaces()` at v2 points at clusters — rather than silently answering from the version that happens to have it.
+
+Two consequences worth stating:
+
+- The one place the resolution rule lives is `_resolve_version()` in `management/_version_import.py`. Nothing else reads the option.
+- Callers that are v1-only *by design* rather than by default — Fusion, the UDF `stage://` handling, the AI inference helpers — go through the private `_manage_workspaces_v1()`, which ignores the option. They are asking for a workspace manager specifically, so an org-wide preference for another version has nothing to say to them. The same reasoning applies to test suites: each version's suite pins its own `version=`, so the ambient option cannot change what is under test.
+
+Because the module that implements a helper differs by version — v1 hangs them off workspaces, v2 off clusters — the neutral layer looks them up by name in the resolved version *package* (`_versioned_attr('get_stage', ver)`) rather than hard-coding a module per version. Each version package re-exports its own from `__init__.py`, so adding a version is an export list, not a branch in the dispatcher.
 
 ### Inheritance model
 
@@ -61,13 +70,13 @@ A resource that exists at one version only lives in that version's folder, and t
 
 ### Convention-based module lookup
 
-`_import_versioned_module(version, module_name)` in `management/_version_import.py` imports `singlestoredb.management.{version}.{module_name}`, distinguishing "this version is unsupported" from "this version has no such module" in its error message. The `manage_*()` factories are its only callers. No registry or registration is needed — the folder structure is the registry.
+`_import_versioned_module(version, module_name)` in `management/_version_import.py` imports `singlestoredb.management.{version}.{module_name}`, distinguishing "this version is unsupported" from "this version has no such module" in its error message. The `manage_*()` factories are its only callers. Its companion `_versioned_attr(name, version)` looks a name up in the version *package* instead, for the helpers whose implementing module differs by version. No registry or registration is needed — the folder structure is the registry.
 
 ### API version in URL
 
 Each manager class has a `default_version` class attribute, a literal on the class. It is **not** resolved from `config.get_option('management.version')` at import time: doing that let a v1-only class declare itself to be v2 whenever the option was set. The URL is built as `urljoin(base_url_root, version or type(self).default_version) + '/'`.
 
-The `management.version` option is consulted by the `manage_*()` factories, not by the manager classes, and only for resources that exist at more than one version. `manage_workspaces()` ignores it: workspaces are v1-only, so a global preference for another version has nothing to say about them, and only an explicit `version=` argument is an error.
+The `management.version` option is consulted by the version-neutral entry points, never by the manager classes. Every one of them consults it, including the entry points for resources that exist at a single version: `manage_workspaces()` and `manage_clusters()` both resolve the version first and then raise if the resource is absent there, so which of the two works is decided by the option rather than by which function you happened to call. The private `_manage_workspaces_v1()` is the exception, and the only one.
 
 ### Deprecation of the v1 grammar
 
@@ -114,3 +123,4 @@ full on the `versioned-management-api` branch:
 - **Inheritance direction inverted** from "v2 subclasses v1" to "shared base level-set to the newest version, `v1/` holds backward overrides", for the reasons in the alternatives above.
 - **`default_version` resolved from the config option.** The original text described it as resolved from `config.get_option('management.version')`; it is a class literal, and making it dynamic was the bug that let a v1 class report itself as v2.
 - **`management/versioned.py` renamed to `_version_import.py`**, since all that remains of it is the version-module importer.
+- **Rule 2 added.** The original text only described version routing in the `manage_*()` factories, which left `singlestoredb.management.get_organization`/`get_secret`/`get_stage` re-exported straight from `v1/`: neutral names that ignored the option and would vanish with the v1 package. They now dispatch on the resolved version, and `manage_workspaces()` follows the option rather than pinning to v1 (its private `_manage_workspaces_v1()` is what stays pinned). Consequence to note: once `management.version` names v2, a bare `manage_workspaces()` raises with a pointer to `manage_clusters()` instead of returning a v1 manager.

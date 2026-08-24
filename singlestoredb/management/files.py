@@ -581,9 +581,9 @@ def manage_files(
     :class:`FilesManager`
 
     """
-    from .. import config
     from ._version_import import _import_versioned_module
-    ver = version or config.get_option('management.version') or 'v1'
+    from ._version_import import _resolve_version
+    ver = _resolve_version(version)
     mod = _import_versioned_module(ver, 'files')
     return mod.FilesManager(
         access_token=access_token, base_url=base_url,

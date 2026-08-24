@@ -103,7 +103,9 @@ class TestWorkspaceFusion(unittest.TestCase):
     def setUpClass(cls):
         sql_file = os.path.join(os.path.dirname(__file__), 'test.sql')
         cls.dbname, cls.dbexisted = utils.load_sql(sql_file)
-        mgr = s2.manage_workspaces()
+        # Pinned: manage_workspaces() follows the management.version
+        # option, and Fusion is v1-only.
+        mgr = s2.manage_workspaces(version='v1')
         us_regions = [x for x in mgr.regions if x.name.startswith('US')]
         non_us_regions = [x for x in mgr.regions if not x.name.startswith('US')]
         wg = mgr.create_workspace_group(
@@ -255,7 +257,7 @@ class TestWorkspaceFusion(unittest.TestCase):
         assert names == [f'C Fusion Testing {self.id}', f'B Fusion Testing {self.id}']
 
     def test_show_workspaces(self):
-        mgr = s2.manage_workspaces()
+        mgr = s2.manage_workspaces(version='v1')
         wg = mgr.workspace_groups[f'B Fusion Testing {self.id}']
 
         self.cur.execute(
@@ -370,7 +372,7 @@ class TestWorkspaceFusion(unittest.TestCase):
         assert names == ['show-ws-3', 'show-ws-2']
 
     def test_create_drop_workspace(self):
-        mgr = s2.manage_workspaces()
+        mgr = s2.manage_workspaces(version='v1')
         wg = mgr.workspace_groups[f'A Fusion Testing {self.id}']
 
         self.cur.execute(
@@ -434,7 +436,7 @@ class TestWorkspaceFusion(unittest.TestCase):
             time.sleep(interval)
 
     def test_create_drop_workspace_group(self):
-        mgr = s2.manage_workspaces()
+        mgr = s2.manage_workspaces(version='v1')
 
         reg = [x for x in mgr.regions if x.name.startswith('US')][0]
         wg_name = f'Create WG Test {id(self)}'
@@ -502,7 +504,7 @@ class TestJobsFusion(unittest.TestCase):
     def setUpClass(cls):
         sql_file = os.path.join(os.path.dirname(__file__), 'test.sql')
         cls.dbname, cls.dbexisted = utils.load_sql(sql_file)
-        cls.manager = s2.manage_workspaces()
+        cls.manager = s2.manage_workspaces(version='v1')
         us_regions = [x for x in cls.manager.regions if x.name.startswith('US')]
         cls.workspace_group = cls.manager.create_workspace_group(
             f'Jobs Fusion Testing {cls.id}',
@@ -751,7 +753,7 @@ class TestStageFusion(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspaces()
+        cls.manager = s2.manage_workspaces(version='v1')
         us_regions = [x for x in cls.manager.regions if x.name.startswith('US')]
         cls.workspace_group = cls.manager.create_workspace_group(
             f'Stage Fusion Testing 1 {cls.id}',
@@ -1283,7 +1285,7 @@ class TestFilesFusion(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspaces()
+        cls.manager = s2.manage_workspaces(version='v1')
         us_regions = [x for x in cls.manager.regions if x.name.startswith('US')]
         cls.workspace_group = cls.manager.create_workspace_group(
             f'Files Fusion Testing {cls.id}',

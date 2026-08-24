@@ -25,8 +25,9 @@ if len(args) != 1:
 
 # Connect to workspace. This is still the deprecated v1 workspace-group
 # grammar because the v1 test suite it sets up needs workspace groups;
-# it gets ported to manage_clusters() when that suite goes.
-wm = s2.manage_workspaces(options.token or None)
+# it gets ported to manage_clusters() when that suite goes. Pinned to v1
+# because manage_workspaces() otherwise follows the management.version option.
+wm = s2.manage_workspaces(options.token or None, version='v1')
 
 wg_name = 'Python Client Testing'
 

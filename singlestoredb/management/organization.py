@@ -9,10 +9,51 @@ from typing import Type
 from typing import Union
 
 from ..exceptions import ManagementError
+from ._version_import import _versioned_attr
 from .job import JobsManager
 from .manager import Manager
 from .utils import to_datetime
 from .utils import vars_to_str
+
+
+def get_organization(version: Optional[str] = None) -> 'Organization':
+    """
+    Get the current organization.
+
+    Parameters
+    ----------
+    version : str, optional
+        Version of the API to use. Defaults to the ``management.version``
+        option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
+        variable).
+
+    Returns
+    -------
+    :class:`Organization`
+
+    """
+    return _versioned_attr('get_organization', version)()
+
+
+def get_secret(name: str, version: Optional[str] = None) -> Optional[str]:
+    """
+    Get the value of a secret in the current organization.
+
+    Parameters
+    ----------
+    name : str
+        Name of the secret
+    version : str, optional
+        Version of the API to use. Defaults to the ``management.version``
+        option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
+        variable).
+
+    Returns
+    -------
+    str or None
+
+    """
+    return _versioned_attr('get_secret', version)(name)
 
 
 def listify(x: Union[str, List[str]]) -> List[str]:

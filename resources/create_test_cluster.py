@@ -73,8 +73,9 @@ if options.init_sql and not os.path.isfile(options.init_sql):
 
 # Connect to workspace. This is still the deprecated v1 workspace-group
 # grammar because the v1 test suite it sets up needs workspace groups;
-# it gets ported to manage_clusters() when that suite goes.
-wm = s2.manage_workspaces(options.token or None)
+# it gets ported to manage_clusters() when that suite goes. Pinned to v1
+# because manage_workspaces() otherwise follows the management.version option.
+wm = s2.manage_workspaces(options.token or None, version='v1')
 
 # Find matching region
 if '::' in options.region:

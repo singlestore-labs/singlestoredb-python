@@ -438,6 +438,157 @@ These are not in the scope of this audit pass but are worth noting:
 3. **`fields=` query param** on every GET — intentionally skipped per scope.
 4. **DR / identity / privateConnections / delegatedEntities sub-resources** on
    workspace groups — intentionally skipped per scope.
+5. **`GET /projects` is missing from the spec dump, and `projectID` is required
+   on `POST /v2/clusters`.** Both confirmed live against
+   `https://api.singlestore.com` (2026-08-21):
+
+   - `GET /v1/projects` and `GET /v2/projects` both return
+     `[{projectID, name, edition, createdAt}]`, with `edition` one of
+     `SHARED | STANDARD | ENTERPRISE`. Neither route appears anywhere in
+     `dev-docs/management_api.openapi` — one more instance of that dump not
+     being authoritative.
+   - `POST /v2/clusters` fails with `400 projectID is required` for any body
+     without it, including one that is otherwise complete. `POST
+     /v1/workspaceGroups` assigns a project implicitly: every group in the test
+     organization sits in `Standard Project` without the SDK ever sending an ID.
+     Handled by `ClusterManager._resolve_project_id`, which takes the caller's
+     `project_id`, then `SINGLESTOREDB_PROJECT`, then the organization's only
+     project, and otherwise raises naming the candidates.
+   - `POST /v2/sharedtier/virtualClusters` does **not** require `projectID` —
+     validation runs through to `databaseName` without it — so
+     `create_starter_cluster` leaves `project_id` a plain passthrough.
+   - Field-validation order on `POST /v2/clusters` is `region` → `projectID` →
+     `firewallRanges` (which must be present, `[]` to disallow all inbound
+     traffic) → `size`.
+6. **`POST /v2/sharedtier/virtualClusters` accepts only `AWS` | `AZURE` | `GCP`
+   verbatim.** Also confirmed live (2026-08-21). Any other capitalization —
+   including the mixed-case `Azure` that `GET /v2/regions` itself reports —
+   fails with `500 Unspecified is not a valid CloudServiceProvider`, so a
+   region's `provider` cannot be passed through as-is. `POST /v2/clusters` is
+   case-insensitive on the same field (only an unknown provider is rejected,
+   with `400 invalid provider ...; value must be aws or azure or gcp`).
+   `create_starter_cluster` upper-cases it; `create_cluster` does not.
+   The v1 starter route is a different path, and the v1 shared-tier region list
+   reports only `AWS us-east-1`, so v1 never hit this.
+   **The missing v2 shared-tier region list is a real gap.** `GET /v1/regions/
+   sharedtier` has no v2 successor (`GET /v2/regions/sharedtier` and
+   `GET /v2/sharedtier/regions` both 404) and the 36 entries `GET /v2/regions`
+   returns carry only `region`, `provider`, `regionName` — nothing marks which
+   are shared-tier capable. Sending a non-shared-tier region fails at create
+   time with `500 error creating virtual workspace (<name>): no shared tier
+   region found for provider AWS and region us-east-2`, so a v2-only client has
+   to hard-code the list or discover it by failing. Worth raising with the API
+   team.
+7. **v2 deployment name format.** `POST /v2/clusters` requires the name to match
+   `[a-z0-9]([a-z0-9-]*[a-z0-9])?` at 1-32 characters: an uppercase letter, an
+   underscore, a dot, a space, or a leading/trailing hyphen draws `400 name:
+   must be in a valid format`, and anything longer draws `400 name: the length
+   must be between 1 and 32`. Repeated hyphens are accepted.
+   `POST /v2/sharedtier/virtualClusters` applies none of this — it took
+   `STARTER_cl_test_abc-` unchanged. Neither rule is in the spec dump.
+   Full validation order on `POST /v2/clusters`: `region` presence →
+   `projectID` → `firewallRanges` → `size` → `name` → region existence.
+8. **`POST /v2/clusters` ignores `adminPassword` and generates its own.**
+   Confirmed live (2026-08-21) with two throwaway clusters, both since
+   terminated. Whatever password is sent, the created cluster's `admin` user
+   gets a server-generated one, returned as `adminPassword` in the *create
+   response only* — `GET /v2/clusters/{id}` has no such field. Losing that
+   value means losing `admin` access to the cluster. v1 honored the password it
+   was given, so nothing in the v1 wrapper had to keep it. `create_cluster`
+   therefore carries it onto the returned object as
+   `Cluster.admin_password` (backed by a private attribute so it stays out of
+   `str()`/`repr()`), and the `admin_password` parameter's docstring carries a
+   warning that v2 discards it. Not in the spec dump.
+9. **`PATCH /v2/clusters/{id}` accepts `name` and silently ignores it.**
+   Confirmed live (2026-08-21) with a throwaway cluster, since terminated.
+   `name` is a *known* field on the route — an unknown field draws
+   `400 request body contains an unknown field "bogusField"` and `name` does
+   not — and the PATCH returns success and even cycles the cluster through
+   PENDING, but the name never changes in `GET /v2/clusters/{id}` or
+   `GET /v2/clusters` (polled for two minutes). v1 workspace groups *could* be
+   renamed, so this is a v2 regression rather than a wrapper bug; the accepted
+   field makes it undetectable from the client. Worth raising with the API
+   team. `Cluster.update()` still passes the field through — there is nothing
+   better for it to do — and `TestCluster::test_update` pins the behavior.
+   Separately, the same route applies changes **asynchronously**: after a
+   `PATCH` with new `firewallRanges`, the immediately following
+   `GET /v2/clusters/{id}` still reports the old ranges while the cluster is
+   PENDING, so the trailing `refresh()` inside `Cluster.update()` does not
+   reflect the change.
+   **Wrapper status:** `Cluster.update()` now takes
+   `wait_on_active`/`wait_interval`/`wait_timeout`, defaulting to `False` for
+   backward compatibility. With it, `update()` waits for ACTIVE and then — if
+   `firewall_ranges` or `allow_all_traffic` was passed — for the new ranges to
+   be reported, before the trailing `refresh()`. On this path the firewall wait
+   compares against the ranges that were requested rather than merely checking
+   for non-empty, because the pre-PATCH ranges are already non-empty; see
+   `ClusterManager._wait_on_firewall`. The asynchrony itself is still an API
+   bug: a caller who does not opt in still gets stale values back, and the SDK
+   is only papering over it. Worth raising with the API team alongside the
+   silently-ignored `name`.
+10. **Stage path normalization is inconsistent for directories.** Pre-existing
+    behavior in the shared `management/stage.py`, not v2-specific.
+    `mkdir()`/`rmdir()` append the trailing slash themselves
+    (`re.sub(r'/*$', '', path) + '/'`), but `info()` — and therefore
+    `exists()`, `is_dir()`, `is_file()` — pass the path through unchanged, so
+    `mkdir('d')` followed by `is_dir('d')` returns `False` while
+    `is_dir('d/')` returns `True`. The v1 suite happens to pass the slash
+    everywhere, which is why this never surfaced. Candidate fix: normalize in
+    `info()` too, or in `_fs_path()`.
+11. **`Stage.open(path, 'r')` on a missing object raises `ManagementError`,
+    not `FileNotFoundError`.** Also pre-existing shared behavior. The rest of
+    `open()`'s builtin-open emulation raises `OSError` subclasses
+    (`FileExistsError` for `'x'` on an existing path, `IsADirectoryError` from
+    `_download_file`), so the bare 404 coming through is an inconsistency
+    rather than a deliberate contract. Left as-is because changing it is
+    visible to v1 callers too; pinned by `TestStage::test_open`.
+12. **`POST /v2/clusters` applies `firewallRanges` asynchronously, outside the
+    state machine.** Confirmed live (2026-08-21): a cluster created with
+    `firewallRanges: ['0.0.0.0/0']` reaches ACTIVE with a resolvable endpoint
+    while `GET /v2/clusters/{id}` still reports `firewallRanges: []` — which
+    is deny-all, so connection attempts in that window time out at the TCP
+    level rather than failing authentication. `create_cluster()`'s
+    `wait_on_active` and its endpoint wait both completed before the firewall
+    landed, so the documented "wait until usable" contract was not actually
+    met: an SDK caller could get back an ACTIVE cluster whose endpoint refused
+    every connection. How long the gap lasts varies — one run had the firewall
+    in place by the time the tests ran, the next did not, which is what made
+    `TestCluster::test_connect` flaky.
+    **Wrapper status: fixed.** `ClusterManager._wait_on_firewall()` polls
+    `GET /v2/clusters/{id}` until the cluster admits inbound traffic, and
+    `create_cluster()` calls it under `wait_on_active`, after `_wait_on_state`
+    and `_wait_on_endpoint`, whenever `firewall_ranges` or `allow_all_traffic`
+    was requested. "Admits traffic" means non-empty `firewallRanges` **or**
+    `allowAllTraffic` — see item 13, the API stores a requested `0.0.0.0/0` as
+    the latter — rather than equality with the requested ranges, which the
+    server is free to normalize. The wait
+    is skipped for `firewall_ranges=[]`, which is a legitimate deny-all request
+    (see item 5) and would otherwise hang for the full timeout. The helper
+    lives in `v2/cluster.py` rather than the shared `manager.py` because this
+    is a v2 quirk and the v1 workspace path must not be affected. The live
+    suite's `_wait_for_firewall()` workaround is gone; `TestCluster.setUpClass`
+    now just asserts the SDK delivered a firewall that admits something.
+    The API behavior is still a bug — a caller passing `wait_on_active=False`,
+    or using `GET` directly, still sees the deny-all window — and is worth
+    raising with the API team.
+13. **`POST /v2/clusters` stores `firewallRanges: ['0.0.0.0/0']` as
+    `allowAllTraffic: True` with `firewallRanges: []`.** Confirmed live
+    (2026-08-21) on a cluster since terminated: after the create settled,
+    `GET /v2/clusters/{id}` reported `firewallRanges: []` and
+    `allowAllTraffic: True`, and the endpoint accepted connections — port 3306
+    open — so the empty list there does *not* mean deny-all in that
+    combination. The round trip is lossy: what was asked for as a range comes
+    back as a boolean, so a client cannot compare a create request against the
+    resulting cluster field by field. This is not consistent between runs
+    either — an earlier run of the same test had `firewallRanges:
+    ['0.0.0.0/0']` stored verbatim (that is what item 9's "still reports the
+    old ranges" observation was made against), which suggests either
+    region-dependent handling or an ordering effect in how the two fields are
+    written. Worth raising with the API team.
+    **Wrapper status:** `_wait_on_firewall()` treats either representation as
+    "reachable", and the update path additionally accepts `allowAllTraffic` as
+    satisfying a requested `0.0.0.0/0`. `Cluster.allow_all_traffic` was already
+    parsed, so nothing else changed.
 
 ---
 
