@@ -8,21 +8,45 @@ from typing import Union
 
 from ...exceptions import ManagementError
 from ...management import files as mgmt_files
+from ...management.cluster import Cluster
+from ...management.cluster import CLUSTER_ENV_VARS
+from ...management.cluster import ClusterManager
+from ...management.cluster import manage_clusters
+from ...management.cluster import Project
+from ...management.cluster import StarterCluster
 from ...management.files import FilesManager
 from ...management.files import FileSpace
 from ...management.files import manage_files
 from ...management.inference_api import InferenceAPIInfo
 from ...management.inference_api import InferenceAPIManager
 from ...management.workspace import _manage_workspaces_v1
-from ...management.workspace import StarterWorkspace
 from ...management.workspace import Workspace
 from ...management.workspace import WorkspaceGroup
 from ...management.workspace import WorkspaceManager
 
 
 def get_workspace_manager() -> WorkspaceManager:
-    """Return a new workspace manager."""
+    """
+    Return a new workspace manager.
+
+    Pinned to v1. The ``WORKSPACE`` and ``WORKSPACE GROUP`` commands are the
+    v1 vocabulary -- v2 replaced both with the flat ``Cluster`` -- so they must
+    not follow the ``management.version`` option out of v1. The v2 equivalent
+    is :func:`get_cluster_manager`.
+    """
     return _manage_workspaces_v1()
+
+
+def get_cluster_manager() -> ClusterManager:
+    """
+    Return a new cluster manager.
+
+    Pinned to v2 for the mirror image of the reason
+    :func:`get_workspace_manager` is pinned to v1: the ``CLUSTER`` commands
+    *are* the v2 vocabulary, so they must not follow the ``management.version``
+    option out of v2 -- at v1 there is no cluster resource at all.
+    """
+    return manage_clusters(version='v2')
 
 
 def get_files_manager() -> FilesManager:
@@ -103,7 +127,12 @@ def get_workspace_group(params: Dict[str, Any]) -> WorkspaceGroup:
             raise
 
     if os.environ.get('SINGLESTOREDB_CLUSTER'):
-        raise ValueError('clusters and shared workspaces are not currently supported')
+        raise ValueError(
+            'SINGLESTOREDB_CLUSTER names a cluster, which is the management '
+            'API v2 replacement for a workspace group and is not addressable '
+            'through the WORKSPACE GROUP commands. Use the CLUSTER commands '
+            'instead, e.g. SHOW CLUSTERS.',
+        )
 
     raise KeyError('no workspace group was specified')
 
@@ -170,18 +199,209 @@ def get_workspace(params: Dict[str, Any]) -> Workspace:
             raise
 
     if os.environ.get('SINGLESTOREDB_CLUSTER'):
-        raise ValueError('clusters and shared workspaces are not currently supported')
+        raise ValueError(
+            'SINGLESTOREDB_CLUSTER names a cluster, which is the management '
+            'API v2 replacement for a workspace and is not addressable '
+            'through the WORKSPACE commands. Use the CLUSTER commands '
+            'instead, e.g. SHOW CLUSTERS.',
+        )
 
     raise KeyError('no workspace was specified')
 
 
+def _is_missing(exc: ManagementError) -> bool:
+    """
+    Return True if ``exc`` means "no such deployment".
+
+    A well-formed but unknown ID draws ``404``, but a *malformed* one draws
+    ``400 uuid: incorrect UUID length`` from the v2 routes, which v1's
+    non-UUID IDs never did. Both mean the caller named something that does not
+    exist, so both become a ``KeyError`` rather than leaking a raw 400 for
+    what is usually a typo. Other 400s -- a real request-body problem -- are
+    left alone.
+    """
+    if exc.errno == 404:
+        return True
+    return exc.errno == 400 and 'uuid' in str(exc.msg or '').lower()
+
+
+def get_cluster(params: Dict[str, Any]) -> Cluster:
+    """
+    Retrieve the specified cluster.
+
+    The v2 counterpart of :func:`get_workspace`, and flat where that one is
+    nested: a cluster has no containing group, so there is nothing to resolve
+    first.
+
+    This function will get a cluster name or ID from the following parameters:
+
+        * params['cluster_name']
+        * params['cluster_id']
+        * params['cluster']['cluster_name']
+        * params['cluster']['cluster_id']
+
+    Or, from the environment variables in
+    :data:`singlestoredb.management.cluster.CLUSTER_ENV_VARS`, in order.
+
+    """
+    manager = get_cluster_manager()
+
+    cluster_name = params.get('cluster_name') or \
+        (params.get('cluster') or {}).get('cluster_name')
+    if cluster_name:
+        clusters = [x for x in manager.clusters if x.name == cluster_name]
+
+        if not clusters:
+            raise KeyError(f'no cluster found with name: {cluster_name}')
+
+        if len(clusters) > 1:
+            ids = ', '.join(x.id for x in clusters)
+            raise ValueError(
+                f'more than one cluster with given name was found: {ids}',
+            )
+
+        return clusters[0]
+
+    cluster_id = params.get('cluster_id') or \
+        (params.get('cluster') or {}).get('cluster_id')
+    if cluster_id:
+        try:
+            return manager.get_cluster(cluster_id)
+        except ManagementError as exc:
+            if _is_missing(exc):
+                raise KeyError(f'no cluster found with ID: {cluster_id}')
+            raise
+
+    for envvar in CLUSTER_ENV_VARS:
+        if os.environ.get(envvar):
+            try:
+                return manager.get_cluster(os.environ[envvar])
+            except ManagementError as exc:
+                if _is_missing(exc):
+                    raise KeyError(
+                        f'no cluster found with ID: {os.environ[envvar]} '
+                        f'(from {envvar})',
+                    )
+                raise
+
+    raise KeyError('no cluster was specified')
+
+
+def get_starter_cluster(params: Dict[str, Any]) -> StarterCluster:
+    """
+    Retrieve the specified starter cluster.
+
+    This function will get a starter cluster name or ID from the following
+    parameters:
+
+        * params['cluster_name']
+        * params['cluster_id']
+        * params['cluster']['cluster_name']
+        * params['cluster']['cluster_id']
+
+    """
+    manager = get_cluster_manager()
+
+    cluster_name = params.get('cluster_name') or \
+        (params.get('cluster') or {}).get('cluster_name')
+    if cluster_name:
+        clusters = [
+            x for x in manager.starter_clusters
+            if x.name == cluster_name
+        ]
+
+        if not clusters:
+            raise KeyError(
+                f'no starter cluster found with name: {cluster_name}',
+            )
+
+        if len(clusters) > 1:
+            ids = ', '.join(x.id for x in clusters)
+            raise ValueError(
+                'more than one starter cluster with given name was '
+                f'found: {ids}',
+            )
+
+        return clusters[0]
+
+    cluster_id = params.get('cluster_id') or \
+        (params.get('cluster') or {}).get('cluster_id')
+    if cluster_id:
+        try:
+            return manager.get_starter_cluster(cluster_id)
+        except ManagementError as exc:
+            if _is_missing(exc):
+                raise KeyError(
+                    f'no starter cluster found with ID: {cluster_id}',
+                )
+            raise
+
+    raise KeyError('no starter cluster was specified')
+
+
+def get_project(params: Dict[str, Any]) -> Optional[Project]:
+    """
+    Resolve an ``IN PROJECT`` clause, if one was given.
+
+    Returns ``None`` when no project was named, so that ``CREATE CLUSTER``
+    falls through to ``ClusterManager._resolve_project_id``, which picks the
+    organization's only project or raises naming the candidates. The clause is
+    therefore optional in a single-project organization and required in one
+    with several.
+
+    This function will get a project name or ID from the following parameters:
+
+        * params['project_name']
+        * params['project_id']
+        * params['in_project']['project_name']
+        * params['in_project']['project_id']
+
+    """
+    project_name = params.get('project_name') or \
+        (params.get('in_project') or {}).get('project_name')
+    project_id = params.get('project_id') or \
+        (params.get('in_project') or {}).get('project_id')
+
+    if not project_name and not project_id:
+        return None
+
+    manager = get_cluster_manager()
+
+    if project_name:
+        projects = [x for x in manager.projects if x.name == project_name]
+
+        if not projects:
+            raise KeyError(f'no project found with name: {project_name}')
+
+        if len(projects) > 1:
+            ids = ', '.join(x.id for x in projects)
+            raise ValueError(
+                f'more than one project with given name was found: {ids}',
+            )
+
+        return projects[0]
+
+    assert project_id is not None
+    try:
+        return manager.get_project(project_id)
+    except ManagementError as exc:
+        if _is_missing(exc):
+            raise KeyError(f'no project found with ID: {project_id}')
+        raise
+
+
 def get_deployment(
         params: Dict[str, Any],
-) -> Union[WorkspaceGroup, StarterWorkspace]:
+) -> Union[Cluster, StarterCluster]:
     """
-    Find a starter workspace matching deployment_id or deployment_name.
+    Find a cluster or starter cluster matching deployment_id or deployment_name.
 
-    This function will get a starter workspace or ID from the
+    Resolves against management API v2, so a "deployment" here is a
+    :class:`Cluster` or a :class:`StarterCluster`. ``stage.py`` is the only
+    consumer, and it touches nothing but ``deployment.stage``, which both
+    classes provide.
+
+    This function will get a deployment name or ID from the
     following parameters:
 
         * params['deployment_name']
@@ -190,16 +410,21 @@ def get_deployment(
         * params['group']['deployment_id']
         * params['in_deployment']['deployment_name']
         * params['in_deployment']['deployment_id']
+        * params['in']['in_cluster']['deployment_name']
+        * params['in']['in_cluster']['deployment_id']
         * params['in']['in_group']['deployment_name']
         * params['in']['in_group']['deployment_id']
         * params['in']['in_deployment']['deployment_name']
         * params['in']['in_deployment']['deployment_id']
 
-    Or, from the SINGLESTOREDB_WORKSPACE_GROUP
-    or SINGLESTOREDB_CLUSTER environment variables.
+    The ``group`` and ``in_group`` keys stay wired so that the existing
+    ``IN GROUP`` spelling keeps parsing as a synonym for ``IN CLUSTER``.
+
+    Or, from the environment variables in
+    :data:`singlestoredb.management.cluster.CLUSTER_ENV_VARS`, in order.
 
     """
-    manager = get_workspace_manager()
+    manager = get_cluster_manager()
 
     #
     # Search for deployment by name
@@ -207,38 +432,40 @@ def get_deployment(
     deployment_name = params.get('deployment_name') or \
         (params.get('in_deployment') or {}).get('deployment_name') or \
         (params.get('group') or {}).get('deployment_name') or \
+        ((params.get('in') or {}).get('in_cluster') or {}).get('deployment_name') or \
         ((params.get('in') or {}).get('in_group') or {}).get('deployment_name') or \
         ((params.get('in') or {}).get('in_deployment') or {}).get('deployment_name')
 
     if deployment_name:
-        # Standard workspace group
-        workspace_groups = [
-            x for x in manager.workspace_groups
+        # Standard cluster
+        clusters = [
+            x for x in manager.clusters
             if x.name == deployment_name
         ]
 
-        if len(workspace_groups) == 1:
-            return workspace_groups[0]
+        if len(clusters) == 1:
+            return clusters[0]
 
-        elif len(workspace_groups) > 1:
-            ids = ', '.join(x.id for x in workspace_groups)
+        elif len(clusters) > 1:
+            ids = ', '.join(x.id for x in clusters)
             raise ValueError(
-                f'more than one workspace group with given name was found: {ids}',
+                f'more than one cluster with given name was found: {ids}',
             )
 
-        # Starter workspace
-        starter_workspaces = [
-            x for x in manager.starter_workspaces
+        # Starter cluster
+        starter_clusters = [
+            x for x in manager.starter_clusters
             if x.name == deployment_name
         ]
 
-        if len(starter_workspaces) == 1:
-            return starter_workspaces[0]
+        if len(starter_clusters) == 1:
+            return starter_clusters[0]
 
-        elif len(starter_workspaces) > 1:
-            ids = ', '.join(x.id for x in starter_workspaces)
+        elif len(starter_clusters) > 1:
+            ids = ', '.join(x.id for x in starter_clusters)
             raise ValueError(
-                f'more than one starter workspace with given name was found: {ids}',
+                'more than one starter cluster with given name was '
+                f'found: {ids}',
             )
 
         raise KeyError(f'no deployment found with name: {deployment_name}')
@@ -249,54 +476,58 @@ def get_deployment(
     deployment_id = params.get('deployment_id') or \
         (params.get('in_deployment') or {}).get('deployment_id') or \
         (params.get('group') or {}).get('deployment_id') or \
+        ((params.get('in') or {}).get('in_cluster') or {}).get('deployment_id') or \
         ((params.get('in') or {}).get('in_group') or {}).get('deployment_id') or \
         ((params.get('in') or {}).get('in_deployment') or {}).get('deployment_id')
 
     if deployment_id:
-        try:
-            # Standard workspace group
-            return manager.get_workspace_group(deployment_id)
-        except ManagementError as exc:
-            if exc.errno == 404:
-                try:
-                    # Starter workspace
-                    return manager.get_starter_workspace(deployment_id)
-                except ManagementError as exc:
-                    if exc.errno == 404:
-                        raise KeyError(f'no deployment found with ID: {deployment_id}')
-                    raise
-            else:
-                raise
+        return _deployment_by_id(manager, deployment_id)
 
-    # Use workspace group from environment
+    #
+    # Use the deployment named by the environment. v1 had a branch per
+    # environment variable because a group and a cluster were different
+    # resources; at v2 both variables name the same kind of thing, so one loop
+    # tries cluster then starter cluster for each.
+    #
+    for envvar in CLUSTER_ENV_VARS:
+        if os.environ.get(envvar):
+            return _deployment_by_id(manager, os.environ[envvar], envvar)
+
     if os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP'):
-        try:
-            return manager.get_workspace_group(
-                os.environ['SINGLESTOREDB_WORKSPACE_GROUP'],
-            )
-        except ManagementError as exc:
-            if exc.errno == 404:
-                raise KeyError(
-                    'no workspace found with ID: '
-                    f'{os.environ["SINGLESTOREDB_WORKSPACE_GROUP"]}',
-                )
-            raise
-
-    # Use cluster from environment
-    if os.environ.get('SINGLESTOREDB_CLUSTER'):
-        try:
-            return manager.get_starter_workspace(
-                os.environ['SINGLESTOREDB_CLUSTER'],
-            )
-        except ManagementError as exc:
-            if exc.errno == 404:
-                raise KeyError(
-                    'no starter workspace found with ID: '
-                    f'{os.environ["SINGLESTOREDB_CLUSTER"]}',
-                )
-            raise
+        # Deliberately not resolved. v2 has no addressable group resource, and
+        # Cluster.group_id is not a lookup key, so guessing which cluster was
+        # meant could target the wrong deployment.
+        raise KeyError(
+            'SINGLESTOREDB_WORKSPACE_GROUP names a workspace group, which has '
+            'no management API v2 equivalent -- clusters are flat and a '
+            "cluster's group ID is not addressable. Set SINGLESTOREDB_CLUSTER "
+            'to the cluster ID instead, or name the deployment with '
+            'IN CLUSTER.',
+        )
 
     raise KeyError('no deployment was specified')
+
+
+def _deployment_by_id(
+    manager: ClusterManager,
+    deployment_id: str,
+    envvar: Optional[str] = None,
+) -> Union[Cluster, StarterCluster]:
+    """Look an ID up as a cluster, then as a starter cluster."""
+    source = f' (from {envvar})' if envvar else ''
+    try:
+        return manager.get_cluster(deployment_id)
+    except ManagementError as exc:
+        if not _is_missing(exc):
+            raise
+    try:
+        return manager.get_starter_cluster(deployment_id)
+    except ManagementError as exc:
+        if _is_missing(exc):
+            raise KeyError(
+                f'no deployment found with ID: {deployment_id}{source}',
+            )
+        raise
 
 
 def get_file_space(params: Dict[str, Any]) -> FileSpace:
@@ -327,7 +558,15 @@ def get_file_space(params: Dict[str, Any]) -> FileSpace:
 
 
 def get_inference_api_manager() -> InferenceAPIManager:
-    """Return the inference API manager for the current project."""
+    """
+    Return the inference API manager for the current project.
+
+    Stays on the v1 manager while files and jobs move to v2, because unlike
+    those two there is no v2 route to move to:
+    ``Organization.inference_apis`` raises for every version past v1 and
+    ``management/inference_api.py`` is v1-pinned. Revisit when the models and
+    inference surface gains a v2 equivalent.
+    """
     wm = get_workspace_manager()
     return wm.organization.inference_apis
 
