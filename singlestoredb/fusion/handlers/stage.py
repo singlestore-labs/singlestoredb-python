@@ -18,7 +18,8 @@ class ShowStageFilesHandler(SQLHandler):
         [ <limit> ] [ recursive ] [ extended ];
 
     # Deployment
-    in = { in_group | in_deployment }
+    in = { in_cluster | in_group | in_deployment }
+    in_cluster = IN CLUSTER { deployment_id | deployment_name }
     in_group = IN GROUP { deployment_id | deployment_name }
     in_deployment = IN { deployment_id | deployment_name }
 
@@ -141,7 +142,8 @@ class UploadStageFileHandler(SQLHandler):
     stage_path = '<stage-path>'
 
     # Deployment
-    in = { in_group | in_deployment }
+    in = { in_cluster | in_group | in_deployment }
+    in_cluster = IN CLUSTER { deployment_id | deployment_name }
     in_group = IN GROUP { deployment_id | deployment_name }
     in_deployment = IN { deployment_id | deployment_name }
 
@@ -219,7 +221,8 @@ class DownloadStageFileHandler(SQLHandler):
     stage_path = '<stage-path>'
 
     # Deployment
-    in = { in_group | in_deployment }
+    in = { in_cluster | in_group | in_deployment }
+    in_cluster = IN CLUSTER { deployment_id | deployment_name }
     in_group = IN GROUP { deployment_id | deployment_name }
     in_deployment = IN { deployment_id | deployment_name }
 
@@ -321,7 +324,8 @@ class DropStageFileHandler(SQLHandler):
     stage_path = '<stage-path>'
 
     # Deployment
-    in = { in_group | in_deployment }
+    in = { in_cluster | in_group | in_deployment }
+    in_cluster = IN CLUSTER { deployment_id | deployment_name }
     in_group = IN GROUP { deployment_id | deployment_name }
     in_deployment = IN { deployment_id | deployment_name }
 
@@ -383,7 +387,8 @@ class DropStageFolderHandler(SQLHandler):
     stage_path = '<stage-path>'
 
     # Deployment
-    in = { in_group | in_deployment }
+    in = { in_cluster | in_group | in_deployment }
+    in_cluster = IN CLUSTER { deployment_id | deployment_name }
     in_group = IN GROUP { deployment_id | deployment_name }
     in_deployment = IN { deployment_id | deployment_name }
 
@@ -448,7 +453,8 @@ class CreateStageFolderHandler(SQLHandler):
         [ overwrite ];
 
     # Deployment
-    in = { in_group | in_deployment }
+    in = { in_cluster | in_group | in_deployment }
+    in_cluster = IN CLUSTER { deployment_id | deployment_name }
     in_group = IN GROUP { deployment_id | deployment_name }
     in_deployment = IN { deployment_id | deployment_name }
 
