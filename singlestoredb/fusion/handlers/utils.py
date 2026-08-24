@@ -50,8 +50,17 @@ def get_cluster_manager() -> ClusterManager:
 
 
 def get_files_manager() -> FilesManager:
-    """Return a new files manager."""
-    return manage_files()
+    """
+    Return a new files manager.
+
+    Pinned to v2. ``management/files.py`` is version-neutral -- the personal,
+    shared and models spaces are the same resource at both versions and only
+    the URL differs -- so the pin is about which URL the Fusion FILES commands
+    address, not about which implementation they get. It is explicit rather
+    than left to the ``management.version`` option so that the FILES commands
+    do not change which API they talk to when an unrelated option is set.
+    """
+    return manage_files(version='v2')
 
 
 def dt_isoformat(dt: Optional[datetime.datetime]) -> Optional[str]:
