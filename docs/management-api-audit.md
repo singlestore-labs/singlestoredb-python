@@ -453,10 +453,15 @@ These are not in the scope of this audit pass but are worth noting:
      organization sits in `Standard Project` without the SDK ever sending an ID.
      Handled by `ClusterManager._resolve_project_id`, which takes the caller's
      `project_id`, then `SINGLESTOREDB_PROJECT`, then the organization's only
-     project, and otherwise raises naming the candidates.
+     project, and otherwise raises naming the candidates. Both the argument and
+     the environment variable accept a project *name* as well as an ID:
+     `_project_id_for` treats a UUID as an ID and anything else as a name to
+     look up, which is safe because the route answers `400 uuid: incorrect UUID
+     length` for a non-UUID ID. The API does not promise names are unique, so an
+     ambiguous name raises rather than resolving to the first match.
    - `POST /v2/sharedtier/virtualClusters` does **not** require `projectID` —
      validation runs through to `databaseName` without it — so
-     `create_starter_cluster` leaves `project_id` a plain passthrough.
+     `create_starter_cluster` resolves `project_id` only when one is given.
    - Field-validation order on `POST /v2/clusters` is `region` → `projectID` →
      `firewallRanges` (which must be present, `[]` to disallow all inbound
      traffic) → `size`.

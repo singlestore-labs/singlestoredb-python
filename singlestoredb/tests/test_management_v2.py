@@ -40,6 +40,14 @@ TEST_DIR = os.path.dirname(__file__)
 FAKE_TOKEN = 'test-token-12345'
 FAKE_BASE_URL = 'https://api.example.com'
 
+# Fake project IDs. These have to be UUID-shaped: a project can be named by
+# either its name or its ID, and the wrapper tells the two apart by shape, so a
+# stand-in such as 'pr-1' would be read as a name and send the manager off to
+# list the organization's projects.
+FAKE_PROJECT_ID = '11111111-1111-4111-8111-111111111111'
+FAKE_SHARED_PROJECT_ID = '22222222-2222-4222-8222-222222222222'
+FAKE_STANDARD_PROJECT_ID = '33333333-3333-4333-8333-333333333333'
+
 
 def clean_name(s):
     """
@@ -205,7 +213,7 @@ class TestClusterManagerPosting(unittest.TestCase):
             firewall_ranges=['0.0.0.0/0'],
             admin_password='hunter2',
             update_window={'day': 3, 'hour': 4},
-            project_id='pr-1',
+            project_id=FAKE_PROJECT_ID,
         )
 
         self.assertIs(out, sentinel)
@@ -225,7 +233,7 @@ class TestClusterManagerPosting(unittest.TestCase):
         self.assertEqual(body['adminPassword'], 'hunter2')
         self.assertEqual(body['updateWindow'], {'day': 3, 'hour': 4})
         # The API rejects a create without projectID.
-        self.assertEqual(body['projectID'], 'pr-1')
+        self.assertEqual(body['projectID'], FAKE_PROJECT_ID)
         # Unset options are dropped rather than sent as null.
         self.assertNotIn('kai', body)
         self.assertNotIn('autoSuspend', body)
@@ -243,7 +251,7 @@ class TestClusterManagerPosting(unittest.TestCase):
                 name='us-east-1', provider='AWS',
                 id=None, region_name='us-east-1',
             ),
-            project_id='pr-1',
+            project_id=FAKE_PROJECT_ID,
         )
         body = mgr._post.call_args[1]['json']
         self.assertEqual(body['provider'], 'AWS')
@@ -294,7 +302,7 @@ class TestClusterManagerPosting(unittest.TestCase):
 
         out = mgr.create_cluster(
             'my-cluster', provider='AWS', region_name='us-east-1',
-            admin_password='hunter2', project_id='pr-1',
+            admin_password='hunter2', project_id=FAKE_PROJECT_ID,
         )
         self.assertEqual(out.admin_password, 'generated-not-hunter2')
         # A cluster that did not come from a create has no password to report.
@@ -454,7 +462,7 @@ class TestClusterFirewallWaiting(unittest.TestCase):
                 patch('singlestoredb.management.manager.time.sleep'):
             return mgr.create_cluster(
                 'my-cluster', provider='AWS', region_name='us-east-1',
-                project_id='pr-1', wait_interval=1, **kwargs,
+                project_id=FAKE_PROJECT_ID, wait_interval=1, **kwargs,
             )
 
     def test_create_cluster_waits_on_the_firewall(self):
@@ -605,13 +613,13 @@ class TestProjects(unittest.TestCase):
             'createdAt': '2025-10-15T11:22:33.454592Z',
             'edition': 'SHARED',
             'name': 'Shared Project',
-            'projectID': 'pr-shared',
+            'projectID': FAKE_SHARED_PROJECT_ID,
         },
         {
             'createdAt': '2025-10-15T11:22:33.454592Z',
             'edition': 'STANDARD',
             'name': 'Standard Project',
-            'projectID': 'pr-standard',
+            'projectID': FAKE_STANDARD_PROJECT_ID,
         },
     ]
 
@@ -644,35 +652,101 @@ class TestProjects(unittest.TestCase):
         projects = mgr.projects
         mgr._get.assert_called_once_with('projects')
         self.assertIsInstance(projects, NamedList)
-        self.assertEqual([x.id for x in projects], ['pr-shared', 'pr-standard'])
+        self.assertEqual(
+            [x.id for x in projects],
+            [FAKE_SHARED_PROJECT_ID, FAKE_STANDARD_PROJECT_ID],
+        )
         self.assertEqual([x.edition for x in projects], ['SHARED', 'STANDARD'])
         # NamedList lookup works by name and by ID.
-        self.assertEqual(projects['Standard Project'].id, 'pr-standard')
-        self.assertEqual(projects['pr-shared'].name, 'Shared Project')
+        self.assertEqual(projects['Standard Project'].id, FAKE_STANDARD_PROJECT_ID)
+        self.assertEqual(projects[FAKE_SHARED_PROJECT_ID].name, 'Shared Project')
         self.assertEqual(projects[0].created_at.year, 2025)
 
     def test_get_project(self):
         mgr = self._make_cluster_manager(self.PROJECTS[1])
-        project = mgr.get_project('pr-standard')
-        mgr._get.assert_called_once_with('projects/pr-standard')
+        project = mgr.get_project(FAKE_STANDARD_PROJECT_ID)
+        mgr._get.assert_called_once_with(f'projects/{FAKE_STANDARD_PROJECT_ID}')
         self.assertEqual(project.name, 'Standard Project')
 
     def test_explicit_project_id_wins_over_the_environment(self):
         mgr = self._make_cluster_manager()
-        with patch.dict(os.environ, {'SINGLESTOREDB_PROJECT': 'pr-env'}):
-            self.assertEqual(mgr._resolve_project_id('pr-arg'), 'pr-arg')
+        with patch.dict(
+            os.environ, {'SINGLESTOREDB_PROJECT': FAKE_STANDARD_PROJECT_ID},
+        ):
+            self.assertEqual(
+                mgr._resolve_project_id(FAKE_PROJECT_ID), FAKE_PROJECT_ID,
+            )
 
     def test_environment_used_when_no_project_id_is_passed(self):
         mgr = self._make_cluster_manager(self.PROJECTS)
-        with patch.dict(os.environ, {'SINGLESTOREDB_PROJECT': 'pr-env'}):
-            self.assertEqual(mgr._resolve_project_id(), 'pr-env')
-        # The environment answers without listing projects.
+        with patch.dict(
+            os.environ, {'SINGLESTOREDB_PROJECT': FAKE_STANDARD_PROJECT_ID},
+        ):
+            self.assertEqual(
+                mgr._resolve_project_id(), FAKE_STANDARD_PROJECT_ID,
+            )
+        # An ID answers without listing projects.
         mgr._get.assert_not_called()
+
+    def test_a_project_may_be_named_instead_of_identified(self):
+        mgr = self._make_cluster_manager(self.PROJECTS)
+        self.assertEqual(
+            mgr._resolve_project_id('Standard Project'),
+            FAKE_STANDARD_PROJECT_ID,
+        )
+        mgr._get.assert_called_once_with('projects')
+
+    def test_the_environment_may_name_a_project(self):
+        mgr = self._make_cluster_manager(self.PROJECTS)
+        with patch.dict(
+            os.environ, {'SINGLESTOREDB_PROJECT': 'Shared Project'},
+        ):
+            self.assertEqual(
+                mgr._resolve_project_id(), FAKE_SHARED_PROJECT_ID,
+            )
+
+    def test_an_unknown_project_name_raises_and_lists_the_projects(self):
+        mgr = self._make_cluster_manager(self.PROJECTS)
+        with self.assertRaises(ManagementError) as cm:
+            mgr._resolve_project_id('Nonexistent Project')
+        msg = str(cm.exception)
+        self.assertIn('Nonexistent Project', msg)
+        self.assertIn('Standard Project', msg)
+        self.assertIn(FAKE_SHARED_PROJECT_ID, msg)
+
+    def test_an_ambiguous_project_name_raises(self):
+        # The API does not promise unique names, so two projects may share one.
+        twins = [
+            dict(self.PROJECTS[0], name='Twin'),
+            dict(self.PROJECTS[1], name='Twin'),
+        ]
+        mgr = self._make_cluster_manager(twins)
+        with self.assertRaises(ManagementError) as cm:
+            mgr._resolve_project_id('Twin')
+        msg = str(cm.exception)
+        self.assertIn(FAKE_SHARED_PROJECT_ID, msg)
+        self.assertIn(FAKE_STANDARD_PROJECT_ID, msg)
+
+    def test_create_starter_cluster_resolves_a_project_name(self):
+        mgr = self._make_cluster_manager(self.PROJECTS)
+        post_response = MagicMock()
+        post_response.json.return_value = {'virtualClusterID': 'vc-1'}
+        mgr._post = MagicMock(return_value=post_response)
+        mgr.get_starter_cluster = MagicMock()
+
+        mgr.create_starter_cluster(
+            'my-starter', database_name='db1', provider='AWS',
+            region_name='us-east-1', project_id='Standard Project',
+        )
+        self.assertEqual(
+            mgr._post.call_args[1]['json']['projectID'],
+            FAKE_STANDARD_PROJECT_ID,
+        )
 
     def test_a_sole_project_is_the_default(self):
         self._without_env()
         mgr = self._make_cluster_manager(self.PROJECTS[:1])
-        self.assertEqual(mgr._resolve_project_id(), 'pr-shared')
+        self.assertEqual(mgr._resolve_project_id(), FAKE_SHARED_PROJECT_ID)
 
     def test_more_than_one_project_raises_and_names_them(self):
         self._without_env()
@@ -680,7 +754,7 @@ class TestProjects(unittest.TestCase):
         with self.assertRaises(ManagementError) as cm:
             mgr._resolve_project_id()
         msg = str(cm.exception)
-        self.assertIn('pr-shared', msg)
+        self.assertIn(FAKE_SHARED_PROJECT_ID, msg)
         self.assertIn('Standard Project', msg)
         self.assertIn('SINGLESTOREDB_PROJECT', msg)
 
@@ -700,7 +774,7 @@ class TestProjects(unittest.TestCase):
 
         mgr.create_cluster('my-cluster', provider='AWS', region_name='us-east-1')
         self.assertEqual(
-            mgr._post.call_args[1]['json']['projectID'], 'pr-shared',
+            mgr._post.call_args[1]['json']['projectID'], FAKE_SHARED_PROJECT_ID,
         )
 
 

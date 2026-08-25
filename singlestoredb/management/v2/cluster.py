@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import re
 import time
 from typing import Any
 from typing import Dict
@@ -50,10 +51,21 @@ from .project import Project as Project
 #: Base management API path for the shared-tier resource.
 SHAREDTIER_PATH = 'sharedtier/virtualClusters'
 
-#: Environment variable naming the project new deployments belong to. Set by
+#: Environment variable naming the project new deployments belong to, by name
+#: or by ID -- see :meth:`ClusterManager._project_id_for`. Set by
 #: the SingleStore notebook environment; also read by the v1 inference API
 #: wrapper, so the name is shared rather than v2-specific.
 PROJECT_ENV_VAR = 'SINGLESTOREDB_PROJECT'
+
+#: Shape of a project ID. Anywhere a project can be named, a name is accepted
+#: in place of an ID, and this is how the two are told apart. Sending a project
+#: ID that is not a UUID comes back as ``400 uuid: incorrect UUID length``, so
+#: a value that does not match this could never have been a valid ID and
+#: nothing is lost by reading it as a name.
+PROJECT_ID_RE = re.compile(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}'
+    r'-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+)
 
 #: Environment variables that name the deployment the current process is
 #: running against, in priority order. These are set by the SingleStore
@@ -1058,20 +1070,74 @@ class ClusterManager(Manager):
 
         return out
 
+    def _project_id_for(self, name_or_id: str) -> str:
+        """
+        Return the ID of the project named by ``name_or_id``.
+
+        A UUID is taken as an ID and returned untouched, which keeps an
+        explicit ID free of a ``GET /v2/projects`` round trip. Anything else is
+        matched against the project names in the current organization. The API
+        does not promise that names are unique, so an ambiguous name raises
+        rather than picking the first match.
+
+        Parameters
+        ----------
+        name_or_id : str
+            Project name or ID
+
+        Returns
+        -------
+        str
+
+        Raises
+        ------
+        ManagementError
+            If the name matches no project, or more than one
+
+        """
+        if PROJECT_ID_RE.match(name_or_id):
+            return name_or_id
+
+        projects = self.projects
+        matches = [x for x in projects if x.name == name_or_id]
+
+        if not matches:
+            raise ManagementError(
+                msg=f'No project named {name_or_id!r} exists in the current '
+                    'organization. Its projects are: ' +
+                    (
+                        ', '.join(f'{x.name} ({x.id})' for x in projects)
+                        or 'none'
+                    ) + '.',
+            )
+
+        if len(matches) > 1:
+            raise ManagementError(
+                msg=f'More than one project is named {name_or_id!r}; use an ID '
+                    'instead. The matching IDs are: ' +
+                    ', '.join(x.id for x in matches) + '.',
+            )
+
+        return matches[0].id
+
     def _resolve_project_id(self, project_id: Optional[str] = None) -> str:
         """
         Return the project ID a new deployment should be created in.
 
         ``POST /v2/clusters`` requires ``projectID``, where the v1 workspace
-        group route assigned one implicitly. In priority order: the ID passed
-        by the caller, the :data:`PROJECT_ENV_VAR` environment variable, or the
-        organization's only project. An organization with more than one project
-        has no default -- naming the candidates is more useful than picking one.
+        group route assigned one implicitly. In priority order: the project
+        named by the caller, the :data:`PROJECT_ENV_VAR` environment variable,
+        or the organization's only project. An organization with more than one
+        project has no default -- naming the candidates is more useful than
+        picking one.
+
+        The caller and the environment variable may both give either a project
+        name or a project ID; see :meth:`_project_id_for`.
 
         Parameters
         ----------
         project_id : str, optional
-            Project ID supplied by the caller
+            Project name or ID supplied by the caller
 
         Returns
         -------
@@ -1084,11 +1150,11 @@ class ClusterManager(Manager):
 
         """
         if project_id:
-            return project_id
+            return self._project_id_for(project_id)
 
         from_env = os.environ.get(PROJECT_ENV_VAR)
         if from_env:
-            return from_env
+            return self._project_id_for(from_env)
 
         projects = self.projects
         if len(projects) == 1:
@@ -1096,14 +1162,15 @@ class ClusterManager(Manager):
 
         if not projects:
             raise ManagementError(
-                msg='A project ID is required to create a cluster, but the '
+                msg='A project is required to create a cluster, but the '
                     'current organization reports no projects.',
             )
 
         raise ManagementError(
-            msg='A project ID is required to create a cluster and the current '
-                'organization has more than one project. Pass project_id= or '
-                f'set the {PROJECT_ENV_VAR} environment variable to one of: ' +
+            msg='A project is required to create a cluster and the current '
+                'organization has more than one. Pass project_id= or set the '
+                f'{PROJECT_ENV_VAR} environment variable to the name or ID of '
+                'one of: ' +
                 ', '.join(f'{x.name} ({x.id})' for x in projects) + '.',
         )
 
@@ -1188,8 +1255,9 @@ class ClusterManager(Manager):
         opt_in_preview_feature : bool, optional
             Whether to opt in to preview features
         project_id : str, optional
-            Project ID to create the cluster in. Required by the API; if it is
-            not given it is resolved by :meth:`_resolve_project_id` from the
+            Project name or ID to create the cluster in; a value that is not a
+            UUID is looked up as a name. Required by the API; if it is not
+            given it is resolved by :meth:`_resolve_project_id` from the
             ``SINGLESTOREDB_PROJECT`` environment variable or from the
             organization's only project.
         wait_on_active : bool, optional
@@ -1331,7 +1399,10 @@ class ClusterManager(Manager):
         region_name : str
             Cloud provider region for the starter cluster (e.g., 'us-east-1')
         project_id : str, optional
-            Project ID to associate the starter cluster with
+            Project name or ID to associate the starter cluster with; a value
+            that is not a UUID is looked up as a name. Unlike
+            :meth:`create_cluster` this route does not require one, so nothing
+            is resolved when it is omitted.
 
         Returns
         -------
@@ -1350,7 +1421,7 @@ class ClusterManager(Manager):
             'regionName': region_name,
         }
         if project_id is not None:
-            payload['projectID'] = project_id
+            payload['projectID'] = self._project_id_for(project_id)
 
         res = self._post(SHAREDTIER_PATH, json=payload)
         cluster_id = res.json().get('virtualClusterID')
