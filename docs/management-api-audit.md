@@ -594,6 +594,42 @@ These are not in the scope of this audit pass but are worth noting:
     "reachable", and the update path additionally accepts `allowAllTraffic` as
     satisfying a requested `0.0.0.0/0`. `Cluster.allow_all_traffic` was already
     parsed, so nothing else changed.
+14. **Four v1 workspace-group capabilities have no v2 equivalent.** Recorded
+    here so that `CREATE CLUSTER` can be read against a list rather than
+    against `create_workspace_group`'s signature. `create_workspace_group`
+    posts `adminPassword`, `backupBucketKMSKeyID`, `dataBucketKMSKeyID` and
+    `smartDR`; `POST /v2/clusters` has none of the last three, and ignores the
+    first (item 8). Only `highAvailabilityTwoZones` survives the move, renamed
+    to `multiAZ` (`v2/cluster.py:250`).
+
+    Consequence for the Fusion grammar: `CREATE CLUSTER` deliberately offers no
+    `WITH PASSWORD`, KMS-key or `SMART DR` clause. A clause for any of them
+    would parse, be sent, and be dropped without comment — worse than not
+    offering it, because the statement would read as though it had taken
+    effect. The three KMS/DR fields are flag-only in the spec dump (see
+    cross-cutting item 2), so their absence at v2 is not independently
+    confirmable from the dump either.
+
+    Because the password is generated and reported only in the create response,
+    `CREATE CLUSTER` returns a one-row result carrying `Name`, `ID`, `Endpoint`
+    and `AdminPassword`. `CREATE WORKSPACE GROUP` returns no row, and the
+    divergence is deliberate: at v1 the caller already knew the password
+    because it chose it, and at v2 a cluster created without capturing the
+    response has no reachable `admin` user.
+
+    **Two questions still open**, both requiring a throwaway billable cluster
+    that has not been created:
+
+    - Whether `PATCH /v2/clusters/{id}` honours `adminPassword`. Acceptance
+      would prove nothing on its own — item 9 records the same route accepting
+      and silently ignoring `name` — so settling it needs a real connection
+      attempt with the patched value. If PATCH does honour it, `WITH PASSWORD`
+      becomes implementable as create-then-PATCH; if not, this entry is the
+      upstream bug report.
+    - Re-confirmation of item 8 against the current API. Item 8 was confirmed
+      2026-08-21, but finding 6's `GET /v2/regions/sharedtier` claim has since
+      been corrected from a live probe, so one of the audit's v2 assertions has
+      already proved wrong.
 
 ---
 

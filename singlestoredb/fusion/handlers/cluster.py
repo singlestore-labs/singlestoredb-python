@@ -685,9 +685,14 @@ class DropClusterHandler(SQLHandler):
       only if a cluster with the specified ID or name exists.
     * Use the ``WAIT ON TERMINATED`` clause to pause query execution until
       the cluster is in the ``TERMINATED`` state.
-    * There is no ``FORCE`` clause. At v1, ``FORCE`` meant "terminate the
-      workspace group even though it still contains workspaces"; a cluster
-      is flat and has no children, so the option has nothing to override.
+    * There is no ``FORCE`` clause. At v1 it meant "terminate the workspace
+      group even though it still contains workspaces", and a cluster is flat,
+      so there are no children for it to override. ``DELETE /v2/clusters``
+      does still take a ``force`` query parameter, which
+      ``Cluster.terminate()`` documents as "even if it is in use" -- a
+      different meaning that has not been confirmed against the live API. The
+      clause is withheld rather than guessed at; see item 14 of
+      ``docs/management-api-audit.md``.
     * All databases attached to the cluster are detached when the cluster
       is deleted.
 
