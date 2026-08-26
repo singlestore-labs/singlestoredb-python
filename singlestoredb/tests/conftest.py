@@ -29,6 +29,7 @@ Available Fixtures:
 import logging
 import os
 from collections.abc import Iterator
+from typing import Any
 from typing import Optional
 
 import pytest
@@ -48,6 +49,18 @@ logger = logging.getLogger(__name__)
 _container_manager: Optional[_TestContainerManager] = None
 
 
+def _test_utils() -> Any:
+    """
+    Return the test helper module.
+
+    Imported through a function returning ``Any`` because ``tests/utils.py``
+    carries a module-level ``# type: ignore``, which leaves mypy with no
+    attributes to check against.
+    """
+    from singlestoredb.tests import utils
+    return utils
+
+
 def pytest_configure(config: pytest.Config) -> None:
     """
     Pytest hook that runs before test collection.
@@ -57,6 +70,10 @@ def pytest_configure(config: pytest.Config) -> None:
     parameters at import time, so we need the environment set up early.
     """
     global _container_manager
+
+    # Before any test module is imported: a setUpClass can create clusters,
+    # and they have to be tracked from the first one.
+    _test_utils().install_deployment_tracking()
 
     # Prevent double initialization - pytest_configure can be called multiple times
     if _container_manager is not None:
@@ -134,13 +151,71 @@ def pytest_configure(config: pytest.Config) -> None:
         logger.debug(f'Using existing SINGLESTOREDB_URL={url}')
 
 
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """
+    Sweep the previous test class's deployments before the next one starts.
+
+    This hook runs before pytest triggers ``setUpClass``, so by the time a
+    class begins the one before it is finished -- ``tearDownClass`` included,
+    or skipped because ``setUpClass`` raised. Sweeping here rather than only
+    at the end of the session means a leaked cluster is billed for one class,
+    not for the rest of the run.
+    """
+    utils = _test_utils()
+
+    try:
+        cls = getattr(item, 'cls', None)
+        owner = '{}.{}'.format(
+            item.module.__name__ if getattr(item, 'module', None) else '',
+            cls.__name__ if cls is not None else '',
+        )
+    except Exception:  # pragma: no cover - non-python items
+        return
+
+    if owner == utils.get_owner():
+        return
+
+    previous = utils.get_owner()
+    utils.set_owner(owner)
+    if previous:
+        _sweep_live_deployments(previous)
+
+
+def _sweep_live_deployments(owner: Optional[str] = None) -> None:
+    """
+    Terminate workspace groups, workspaces and clusters tests left behind.
+
+    A class whose ``setUpClass`` raises never gets its ``tearDownClass``, so
+    the deployments it had already created would otherwise stay live -- and
+    billed -- indefinitely. Anything a test created is swept here whether or
+    not the test that made it ran to completion.
+    """
+    try:
+        removed = _test_utils().cleanup_tracked(owner)
+    except Exception as exc:  # pragma: no cover - shutdown path
+        print(f'\n✗ Failed to sweep leftover deployments: {exc}')
+        logger.error(f'Failed to sweep leftover deployments: {exc}')
+        return
+
+    if removed:
+        print('\n' + '=' * 70)
+        print('Terminated deployments left behind by tests:')
+        for label in removed:
+            print(f'  - {label}')
+        print('=' * 70)
+        logger.info(f'Swept {len(removed)} leftover deployment(s)')
+
+
 def pytest_unconfigure(config: pytest.Config) -> None:
     """
     Pytest hook that runs after all tests complete.
 
-    Cleans up the Docker container if one was started.
+    Terminates any live deployment a test left behind, then cleans up the
+    Docker container if one was started.
     """
     global _container_manager
+
+    _sweep_live_deployments()
 
     if _container_manager is not None and not _container_manager.use_existing:
         print('\n' + '=' * 70)

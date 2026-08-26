@@ -12,6 +12,7 @@ import os
 import pathlib
 import unittest
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 from singlestoredb.exceptions import ManagementError
 from singlestoredb.management.utils import normalize_remote_path
@@ -510,6 +511,319 @@ class TestTTLProperty(unittest.TestCase):
         self.assertEqual(obj.value, 1)
         type(obj).__dict__['value'].reset(obj)
         self.assertEqual(obj.value, 2)
+
+
+class TestManagerTransport(unittest.TestCase):
+    """
+    Retries and timeouts on the session every manager shares.
+
+    The long ``wait_on_active`` loops poll for twenty minutes, and a
+    keep-alive connection the far end closed while the client slept surfaces
+    as ``RemoteDisconnected`` on the next poll -- which used to fail the whole
+    operation, leaving a live cluster behind.
+    """
+
+    def _manager(self):
+        from singlestoredb.management.manager import Manager
+        return Manager(access_token='fake-token', base_url='https://example.com')
+
+    def test_retries_are_mounted_for_both_schemes(self):
+        mgr = self._manager()
+        for prefix in ('http://', 'https://'):
+            retries = mgr._sess.get_adapter(prefix + 'x').max_retries
+            self.assertGreater(retries.total, 0)
+
+    def test_post_is_not_replayed(self):
+        # A dropped connection does not say whether the server acted on the
+        # request, and a replayed POST /clusters deploys twice.
+        retries = self._manager()._sess.get_adapter('https://x').max_retries
+        self.assertNotIn('POST', retries.allowed_methods)
+        self.assertIn('GET', retries.allowed_methods)
+        self.assertIn('DELETE', retries.allowed_methods)
+
+    def test_transient_statuses_are_retried(self):
+        retries = self._manager()._sess.get_adapter('https://x').max_retries
+        for status in (429, 502, 503, 504):
+            self.assertIn(status, retries.status_forcelist)
+        self.assertNotIn(404, retries.status_forcelist)
+        # _check has to be the one to raise, so it can quote the body.
+        self.assertFalse(retries.raise_on_status)
+
+    def test_a_default_timeout_is_applied(self):
+        mgr = self._manager()
+        mgr._sess.get = MagicMock()
+        mgr._doit('get', 'clusters')
+        self.assertEqual(
+            mgr._sess.get.call_args[1]['timeout'],
+            (10.0, 180.0),
+        )
+
+    def test_an_explicit_timeout_wins(self):
+        mgr = self._manager()
+        mgr._sess.get = MagicMock()
+        mgr._doit('get', 'clusters', timeout=1)
+        self.assertEqual(mgr._sess.get.call_args[1]['timeout'], 1)
+
+    def test_a_transport_failure_names_the_route(self):
+        import requests
+
+        mgr = self._manager()
+        mgr._sess.get = MagicMock(
+            side_effect=requests.exceptions.ConnectionError(
+                'Connection aborted.',
+            ),
+        )
+        with self.assertRaises(ManagementError) as cm:
+            mgr._doit('get', 'clusters/abc')
+
+        msg = str(cm.exception)
+        self.assertIn('ConnectionError', msg)
+        self.assertIn('GET', msg)
+        self.assertIn('clusters/abc', msg)
+
+
+class TestDeploymentTracking(unittest.TestCase):
+    """
+    The sweeper in ``tests/utils.py`` that keeps test runs from leaking
+    billable deployments.
+    """
+
+    def setUp(self):
+        from singlestoredb.tests import utils
+        self.utils = utils
+        self.saved = list(utils._tracked)
+        utils._tracked.clear()
+        self.addCleanup(self._restore)
+        self.owner = utils.get_owner()
+        self.addCleanup(lambda: utils.set_owner(self.owner))
+
+    def _restore(self):
+        self.utils._tracked.clear()
+        self.utils._tracked.extend(self.saved)
+
+    def _deployment(self, name, terminated_at=None, state='ACTIVE'):
+        """A stand-in that is not a Mock, so tracking does not skip it."""
+        class Deployment:
+            def __init__(self):
+                self.name = name
+                self.id = name
+                self.terminated_at = terminated_at
+                self.state = state
+                self.terminated_with = None
+                self._manager = object()
+
+            def refresh(self):
+                return self
+
+            def terminate(self, force=False):
+                self.terminated_with = force
+
+        return Deployment()
+
+    def test_mocked_deployments_are_not_tracked(self):
+        # The unit tests create objects from patched _post calls; sweeping
+        # those would be a round trip and a warning per fake object.
+        self.utils.track(MagicMock())
+        self.assertEqual(self.utils._tracked, [])
+
+    def test_a_tracked_deployment_is_terminated_with_force(self):
+        obj = self._deployment('wg-1')
+        self.utils.track(obj)
+        self.assertEqual(len(self.utils.cleanup_tracked()), 1)
+        self.assertTrue(obj.terminated_with)
+        self.assertEqual(self.utils._tracked, [])
+
+    def test_an_already_terminated_deployment_is_left_alone(self):
+        obj = self._deployment('wg-1', terminated_at='2026-01-01T00:00:00Z')
+        self.utils.track(obj)
+        self.assertEqual(self.utils.cleanup_tracked(), [])
+        self.assertIsNone(obj.terminated_with)
+
+    def test_a_deployment_that_no_longer_exists_is_left_alone(self):
+        obj = self._deployment('wg-1')
+        obj.refresh = MagicMock(side_effect=KeyError('gone'))
+        self.utils.track(obj)
+        self.assertEqual(self.utils.cleanup_tracked(), [])
+        self.assertIsNone(obj.terminated_with)
+
+    def test_children_are_terminated_before_their_parents(self):
+        group = self._deployment('wg-1')
+        space = self._deployment('ws-1')
+        order = []
+        for obj in (group, space):
+            obj.terminate = lambda force=False, obj=obj: order.append(obj.name)
+        self.utils.track(group)
+        self.utils.track(space)
+        self.utils.cleanup_tracked()
+        self.assertEqual(order, ['ws-1', 'wg-1'])
+
+    def test_a_sweep_is_limited_to_one_owner(self):
+        self.utils.set_owner('mod.ClassA')
+        first = self.utils.track(self._deployment('a'))
+        self.utils.set_owner('mod.ClassB')
+        second = self.utils.track(self._deployment('b'))
+
+        self.assertEqual(self.utils.cleanup_tracked('mod.ClassA'), ["Deployment 'a'"])
+        self.assertTrue(first.terminated_with)
+        self.assertIsNone(second.terminated_with)
+
+        # ... and the rest still goes at the end of the session.
+        self.assertEqual(len(self.utils.cleanup_tracked()), 1)
+        self.assertTrue(second.terminated_with)
+
+    def test_a_failed_termination_does_not_stop_the_sweep(self):
+        first = self._deployment('a')
+        first.terminate = MagicMock(side_effect=RuntimeError('boom'))
+        second = self._deployment('b')
+        self.utils.track(first)
+        self.utils.track(second)
+
+        # Nothing raises: this runs outside any test, where an exception is
+        # reported against whatever happens to run next.
+        self.assertEqual(self.utils.cleanup_tracked(), ["Deployment 'b'"])
+        self.assertTrue(second.terminated_with)
+
+    def test_untrack_drops_a_deployment(self):
+        obj = self.utils.track(self._deployment('a'))
+        self.utils.untrack(obj)
+        self.assertEqual(self.utils.cleanup_tracked(), [])
+        self.assertIsNone(obj.terminated_with)
+
+    def test_every_creation_method_is_wrapped(self):
+        # A rename that silently stops tracking is how a cluster leaks.
+        import importlib
+
+        self.utils.install_deployment_tracking()
+        for module_name, class_name, method_name in self.utils._CREATORS:
+            klass = getattr(importlib.import_module(module_name), class_name)
+            method = getattr(klass, method_name, None)
+            self.assertIsNotNone(
+                method, f'{class_name}.{method_name} no longer exists',
+            )
+            self.assertTrue(
+                hasattr(method, '__wrapped__'),
+                f'{class_name}.{method_name} is not tracked',
+            )
+
+
+class TestLeftoverDeploymentPatterns(unittest.TestCase):
+    """
+    The maintenance sweep runs against a real organization, so it must match
+    the names the suite generates and nothing else.
+    """
+
+    def setUp(self):
+        from singlestoredb.tests import cleanup_deployments
+        self.mod = cleanup_deployments
+
+    def test_generated_names_match(self):
+        for name in (
+            'wg-test-abcDEF_12',
+            'ws-test-abcDEF-x',
+            'cl-test-abcDEF',
+            'starter-ws-test-abcDEF',
+            'starter-cl-test-abcDEF',
+            'A Fusion Testing deadbeefdeadbeef',
+            'C Fusion Testing deadbeef',
+            'd-fusion-cluster-deadbeef',
+            'jobs-fusion-deadbeef',
+            'stage-fusion-2-deadbeef',
+        ):
+            self.assertTrue(self.mod.is_test_deployment(name), name)
+
+    def test_names_a_person_chose_do_not_match(self):
+        for name in (
+            None,
+            '',
+            'my-production-cluster',
+            'wg-test',
+            'prod wg-test-x',
+            'analytics-fusion-cluster',
+            'Fusion Testing',
+            'a-fusion-cluster-deadbeef-prod',
+        ):
+            self.assertFalse(self.mod.is_test_deployment(name), name)
+
+    def _cluster(self, name, hours=None, naive=False):
+        # A naive created_at is what the API sends when it omits the zone: the
+        # instant is still UTC, the tzinfo is just missing.
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        if naive:
+            now = now.replace(tzinfo=None)
+
+        class Cluster:
+            def __init__(self):
+                self.name = name
+                self.id = name
+                self.terminated_at = None
+                self.created_at = (
+                    None if hours is None
+                    else now - datetime.timedelta(hours=hours)
+                )
+
+        return Cluster()
+
+    def _find(self, clusters, **kwargs):
+        """Run find_leftovers against a fixed cluster list."""
+        import singlestoredb as s2
+
+        manager = MagicMock()
+        manager.clusters = clusters
+        manager.starter_clusters = []
+        with patch.object(
+            s2, 'manage_clusters', return_value=manager,
+        ), patch.object(
+            s2, 'manage_workspaces', side_effect=RuntimeError('no v1'),
+        ):
+            found, spared = self.mod.find_leftovers(**kwargs)
+        return [x[1].name for x in found], spared
+
+    def test_the_age_filter_spares_a_deployment_a_live_run_may_own(self):
+        # A parallel run's fixtures are named exactly like stranded ones, so
+        # age is the only thing keeping this from killing them mid-test.
+        old = self._cluster('cl-test-old', hours=5)
+        new = self._cluster('cl-test-new', hours=0.5)
+        terminated = self._cluster('cl-test-gone', hours=5)
+        terminated.terminated_at = 'yes'
+
+        names, spared = self._find([old, new, terminated], older_than=2)
+
+        self.assertEqual(names, ['cl-test-old'])
+        self.assertEqual(len(spared), 1)
+        self.assertIn('cl-test-new', spared[0])
+
+    def test_the_default_spares_anything_a_run_could_still_own(self):
+        # Not zero: a default that swept every match would make running this
+        # during a test run destructive.
+        self.assertGreaterEqual(self.mod.DEFAULT_MIN_AGE_HOURS, 1)
+        names, spared = self._find([
+            self._cluster('cl-test-mid-run', hours=1),
+        ])
+        self.assertEqual(names, [])
+        self.assertEqual(len(spared), 1)
+
+    def test_an_unreported_creation_time_is_spared_by_default(self):
+        names, spared = self._find([self._cluster('cl-test-ageless')])
+        self.assertEqual(names, [])
+        self.assertIn('cl-test-ageless', spared[0])
+
+        names, _ = self._find(
+            [self._cluster('cl-test-ageless')], include_unknown_age=True,
+        )
+        self.assertEqual(names, ['cl-test-ageless'])
+
+    def test_a_naive_timestamp_is_read_as_utc(self):
+        # Reading it as local time would overstate the age east of UTC and
+        # sweep a deployment a live run owns.
+        obj = self._cluster('cl-test-naive', hours=1, naive=True)
+        self.assertAlmostEqual(self.mod._age_hours(obj), 1, delta=0.1)
+
+    def test_zero_sweeps_everything_matched(self):
+        names, spared = self._find(
+            [self._cluster('cl-test-brand-new', hours=0)], older_than=0,
+        )
+        self.assertEqual(names, ['cl-test-brand-new'])
+        self.assertEqual(spared, [])
 
 
 if __name__ == '__main__':

@@ -9,6 +9,7 @@ import uuid
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 from urllib.parse import urlparse
 
@@ -276,3 +277,231 @@ def drop_user(name: str) -> None:
         with s2.connect(**args) as conn:
             with conn.cursor() as cur:
                 cur.execute(f'DROP USER IF EXISTS {name};')
+
+
+#
+# Live deployment tracking
+#
+# Every workspace group, workspace, cluster and starter cluster a test creates
+# costs money until it is terminated, and the usual `tearDownClass` is not
+# enough on its own:
+#
+#   * unittest does not call `tearDownClass` at all if `setUpClass` raises, so
+#     a fixture that dies partway through -- two of three clusters created,
+#     then a dropped connection -- leaks everything it had made so far;
+#   * a test that creates a deployment in its body and then fails before its
+#     own cleanup line leaks it too.
+#
+# So creations are registered here as well, and `cleanup_tracked()` sweeps
+# whatever is left: per test class as the run moves on to the next one, and
+# again for everything at the end of the session (see conftest.py).
+# Terminating twice is harmless -- the second attempt finds it gone and is
+# ignored -- so tracked objects do not have to be untracked by the tests that
+# clean up after themselves.
+#
+
+#: (owner, label, object) for every deployment created so far and not yet
+#: swept. The owner is the test class that was running at creation time, so
+#: a class's leftovers can be dropped when the run leaves that class rather
+#: than idling -- and billing -- until the session ends.
+_tracked: List[Tuple[str, str, Any]] = []
+
+#: Test class currently running, as set by conftest.
+_owner = ''
+
+
+def get_owner() -> str:
+    """Return the test class creations are currently attributed to."""
+    return _owner
+
+
+def set_owner(owner: str) -> None:
+    """Record which test class subsequent creations belong to."""
+    global _owner
+    _owner = owner
+
+
+def _is_mocked(obj: Any) -> bool:
+    """
+    Did this object come out of a mocked manager?
+
+    The unit tests call the same creation methods with ``_post`` patched, and
+    the objects they get back name deployments that do not exist. Sweeping
+    those would be a round trip per fake object and a warning apiece.
+    """
+    from unittest.mock import NonCallableMock
+
+    if isinstance(obj, NonCallableMock):
+        return True
+    manager = getattr(obj, '_manager', None)
+    if manager is None:
+        return True
+    if isinstance(manager, NonCallableMock):
+        return True
+    return any(
+        isinstance(getattr(manager, x, None), NonCallableMock)
+        for x in ('_get', '_post', '_delete')
+    )
+
+
+def track(obj: Any, label: str = '') -> Any:
+    """
+    Register a live deployment for end-of-session cleanup.
+
+    Returns the object, so it can wrap a creation call in place::
+
+        cls.cluster = utils.track(mgr.create_cluster(...))
+
+    """
+    if obj is not None and not _is_mocked(obj):
+        _tracked.append((
+            _owner,
+            label or '{} {!r}'.format(
+                type(obj).__name__, getattr(obj, 'name', None) or
+                getattr(obj, 'id', '?'),
+            ),
+            obj,
+        ))
+    return obj
+
+
+def untrack(obj: Any) -> None:
+    """Forget a deployment that has been terminated."""
+    for i, entry in reversed(list(enumerate(_tracked))):
+        if entry[2] is obj:
+            _tracked.pop(i)
+
+
+def terminate(obj: Any) -> None:
+    """
+    Terminate a deployment, whatever kind it is.
+
+    ``force=True`` is what makes a workspace group with live workspaces in it
+    go away; the starter variants take no arguments at all.
+    """
+    try:
+        obj.terminate(force=True)
+    except TypeError:
+        obj.terminate()
+
+
+#: (module, class, method) triples that bring a billable deployment into
+#: existence. Wrapping them is what makes tracking automatic, so a new test
+#: cannot leak a cluster by forgetting to register it.
+_CREATORS = [
+    (
+        'singlestoredb.management.v1.workspace', 'WorkspaceManager',
+        'create_workspace_group',
+    ),
+    (
+        'singlestoredb.management.v1.workspace', 'WorkspaceManager',
+        'create_workspace',
+    ),
+    (
+        'singlestoredb.management.v1.workspace', 'WorkspaceManager',
+        'create_starter_workspace',
+    ),
+    (
+        'singlestoredb.management.v1.workspace', 'WorkspaceGroup',
+        'create_workspace',
+    ),
+    ('singlestoredb.management.v2.cluster', 'ClusterManager', 'create_cluster'),
+    (
+        'singlestoredb.management.v2.cluster', 'ClusterManager',
+        'create_starter_cluster',
+    ),
+]
+
+_tracking_installed = False
+
+
+def install_deployment_tracking() -> None:
+    """
+    Wrap the deployment creation methods so their results are tracked.
+
+    Called from ``pytest_configure`` rather than a fixture: it has to be in
+    place before any test module is imported, since a ``setUpClass`` can run
+    creations that a later fixture would never see.
+    """
+    global _tracking_installed
+    if _tracking_installed:
+        return
+    _tracking_installed = True
+
+    import functools
+    import importlib
+
+    def wrap(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            return track(func(*args, **kwargs))
+        return wrapper
+
+    for module_name, class_name, method_name in _CREATORS:
+        try:
+            klass = getattr(importlib.import_module(module_name), class_name)
+            setattr(klass, method_name, wrap(getattr(klass, method_name)))
+        except AttributeError as exc:
+            # A renamed method must not silently stop being tracked.
+            logger.warning(
+                f'Cannot track {module_name}.{class_name}.'
+                f'{method_name}: {exc}',
+            )
+
+
+def _is_gone(obj: Any) -> bool:
+    """
+    Has this deployment already been terminated?
+
+    The local copy is stale -- a test that terminated in its own teardown
+    still holds an object whose ``terminated_at`` is None -- so ask the
+    server. A refresh that fails is taken as gone, which is the whole point
+    of the question for anything that 404s.
+    """
+    if hasattr(obj, 'refresh'):
+        try:
+            obj.refresh()
+        except Exception:
+            return True
+    if getattr(obj, 'terminated_at', None) is not None:
+        return True
+    return str(getattr(obj, 'state', '') or '').upper() in (
+        'TERMINATED', 'TERMINATING',
+    )
+
+
+def cleanup_tracked(owner: Optional[str] = None) -> List[str]:
+    """
+    Terminate tracked deployments that are still live.
+
+    Parameters
+    ----------
+    owner : str, optional
+        Only sweep what this test class created. The default sweeps
+        everything, which is what the end of the session wants.
+
+    Returns
+    -------
+    List[str]
+        Labels of the deployments this call terminated. Failures are logged
+        rather than raised: this runs outside any test, where an exception
+        would be reported against whatever happens to run next.
+
+    """
+    # Last created, first terminated: a workspace goes before the group that
+    # holds it.
+    entries = [x for x in reversed(_tracked) if owner is None or x[0] == owner]
+    for entry in entries:
+        _tracked.remove(entry)
+
+    removed = []
+    for _, label, obj in entries:
+        if _is_gone(obj):
+            continue
+        try:
+            terminate(obj)
+        except Exception as exc:
+            logger.warning(f'Could not terminate {label}: {exc}')
+        else:
+            removed.append(label)
+    return removed

@@ -7,10 +7,13 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 from typing import Union
 from urllib.parse import urljoin
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from .. import config
 from ..exceptions import ManagementError
@@ -28,6 +31,59 @@ def set_organization(kwargs: Dict[str, Any]) -> None:
         if 'params' not in kwargs:
             kwargs['params'] = {}
         kwargs['params']['organizationID'] = org
+
+
+#: Methods that may be replayed after a transport-level failure. POST is
+#: absent on purpose: a dropped connection does not say whether the server
+#: acted on the request, and replaying ``POST /clusters`` would deploy twice.
+#: Everything the long ``wait_on_*`` loops issue is a GET, so the retries
+#: cover the failure mode that actually shows up -- a keep-alive connection
+#: the far end closed while the client was sleeping between polls, which
+#: surfaces as ``RemoteDisconnected`` on the next request.
+RETRY_METHODS = frozenset(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'])
+
+#: Status codes worth retrying. These are the transient ones; a 4xx other
+#: than 429 is a client error that will fail again identically.
+RETRY_STATUSES = frozenset([429, 500, 502, 503, 504])
+
+
+def build_retry(
+    total: Optional[int] = None,
+    backoff_factor: Optional[float] = None,
+) -> Retry:
+    """Build the retry policy used by every manager session."""
+    if total is None:
+        total = int(os.environ.get('SINGLESTOREDB_MANAGEMENT_RETRIES', '4'))
+    if backoff_factor is None:
+        backoff_factor = float(
+            os.environ.get('SINGLESTOREDB_MANAGEMENT_RETRY_BACKOFF', '0.5'),
+        )
+    return Retry(
+        total=total,
+        connect=total,
+        read=total,
+        status=total,
+        allowed_methods=RETRY_METHODS,
+        status_forcelist=RETRY_STATUSES,
+        backoff_factor=backoff_factor,
+        # Let ``Manager._check`` raise the error with the response body in it
+        # rather than urllib3 raising a bare MaxRetryError.
+        raise_on_status=False,
+        respect_retry_after_header=True,
+    )
+
+
+def default_timeout() -> Tuple[float, float]:
+    """
+    Return the (connect, read) timeout applied when a caller gives none.
+
+    Without this a stalled connection hangs the client forever instead of
+    failing and being retried.
+    """
+    return (
+        float(os.environ.get('SINGLESTOREDB_MANAGEMENT_CONNECT_TIMEOUT', '10')),
+        float(os.environ.get('SINGLESTOREDB_MANAGEMENT_READ_TIMEOUT', '180')),
+    )
 
 
 def is_jwt(token: str) -> bool:
@@ -78,6 +134,9 @@ class Manager:
 
         self._is_jwt = not access_token and new_access_token and is_jwt(new_access_token)
         self._sess = requests.Session()
+        adapter = HTTPAdapter(max_retries=build_retry())
+        self._sess.mount('http://', adapter)
+        self._sess.mount('https://', adapter)
         self._sess.headers.update({
             'Authorization': f'Bearer {new_access_token}',
             'Content-Type': 'application/json',
@@ -136,9 +195,19 @@ class Manager:
         # Refresh the JWT as needed
         if self._is_jwt:
             self._sess.headers.update({'Authorization': f'Bearer {get_token()}'})
-        return getattr(self._sess, method.lower())(
-            urljoin(self._base_url, path), *args, **kwargs,
-        )
+        kwargs.setdefault('timeout', default_timeout())
+        url = urljoin(self._base_url, path)
+        try:
+            return getattr(self._sess, method.lower())(url, *args, **kwargs)
+        except requests.exceptions.RequestException as exc:
+            # A transport failure otherwise escapes as a bare
+            # requests.ConnectionError / ReadTimeout naming neither the route
+            # nor the method, which makes it indistinguishable from a bug in
+            # the caller. Retries for the replayable methods are already
+            # exhausted by the time this is reached.
+            raise ManagementError(
+                msg=f'{type(exc).__name__} on {method.upper()} {url}: {exc}',
+            ) from exc
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
