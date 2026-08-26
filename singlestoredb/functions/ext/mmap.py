@@ -269,6 +269,8 @@ def main(argv: Optional[List[str]] = None) -> None:
                 mgr = _manage_workspaces_v1()
                 if url.hostname:
                     wsg = mgr.get_workspace_group(url.hostname)
+                # Pinned to v1: SINGLESTOREDB_WORKSPACE_GROUP holds a group ID,
+                # and a group is an addressable resource only at v1.
                 elif os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP'):
                     wsg = mgr.get_workspace_group(
                         os.environ['SINGLESTOREDB_WORKSPACE_GROUP'],

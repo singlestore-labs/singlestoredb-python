@@ -14,7 +14,6 @@ from ..exceptions import ManagementError
 from .manager import Manager
 from .utils import camel_to_snake
 from .utils import from_datetime
-from .utils import get_cluster_id
 from .utils import get_database_name
 from .utils import get_virtual_workspace_id
 from .utils import get_workspace_id
@@ -71,6 +70,10 @@ class TargetType(Enum):
     ``'Cluster'``               v2         Cluster (the v1 "workspace")
     ``'VirtualCluster'``        v2         Starter (shared tier) cluster
     ==========================  =========  ===================================
+
+    Only the read path ever sees the v1 sense of ``'Cluster'``: the write path
+    takes its target from the notebook environment, which names a workspace or
+    starter deployment and never a legacy self-managed cluster.
     """
 
     WORKSPACE = 'Workspace'
@@ -715,12 +718,6 @@ class JobsManager:
     #: ``targetType`` sent for a starter / shared-tier deployment.
     _starter_target_type = TargetType.VIRTUAL_CLUSTER
 
-    #: ``targetType`` sent for a legacy self-managed cluster, or ``None`` if
-    #: the version has no such concept. There is no such concept from v2
-    #: onward -- everything is a cluster -- so ``SINGLESTOREDB_CLUSTER`` is
-    #: not a distinct target here.
-    _legacy_cluster_target_type: Optional[TargetType] = None
-
     def __init__(self, manager: Optional[Manager]):
         self._manager = manager
 
@@ -729,13 +726,15 @@ class JobsManager:
         Fill in ``targetID`` / ``targetType`` from the ambient environment.
 
         The deployment the job should run against is taken from the
-        environment variables set by the notebook runtime. Which
-        ``targetType`` string names each kind of deployment is
-        version-specific; see the ``_*_target_type`` class attributes.
+        environment variables set by the notebook runtime:
+        ``SINGLESTOREDB_VIRTUAL_WORKSPACE`` for a starter deployment, and
+        ``SINGLESTOREDB_WORKSPACE`` for a regular one -- the latter holds a
+        cluster ID at v2 and a workspace ID at v1. Which ``targetType`` string
+        names each kind of deployment is version-specific; see the
+        ``_*_target_type`` class attributes.
         """
         starter_id = get_virtual_workspace_id()
         deployment_id = get_workspace_id()
-        legacy_cluster_id = get_cluster_id()
 
         if starter_id is not None:
             target_config['targetID'] = starter_id
@@ -744,11 +743,6 @@ class JobsManager:
         elif deployment_id is not None:
             target_config['targetID'] = deployment_id
             target_config['targetType'] = self._deployment_target_type.value
-
-        elif legacy_cluster_id is not None and \
-                self._legacy_cluster_target_type is not None:
-            target_config['targetID'] = legacy_cluster_id
-            target_config['targetType'] = self._legacy_cluster_target_type.value
 
     def schedule(
         self,

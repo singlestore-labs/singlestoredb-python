@@ -57,7 +57,15 @@ def get_secret(name: str) -> Optional[str]:
 def get_workspace_group(
     workspace_group: Optional[Union[WorkspaceGroup, str]] = None,
 ) -> WorkspaceGroup:
-    """Get the stage for the workspace group."""
+    """
+    Get the workspace group.
+
+    Falls back to ``SINGLESTOREDB_WORKSPACE_GROUP``, the notebook environment's
+    group ID. A group is an addressable resource only at v1; the v2 counterpart
+    of this lookup does not exist, which is why
+    :func:`singlestoredb.management.cluster.get_cluster` ignores that variable
+    and reads ``SINGLESTOREDB_WORKSPACE`` instead.
+    """
     from ..workspace import _manage_workspaces_v1
     if isinstance(workspace_group, WorkspaceGroup):
         return workspace_group
@@ -81,7 +89,14 @@ def get_workspace(
     workspace_group: Optional[Union[WorkspaceGroup, str]] = None,
     workspace: Optional[Union[Workspace, str]] = None,
 ) -> Workspace:
-    """Get the workspaces for a workspace_group."""
+    """
+    Get a workspace within a workspace group.
+
+    Falls back to ``SINGLESTOREDB_WORKSPACE``, the notebook environment's name
+    for the current deployment. Its value is a workspace ID only in a v1
+    environment; from v2 onward it carries a cluster ID, which
+    :func:`singlestoredb.management.v2.cluster.get_cluster` resolves instead.
+    """
     if isinstance(workspace, Workspace):
         return workspace
     wg = get_workspace_group(workspace_group)

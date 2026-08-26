@@ -463,5 +463,54 @@ class TestSecretFromDictTimestamps(unittest.TestCase):
         self.assertIsNone(sec.deleted_at)
 
 
+class TestTTLProperty(unittest.TestCase):
+    """A ttl_property caches per instance, not per class."""
+
+    @staticmethod
+    def _counter_class():
+        from singlestoredb.management.utils import ttl_property
+
+        class Counter:
+            def __init__(self):
+                self.calls = 0
+
+            @ttl_property(datetime.timedelta(hours=1))
+            def value(self):
+                self.calls += 1
+                return self.calls
+
+        return Counter
+
+    def test_repeated_reads_are_served_from_the_cache(self):
+        obj = self._counter_class()()
+        self.assertEqual(obj.value, 1)
+        self.assertEqual(obj.value, 1)
+        self.assertEqual(obj.calls, 1)
+
+    def test_each_instance_caches_its_own_value(self):
+        # Two managers may hold different tokens, so one must never be served
+        # the other's copy.
+        cls = self._counter_class()
+        first, second = cls(), cls()
+        self.assertEqual(first.value, 1)
+        self.assertEqual(second.value, 1)
+        self.assertEqual(first.calls, 1)
+        self.assertEqual(second.calls, 1)
+
+    def test_an_expired_value_is_refetched(self):
+        cls = self._counter_class()
+        obj = cls()
+        self.assertEqual(obj.value, 1)
+        type(obj).__dict__['value'].ttl = datetime.timedelta(0)
+        self.assertEqual(obj.value, 2)
+
+    def test_reset_discards_the_cached_value(self):
+        cls = self._counter_class()
+        obj = cls()
+        self.assertEqual(obj.value, 1)
+        type(obj).__dict__['value'].reset(obj)
+        self.assertEqual(obj.value, 2)
+
+
 if __name__ == '__main__':
     unittest.main()

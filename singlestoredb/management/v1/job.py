@@ -22,17 +22,14 @@ class JobsManager(_JobsManager):
 
     The ``jobs`` routes themselves are unchanged from v1 to v2. What changed
     is the ``targetConfig.targetType`` vocabulary: v1's ``'Workspace'`` and
-    ``'VirtualWorkspace'`` became ``'Cluster'`` and ``'VirtualCluster'``, and
-    v1's legacy self-managed ``'Cluster'`` target has no later equivalent.
+    ``'VirtualWorkspace'`` became ``'Cluster'`` and ``'VirtualCluster'``.
 
     Note that ``'Cluster'`` means different things at the two versions: a
     legacy self-managed cluster at v1, and the resource v1 called a workspace
-    from v2 onward.
+    from v2 onward. Only the read path ever sees the v1 sense of it -- the
+    deployment a job is scheduled against comes from
+    ``SINGLESTOREDB_WORKSPACE``, which never names a legacy cluster.
     """
 
     _deployment_target_type = TargetType.WORKSPACE
     _starter_target_type = TargetType.VIRTUAL_WORKSPACE
-
-    #: v1 keeps a distinct legacy self-managed cluster target, named by
-    #: ``SINGLESTOREDB_CLUSTER``.
-    _legacy_cluster_target_type = TargetType.CLUSTER

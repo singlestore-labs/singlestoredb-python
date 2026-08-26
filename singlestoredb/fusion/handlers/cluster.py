@@ -75,6 +75,22 @@ def _deployment_type(params: Dict[str, Any]) -> Optional[str]:
     return str(value).upper().replace('_', '-')
 
 
+def _cluster_region(cluster: Any) -> Optional[str]:
+    """Return a cluster's provider region name, e.g. ``us-east-1``."""
+    region = cluster.region
+    if region is None:
+        return None
+    return region.region_name or region.name
+
+
+def _cluster_project_id(cluster: Any) -> Optional[str]:
+    """Return the ID of the project a deployment belongs to."""
+    project = cluster.project
+    if project is None:
+        return None
+    return project.id
+
+
 def _resolve_region(params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Resolve an ``IN REGION`` clause to ``create_cluster`` keywords.
@@ -116,11 +132,11 @@ def _resolve_region(params: Dict[str, Any]) -> Dict[str, Any]:
     if matches:
         return dict(
             provider=matches[0].provider,
-            region_name=matches[0].region_name,
+            region=matches[0].region_name,
         )
 
     # Unknown to the cached region list; let the API rule on it.
-    return dict(provider=provider, region_name=region_name)
+    return dict(provider=provider, region=region_name)
 
 
 class ShowClustersHandler(SQLHandler):
@@ -186,17 +202,17 @@ class ShowClustersHandler(SQLHandler):
 
             def fields(x: Any) -> Any:
                 return (
-                    x.name, x.id, x.region_name, x.size, x.state,
+                    x.name, x.id, _cluster_region(x), x.size, x.state,
                     x.provider, x.endpoint, x.deployment_type,
                     json.dumps(x.firewall_ranges or []),
-                    x.project_id,
+                    _cluster_project_id(x),
                     dt_isoformat(x.created_at),
                     dt_isoformat(x.terminated_at),
                 )
         else:
             def fields(x: Any) -> Any:
-                # Cluster has no region object, only the provider slug.
-                return (x.name, x.id, x.region_name, x.size, x.state)
+                # Report the provider slug, not the region's display name.
+                return (x.name, x.id, _cluster_region(x), x.size, x.state)
 
         res.set_rows([fields(x) for x in manager.clusters])
 
@@ -500,7 +516,7 @@ class CreateClusterHandler(SQLHandler):
         cluster = manager.create_cluster(
             params['cluster_name'],
             provider=region['provider'],
-            region_name=region['region_name'],
+            region=region['region'],
             size=params['with_size'],
             scale_factor=params['with_scale_factor'],
             firewall_ranges=params['with_firewall_ranges'],
@@ -512,7 +528,7 @@ class CreateClusterHandler(SQLHandler):
             update_window=_update_window(params),
             kai=params['enable_kai'],
             multi_az=params['enable_multi_az'],
-            project_id=project.id if project is not None else None,
+            project=project,
             wait_on_active=params['wait_on_active'],
         )
 
@@ -868,7 +884,7 @@ class ShowStarterClustersHandler(SQLHandler):
             def fields(x: Any) -> Any:
                 return (
                     x.name, x.id, x.database_name,
-                    x.endpoint, x.project_id,
+                    x.endpoint, _cluster_project_id(x),
                 )
         else:
             def fields(x: Any) -> Any:
@@ -961,7 +977,7 @@ class CreateStarterClusterHandler(SQLHandler):
             params['cluster_name'],
             database_name=params['with_database'],
             provider=params['with_provider'],
-            region_name=params['in_region'],
+            region=params['in_region'],
         )
 
         return None

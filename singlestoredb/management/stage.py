@@ -51,8 +51,8 @@ def get_stage(
         The deployment whose stage is wanted, or its name or ID. What counts
         as a deployment is version-specific: a cluster at v2, a workspace
         group at v1. If not given, the deployment named by the environment is
-        used -- ``SINGLESTOREDB_WORKSPACE_GROUP`` at v1, one of the cluster
-        environment variables at v2.
+        used -- ``SINGLESTOREDB_WORKSPACE_GROUP`` at v1, and
+        ``SINGLESTOREDB_WORKSPACE`` at v2.
     version : str, optional
         Version of the API to use. Defaults to the ``management.version``
         option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment

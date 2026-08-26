@@ -135,7 +135,13 @@ class Portal(object):
 
     @property
     def workspace_group_id(self) -> Optional[str]:
-        """Workspace Group ID."""
+        """
+        Workspace Group ID.
+
+        The deployment's group ID. A group is an addressable resource only at
+        management API v1; at v2 the same ID is reported back as
+        ``Cluster.group`` and cannot be looked up.
+        """
         try:
             return self._connection_info['workspace_group']
         except KeyError:
@@ -156,7 +162,12 @@ class Portal(object):
 
     @property
     def workspace_id(self) -> Optional[str]:
-        """Workspace ID."""
+        """
+        Workspace ID.
+
+        The current deployment: a workspace ID at v1, a cluster ID from v2
+        onward. See :attr:`cluster_id`, which is the same value.
+        """
         try:
             return self._connection_info['workspace']
         except KeyError:
@@ -260,11 +271,29 @@ class Portal(object):
 
     @property
     def cluster_id(self) -> Optional[str]:
-        """Cluster ID."""
+        """
+        Cluster ID.
+
+        The same value as :attr:`workspace_id`: management API v2 calls the
+        deployment a cluster where v1 called it a workspace, and the notebook
+        environment publishes it under its original name --
+        ``SINGLESTOREDB_WORKSPACE`` -- rather than adding a second variable.
+        """
+        return self.workspace_id
+
+    @property
+    def project_id(self) -> Optional[str]:
+        """
+        Project ID.
+
+        The project new deployments are created in. May be a project name
+        rather than an ID; the management API accepts either wherever a project
+        can be named.
+        """
         try:
-            return self._connection_info['cluster']
+            return self._connection_info['project']
         except KeyError:
-            return os.environ.get('SINGLESTOREDB_CLUSTER')
+            return os.environ.get('SINGLESTOREDB_PROJECT')
 
     def _parse_url(self) -> Dict[str, Any]:
         url = urllib.parse.urlparse(

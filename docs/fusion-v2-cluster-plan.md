@@ -29,10 +29,16 @@ is verified to interoperate everywhere `WorkspaceGroup` did.
 
 ### Live API probe — findings (2026-08-24)
 
-The OpenAPI dump at `dev-docs/management_api.openapi` is version 1.1.124 with 42
-v1 paths and only 2 v2 paths (`/v2/regions` and one metrics route). It cannot
-answer v2 questions, which is why the audit repeatedly says "not in the spec
-dump." So the live API was probed read-only instead:
+At the time of the probe, the OpenAPI dump at `dev-docs/management_api.openapi`
+was version 1.1.124 with 42 v1 paths and only 2 v2 paths (`/v2/regions` and one
+metrics route). It could not answer v2 questions, which is why the audit
+repeatedly says "not in the spec dump." So the live API was probed read-only
+instead:
+
+> **Since then (2026-08-25)** the dump has been replaced with the current
+> upstream spec (1.2.171, 65 paths). It now covers v2 properly, but publishes
+> only nine v1 routes, so the v1 shapes cited elsewhere in these plans are no
+> longer in the file. `egress` is still absent at both versions.
 
 **The v2 sweep is safe.** Every route the swept handlers call answers at v2:
 `/v2/organizations/current`, `/v2/jobs/runtimes`, `/v2/secrets`,
@@ -126,12 +132,17 @@ only `job.py` moves. Add alongside it:
 - `get_cluster(params)` — mirrors `get_workspace()` (`:111-176`): name filters
   `manager.clusters`, raising `KeyError` on none and `ValueError` on ambiguity;
   ID uses `manager.get_cluster()` mapping `errno == 404` to `KeyError`; then the
-  env vars in `CLUSTER_ENV_VARS` (`v2/cluster.py:62`) in order.
+  env vars in `CLUSTER_ENV_VARS` (`v2/cluster.py:70`) in order — in practice the
+  one the notebook environment publishes, `SINGLESTOREDB_WORKSPACE`, whose value
+  is a cluster ID at v2.
 - `get_starter_cluster(params)` — same shape against `starter_clusters` /
   `get_starter_cluster()`.
 - `get_project(params)` — resolves an `IN PROJECT` clause by name against
-  `manager.projects` or by ID via `get_project()`, returning `None` when absent so
-  `create_cluster` falls through to `_resolve_project_id()`.
+  `manager.projects` or by ID via `get_project()`, falling back to
+  `PROJECT_ENV_VAR` (`SINGLESTOREDB_PROJECT`, set by the notebook environment
+  and holding either a name or an ID — told apart by `PROJECT_ID_RE`) and
+  returning `None` when neither names a project so `create_cluster` falls
+  through to `_resolve_project_id()`.
 - `get_deployment(params)` — **repointed in place** to v2. Verified safe:
   `stage.py` is its only consumer, so the workspace handlers are unaffected.
   `workspace_groups`→`clusters`, `starter_workspaces`→`starter_clusters`,
@@ -140,13 +151,14 @@ only `job.py` moves. Add alongside it:
   cluster then starter cluster on 404. Keep the `params['group']` keys wired so
   the existing `IN GROUP` spelling still parses as a synonym.
   `SINGLESTOREDB_WORKSPACE_GROUP`, if set and nothing else matched, raises a
-  `KeyError` naming `SINGLESTOREDB_CLUSTER` — there is no addressable group
-  resource at v2 and `Cluster.group_id` is not a lookup key, so silently
-  resolving it could target the wrong deployment.
+  `KeyError` pointing at `SINGLESTOREDB_WORKSPACE` — its value is a group ID,
+  which v2 reports only as the read-only `Cluster.group` and offers no route
+  to look up, so silently resolving it could target the wrong deployment.
 - `get_files_manager()` → `manage_files(version='v2')` (step 6).
-- Reword the two stale `SINGLESTOREDB_CLUSTER` raises at `:105-106` and
-  `:172-173`; they claim clusters "are not currently supported" and should now
-  point at the `CLUSTER` commands.
+- Drop the two stale raises at `:105-106` and `:172-173`. They claim clusters
+  "are not currently supported" and were reworded to point at the `CLUSTER`
+  commands, but they keyed off `SINGLESTOREDB_CLUSTER`, which no environment
+  ever sets — dead branches.
 - `get_inference_api_manager()` (`:329-332`) stays on `get_workspace_manager()`,
   with a comment explaining why this one is pinned while files/jobs are not.
 
@@ -207,8 +219,9 @@ none. Region resolution matches on both `.name` and `.region_name`, requires
 
 Columns: `SHOW CLUSTERS` → `Name`, `ID`, `Region`, `Size`, `State`; extended adds
 `Provider`, `Endpoint`, `DeploymentType`, `FirewallRanges`, `ProjectID`,
-`CreatedAt`, `TerminatedAt`. Use `x.region_name` — `Cluster` has no `region`
-object. `SHOW CLUSTER REGIONS` → `Name`, `Provider`, `RegionName` (no `ID`, since
+`CreatedAt`, `TerminatedAt`. Report `x.region.region_name` — `Cluster.region` is
+a `Region`, whose `name` is the display name and `region_name` the provider slug.
+`SHOW CLUSTER REGIONS` → `Name`, `Provider`, `RegionName` (no `ID`, since
 v2 has none). `SHOW PROJECTS` → `Name`, `ID`, `Edition`, `CreatedAt`.
 
 `SHOW REGIONS` (`workspace.py:148`) is **left alone on v1** so its `ID` column

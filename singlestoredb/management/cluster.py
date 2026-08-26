@@ -10,14 +10,13 @@ from typing import Optional
 
 from ._version_import import _import_versioned_module
 from .v2.cluster import Cluster as Cluster
-from .v2.cluster import CLUSTER_ENV_VARS as CLUSTER_ENV_VARS
 from .v2.cluster import ClusterManager as ClusterManager
 from .v2.cluster import get_cluster as get_cluster
 from .v2.cluster import get_organization as get_organization
 from .v2.cluster import get_secret as get_secret
 from .v2.cluster import get_stage as get_stage
 from .v2.cluster import Project as Project
-from .v2.cluster import PROJECT_ENV_VAR as PROJECT_ENV_VAR
+from .v2.cluster import PROJECT_ID_RE as PROJECT_ID_RE
 from .v2.cluster import SHAREDTIER_PATH as SHAREDTIER_PATH
 from .v2.cluster import Stage as Stage
 from .v2.cluster import StageObject as StageObject

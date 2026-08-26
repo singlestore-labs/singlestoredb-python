@@ -61,7 +61,8 @@ line 25 is `return manage_workspaces()`, lines 17-20 import
 `StarterWorkspace`/`Workspace`/`WorkspaceGroup`/`WorkspaceManager` from
 `...management.workspace`, and lines 106 and 173 raise
 `'clusters and shared workspaces are not currently supported'` when
-`SINGLESTOREDB_CLUSTER` is set. There is **no cluster grammar** in `fusion/handlers/`
+`SINGLESTOREDB_CLUSTER` is set — a branch that never fires, since no environment
+sets that variable (see §4.3). There is **no cluster grammar** in `fusion/handlers/`
 (files: `export.py`, `files.py`, `job.py`, `models.py`, `stage.py`, `utils.py`), so there is
 nothing for a `test_fusion_v2.py` to exercise. `test_fusion.py` stays the v1 suite.
 **This is the one thing blocking full v2 adoption**, so it is the natural next piece of work
@@ -191,6 +192,21 @@ path segment, not a separate host.
 - `job.py:77-80` — `TargetType.WORKSPACE` / `VIRTUAL_WORKSPACE` in the shared enum
 - `job.py:715, 718` — shared defaults are the **v1** vocabulary
 - `v2/cluster.py:57` — `CLUSTER_ENV_VARS = ('SINGLESTOREDB_CLUSTER', 'SINGLESTOREDB_WORKSPACE')`
+
+**⚠ Correction to the above (established after Part 7).** `SINGLESTOREDB_CLUSTER`
+**does not exist**: the notebook environment publishes the current deployment as
+`SINGLESTOREDB_WORKSPACE` at every API version — a workspace ID at v1, a cluster
+ID at v2 — plus `SINGLESTOREDB_WORKSPACE_GROUP` for the group ID and
+`SINGLESTOREDB_PROJECT` for the project. So:
+- `CLUSTER_ENV_VARS` is `('SINGLESTOREDB_WORKSPACE',)`, and `get_cluster_id()` is
+  simply the v2 spelling of `get_workspace_id()`.
+- `SINGLESTOREDB_WORKSPACE_GROUP` is *not* a deployment variable. Its value is a
+  group ID, which v2 reports only as the read-only `Cluster.group` and offers
+  no route to look up, so `CLUSTER_GROUP_ENV_VAR` names it separately and
+  `get_deployment()` refuses to guess which cluster was meant.
+- The legacy self-managed cluster target is gone from the write path: nothing
+  sets the variable that named it, so `_resolve_target` has only the starter and
+  deployment branches.
 - `v2/inference_api.py:22` — error string says `manage_workspaces(version='v1')`, i.e. v2
   code naming a v1 factory
 
@@ -211,8 +227,8 @@ already satisfied for identifiers.
 - `class Stage(_Stage)` at `:60` — base is shared `management.stage.Stage`; sole body is
   `_fs_path` → `clusters/{id}/stage/fs/{path}` (`:67-68`).
 - `class Cluster(VersionedMixin)` at `:119` — flat resource carrying the union of v1
-  `Workspace` + `WorkspaceGroup` fields (`:141-168`): `group_id, size, scale_factor, state,
-  created_at, terminated_at, expires_at, last_resumed_at, endpoint, provider, region_name,
+  `Workspace` + `WorkspaceGroup` fields (`:141-168`): `group, size, scale_factor, state,
+  created_at, terminated_at, expires_at, last_resumed_at, endpoint, provider, region,
   project_id, deployment_type, kai, multi_az, allow_all_traffic, firewall_ranges,
   outbound_allow_list, opt_in_preview_feature, update_window, auto_suspend, auto_scale,
   cache_config, resume_attachments, scaling_progress, smart_dr_status`.
@@ -324,7 +340,9 @@ into the shared base, reduce the `v2/` module to a pure re-export.
   (`TargetType.from_str`) must round-trip either version's wire value without knowing which
   produced it. Only the write path is version-specific, via the three class attributes.
   Note `'Cluster'` means *different things* per version — legacy self-managed at v1, the v1
-  "workspace" at v2 — which is exactly why the union is required.
+  "workspace" at v2 — which is exactly why the union is required. Only the read path ever
+  sees the v1 sense: the write path takes its target from `SINGLESTOREDB_WORKSPACE`, which
+  never names a legacy cluster.
 
 **⚠ The sharp edge:** `v1/organization.py` is currently a 10-line pure re-export, so v1's
 `Organization` picks up the shared base `JobsManager`. **If the base flips to v2 target
@@ -345,11 +363,12 @@ imports `_get_exports`/`ExportService`/`ExportStatus` from it and Fusion is v1-o
 ### Part 3 — Vocabulary cleanup
 
 - **`job.py:736-751` `_resolve_target`** — rename the v1-flavored locals to neutral names
-  (`starter_id`, `deployment_id`, `legacy_cluster_id`). Keep the `utils.py:229-241` env-var
+  (`starter_id`, `deployment_id`). Keep the `utils.py:229-241` env-var
   reader **names as-is**: they read `SINGLESTOREDB_WORKSPACE` etc., which is the notebook
   runtime's external contract, not ours to rename.
-- **`v2/cluster.py:57` `CLUSTER_ENV_VARS`** — keep `SINGLESTOREDB_WORKSPACE`. Same reason;
-  make the existing justification comment at `:53-56` say so plainly.
+- **`v2/cluster.py:57` `CLUSTER_ENV_VARS`** — keep `SINGLESTOREDB_WORKSPACE`, and *only* it;
+  same reason. Make the existing justification comment at `:53-56` say so plainly, including
+  that no `SINGLESTOREDB_CLUSTER` exists to prefer over it.
 - **Docstring sweep** — replace `WorkspaceManager` with `ClusterManager` and drop
   workspace-group phrasing at every site listed in §4.3.
 - **`utils.py:2`** — fix the module docstring.

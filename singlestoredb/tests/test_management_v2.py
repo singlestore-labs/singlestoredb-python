@@ -31,6 +31,7 @@ import singlestoredb as s2
 from singlestoredb.exceptions import ManagementError
 from singlestoredb.management.job import Status
 from singlestoredb.management.job import TargetType
+from singlestoredb.management.project import Project
 from singlestoredb.management.region import Region
 from singlestoredb.management.utils import NamedList
 
@@ -47,6 +48,9 @@ FAKE_BASE_URL = 'https://api.example.com'
 FAKE_PROJECT_ID = '11111111-1111-4111-8111-111111111111'
 FAKE_SHARED_PROJECT_ID = '22222222-2222-4222-8222-222222222222'
 FAKE_STANDARD_PROJECT_ID = '33333333-3333-4333-8333-333333333333'
+
+#: Fake cluster ID, for the tests that only pass one along.
+FAKE_CLUSTER_ID = '44444444-4444-4444-8444-444444444444'
 
 
 def clean_name(s):
@@ -207,13 +211,13 @@ class TestClusterManagerPosting(unittest.TestCase):
         out = mgr.create_cluster(
             'my-cluster',
             provider='AWS',
-            region_name='us-east-1',
+            region='us-east-1',
             size='S-00',
             scale_factor=1.0,
             firewall_ranges=['0.0.0.0/0'],
             admin_password='hunter2',
             update_window={'day': 3, 'hour': 4},
-            project_id=FAKE_PROJECT_ID,
+            project=FAKE_PROJECT_ID,
         )
 
         self.assertIs(out, sentinel)
@@ -238,6 +242,32 @@ class TestClusterManagerPosting(unittest.TestCase):
         self.assertNotIn('kai', body)
         self.assertNotIn('autoSuspend', body)
 
+    def test_create_cluster_always_sends_firewall_ranges(self):
+        """
+        ``firewallRanges`` cannot be dropped when unset.
+
+        Verified live: ``POST /v2/clusters`` answers 400 "firewallRanges cannot
+        be null (indicate empty list [] to disallow all inbound traffic)", so
+        an omitted ``firewall_ranges`` has to be sent as a deny-all ``[]``
+        rather than left out with the other unset fields.
+        """
+        mgr = self._make_cluster_manager()
+        post_response = MagicMock()
+        post_response.json.return_value = {'clusterID': 'cl-1'}
+        mgr._post = MagicMock(return_value=post_response)
+        mgr.get_cluster = MagicMock(return_value=MagicMock())
+
+        mgr.create_cluster(
+            'my-cluster',
+            provider='AWS',
+            region='us-east-1',
+            size='S-00',
+            project=FAKE_PROJECT_ID,
+        )
+
+        body = mgr._post.call_args[1]['json']
+        self.assertEqual(body['firewallRanges'], [])
+
     def test_create_cluster_accepts_a_region_object(self):
         mgr = self._make_cluster_manager()
         post_response = MagicMock()
@@ -251,7 +281,7 @@ class TestClusterManagerPosting(unittest.TestCase):
                 name='us-east-1', provider='AWS',
                 id=None, region_name='us-east-1',
             ),
-            project_id=FAKE_PROJECT_ID,
+            project=FAKE_PROJECT_ID,
         )
         body = mgr._post.call_args[1]['json']
         self.assertEqual(body['provider'], 'AWS')
@@ -268,7 +298,7 @@ class TestClusterManagerPosting(unittest.TestCase):
 
         out = mgr.create_starter_cluster(
             'my-starter', database_name='db1',
-            provider='AWS', region_name='us-east-1',
+            provider='AWS', region='us-east-1',
         )
         self.assertEqual(out, 'sentinel')
         mgr.get_starter_cluster.assert_called_once_with('vc-1')
@@ -301,8 +331,8 @@ class TestClusterManagerPosting(unittest.TestCase):
         mgr.get_cluster = MagicMock(return_value=cluster)
 
         out = mgr.create_cluster(
-            'my-cluster', provider='AWS', region_name='us-east-1',
-            admin_password='hunter2', project_id=FAKE_PROJECT_ID,
+            'my-cluster', provider='AWS', region='us-east-1',
+            admin_password='hunter2', project=FAKE_PROJECT_ID,
         )
         self.assertEqual(out.admin_password, 'generated-not-hunter2')
         # A cluster that did not come from a create has no password to report.
@@ -328,7 +358,7 @@ class TestClusterManagerPosting(unittest.TestCase):
 
         mgr.create_starter_cluster(
             'my-starter', database_name='db1',
-            provider='Azure', region_name='southcentralus',
+            provider='Azure', region='southcentralus',
         )
         self.assertEqual(mgr._post.call_args[1]['json']['provider'], 'AZURE')
 
@@ -340,7 +370,7 @@ class TestClusterManagerPosting(unittest.TestCase):
         with self.assertRaises(ManagementError):
             mgr.create_starter_cluster(
                 'my-starter', database_name='db1',
-                provider='AWS', region_name='us-east-1',
+                provider='AWS', region='us-east-1',
             )
 
     def test_shared_tier_regions_uses_sharedtier_endpoint(self):
@@ -461,8 +491,8 @@ class TestClusterFirewallWaiting(unittest.TestCase):
         with patch('singlestoredb.management.v2.cluster.time.sleep'), \
                 patch('singlestoredb.management.manager.time.sleep'):
             return mgr.create_cluster(
-                'my-cluster', provider='AWS', region_name='us-east-1',
-                project_id=FAKE_PROJECT_ID, wait_interval=1, **kwargs,
+                'my-cluster', provider='AWS', region='us-east-1',
+                project=FAKE_PROJECT_ID, wait_interval=1, **kwargs,
             )
 
     def test_create_cluster_waits_on_the_firewall(self):
@@ -696,6 +726,19 @@ class TestProjects(unittest.TestCase):
         )
         mgr._get.assert_called_once_with('projects')
 
+    def test_a_project_object_may_be_passed_instead_of_a_name(self):
+        mgr = self._make_cluster_manager(self.PROJECTS)
+        project = mgr.projects['Standard Project']
+        mgr._get.reset_mock()
+        with patch.dict(
+            os.environ, {'SINGLESTOREDB_PROJECT': FAKE_SHARED_PROJECT_ID},
+        ):
+            self.assertEqual(
+                mgr._resolve_project_id(project), FAKE_STANDARD_PROJECT_ID,
+            )
+        # A Project carries its ID, so no lookup is needed.
+        mgr._get.assert_not_called()
+
     def test_the_environment_may_name_a_project(self):
         mgr = self._make_cluster_manager(self.PROJECTS)
         with patch.dict(
@@ -736,7 +779,7 @@ class TestProjects(unittest.TestCase):
 
         mgr.create_starter_cluster(
             'my-starter', database_name='db1', provider='AWS',
-            region_name='us-east-1', project_id='Standard Project',
+            region='us-east-1', project='Standard Project',
         )
         self.assertEqual(
             mgr._post.call_args[1]['json']['projectID'],
@@ -772,9 +815,44 @@ class TestProjects(unittest.TestCase):
         mgr._post = MagicMock(return_value=post_response)
         mgr.get_cluster = MagicMock()
 
-        mgr.create_cluster('my-cluster', provider='AWS', region_name='us-east-1')
+        mgr.create_cluster('my-cluster', provider='AWS', region='us-east-1')
         self.assertEqual(
             mgr._post.call_args[1]['json']['projectID'], FAKE_SHARED_PROJECT_ID,
+        )
+
+    def test_create_cluster_accepts_a_project_object(self):
+        self._without_env()
+        mgr = self._make_cluster_manager(self.PROJECTS)
+        project = Project(id=FAKE_STANDARD_PROJECT_ID, name='Standard Project')
+        post_response = MagicMock()
+        post_response.json.return_value = {'clusterID': 'cl-1'}
+        mgr._post = MagicMock(return_value=post_response)
+        mgr.get_cluster = MagicMock()
+
+        mgr.create_cluster(
+            'my-cluster', provider='AWS', region='us-east-1',
+            project=project,
+        )
+        self.assertEqual(
+            mgr._post.call_args[1]['json']['projectID'],
+            FAKE_STANDARD_PROJECT_ID,
+        )
+
+    def test_create_starter_cluster_accepts_a_project_object(self):
+        mgr = self._make_cluster_manager(self.PROJECTS)
+        project = Project(id=FAKE_STANDARD_PROJECT_ID, name='Standard Project')
+        post_response = MagicMock()
+        post_response.json.return_value = {'virtualClusterID': 'vc-1'}
+        mgr._post = MagicMock(return_value=post_response)
+        mgr.get_starter_cluster = MagicMock()
+
+        mgr.create_starter_cluster(
+            'my-starter', database_name='db1', provider='AWS',
+            region='us-east-1', project=project,
+        )
+        self.assertEqual(
+            mgr._post.call_args[1]['json']['projectID'],
+            FAKE_STANDARD_PROJECT_ID,
         )
 
 
@@ -812,10 +890,78 @@ class TestClusterFromDict(unittest.TestCase):
         self.assertEqual(c.provider, 'AWS')
         self.assertEqual(c.size, 'S-00')
         self.assertEqual(c.scale_factor, 1.0)
-        self.assertEqual(c.region_name, 'us-east-1')
         self.assertEqual(c.created_at.year, 2024)
         self.assertEqual(c.created_at.month, 3)
         self.assertEqual(c.firewall_ranges, ['0.0.0.0/0'])
+
+    def test_region_falls_back_to_what_the_cluster_reports(self):
+        from singlestoredb.management.v2.cluster import Cluster
+        # A manager reporting no matching region: the cluster's own provider
+        # and region slug are all there is, and the display name is unknown.
+        mgr = MagicMock()
+        mgr.regions = []
+        c = Cluster.from_dict(self._payload(), mgr)
+        self.assertIsInstance(c.region, Region)
+        self.assertEqual(c.region.region_name, 'us-east-1')
+        self.assertEqual(c.region.provider, 'AWS')
+        self.assertIsNone(c.region.id)
+
+    def test_region_is_resolved_against_the_region_list(self):
+        from singlestoredb.management.v2.cluster import Cluster
+        # v2 reports the provider slug on a cluster and the display name only
+        # in the region list, so the two are matched on (provider, region_name).
+        mgr = MagicMock()
+        mgr.regions = [
+            Region(
+                name='US West 2 (Oregon)', provider='AWS',
+                id=None, region_name='us-west-2',
+            ),
+            Region(
+                name='US East 1 (N. Virginia)', provider='AWS',
+                id=None, region_name='us-east-1',
+            ),
+        ]
+        c = Cluster.from_dict(self._payload(), mgr)
+        self.assertEqual(c.region.name, 'US East 1 (N. Virginia)')
+        self.assertEqual(c.region.region_name, 'us-east-1')
+
+    def test_a_cluster_with_no_region_has_none(self):
+        from singlestoredb.management.v2.cluster import Cluster
+        payload = self._payload()
+        del payload['region']
+        c = Cluster.from_dict(payload, MagicMock())
+        self.assertIsNone(c.region)
+
+    def test_project_is_resolved_against_the_project_list(self):
+        from singlestoredb.management.v2.cluster import Cluster
+        # A cluster reports only its projectID, so the name and edition come
+        # from the manager's cached project list.
+        mgr = MagicMock()
+        mgr.projects = [
+            Project(id=FAKE_PROJECT_ID, name='Standard Project', edition='STANDARD'),
+        ]
+        c = Cluster.from_dict(self._payload(projectID=FAKE_PROJECT_ID), mgr)
+        self.assertIsInstance(c.project, Project)
+        self.assertEqual(c.project.id, FAKE_PROJECT_ID)
+        self.assertEqual(c.project.name, 'Standard Project')
+        self.assertEqual(c.project.edition, 'STANDARD')
+
+    def test_project_falls_back_to_the_reported_id(self):
+        from singlestoredb.management.v2.cluster import Cluster
+        # An ID the project list does not know about still yields a Project, so
+        # cluster.project.id is readable either way.
+        mgr = MagicMock()
+        mgr.projects = []
+        c = Cluster.from_dict(self._payload(projectID=FAKE_PROJECT_ID), mgr)
+        self.assertIsInstance(c.project, Project)
+        self.assertEqual(c.project.id, FAKE_PROJECT_ID)
+        self.assertIsNone(c.project.edition)
+
+    def test_a_cluster_with_no_project_has_none(self):
+        from singlestoredb.management.v2.cluster import Cluster
+        mgr = MagicMock()
+        mgr.projects = []
+        self.assertIsNone(Cluster.from_dict(self._payload(), mgr).project)
 
     def test_no_manager_raises(self):
         from singlestoredb.management.v2.cluster import Cluster
@@ -843,6 +989,90 @@ class TestClusterFromDict(unittest.TestCase):
         )
 
 
+class TestDeploymentEnvVars(unittest.TestCase):
+    """
+    The environment-variable contract the notebook environment publishes.
+
+    There is no ``SINGLESTOREDB_CLUSTER``: the current deployment arrives as
+    ``SINGLESTOREDB_WORKSPACE`` at every API version, and its value is a
+    cluster ID at v2. ``SINGLESTOREDB_WORKSPACE_GROUP`` is published too, but
+    it holds a group ID, which v2 reports only as :attr:`Cluster.group` and
+    offers no route to look up.
+    """
+
+    def _clean_env(self, **values):
+        ctx = patch.dict(os.environ)
+        ctx.start()
+        self.addCleanup(ctx.stop)
+        for name in (
+            'SINGLESTOREDB_WORKSPACE',
+            'SINGLESTOREDB_WORKSPACE_GROUP',
+            'SINGLESTOREDB_VIRTUAL_WORKSPACE',
+            'SINGLESTOREDB_DEFAULT_DATABASE',
+        ):
+            os.environ.pop(name, None)
+        os.environ.update(values)
+
+    def test_get_cluster_reads_the_workspace_variable(self):
+        from singlestoredb.management.cluster import get_cluster
+        self._clean_env(SINGLESTOREDB_WORKSPACE=FAKE_CLUSTER_ID)
+        mgr = MagicMock()
+        with patch(
+            'singlestoredb.management.cluster.manage_clusters',
+            return_value=mgr,
+        ):
+            get_cluster()
+        mgr.clusters.__getitem__.assert_called_once_with(FAKE_CLUSTER_ID)
+
+    def test_get_cluster_ignores_the_group_variable(self):
+        from singlestoredb.management.cluster import get_cluster
+        # A group ID is not a cluster ID and there is no group route to turn
+        # one into the other, so this is left unresolved rather than guessed at.
+        self._clean_env(SINGLESTOREDB_WORKSPACE_GROUP=FAKE_CLUSTER_ID)
+        with patch(
+            'singlestoredb.management.cluster.manage_clusters',
+            return_value=MagicMock(),
+        ):
+            with self.assertRaises(RuntimeError):
+                get_cluster()
+
+    def test_cluster_id_is_the_workspace_variable(self):
+        from singlestoredb.management.utils import get_cluster_id
+        from singlestoredb.management.utils import get_workspace_id
+        self._clean_env(SINGLESTOREDB_WORKSPACE=FAKE_CLUSTER_ID)
+        self.assertEqual(get_cluster_id(), FAKE_CLUSTER_ID)
+        self.assertEqual(get_workspace_id(), FAKE_CLUSTER_ID)
+
+    def test_no_deployment_variable_leaves_the_id_unset(self):
+        from singlestoredb.management.utils import get_cluster_id
+        self._clean_env()
+        self.assertIsNone(get_cluster_id())
+
+    def test_job_target_comes_from_the_workspace_variable(self):
+        from singlestoredb.management.job import TargetType
+        from singlestoredb.management.v1.job import JobsManager as V1JobsManager
+        from singlestoredb.management.v2.job import JobsManager as V2JobsManager
+        self._clean_env(SINGLESTOREDB_WORKSPACE=FAKE_CLUSTER_ID)
+
+        for manager_cls, target_type in (
+            (V2JobsManager, TargetType.CLUSTER),
+            (V1JobsManager, TargetType.WORKSPACE),
+        ):
+            target_config = {}
+            manager_cls(MagicMock())._resolve_target(target_config)
+            self.assertEqual(
+                target_config,
+                dict(targetID=FAKE_CLUSTER_ID, targetType=target_type.value),
+            )
+
+    def test_group_variable_is_not_a_job_target(self):
+        from singlestoredb.management.v2.job import JobsManager
+        self._clean_env(SINGLESTOREDB_WORKSPACE_GROUP=FAKE_CLUSTER_ID)
+        target_config = {}
+        JobsManager(MagicMock())._resolve_target(target_config)
+        self.assertEqual(target_config, {})
+
+
 #
 # Live suites. These need SINGLESTOREDB_MANAGEMENT_TOKEN and an organization
 # with v2 access, and they create and destroy real deployments.
@@ -868,11 +1098,10 @@ class TestCluster(unittest.TestCase):
         # the firewall settings passed alongside the compute settings.
         cls.cluster = cls.manager.create_cluster(
             f'cl-test-{name}',
-            provider=region.provider,
-            region_name=region.region_name or region.name,
+            region=region,
             size='S-00',
             firewall_ranges=['0.0.0.0/0'],
-            project_id=_project_id(cls.manager),
+            project=_project_id(cls.manager),
             wait_on_active=True,
         )
 
@@ -1049,8 +1278,7 @@ class TestStarterCluster(unittest.TestCase):
         cls.starter_cluster = cls.manager.create_starter_cluster(
             f'starter-cl-test-{name}',
             database_name=cls.database_name,
-            provider=region.provider,
-            region_name=region.region_name or region.name,
+            region=region,
         )
 
         cls.starter_cluster.create_user(
@@ -1151,11 +1379,10 @@ class TestStage(unittest.TestCase):
         # to exist for its stage to be addressable.
         cls.cluster = cls.manager.create_cluster(
             f'cl-test-{name}',
-            provider=region.provider,
-            region_name=region.region_name or region.name,
+            region=region,
             size='S-00',
             firewall_ranges=['0.0.0.0/0'],
-            project_id=_project_id(cls.manager),
+            project=_project_id(cls.manager),
             wait_on_active=True,
         )
 
@@ -1338,11 +1565,10 @@ class TestJob(unittest.TestCase):
 
         cls.cluster = cls.manager.create_cluster(
             f'cl-test-{name}',
-            provider=region.provider,
-            region_name=region.region_name or region.name,
+            region=region,
             size='S-00',
             firewall_ranges=['0.0.0.0/0'],
-            project_id=_project_id(cls.manager),
+            project=_project_id(cls.manager),
             wait_on_active=True,
         )
 

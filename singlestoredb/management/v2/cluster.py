@@ -51,12 +51,6 @@ from .project import Project as Project
 #: Base management API path for the shared-tier resource.
 SHAREDTIER_PATH = 'sharedtier/virtualClusters'
 
-#: Environment variable naming the project new deployments belong to, by name
-#: or by ID -- see :meth:`ClusterManager._project_id_for`. Set by
-#: the SingleStore notebook environment; also read by the v1 inference API
-#: wrapper, so the name is shared rather than v2-specific.
-PROJECT_ENV_VAR = 'SINGLESTOREDB_PROJECT'
-
 #: Shape of a project ID. Anywhere a project can be named, a name is accepted
 #: in place of an ID, and this is how the two are told apart. Sending a project
 #: ID that is not a UUID comes back as ``400 uuid: incorrect UUID length``, so
@@ -67,11 +61,26 @@ PROJECT_ID_RE = re.compile(
     r'-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
 )
 
-#: Environment variables that name the deployment the current process is
-#: running against, in priority order. These are set by the SingleStore
-#: notebook environment and are part of its external contract, so they keep
-#: their published names regardless of API version.
-CLUSTER_ENV_VARS = ('SINGLESTOREDB_CLUSTER', 'SINGLESTOREDB_WORKSPACE')
+
+def _project_from_id(
+    manager: 'ClusterManager',
+    project_id: Optional[str],
+) -> Optional[Project]:
+    """
+    Return the project with the given ID, as reported by ``manager``.
+
+    A deployment reports only its ``projectID``, so the rest of the project is
+    recovered from :attr:`ClusterManager.projects` -- a cached list, so this
+    costs nothing per deployment after the first. An ID that matches no project
+    still yields a :class:`Project`, carrying the ID and nothing else, so that
+    ``cluster.project.id`` is always readable.
+    """
+    if project_id is None:
+        return None
+    return next(
+        (x for x in manager.projects if x.id == project_id),
+        Project(id=project_id, name='<unknown>'),
+    )
 
 
 def get_organization() -> Organization:
@@ -96,9 +105,13 @@ def get_cluster(
     Parameters
     ----------
     cluster : Cluster or str, optional
-        A cluster object, or the name or ID of a cluster. If not given, the
-        cluster named by one of the deployment environment variables listed in
-        :data:`CLUSTER_ENV_VARS` is used.
+        A cluster object, or the name or ID of a cluster. If not given,
+        ``SINGLESTOREDB_WORKSPACE`` is used: the notebook environment publishes
+        no ``SINGLESTOREDB_CLUSTER``, and that variable carries the cluster ID
+        at v2 just as it carried the workspace ID at v1.
+        ``SINGLESTOREDB_WORKSPACE_GROUP`` is *not* consulted -- it holds a group
+        ID, which v2 reports only as the read-only :attr:`Cluster.group` and
+        offers no route to look up.
 
     Returns
     -------
@@ -111,9 +124,8 @@ def get_cluster(
     mgr = manage_clusters(version='v2')
     if cluster:
         return mgr.clusters[cluster]
-    for envvar in CLUSTER_ENV_VARS:
-        if envvar in os.environ:
-            return mgr.clusters[os.environ[envvar]]
+    if 'SINGLESTOREDB_WORKSPACE' in os.environ:
+        return mgr.clusters[os.environ['SINGLESTOREDB_WORKSPACE']]
     raise RuntimeError('no cluster specified')
 
 
@@ -148,7 +160,7 @@ class Cluster:
 
     name: str
     id: str
-    group_id: Optional[str]
+    group: Optional[str]
     size: Optional[str]
     scale_factor: Optional[float]
     state: str
@@ -158,8 +170,8 @@ class Cluster:
     last_resumed_at: Optional[datetime.datetime]
     endpoint: Optional[str]
     provider: Optional[str]
-    region_name: Optional[str]
-    project_id: Optional[str]
+    region: Optional[Region]
+    project: Optional[Project]
     deployment_type: Optional[str]
     kai: Optional[bool]
     multi_az: Optional[bool]
@@ -180,7 +192,7 @@ class Cluster:
         name: str,
         id: str,
         state: str,
-        group_id: Optional[str] = None,
+        group: Optional[str] = None,
         size: Optional[str] = None,
         scale_factor: Optional[float] = None,
         created_at: Optional[Union[str, datetime.datetime]] = None,
@@ -189,8 +201,8 @@ class Cluster:
         last_resumed_at: Optional[Union[str, datetime.datetime]] = None,
         endpoint: Optional[str] = None,
         provider: Optional[str] = None,
-        region_name: Optional[str] = None,
-        project_id: Optional[str] = None,
+        region: Union[str, Region, None] = None,
+        project: Union[str, Project, None] = None,
         deployment_type: Optional[str] = None,
         kai: Optional[bool] = None,
         multi_az: Optional[bool] = None,
@@ -216,8 +228,9 @@ class Cluster:
         #: TRANSITIONING, RESUMING, FAILED
         self.state = state.strip()
 
-        #: Unique ID of the group the cluster belongs to
-        self.group_id = group_id
+        #: Unique ID of the group the cluster belongs to. v2 has no group
+        #: route, so this is an opaque ID rather than a lookup key.
+        self.group = group
 
         #: Size of the cluster in cluster size notation (S-00, S-1, etc.)
         self.size = size
@@ -243,13 +256,27 @@ class Cluster:
         #: Cloud provider hosting the cluster (AWS | GCP | Azure)
         self.provider = provider
 
-        #: Cloud provider region name, e.g., ``us-east-1``. Unlike v1, v2 does
-        #: not report a region ID; a region is identified by the
-        #: ``(provider, region_name)`` pair.
-        self.region_name = region_name
+        #: Region the cluster is deployed in. Unlike v1, v2 does not report a
+        #: region ID; a region is identified by the
+        #: ``(provider, region_name)`` pair. A string is taken as the provider
+        #: region name, e.g., ``us-east-1``; :meth:`from_dict` resolves it
+        #: against :attr:`ClusterManager.regions` so that the display name is
+        #: filled in too.
+        if isinstance(region, str):
+            region = Region(
+                name=region,
+                provider=provider or '<unknown>',
+                region_name=region,
+            )
+        self.region = region
 
-        #: Project ID associated with the cluster
-        self.project_id = project_id
+        #: Project the cluster belongs to. A string is taken as the project
+        #: ID; :meth:`from_dict` resolves it against
+        #: :attr:`ClusterManager.projects` so that the name and edition are
+        #: filled in too.
+        if isinstance(project, str):
+            project = Project(id=project, name='<unknown>')
+        self.project = project
 
         #: Deployment type of the cluster (PRODUCTION | NON-PRODUCTION)
         self.deployment_type = deployment_type
@@ -351,11 +378,33 @@ class Cluster:
         # Size is reported as an object: dict(size='S-00', scaleFactor=1)
         size_spec = obj.get('size') or {}
 
+        # v2 reports the provider region name and no region ID, so the region
+        # is matched on the ``(provider, region_name)`` pair to recover the
+        # display name. An unmatched region still yields a Region, built from
+        # what the cluster itself reports.
+        provider = obj.get('provider')
+        region_name = obj.get('region')
+        region: Optional[Region] = None
+        if region_name is not None:
+            region = next(
+                (
+                    x for x in manager.regions
+                    if x.region_name == region_name and x.provider == provider
+                ),
+                None,
+            )
+            if region is None:
+                region = Region(
+                    name=region_name,
+                    provider=provider or '<unknown>',
+                    region_name=region_name,
+                )
+
         out = cls(
             name=obj['name'],
             id=obj['clusterID'],
             state=obj.get('state', 'Unknown'),
-            group_id=obj.get('groupID'),
+            group=obj.get('groupID'),
             size=size_spec.get('size'),
             scale_factor=size_spec.get('scaleFactor'),
             created_at=obj.get('createdAt'),
@@ -363,9 +412,9 @@ class Cluster:
             expires_at=obj.get('expiresAt'),
             last_resumed_at=obj.get('lastResumedAt'),
             endpoint=obj.get('endpoint'),
-            provider=obj.get('provider'),
-            region_name=obj.get('region'),
-            project_id=obj.get('projectID'),
+            provider=provider,
+            region=region,
+            project=_project_from_id(manager, obj.get('projectID')),
             deployment_type=obj.get('deploymentType'),
             kai=obj.get('kai'),
             multi_az=obj.get('multiAZ'),
@@ -461,8 +510,8 @@ class Cluster:
         deployment_type : str, optional
             Deployment type of the cluster (PRODUCTION | NON-PRODUCTION)
         firewall_ranges : List[str], optional
-            List of allowed CIDR ranges. An empty list indicates that all
-            inbound requests are allowed.
+            List of allowed CIDR ranges. An empty list denies all inbound
+            traffic; omitting it leaves the current ranges alone.
         allow_all_traffic : bool, optional
             Allow all traffic to the cluster
         admin_password : str, optional
@@ -688,7 +737,7 @@ class StarterCluster:
     endpoint: Optional[str]
     mysql_dml_port: Optional[int]
     websocket_port: Optional[int]
-    project_id: Optional[str]
+    project: Optional[Project]
 
     def __init__(
         self,
@@ -698,7 +747,7 @@ class StarterCluster:
         endpoint: Optional[str] = None,
         mysql_dml_port: Optional[int] = None,
         websocket_port: Optional[int] = None,
-        project_id: Optional[str] = None,
+        project: Union[str, Project, None] = None,
     ):
         #: Name of the starter cluster
         self.name = name
@@ -719,8 +768,13 @@ class StarterCluster:
         #: WebSocket port for the starter cluster
         self.websocket_port = websocket_port
 
-        #: Project ID associated with the starter cluster
-        self.project_id = project_id
+        #: Project the starter cluster belongs to. A string is taken as the
+        #: project ID; :meth:`from_dict` resolves it against
+        #: :attr:`ClusterManager.projects` so that the name and edition are
+        #: filled in too.
+        if isinstance(project, str):
+            project = Project(id=project, name='<unknown>')
+        self.project = project
 
         self._manager: Optional[ClusterManager] = None
 
@@ -758,7 +812,7 @@ class StarterCluster:
             endpoint=obj.get('endpoint'),
             mysql_dml_port=obj.get('mysqlDmlPort'),
             websocket_port=obj.get('websocketPort'),
-            project_id=obj.get('projectID'),
+            project=_project_from_id(manager, obj.get('projectID')),
         )
         out._manager = manager
         return out
@@ -958,9 +1012,16 @@ class ClusterManager(Manager):
         res = self._get('regions')
         return NamedList([Region.from_dict(item, self) for item in res.json()])
 
-    @property
+    @ttl_property(datetime.timedelta(hours=1))
     def projects(self) -> NamedList[Project]:
-        """Return a list of projects in the current organization."""
+        """
+        Return a list of projects in the current organization.
+
+        Cached like :attr:`regions`, because every :class:`Cluster` built by
+        :meth:`Cluster.from_dict` resolves its project against this list and
+        listing clusters would otherwise cost a ``GET /v2/projects`` per
+        cluster.
+        """
         res = self._get('projects')
         return NamedList([Project.from_dict(item, self) for item in res.json()])
 
@@ -1070,20 +1131,21 @@ class ClusterManager(Manager):
 
         return out
 
-    def _project_id_for(self, name_or_id: str) -> str:
+    def _project_id_for(self, name_or_id: Union[str, Project]) -> str:
         """
         Return the ID of the project named by ``name_or_id``.
 
-        A UUID is taken as an ID and returned untouched, which keeps an
-        explicit ID free of a ``GET /v2/projects`` round trip. Anything else is
-        matched against the project names in the current organization. The API
-        does not promise that names are unique, so an ambiguous name raises
-        rather than picking the first match.
+        A :class:`Project` is reduced to its ID. A UUID is taken as an ID and
+        returned untouched, which keeps an explicit ID free of a
+        ``GET /v2/projects`` round trip. Anything else is matched against the
+        project names in the current organization. The API does not promise
+        that names are unique, so an ambiguous name raises rather than picking
+        the first match.
 
         Parameters
         ----------
-        name_or_id : str
-            Project name or ID
+        name_or_id : str or Project
+            Project, or project name or ID
 
         Returns
         -------
@@ -1095,6 +1157,9 @@ class ClusterManager(Manager):
             If the name matches no project, or more than one
 
         """
+        if isinstance(name_or_id, Project):
+            return name_or_id.id
+
         if PROJECT_ID_RE.match(name_or_id):
             return name_or_id
 
@@ -1120,24 +1185,28 @@ class ClusterManager(Manager):
 
         return matches[0].id
 
-    def _resolve_project_id(self, project_id: Optional[str] = None) -> str:
+    def _resolve_project_id(
+        self,
+        project: Union[str, Project, None] = None,
+    ) -> str:
         """
         Return the project ID a new deployment should be created in.
 
         ``POST /v2/clusters`` requires ``projectID``, where the v1 workspace
         group route assigned one implicitly. In priority order: the project
-        named by the caller, the :data:`PROJECT_ENV_VAR` environment variable,
-        or the organization's only project. An organization with more than one
-        project has no default -- naming the candidates is more useful than
-        picking one.
+        named by the caller, the ``SINGLESTOREDB_PROJECT`` environment variable
+        the notebook environment sets, or the organization's only project. An
+        organization with more than one project has no default -- naming the
+        candidates is more useful than picking one.
 
-        The caller and the environment variable may both give either a project
-        name or a project ID; see :meth:`_project_id_for`.
+        The caller may give a :class:`Project`, a project name or a project ID,
+        and the environment variable either a name or an ID; see
+        :meth:`_project_id_for`.
 
         Parameters
         ----------
-        project_id : str, optional
-            Project name or ID supplied by the caller
+        project : str or Project, optional
+            Project, or project name or ID, supplied by the caller
 
         Returns
         -------
@@ -1149,10 +1218,10 @@ class ClusterManager(Manager):
             If no project ID can be determined
 
         """
-        if project_id:
-            return self._project_id_for(project_id)
+        if project:
+            return self._project_id_for(project)
 
-        from_env = os.environ.get(PROJECT_ENV_VAR)
+        from_env = os.environ.get('SINGLESTOREDB_PROJECT')
         if from_env:
             return self._project_id_for(from_env)
 
@@ -1168,9 +1237,9 @@ class ClusterManager(Manager):
 
         raise ManagementError(
             msg='A project is required to create a cluster and the current '
-                'organization has more than one. Pass project_id= or set the '
-                f'{PROJECT_ENV_VAR} environment variable to the name or ID of '
-                'one of: ' +
+                'organization has more than one. Pass project= or set the '
+                'SINGLESTOREDB_PROJECT environment variable to the name or ID '
+                'of one of: ' +
                 ', '.join(f'{x.name} ({x.id})' for x in projects) + '.',
         )
 
@@ -1179,7 +1248,6 @@ class ClusterManager(Manager):
         name: str,
         region: Union[str, Region, None] = None,
         provider: Optional[str] = None,
-        region_name: Optional[str] = None,
         size: Optional[str] = None,
         scale_factor: Optional[float] = None,
         firewall_ranges: Optional[List[str]] = None,
@@ -1194,7 +1262,7 @@ class ClusterManager(Manager):
         kai: Optional[bool] = None,
         multi_az: Optional[bool] = None,
         opt_in_preview_feature: Optional[bool] = None,
-        project_id: Optional[str] = None,
+        project: Union[str, Project, None] = None,
         wait_on_active: bool = False,
         wait_interval: int = 10,
         wait_timeout: int = 600,
@@ -1210,21 +1278,24 @@ class ClusterManager(Manager):
         name : str
             Name of the cluster
         region : str or Region, optional
-            Region to create the cluster in. A :class:`Region` is reduced to
-            its ``(provider, region_name)`` pair; a string is taken as the
-            provider region name. v2 has no region IDs.
+            Region to create the cluster in. A :class:`Region` supplies both
+            halves of the ``(provider, region_name)`` pair v2 identifies a
+            region by; a string is taken as the provider region name, e.g.,
+            ``us-east-1``, and needs ``provider`` alongside it. v2 has no
+            region IDs.
         provider : str, optional
-            Cloud provider for the cluster (AWS | GCP | Azure). Used together
-            with ``region_name`` as an alternative to ``region``.
-        region_name : str, optional
-            Cloud provider region name, e.g., ``us-east-1``
+            Cloud provider for the cluster (AWS | GCP | Azure). Only needed
+            when ``region`` is a string; a :class:`Region` carries its own,
+            which this overrides if both are given.
         size : str, optional
             Cluster size in cluster size notation (S-00, S-1, etc.)
         scale_factor : float, optional
             Scale factor for the cluster
         firewall_ranges : List[str], optional
-            List of allowed CIDR ranges. An empty list indicates that all
-            inbound requests are allowed.
+            List of allowed CIDR ranges. An empty list denies all inbound
+            traffic, which is also what is sent when this is not given:
+            ``POST /v2/clusters`` rejects a null ``firewallRanges`` outright,
+            so there is no way to leave the choice to the server.
         allow_all_traffic : bool, optional
             Allow all traffic to the cluster
         admin_password : str, optional
@@ -1254,9 +1325,10 @@ class ClusterManager(Manager):
             Whether to deploy across multiple availability zones
         opt_in_preview_feature : bool, optional
             Whether to opt in to preview features
-        project_id : str, optional
-            Project name or ID to create the cluster in; a value that is not a
-            UUID is looked up as a name. Required by the API; if it is not
+        project : str or Project, optional
+            Project to create the cluster in. A :class:`Project` is reduced to
+            its ID; a string that is not a UUID is looked up as a name.
+            Required by the API; if it is not
             given it is resolved by :meth:`_resolve_project_id` from the
             ``SINGLESTOREDB_PROJECT`` environment variable or from the
             organization's only project.
@@ -1278,13 +1350,21 @@ class ClusterManager(Manager):
         :class:`Cluster`
 
         """
+        region_name: Optional[str] = None
         if isinstance(region, Region):
             provider = provider or region.provider
-            region_name = region_name or region.region_name or region.name
+            region_name = region.region_name or region.name
         elif region is not None:
-            region_name = region_name or region
+            region_name = region
 
-        project_id = self._resolve_project_id(project_id)
+        project_id = self._resolve_project_id(project)
+
+        # POST /v2/clusters rejects a null firewallRanges -- "indicate empty
+        # list [] to disallow all inbound traffic" -- so the field cannot be
+        # dropped the way every other unset field is. Deny-all is the only
+        # safe default for a cluster nobody asked to expose.
+        if firewall_ranges is None:
+            firewall_ranges = []
 
         size_spec: Optional[Dict[str, Any]] = None
         if size is not None or scale_factor is not None:
@@ -1380,9 +1460,9 @@ class ClusterManager(Manager):
         self,
         name: str,
         database_name: str,
-        provider: str,
-        region_name: str,
-        project_id: Optional[str] = None,
+        provider: Optional[str] = None,
+        region: Union[str, Region, None] = None,
+        project: Union[str, Project, None] = None,
     ) -> StarterCluster:
         """
         Create a new starter (shared tier) cluster.
@@ -1393,14 +1473,21 @@ class ClusterManager(Manager):
             Name of the starter cluster
         database_name : str
             Name of the database for the starter cluster
-        provider : str
+        provider : str, optional
             Cloud provider for the starter cluster (AWS | GCP | Azure). Any
-            capitalization is accepted; see below.
-        region_name : str
-            Cloud provider region for the starter cluster (e.g., 'us-east-1')
-        project_id : str, optional
-            Project name or ID to associate the starter cluster with; a value
-            that is not a UUID is looked up as a name. Unlike
+            capitalization is accepted; see below. Only needed when ``region``
+            is a string; a :class:`Region` carries its own, which this
+            overrides if both are given.
+        region : str or Region
+            Region to create the starter cluster in. A :class:`Region` supplies
+            both the provider and the provider region name; a string is taken
+            as the provider region name (e.g., 'us-east-1') and needs
+            ``provider`` alongside it. See :attr:`shared_tier_regions` for the
+            regions this route accepts.
+        project : str or Project, optional
+            Project to associate the starter cluster with. A :class:`Project`
+            is reduced to its ID; a string that is not a UUID is looked up as a
+            name. Unlike
             :meth:`create_cluster` this route does not require one, so nothing
             is resolved when it is omitted.
 
@@ -1409,6 +1496,19 @@ class ClusterManager(Manager):
         :class:`StarterCluster`
 
         """
+        region_name: Optional[str] = None
+        if isinstance(region, Region):
+            provider = provider or region.provider
+            region_name = region.region_name or region.name
+        elif region is not None:
+            region_name = region
+
+        if not provider or not region_name:
+            raise ValueError(
+                'a provider and a region name are required; pass a Region, '
+                'or a provider region name together with provider=',
+            )
+
         payload: Dict[str, Any] = {
             'name': name,
             'databaseName': database_name,
@@ -1420,8 +1520,8 @@ class ClusterManager(Manager):
             'provider': provider.upper(),
             'regionName': region_name,
         }
-        if project_id is not None:
-            payload['projectID'] = self._project_id_for(project_id)
+        if project is not None:
+            payload['projectID'] = self._project_id_for(project)
 
         res = self._post(SHAREDTIER_PATH, json=payload)
         cluster_id = res.json().get('virtualClusterID')

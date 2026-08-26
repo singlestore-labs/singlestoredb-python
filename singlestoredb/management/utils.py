@@ -39,35 +39,47 @@ else:
 
 
 class TTLProperty(object):
-    """Property with time limit."""
+    """
+    Property with time limit.
+
+    The value is cached on the instance, not on the descriptor. A descriptor is
+    shared by every instance of the class it is defined on, and what these
+    properties return is not: a manager's project list belongs to one
+    organization, so a descriptor-wide cache would hand one manager's list to a
+    manager holding a different token.
+    """
 
     def __init__(self, fget: Callable[[Any], Any], ttl: datetime.timedelta):
         self.fget = fget
         self.ttl = ttl
-        self._last_executed = datetime.datetime(2000, 1, 1)
-        self._last_result = None
         self.__doc__ = fget.__doc__
         self._name = ''
 
-    def reset(self) -> None:
-        self._last_executed = datetime.datetime(2000, 1, 1)
-        self._last_result = None
-
     def __set_name__(self, owner: Any, name: str) -> None:
         self._name = name
+
+    @property
+    def _cache_key(self) -> str:
+        return f'_ttl_cache_{self._name or id(self)}'
+
+    def reset(self, obj: Any) -> None:
+        """Discard the value cached for ``obj``, if any."""
+        obj.__dict__.pop(self._cache_key, None)
 
     def __get__(self, obj: Any, objtype: Any = None) -> Any:
         if obj is None:
             return self
 
-        if self._last_result is not None \
-                and (datetime.datetime.now() - self._last_executed) < self.ttl:
-            return self._last_result
+        cached = obj.__dict__.get(self._cache_key)
+        if cached is not None:
+            value, fetched_at = cached
+            if (datetime.datetime.now() - fetched_at) < self.ttl:
+                return value
 
-        self._last_result = self.fget(obj)
-        self._last_executed = datetime.datetime.now()
+        value = self.fget(obj)
+        obj.__dict__[self._cache_key] = (value, datetime.datetime.now())
 
-        return self._last_result
+        return value
 
 
 def ttl_property(ttl: datetime.timedelta) -> Callable[[Any], Any]:
@@ -227,12 +239,25 @@ def get_token() -> Optional[str]:
 
 
 def get_cluster_id() -> Optional[str]:
-    """Return the cluster id for the current token or environment."""
-    return os.environ.get('SINGLESTOREDB_CLUSTER') or None
+    """
+    Return the cluster id for the current token or environment.
+
+    The v2 spelling of :func:`get_workspace_id`, and the same value: there is
+    no ``SINGLESTOREDB_CLUSTER``, because the notebook environment publishes
+    the current deployment as ``SINGLESTOREDB_WORKSPACE`` whatever the API
+    version calls it.
+    """
+    return get_workspace_id()
 
 
 def get_workspace_id() -> Optional[str]:
-    """Return the workspace id for the current token or environment."""
+    """
+    Return the deployment id for the current token or environment.
+
+    ``SINGLESTOREDB_WORKSPACE`` is the notebook environment's name for the
+    current deployment at every API version: the workspace ID at v1, and the
+    cluster ID from v2 onward.
+    """
     return os.environ.get('SINGLESTOREDB_WORKSPACE') or None
 
 

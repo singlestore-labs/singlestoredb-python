@@ -289,6 +289,80 @@ class TestFusion(unittest.TestCase):
         assert 'get_workspace_manager' not in src
         assert src.count('get_cluster_manager().organizations.current.jobs') == 8
 
+    def _fusion_env(self, **values):
+        """Run with only the deployment variables in ``values`` set."""
+        from unittest.mock import patch
+
+        ctx = patch.dict(os.environ)
+        ctx.start()
+        self.addCleanup(ctx.stop)
+        for name in (
+            'SINGLESTOREDB_WORKSPACE',
+            'SINGLESTOREDB_WORKSPACE_GROUP',
+            'SINGLESTOREDB_PROJECT',
+        ):
+            os.environ.pop(name, None)
+        os.environ.update(values)
+
+    def test_project_falls_back_to_the_environment(self):
+        """
+        ``IN PROJECT`` is optional when the environment names a project.
+
+        The notebook environment publishes ``SINGLESTOREDB_PROJECT``, which may
+        hold either a name or an ID, so both spellings have to resolve.
+        """
+        from unittest.mock import MagicMock
+        from unittest.mock import patch
+
+        from singlestoredb.fusion.handlers import utils
+
+        project_id = '11111111-1111-4111-8111-111111111111'
+        by_name = MagicMock()
+        by_name.name = 'My Project'
+        manager = MagicMock()
+        manager.projects = [by_name]
+
+        with patch.object(utils, 'get_cluster_manager', return_value=manager):
+            self._fusion_env(SINGLESTOREDB_PROJECT=project_id)
+            assert utils.get_project({}) is manager.get_project.return_value
+            manager.get_project.assert_called_once_with(project_id)
+
+            self._fusion_env(SINGLESTOREDB_PROJECT='My Project')
+            assert utils.get_project({}) is by_name
+
+            # A clause still wins over the environment.
+            self._fusion_env(SINGLESTOREDB_PROJECT='My Project')
+            assert utils.get_project(
+                dict(in_project=dict(project_id=project_id)),
+            ) is manager.get_project.return_value
+
+            self._fusion_env()
+            assert utils.get_project({}) is None
+
+    def test_deployment_refuses_the_group_environment_variable(self):
+        """
+        ``SINGLESTOREDB_WORKSPACE_GROUP`` holds a group ID, not a cluster ID.
+
+        v2 reports the group only as ``Cluster.group`` and has no route to
+        look it up, so guessing which cluster was meant could target the wrong
+        deployment.
+        """
+        from unittest.mock import MagicMock
+        from unittest.mock import patch
+
+        from singlestoredb.fusion.handlers import utils
+
+        with patch.object(utils, 'get_cluster_manager', return_value=MagicMock()):
+            self._fusion_env(
+                SINGLESTOREDB_WORKSPACE_GROUP='11111111-1111-4111-8111-111111111111',
+            )
+            with self.assertRaises(KeyError) as cm:
+                utils.get_deployment({})
+
+        msg = str(cm.exception)
+        assert 'SINGLESTOREDB_WORKSPACE_GROUP' in msg
+        assert 'SINGLESTOREDB_WORKSPACE' in msg
+
 
 @pytest.mark.management
 class TestWorkspaceFusion(unittest.TestCase):
@@ -749,10 +823,9 @@ class TestClusterFusion(unittest.TestCase):
             cls.clusters.append(
                 mgr.create_cluster(
                     f'{prefix}-fusion-cluster-{cls.id}',
-                    provider=region.provider,
-                    region_name=region.region_name,
+                    region=region,
                     size='S-00',
-                    project_id=cls.project_id,
+                    project=cls.project_id,
                     wait_on_active=True,
                     wait_timeout=1200,
                 ),
@@ -1062,7 +1135,7 @@ class TestClusterFusion(unittest.TestCase):
                 if x.name == name and x.terminated_at is None
             ]
             assert len(live) == 1, live
-            assert live[0].project_id == project.id, live[0].project_id
+            assert live[0].project.id == project.id, live[0].project
 
         finally:
             for cluster in mgr.clusters:
@@ -1148,18 +1221,18 @@ class TestJobsFusion(unittest.TestCase):
         region = random.choice(us_regions)
         cls.cluster = cls.manager.create_cluster(
             f'jobs-fusion-{cls.id}',
-            provider=region.provider,
-            region_name=region.region_name,
+            region=region,
             size='S-00',
-            project_id=project_id,
+            project=project_id,
             wait_on_active=True,
             wait_timeout=1200,
         )
 
         os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] = cls.dbname
-        # SINGLESTOREDB_WORKSPACE is still read at v2 -- it is one of
-        # CLUSTER_ENV_VARS -- and now names a cluster ID.
-        os.environ['SINGLESTOREDB_CLUSTER'] = cls.cluster.id
+        # SINGLESTOREDB_WORKSPACE is the only deployment variable the notebook
+        # environment publishes -- there is no SINGLESTOREDB_CLUSTER -- and at
+        # v2 its value is a cluster ID.
+        os.environ['SINGLESTOREDB_WORKSPACE'] = cls.cluster.id
 
     @classmethod
     def tearDownClass(cls):
@@ -1178,7 +1251,6 @@ class TestJobsFusion(unittest.TestCase):
         cls.manager = None
         cls.cluster = None
         for envvar in (
-            'SINGLESTOREDB_CLUSTER',
             'SINGLESTOREDB_WORKSPACE',
             'SINGLESTOREDB_DEFAULT_DATABASE',
         ):
@@ -1438,10 +1510,9 @@ class TestStageFusion(unittest.TestCase):
             region = random.choice(us_regions)
             return cls.manager.create_cluster(
                 f'stage-fusion-{suffix}-{cls.id}',
-                provider=region.provider,
-                region_name=region.region_name,
+                region=region,
                 size='S-00',
-                project_id=project_id,
+                project=project_id,
                 wait_on_active=True,
                 wait_timeout=1200,
             )
@@ -1450,10 +1521,11 @@ class TestStageFusion(unittest.TestCase):
         cls.cluster_2 = make('2')
 
         os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] = 'information_schema'
-        # SINGLESTOREDB_WORKSPACE_GROUP would raise at v2: there is no
-        # addressable group resource, so get_deployment() refuses to guess
-        # which cluster was meant rather than target the wrong one.
-        os.environ['SINGLESTOREDB_CLUSTER'] = cls.cluster.id
+        # SINGLESTOREDB_WORKSPACE_GROUP would raise at v2: its value is a
+        # group ID, which v2 reports only as Cluster.group and cannot look
+        # up, so get_deployment() refuses to guess which cluster was meant
+        # rather than target the wrong one.
+        os.environ['SINGLESTOREDB_WORKSPACE'] = cls.cluster.id
 
     @classmethod
     def tearDownClass(cls):
@@ -1469,7 +1541,6 @@ class TestStageFusion(unittest.TestCase):
         cls.cluster = None
         cls.cluster_2 = None
         for envvar in (
-            'SINGLESTOREDB_CLUSTER',
             'SINGLESTOREDB_WORKSPACE',
             'SINGLESTOREDB_WORKSPACE_GROUP',
             'SINGLESTOREDB_DEFAULT_DATABASE',
