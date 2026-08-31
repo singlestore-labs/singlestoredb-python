@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """SingleStoreDB Cloud Scheduled Notebook Job."""
 import datetime
-import time
 from enum import Enum
 from typing import Any
 from typing import Dict
@@ -10,6 +9,7 @@ from typing import Optional
 from typing import Type
 from typing import Union
 
+from . import timing
 from ..exceptions import ManagementError
 from .manager import Manager
 from .utils import camel_to_snake
@@ -881,7 +881,7 @@ class JobsManager:
                 return True
             if job.schedule.mode == Mode.RECURRING:
                 raise ValueError(f'Cannot wait for recurring job {job_id}')
-            time.sleep(5)
+            timing.sleep(5, 'job completion')
 
     def get(self, job_id: str) -> Job:
         """Get a job by its ID."""

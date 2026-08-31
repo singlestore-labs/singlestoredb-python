@@ -11,6 +11,7 @@ import datetime
 import os
 import pathlib
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
@@ -582,6 +583,62 @@ class TestManagerTransport(unittest.TestCase):
         self.assertIn('clusters/abc', msg)
 
 
+class TestWaitOnEndpoint(unittest.TestCase):
+    """
+    ``Manager._wait_on_endpoint`` polls a new deployment by connecting to it.
+
+    It only runs inside the notebook environment, which is why the loop having
+    no exit on success went unnoticed: a successful connect fell out of the
+    ``try`` and straight back into ``while True``, so the only ways out were an
+    access-denied error or the timeout.
+    """
+
+    def _manager(self):
+        from singlestoredb.management.manager import Manager
+        mgr = Manager(access_token='fake-token', base_url='https://example.com')
+        mgr.obj_type = 'cluster'
+        return mgr
+
+    def test_a_successful_connect_ends_the_wait(self):
+        mgr = self._manager()
+        out = MagicMock()
+
+        with patch.dict(
+            os.environ, {'SINGLESTOREDB_WORKLOAD_TYPE': 'notebook'},
+        ):
+            with patch('singlestoredb.management.timing.time.sleep'):
+                result = mgr._wait_on_endpoint(out, interval=1, timeout=10)
+
+        self.assertIs(result, out)
+        # Once, not until the timeout ran out.
+        self.assertEqual(out.connect.call_count, 1)
+
+    def test_nothing_is_waited_on_outside_the_notebook_environment(self):
+        mgr = self._manager()
+        out = MagicMock()
+
+        with patch.dict(os.environ, {'SINGLESTOREDB_WORKLOAD_TYPE': ''}):
+            result = mgr._wait_on_endpoint(out, interval=1, timeout=10)
+
+        self.assertIs(result, out)
+        out.connect.assert_not_called()
+
+    def test_a_refused_connection_is_retried_until_the_timeout(self):
+        mgr = self._manager()
+        out = MagicMock()
+        out.connect = MagicMock(side_effect=OSError('connection refused'))
+
+        with patch.dict(
+            os.environ, {'SINGLESTOREDB_WORKLOAD_TYPE': 'notebook'},
+        ):
+            with patch('singlestoredb.management.timing.time.sleep'):
+                with self.assertRaises(ManagementError) as cm:
+                    mgr._wait_on_endpoint(out, interval=10, timeout=30)
+
+        self.assertIn('endpoint', str(cm.exception))
+        self.assertEqual(out.connect.call_count, 4)
+
+
 class TestDeploymentTracking(unittest.TestCase):
     """
     The sweeper in ``tests/utils.py`` that keeps test runs from leaking
@@ -689,6 +746,21 @@ class TestDeploymentTracking(unittest.TestCase):
         self.assertEqual(self.utils.cleanup_tracked(), [])
         self.assertIsNone(obj.terminated_with)
 
+    def test_a_mocked_creation_is_recognised_by_its_manager(self):
+        mgr = MagicMock()
+        self.assertTrue(self.utils._creator_is_mocked(mgr))
+
+        real = SimpleNamespace(_get=object(), _post=object(), _delete=object())
+        self.assertFalse(self.utils._creator_is_mocked(real))
+
+        # A created object reaches its manager through _manager.
+        self.assertTrue(
+            self.utils._creator_is_mocked(SimpleNamespace(_manager=mgr)),
+        )
+        self.assertFalse(
+            self.utils._creator_is_mocked(SimpleNamespace(_manager=real)),
+        )
+
     def test_every_creation_method_is_wrapped(self):
         # A rename that silently stops tracking is how a cluster leaks.
         import importlib
@@ -706,6 +778,237 @@ class TestDeploymentTracking(unittest.TestCase):
             )
 
 
+class TestSharedClusterPool(unittest.TestCase):
+    """
+    The pool in ``tests/utils.py`` that keeps the Stage and Job suites from
+    deploying a cluster apiece.
+    """
+
+    def setUp(self):
+        from singlestoredb.tests import utils
+        self.utils = utils
+
+        self.saved_pool = list(utils._pool)
+        self.saved_skip = utils._pool_skip
+        self.saved_tracked = list(utils._tracked)
+        self.saved_owner = utils.get_owner()
+        utils._pool.clear()
+        utils._pool_skip = None
+        utils._tracked.clear()
+        self.addCleanup(self._restore)
+
+        self.created = []
+
+    def _restore(self):
+        self.utils._pool[:] = self.saved_pool
+        self.utils._pool_skip = self.saved_skip
+        self.utils._tracked[:] = self.saved_tracked
+        self.utils.set_owner(self.saved_owner)
+
+    def _manager(self, regions=('US East 1',), projects=('STANDARD',)):
+        """
+        A stand-in cluster manager.
+
+        Not a ``Mock``: ``utils.track`` skips anything that came out of a
+        mocked manager, and the owner a pool cluster is tracked under is the
+        whole point of the pool. ``create_cluster`` calls ``track`` itself
+        because that is what ``install_deployment_tracking`` does to the real
+        method.
+        """
+        created = self.created
+        utils = self.utils
+
+        class Region:
+            def __init__(self, name):
+                self.name = name
+                self.region_name = name
+
+        class Project:
+            def __init__(self, edition):
+                self.edition = edition
+                self.id = f'project-{edition}'
+
+        class Cluster:
+            def __init__(self, name, kwargs):
+                self.name = name
+                self.id = f'id-of-{name}'
+                self.terminated_at = None
+                self.state = 'ACTIVE'
+                self.kwargs = kwargs
+                self._manager = object()
+
+            def refresh(self):
+                return self
+
+            def terminate(self, force=False):
+                pass
+
+        # Bound outside the class body: a comprehension there cannot see the
+        # enclosing function's names.
+        region_list = [Region(x) for x in regions]
+        project_list = [Project(x) for x in projects]
+
+        class Manager:
+            regions = region_list
+            projects = project_list
+
+            def create_cluster(self, name, **kwargs):
+                # The owner in force at creation time is what decides whether
+                # the per-class sweep eats the pool.
+                created.append((name, utils.get_owner(), kwargs))
+                return utils.track(Cluster(name, kwargs))
+
+        return Manager()
+
+    def _patched(self, **kwargs):
+        import singlestoredb as s2
+        return patch.object(s2, 'manage_clusters', return_value=self._manager(**kwargs))
+
+    def test_the_pool_is_built_once(self):
+        with self._patched():
+            first = self.utils.shared_clusters(2)
+            second = self.utils.shared_clusters(2)
+
+        self.assertEqual([x.id for x in first], [x.id for x in second])
+        self.assertEqual(len(self.created), 2)
+
+    def test_the_pool_grows_to_the_largest_request(self):
+        with self._patched():
+            one = self.utils.shared_clusters(1)
+            two = self.utils.shared_clusters(2)
+
+        # The second call adds a cluster rather than replacing the first.
+        self.assertEqual(len(self.created), 2)
+        self.assertEqual(two[0].id, one[0].id)
+        self.assertEqual(len(two), 2)
+
+    def test_pool_clusters_are_tracked_under_the_empty_owner(self):
+        # A pool cluster tracked under the class that asked for it first would
+        # be terminated by conftest's per-class sweep the moment the run moved
+        # on -- so the pool would die after one consumer.
+        self.utils.set_owner('mod.ClassA')
+        with self._patched():
+            self.utils.shared_clusters(2)
+
+        self.assertEqual([x[1] for x in self.created], ['', ''])
+        self.assertEqual([x[0] for x in self.utils._tracked], ['', ''])
+
+        # The owner the caller was running under is put back...
+        self.assertEqual(self.utils.get_owner(), 'mod.ClassA')
+        # ... and a sweep of that class leaves the pool alone.
+        self.assertEqual(self.utils.cleanup_tracked('mod.ClassA'), [])
+        self.assertEqual(len(self.utils._tracked), 2)
+        # Only the end-of-session sweep, which matches every owner, takes it.
+        self.assertEqual(len(self.utils.cleanup_tracked()), 2)
+
+    def test_pool_names_are_swept_by_the_maintenance_script(self):
+        from singlestoredb.tests import cleanup_deployments
+
+        with self._patched():
+            self.utils.shared_clusters(1)
+
+        self.assertTrue(
+            cleanup_deployments.is_test_deployment(self.created[0][0]),
+            self.created[0][0],
+        )
+        # POST /v2/clusters caps a name at 32 characters.
+        self.assertLessEqual(len(self.created[0][0]), 32)
+
+    def test_a_pool_cluster_is_deployed_where_its_consumers_deployed_theirs(self):
+        with self._patched():
+            self.utils.shared_clusters(1)
+
+        _, _, kwargs = self.created[0]
+        self.assertEqual(kwargs['size'], 'S-00')
+        self.assertEqual(kwargs['project'], 'project-STANDARD')
+        self.assertEqual(kwargs['firewall_ranges'], ['0.0.0.0/0'])
+        self.assertTrue(kwargs['wait_on_active'])
+
+    def test_no_us_region_skips_rather_than_failing(self):
+        with self._patched(regions=('EU West 1',)):
+            with self.assertRaises(unittest.SkipTest):
+                self.utils.shared_clusters(1)
+
+            # Cached: the next class to ask skips without repeating the
+            # lookups, and nothing was deployed.
+            with self.assertRaises(unittest.SkipTest):
+                self.utils.shared_clusters(1)
+
+        self.assertEqual(self.created, [])
+
+    def test_no_standard_project_skips_rather_than_failing(self):
+        with self._patched(projects=('SHARED',)):
+            with self.assertRaises(unittest.SkipTest) as cm:
+                self.utils.shared_clusters(1)
+        self.assertIn('SINGLESTOREDB_PROJECT', str(cm.exception))
+        self.assertEqual(self.created, [])
+
+    def test_an_explicit_project_does_not_need_a_standard_one(self):
+        with patch.dict(
+            os.environ, {'SINGLESTOREDB_PROJECT': 'chosen-project'},
+        ):
+            with self._patched(projects=('SHARED',)):
+                self.utils.shared_clusters(1)
+
+        self.assertEqual(self.created[0][2]['project'], 'chosen-project')
+
+
+class TestClearStage(unittest.TestCase):
+    """
+    Emptying a pooled deployment's stage, which is what lets a class that
+    asserts exact stage listings borrow a cluster another class has used.
+    """
+
+    def setUp(self):
+        from singlestoredb.tests import utils
+        self.utils = utils
+
+    def _deployment(self, entries, failing=()):
+        removed = []
+
+        class Obj:
+            def __init__(self, path, type):
+                self.path = path
+                self.type = type
+
+        class Stage:
+            def listdir(self, path='/', *, recursive=False, return_objects=False):
+                assert return_objects
+                return [Obj(p, t) for p, t in entries]
+
+            def remove(self, path):
+                if path in failing:
+                    raise OSError('nope')
+                removed.append(('remove', path))
+
+            def removedirs(self, path):
+                if path in failing:
+                    raise OSError('nope')
+                removed.append(('removedirs', path))
+
+        class Deployment:
+            stage = Stage()
+
+        return Deployment(), removed
+
+    def test_files_are_removed_and_folders_go_recursively(self):
+        deployment, removed = self._deployment(
+            [('test.sql', 'file'), ('data/', 'directory')],
+        )
+        self.utils.clear_stage(deployment)
+        self.assertEqual(
+            removed, [('remove', 'test.sql'), ('removedirs', 'data/')],
+        )
+
+    def test_a_path_that_will_not_go_does_not_stop_the_rest(self):
+        deployment, removed = self._deployment(
+            [('stuck.sql', 'file'), ('test.sql', 'file')],
+            failing=('stuck.sql',),
+        )
+        self.utils.clear_stage(deployment)
+        self.assertEqual(removed, [('remove', 'test.sql')])
+
+
 class TestLeftoverDeploymentPatterns(unittest.TestCase):
     """
     The maintenance sweep runs against a real organization, so it must match
@@ -721,6 +1024,7 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
             'wg-test-abcDEF_12',
             'ws-test-abcDEF-x',
             'cl-test-abcDEF',
+            'cl-test-shared-0-deadbeef',
             'starter-ws-test-abcDEF',
             'starter-cl-test-abcDEF',
             'A Fusion Testing deadbeefdeadbeef',

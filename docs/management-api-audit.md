@@ -466,7 +466,14 @@ These are not in the scope of this audit pass but are worth noting:
      `create_starter_cluster` resolves `project` only when one is given.
    - Field-validation order on `POST /v2/clusters` is `region` → `projectID` →
      `firewallRanges` (which must be present, `[]` to disallow all inbound
-     traffic) → `size`.
+     traffic) → `sizeConfig`.
+     **Correction (2026-08-28): the size field is `sizeConfig`, not `size`.**
+     It was `size` when this was recorded. The rename shipped on 2026-08-26,
+     was backed out the next morning (verified live 2026-08-27: `sizeConfig`
+     drew `400 ... unknown field "sizeConfig"`), and landed again by
+     2026-08-28, when `size` began drawing `400 request body contains an
+     unknown field "size"`. Only the outer key changed; the object inside is
+     still `{size, scaleFactor}`, and `PATCH /v2/clusters/{id}` moved with it.
 6. **`POST /v2/sharedtier/virtualClusters` accepts only `AWS` | `AZURE` | `GCP`
    verbatim.** Also confirmed live (2026-08-21). Any other capitalization —
    including the mixed-case `Azure` that `GET /v2/regions` itself reports —
@@ -499,7 +506,7 @@ These are not in the scope of this audit pass but are worth noting:
    `POST /v2/sharedtier/virtualClusters` applies none of this — it took
    `STARTER_cl_test_abc-` unchanged. Neither rule is in the spec dump.
    Full validation order on `POST /v2/clusters`: `region` presence →
-   `projectID` → `firewallRanges` → `size` → `name` → region existence.
+   `projectID` → `firewallRanges` → `sizeConfig` → `name` → region existence.
 8. **`POST /v2/clusters` ignores `adminPassword` and generates its own.**
    Confirmed live (2026-08-21) with two throwaway clusters, both since
    terminated. Whatever password is sent, the created cluster's `admin` user

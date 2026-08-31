@@ -309,14 +309,21 @@ register_option(
     environ=['SINGLESTOREDB_MANAGEMENT_BASE_URL'],
 )
 
-# PART 7: the default is held at 'v1' so the v1 test suite stays a valid
-# regression gate while the management base classes are level-set to v2. It
-# flips to 'v2' together with Manager.default_version and
-# FilesManager.default_version.
+# v2 is the default (PART 7 of the v1/v2 untwist). Set this to 'v1' -- or pass
+# version='v1' to a manage_* factory -- to address the v1 endpoints, which
+# remain reachable until management/v1/ is removed. Kept in step with
+# Manager.default_version and FilesManager.default_version.
 register_option(
-    'management.version', 'string', check_str, 'v1',
+    'management.version', 'string', check_str, 'v2',
     'Specifies the version for the management API.',
     environ=['SINGLESTOREDB_MANAGEMENT_VERSION'],
+)
+
+register_option(
+    'management.trace', 'bool', check_bool, False,
+    'Log the duration of every management API request and every poll '
+    'the wait_on_* loops sleep through to stderr.',
+    environ=['SINGLESTOREDB_MANAGEMENT_TRACE'],
 )
 
 

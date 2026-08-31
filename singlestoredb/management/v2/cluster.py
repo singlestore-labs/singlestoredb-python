@@ -22,13 +22,13 @@ from __future__ import annotations
 import datetime
 import os
 import re
-import time
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Union
 
+from .. import timing
 from ... import config
 from ... import connection
 from ...exceptions import ManagementError
@@ -376,7 +376,17 @@ class Cluster:
 
         """
         # Size is reported as an object: dict(size='S-00', scaleFactor=1)
-        size_spec = obj.get('size') or {}
+        #
+        # The rename of this field to ``sizeConfig`` shipped on 2026-08-26, was
+        # backed out the next morning, and landed again by 2026-08-28, when
+        # ``POST /v2/clusters`` began answering ``400 request body contains an
+        # unknown field "size"``. The request bodies below send ``sizeConfig``
+        # accordingly; both keys are read here, since a field that has already
+        # been reverted once may be reverted again, and a response carrying the
+        # other name would otherwise silently leave
+        # :attr:`Cluster.size` as None. The ``size`` argument and
+        # :attr:`Cluster.size` are wrapper-side names either way.
+        size_spec = obj.get('sizeConfig') or obj.get('size') or {}
 
         # v2 reports the provider region name and no region ID, so the region
         # is matched on the ``(provider, region_name)`` pair to recover the
@@ -498,6 +508,7 @@ class Cluster:
         size : str, optional
             Size of the cluster in cluster size notation, such as "S-1".
             Resizing is done through this field; v2 has no ``resize`` route.
+            Sent nested in a ``size`` object alongside ``scale_factor``.
         scale_factor : float, optional
             Scale factor for the cluster
         auto_suspend : Dict[str, Any], optional
@@ -551,7 +562,8 @@ class Cluster:
         data = {
             k: v for k, v in dict(
                 name=name,
-                size=size_spec,
+                # ``sizeConfig``, not ``size``; see Cluster.from_dict.
+                sizeConfig=size_spec,
                 autoSuspend=snake_to_camel_dict(auto_suspend),
                 autoScale=snake_to_camel_dict(auto_scale),
                 cacheConfig=cache_config,
@@ -609,16 +621,20 @@ class Cluster:
         manager = self._require_manager()
         manager._delete(f'clusters/{self.id}', params=dict(force=force))
         if wait_on_terminated:
+            remaining = float(wait_timeout)
             while True:
+                started_at = timing.now()
                 self.refresh()
                 if self.terminated_at is not None:
                     break
-                if wait_timeout <= 0:
+                if remaining <= 0:
                     raise ManagementError(
                         msg='Exceeded waiting time for Cluster to terminate',
                     )
-                time.sleep(wait_interval)
-                wait_timeout -= wait_interval
+                timing.sleep(wait_interval, 'cluster terminated')
+                # Charged by measured time, so the refresh above counts against
+                # the timeout too. See timing.poll_cost.
+                remaining -= timing.poll_cost(started_at, wait_interval)
 
     def connect(self, **kwargs: Any) -> connection.Connection:
         """
@@ -1111,23 +1127,28 @@ class ClusterManager(Manager):
             return bool(cluster.firewall_ranges) \
                 or bool(cluster.allow_all_traffic)
 
-        waited = 0
+        waited = 0.0
+        remaining = float(timeout)
         while not done(out):
-            if timeout <= 0:
+            if remaining <= 0:
                 wanted = 'to become {}'.format(expected) \
                     if expected is not None else 'to be applied'
                 raise ManagementError(
                     msg=f'Exceeded waiting time for the firewall of cluster '
-                        f'{out.id} {wanted} ({waited}s); it reports '
+                        f'{out.id} {wanted} ({waited:.0f}s); it reports '
                         f'firewall_ranges={out.firewall_ranges!r}, '
                         f'allow_all_traffic={out.allow_all_traffic!r}. While '
                         'the firewall admits nothing the endpoint refuses all '
                         'inbound connections.',
                 )
-            time.sleep(interval)
-            timeout -= interval
-            waited += interval
+            started_at = timing.now()
+            timing.sleep(interval, 'cluster firewall')
             out = self.get_cluster(out.id)
+            # Measured, and charged after the refetch, so a slow or retried GET
+            # counts against the timeout. See timing.poll_cost.
+            cost = timing.poll_cost(started_at, interval)
+            remaining -= cost
+            waited += cost
 
         return out
 
@@ -1288,7 +1309,8 @@ class ClusterManager(Manager):
             when ``region`` is a string; a :class:`Region` carries its own,
             which this overrides if both are given.
         size : str, optional
-            Cluster size in cluster size notation (S-00, S-1, etc.)
+            Cluster size in cluster size notation (S-00, S-1, etc.). Sent
+            nested in a ``size`` object alongside ``scale_factor``.
         scale_factor : float, optional
             Scale factor for the cluster
         firewall_ranges : List[str], optional
@@ -1380,7 +1402,8 @@ class ClusterManager(Manager):
                     name=name,
                     provider=provider,
                     region=region_name,
-                    size=size_spec,
+                    # ``sizeConfig``, not ``size``; see Cluster.from_dict.
+                    sizeConfig=size_spec,
                     firewallRanges=firewall_ranges,
                     allowAllTraffic=allow_all_traffic,
                     adminPassword=admin_password,

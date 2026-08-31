@@ -67,8 +67,8 @@ def manage_clusters(
     from ._version_import import _resolve_version
     # Follows the management.version option like the other public entry points
     # rather than pinning the front door to one version, so a future version is
-    # picked up from the environment. That option still defaults to 'v1', which
-    # has no clusters, so a bare call raises until that default is flipped.
+    # picked up from the environment. The option now defaults to 'v2', so a
+    # bare call succeeds; an explicit 'v1' still has no clusters and raises.
     ver = _resolve_version(version, default=DEFAULT_CLUSTER_VERSION)
     if ver == 'v1':
         raise ManagementError(

@@ -527,10 +527,9 @@ class FilesManager(Manager):
     #: Management API version if none is specified. See the note on
     #: ``Manager.default_version``; ``manage_files()`` reads the
     #: ``management.version`` option at call time instead.
-    #: PART 7: held at 'v1' so the v1 test suite stays a valid regression
-    #: gate while the base classes are level-set to v2. Flips with the
-    #: ``management.version`` option default.
-    default_version = 'v1'
+    #: Kept in step with the ``management.version`` option default. The Files
+    #: API is unchanged at v2, so this picks the URL, not the implementation.
+    default_version = 'v2'
 
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url') \

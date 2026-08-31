@@ -15,6 +15,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from . import timing
 from .. import config
 from ..exceptions import ManagementError
 from ..exceptions import OperationalError
@@ -103,10 +104,9 @@ class Manager:
     #: ``management.version`` option: the option is read by the ``manage_*``
     #: factories at call time, so reading it here would freeze it at import
     #: and let a v1 class declare itself to be v2.
-    #: PART 7: held at 'v1' so the v1 test suite stays a valid regression
-    #: gate while the base classes are level-set to v2. Flips with the
-    #: ``management.version`` option default.
-    default_version = 'v1'
+    #: Kept in step with the ``management.version`` option default, which is
+    #: also v2; a v1 class pins itself instead of inheriting this.
+    default_version = 'v2'
 
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url') \
@@ -197,9 +197,16 @@ class Manager:
             self._sess.headers.update({'Authorization': f'Bearer {get_token()}'})
         kwargs.setdefault('timeout', default_timeout())
         url = urljoin(self._base_url, path)
+        # Every management HTTP call comes through here, so this is the one
+        # place request time has to be recorded. See management.timing.
+        started_at = time.monotonic()
         try:
-            return getattr(self._sess, method.lower())(url, *args, **kwargs)
+            res = getattr(self._sess, method.lower())(url, *args, **kwargs)
         except requests.exceptions.RequestException as exc:
+            timing.record_request(
+                method, path, time.monotonic() - started_at, started_at,
+                error=exc,
+            )
             # A transport failure otherwise escapes as a bare
             # requests.ConnectionError / ReadTimeout naming neither the route
             # nor the method, which makes it indistinguishable from a bug in
@@ -208,6 +215,11 @@ class Manager:
             raise ManagementError(
                 msg=f'{type(exc).__name__} on {method.upper()} {url}: {exc}',
             ) from exc
+        timing.record_request(
+            method, path, time.monotonic() - started_at, started_at,
+            response=res,
+        )
+        return res
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
@@ -377,17 +389,24 @@ class Manager:
                 ),
             )
 
+        remaining = float(timeout)
         while True:
             if getattr(out, 'state').lower() in states:
                 break
-            if timeout <= 0:
+            if remaining <= 0:
                 raise ManagementError(
                     msg=f'Exceeded waiting time for {self.obj_type} to become '
                         '{}.'.format(', '.join(states)),
                 )
-            time.sleep(interval)
-            timeout -= interval
+            started_at = timing.now()
+            timing.sleep(
+                interval,
+                '{} state -> {}'.format(self.obj_type, ', '.join(states)),
+            )
             out = getattr(self, f'get_{self.obj_type}')(out.id)
+            # Charged after the refetch, and by measured time: the refetch is
+            # part of what the iteration cost. See timing.poll_cost.
+            remaining -= timing.poll_cost(started_at, interval)
 
         return out
 
@@ -430,23 +449,32 @@ class Manager:
                 msg=f'{type(out).__name__} object does not have a valid endpoint',
             )
 
+        remaining = float(timeout)
         while True:
+            started_at = timing.now()
             try:
                 # Try to establish a connection to the endpoint using context manager
-                with out.connect(connect_timeout=5):
-                    pass
+                with timing.timed(f'{self.obj_type} endpoint connect'):
+                    with out.connect(connect_timeout=5):
+                        pass
+                # Connected, so the endpoint is ready. Without this the loop
+                # reconnects forever on success and only ever leaves through
+                # the 1045 branch or the timeout.
+                break
             except Exception as exc:
                 # If we get an 'access denied' error, that means that the server is
                 # up and we just aren't authenticating.
                 if isinstance(exc, OperationalError) and exc.errno == 1045:
                     break
                 # If connection fails, check timeout and retry
-                if timeout <= 0:
+                if remaining <= 0:
                     raise ManagementError(
                         msg=f'Exceeded waiting time for {self.obj_type} endpoint '
                             'to become ready',
                     )
-                time.sleep(interval)
-                timeout -= interval
+                timing.sleep(interval, f'{self.obj_type} endpoint')
+                # The failed connect attempt is part of what the iteration
+                # cost: connect_timeout is 5 seconds on top of the sleep.
+                remaining -= timing.poll_cost(started_at, interval)
 
         return out

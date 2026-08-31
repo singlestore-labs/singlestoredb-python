@@ -11,8 +11,9 @@ from ..exceptions import ManagementError
 _VERSION_RE = re.compile(r'^v\d+$')
 
 #: API version used when neither the caller nor the ``management.version``
-#: option names one. Flips to ``'v2'`` with the option's own default.
-DEFAULT_VERSION = 'v1'
+#: option names one -- i.e. when the option has been explicitly blanked out,
+#: since it otherwise carries this same default itself.
+DEFAULT_VERSION = 'v2'
 
 
 def _resolve_version(

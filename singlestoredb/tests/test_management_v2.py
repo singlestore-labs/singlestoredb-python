@@ -34,6 +34,7 @@ from singlestoredb.management.job import TargetType
 from singlestoredb.management.project import Project
 from singlestoredb.management.region import Region
 from singlestoredb.management.utils import NamedList
+from singlestoredb.tests import utils
 
 
 TEST_DIR = os.path.dirname(__file__)
@@ -231,8 +232,12 @@ class TestClusterManagerPosting(unittest.TestCase):
         # regionID to send.
         self.assertEqual(body['region'], 'us-east-1')
         self.assertNotIn('regionID', body)
-        # Size and scale factor are nested in one object.
-        self.assertEqual(body['size'], {'size': 'S-00', 'scaleFactor': 1.0})
+        # Size and scale factor are nested in one object, under ``sizeConfig``.
+        # That rename shipped on 2026-08-26, was backed out the next morning,
+        # and landed again by 2026-08-28, when ``POST /v2/clusters`` began
+        # answering 400 "unknown field" to ``size``.
+        self.assertEqual(body['sizeConfig'], {'size': 'S-00', 'scaleFactor': 1.0})
+        self.assertNotIn('size', body)
         self.assertEqual(body['firewallRanges'], ['0.0.0.0/0'])
         self.assertEqual(body['adminPassword'], 'hunter2')
         self.assertEqual(body['updateWindow'], {'day': 3, 'hour': 4})
@@ -443,7 +448,7 @@ class TestClusterFirewallWaiting(unittest.TestCase):
             side_effect=[self._cluster(firewall_ranges=[]), pending, applied],
         )
 
-        with patch('singlestoredb.management.v2.cluster.time.sleep'):
+        with patch('singlestoredb.management.timing.time.sleep'):
             out = mgr._wait_on_firewall(
                 self._cluster(firewall_ranges=[]), interval=1,
             )
@@ -455,7 +460,7 @@ class TestClusterFirewallWaiting(unittest.TestCase):
         mgr = self._make_cluster_manager()
         mgr.get_cluster = MagicMock(return_value=self._cluster(firewall_ranges=[]))
 
-        with patch('singlestoredb.management.v2.cluster.time.sleep'):
+        with patch('singlestoredb.management.timing.time.sleep'):
             with self.assertRaises(ManagementError) as cm:
                 mgr._wait_on_firewall(
                     self._cluster(firewall_ranges=[]), interval=1, timeout=3,
@@ -475,7 +480,7 @@ class TestClusterFirewallWaiting(unittest.TestCase):
             side_effect=[self._cluster(firewall_ranges=['0.0.0.0/0']), new],
         )
 
-        with patch('singlestoredb.management.v2.cluster.time.sleep'):
+        with patch('singlestoredb.management.timing.time.sleep'):
             out = mgr._wait_on_firewall(
                 self._cluster(firewall_ranges=['0.0.0.0/0']),
                 interval=1, expected=['192.168.0.0/16'],
@@ -488,8 +493,7 @@ class TestClusterFirewallWaiting(unittest.TestCase):
         post_response = MagicMock()
         post_response.json.return_value = {'clusterID': 'cl-1'}
         mgr._post = MagicMock(return_value=post_response)
-        with patch('singlestoredb.management.v2.cluster.time.sleep'), \
-                patch('singlestoredb.management.manager.time.sleep'):
+        with patch('singlestoredb.management.timing.time.sleep'):
             return mgr.create_cluster(
                 'my-cluster', provider='AWS', region='us-east-1',
                 project=FAKE_PROJECT_ID, wait_interval=1, **kwargs,
@@ -550,7 +554,7 @@ class TestClusterFirewallWaiting(unittest.TestCase):
         applied = self._cluster(firewall_ranges=[], allow_all_traffic=True)
         mgr.get_cluster = MagicMock(side_effect=[applied])
 
-        with patch('singlestoredb.management.v2.cluster.time.sleep'):
+        with patch('singlestoredb.management.timing.time.sleep'):
             out = mgr._wait_on_firewall(
                 self._cluster(firewall_ranges=['10.0.0.0/8']),
                 interval=1, expected=['0.0.0.0/0'],
@@ -563,7 +567,7 @@ class TestClusterFirewallWaiting(unittest.TestCase):
                 firewall_ranges=[], allow_all_traffic=True,
             ),
         )
-        with patch('singlestoredb.management.v2.cluster.time.sleep'):
+        with patch('singlestoredb.management.timing.time.sleep'):
             with self.assertRaises(ManagementError):
                 mgr._wait_on_firewall(
                     self._cluster(firewall_ranges=['10.0.0.0/8']),
@@ -618,14 +622,26 @@ class TestClusterFirewallWaiting(unittest.TestCase):
                 self._cluster(firewall_ranges=['192.168.0.0/16'], manager=mgr),
             ],
         )
-        with patch('singlestoredb.management.v2.cluster.time.sleep'), \
-                patch('singlestoredb.management.manager.time.sleep'):
+        with patch('singlestoredb.management.timing.time.sleep'):
             cluster.update(
                 firewall_ranges=['192.168.0.0/16'],
                 wait_on_active=True, wait_interval=1,
             )
         self.assertEqual(mgr.get_cluster.call_count, 3)
         self.assertEqual(cluster.firewall_ranges, ['192.168.0.0/16'])
+
+    def test_update_nests_the_size_and_scale_factor(self):
+        """Resizing goes out as a nested object, not as a bare string."""
+        mgr = self._make_cluster_manager()
+        mgr._patch = MagicMock()
+        mgr.get_cluster = MagicMock(return_value=self._cluster(manager=mgr))
+        cluster = self._cluster(manager=mgr)
+
+        cluster.update(size='S-1', scale_factor=2.0)
+
+        body = mgr._patch.call_args[1]['json']
+        self.assertEqual(body['sizeConfig'], {'size': 'S-1', 'scaleFactor': 2.0})
+        self.assertNotIn('size', body)
 
 
 class TestProjects(unittest.TestCase):
@@ -869,8 +885,11 @@ class TestClusterFromDict(unittest.TestCase):
             'name': 'my-cluster',
             'clusterID': 'cl-1',
             'state': 'ACTIVE',
-            # Size is reported as an object, not a bare string.
-            'size': {'size': 'S-00', 'scaleFactor': 1.0},
+            # Size is reported as an object, not a bare string. Under
+            # ``sizeConfig`` since the 2026-08-28 rename; ``size`` is still
+            # read, and tested below, because the rename was reverted once
+            # already.
+            'sizeConfig': {'size': 'S-00', 'scaleFactor': 1.0},
             'createdAt': '2024-03-15T12:30:45Z',
             'endpoint': 'svc.example.com',
             'provider': 'AWS',
@@ -893,6 +912,23 @@ class TestClusterFromDict(unittest.TestCase):
         self.assertEqual(c.created_at.year, 2024)
         self.assertEqual(c.created_at.month, 3)
         self.assertEqual(c.firewall_ranges, ['0.0.0.0/0'])
+
+    def test_either_spelling_of_the_size_object_is_read(self):
+        from singlestoredb.management.v2.cluster import Cluster
+        mgr = MagicMock()
+
+        payload = self._payload()
+        payload.pop('sizeConfig')
+        payload['size'] = {'size': 'S-1', 'scaleFactor': 2.0}
+        c = Cluster.from_dict(payload, mgr)
+        self.assertEqual(c.size, 'S-1')
+        self.assertEqual(c.scale_factor, 2.0)
+
+        # Neither: the wrapper reports no size rather than raising.
+        payload.pop('size')
+        c = Cluster.from_dict(payload, mgr)
+        self.assertIsNone(c.size)
+        self.assertIsNone(c.scale_factor)
 
     def test_region_falls_back_to_what_the_cluster_reports(self):
         from singlestoredb.management.v2.cluster import Cluster
@@ -1161,8 +1197,13 @@ class TestCluster(unittest.TestCase):
 
         objs = {}
         for item in clusters:
-            objs[item.id] = item
-            objs[item.name] = item
+            # setdefault, and name before id, so this resolves a key the way
+            # NamedList._find_item does: to the *first* match. Plain assignment
+            # kept the last, which disagrees as soon as the listing carries two
+            # entries of one name -- GET /v2/clusters reports a terminated
+            # cluster alongside its live replacement, so that happens.
+            objs.setdefault(item.name, item)
+            objs.setdefault(item.id, item)
 
         name = random.choice(names)
         assert clusters[name] == objs[name]
@@ -1260,7 +1301,11 @@ class TestStarterCluster(unittest.TestCase):
         # list work -- anything else gets a 500 'no shared tier region found
         # for provider X and region Y' out of POST /v2/sharedtier/
         # virtualClusters -- so discover rather than sampling all regions.
-        regions = list(cls.manager.shared_tier_regions)
+        # US-only where possible, matching the v1 starter test: non-US regions
+        # are likelier to answer a creation with a control-plane 500. Fall back
+        # to the full list rather than skipping if the org has no US region.
+        all_regions = list(cls.manager.shared_tier_regions)
+        regions = [x for x in all_regions if 'US' in x.name] or all_regions
         if not regions:
             raise unittest.SkipTest(
                 'no shared-tier capable region is available to this '
@@ -1316,8 +1361,13 @@ class TestStarterCluster(unittest.TestCase):
 
         objs = {}
         for item in clusters:
-            objs[item.id] = item
-            objs[item.name] = item
+            # setdefault, and name before id, so this resolves a key the way
+            # NamedList._find_item does: to the *first* match. Plain assignment
+            # kept the last, which disagrees as soon as the listing carries two
+            # entries of one name -- GET /v2/clusters reports a terminated
+            # cluster alongside its live replacement, so that happens.
+            objs.setdefault(item.name, item)
+            objs.setdefault(item.id, item)
 
         name = random.choice(names)
         assert clusters[name] == objs[name]
@@ -1355,6 +1405,7 @@ class TestStarterCluster(unittest.TestCase):
 
 
 @pytest.mark.management
+@pytest.mark.xdist_group(utils.SHARED_CLUSTER_STAGE_GROUP)
 class TestStage(unittest.TestCase):
     """
     Stage at v2 hangs off the cluster (``clusters/{id}/stage/fs/``) rather
@@ -1369,30 +1420,23 @@ class TestStage(unittest.TestCase):
     def setUpClass(cls):
         cls.manager = s2.manage_clusters(version='v2')
 
-        us_regions = _us_regions(cls.manager)
-
-        name = clean_name(secrets.token_urlsafe(20)[:20])
-        region = random.choice(us_regions)
-
         # UNVERIFIED: v1 could reach a stage from a workspace group without
         # ever starting a workspace. At v2 there is no group, so a cluster has
         # to exist for its stage to be addressable.
-        cls.cluster = cls.manager.create_cluster(
-            f'cl-test-{name}',
-            region=region,
-            size='S-00',
-            firewall_ranges=['0.0.0.0/0'],
-            project=_project_id(cls.manager),
-            wait_on_active=True,
-        )
+        #
+        # A shared one: every assertion below is scoped to one path, and every
+        # path is namespaced with id(self), so what another class left in this
+        # cluster's stage is invisible here. See
+        # docs/shared-deployment-pool-plan.md.
+        cls.cluster = utils.shared_clusters(1)[0]
 
         # v2 generates the admin password; see TestCluster.setUpClass.
         cls.password = cls.cluster.admin_password
 
     @classmethod
     def tearDownClass(cls):
-        if cls.cluster is not None:
-            cls.cluster.terminate(force=True)
+        # The cluster is the shared pool's: it stays live for the classes that
+        # follow and is terminated once, at the end of the session.
         cls.cluster = None
         cls.manager = None
         cls.password = None
@@ -1541,6 +1585,7 @@ class TestSecrets(unittest.TestCase):
 
 
 @pytest.mark.management
+@pytest.mark.xdist_group(utils.SHARED_CLUSTER_JOBS_GROUP)
 class TestJob(unittest.TestCase):
     """
     Scheduled notebook jobs at v2.
@@ -1558,19 +1603,9 @@ class TestJob(unittest.TestCase):
     def setUpClass(cls):
         cls.manager = s2.manage_clusters(version='v2')
 
-        us_regions = _us_regions(cls.manager)
-
-        name = clean_name(secrets.token_urlsafe(20)[:20])
-        region = random.choice(us_regions)
-
-        cls.cluster = cls.manager.create_cluster(
-            f'cl-test-{name}',
-            region=region,
-            size='S-00',
-            firewall_ranges=['0.0.0.0/0'],
-            project=_project_id(cls.manager),
-            wait_on_active=True,
-        )
+        # A shared cluster: a job only needs a live deployment to name as its
+        # target, and each assertion here is about the job it just created.
+        cls.cluster = utils.shared_clusters(1)[0]
 
         # v2 generates the admin password; see TestCluster.setUpClass.
         cls.password = cls.cluster.admin_password
@@ -1582,8 +1617,7 @@ class TestJob(unittest.TestCase):
                 cls.manager.organizations.current.jobs.delete(job_id)
             except Exception:
                 pass
-        if cls.cluster is not None:
-            cls.cluster.terminate(force=True)
+        # The cluster is the shared pool's; see TestStage.tearDownClass.
         cls.cluster = None
         cls.manager = None
         cls.password = None

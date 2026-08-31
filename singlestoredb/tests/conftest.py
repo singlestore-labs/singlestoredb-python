@@ -30,7 +30,9 @@ import logging
 import os
 from collections.abc import Iterator
 from typing import Any
+from typing import List
 from typing import Optional
+from typing import Tuple
 
 import pytest
 
@@ -230,6 +232,110 @@ def pytest_unconfigure(config: pytest.Config) -> None:
             print(f'✗ Failed to stop Docker container: {e}')
             print('=' * 70)
             logger.error(f'Failed to stop Docker container: {e}')
+
+
+#: Management API timings per test, collected when SINGLESTOREDB_MANAGEMENT_TRACE
+#: is set. Kept here rather than on the config object so that
+#: ``pytest_terminal_summary`` can read it without a fixture.
+_management_traces: List[Tuple[str, Any]] = []
+
+#: The same, for the class fixtures rather than the tests. Separate because the
+#: two overlap: a class trace spans its tests as well as its fixtures, so the
+#: fixture share is what is left after the tests' events are taken out of it.
+_management_fixture_traces: List[Tuple[str, Any]] = []
+
+
+@pytest.fixture(autouse=True)
+def trace_management_api(request: pytest.FixtureRequest) -> Iterator[None]:
+    """
+    Record where each test's management API time went.
+
+    Only active when ``SINGLESTOREDB_MANAGEMENT_TRACE`` is set, and reported by
+    :func:`pytest_terminal_summary`. The per-event stderr log the same variable
+    turns on is swallowed by pytest's capturing unless ``-s`` is given, so the
+    summary is written through the terminal reporter instead, which is always
+    shown.
+    """
+    from singlestoredb.management import timing
+
+    if not timing.logging_enabled():
+        yield
+        return
+
+    with timing.trace() as trace:
+        yield
+
+    if trace.events:
+        _management_traces.append((request.node.nodeid, trace))
+
+
+@pytest.fixture(scope='class', autouse=True)
+def trace_management_api_class(request: pytest.FixtureRequest) -> Iterator[None]:
+    """
+    Record what a class's ``setUpClass``/``tearDownClass`` cost.
+
+    :func:`trace_management_api` is function-scoped, so it opens after
+    ``setUpClass`` has already run and closes before ``tearDownClass`` -- which
+    made the most expensive management calls in the suite invisible. The
+    fixtures here deploy the clusters and workspace groups the tests share, so
+    a run could report 5592 traced seconds out of 10125 and only three
+    ``POST clusters``.
+
+    This trace spans the whole class, tests included, and
+    :func:`timing.Trace.of` subtracts the tests back out: the events are the
+    same objects in both traces, since :func:`timing._emit` hands each one to
+    every trace active in the context, so identity separates them exactly.
+    """
+    from singlestoredb.management import timing
+
+    if not timing.logging_enabled():
+        yield
+        return
+
+    # The tests of this class are the ones appended from here on.
+    first_test = len(_management_traces)
+    with timing.trace() as trace:
+        yield
+
+    tests = [x[1] for x in _management_traces[first_test:]]
+    in_a_test = {id(x) for one in tests for x in one.events}
+    fixtures = timing.Trace.of(
+        [x for x in trace.events if id(x) not in in_a_test],
+        trace.elapsed - sum(x.elapsed for x in tests),
+    )
+    if fixtures.events:
+        _management_fixture_traces.append((request.node.nodeid, fixtures))
+
+
+def pytest_terminal_summary(terminalreporter: Any) -> None:
+    """Report the management API time the run spent, if it was traced."""
+    if not _management_traces and not _management_fixture_traces:
+        return
+
+    from singlestoredb.management import timing
+
+    terminalreporter.write_sep('=', 'management API timing')
+    combined = timing.Trace.combine(
+        x[1] for x in _management_traces + _management_fixture_traces
+    )
+    terminalreporter.write_line(combined.summary())
+
+    for heading, traces in (
+        ('slowest traced tests', _management_traces),
+        ('slowest traced class fixtures', _management_fixture_traces),
+    ):
+        if not traces:
+            continue
+        slowest = sorted(traces, key=lambda x: x[1].elapsed, reverse=True)[:10]
+        terminalreporter.write_line('')
+        terminalreporter.write_line(f'  {heading}')
+        for nodeid, trace in slowest:
+            terminalreporter.write_line(
+                '  {:>8.3f}s  requests={:>7.3f}s waiting={:>8.3f}s  {}'.format(
+                    trace.elapsed, trace.total(timing.REQUEST),
+                    trace.total(timing.WAIT), nodeid,
+                ),
+            )
 
 
 @pytest.fixture(scope='session', autouse=True)

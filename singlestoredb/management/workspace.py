@@ -77,7 +77,9 @@ def manage_workspaces(
     version : str, optional
         Version of the API to use. Defaults to the ``management.version``
         option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
-        variable), or to ``v1`` when that is unset.
+        variable), or to ``DEFAULT_VERSION`` when that is unset. Both now name
+        ``v2``, and v2 has no workspaces, so a caller who wants a workspace
+        manager has to ask for ``v1`` outright.
     base_url : str, optional
         Base URL of the workspace management API
     organization_id : str, optional

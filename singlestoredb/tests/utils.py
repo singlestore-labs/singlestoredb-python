@@ -4,7 +4,10 @@
 import glob
 import logging
 import os
+import random
 import re
+import secrets
+import unittest
 import uuid
 from typing import Any
 from typing import Dict
@@ -338,10 +341,7 @@ def _is_mocked(obj: Any) -> bool:
         return True
     if isinstance(manager, NonCallableMock):
         return True
-    return any(
-        isinstance(getattr(manager, x, None), NonCallableMock)
-        for x in ('_get', '_post', '_delete')
-    )
+    return _creator_is_mocked(manager)
 
 
 def track(obj: Any, label: str = '') -> Any:
@@ -383,6 +383,33 @@ def terminate(obj: Any) -> None:
         obj.terminate(force=True)
     except TypeError:
         obj.terminate()
+
+
+def _creator_is_mocked(target: Any) -> bool:
+    """
+    Is this creation call going through a mocked manager?
+
+    The unit tests call the creation methods with ``_post`` patched, and the
+    objects they get back name deployments that do not exist, so they must not
+    be tracked. ``target`` is the manager, or -- through :func:`_is_mocked` --
+    whatever a created object holds in ``_manager``.
+    """
+    from unittest.mock import NonCallableMock
+
+    if isinstance(target, NonCallableMock):
+        return True
+    manager = target if hasattr(target, '_post') else getattr(
+        target, '_manager', None,
+    )
+    if isinstance(manager, NonCallableMock):
+        return True
+    # An unrecognisable receiver counts as real: a fake deployment swept is a
+    # round trip and a warning, whereas a real one skipped is a cluster left
+    # running and billing.
+    return any(
+        isinstance(getattr(manager, x, None), NonCallableMock)
+        for x in ('_get', '_post', '_delete')
+    )
 
 
 #: (module, class, method) triples that bring a billable deployment into
@@ -505,3 +532,156 @@ def cleanup_tracked(owner: Optional[str] = None) -> List[str]:
         else:
             removed.append(label)
     return removed
+
+
+#
+# Shared deployment pool
+#
+# Several classes need nothing from a deployment but that it is live: the
+# Stage and Job suites read and write through the management API against
+# whatever cluster they are handed. Deploying one apiece cost 2190s of the
+# 8915s a traced run took, and an S-00 cluster reaching ACTIVE is ~460s that
+# cannot be made faster -- so the only lever is deploying fewer of them.
+#
+# The pool is built on first use and reused for the rest of the process. A
+# class must not mutate what it borrows: anything that PATCHes, suspends or
+# terminates its subject keeps deploying its own (see
+# ``docs/shared-deployment-pool-plan.md`` for which classes those are and why).
+#
+# The pool is process-wide, so under ``pytest-xdist`` every worker that gets a
+# borrowing class builds a pool of its own. The ``xdist_group`` marks below
+# keep the borrowers together on a worker; see ``SHARED_CLUSTER_*_GROUP``.
+#
+
+#: ``xdist_group`` names for the classes that borrow from the pool, so
+#: ``--dist loadgroup`` puts each set on one worker and each set builds one
+#: pool. Two groups rather than one: a single group serialises all four classes
+#: behind one pool build, and the groups run concurrently on separate workers,
+#: so splitting costs one extra cluster and halves that chain.
+#:
+#: Stage wants two clusters (``TestStageFusion`` names a second one in
+#: ``IN GROUP``) and jobs want one, so the split follows what they borrow:
+#:
+#: * ``SHARED_CLUSTER_STAGE_GROUP`` -- ``TestStageFusion``, v2 ``TestStage``
+#: * ``SHARED_CLUSTER_JOBS_GROUP`` -- ``TestJobsFusion``, v2 ``TestJob``
+#:
+#: Without ``-n``/``--dist loadgroup`` the marks do nothing: one process, one
+#: pool of two, which is the serial behaviour they were added on top of.
+SHARED_CLUSTER_STAGE_GROUP = 'shared-cluster-stage'
+SHARED_CLUSTER_JOBS_GROUP = 'shared-cluster-jobs'
+
+#: Live clusters shared by the classes that need only *a* deployment.
+_pool: List[Any] = []
+
+#: Why the pool cannot be built in this organization, once that is known.
+#: Cached so the second class to ask skips without repeating the lookups.
+_pool_skip: Optional[str] = None
+
+#: Suffix for the pool's cluster names, so a run's clusters are distinguishable
+#: from a concurrent run's. Matches the ``cl-test-*`` pattern the maintenance
+#: sweep in ``cleanup_deployments.py`` looks for.
+_pool_id = secrets.token_hex(4)
+
+
+def shared_clusters(count: int = 1) -> List[Any]:
+    """
+    Return ``count`` live v2 clusters shared by the whole test session.
+
+    The pool grows to fit the largest request and is never rebuilt, so every
+    caller gets the same objects::
+
+        @classmethod
+        def setUpClass(cls):
+            cls.cluster, cls.cluster_2 = utils.shared_clusters(2)
+
+    Raises ``unittest.SkipTest`` for the same reasons the per-class fixtures
+    did -- no US regions, or no project to deploy into -- so a class that
+    borrows from the pool skips where it used to skip.
+
+    Terminating a pool cluster is not this module's business beyond the
+    end-of-session sweep: a class that borrows one must leave it live and
+    usable, since the classes after it get the same object.
+    """
+    global _pool_skip
+
+    if _pool_skip:
+        raise unittest.SkipTest(_pool_skip)
+
+    if len(_pool) >= count:
+        return _pool[:count]
+
+    # Pinned to v2: the pool's consumers are v2 suites, so the fixture must
+    # not follow the management.version option out of v2 either.
+    mgr = s2.manage_clusters(version='v2')
+
+    us_regions = [
+        x for x in mgr.regions
+        if 'US' in x.name or 'us-' in (x.region_name or '')
+    ]
+    if not us_regions:
+        _pool_skip = 'No US regions reported by the v2 API'
+        raise unittest.SkipTest(_pool_skip)
+
+    project_id = os.environ.get('SINGLESTOREDB_PROJECT')
+    if not project_id:
+        standard = [x for x in mgr.projects if x.edition == 'STANDARD']
+        if not standard:
+            _pool_skip = (
+                'No STANDARD project in this organization; set '
+                'SINGLESTOREDB_PROJECT to the project to deploy into'
+            )
+            raise unittest.SkipTest(_pool_skip)
+        project_id = standard[0].id
+
+    # Tracked under the empty owner rather than under whichever class happened
+    # to ask first. conftest.pytest_runtest_setup sweeps the previous owner's
+    # deployments as soon as the run moves to the next class, so a pool
+    # attributed to a class would be terminated after its first consumer;
+    # ``''`` matches no per-class sweep and is swept exactly once, by
+    # pytest_unconfigure, which passes owner=None and so matches everything.
+    prev = get_owner()
+    set_owner('')
+    try:
+        while len(_pool) < count:
+            _pool.append(
+                mgr.create_cluster(
+                    f'cl-test-shared-{len(_pool)}-{_pool_id}',
+                    region=random.choice(us_regions),
+                    size='S-00',
+                    # The v2 suites that deploy their own ask for this, and a
+                    # pool cluster stands in for those, so it has to be at
+                    # least as reachable as what it replaces.
+                    firewall_ranges=['0.0.0.0/0'],
+                    project=project_id,
+                    wait_on_active=True,
+                    wait_timeout=1200,
+                ),
+            )
+    finally:
+        set_owner(prev)
+
+    return _pool[:count]
+
+
+def clear_stage(deployment: Any) -> None:
+    """
+    Empty a deployment's stage.
+
+    A pool cluster carries whatever the class before left in its stage, and
+    ``TestStageFusion`` asserts exact listings of the stage root, so it starts
+    from a known-empty one rather than from whatever ran first. Failures are
+    logged rather than raised: this runs in a fixture, where the interesting
+    failure is the test's, not the cleanup's.
+    """
+    stage = deployment.stage
+
+    # The root listing is enough: a folder goes recursively, so there is no
+    # reason to enumerate what is inside it.
+    for obj in stage.listdir('/', return_objects=True):
+        try:
+            if obj.type == 'directory':
+                stage.removedirs(obj.path)
+            else:
+                stage.remove(obj.path)
+        except Exception as exc:
+            logger.warning(f'Could not clear stage path {obj.path}: {exc}')

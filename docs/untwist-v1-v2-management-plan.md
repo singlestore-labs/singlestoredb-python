@@ -495,7 +495,7 @@ commit 393570e1 made those literals.
 Record the new rules: separate classes per vocabulary; shared modules only for URL-only
 differences; no cross-version imports; base level-set to v2.
 
-### Part 7 — Flip the default to v2
+### Part 7 — Flip the default to v2 — **landed**
 
 **Gated on the v1 suite passing green after Part 2** (the "see v1 working first"
 checkpoint). Deliberately small, because Parts 1-6 did the structural work:
@@ -510,10 +510,29 @@ checkpoint). Deliberately small, because Parts 1-6 did the structural work:
 - Top-level `export.py` repoints to `v2/export.py` **only after** Fusion cluster support
   lands (see §3). Until then it stays v1.
 
+**As landed**, with two additions the plan did not anticipate:
+
+- `_version_import.DEFAULT_VERSION` (`'v1'` → `'v2'`) had to flip with the option. It is the
+  fallback when the option is *explicitly blanked*, not when it is merely unset, so leaving it
+  at `'v1'` would have made `management.version=''` mean something different from the default.
+  Consequence: a bare `manage_workspaces()` now raises and points at `manage_clusters()`,
+  where before it returned a v1 manager.
+- The v1 coverage is gated by a `management_v1` pytest marker rather than being deleted:
+  module-level `pytestmark` in `tests/test_management_v1.py` plus `TestWorkspaceFusion` in
+  `tests/test_fusion.py`. `-m 'not management_v1'` for a normal run, `-m 'management_v1'` for
+  the nightly that keeps proving v1 works. The marker is deliberately separate from
+  `management` because `test_management_v1.py` also holds mocked units that need no token —
+  those are v1-specific too, and go away with `management/v1/`.
+- `docs/src/whatsnew.rst` is generated at release time by `/bump-version` from the git log,
+  so there is no hand-written entry; the user-visible change (`manage_files()` and
+  `manage_regions()` resolving to `/v2/`, `manage_workspaces()` needing an explicit `v1`)
+  has to be picked up from the commit message at release. `docs/src/api.rst:233-247` still
+  documents workspaces only and has no cluster section — **outstanding**.
+
 Then, as a **separate follow-up commit** once v2 is confirmed against a live endpoint:
 delete `management/v1/`, `management/workspace.py`, `tests/test_management_v1.py`, and
-`test_fusion.py`'s workspace grammar. Verification step 6 rehearses exactly this, so it
-should be mechanical.
+`test_fusion.py`'s workspace grammar — i.e. everything the `management_v1` marker now
+selects. Verification step 6 rehearses exactly this, so it should be mechanical.
 
 ---
 

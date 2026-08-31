@@ -9,10 +9,12 @@ import time
 import unittest
 from typing import Any
 from typing import List
+from typing import Tuple
 
 import pytest
 
 import singlestoredb as s2
+from singlestoredb.management import timing
 from singlestoredb.tests import utils
 
 
@@ -167,7 +169,6 @@ class TestFusion(unittest.TestCase):
             'ENABLE KAI WITH CACHE CONFIG 2 '
             "WITH FIREWALL RANGES '0.0.0.0/0' ALLOW ALL TRAFFIC "
             "WITH UPDATE WINDOW '3:5' EXPIRES AT '1h' "
-            'WITH DEPLOYMENT TYPE NON_PRODUCTION ENABLE MULTI AZ '
             'WAIT ON ACTIVE'
         )
 
@@ -190,8 +191,29 @@ class TestFusion(unittest.TestCase):
             suspend_after_units='MINUTES',
             suspend_type='IDLE',
         )
-        assert params['with_deployment_type'] == 'NON_PRODUCTION'
+        assert params['with_update_window'] == '3:5'
         assert params['wait_on_active'] is True
+
+    def test_create_cluster_has_no_v2_only_clauses(self):
+        """
+        The grammar stops at what the v1 pair exposes.
+
+        ``deploymentType`` and ``multiAZ`` have no ``CREATE WORKSPACE`` or
+        ``CREATE WORKSPACE GROUP`` counterpart, so they are reachable only
+        through ``ClusterManager.create_cluster``. Asserted rather than left
+        implicit: re-adding a clause is a deliberate widening of the SQL
+        surface, not a detail of the handler.
+        """
+        from singlestoredb.fusion import registry
+
+        handler = registry._handlers['CREATE CLUSTER']
+        handler.compile()
+        syntax = handler.syntax.upper()
+        assert 'DEPLOYMENT TYPE' not in syntax, syntax
+        assert 'MULTI AZ' not in syntax, syntax
+        # ... while the clauses the v1 commands do have are still here.
+        for clause in ('ENABLE KAI', 'UPDATE WINDOW', 'CACHE CONFIG'):
+            assert clause in syntax, (clause, syntax)
 
     def test_create_cluster_rejects_region_id(self):
         from singlestoredb.fusion import registry
@@ -365,7 +387,15 @@ class TestFusion(unittest.TestCase):
 
 
 @pytest.mark.management
+@pytest.mark.management_v1
 class TestWorkspaceFusion(unittest.TestCase):
+    """
+    The WORKSPACE and WORKSPACE GROUP grammar, which is the v1 vocabulary.
+
+    Marked ``management_v1`` so it switches off with the rest of the v1
+    coverage; ``TestClusterFusion*`` is the v2 replacement. The grammar
+    itself, and therefore this suite, goes away with ``management/v1/``.
+    """
 
     id: str = secrets.token_hex(8)
     dbname: str = ''
@@ -379,8 +409,9 @@ class TestWorkspaceFusion(unittest.TestCase):
         # Pinned: manage_workspaces() follows the management.version
         # option, and Fusion is v1-only.
         mgr = s2.manage_workspaces(version='v1')
+        # US-only: no test here asserts anything about these groups' regions,
+        # and creation in some non-US regions fails with a control-plane 500.
         us_regions = [x for x in mgr.regions if x.name.startswith('US')]
-        non_us_regions = [x for x in mgr.regions if not x.name.startswith('US')]
         wg = mgr.create_workspace_group(
             f'A Fusion Testing {cls.id}',
             region=random.choice(us_regions),
@@ -395,7 +426,7 @@ class TestWorkspaceFusion(unittest.TestCase):
         cls.workspace_groups.append(wg)
         wg = mgr.create_workspace_group(
             f'C Fusion Testing {cls.id}',
-            region=random.choice(non_us_regions),
+            region=random.choice(us_regions),
             firewall_ranges=[],
         )
         cls.workspace_groups.append(wg)
@@ -546,20 +577,26 @@ class TestWorkspaceFusion(unittest.TestCase):
             f'"B Fusion Testing {self.id}" with size S-00',
         )
 
-        time.sleep(30)
-        iterations = 20
+        # Wait for the three to be listed, not for them to be ACTIVE. Nothing
+        # below asserts a state value -- 'State' is checked as a column name,
+        # never for its contents -- so all this test needs is that SHOW
+        # WORKSPACES can see them. Requiring ACTIVE cost around 450 seconds a
+        # run for no assertion, and at a 30 second interval most of that was
+        # overshoot. Polled through timing.sleep so a traced run accounts for
+        # it; a bare time.sleep here was invisible to the tracer and landed in
+        # the unlabelled 'other' bucket.
+        wanted = ('show-ws-1', 'show-ws-2', 'show-ws-3')
+        deadline = time.time() + 600
         while True:
-            wgs = wg.workspaces
-            states = [
-                x.state for x in wgs
-                if x.name in ('show-ws-1', 'show-ws-2', 'show-ws-3')
-            ]
-            if len(states) == 3 and states.count('ACTIVE') == 3:
+            listed = [x.name for x in wg.workspaces if x.name in wanted]
+            if len(listed) == 3:
                 break
-            iterations -= 1
-            if not iterations:
-                raise RuntimeError('timed out waiting for workspaces to start')
-            time.sleep(30)
+            if time.time() >= deadline:
+                raise RuntimeError(
+                    'timed out waiting for workspaces to be listed; '
+                    f'saw {sorted(listed)}',
+                )
+            timing.sleep(5, 'workspace listed')
 
         # SHOW
         self.cur.execute(f'show workspaces in group "B Fusion Testing {self.id}"')
@@ -761,29 +798,49 @@ class TestWorkspaceFusion(unittest.TestCase):
                 pass
 
 
-@pytest.mark.management
-class TestClusterFusion(unittest.TestCase):
+class _ClusterFusionMixin:
     """
-    The v2 mirror of :class:`TestWorkspaceFusion`, flat rather than nested.
+    Plumbing shared by the CLUSTER fusion suites.
 
-    A cluster is created in one statement where a workspace needed two, so
-    there is no group fixture and no ``IN GROUP`` clause anywhere. Names are
-    lowercase and hyphenated because ``POST /v2/clusters`` enforces
+    These are the v2 mirror of :class:`TestWorkspaceFusion`, flat rather than
+    nested. A cluster is created in one statement where a workspace needed
+    two, so there is no group fixture and no ``IN GROUP`` clause anywhere.
+    Names are lowercase and hyphenated because ``POST /v2/clusters`` enforces
     ``[a-z0-9]([a-z0-9-]*[a-z0-9])?`` at 1-32 characters (audit item 7) --
     the spaced names the v1 suite uses are rejected.
 
-    Three clusters are created so the ``LIKE``/``ORDER BY``/``LIMIT``
-    assertions have something to sort, and the read-only tests share them
-    rather than each creating their own. This is the most expensive suite in
-    the repo.
+    This was one class deploying three clusters in ``setUpClass``, which every
+    test then waited out whether or not it touched a cluster: the two
+    lifecycle tests deploy their own and the region, project and grammar
+    tests need none at all, yet all of them paid for three. The classes below
+    declare what they need in :attr:`fixture_prefixes` instead, so the
+    cluster-less ones start immediately and no class deploys more than it
+    reads.
+
+    Not a ``TestCase``, and named with a leading underscore: pytest collects
+    any ``Test``-prefixed ``TestCase`` subclass it can reach, so a base that
+    was either would run every inherited test a second time under a fixture
+    of its own.
     """
 
-    id: str = secrets.token_hex(4)
+    #: Prefixes of the shared clusters to deploy before this class's tests,
+    #: named ``<prefix>-fusion-cluster-<id>``. Empty means the class needs no
+    #: deployment, which is true of most of them.
+    fixture_prefixes: Tuple[str, ...] = ()
+
+    #: Set per class in setUpClass rather than once for the module, so the
+    #: ``LIKE`` patterns in a class can only ever match clusters that class
+    #: created. The exact-count assertion in ``test_show_clusters_like`` used
+    #: to rely on the lifecycle tests sorting alphabetically after it and
+    #: their clusters leaving the list endpoint in time; with a per-class id
+    #: it holds whatever else is running.
+    id: str = ''
     dbname: str = ''
     dbexisted: bool = False
     clusters: List[Any] = []
     manager: Any = None
     project_id: str = ''
+    us_regions: List[Any] = []
 
     @classmethod
     def _project_id(cls, mgr):
@@ -801,6 +858,11 @@ class TestClusterFusion(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.id = secrets.token_hex(4)
+        # Rebound per class: a list on the mixin would be one object shared by
+        # every subclass, so one class's teardown would pop another's clusters.
+        cls.clusters = []
+
         sql_file = os.path.join(os.path.dirname(__file__), 'test.sql')
         cls.dbname, cls.dbexisted = utils.load_sql(sql_file)
 
@@ -809,17 +871,17 @@ class TestClusterFusion(unittest.TestCase):
         mgr = s2.manage_clusters(version='v2')
         cls.manager = mgr
 
-        us_regions = [
+        cls.us_regions = [
             x for x in mgr.regions
             if 'US' in x.name or 'us-' in (x.region_name or '')
         ]
-        if not us_regions:
+        if not cls.us_regions:
             raise unittest.SkipTest('No US regions reported by the v2 API')
 
         cls.project_id = cls._project_id(mgr)
 
-        for prefix in ('a', 'b', 'c'):
-            region = random.choice(us_regions)
+        for prefix in cls.fixture_prefixes:
+            region = random.choice(cls.us_regions)
             cls.clusters.append(
                 mgr.create_cluster(
                     f'{prefix}-fusion-cluster-{cls.id}',
@@ -838,7 +900,13 @@ class TestClusterFusion(unittest.TestCase):
         while cls.clusters:
             cluster = cls.clusters.pop()
             try:
-                cluster.terminate(wait_on_terminated=True, wait_timeout=1200)
+                # No wait_on_terminated: teardown only needs the DELETE to
+                # land, and waiting each cluster out serially costs minutes
+                # that assert nothing. Anything the DELETE fails to remove is
+                # swept by utils.cleanup_tracked. The one place termination has
+                # to be observed is test_create_drop_cluster, which polls the
+                # listing itself through _wait_cluster_gone.
+                cluster.terminate(force=True)
             except Exception:
                 pass
 
@@ -866,30 +934,19 @@ class TestClusterFusion(unittest.TestCase):
         except Exception:
             pass
 
-    def _wait_cluster_gone(self, name, timeout=180, interval=5):
-        """
-        Poll until the LIST endpoint agrees the cluster is gone.
 
-        The mirror of ``_wait_workspace_group_gone``: ``WAIT ON TERMINATED``
-        polls ``GET /v2/clusters/{id}``, and ``GET /v2/clusters`` can lag
-        behind it, so a create-drop-create sequence sees a stale record.
-        """
-        mgr = type(self).manager
-        deadline = time.time() + timeout
-        while True:
-            found = [x for x in mgr.clusters if x.name == name]
-            if not found or all(x.terminated_at is not None for x in found):
-                return
-            if time.time() >= deadline:
-                self.fail(
-                    f'cluster {name!r} still active in the list endpoint '
-                    f'after {timeout}s: {found!r}',
-                )
-            time.sleep(interval)
+@pytest.mark.management
+class TestClusterFusion(_ClusterFusionMixin, unittest.TestCase):
+    """
+    ``SHOW CLUSTERS`` against three deployed clusters.
 
-    #
-    # Read-only, against the three shared fixtures
-    #
+    Three of them so the ``LIKE``/``ORDER BY``/``LIMIT`` assertions have
+    something to sort. Nothing here mutates a cluster, which is what makes the
+    fixture shareable -- ``SUSPEND``/``RESUME`` cannot share it and deploys its
+    own in :class:`TestClusterFusionSuspendResume`.
+    """
+
+    fixture_prefixes = ('a', 'b', 'c')
 
     def test_show_clusters(self):
         self.cur.execute('show clusters')
@@ -948,6 +1005,18 @@ class TestClusterFusion(unittest.TestCase):
         names = [x[0] for x in self.cur.fetchall()]
         assert len(names) == 2, names
 
+
+@pytest.mark.management
+class TestClusterFusionReadOnly(_ClusterFusionMixin, unittest.TestCase):
+    """
+    The handlers that read something the organization already has.
+
+    Projects, regions and starter clusters are all pre-existing, so this class
+    deploys nothing -- these assertions were waiting on three clusters they
+    never looked at. Nothing here asserts a row count over a listing, so other
+    suites deploying at the same time cannot disturb them.
+    """
+
     def test_show_projects(self):
         self.cur.execute('show projects')
         cols = [x[0] for x in self.cur.description]
@@ -980,17 +1049,61 @@ class TestClusterFusion(unittest.TestCase):
         assert all(x.startswith('US') for x in names), names
         assert names == sorted(names), names
 
-    #
-    # Lifecycle
-    #
+    def test_show_starter_clusters(self):
+        self.cur.execute('show starter clusters')
+        cols = [x[0] for x in self.cur.description]
+        assert cols == ['Name', 'ID', 'DatabaseName'], cols
+
+        self.cur.execute('show starter clusters extended')
+        cols = [x[0] for x in self.cur.description]
+        assert cols == [
+            'Name', 'ID', 'DatabaseName', 'Endpoint', 'ProjectID',
+        ], cols
+
+    def test_drop_starter_cluster_if_exists(self):
+        """IF EXISTS must swallow the miss; the bare form must not."""
+        with self.assertRaises(KeyError):
+            self.cur.execute('drop starter cluster "no-such-starter-xyz"')
+        self.cur.execute('drop starter cluster if exists "no-such-starter-xyz"')
+
+
+@pytest.mark.management
+class TestClusterFusionCreateDrop(_ClusterFusionMixin, unittest.TestCase):
+    """
+    ``CREATE CLUSTER`` and ``DROP CLUSTER`` end to end.
+
+    Deploys nothing up front: the test creates, drops and recreates a cluster
+    of its own, so the three shared fixtures it used to inherit were pure cost.
+    Alone in its class because it is the longest test in the repo -- most of
+    twenty minutes, nearly all of it provisioning -- and anything sharing the
+    class would queue behind it.
+    """
+
+    def _wait_cluster_gone(self, name, timeout=180, interval=5):
+        """
+        Poll until the LIST endpoint agrees the cluster is gone.
+
+        The mirror of ``_wait_workspace_group_gone``: ``WAIT ON TERMINATED``
+        polls ``GET /v2/clusters/{id}``, and ``GET /v2/clusters`` can lag
+        behind it, so a create-drop-create sequence sees a stale record.
+        """
+        mgr = type(self).manager
+        deadline = time.time() + timeout
+        while True:
+            found = [x for x in mgr.clusters if x.name == name]
+            if not found or all(x.terminated_at is not None for x in found):
+                return
+            if time.time() >= deadline:
+                self.fail(
+                    f'cluster {name!r} still active in the list endpoint '
+                    f'after {timeout}s: {found!r}',
+                )
+            time.sleep(interval)
 
     def test_create_drop_cluster(self):
         mgr = type(self).manager
         name = f'd-fusion-cluster-{self.id}'
-        region = [
-            x for x in mgr.regions
-            if 'US' in x.name or 'us-' in (x.region_name or '')
-        ][0]
+        region = type(self).us_regions[0]
 
         try:
             self.cur.execute(
@@ -1068,6 +1181,20 @@ class TestClusterFusion(unittest.TestCase):
                     except Exception:
                         pass
 
+
+@pytest.mark.management
+class TestClusterFusionSuspendResume(_ClusterFusionMixin, unittest.TestCase):
+    """
+    ``SUSPEND CLUSTER`` and ``RESUME CLUSTER``.
+
+    Deploys one cluster rather than sharing :class:`TestClusterFusion`'s three,
+    for two reasons: it needs exactly one, and it is the only test here that
+    changes a fixture's state, so sharing would leave the ``SHOW`` assertions
+    reading a cluster mid-suspend.
+    """
+
+    fixture_prefixes = ('a',)
+
     def test_suspend_resume_cluster(self):
         name = f'a-fusion-cluster-{self.id}'
         mgr = type(self).manager
@@ -1080,6 +1207,16 @@ class TestClusterFusion(unittest.TestCase):
         state = [x for x in mgr.clusters if x.name == name][0].state
         assert state.upper() == 'ACTIVE', state
 
+
+@pytest.mark.management
+class TestClusterFusionProject(_ClusterFusionMixin, unittest.TestCase):
+    """
+    How ``IN PROJECT`` resolves, and which spellings must not parse.
+
+    Deploys nothing: the one test here that creates a cluster deliberately does
+    not wait it out, and the rest assert a rejection.
+    """
+
     def test_create_cluster_without_project(self):
         """
         Omitting IN PROJECT is only valid in a single-project organization.
@@ -1091,10 +1228,7 @@ class TestClusterFusion(unittest.TestCase):
         """
         mgr = type(self).manager
         name = f'e-fusion-cluster-{self.id}'
-        region = [
-            x for x in mgr.regions
-            if 'US' in x.name or 'us-' in (x.region_name or '')
-        ][0]
+        region = type(self).us_regions[0]
 
         if len(mgr.projects) == 1:
             raise unittest.SkipTest(
@@ -1115,35 +1249,54 @@ class TestClusterFusion(unittest.TestCase):
         assert not live, live
 
     def test_create_cluster_named_project(self):
+        """
+        ``IN PROJECT "<name>"`` resolves the name to the project's ID.
+
+        Deliberately no ``WAIT ON ACTIVE``. The ``projectID`` is settled by the
+        time ``POST /v2/clusters`` answers -- the create response carries the
+        cluster ID, and ``GET /v2/clusters/{id}`` reports the project straight
+        away -- so provisioning the cluster the rest of the way would add
+        minutes of waiting and assert nothing this does not already prove.
+        """
         mgr = type(self).manager
         project = [
             x for x in mgr.projects if x.id == type(self).project_id
         ][0]
         name = f'f-fusion-cluster-{self.id}'
-        region = [
-            x for x in mgr.regions
-            if 'US' in x.name or 'us-' in (x.region_name or '')
-        ][0]
+        region = type(self).us_regions[0]
 
+        cluster_id = None
         try:
             self.cur.execute(
                 f'create cluster "{name}" in region "{region.region_name}" '
-                f'in project "{project.name}" with size "S-00" wait on active',
+                f'in project "{project.name}" with size "S-00"',
             )
-            live = [
-                x for x in mgr.clusters
-                if x.name == name and x.terminated_at is None
-            ]
-            assert len(live) == 1, live
-            assert live[0].project.id == project.id, live[0].project
+            row = self.cur.fetchall()
+            assert len(row) == 1, row
+            assert row[0][0] == name, row
+            cluster_id = row[0][1]
+            assert cluster_id, row
+
+            # Read back through GET /v2/clusters/{id} rather than the listing:
+            # the create is not waited out, and the LIST endpoint can lag
+            # behind a cluster it has only just been told about.
+            assert mgr.get_cluster(cluster_id).project.id == project.id
 
         finally:
-            for cluster in mgr.clusters:
-                if cluster.name == name and cluster.terminated_at is None:
-                    try:
-                        cluster.terminate()
-                    except Exception:
-                        pass
+            # force=True: the cluster is still PENDING, having never been
+            # waited out, and a termination request is refused otherwise.
+            if cluster_id is not None:
+                try:
+                    mgr.get_cluster(cluster_id).terminate(force=True)
+                except Exception:
+                    pass
+            else:
+                for cluster in mgr.clusters:
+                    if cluster.name == name and cluster.terminated_at is None:
+                        try:
+                            cluster.terminate(force=True)
+                        except Exception:
+                            pass
 
     def test_region_id_does_not_parse(self):
         """v2 has no region IDs, so the v1 spelling must be rejected."""
@@ -1159,28 +1312,11 @@ class TestClusterFusion(unittest.TestCase):
                 'in project "no such project xyz"',
             )
 
-    def test_show_starter_clusters(self):
-        self.cur.execute('show starter clusters')
-        cols = [x[0] for x in self.cur.description]
-        assert cols == ['Name', 'ID', 'DatabaseName'], cols
-
-        self.cur.execute('show starter clusters extended')
-        cols = [x[0] for x in self.cur.description]
-        assert cols == [
-            'Name', 'ID', 'DatabaseName', 'Endpoint', 'ProjectID',
-        ], cols
-
-    def test_drop_starter_cluster_if_exists(self):
-        """IF EXISTS must swallow the miss; the bare form must not."""
-        with self.assertRaises(KeyError):
-            self.cur.execute('drop starter cluster "no-such-starter-xyz"')
-        self.cur.execute('drop starter cluster if exists "no-such-starter-xyz"')
-
 
 @pytest.mark.management
+@pytest.mark.xdist_group(utils.SHARED_CLUSTER_JOBS_GROUP)
 class TestJobsFusion(unittest.TestCase):
 
-    id: str = secrets.token_hex(8)
     notebook_name: str = 'Scheduling Test.ipynb'
     dbname: str = ''
     dbexisted: bool = False
@@ -1199,34 +1335,10 @@ class TestJobsFusion(unittest.TestCase):
         # of the Cluster/VirtualCluster targetType vocabulary.
         cls.manager = s2.manage_clusters(version='v2')
 
-        us_regions = [
-            x for x in cls.manager.regions
-            if 'US' in x.name or 'us-' in (x.region_name or '')
-        ]
-        if not us_regions:
-            raise unittest.SkipTest('No US regions reported by the v2 API')
-
-        project_id = os.environ.get('SINGLESTOREDB_PROJECT')
-        if not project_id:
-            standard = [
-                x for x in cls.manager.projects if x.edition == 'STANDARD'
-            ]
-            if not standard:
-                raise unittest.SkipTest(
-                    'No STANDARD project in this organization; set '
-                    'SINGLESTOREDB_PROJECT to the project to deploy into',
-                )
-            project_id = standard[0].id
-
-        region = random.choice(us_regions)
-        cls.cluster = cls.manager.create_cluster(
-            f'jobs-fusion-{cls.id}',
-            region=region,
-            size='S-00',
-            project=project_id,
-            wait_on_active=True,
-            wait_timeout=1200,
-        )
+        # A shared cluster: a job needs a live deployment to target, and every
+        # listing here is filtered by job id, so nothing this class asserts can
+        # see another class's jobs.
+        cls.cluster = utils.shared_clusters(1)[0]
 
         os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] = cls.dbname
         # SINGLESTOREDB_WORKSPACE is the only deployment variable the notebook
@@ -1241,13 +1353,7 @@ class TestJobsFusion(unittest.TestCase):
                 cls.manager.organizations.current.jobs.delete(job_id)
             except Exception:
                 pass
-        if cls.cluster is not None:
-            try:
-                cls.cluster.terminate(
-                    wait_on_terminated=True, wait_timeout=1200,
-                )
-            except Exception:
-                pass
+        # The cluster is the pool's; see TestStageFusion.tearDownClass.
         cls.manager = None
         cls.cluster = None
         for envvar in (
@@ -1468,9 +1574,9 @@ class TestJobsFusion(unittest.TestCase):
 
 
 @pytest.mark.management
+@pytest.mark.xdist_group(utils.SHARED_CLUSTER_STAGE_GROUP)
 class TestStageFusion(unittest.TestCase):
 
-    id: str = secrets.token_hex(8)
     dbname: str = 'information_schema'
     manager: None
     cluster: None
@@ -1484,41 +1590,19 @@ class TestStageFusion(unittest.TestCase):
         # duplicating doubles a suite that already runs for tens of minutes.
         cls.manager = s2.manage_clusters(version='v2')
 
-        us_regions = [
-            x for x in cls.manager.regions
-            if 'US' in x.name or 'us-' in (x.region_name or '')
-        ]
-        if not us_regions:
-            raise unittest.SkipTest('No US regions reported by the v2 API')
+        # Two clusters from the shared pool rather than two of this class's
+        # own. Nothing here mutates a cluster, and the second one exists only
+        # so IN GROUP can name a deployment other than the default. Deploying
+        # them was 891s of the run; see
+        # docs/shared-deployment-pool-plan.md.
+        cls.cluster, cls.cluster_2 = utils.shared_clusters(2)
 
-        project_id = os.environ.get('SINGLESTOREDB_PROJECT')
-        if not project_id:
-            standard = [
-                x for x in cls.manager.projects if x.edition == 'STANDARD'
-            ]
-            if not standard:
-                raise unittest.SkipTest(
-                    'No STANDARD project in this organization; set '
-                    'SINGLESTOREDB_PROJECT to the project to deploy into',
-                )
-            project_id = standard[0].id
-
-        # Lowercase and hyphenated: POST /v2/clusters enforces
-        # [a-z0-9]([a-z0-9-]*[a-z0-9])? at 1-32 chars, so the spaced names
-        # the v1 fixture used are rejected outright.
-        def make(suffix):
-            region = random.choice(us_regions)
-            return cls.manager.create_cluster(
-                f'stage-fusion-{suffix}-{cls.id}',
-                region=region,
-                size='S-00',
-                project=project_id,
-                wait_on_active=True,
-                wait_timeout=1200,
-            )
-
-        cls.cluster = make('1')
-        cls.cluster_2 = make('2')
+        # The stage paths below are fixed rather than namespaced, and the
+        # listings are asserted by exact contents, so both stages have to start
+        # empty: a pool cluster carries whatever the class before it left
+        # there. tearDown clears them again after every test.
+        for cluster in (cls.cluster, cls.cluster_2):
+            utils.clear_stage(cluster)
 
         os.environ['SINGLESTOREDB_DEFAULT_DATABASE'] = 'information_schema'
         # SINGLESTOREDB_WORKSPACE_GROUP would raise at v2: its value is a
@@ -1529,14 +1613,9 @@ class TestStageFusion(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for cluster in (cls.cluster, cls.cluster_2):
-            if cluster is not None:
-                try:
-                    cluster.terminate(
-                        wait_on_terminated=True, wait_timeout=1200,
-                    )
-                except Exception:
-                    pass
+        # The clusters are the pool's, not this class's: they stay live for the
+        # classes that follow and are terminated once, at the end of the
+        # session, by utils.cleanup_tracked.
         cls.manager = None
         cls.cluster = None
         cls.cluster_2 = None

@@ -142,16 +142,23 @@ class TestConfigOption(unittest.TestCase):
             self.assertIsInstance(internal, V1WM)
             self.assertIn('/v1/', internal._base_url)
 
-    def test_v1_manager_default_version_ignores_config(self):
+    def test_default_version_is_a_literal_not_the_config_option(self):
         """
         ``default_version`` must not be frozen from the config option at
         import time -- that let a v1 class declare itself to be v2.
+
+        ``Manager``/``FilesManager`` are level-set to v2, matching the option
+        default; ``WorkspaceManager`` is a v1 class and pins itself. Setting
+        the option must move none of them.
         """
         from singlestoredb.management.manager import Manager
         from singlestoredb.management.v1.workspace import WorkspaceManager
         from singlestoredb.management.files import FilesManager
-        for cls in (Manager, WorkspaceManager, FilesManager):
-            self.assertEqual(cls.default_version, 'v1', cls.__name__)
+        expected = {Manager: 'v2', FilesManager: 'v2', WorkspaceManager: 'v1'}
+        for value in ('v1', 'v2', None):
+            with management_version(value):
+                for cls, want in expected.items():
+                    self.assertEqual(cls.default_version, want, cls.__name__)
 
 
 class TestManageRoutingForAllFactories(unittest.TestCase):
@@ -176,13 +183,21 @@ class TestManageRoutingForAllFactories(unittest.TestCase):
             access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v1',
         )
         self.assertIsInstance(v1, V1WM)
-        # The option is followed; an unset option falls back to v1.
-        for value in ('v1', None):
-            with management_version(value):
-                default = manage_workspaces(
+        # The option is followed...
+        with management_version('v1'):
+            self.assertIsInstance(
+                manage_workspaces(
+                    access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
+                ),
+                V1WM,
+            )
+        # ...and an unset option falls back to DEFAULT_VERSION, which is now
+        # v2, so a bare call is redirected to clusters like any other v2 call.
+        with management_version(None):
+            with self.assertRaises(ManagementError):
+                manage_workspaces(
                     access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
                 )
-                self.assertIsInstance(default, V1WM)
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
     def test_manage_clusters(self, _mock_token):
@@ -190,8 +205,9 @@ class TestManageRoutingForAllFactories(unittest.TestCase):
         ``manage_clusters`` follows ``management.version``.
 
         Clusters are v2-only, so a resolved ``v1`` raises whether it came from
-        the caller or from the option. The option still defaults to ``v1``,
-        which is why the live v2 suites pass ``version='v2'`` explicitly.
+        the caller or from the option. The option defaults to ``v2`` now; the
+        live v2 suites still pass ``version='v2'`` explicitly so that they do
+        not start testing v1 if the option is ever pointed back.
         """
         from singlestoredb.management.cluster import manage_clusters
         from singlestoredb.management.cluster import DEFAULT_CLUSTER_VERSION

@@ -61,20 +61,6 @@ def _update_window(params: Dict[str, Any]) -> Optional[Dict[str, int]]:
     return dict(day=int(day), hour=int(hour))
 
 
-def _deployment_type(params: Dict[str, Any]) -> Optional[str]:
-    """
-    Convert a ``WITH DEPLOYMENT TYPE`` clause to the API's spelling.
-
-    Grammar keywords match ``[A-Z0-9_]+``, so the non-production value has to
-    be written ``NON_PRODUCTION`` in the grammar and translated back to the
-    hyphenated ``NON-PRODUCTION`` the API expects.
-    """
-    value = params.get('with_deployment_type')
-    if not value:
-        return None
-    return str(value).upper().replace('_', '-')
-
-
 def _cluster_region(cluster: Any) -> Optional[str]:
     """Return a cluster's provider region name, e.g. ``us-east-1``."""
     region = cluster.region
@@ -372,8 +358,6 @@ class CreateClusterHandler(SQLHandler):
         [ allow_all_traffic ]
         [ with_update_window ]
         [ expires_at ]
-        [ with_deployment_type ]
-        [ enable_multi_az ]
         [ wait_on_active ]
     ;
 
@@ -425,12 +409,6 @@ class CreateClusterHandler(SQLHandler):
     # Datetime or interval for expiration date/time of the cluster
     expires_at = EXPIRES AT '<iso-datetime-or-interval>'
 
-    # Deployment type
-    with_deployment_type = WITH DEPLOYMENT TYPE { PRODUCTION | NON_PRODUCTION }
-
-    # Deploy across two availability zones
-    enable_multi_az = ENABLE MULTI AZ
-
     # Wait for the cluster to be active before continuing
     wait_on_active = WAIT ON ACTIVE
 
@@ -478,6 +456,11 @@ class CreateClusterHandler(SQLHandler):
     * There are no KMS key or ``SMART DR`` clauses. Management API v2 has no
       equivalent of v1's ``backupBucketKMSKeyID``, ``dataBucketKMSKeyID`` or
       ``smartDR``, so such clauses would be silently dropped.
+    * The clause list deliberately stops at what ``CREATE WORKSPACE GROUP`` and
+      ``CREATE WORKSPACE`` between them expose, so a v1 script has a v2
+      counterpart for everything it says. The API's ``deploymentType`` and
+      ``multiAZ`` have no such counterpart and are not surfaced here; reach
+      them through ``ClusterManager.create_cluster``, which still takes both.
 
     Example
     -------
@@ -523,11 +506,9 @@ class CreateClusterHandler(SQLHandler):
             allow_all_traffic=params['allow_all_traffic'],
             auto_suspend=_auto_suspend(params),
             cache_config=params['with_cache_config'],
-            deployment_type=_deployment_type(params),
             expires_at=params['expires_at'],
             update_window=_update_window(params),
             kai=params['enable_kai'],
-            multi_az=params['enable_multi_az'],
             project=project,
             wait_on_active=params['wait_on_active'],
         )

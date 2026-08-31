@@ -6,7 +6,11 @@ Branch `versioned-management-api` has completed Parts 1–6 of
 `docs/untwist-v1-v2-management-plan.md`: the management API is split into
 version-neutral top-level modules whose base classes are level-set to **v2**,
 with `management/v1/` holding backward overrides. Part 7 — flipping the
-`management.version` default from `'v1'` to `'v2'` — is deliberately not done.
+`management.version` default from `'v1'` to `'v2'` — was deliberately not done
+when this plan was written. **It has since landed**, together with a
+`management_v1` pytest marker that gates the v1 coverage so it can be demoted to
+a nightly run; the Fusion work below is what unblocked it. The context that
+follows describes the pre-flip state.
 
 The one thing blocking that flip is Fusion. The plan's §8 names it: Fusion has no
 cluster grammar and is hardwired to v1 at a single chokepoint,
@@ -199,8 +203,6 @@ Grammar constraints, verified in `fusion/handler.py`:
 - `CREATE CLUSTER IDENTITY` already exists in `export.py` (all handlers
   `_enabled = False`). It is the longer key so routing is correct if hidden
   handlers are ever enabled.
-- `NON_PRODUCTION` must be underscored in grammar (keywords are `[A-Z0-9_]+`);
-  the handler maps `_` → `-` before sending `deploymentType`.
 - Consecutive `] [` optionals are rewritten into an order-independent union
   (`handler.py:449`), as with `CREATE WORKSPACE GROUP`.
 
@@ -208,10 +210,20 @@ Grammar constraints, verified in `fusion/handler.py`:
 `IN REGION` (+ optional `WITH PROVIDER` to disambiguate), `IN PROJECT`,
 `WITH SIZE`, `WITH SCALE FACTOR`, `AUTO SUSPEND AFTER ... WITH TYPE ...`,
 `ENABLE KAI`, `WITH CACHE CONFIG`, `WITH FIREWALL RANGES`, `ALLOW ALL TRAFFIC`,
-`WITH UPDATE WINDOW`, `EXPIRES AT`, `WITH DEPLOYMENT TYPE`, `ENABLE MULTI AZ`,
-`WAIT ON ACTIVE`. Reuse `CreateWorkspaceHandler.run`'s auto-suspend seconds table
+`WITH UPDATE WINDOW`, `EXPIRES AT`, `WAIT ON ACTIVE`. Reuse
+`CreateWorkspaceHandler.run`'s auto-suspend seconds table
 (`workspace.py:620-633`) and `CreateWorkspaceGroupHandler.run`'s update-window
 split (`:498-501`).
+
+**Revised 2026-08-28: no `WITH DEPLOYMENT TYPE` and no `ENABLE MULTI AZ`.** Both
+shipped in the first cut and were removed. The clause list is meant to stop at
+what `CREATE WORKSPACE GROUP` and `CREATE WORKSPACE` between them expose, so
+that a v1 script has a v2 counterpart for everything it says; `deploymentType`
+and `multiAZ` have no v1 counterpart. Every other v2-only clause here earns its
+place: `WITH PROVIDER` replaces the missing `IN REGION ID`, `IN PROJECT` is
+required by `POST /v2/clusters`, and `WITH SCALE FACTOR` is the other half of
+`sizeConfig`. Both dropped options remain on
+`ClusterManager.create_cluster`.
 
 **No `WITH PASSWORD` until step 4 says so.** **No region-ID alternate** — v2 has
 none. Region resolution matches on both `.name` and `.region_name`, requires
@@ -383,7 +395,7 @@ pre-commit run --all-files
 
 - **`create_cluster`'s POST body has never been sent live** — `test_management_v2.py`
   mocks `_post`. `TestClusterFusion` and step 4 are its first real exercise of
-  `projectID`, `size: {size, scaleFactor}`, `multiAZ`, `updateWindow`,
+  `projectID`, `sizeConfig: {size, scaleFactor}`, `multiAZ`, `updateWindow`,
   `deploymentType`. Expect iteration.
 - **`USE CLUSTER` is a coin flip.** `notebook.portal` takes v1-shaped
   `(group_id, workspace_name)` tuples; whether it accepts a v2 cluster ID is not

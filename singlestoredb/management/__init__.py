@@ -11,4 +11,5 @@ from .organization import get_organization
 from .organization import get_secret
 from .region import manage_regions
 from .stage import get_stage
+from .timing import trace as trace_timing
 from .workspace import manage_workspaces

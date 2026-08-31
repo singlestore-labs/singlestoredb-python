@@ -8,6 +8,14 @@ the resources hanging off them. No test in this file may branch on version;
 the v2 equivalents live in ``test_management_v2.py``, the version-neutral
 helper units in ``test_management_utils.py``, and the structural cross-version
 invariants in ``test_management_versioning.py``.
+
+The whole module carries ``@pytest.mark.management_v1`` (see ``pytestmark``
+below) so that the v1 endpoints can be switched off as a group now that
+``management.version`` defaults to v2: ``-m 'not management_v1'`` for a normal
+run, ``-m 'management_v1'`` for the nightly that still proves v1 works. The
+marker is separate from ``management`` because this file also holds mocked
+units that need no token -- those are v1-specific too, and go away with
+``management/v1/``.
 """
 import datetime
 import os
@@ -30,6 +38,9 @@ from singlestoredb.management.utils import NamedList
 
 
 TEST_DIR = pathlib.Path(os.path.dirname(__file__))
+
+#: Applies to every test in this module, live or mocked.
+pytestmark = pytest.mark.management_v1
 
 
 def clean_name(s):
@@ -134,8 +145,13 @@ class TestWorkspace(unittest.TestCase):
 
         objs = {}
         for item in workspace_groups:
-            objs[item.id] = item
-            objs[item.name] = item
+            # setdefault, and name before id, so this resolves a key the way
+            # NamedList._find_item does: to the *first* match. Plain assignment
+            # kept the last, which disagrees as soon as the listing carries two
+            # entries of one name -- terminated groups stay in the listing, so
+            # a suite that recreates a group under its old name produces that.
+            objs.setdefault(item.name, item)
+            objs.setdefault(item.id, item)
 
         name = random.choice(names)
         assert workspace_groups[name] == objs[name]
@@ -154,8 +170,9 @@ class TestWorkspace(unittest.TestCase):
 
         objs = {}
         for item in spaces:
-            objs[item.id] = item
-            objs[item.name] = item
+            # First match wins, as in test_workspace_groups above.
+            objs.setdefault(item.name, item)
+            objs.setdefault(item.id, item)
 
         name = random.choice(names)
         assert spaces[name] == objs[name]
@@ -287,8 +304,9 @@ class TestStarterWorkspace(unittest.TestCase):
 
         objs = {}
         for item in workspaces:
-            objs[item.id] = item
-            objs[item.name] = item
+            # First match wins, as in test_workspace_groups above.
+            objs.setdefault(item.name, item)
+            objs.setdefault(item.id, item)
 
         name = random.choice(names)
         assert workspaces[name] == objs[name]
@@ -885,32 +903,19 @@ class TestStage(unittest.TestCase):
 class TestSecrets(unittest.TestCase):
 
     manager = None
-    wg = None
-    password = None
 
     @classmethod
     def setUpClass(cls):
+        # No deployment: a secret belongs to the organization, not to a
+        # workspace group, and test_get_secret reaches it through
+        # organizations.current. This used to create a group with a firewall
+        # and an admin password that nothing in the class ever read -- a
+        # provisioning wait and a teardown for an unused fixture.
         cls.manager = s2.manage_workspaces(version='v1')
-
-        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
-
-        name = clean_name(secrets.token_urlsafe(20)[:20])
-
-        cls.wg = cls.manager.create_workspace_group(
-            f'wg-test-{name}',
-            region=random.choice(us_regions).id,
-            admin_password=cls.password,
-            firewall_ranges=['0.0.0.0/0'],
-        )
 
     @classmethod
     def tearDownClass(cls):
-        if cls.wg is not None:
-            cls.wg.terminate(force=True)
-        cls.wg = None
         cls.manager = None
-        cls.password = None
 
     def test_get_secret(self):
         # manually create secret and then get secret

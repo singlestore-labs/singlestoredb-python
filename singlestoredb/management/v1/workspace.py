@@ -6,7 +6,6 @@ import datetime
 import io
 import os
 import re
-import time
 from typing import Any
 from typing import cast
 from typing import Dict
@@ -16,6 +15,7 @@ from typing import Optional
 from typing import overload
 from typing import Union
 
+from .. import timing
 from ... import config
 from ... import connection
 from ...exceptions import ManagementError
@@ -789,16 +789,20 @@ class WorkspaceGroup:
             )
         self._manager._delete(f'workspaceGroups/{self.id}', params=dict(force=force))
         if wait_on_terminated:
+            remaining = float(wait_timeout)
             while True:
+                started_at = timing.now()
                 self.refresh()
                 if self.terminated_at is not None:
                     break
-                if wait_timeout <= 0:
+                if remaining <= 0:
                     raise ManagementError(
                         msg='Exceeded waiting time for WorkspaceGroup to terminate',
                     )
-                time.sleep(wait_interval)
-                wait_timeout -= wait_interval
+                timing.sleep(wait_interval, 'workspace group terminated')
+                # Charged by measured time, so the refresh above counts against
+                # the timeout too. See timing.poll_cost.
+                remaining -= timing.poll_cost(started_at, wait_interval)
 
     def create_workspace(
         self,
@@ -1139,8 +1143,8 @@ class WorkspaceManager(Manager):
     """
 
     #: Workspace management API version if none is specified. Workspaces
-    #: are v1-only, so this is a literal and it does *not* flip in Part 7 --
-    #: it disappears with this package.
+    #: are v1-only, so this is a literal and it did *not* flip with the
+    #: ``management.version`` default -- it disappears with this package.
     default_version = 'v1'
 
     #: Base URL if none is specified.
