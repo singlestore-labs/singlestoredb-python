@@ -167,8 +167,9 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
 
     try:
         cls = getattr(item, 'cls', None)
+        module = getattr(item, 'module', None)
         owner = '{}.{}'.format(
-            item.module.__name__ if getattr(item, 'module', None) else '',
+            module.__name__ if module is not None else '',
             cls.__name__ if cls is not None else '',
         )
     except Exception:  # pragma: no cover - non-python items
@@ -237,6 +238,12 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 #: Management API timings per test, collected when SINGLESTOREDB_MANAGEMENT_TRACE
 #: is set. Kept here rather than on the config object so that
 #: ``pytest_terminal_summary`` can read it without a fixture.
+#:
+#: Every test that ran under an active trace is in here, including the ones that
+#: made no management call at all: ``trace_management_api_class`` subtracts this
+#: list from the class total to get the fixture share, so a test missing from it
+#: has its wall clock charged to ``setUpClass``. The event-less ones are
+#: filtered out at report time by :func:`_traced` instead.
 _management_traces: List[Tuple[str, Any]] = []
 
 #: The same, for the class fixtures rather than the tests. Separate because the
@@ -265,8 +272,7 @@ def trace_management_api(request: pytest.FixtureRequest) -> Iterator[None]:
     with timing.trace() as trace:
         yield
 
-    if trace.events:
-        _management_traces.append((request.node.nodeid, trace))
+    _management_traces.append((request.node.nodeid, trace))
 
 
 @pytest.fixture(scope='class', autouse=True)
@@ -307,22 +313,33 @@ def trace_management_api_class(request: pytest.FixtureRequest) -> Iterator[None]
         _management_fixture_traces.append((request.node.nodeid, fixtures))
 
 
+def _traced(traces: List[Tuple[str, Any]]) -> List[Tuple[str, Any]]:
+    """
+    Drop the traces that recorded no management call.
+
+    ``_management_traces`` holds every test so that the fixture arithmetic is
+    right, but a test that made no management call has nothing to report and its
+    wall clock would inflate the combined total.
+    """
+    return [x for x in traces if x[1].events]
+
+
 def pytest_terminal_summary(terminalreporter: Any) -> None:
     """Report the management API time the run spent, if it was traced."""
-    if not _management_traces and not _management_fixture_traces:
+    tests = _traced(_management_traces)
+    fixtures = _traced(_management_fixture_traces)
+    if not tests and not fixtures:
         return
 
     from singlestoredb.management import timing
 
     terminalreporter.write_sep('=', 'management API timing')
-    combined = timing.Trace.combine(
-        x[1] for x in _management_traces + _management_fixture_traces
-    )
+    combined = timing.Trace.combine(x[1] for x in tests + fixtures)
     terminalreporter.write_line(combined.summary())
 
     for heading, traces in (
-        ('slowest traced tests', _management_traces),
-        ('slowest traced class fixtures', _management_fixture_traces),
+        ('slowest traced tests', tests),
+        ('slowest traced class fixtures', fixtures),
     ):
         if not traces:
             continue
