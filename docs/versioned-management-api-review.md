@@ -4,6 +4,12 @@ Read-only review of the whole branch (60 commits, 70 files, +16,023 −3,344 ahe
 of `main`), looking for unfinished work, defects, and doc/comment drift. Nothing
 here has been fixed yet; each item is written so it can be picked up cold.
 
+> **Worked through 2026-09-01.** Every item now carries a resolution line. §1.1,
+> §1.2, §1.3, §1.5, §2.1, §2.3, §2.4, §2.5, §2.6 and §2.7 are **fixed**; §1.4 and
+> §2.2 are **won't-do** with a reason; §3a and §3b are **decided**. §4 is
+> untouched by design. The verification list at the bottom is corrected where the
+> review got it wrong.
+
 ## Context
 
 The branch restructures the management API into version namespaces:
@@ -41,6 +47,11 @@ object counts as real.
 *Verify:* the tracking unit tests in `test_management_utils.py`, plus a new case
 asserting an object with `_manager = None` **is** tracked.
 
+**Fixed** in `d9ded284`, as a deletion rather than an inversion: dropping the
+`manager is None` branch falls through to `_creator_is_mocked`, which already
+answers "real" for `None`. New case
+`test_a_deployment_without_a_manager_is_still_tracked`.
+
 ### 1.2 Class-fixture timings are inflated
 
 `singlestoredb/tests/conftest.py` — `trace_management_api` appends to
@@ -54,6 +65,12 @@ or subtract a per-class total that counts every test.
 management and non-management tests; reported fixture time should no longer
 exceed the real `setUpClass` cost.
 
+**Fixed** in `bea8c065`: append unconditionally, and filter event-less traces at
+report time through a new `_traced()` helper — the combined total and both
+"slowest" listings all use it, since an empty trace would otherwise inflate
+`elapsed` and `unaccounted`. **The runtime check was not run**: it needs the
+management suites, which provision real clusters.
+
 ### 1.3 mypy error hidden from pre-commit
 
 `singlestoredb/tests/conftest.py:171` — `error: "Item" has no attribute "module"`
@@ -61,12 +78,20 @@ under a full `mypy singlestoredb/`. pre-commit's `mirrors-mypy` runs with only
 `types-requests`, so `pytest.Item` degrades to `Any` and the error is invisible
 there. Fix at the call site (`getattr(item, 'module', None)` or a `cast`).
 
+**Fixed** in `bea8c065` by hoisting the `getattr` to a local. `mypy
+singlestoredb/`: 112 errors → 111.
+
 ### 1.4 `TTLProperty.reset()` signature break with no callers
 
 `singlestoredb/management/utils.py` — `reset()` became `reset(obj)` as part of the
 per-instance caching rework, and has **zero callers in the library**. Keeping it
 is right (it is the only way to invalidate the new per-instance cache), but if it
 was ever public the break needs a whatsnew line.
+
+**Won't-do.** `reset(obj)` stays as-is — no code change was ever in question. The
+whatsnew line is not written, for the reason in §2.2: `whatsnew.rst` is generated
+at release time. The break is instead recorded as item 5 of the list the untwist
+plan's Part 7 now carries for the release commit messages.
 
 ### 1.5 Hardcoded env-var literals in Fusion utils
 
@@ -77,6 +102,23 @@ Both plan docs describe named constants — `CLUSTER_ENV_VARS`,
 `CLUSTER_GROUP_ENV_VAR`, `PROJECT_ENV_VAR` — that **do not exist anywhere in the
 codebase**. Reuse the existing accessors and delete those constant names from the
 plan docs; introducing the constants is more new surface for no gain.
+
+**Fixed** in `616612eb`, with two amendments to the above:
+
+* The review missed two more of the same reads, in `v2/cluster.py` (`get_cluster`
+  and `_resolve_project_id`). Both routed through the accessors too, which let
+  `import os` go from that module entirely.
+* `SINGLESTOREDB_PROJECT` had **no** accessor, so one was added:
+  `get_project_id()`, mirroring `get_workspace_id()`. That is a judgment call
+  against the letter of this item — but the argument here is against a *set of
+  constants*, and one accessor beside the three already in
+  `management/utils.py` is less surface than a literal read left in a different
+  package.
+
+`CLUSTER_ENV_VARS` did once exist (`v2/cluster.py`, deleted in `3a9ebb04` when
+one variable was left); the plan-doc references to it are now annotated as
+historical rather than deleted. `SINGLESTOREDB_WORKSPACE_GROUP` is untouched: the
+one site that checks it never reads its value.
 
 ---
 
@@ -97,6 +139,18 @@ The untwist plan already lists this as **outstanding** (`api.rst:233-247`). Add 
 cluster section mirroring the existing workspace section's structure, and mark
 the workspace section as v1/legacy.
 
+**Fixed** in `8796b5bd`. A cluster section covering `manage_clusters`,
+`ClusterManager`, `Cluster`, `StarterCluster` and `Project` now precedes the
+workspace one, which is retitled "Workspaces (v1)" with a deprecation note. The
+version-neutral sections that reached their manager through `WorkspaceManager` —
+Region, Organization, Stage Files — name the `ClusterManager`/`Cluster` attribute
+first and the v1 one second.
+
+`management.timing` is **deliberately not documented**: it is internal.
+
+Every autosummary entry was checked to resolve against the source. **Not
+Sphinx-built** — see the correction to step 7 below.
+
 ### 2.2 No whatsnew entries for the user-visible breaks
 
 `docs/src/whatsnew.rst` needs:
@@ -110,6 +164,14 @@ the workspace section as v1/legacy.
   `_connection_info['cluster']` / `SINGLESTOREDB_CLUSTER`; new
   `Portal.project_id`.
 * `TTLProperty.reset()` → `reset(obj)`, if §1.4 keeps it.
+
+**Won't-do.** This item conflicts with a decision the branch had already
+recorded and the review did not pick up: `docs/src/whatsnew.rst` is generated at
+release time by `/bump-version` from the git log, so there is no hand-written
+entry to add to. Rather than pre-empt the release, all four breaks (plus
+`manage_files`/`manage_regions` resolving to `/v2/`) are now enumerated in the
+untwist plan's Part 7 as the list the release commit messages have to carry.
+`whatsnew.rst` is untouched on this branch.
 
 ### 2.3 ADR 0001 cites two things that don't exist
 
@@ -126,6 +188,11 @@ The ADR is otherwise accurate: its central claim that
 `_version_import._resolve_version()` is the only read of `management.version`
 was verified by grep.
 
+**Fixed** in `9206bb09`. Both corrections confirmed against the source first:
+`v1/job.py:34-35` and `management/job.py:716-719` hold only the two target-type
+attributes, and `v2`'s `Stage` comes from `management/stage.py` via
+`v2/cluster.py:40-41`.
+
 ### 2.4 Version-neutral modules still say "workspace"
 
 * `management/manager.py:425` — `_wait_on_endpoint`'s docstring says "Workspace
@@ -133,10 +200,19 @@ was verified by grep.
 * `management/files.py:42` — `FilesObject`'s docstring points at
   ``WorkspaceGroup.stage``; at v2 that is ``Cluster.stage``.
 
+**Fixed:** `manager.py` in `9206bb09`, `files.py` in `8796b5bd` (alongside the
+same cross-reference in api.rst's Stage Files section). Both name the v2
+attribute first and the v1 one second, rather than replacing one with the other —
+the modules are version-neutral and serve both.
+
 ### 2.5 Stale `.flake8` per-file-ignore
 
 `.flake8` ignores `singlestoredb/management/inference_api.py`, which moved to
 `v1/inference_api.py`. Harmless (flake8 is clean) but misleading.
+
+**Fixed** in `9206bb09` by deleting the line: `v1/inference_api.py` is already
+covered by the `singlestoredb/management/v1/*.py:F401` glob two lines down. The
+other four `management/*.py` paths in that list were checked and all still exist.
 
 ### 2.6 Plan docs left in a pre-landing voice
 
@@ -158,22 +234,44 @@ These read as open questions, but the work landed and the answers are recorded i
 * `docs/shared-deployment-pool-plan.md` — well annotated; one nit, "Two things
   parallelism does not fix, and one it breaks:" is followed by four bullets.
 
+**Fixed** in `c91db3e2`. Two notes on what the review got slightly wrong:
+
+* The pool plan's four bullets are one not-fixed and **three** breaks (peak
+  concurrency, `USE_DATA_API`, the trace summary), not two and two.
+* The Fusion plan's "expect 45 → ~56" was **exact at the time** — verified 45 on
+  `main` and 56 at the commit the cluster commands landed. The registry holds 48
+  only because `0b0765f5` later hid the eight inference and MODEL commands. The
+  figure was corrected, but the estimate was not wrong.
+
 ### 2.7 Scratch prompt checked into `docs/`
 
-`docs/shared-deployment-pool-prompt.md` is a personal instruction file to an
+`docs/shared-deployment-pool-prompt.md` was a personal instruction file to an
 agent ("Do the plan's steps 1-3. Stop before step 4 … that is mine to run, not
 yours."). It is not documentation.
 
+**Fixed** in `3bc9b400` — deleted. The plan it drove is checked in and annotated.
+
 ---
 
-## 3. Open decisions
+## 3. Open decisions — both settled
 
 **a. `management/export.py` is still a 6-line re-export from `.v1.export`.** The
 untwist plan (§5 Part 7) says it "repoints to `v2/export.py` **only after** Fusion
 cluster support lands". That has landed, so the pin is now either an intentional
 deferral or an oversight. Repoint it, or annotate the plan with why it stays.
 
+**Decided: it stays, and the plan is annotated (`c91db3e2`).** Neither deferral
+nor oversight exactly — the plan's gate was simply the wrong one. What blocks the
+repoint is not `CLUSTER` commands existing, it is the **EXPORT** grammar:
+`fusion/handlers/export.py` resolves its target with `get_workspace_group({})` at
+every call site, while `v2/export.py`'s `ExportService.__init__` and
+`_get_exports` both take a `Cluster`. Repointing the shim breaks every EXPORT
+handler with nothing to move them to. The real precondition is porting the EXPORT
+Fusion grammar to clusters, which is not on this branch. **Open.**
+
 **b. Does `docs/shared-deployment-pool-prompt.md` stay in the repo?** See §2.7.
+
+**Decided: no.** Deleted in `3bc9b400`.
 
 ---
 
@@ -212,14 +310,36 @@ Docker container is a state change.
 
 ## Verification for the follow-up work
 
-1. `pre-commit run --all-files` → clean.
+1. `pre-commit run --all-files` → clean. **Ran, clean** — before every commit.
 2. `mypy singlestoredb/` → the `conftest.py:171` error gone; total drops by
-   exactly one (the rest is pre-existing third-party/numpy noise).
+   exactly one (the rest is pre-existing third-party/numpy noise). **Ran: 112 →
+   111**, exactly as predicted.
 3. `pytest -v -m 'not management' singlestoredb/tests` → green, no token needed.
+   **Ran: 762 passed, 15 skipped.**
 4. `python -c "import singlestoredb.fusion, singlestoredb.fusion.registry as r; print(len(r._handlers))"`
-   → 48, if the Fusion doc figures are corrected.
+   → 48, if the Fusion doc figures are corrected. **Ran: 48**, all 11 cluster
+   commands present, zero MODEL handlers.
 5. `pytest -v -m 'management and not management_v1' singlestoredb/tests` → green
-   (what the `-n 3 --dist loadgroup` default is tuned for).
+   (what the `-n 3 --dist loadgroup` default is tuned for). **Not run** — it
+   provisions real billable clusters.
 6. Nightly gate unaffected: `pytest -v -m 'management_v1' singlestoredb/tests`.
+   **Not run**, same reason.
 7. Docs build after the api.rst/whatsnew work: `make -C docs html`, no new Sphinx
    warnings.
+
+   **Not run, and the command is wrong.** There is no `docs/Makefile` — it is
+   `docs/src/Makefile`, so the invocation is `make -C docs/src html`. Worth
+   knowing before running it: that Makefile's catch-all target starts a
+   SingleStoreDB Docker container (the `ipython_directive` extension executes
+   code) and then `mv`s the build output over the ~203 committed HTML files in
+   `docs/`, so an innocent-looking docs check produces a large unrelated diff.
+   `sphinx-build -b html . _build/check` from `docs/src` is the side-effect-free
+   way to look for warnings.
+
+   The api.rst work in §2.1 therefore ships **unbuilt**. It was checked by
+   resolving every autosummary entry against the source and verifying every
+   section underline, which is not the same as a clean Sphinx run.
+
+Also unverified: §1.2's runtime check
+(`SINGLESTOREDB_MANAGEMENT_TRACE=1 pytest -n 0` on a mixed class) needs the
+management suites, so the fix is argued from the code, not measured.
