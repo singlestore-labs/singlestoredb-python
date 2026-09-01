@@ -14,6 +14,14 @@ from .utils import get_inference_api
 from .utils import get_inference_api_manager
 
 
+# Every handler in this module is hidden -- ``_enabled = False``, so it only
+# registers when SINGLESTOREDB_FUSION_ENABLE_HIDDEN is set. The models surface
+# is v1-only: the START/STOP/SHOW/DROP MODEL commands ride the ``inferenceapis/``
+# routes, which do not exist past v1, and the CUSTOM MODEL commands are the same
+# generation of API. Rather than let the grammar advertise commands that have no
+# v2 equivalent, none of them are registered by default.
+
+
 class ShowCustomModelsHandler(ShowFilesHandler):
     """
     SHOW CUSTOM MODELS
@@ -71,6 +79,8 @@ class ShowCustomModelsHandler(ShowFilesHandler):
 
     """  # noqa: E501
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         params['file_location'] = 'MODELS'
 
@@ -122,6 +132,8 @@ class UploadCustomModelHandler(SQLHandler):
     * ``DOWNLOAD CUSTOM MODEL model_name``
 
     """  # noqa: E501
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         params['file_location'] = 'MODELS'
@@ -201,6 +213,8 @@ class DownloadCustomModelHandler(SQLHandler):
 
     """  # noqa: E501
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         params['file_location'] = 'MODELS'
 
@@ -241,6 +255,8 @@ class DropCustomModelHandler(SQLHandler):
         DROP CUSTOM MODEL llama3;
 
     """  # noqa: E501
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         params['file_location'] = 'MODELS'
@@ -283,6 +299,8 @@ class StartModelHandler(SQLHandler):
     * ``SHOW MODELS``
 
     """  # noqa: E501
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         inference_api = get_inference_api(params)
@@ -332,6 +350,8 @@ class StopModelHandler(SQLHandler):
 
     """  # noqa: E501
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         inference_api = get_inference_api(params)
         operation_result = inference_api.stop()
@@ -373,6 +393,8 @@ class ShowModelsHandler(SQLHandler):
     * ``DROP MODEL model_name``
 
     """  # noqa: E501
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         inference_api_manager = get_inference_api_manager()
@@ -424,6 +446,8 @@ class DropModelHandler(SQLHandler):
     * ``SHOW MODELS``
 
     """  # noqa: E501
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         inference_api = get_inference_api(params)

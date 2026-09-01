@@ -8,7 +8,7 @@ from typing import Union
 
 import httpx
 
-from singlestoredb.management.inference_api import InferenceAPIInfo
+from singlestoredb.management.v1.inference_api import InferenceAPIInfo
 from singlestoredb.management.workspace import _manage_workspaces_v1
 
 try:

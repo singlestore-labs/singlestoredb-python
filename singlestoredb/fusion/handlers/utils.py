@@ -17,8 +17,8 @@ from ...management.cluster import StarterCluster
 from ...management.files import FilesManager
 from ...management.files import FileSpace
 from ...management.files import manage_files
-from ...management.inference_api import InferenceAPIInfo
-from ...management.inference_api import InferenceAPIManager
+from ...management.v1.inference_api import InferenceAPIInfo
+from ...management.v1.inference_api import InferenceAPIManager
 from ...management.workspace import _manage_workspaces_v1
 from ...management.workspace import Workspace
 from ...management.workspace import WorkspaceGroup
@@ -582,9 +582,11 @@ def get_inference_api_manager() -> InferenceAPIManager:
     Return the inference API manager for the current project.
 
     Stays on the v1 manager while files and jobs move to v2, because unlike
-    those two there is no v2 route to move to:
-    ``Organization.inference_apis`` raises for every version past v1 and
-    ``management/inference_api.py`` is v1-pinned. Revisit when the models and
+    those two there is no v2 route to move to: ``Organization.inference_apis``
+    raises for every version past v1, and the implementation is imported from
+    ``management/v1/inference_api.py`` by that name -- there is deliberately no
+    version-neutral alias for it. The handlers this feeds are hidden for the
+    same reason (see ``handlers/models.py``). Revisit when the models and
     inference surface gains a v2 equivalent.
     """
     wm = get_workspace_manager()

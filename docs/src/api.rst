@@ -329,7 +329,6 @@ They provide access to organization-level resources and operations.
    Organization
    Organization.get_secret
    Organization.jobs
-   Organization.inference_apis
 
 
 Secret
