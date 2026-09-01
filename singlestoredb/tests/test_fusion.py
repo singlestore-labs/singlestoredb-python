@@ -154,6 +154,88 @@ class TestFusion(unittest.TestCase):
         assert '<region-id>' in syntax, syntax
         assert 'KMS' in syntax.upper(), syntax
 
+    def test_v1_workspace_commands_are_deprecated(self):
+        """
+        Every v1 WORKSPACE command points at its v2 CLUSTER replacement.
+
+        ``SHOW REGIONS`` is the sole exception -- v2 assigns no region IDs, so
+        ``SHOW CLUSTER REGIONS`` cannot report the ``ID`` column and is not a
+        drop-in. Asserted so that adding a v1 command without a pointer, or
+        quietly deprecating ``SHOW REGIONS``, fails here.
+        """
+        from singlestoredb.fusion import registry
+
+        undeprecated = set()
+        for key, handler in registry._handlers.items():
+            if not handler.__module__.endswith('.workspace'):
+                continue
+            if handler._deprecated_by:
+                # The replacement must be a real command, not a typo.
+                assert handler._deprecated_by in registry._handlers, \
+                    (key, handler._deprecated_by)
+            else:
+                undeprecated.add(key)
+
+        assert undeprecated == {'SHOW REGIONS'}, undeprecated
+
+    def test_v2_cluster_commands_are_not_deprecated(self):
+        """The replacements must not themselves warn."""
+        from singlestoredb.fusion import registry
+
+        for key, handler in registry._handlers.items():
+            if handler.__module__.endswith('.cluster'):
+                assert not handler._deprecated_by, key
+
+    def test_deprecation_warning_fires_on_execute(self):
+        """
+        ``_deprecated_by`` warns, names the command, and still runs.
+
+        Driven through a probe handler rather than a real ``WORKSPACE`` command
+        so the assertion needs no management API token: what is under test is
+        the mechanism in ``SQLHandler.execute``, not any one command's body.
+        """
+        from singlestoredb.fusion.handler import SQLHandler
+        from singlestoredb.warnings import DeprecatedFeatureWarning
+
+        class _DeprecatedProbeHandler(SQLHandler):
+            """
+            SHOW FUSION DEPRECATION PROBE;
+
+            """
+
+            _deprecated_by = 'SHOW CLUSTERS'
+
+            def run(self, params):
+                return None
+
+        # Deliberately not registered -- execute() only needs the class.
+        handler = _DeprecatedProbeHandler(self.conn)
+
+        with self.assertWarns(DeprecatedFeatureWarning) as caught:
+            res = handler.execute('SHOW FUSION DEPRECATION PROBE')
+
+        msg = str(caught.warning)
+        assert 'SHOW FUSION DEPRECATION PROBE' in msg, msg
+        assert 'SHOW CLUSTERS' in msg, msg
+        # Deprecated, not removed: the command still returns a result.
+        assert res is not None
+
+    def test_no_deprecation_warning_by_default(self):
+        """A command without ``_deprecated_by`` stays silent."""
+        import warnings
+
+        from singlestoredb.warnings import DeprecatedFeatureWarning
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            self.cur.execute('show fusion commands')
+            self.cur.fetchall()
+
+        assert not [
+            x for x in caught
+            if issubclass(x.category, DeprecatedFeatureWarning)
+        ], [str(x.message) for x in caught]
+
     def test_maximal_create_cluster_parses(self):
         from singlestoredb.fusion import registry
 

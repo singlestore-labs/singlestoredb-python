@@ -22,6 +22,7 @@ from parsimonious.nodes import NodeVisitor
 
 from . import result
 from ..connection import Connection
+from ..warnings import DeprecatedFeatureWarning
 from ..warnings import PreviewFeatureWarning
 
 CORE_GRAMMAR = r'''
@@ -584,6 +585,12 @@ class SQLHandler(NodeVisitor):
     _enabled: bool = True
     _preview: bool = False
 
+    #: Command that replaces this one, e.g. ``'SHOW CLUSTERS'``. When set, the
+    #: command still runs but warns on every execution. Used for the management
+    #: API v1 vocabulary (``handlers/workspace.py``), which v2 replaced with the
+    #: flat ``CLUSTER`` commands. Empty means not deprecated.
+    _deprecated_by: str = ''
+
     def __init__(self, connection: Connection):
         self.connection = connection
         self._handled: Set[str] = set()
@@ -665,6 +672,17 @@ class SQLHandler(NodeVisitor):
             )
 
         type(self).compile()
+
+        if type(self)._deprecated_by:
+            # After compile(), so that command_key is populated -- naming the
+            # command the user actually typed is the point of the message.
+            warnings.warn(
+                f'{" ".join(type(self).command_key).upper()} is a management '
+                'API v1 command and is deprecated. Use '
+                f'{type(self)._deprecated_by} instead.',
+                DeprecatedFeatureWarning, stacklevel=2,
+            )
+
         self._handled = set()
         try:
             params = self.visit(type(self).grammar.parse(sql))
