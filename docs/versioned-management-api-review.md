@@ -269,6 +269,22 @@ every call site, while `v2/export.py`'s `ExportService.__init__` and
 handler with nothing to move them to. The real precondition is porting the EXPORT
 Fusion grammar to clusters, which is not on this branch. **Open.**
 
+**Resolved.** The precondition named above was then done: all seven EXPORT
+handlers resolve their target with `get_cluster({})` and import from
+`management/v2/export.py` directly, so the version is named at the import line.
+With nothing left on v1, `management/export.py` was repointed to `.v2.export`.
+It is documented as a *version-locked* shim rather than a version-neutral one —
+it cannot consult `management.version`, because v1 takes a `WorkspaceGroup` and
+v2 a `Cluster`, so the two do not fit behind one name.
+
+One behaviour change falls out of the move: the environment variable that names
+the export target goes from `SINGLESTOREDB_WORKSPACE_GROUP` to
+`SINGLESTOREDB_WORKSPACE`, since that is what `get_cluster` reads. All seven
+handlers are hidden (`_enabled = False`), so this reaches no one who has not set
+`SINGLESTOREDB_FUSION_ENABLE_HIDDEN`. No `IN CLUSTER` clause was added — these
+commands took no target clause at v1 either, and adding one is a grammar change
+rather than part of the version move.
+
 **b. Does `docs/shared-deployment-pool-prompt.md` stay in the repo?** See §2.7.
 
 **Decided: no.** Deleted in `3bc9b400`.

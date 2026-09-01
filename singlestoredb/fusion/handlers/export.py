@@ -1,4 +1,25 @@
 #!/usr/bin/env python3
+"""
+Fusion SQL handlers for the table egress (EXPORT) service.
+
+Pinned to management API v2, so an export is owned by a
+:class:`~singlestoredb.management.v2.cluster.Cluster`. The version is named at
+the import line rather than left to the ``management.version`` option, for the
+same reason ``handlers/utils.py`` pins its managers: the egress routes differ by
+version (``clusters/{id}/egress/...`` at v2 against
+``workspaceGroups/{id}/egress/...`` at v1) and these handlers must not follow an
+unrelated option onto the other one.
+
+Every handler here resolves its target with ``get_cluster({})``, which reads
+``SINGLESTOREDB_WORKSPACE``. At v1 it was ``get_workspace_group({})``, reading
+``SINGLESTOREDB_WORKSPACE_GROUP`` -- so the environment variable that names the
+export target changed with the version. There is deliberately no ``IN CLUSTER``
+clause: none of these commands took a target clause at v1 either, and adding one
+is a grammar change rather than part of the version move.
+
+All handlers are hidden (``_enabled = False``), so they only register under
+``SINGLESTOREDB_FUSION_ENABLE_HIDDEN``.
+"""
 import datetime
 import json
 from typing import Any
@@ -6,12 +27,12 @@ from typing import Dict
 from typing import Optional
 
 from .. import result
-from ...management.export import _get_exports
-from ...management.export import ExportService
-from ...management.export import ExportStatus
+from ...management.v2.export import _get_exports
+from ...management.v2.export import ExportService
+from ...management.v2.export import ExportStatus
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
-from .utils import get_workspace_group
+from .utils import get_cluster
 
 
 class CreateClusterIdentity(SQLHandler):
@@ -82,13 +103,10 @@ class CreateClusterIdentity(SQLHandler):
 
         storage_config['provider'] = 'S3'
 
-        wsg = get_workspace_group({})
-
-        if wsg._manager is None:
-            raise TypeError('no workspace manager is associated with workspace group')
+        cluster = get_cluster({})
 
         out = ExportService(
-            wsg,
+            cluster,
             'none',
             'none',
             dict(**catalog_config, **catalog_creds),
@@ -124,13 +142,10 @@ def _start_export(params: Dict[str, Any]) -> Optional[FusionSQLResult]:
 
     storage_config['provider'] = 'S3'
 
-    wsg = get_workspace_group({})
+    cluster = get_cluster({})
 
     if from_database is None:
         raise ValueError('database name must be specified for source table')
-
-    if wsg._manager is None:
-        raise TypeError('no workspace manager is associated with workspace group')
 
     partition_by = []
     if params['partition_by']:
@@ -178,7 +193,7 @@ def _start_export(params: Dict[str, Any]) -> Optional[FusionSQLResult]:
             raise ValueError('invalid refresh interval time unit')
 
     out = ExportService(
-        wsg,
+        cluster,
         from_database,
         from_table,
         dict(**catalog_config, **catalog_creds),
@@ -420,9 +435,9 @@ class ShowExport(SQLHandler):
     _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        wsg = get_workspace_group({})
+        cluster = get_cluster({})
         return _format_status(
-            params['export_id'], ExportStatus(params['export_id'], wsg),
+            params['export_id'], ExportStatus(params['export_id'], cluster),
         )
 
 
@@ -441,21 +456,25 @@ class ShowExports(SQLHandler):
     _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        wsg = get_workspace_group({})
+        cluster = get_cluster({})
 
-        exports = _get_exports(wsg, params.get('scope', 'all'))
+        exports = _get_exports(cluster, params.get('scope', 'all'))
 
         res = FusionSQLResult()
         res.add_field('ExportID', result.STRING)
         res.add_field('Status', result.STRING)
         res.add_field('Message', result.STRING)
+        # The ID comes from the ExportStatus rather than from its ``_info()``
+        # body: ``_info()`` is a per-export status GET, which is not documented
+        # to echo ``egressID`` back. ``_get_exports`` already read the ID from
+        # the listing to build each object, so it is known here either way.
         res.set_rows([
             (
-                info['egressID'],
+                x.export_id,
                 info.get('status', 'Unknown'),
                 info.get('statusMsg', ''),
             )
-            for info in [x._info() for x in exports]
+            for x, info in [(x, x._info()) for x in exports]
         ])
 
         return res
@@ -476,8 +495,8 @@ class SuspendExport(SQLHandler):
     _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        wsg = get_workspace_group({})
-        service = ExportService.from_export_id(wsg, params['export_id'])
+        cluster = get_cluster({})
+        service = ExportService.from_export_id(cluster, params['export_id'])
         return _format_status(params['export_id'], service.suspend())
 
 
@@ -496,8 +515,8 @@ class ResumeExport(SQLHandler):
     _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        wsg = get_workspace_group({})
-        service = ExportService.from_export_id(wsg, params['export_id'])
+        cluster = get_cluster({})
+        service = ExportService.from_export_id(cluster, params['export_id'])
         return _format_status(params['export_id'], service.resume())
 
 
@@ -516,8 +535,8 @@ class DropExport(SQLHandler):
     _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
-        wsg = get_workspace_group({})
-        service = ExportService.from_export_id(wsg, params['export_id'])
+        cluster = get_cluster({})
+        service = ExportService.from_export_id(cluster, params['export_id'])
         service.drop()
         return None
 
