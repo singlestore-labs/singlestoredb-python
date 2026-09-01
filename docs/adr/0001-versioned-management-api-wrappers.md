@@ -57,11 +57,13 @@ class Stage(_Stage):
         return f'stage/{self._deployment_id}/fs/{path}'
 ```
 
-and `v2/stage.py` is a plain re-export. The direction matters: with v2 as the subclass, deleting `v1/` would strand the base class it inherits from. With v1 as the subclass, deleting `v1/` leaves the current behavior standing on its own.
+and v2 uses the shared class unchanged — there is no `v2/stage.py`; `v2`'s
+`Stage` is re-exported from `v2/cluster.py`, which imports it from
+`management/stage.py`. The direction matters: with v2 as the subclass, deleting `v1/` would strand the base class it inherits from. With v1 as the subclass, deleting `v1/` leaves the current behavior standing on its own.
 
 Version differences are expressed as **class attributes on the shared class**, repointed by the version subclass, rather than as runtime `if version == ...` branches:
 
-- `JobsManager._deployment_target_type`, `_starter_target_type`, `_legacy_cluster_target_type` — the `targetType` strings each version uses
+- `JobsManager._deployment_target_type`, `_starter_target_type` — the `targetType` strings each version uses
 - `Organization._jobs_manager_class`, `_inference_api_manager_class`
 - `Organizations._organization_class` — so a v1 manager hands out a v1-configured organization
 - `Stage._fs_path` — the one thing that differs about Stage

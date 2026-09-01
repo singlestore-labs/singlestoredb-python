@@ -422,7 +422,8 @@ class Manager:
         Parameters
         ----------
         out : Any
-            Workspace object with a connect method
+            Deployment object with a connect method -- a ``Cluster`` or
+            ``StarterCluster`` at v2, a ``Workspace`` at v1
         interval : int, optional
             Interval between each connection attempt (default: 10 seconds)
         timeout : int, optional
