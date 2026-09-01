@@ -761,6 +761,18 @@ class TestDeploymentTracking(unittest.TestCase):
             self.utils._creator_is_mocked(SimpleNamespace(_manager=real)),
         )
 
+    def test_a_deployment_without_a_manager_is_still_tracked(self):
+        # The fail-safe bias: an unrecognisable object counts as real. A fake
+        # deployment swept is a round trip and a warning, whereas a real one
+        # skipped is a cluster left running and billing.
+        obj = self._deployment('a')
+        obj._manager = None
+        self.utils.track(obj)
+        self.assertEqual(len(self.utils._tracked), 1)
+
+        self.assertFalse(self.utils._is_mocked(obj))
+        self.assertFalse(self.utils._is_mocked(SimpleNamespace(name='b')))
+
     def test_every_creation_method_is_wrapped(self):
         # A rename that silently stops tracking is how a cluster leaks.
         import importlib

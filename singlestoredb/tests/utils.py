@@ -331,14 +331,18 @@ def _is_mocked(obj: Any) -> bool:
     The unit tests call the same creation methods with ``_post`` patched, and
     the objects they get back name deployments that do not exist. Sweeping
     those would be a round trip per fake object and a warning apiece.
+
+    An unrecognisable object counts as real, including one whose ``_manager``
+    is ``None``: a fake deployment swept is a round trip and a warning, whereas
+    a real one skipped is a cluster left running and billing. That bias lives
+    in :func:`_creator_is_mocked`, which this defers to for everything but the
+    receiver itself.
     """
     from unittest.mock import NonCallableMock
 
     if isinstance(obj, NonCallableMock):
         return True
     manager = getattr(obj, '_manager', None)
-    if manager is None:
-        return True
     if isinstance(manager, NonCallableMock):
         return True
     return _creator_is_mocked(manager)
