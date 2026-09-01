@@ -261,6 +261,18 @@ def get_workspace_id() -> Optional[str]:
     return os.environ.get('SINGLESTOREDB_WORKSPACE') or None
 
 
+def get_project_id() -> Optional[str]:
+    """
+    Return the project id or name for the current token or environment.
+
+    ``SINGLESTOREDB_PROJECT`` is a single value for both spellings, so the
+    caller decides which it is -- see ``PROJECT_ID_RE`` in
+    :mod:`singlestoredb.management.v2.cluster`. Projects are a v2 resource;
+    there is no v1 equivalent.
+    """
+    return os.environ.get('SINGLESTOREDB_PROJECT') or None
+
+
 def get_virtual_workspace_id() -> Optional[str]:
     """Return the virtual workspace id for the current token or environment."""
     return os.environ.get('SINGLESTOREDB_VIRTUAL_WORKSPACE') or None

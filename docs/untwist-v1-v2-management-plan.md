@@ -198,12 +198,17 @@ path segment, not a separate host.
 `SINGLESTOREDB_WORKSPACE` at every API version — a workspace ID at v1, a cluster
 ID at v2 — plus `SINGLESTOREDB_WORKSPACE_GROUP` for the group ID and
 `SINGLESTOREDB_PROJECT` for the project. So:
-- `CLUSTER_ENV_VARS` is `('SINGLESTOREDB_WORKSPACE',)`, and `get_cluster_id()` is
-  simply the v2 spelling of `get_workspace_id()`.
+- `CLUSTER_ENV_VARS` collapses to `('SINGLESTOREDB_WORKSPACE',)`, and
+  `get_cluster_id()` is simply the v2 spelling of `get_workspace_id()`. **Landed
+  as a deletion:** a one-element tuple is not worth a name, so the constant is
+  gone (removed in `3a9ebb04`) and every reader goes through
+  `management/utils.py`'s `get_cluster_id()`.
 - `SINGLESTOREDB_WORKSPACE_GROUP` is *not* a deployment variable. Its value is a
   group ID, which v2 reports only as the read-only `Cluster.group` and offers
-  no route to look up, so `CLUSTER_GROUP_ENV_VAR` names it separately and
-  `get_deployment()` refuses to guess which cluster was meant.
+  no route to look up, so `get_deployment()` refuses to guess which cluster was
+  meant and raises pointing at `SINGLESTOREDB_WORKSPACE`. No constant names it:
+  the one site that checks it (`fusion/handlers/utils.py`) never reads its
+  value.
 - The legacy self-managed cluster target is gone from the write path: nothing
   sets the variable that named it, so `_resolve_target` has only the starter and
   deployment branches.
@@ -251,8 +256,9 @@ already satisfied for identifiers.
   One call replaces v1's `create_workspace_group` + `create_workspace`.
   **Its POST body was inferred from the GET response shape and never verified against the
   live API.**
-- Module level: `SHAREDTIER_PATH` (`:51`), `CLUSTER_ENV_VARS` (`:57`), `get_organization`
-  (`:71`), `get_secret` (`:77`), `get_cluster` (`:82`), `get_stage` (`:112`).
+- Module level: `SHAREDTIER_PATH` (`:51`), `CLUSTER_ENV_VARS` (`:57` — since
+  deleted, see the correction in §4.3), `get_organization` (`:71`), `get_secret`
+  (`:77`), `get_cluster` (`:82`), `get_stage` (`:112`).
 
 ### 4.5 Current test state
 
@@ -369,6 +375,12 @@ imports `_get_exports`/`ExportService`/`ExportStatus` from it and Fusion is v1-o
 - **`v2/cluster.py:57` `CLUSTER_ENV_VARS`** — keep `SINGLESTOREDB_WORKSPACE`, and *only* it;
   same reason. Make the existing justification comment at `:53-56` say so plainly, including
   that no `SINGLESTOREDB_CLUSTER` exists to prefer over it.
+
+  **Landed differently:** with one variable left, the constant was deleted
+  outright rather than reduced to a one-element tuple, and the justification now
+  lives on `management/utils.py`'s `get_cluster_id()` — the single accessor every
+  reader in `management/` and `fusion/` goes through. The env-var *names* are
+  still the notebook runtime's contract and unchanged.
 - **Docstring sweep** — replace `WorkspaceManager` with `ClusterManager` and drop
   workspace-group phrasing at every site listed in §4.3.
 - **`utils.py:2`** — fix the module docstring.

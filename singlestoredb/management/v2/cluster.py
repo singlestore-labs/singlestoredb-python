@@ -20,7 +20,6 @@ know what a workspace was.
 from __future__ import annotations
 
 import datetime
-import os
 import re
 from typing import Any
 from typing import Dict
@@ -40,6 +39,8 @@ from ..region import Region
 from ..stage import Stage as Stage
 from ..stage import StageObject as StageObject
 from ..utils import camel_to_snake_dict
+from ..utils import get_cluster_id
+from ..utils import get_project_id
 from ..utils import NamedList
 from ..utils import PathLike
 from ..utils import snake_to_camel_dict
@@ -124,8 +125,9 @@ def get_cluster(
     mgr = manage_clusters(version='v2')
     if cluster:
         return mgr.clusters[cluster]
-    if 'SINGLESTOREDB_WORKSPACE' in os.environ:
-        return mgr.clusters[os.environ['SINGLESTOREDB_WORKSPACE']]
+    from_env = get_cluster_id()
+    if from_env:
+        return mgr.clusters[from_env]
     raise RuntimeError('no cluster specified')
 
 
@@ -1242,7 +1244,7 @@ class ClusterManager(Manager):
         if project:
             return self._project_id_for(project)
 
-        from_env = os.environ.get('SINGLESTOREDB_PROJECT')
+        from_env = get_project_id()
         if from_env:
             return self._project_id_for(from_env)
 

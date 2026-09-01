@@ -17,6 +17,9 @@ from ...management.cluster import StarterCluster
 from ...management.files import FilesManager
 from ...management.files import FileSpace
 from ...management.files import manage_files
+from ...management.utils import get_cluster_id
+from ...management.utils import get_project_id
+from ...management.utils import get_workspace_id
 from ...management.v1.inference_api import InferenceAPIInfo
 from ...management.v1.inference_api import InferenceAPIManager
 from ...management.workspace import _manage_workspaces_v1
@@ -194,16 +197,14 @@ def get_workspace(params: Dict[str, Any]) -> Workspace:
                 raise KeyError(f'no workspace found with ID: {workspace_id}')
             raise
 
-    if os.environ.get('SINGLESTOREDB_WORKSPACE'):
+    from_env = get_workspace_id()
+    if from_env:
         try:
-            return manager.get_workspace(
-                os.environ['SINGLESTOREDB_WORKSPACE'],
-            )
+            return manager.get_workspace(from_env)
         except ManagementError as exc:
             if exc.errno == 404:
                 raise KeyError(
-                    'no workspace found with ID: '
-                    f'{os.environ["SINGLESTOREDB_WORKSPACE"]}',
+                    f'no workspace found with ID: {from_env}',
                 )
             raise
 
@@ -273,7 +274,7 @@ def get_cluster(params: Dict[str, Any]) -> Cluster:
                 raise KeyError(f'no cluster found with ID: {cluster_id}')
             raise
 
-    from_env = os.environ.get('SINGLESTOREDB_WORKSPACE')
+    from_env = get_cluster_id()
     if from_env:
         try:
             return manager.get_cluster(from_env)
@@ -368,7 +369,7 @@ def get_project(params: Dict[str, Any]) -> Optional[Project]:
 
     source = ''
     if not project_name and not project_id:
-        from_env = os.environ.get('SINGLESTOREDB_PROJECT')
+        from_env = get_project_id()
         if not from_env:
             return None
         source = ' (from SINGLESTOREDB_PROJECT)'
@@ -506,7 +507,7 @@ def get_deployment(
     # environment names it once, so one lookup tries cluster then starter
     # cluster.
     #
-    from_env = os.environ.get('SINGLESTOREDB_WORKSPACE')
+    from_env = get_cluster_id()
     if from_env:
         return _deployment_by_id(
             manager, from_env, 'SINGLESTOREDB_WORKSPACE',

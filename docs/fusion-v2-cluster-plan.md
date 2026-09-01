@@ -136,22 +136,26 @@ only `job.py` moves. Add alongside it:
 - `get_cluster(params)` — mirrors `get_workspace()` (`:111-176`): name filters
   `manager.clusters`, raising `KeyError` on none and `ValueError` on ambiguity;
   ID uses `manager.get_cluster()` mapping `errno == 404` to `KeyError`; then the
-  env vars in `CLUSTER_ENV_VARS` (`v2/cluster.py:70`) in order — in practice the
-  one the notebook environment publishes, `SINGLESTOREDB_WORKSPACE`, whose value
-  is a cluster ID at v2.
+  environment, through `management/utils.py`'s `get_cluster_id()`. That reads
+  `SINGLESTOREDB_WORKSPACE`, which is what the notebook environment publishes
+  the current deployment as at every version — a cluster ID from v2 onward.
+  **Landed** as one accessor call rather than a list of env-var names: there is
+  only ever one variable, so a `CLUSTER_ENV_VARS` tuple would have been new
+  surface for no gain.
 - `get_starter_cluster(params)` — same shape against `starter_clusters` /
   `get_starter_cluster()`.
 - `get_project(params)` — resolves an `IN PROJECT` clause by name against
   `manager.projects` or by ID via `get_project()`, falling back to
-  `PROJECT_ENV_VAR` (`SINGLESTOREDB_PROJECT`, set by the notebook environment
-  and holding either a name or an ID — told apart by `PROJECT_ID_RE`) and
+  `management/utils.py`'s `get_project_id()` (`SINGLESTOREDB_PROJECT`, set by
+  the notebook environment and holding either a name or an ID — told apart by
+  `PROJECT_ID_RE`) and
   returning `None` when neither names a project so `create_cluster` falls
   through to `_resolve_project_id()`.
 - `get_deployment(params)` — **repointed in place** to v2. Verified safe:
   `stage.py` is its only consumer, so the workspace handlers are unaffected.
   `workspace_groups`→`clusters`, `starter_workspaces`→`starter_clusters`,
   `get_workspace_group`→`get_cluster`, `get_starter_workspace`→`get_starter_cluster`;
-  the two env branches collapse into one loop over `CLUSTER_ENV_VARS` trying
+  the two env branches collapse into a single `get_cluster_id()` read trying
   cluster then starter cluster on 404. Keep the `params['group']` keys wired so
   the existing `IN GROUP` spelling still parses as a synonym.
   `SINGLESTOREDB_WORKSPACE_GROUP`, if set and nothing else matched, raises a
