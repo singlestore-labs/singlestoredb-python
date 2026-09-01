@@ -523,23 +523,27 @@ checkpoint). Deliberately small, because Parts 1-6 did the structural work:
 - Top-level `export.py` repoints to `v2/export.py` **only after** Fusion cluster support
   lands (see §3). Until then it stays v1.
 
-  **Still v1, and deliberately so.** Fusion cluster support has landed, but the
-  gate was the wrong one: what blocks the repoint is not `CLUSTER` commands
-  existing, it is the **EXPORT** grammar. `fusion/handlers/export.py` resolves
-  its target with `get_workspace_group({})` at every call site, and v2's
-  `ExportService.__init__` and `_get_exports` both take a `Cluster` — a
-  `WorkspaceGroup` has no `/clusters/{id}/egress/*` route behind it. Repointing
-  the shim would break every EXPORT handler with no v2 replacement to move them
-  to. The real precondition is porting the EXPORT Fusion grammar to clusters,
-  which is not on this branch. **Open.**
+  **Landed**, but the gate as first written was the wrong one: what blocked the
+  repoint was not `CLUSTER` commands existing, it was the **EXPORT** grammar.
+  `fusion/handlers/export.py` resolved its target with `get_workspace_group({})`
+  at every call site, and v2's `ExportService.__init__` and `_get_exports` both
+  take a `Cluster` — a `WorkspaceGroup` has no `/clusters/{id}/egress/*` route
+  behind it, so repointing the shim alone would have broken every EXPORT handler
+  with no v2 replacement to move them to. The real precondition was porting the
+  EXPORT Fusion grammar to clusters, which commit `6f9d3a9b` did: the handlers
+  now resolve with `get_cluster({})`, reading `SINGLESTOREDB_WORKSPACE` rather
+  than `SINGLESTOREDB_WORKSPACE_GROUP`. `management/export.py` re-exports
+  `v2/export.py`, and `v1/export.py` is deprecated in place. **Done.**
 
 **As landed**, with two additions the plan did not anticipate:
 
 - `_version_import.DEFAULT_VERSION` (`'v1'` → `'v2'`) had to flip with the option. It is the
   fallback when the option is *explicitly blanked*, not when it is merely unset, so leaving it
   at `'v1'` would have made `management.version=''` mean something different from the default.
-  Consequence: a bare `manage_workspaces()` now raises and points at `manage_clusters()`,
-  where before it returned a v1 manager.
+  Consequence, as first landed: a bare `manage_workspaces()` raised and pointed at
+  `manage_clusters()`, where before it returned a v1 manager. **Reverted** — see the
+  "v1 keeps working" note below. `manage_workspaces()` is now pinned to v1 and does not
+  consult the option at all.
 - The v1 coverage is gated by a `management_v1` pytest marker rather than being deleted:
   module-level `pytestmark` in `tests/test_management_v1.py` plus `TestWorkspaceFusion` in
   `tests/test_fusion.py`. `-m 'not management_v1'` for a normal run, `-m 'management_v1'` for
@@ -552,9 +556,11 @@ checkpoint). Deliberately small, because Parts 1-6 did the structural work:
   the full list of user-visible breaks they have to carry:
 
   1. `manage_files()` and `manage_regions()` resolve to `/v2/` by default.
-  2. `management.version` defaults to `'v2'`: a bare `manage_workspaces()` is deprecated and
-     needs an explicit `version='v1'`, and `manage_clusters()` raises `ManagementError` if
-     the option is pinned to `v1`.
+  2. `management.version` defaults to `'v2'`. v1 is deprecated but still works: every v1
+     entry point still returns a working v1 object, and a bare `manage_workspaces()` still
+     hands back a v1 manager — it emits a `DeprecationWarning` rather than raising.
+     `manage_clusters()` does raise `ManagementError` if the option is pinned to `v1`,
+     since clusters do not exist there.
   3. `manage_cluster` (singular, the legacy self-managed cluster entry point) is **removed**
      from `singlestoredb/__init__.py`'s exports. Zero remaining references in the repo.
   4. `Portal.cluster_id` returns `self.workspace_id` rather than reading
@@ -567,10 +573,81 @@ checkpoint). Deliberately small, because Parts 1-6 did the structural work:
   retitled "Workspaces (v1)" with a deprecation note. `management.timing` is deliberately
   left undocumented: it is internal. **Done.**
 
+- **v1 keeps working. Deprecated is not removed.** The governing rule for this part:
+  flipping the default to v2 may not take any v1 capability away. Warnings are the
+  only consequence of using v1; nothing raises merely because the default moved.
+  Concretely, `manage_workspaces()` is **pinned to v1** rather than resolved through
+  `management.version`, so a bare call still returns a working manager. It is the one
+  public entry point the option does not steer, and deliberately so: the option
+  selects between implementations of a resource that exists at more than one version,
+  and workspaces exist only at v1.
+
+  The asymmetry with `manage_clusters()` — which does consult the option and raises at
+  v1 — is intentional and rests on what the option's value tells you now that it
+  defaults to v2. Reading `'v2'` is no signal, since that is just the default, so it
+  cannot justify refusing a workspace manager. Reading `'v1'` is a signal, because
+  nobody arrives at it without setting it, so `manage_clusters()` is right to treat it
+  as a deliberate request it cannot satisfy.
+  `TestConfigOption.test_the_option_does_not_reach_manage_workspaces` and
+  `TestDeprecatedVersionWarning.test_v1_still_works` hold this down.
+
+- **v1 is deprecated wholesale, not just its workspace vocabulary.**
+  `_version_import._warn_if_deprecated_version` raises a `DeprecationWarning`
+  whenever a public version-neutral entry point *resolves* to v1 — so it fires for
+  an inherited `management.version=v1` as much as for an explicit
+  `version='v1'`. Wired into `manage_files`, `manage_regions`, and (via
+  `_versioned_attr`, the shared dispatch) `get_organization`, `get_secret` and
+  `get_stage`. Three deliberate exclusions:
+
+  - `_resolve_version` itself, so the v1-by-design internal paths
+    (`_manage_workspaces_v1`, and the inference API behind it) stay silent — a
+    warning there is noise the caller cannot act on.
+  - `manage_workspaces`, which keeps its own more specific warning naming
+    `manage_clusters`. It reaches v1 through the silent internal path, so callers
+    get exactly one warning, not two.
+  - `manage_clusters`, which raises `ManagementError` at v1 rather than warning.
+
+  Every module under `v1/` carries a `.. deprecated::` note, and the classes v2
+  genuinely replaced name their replacement. The three modules that only
+  re-export a shared implementation (`files`, `region`, `billing_usage`) mark the
+  *module path* only — a class-level note there would show up on the v2 class
+  too. `TestDeprecatedVersionWarning` and `TestV1IsDocumentedAsDeprecated` in
+  `tests/test_management_versioning.py` enforce all of the above, including the
+  "v2 must stay silent" half. **Done.**
+
+- **`notebook/_objects.py` was silently pinned to v1.** It imported
+  `management.workspace`, whose `get_secret`/`get_stage`/`get_organization` are
+  re-exports of the *v1* implementations, so the notebook `secrets`, `stage` and
+  `organization` globals ignored `management.version` entirely. Those three now
+  come from the version-neutral `management` package. The `workspace` and
+  `workspacegroup` globals still come from the shim, deliberately: v2 has no
+  such resource and there is no `cluster` notebook global to proxy to, so that
+  is a port rather than a version bump. **Open**, and listed below.
+
+  Note what this means for a **v1** notebook environment, since it is the one place
+  the "v1 keeps working" rule asks the caller to do something: those three globals
+  now follow the option, so a v1 environment has to set
+  `SINGLESTOREDB_MANAGEMENT_VERSION=v1` to keep hitting v1 routes. That is the cost
+  of them being neutral at all — before this change they were pinned, so v1 worked
+  and v2 was simply broken. Neutral plus a default is the only shape in which both
+  versions are reachable, and v2 is the right default to pick.
+
 Then, as a **separate follow-up commit** once v2 is confirmed against a live endpoint:
 delete `management/v1/`, `management/workspace.py`, `tests/test_management_v1.py`, and
 `test_fusion.py`'s workspace grammar — i.e. everything the `management_v1` marker now
 selects. Verification step 6 rehearses exactly this, so it should be mechanical.
+
+**Two things have to move before that deletion is mechanical**, and both are
+recorded in the modules themselves rather than only here:
+
+1. `v1/inference_api.py` has **no v2 counterpart** — `inference/*` exists only at
+   v1 — and it is the one module under `v1/` deliberately left un-deprecated,
+   because there is nowhere to send callers. `fusion/handlers/models.py`, the
+   Fusion model commands, and `singlestoredb/ai/{chat,embeddings}.py` all depend
+   on it through `_manage_workspaces_v1`. Deleting `v1/` as-is takes the
+   inference API with it; it needs a version-neutral home first.
+2. The notebook `workspace`/`workspacegroup` globals (above) need a cluster
+   equivalent, or they go too.
 
 ---
 

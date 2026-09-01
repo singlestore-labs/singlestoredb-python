@@ -102,14 +102,15 @@ class TestConfigOption(unittest.TestCase):
             self.assertIsInstance(mgr, V2RM)
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
-    def test_config_option_reaches_manage_workspaces(self, _mock_token):
+    def test_the_option_does_not_reach_manage_workspaces(self, _mock_token):
         """
-        The public factory follows the option; the internal one does not.
+        Neither workspace factory consults the option -- v1 keeps working.
 
-        ``manage_workspaces()`` is a version-neutral entry point, so a global
-        preference for v2 redirects the caller to clusters rather than handing
-        back a v1 manager. ``_manage_workspaces_v1`` is what the v1-only
-        internals call, and it stays pinned.
+        Workspaces exist only at v1, so there is nothing for the option to
+        select between. Flipping the default to v2 must not turn a bare
+        ``manage_workspaces()`` into an error: that would be v1 ceasing to work
+        rather than v1 being deprecated. The deprecation warning is what steers
+        callers to clusters.
         """
         from singlestoredb.management.workspace import manage_workspaces
         from singlestoredb.management.workspace import _manage_workspaces_v1
@@ -117,30 +118,31 @@ class TestConfigOption(unittest.TestCase):
             WorkspaceManager as V1WM,
         )
 
-        with management_version('v2'):
-            with self.assertRaises(ManagementError) as ctx:
-                manage_workspaces(
-                    access_token=FAKE_TOKEN,
-                    base_url=FAKE_BASE_URL,
-                )
-            self.assertIn('manage_clusters', str(ctx.exception))
+        for option in ('v1', 'v2', None):
+            with self.subTest(option=option), management_version(option):
+                for label, factory in (
+                    ('public', manage_workspaces),
+                    ('internal', _manage_workspaces_v1),
+                ):
+                    with self.subTest(factory=label):
+                        mgr = factory(
+                            access_token=FAKE_TOKEN,
+                            base_url=FAKE_BASE_URL,
+                        )
+                        self.assertIsInstance(mgr, V1WM)
+                        self.assertIn('/v1/', mgr._base_url)
 
-            # An explicit v1 still overrides the option...
-            mgr = manage_workspaces(
-                access_token=FAKE_TOKEN,
-                base_url=FAKE_BASE_URL,
-                version='v1',
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_manage_workspaces_still_rejects_an_explicit_other_version(
+        self, _mock_token,
+    ):
+        """Pinning to v1 is not the same as ignoring the argument."""
+        from singlestoredb.management.workspace import manage_workspaces
+        with self.assertRaises(ManagementError) as ctx:
+            manage_workspaces(
+                access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v2',
             )
-            self.assertIsInstance(mgr, V1WM)
-            self.assertIn('/v1/', mgr._base_url)
-
-            # ...and the internal path is immune to the option entirely.
-            internal = _manage_workspaces_v1(
-                access_token=FAKE_TOKEN,
-                base_url=FAKE_BASE_URL,
-            )
-            self.assertIsInstance(internal, V1WM)
-            self.assertIn('/v1/', internal._base_url)
+        self.assertIn('manage_clusters', str(ctx.exception))
 
     def test_default_version_is_a_literal_not_the_config_option(self):
         """
@@ -169,7 +171,7 @@ class TestManageRoutingForAllFactories(unittest.TestCase):
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
     def test_manage_workspaces(self, _mock_token):
-        """Workspaces are v1-only; v2 callers are redirected to clusters."""
+        """Workspaces are v1-only; an explicit v2 is refused, v1 still works."""
         from singlestoredb.management.workspace import manage_workspaces
         from singlestoredb.management.v1.workspace import (
             WorkspaceManager as V1WM,
@@ -183,20 +185,16 @@ class TestManageRoutingForAllFactories(unittest.TestCase):
             access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v1',
         )
         self.assertIsInstance(v1, V1WM)
-        # The option is followed...
-        with management_version('v1'):
-            self.assertIsInstance(
-                manage_workspaces(
-                    access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
-                ),
-                V1WM,
-            )
-        # ...and an unset option falls back to DEFAULT_VERSION, which is now
-        # v2, so a bare call is redirected to clusters like any other v2 call.
-        with management_version(None):
-            with self.assertRaises(ManagementError):
-                manage_workspaces(
-                    access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
+        # A bare call is pinned to v1 rather than resolved through the option,
+        # so flipping the default to v2 left it working. Covered in full by
+        # TestConfigOption.test_the_option_does_not_reach_manage_workspaces.
+        for option in ('v1', None):
+            with management_version(option):
+                self.assertIsInstance(
+                    manage_workspaces(
+                        access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
+                    ),
+                    V1WM,
                 )
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
@@ -401,6 +399,269 @@ class TestManageWorkspacesDeprecation(unittest.TestCase):
             _manage_workspaces_v1(
                 access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL,
             )
+
+
+class TestDeprecatedVersionWarning(unittest.TestCase):
+    """
+    Every public version-neutral entry point warns when it resolves to v1.
+
+    v1 is being wound down, so a caller who lands on it -- whether by passing
+    ``version='v1'`` or by inheriting it from the ``management.version``
+    option -- has to be told. The warning fires after resolution rather than in
+    ``_resolve_version``, so both routes are covered and the internal v1-only
+    paths stay silent (see :class:`TestManageWorkspacesDeprecation`).
+    """
+
+    # (label, callable taking a version kwarg). Each is a public entry point
+    # that can resolve to v1; ``manage_clusters`` is absent because v1 has no
+    # clusters and it raises instead, and ``manage_workspaces`` because it
+    # raises its own more specific warning, asserted separately below.
+    def _entry_points(self):
+        import singlestoredb as s2
+        from singlestoredb.management import get_organization
+        from singlestoredb.management import get_secret
+        from singlestoredb.management import get_stage
+        return [
+            (
+                'manage_files', lambda **kw: s2.manage_files(
+                    access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, **kw,
+                ),
+            ),
+            (
+                'manage_regions', lambda **kw: s2.manage_regions(
+                    access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, **kw,
+                ),
+            ),
+            # The three helpers dispatch through _versioned_attr, so they are
+            # patched out: the assertion is about the warning, not the route.
+            ('get_organization', lambda **kw: get_organization(**kw)),
+            ('get_secret', lambda **kw: get_secret('s', **kw)),
+            ('get_stage', lambda **kw: get_stage('d', **kw)),
+        ]
+
+    @contextlib.contextmanager
+    def _stubbed_helpers(self):
+        """Stub the three version-package helpers at both versions."""
+        with contextlib.ExitStack() as stack:
+            for ver in ('v1', 'v2'):
+                for name in ('get_organization', 'get_secret', 'get_stage'):
+                    stack.enter_context(
+                        patch(
+                            f'singlestoredb.management.{ver}.{name}',
+                            lambda *a: 'ok',
+                            create=True,
+                        ),
+                    )
+            yield
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_explicit_v1_warns(self, _mock_token):
+        with self._stubbed_helpers():
+            for label, call in self._entry_points():
+                with self.subTest(entry_point=label):
+                    with self.assertWarns(DeprecationWarning) as ctx:
+                        call(version='v1')
+                    msg = str(ctx.warning)
+                    self.assertIn('v1', msg)
+                    self.assertIn('deprecated', msg)
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_v1_inherited_from_the_option_warns(self, _mock_token):
+        """A caller who never names a version still gets told."""
+        with self._stubbed_helpers(), management_version('v1'):
+            for label, call in self._entry_points():
+                with self.subTest(entry_point=label):
+                    with self.assertWarns(DeprecationWarning) as ctx:
+                        call()
+                    self.assertIn('deprecated', str(ctx.warning))
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_v2_is_silent(self, _mock_token):
+        """The default version must not warn -- otherwise nobody reads any of them."""
+        with self._stubbed_helpers(), management_version('v2'):
+            for label, call in self._entry_points() + [
+                (
+                    'manage_clusters', lambda **kw: __import__(
+                        'singlestoredb',
+                    ).manage_clusters(
+                        access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, **kw,
+                    ),
+                ),
+            ]:
+                with self.subTest(entry_point=label):
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('error', DeprecationWarning)
+                        call()
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_v1_still_works(self, _mock_token):
+        """
+        Deprecated must not mean broken. This is the point of the whole set.
+
+        v2 is the default, but v1 is still a supported version: every entry
+        point must return a working v1 object, and none may raise merely
+        because the default moved. Warnings are the only consequence.
+        """
+        import singlestoredb as s2
+        from singlestoredb.management.workspace import manage_workspaces
+        with self._stubbed_helpers(), warnings.catch_warnings():
+            warnings.simplefilter('ignore', DeprecationWarning)
+            for label, call in self._entry_points():
+                with self.subTest(entry_point=label):
+                    self.assertIsNotNone(call(version='v1'))
+            # The v1 routes really are v1 routes, not v2 ones relabelled.
+            for label, factory in (
+                ('manage_files', s2.manage_files),
+                ('manage_regions', s2.manage_regions),
+                ('manage_workspaces', manage_workspaces),
+            ):
+                with self.subTest(factory=label):
+                    mgr = factory(
+                        access_token=FAKE_TOKEN,
+                        base_url=FAKE_BASE_URL,
+                        version='v1',
+                    )
+                    self.assertIn('/v1/', mgr._base_url)
+
+    def test_the_deprecated_version_is_not_the_default(self):
+        """Guards the pair: whatever DEPRECATED_VERSION names cannot be the default."""
+        from singlestoredb import config
+        from singlestoredb.management import _version_import as vi
+        self.assertNotEqual(vi.DEPRECATED_VERSION, vi.DEFAULT_VERSION)
+        self.assertEqual(vi.DEFAULT_VERSION, 'v2')
+        self.assertNotEqual(
+            config.get_default('management.version'), vi.DEPRECATED_VERSION,
+        )
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_manage_workspaces_warns_once_not_twice(self, _mock_token):
+        """
+        ``manage_workspaces()`` is the one v1 entry point with its own message.
+
+        It reaches v1 through ``_manage_workspaces_v1``, which is deliberately
+        silent, so the caller gets exactly one warning -- the specific one
+        naming ``manage_clusters`` -- rather than that plus the generic
+        "v1 is deprecated".
+        """
+        from singlestoredb.management.workspace import manage_workspaces
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            manage_workspaces(
+                access_token=FAKE_TOKEN, base_url=FAKE_BASE_URL, version='v1',
+            )
+        deprecations = [
+            w for w in caught if issubclass(w.category, DeprecationWarning)
+        ]
+        self.assertEqual(len(deprecations), 1, [str(w.message) for w in deprecations])
+        self.assertIn('manage_clusters', str(deprecations[0].message))
+
+
+class TestV1IsDocumentedAsDeprecated(unittest.TestCase):
+    """
+    Every module under ``management/v1/`` carries a deprecation note.
+
+    A docstring check rather than a runtime one because most of these are
+    classes built by ``from_dict`` deep in the library, where a warning would
+    be noise the caller cannot act on. The note is what a reader of the API
+    docs and of an IDE tooltip actually sees.
+    """
+
+    #: ``inference/*`` has no v2 counterpart, so there is nowhere to send
+    #: callers and deprecating it would be a lie. Its docstring says so
+    #: explicitly, which the test below checks instead.
+    NOT_DEPRECATED = {'inference_api'}
+
+    def _v1_modules(self):
+        import singlestoredb.management.v1 as v1
+        directory = os.path.dirname(v1.__file__)
+        return sorted(
+            name[:-3] for name in os.listdir(directory)
+            if name.endswith('.py') and name != '__init__.py'
+        )
+
+    def test_every_v1_module_says_it_is_deprecated(self):
+        modules = self._v1_modules()
+        self.assertTrue(modules, 'found no modules under management/v1/')
+        for name in modules:
+            if name in self.NOT_DEPRECATED:
+                continue
+            with self.subTest(module=name):
+                mod = importlib.import_module(f'singlestoredb.management.v1.{name}')
+                self.assertIsNotNone(mod.__doc__, f'v1/{name}.py has no docstring')
+                self.assertIn('deprecated', mod.__doc__.lower())
+
+    def test_the_v1_package_itself_says_it_is_deprecated(self):
+        import singlestoredb.management.v1 as v1
+        self.assertIn('deprecated', v1.__doc__.lower())
+
+    def test_the_workspace_shim_says_it_is_deprecated(self):
+        from singlestoredb.management import workspace
+        self.assertIn('deprecated', workspace.__doc__.lower())
+
+    def test_the_inference_api_explains_why_it_is_exempt(self):
+        """The exemption must be justified in the module, not just in this test."""
+        from singlestoredb.management.v1 import inference_api
+        doc = inference_api.__doc__.lower()
+        self.assertIn('not** deprecated', doc)
+        self.assertIn('no v2 counterpart', doc)
+
+    def test_v1_only_classes_name_their_v2_replacement(self):
+        """
+        The v1 classes that v2 genuinely replaced carry their own note.
+
+        Restricted to classes actually defined under ``v1/``: the modules that
+        only re-export a shared implementation (``files``, ``region``,
+        ``billing_usage``) must *not* grow a class-level note, because that
+        note would show up on the v2 class too.
+        """
+        from singlestoredb.management.v1 import export
+        from singlestoredb.management.v1 import job
+        from singlestoredb.management.v1 import organization
+        from singlestoredb.management.v1 import stage
+        from singlestoredb.management.v1 import workspace
+        expected = [
+            (workspace.Workspace, 'cluster.Cluster'),
+            (workspace.WorkspaceGroup, 'cluster.Cluster'),
+            (workspace.StarterWorkspace, 'cluster.StarterCluster'),
+            (workspace.WorkspaceManager, 'cluster.ClusterManager'),
+            (stage.Stage, 'management.stage.Stage'),
+            (job.JobsManager, 'management.job.JobsManager'),
+            (organization.Organization, 'management.organization.Organization'),
+            (organization.Organizations, 'management.organization.Organizations'),
+            (export.ExportService, 'management.export.ExportService'),
+            (export.ExportStatus, 'management.export.ExportStatus'),
+        ]
+        for cls, replacement in expected:
+            with self.subTest(cls=cls.__name__):
+                doc = cls.__doc__ or ''
+                self.assertIn('.. deprecated::', doc)
+                self.assertIn(replacement, doc)
+
+    def test_shared_classes_are_not_marked_deprecated(self):
+        """
+        ``v1/files.py`` and friends re-export the shared classes.
+
+        Marking those classes deprecated would tell v2 users their own classes
+        are going away, so only the v1 *module path* carries the note.
+        """
+        from singlestoredb.management.v1 import billing_usage as v1_billing
+        from singlestoredb.management.v1 import files as v1_files
+        from singlestoredb.management.v1 import region as v1_region
+        for mod, names in (
+            (v1_files, ('FilesManager', 'FilesObject')),
+            (v1_region, ('Region', 'RegionManager')),
+            (v1_billing, ('BillingUsageItem', 'UsageItem')),
+        ):
+            for name in names:
+                with self.subTest(cls=f'{mod.__name__}.{name}'):
+                    cls = getattr(mod, name)
+                    self.assertNotIn('.. deprecated::', cls.__doc__ or '')
+                    # ...and it really is the shared class, not a v1 subclass.
+                    self.assertFalse(
+                        cls.__module__.startswith('singlestoredb.management.v1'),
+                        f'{name} is defined under v1/, so the note above '
+                        'would be correct and this test is wrong',
+                    )
 
 
 class TestFactoriesAreNotDuplicated(unittest.TestCase):

@@ -1,5 +1,19 @@
 #!/usr/bin/env python
-"""SingleStoreDB Cloud Inference API (v1 only)."""
+"""
+SingleStoreDB Cloud Inference API (v1 only).
+
+Deliberately **not** deprecated, unlike the rest of
+:mod:`singlestoredb.management.v1`: ``inference/*`` has no v2 counterpart, so
+there is nowhere to send callers. Reached through
+:attr:`Organization.inference_apis` on a *v1* organization, which is why
+``fusion/handlers/utils.get_inference_api_manager`` and the
+:mod:`singlestoredb.ai` helpers go through ``_manage_workspaces_v1`` -- the
+internal path that resolves v1 without warning.
+
+Consequence for the planned deletion of ``management/v1/``: this module has to
+move somewhere version-neutral first, or the inference API and the Fusion
+model commands go with it.
+"""
 import os
 from typing import Any
 from typing import Dict

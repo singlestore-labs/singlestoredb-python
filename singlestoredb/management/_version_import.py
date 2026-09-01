@@ -2,6 +2,7 @@
 """Importer for version-specific management API modules."""
 import importlib
 import re
+import warnings
 from typing import Any
 from typing import Optional
 
@@ -14,6 +15,52 @@ _VERSION_RE = re.compile(r'^v\d+$')
 #: option names one -- i.e. when the option has been explicitly blanked out,
 #: since it otherwise carries this same default itself.
 DEFAULT_VERSION = 'v2'
+
+#: The version this SDK is winding down. Everything under
+#: ``singlestoredb.management.v1`` goes away with it, so any *public* entry
+#: point that resolves to it warns -- see :func:`_warn_if_deprecated_version`.
+DEPRECATED_VERSION = 'v1'
+
+
+def _warn_if_deprecated_version(version: str, stacklevel: int = 3) -> None:
+    """
+    Warn if ``version`` names a management API version being wound down.
+
+    Called from the public version-neutral entry points -- the ``manage_*``
+    factories and the ``get_organization``/``get_secret``/``get_stage``
+    helpers -- *after* the version has been resolved, so it fires whether v1
+    was named by the caller or inherited from the ``management.version``
+    option.
+
+    Deliberately not called from :func:`_resolve_version` itself. Several
+    internal paths are v1-only by design and resolve v1 with no v2 route to
+    move to -- ``workspace._manage_workspaces_v1`` and the inference API
+    behind it -- so warning at the resolver would emit noise the caller can do
+    nothing about. :func:`manage_workspaces` is likewise excluded: it raises
+    its own, more specific warning naming ``manage_clusters``.
+
+    Parameters
+    ----------
+    version : str
+        The already-resolved version
+    stacklevel : int, optional
+        Passed through to :func:`warnings.warn`. The default of 3 is right for
+        a public entry point calling this directly: 1 is this function, 2 is
+        the entry point, 3 is the user. Add one per intervening frame.
+
+    """
+    if version != DEPRECATED_VERSION:
+        return
+    warnings.warn(
+        f'management API {DEPRECATED_VERSION} is deprecated and will be '
+        'removed; it has been replaced by '
+        f'{DEFAULT_VERSION}. Stop passing version='
+        f'"{DEPRECATED_VERSION}", and unset the management.version option '
+        '(the SINGLESTOREDB_MANAGEMENT_VERSION environment variable) if it '
+        f'names {DEPRECATED_VERSION}.',
+        DeprecationWarning,
+        stacklevel=stacklevel + 1,
+    )
 
 
 def _resolve_version(
@@ -70,6 +117,11 @@ def _versioned_attr(name: str, version: Optional[str] = None) -> Any:
     future version is free to put them somewhere else again. Each version
     package re-exports its own, so this layer only has to resolve the version.
 
+    Every caller is a public entry point one frame up
+    (``organization.get_organization``, ``organization.get_secret``,
+    ``stage.get_stage``), so the deprecated-version warning is raised here
+    rather than repeated in each of them.
+
     Parameters
     ----------
     name : str
@@ -89,6 +141,8 @@ def _versioned_attr(name: str, version: Optional[str] = None) -> Any:
 
     """
     ver = _resolve_version(version)
+    # +1 for this frame sitting between the helper and the user.
+    _warn_if_deprecated_version(ver, stacklevel=4)
     pkg = _import_versioned_package(ver)
     try:
         return getattr(pkg, name)

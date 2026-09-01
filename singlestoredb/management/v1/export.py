@@ -1,5 +1,14 @@
 #!/usr/bin/env python
-"""SingleStoreDB export service."""
+"""
+SingleStoreDB export service (management API v1) -- **deprecated**.
+
+.. deprecated::
+   Deprecated with the rest of :mod:`singlestoredb.management.v1`. Table egress
+   is driven through ``clusters/{id}/egress/...`` at v2, so an export is owned
+   by a :class:`~singlestoredb.management.cluster.Cluster` rather than by a
+   workspace group. Use :mod:`singlestoredb.management.export`, which is the v2
+   implementation, and the ``CLUSTER``-based Fusion ``EXPORT`` grammar.
+"""
 from __future__ import annotations
 
 import copy
@@ -17,7 +26,13 @@ from .workspace import WorkspaceManager
 
 
 class ExportService(object):
-    """Export service."""
+    """
+    Export service (API v1).
+
+    .. deprecated::
+       Use :class:`singlestoredb.management.export.ExportService`, which takes a
+       :class:`Cluster` instead of a :class:`WorkspaceGroup`.
+    """
 
     database: str
     table: str
@@ -238,6 +253,13 @@ class ExportService(object):
 
 
 class ExportStatus(object):
+    """
+    Status of a v1 export.
+
+    .. deprecated::
+       Use :class:`singlestoredb.management.export.ExportStatus`, which is keyed
+       by a :class:`Cluster` instead of a :class:`WorkspaceGroup`.
+    """
 
     export_id: str
 

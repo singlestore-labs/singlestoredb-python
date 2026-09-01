@@ -570,7 +570,12 @@ def manage_files(
     access_token : str, optional
         The API key or other access token for the files management API
     version : str, optional
-        Version of the API to use
+        Version of the API to use. Defaults to the ``management.version``
+        option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
+        variable), which names ``v2``. Passing ``'v1'`` -- or inheriting it
+        from the option -- raises a :class:`DeprecationWarning`; the Files
+        routes are identical at both versions, so there is nothing to keep
+        v1 for here.
     base_url : str, optional
         Base URL of the files management API
     organization_id : str, optional
@@ -583,7 +588,9 @@ def manage_files(
     """
     from ._version_import import _import_versioned_module
     from ._version_import import _resolve_version
+    from ._version_import import _warn_if_deprecated_version
     ver = _resolve_version(version)
+    _warn_if_deprecated_version(ver)
     mod = _import_versioned_module(ver, 'files')
     return mod.FilesManager(
         access_token=access_token, base_url=base_url,

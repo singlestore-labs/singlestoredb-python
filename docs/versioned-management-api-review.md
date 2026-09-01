@@ -157,9 +157,11 @@ Sphinx-built** — see the correction to step 7 below.
 
 * `manage_cluster` (singular, legacy self-managed clusters) **removed** from
   `singlestoredb/__init__.py`'s exports — zero remaining references in the repo.
-* `management.version` now defaults to `'v2'`: a bare `manage_workspaces()` emits
-  a deprecation warning, and `manage_clusters()` raises `ManagementError` if the
-  option is pinned to `v1`.
+* `management.version` now defaults to `'v2'`. v1 is deprecated but still fully
+  works: a bare `manage_workspaces()` emits a deprecation warning and returns a
+  working v1 manager, and every other v1 entry point warns rather than raising.
+  `manage_clusters()` does raise `ManagementError` if the option is pinned to
+  `v1`, since clusters do not exist there.
 * `Portal.cluster_id` now returns `self.workspace_id` rather than reading
   `_connection_info['cluster']` / `SINGLESTOREDB_CLUSTER`; new
   `Portal.project_id`.

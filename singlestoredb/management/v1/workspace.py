@@ -1,5 +1,37 @@
 #!/usr/bin/env python
-"""SingleStoreDB Workspace Management."""
+"""
+SingleStoreDB Workspace Management (management API v1) -- **deprecated**.
+
+.. deprecated::
+   Workspaces and workspace groups are the v1 deployment vocabulary. v2
+   collapsed the two-level group/workspace hierarchy into the flat
+   :class:`~singlestoredb.management.cluster.Cluster`, so there is no v1-to-v2
+   rename for these classes -- the shape changed:
+
+   Everything below is reached through :mod:`singlestoredb.management.cluster`
+   at v2, which is what the names in the right column belong to:
+
+   ============================================  ====================
+   v1                                            v2
+   ============================================  ====================
+   :func:`singlestoredb.manage_workspaces`       ``manage_clusters``
+   :class:`WorkspaceManager`                     ``ClusterManager``
+   :class:`WorkspaceGroup` + :class:`Workspace`  ``Cluster``
+   :class:`StarterWorkspace`                     ``StarterCluster``
+   :func:`get_workspace_group`                   ``get_cluster``
+   :func:`get_workspace`                         ``get_cluster``
+   :func:`get_stage`                             ``get_stage``
+   ============================================  ====================
+
+   Note that :func:`get_workspace_group` and :func:`get_workspace` both collapse
+   onto ``get_cluster``, and that the environment variable behind them changes
+   with the version: v1 reads ``SINGLESTOREDB_WORKSPACE_GROUP`` and
+   ``SINGLESTOREDB_WORKSPACE``, while v2 reads ``SINGLESTOREDB_WORKSPACE`` alone
+   and finds a cluster ID in it. ``get_stage`` keeps its name but moves to the
+   version-neutral :mod:`singlestoredb.management`.
+
+   This module goes away with :mod:`singlestoredb.management.v1`.
+"""
 from __future__ import annotations
 
 import datetime
@@ -44,13 +76,27 @@ SHAREDTIER_PATH = 'sharedtier/virtualWorkspaces'
 
 
 def get_organization() -> Organization:
-    """Get the organization."""
+    """
+    Get the organization.
+
+    .. deprecated::
+       The v1 implementation. Call
+       :func:`singlestoredb.management.get_organization`, which dispatches on
+       the ``management.version`` option.
+    """
     from ..workspace import _manage_workspaces_v1
     return _manage_workspaces_v1().organization
 
 
 def get_secret(name: str) -> Optional[str]:
-    """Get a secret from the organization."""
+    """
+    Get a secret from the organization.
+
+    .. deprecated::
+       The v1 implementation. Call
+       :func:`singlestoredb.management.get_secret`, which dispatches on the
+       ``management.version`` option.
+    """
     return get_organization().get_secret(name).value
 
 
@@ -59,6 +105,10 @@ def get_workspace_group(
 ) -> WorkspaceGroup:
     """
     Get the workspace group.
+
+    .. deprecated::
+       Workspace groups do not exist at v2. Use
+       :func:`singlestoredb.management.cluster.get_cluster`.
 
     Falls back to ``SINGLESTOREDB_WORKSPACE_GROUP``, the notebook environment's
     group ID. A group is an addressable resource only at v1; the v2 counterpart
@@ -81,7 +131,14 @@ def get_workspace_group(
 def get_stage(
     workspace_group: Optional[Union[WorkspaceGroup, str]] = None,
 ) -> Stage:
-    """Get the stage for the workspace group."""
+    """
+    Get the stage for the workspace group.
+
+    .. deprecated::
+       The v1 implementation. Call
+       :func:`singlestoredb.management.get_stage`, which dispatches on the
+       ``management.version`` option and takes a cluster at v2.
+    """
     return get_workspace_group(workspace_group).stage
 
 
@@ -91,6 +148,11 @@ def get_workspace(
 ) -> Workspace:
     """
     Get a workspace within a workspace group.
+
+    .. deprecated::
+       Workspaces do not exist at v2. Use
+       :func:`singlestoredb.management.cluster.get_cluster`, which reads the
+       same ``SINGLESTOREDB_WORKSPACE`` variable but finds a cluster ID in it.
 
     Falls back to ``SINGLESTOREDB_WORKSPACE``, the notebook environment's name
     for the current deployment. Its value is a workspace ID only in a v1
@@ -112,6 +174,12 @@ def get_workspace(
 class Workspace:
     """
     SingleStoreDB workspace definition.
+
+    .. deprecated::
+       Use :class:`singlestoredb.management.cluster.Cluster`. A v2 cluster is
+       flat: it carries the size and state this class holds together with the
+       region and Stage that :class:`WorkspaceGroup` held, so there is no
+       separate group object to look it up through.
 
     This object is not instantiated directly. It is used in the results
     of API calls on the :class:`WorkspaceManager`. Workspaces are created using
@@ -480,6 +548,15 @@ class Workspace:
 class WorkspaceGroup:
     """
     SingleStoreDB workspace group definition.
+
+    .. deprecated::
+       Use :class:`singlestoredb.management.cluster.Cluster`. v2 has no
+       container resource: what this class held -- region, firewall ranges,
+       Stage, the workspaces inside it -- belongs to the cluster itself, and
+       :meth:`ClusterManager.create_cluster` replaces the two-step
+       create-group-then-create-workspace dance. Grouping is expressed by a
+       :class:`~singlestoredb.management.cluster.Project` instead, which is an
+       organizational unit rather than a deployment parent.
 
     This object is not instantiated directly. It is used in the results
     of API calls on the :class:`WorkspaceManager`. Workspace groups are created using
@@ -890,6 +967,9 @@ class StarterWorkspace:
     """
     SingleStoreDB starter workspace definition.
 
+    .. deprecated::
+       Use :class:`singlestoredb.management.cluster.StarterCluster`.
+
     This object is not instantiated directly. It is used in the results
     of API calls on the :class:`WorkspaceManager`. Existing starter workspaces are
     accessed by either :attr:`WorkspaceManager.starter_workspaces` or by calling
@@ -1124,6 +1204,12 @@ class StarterWorkspace:
 class WorkspaceManager(Manager):
     """
     SingleStoreDB workspace manager.
+
+    .. deprecated::
+       Use :class:`singlestoredb.management.cluster.ClusterManager`, via
+       :func:`singlestoredb.manage_clusters`. ``manage_workspaces()`` warns and
+       requires ``version='v1'`` now that the ``management.version`` option
+       defaults to ``v2``.
 
     This class should be instantiated using :func:`singlestoredb.manage_workspaces`.
 

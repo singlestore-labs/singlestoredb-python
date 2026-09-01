@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 """
-SingleStoreDB Files Management API v1.
+SingleStoreDB Files Management API v1 -- **deprecated**.
+
+.. deprecated::
+   Only the module path is deprecated, along with the rest of
+   :mod:`singlestoredb.management.v1`; the names re-exported below are the
+   shared implementations, not v1-specific ones. Import them from
+   :mod:`singlestoredb.management.files`, and call ``manage_files()`` without
+   ``version='v1'``.
 
 The Files API is identical at v1 and v2 -- ``files/fs/{space}/...`` is
 live-confirmed at both versions -- so the implementation lives in the shared

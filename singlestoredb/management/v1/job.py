@@ -1,5 +1,12 @@
 #!/usr/bin/env python
-"""SingleStoreDB Job Management API v1."""
+"""
+SingleStoreDB Job Management API v1 -- **deprecated**.
+
+.. deprecated::
+   Deprecated with the rest of :mod:`singlestoredb.management.v1`. Use
+   :mod:`singlestoredb.management.job`, whose ``JobsManager`` sends the v2
+   ``targetType`` vocabulary, reached from :attr:`Organization.jobs` at v2.
+"""
 from ..job import Execution as Execution
 from ..job import ExecutionConfig as ExecutionConfig
 from ..job import ExecutionMetadata as ExecutionMetadata
@@ -19,6 +26,9 @@ from ..job import TargetType as TargetType
 class JobsManager(_JobsManager):
     """
     SingleStoreDB scheduled notebook jobs manager (API v1).
+
+    .. deprecated::
+       Use :class:`singlestoredb.management.job.JobsManager`, the v2 class.
 
     The ``jobs`` routes themselves are unchanged from v1 to v2. What changed
     is the ``targetConfig.targetType`` vocabulary: v1's ``'Workspace'`` and

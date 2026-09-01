@@ -340,11 +340,37 @@ with exactly one project does not need to name it.
 Workspaces (v1)
 ...............
 
-.. note:: Workspaces are the **management API v1** deployment vocabulary, which
-   :class:`Cluster` replaces. ``management.version`` now defaults to ``'v2'``,
-   so a bare :func:`manage_workspaces` call is deprecated; pass
-   ``version='v1'`` to ask for v1 explicitly. New code should use
-   :func:`manage_clusters`.
+.. deprecated:: Management API v1 as a whole is deprecated, not just the
+   workspace vocabulary below. ``management.version`` now defaults to ``'v2'``,
+   and every entry point that resolves to v1 raises a
+   :class:`DeprecationWarning` -- whether v1 was named with ``version='v1'`` or
+   inherited from the ``management.version`` option
+   (``SINGLESTOREDB_MANAGEMENT_VERSION``).
+
+   **v1 still works.** Deprecated here means warned about, not removed: every
+   function and class below still operates against the live v1 endpoints, and
+   :func:`manage_workspaces` still returns a working
+   :class:`WorkspaceManager` without being asked for a version. Nothing raises
+   because the default moved. When you are ready to move off v1:
+
+   ==============================  ==============================
+   v1                              v2
+   ==============================  ==============================
+   :func:`manage_workspaces`       :func:`manage_clusters`
+   :class:`WorkspaceManager`       :class:`ClusterManager`
+   :class:`WorkspaceGroup`         :class:`Cluster`
+   :class:`Workspace`              :class:`Cluster`
+   :class:`StarterWorkspace`       :class:`StarterCluster`
+   ==============================  ==============================
+
+   Note that :class:`WorkspaceGroup` and :class:`Workspace` both collapse onto
+   :class:`Cluster`: v2 is flat, so there is no container resource and no
+   two-step create. Grouping is expressed by :class:`Project`, which is an
+   organizational unit rather than a deployment parent.
+
+   :func:`manage_files` and :func:`manage_regions` need no migration -- their
+   routes are identical at both versions, so simply stop passing
+   ``version='v1'``.
 
 The :func:`manage_workspaces` function will return a :class:`WorkspaceManager`
 object that can be used to interact with version 1 of the Management API.
