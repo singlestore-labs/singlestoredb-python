@@ -229,7 +229,9 @@ required by `POST /v2/clusters`, and `WITH SCALE FACTOR` is the other half of
 `sizeConfig`. Both dropped options remain on
 `ClusterManager.create_cluster`.
 
-**No `WITH PASSWORD` until step 4 says so.** **No region-ID alternate** — v2 has
+**No `WITH PASSWORD`** — step 4's probe ran and settled it: neither `POST` nor
+`PATCH /v2/clusters/{id}` honours `adminPassword`, so there is no way to
+implement the clause. **No region-ID alternate** — v2 has
 none. Region resolution matches on both `.name` and `.region_name`, requires
 `WITH PROVIDER` to break ties, and passes an unmatched literal straight through.
 
@@ -248,7 +250,23 @@ keeps working; `SHOW CLUSTER REGIONS` is the v2-native replacement.
 Flagged risk: `singlestoredb.notebook.portal`'s contract is v1-shaped and cannot
 be tested outside a Helios notebook.
 
-## Step 4 — probe the password behaviour, then decide `WITH PASSWORD`
+## Step 4 — probe the password behaviour, then decide `WITH PASSWORD` (done)
+
+> **The probe ran on 2026-08-25** against one throwaway `S-00`
+> (`probe-adminpw-1787666027`, since terminated). Results in
+> `docs/management-api-audit.md` items 8 and 14:
+>
+> 1. `POST` returns a **generated** password, re-confirmed by connecting with
+>    both values — the one sent is refused `1045`, the one returned works.
+> 2. `PATCH /v2/clusters/{id}` **does not honour `adminPassword`** either. It is
+>    accepted, the cluster reports ACTIVE, and the original generated password
+>    keeps working — the same accept-and-silently-ignore shape audit item 9
+>    records for `name`.
+>
+> **Outcome: `WITH PASSWORD` is not implementable and is not offered.**
+> Create-then-PATCH was the only route and it does not work. The audit entries
+> are the upstream bug report. `CREATE CLUSTER` returns the one-row result
+> described below, which is the only place the generated password appears.
 
 Create one throwaway `S-00` cluster and settle what the audit could not:
 
@@ -264,7 +282,7 @@ Create one throwaway `S-00` cluster and settle what the audit could not:
 Outcome drives the grammar:
 - PATCH honors it → add `WITH PASSWORD '<password>'` as create-then-PATCH.
 - PATCH ignores it → omit the clause; the audit entry becomes the upstream bug
-  report.
+  report. ← **this is what happened.**
 
 Either way `CREATE CLUSTER` returns a one-row result carrying `Name`, `ID`,
 `Endpoint`, `AdminPassword` from `Cluster.admin_password` (`v2/cluster.py:297`) —
@@ -360,7 +378,11 @@ duplicating doubles a suite that already runs for tens of minutes.
 # no token needed
 pytest singlestoredb/tests/test_fusion.py -m 'not management' -v
 
-# registry wiring — expect 45 -> ~56 commands, none missing
+# registry wiring — expect 45 -> ~56 commands, none missing.
+#
+# The estimate was exact: 45 on main, 56 once the 11 cluster commands landed.
+# The registry now holds 48, because a later commit (0b0765f5) hid the eight
+# inference and MODEL commands. So: 48, none of the 11 missing, zero MODEL.
 python -c "
 from singlestoredb.fusion import registry
 want={'SHOW CLUSTERS','SHOW CLUSTER REGIONS','SHOW PROJECTS','CREATE CLUSTER',
@@ -412,6 +434,13 @@ pre-commit run --all-files
   At v1 it meant "even if it has workspaces"; a v2 cluster has no children, so
   the semantics are unclear and possibly ignored. Confirm during step 4's probe,
   and drop the clause if it is a no-op.
+
+  **Dropped.** `DROP CLUSTER` offers no `FORCE` clause. The probe did not
+  establish what `force` means at v2 — `DELETE /v2/clusters` still takes the
+  query parameter, and `Cluster.terminate()` documents it as "even if it is in
+  use", which is a different meaning from v1's "even if it has workspaces" and
+  is unconfirmed. Withheld rather than guessed at; the reasoning is in the
+  handler's docstring (`fusion/handlers/cluster.py:685-692`).
 - **Cost and duration.** `TestClusterFusion` creates three real clusters plus a
   suspend/resume cycle, making it the slowest test in the repo. Consider reusing
   one cluster across the read-only SHOW tests.

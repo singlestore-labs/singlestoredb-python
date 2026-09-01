@@ -3,6 +3,10 @@
 Branch: `versioned-management-api`. All work is in the v2 management wrappers
 plus the live v2 test suite. Nothing here touches v1 behavior.
 
+> **Status: all six steps landed.** Each step below carries a note saying where.
+> Step 6 was the one item held for a decision; it was taken and shipped, and the
+> snippet it proposed is not quite what went in — see that step.
+
 ## Background (all verified live against a real org, 2026-08-21)
 
 `POST /v2/clusters` applies `firewallRanges` **asynchronously and outside the
@@ -79,6 +83,9 @@ between deny-all and reachable. Record this reasoning in the docstring.
 Verify: unit test that a mocked `get_cluster` returning `[]`, `[]`,
 `['0.0.0.0/0']` causes exactly three calls and returns the third object.
 
+**Landed** as `ClusterManager._wait_on_firewall` (`v2/cluster.py:1063`), waiting
+on non-empty as described.
+
 ## Step 2 — call it from `create_cluster()`
 
 In `create_cluster()` (`v2/cluster.py:985`), inside the existing
@@ -116,6 +123,9 @@ Verify:
 - Unit: the existing admin-password test still passes (order regression).
 - `pytest singlestoredb/tests/test_management_v2.py -q -m 'not management'`
 
+**Landed** in `create_cluster` (`v2/cluster.py:1440`), with both gates and the
+admin-password ordering as written.
+
 ## Step 3 — opt-in waiting on `Cluster.update()`
 
 Add to `update()` (`v2/cluster.py:400`), after the existing keyword arguments:
@@ -135,6 +145,9 @@ pre-PATCH values, because the API applies the change asynchronously.
 
 Verify: unit test that `update(firewall_ranges=[...], wait_on_active=True)`
 polls and that `update(firewall_ranges=[...])` does not.
+
+**Landed** on `Cluster.update` (`v2/cluster.py:473`), the three keywords
+defaulting as written.
 
 ## Step 4 — simplify the live suite
 
@@ -156,6 +169,8 @@ Verify: `pytest "singlestoredb/tests/test_management_v2.py::TestCluster" -m
 management` — 8 tests, roughly 4 minutes, creates and terminates one real
 cluster. `test_connect` passing here is the whole point: it is the test that
 was timing out at the TCP level.
+
+**Landed.** `_wait_for_firewall` is gone from `test_management_v2.py`.
 
 ## Step 5 — pin the v1 suite's env-following `manage_*` calls
 
@@ -181,7 +196,11 @@ Verify: `SINGLESTOREDB_MANAGEMENT_VERSION=v2 pytest
 singlestoredb/tests/test_management_v1.py -q -m 'not management'` — the v1 unit
 tests must be unaffected by the env var.
 
-## Step 6 — decide `manage_clusters()`'s default (needs a call)
+**Landed** at `test_management_v1.py:1110` and `:1448`, each with a comment
+saying why the pin is there. This is now the project-wide rule: a test pins the
+version it means rather than inheriting the ambient option.
+
+## Step 6 — `manage_clusters()`'s default (decided and shipped)
 
 `manage_clusters()` currently ignores `management.version` entirely and uses
 `DEFAULT_CLUSTER_VERSION = 'v2'` (`management/cluster.py:29`). That conflicts
@@ -205,8 +224,23 @@ the environment without another code change. The explicit-`version='v1'` error
 path stays as-is, since that is a caller asking for something that does not
 exist rather than an ambient default.
 
-Confirm this before implementing — it is the one item here that changes what a
-version-neutral caller gets in a future release.
+**Decided as recommended, and landed — but not with the snippet above.** The
+option now defaults to `'v2'` (the Part 7 flip), so there is no longer a `v1`
+default to step around, and the whole resolution collapses into the shared
+helper every other entry point uses:
+
+```python
+ver = _resolve_version(version, default=DEFAULT_CLUSTER_VERSION)
+if ver == 'v1':
+    raise ManagementError(...)
+```
+
+`management/cluster.py:72`. `DEFAULT_CLUSTER_VERSION` survives as the fallback
+for an *explicitly blanked* option, which is the same role
+`_version_import.DEFAULT_VERSION` plays for `manage_workspaces()`. The `v1` →
+`ManagementError` path is unchanged, and it now fires for an option-supplied
+`v1` as well as an explicit argument — which is the intended reading of "clusters
+do not exist in v1", not a regression.
 
 Verify: unit tests for all four cases — no option set, option `v1`, option
 `v2`, explicit `version='v1'` still raising.

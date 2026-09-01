@@ -365,6 +365,7 @@ an identical comment naming Part 7 so they are trivial to find.
 **Top-level `export.py`** (6-line v1 shim) stays pointed at v1: `fusion/handlers/export.py:9-11`
 imports `_get_exports`/`ExportService`/`ExportStatus` from it and Fusion is v1-only.
 `v1/export.py` and `v2/export.py` are already fully separate and need no change.
+This outlived the branch — see the annotation on Part 7's `export.py` bullet.
 
 ### Part 3 — Vocabulary cleanup
 
@@ -522,6 +523,16 @@ checkpoint). Deliberately small, because Parts 1-6 did the structural work:
 - Top-level `export.py` repoints to `v2/export.py` **only after** Fusion cluster support
   lands (see §3). Until then it stays v1.
 
+  **Still v1, and deliberately so.** Fusion cluster support has landed, but the
+  gate was the wrong one: what blocks the repoint is not `CLUSTER` commands
+  existing, it is the **EXPORT** grammar. `fusion/handlers/export.py` resolves
+  its target with `get_workspace_group({})` at every call site, and v2's
+  `ExportService.__init__` and `_get_exports` both take a `Cluster` — a
+  `WorkspaceGroup` has no `/clusters/{id}/egress/*` route behind it. Repointing
+  the shim would break every EXPORT handler with no v2 replacement to move them
+  to. The real precondition is porting the EXPORT Fusion grammar to clusters,
+  which is not on this branch. **Open.**
+
 **As landed**, with two additions the plan did not anticipate:
 
 - `_version_import.DEFAULT_VERSION` (`'v1'` → `'v2'`) had to flip with the option. It is the
@@ -536,10 +547,25 @@ checkpoint). Deliberately small, because Parts 1-6 did the structural work:
   `management` because `test_management_v1.py` also holds mocked units that need no token —
   those are v1-specific too, and go away with `management/v1/`.
 - `docs/src/whatsnew.rst` is generated at release time by `/bump-version` from the git log,
-  so there is no hand-written entry; the user-visible change (`manage_files()` and
-  `manage_regions()` resolving to `/v2/`, `manage_workspaces()` needing an explicit `v1`)
-  has to be picked up from the commit message at release. `docs/src/api.rst:233-247` still
-  documents workspaces only and has no cluster section — **outstanding**.
+  so there is no hand-written entry. **Confirmed as the policy** — nothing on this branch
+  touches `whatsnew.rst`. That puts the burden on the release commit messages, so here is
+  the full list of user-visible breaks they have to carry:
+
+  1. `manage_files()` and `manage_regions()` resolve to `/v2/` by default.
+  2. `management.version` defaults to `'v2'`: a bare `manage_workspaces()` is deprecated and
+     needs an explicit `version='v1'`, and `manage_clusters()` raises `ManagementError` if
+     the option is pinned to `v1`.
+  3. `manage_cluster` (singular, the legacy self-managed cluster entry point) is **removed**
+     from `singlestoredb/__init__.py`'s exports. Zero remaining references in the repo.
+  4. `Portal.cluster_id` returns `self.workspace_id` rather than reading
+     `_connection_info['cluster']` / `SINGLESTOREDB_CLUSTER`; new `Portal.project_id`.
+  5. `TTLProperty.reset()` → `reset(obj)`, needed to invalidate the new per-instance cache.
+     No callers in the library, so this only matters if anything downstream used it.
+
+- `docs/src/api.rst` now has a cluster section covering `manage_clusters`,
+  `ClusterManager`, `Cluster`, `StarterCluster` and `Project`, and the workspace half is
+  retitled "Workspaces (v1)" with a deprecation note. `management.timing` is deliberately
+  left undocumented: it is internal. **Done.**
 
 Then, as a **separate follow-up commit** once v2 is confirmed against a live endpoint:
 delete `management/v1/`, `management/workspace.py`, `tests/test_management_v1.py`, and

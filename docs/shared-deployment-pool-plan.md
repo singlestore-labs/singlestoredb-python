@@ -167,7 +167,7 @@ applied after `addopts`, so `-n 0` still gives a serial run and an explicit
 `--dist` still wins. 3 rather than `auto` because the ceiling is the API's
 tolerance for concurrent provisioning, not the host's CPUs.
 
-Two things parallelism does not fix, and one it breaks:
+One thing parallelism does not fix, and three it breaks:
 
 * `TestClusterFusionCreateDrop::test_create_drop_cluster` is a single test of
   most of twenty minutes. One test cannot be split, so ~1200s is the floor on
