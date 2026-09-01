@@ -228,10 +228,126 @@ Management API
 --------------
 
 The management objects allow you to create, destroy, and interact with
-workspaces in the SingleStoreDB Cloud.
+deployments in the SingleStoreDB Cloud.
+
+The API is versioned. Version 2 is the default, and calls a deployment a
+:class:`Cluster`; version 1 called it a :class:`Workspace` inside a
+:class:`WorkspaceGroup`. Which version you get is controlled by the
+``management.version`` option (the ``SINGLESTOREDB_MANAGEMENT_VERSION``
+environment variable), or by passing ``version=`` to the ``manage_*``
+functions.
+
+The :func:`manage_clusters` function will return a :class:`ClusterManager`
+object that can be used to interact with the Management API. The v1 entry
+point, :func:`manage_workspaces`, is documented under `Workspaces (v1)`_.
+
+.. currentmodule:: singlestoredb
+
+.. autosummary::
+   :toctree: generated/
+
+   manage_clusters
+
+
+ClusterManager
+..............
+
+ClusterManager objects are returned by the :func:`manage_clusters` function.
+They allow you to retrieve information about the clusters in your account, or
+create new ones. Clusters are flat: unlike v1 workspaces they are not contained
+in a group, so there is nothing to resolve before reaching one.
+
+.. currentmodule:: singlestoredb.management.cluster
+
+.. autosummary::
+   :toctree: generated/
+
+   ClusterManager
+   ClusterManager.organization
+   ClusterManager.organizations
+   ClusterManager.billing
+   ClusterManager.clusters
+   ClusterManager.starter_clusters
+   ClusterManager.projects
+   ClusterManager.regions
+   ClusterManager.shared_tier_regions
+   ClusterManager.create_cluster
+   ClusterManager.create_starter_cluster
+   ClusterManager.get_cluster
+   ClusterManager.get_starter_cluster
+   ClusterManager.get_project
+
+
+Cluster
+.......
+
+Cluster objects are retrieved from :meth:`ClusterManager.get_cluster` or by
+retrieving an element from :attr:`ClusterManager.clusters`. They are created
+with :meth:`ClusterManager.create_cluster`, which replaces v1's two-step
+workspace group plus workspace creation.
+
+.. autosummary::
+   :toctree: generated/
+
+   Cluster
+   Cluster.organization
+   Cluster.stage
+   Cluster.admin_password
+   Cluster.connect
+   Cluster.refresh
+   Cluster.update
+   Cluster.suspend
+   Cluster.resume
+   Cluster.terminate
+
+
+StarterCluster
+..............
+
+Starter clusters are the shared-tier deployment. They are created with
+:meth:`ClusterManager.create_starter_cluster` and retrieved from
+:meth:`ClusterManager.get_starter_cluster` or
+:attr:`ClusterManager.starter_clusters`. They support a smaller surface than a
+:class:`Cluster` — there is no update, suspend or resume.
+
+.. autosummary::
+   :toctree: generated/
+
+   StarterCluster
+   StarterCluster.organization
+   StarterCluster.stage
+   StarterCluster.connect
+   StarterCluster.refresh
+   StarterCluster.create_user
+   StarterCluster.terminate
+
+
+Project
+.......
+
+Projects group the clusters in an organization. Project objects are retrieved
+from :meth:`ClusterManager.get_project` or by retrieving an element from
+:attr:`ClusterManager.projects`, and a project is what
+:meth:`ClusterManager.create_cluster` places a new cluster in. An organization
+with exactly one project does not need to name it.
+
+.. autosummary::
+   :toctree: generated/
+
+   Project
+
+
+Workspaces (v1)
+...............
+
+.. note:: Workspaces are the **management API v1** deployment vocabulary, which
+   :class:`Cluster` replaces. ``management.version`` now defaults to ``'v2'``,
+   so a bare :func:`manage_workspaces` call is deprecated; pass
+   ``version='v1'`` to ask for v1 explicitly. New code should use
+   :func:`manage_clusters`.
 
 The :func:`manage_workspaces` function will return a :class:`WorkspaceManager`
-object that can be used to interact with the Management API.
+object that can be used to interact with version 1 of the Management API.
 
 .. currentmodule:: singlestoredb
 
@@ -305,7 +421,8 @@ Workspaces are created within WorkspaceGroups. They can be created using either
 Region
 ......
 
-Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
+Region objects are accessed from the :attr:`ClusterManager.regions` attribute,
+or from :attr:`WorkspaceManager.regions` at v1.
 
 .. currentmodule:: singlestoredb.management.region
 
@@ -318,8 +435,9 @@ Region objects are accessed from the :attr:`WorkspaceManager.regions` attribute.
 Organization
 ............
 
-Organization objects are retrieved from :attr:`WorkspaceManager.organization`.
-They provide access to organization-level resources and operations.
+Organization objects are retrieved from :attr:`ClusterManager.organization`, or
+from :attr:`WorkspaceManager.organization` at v1. They provide access to
+organization-level resources and operations.
 
 .. currentmodule:: singlestoredb.management.organization
 
@@ -412,10 +530,9 @@ The following classes are used as parameters and return values in the jobs API.
 Stage Files
 ...........
 
-To interact with files in your Stage, use the
-:attr:`WorkspaceGroup.stage` attribute.
-It will return a :class:`Stage` object which defines the following
-methods and attributes.
+To interact with files in your Stage, use the :attr:`Cluster.stage` attribute
+(:attr:`WorkspaceGroup.stage` at v1). It will return a :class:`Stage` object
+which defines the following methods and attributes.
 
 .. currentmodule:: singlestoredb.management.workspace
 

@@ -39,7 +39,8 @@ class FilesObject:
     It can belong to either a deployment's stage or personal/shared space.
 
     This object is not instantiated directly. It is used in the results
-    of various operations in ``WorkspaceGroup.stage``, ``FilesManager.personal_space``,
+    of various operations in ``Cluster.stage`` (``WorkspaceGroup.stage`` at
+    management API v1), ``FilesManager.personal_space``,
     ``FilesManager.shared_space`` and ``FilesManager.models_space`` methods.
 
     """
