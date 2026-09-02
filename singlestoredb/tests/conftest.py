@@ -76,6 +76,7 @@ def pytest_configure(config: pytest.Config) -> None:
     # Before any test module is imported: a setUpClass can create clusters,
     # and they have to be tracked from the first one.
     _test_utils().install_deployment_tracking()
+    _install_sweep_fallbacks()
 
     # Prevent double initialization - pytest_configure can be called multiple times
     if _container_manager is not None:
@@ -207,6 +208,79 @@ def _sweep_live_deployments(owner: Optional[str] = None) -> None:
             print(f'  - {label}')
         print('=' * 70)
         logger.info(f'Swept {len(removed)} leftover deployment(s)')
+
+    # A deployment still tracked after a full sweep is one the sweep could not
+    # terminate -- it is live and billing. Say so loudly rather than letting
+    # the run end quietly; `python -m singlestoredb.tests.cleanup_deployments`
+    # is the way to reap it.
+    if owner is None:
+        try:
+            stranded = _test_utils().tracked_labels()
+        except Exception:  # pragma: no cover - shutdown path
+            return
+        if stranded:
+            print('\n' + '!' * 70)
+            print(
+                'STILL LIVE -- these deployments could not be terminated and '
+                'are costing money:',
+            )
+            for label in stranded:
+                print(f'  - {label}')
+            print(
+                'Reap them with: python -m singlestoredb.tests.'
+                'cleanup_deployments --yes',
+            )
+            print('!' * 70)
+            logger.error(f'{len(stranded)} deployment(s) left live')
+
+
+#: Set once the atexit/signal fallbacks are in place, so a repeated
+#: ``pytest_configure`` does not stack handlers.
+_sweep_fallbacks_installed = False
+
+
+def _install_sweep_fallbacks() -> None:
+    """
+    Sweep leftover deployments even when ``pytest_unconfigure`` never runs.
+
+    ``pytest_unconfigure`` is the normal path, but it is skipped whenever the
+    process does not shut down through pytest: a cancelled CI job, a killed
+    xdist worker holding the shared cluster pool, or an interpreter crash. The
+    pool is the expensive case -- it is attributed to owner ``''``, so no
+    per-class sweep ever touches it, and ``pytest_unconfigure`` is its only
+    scheduled cleanup.
+
+    ``atexit`` covers ``sys.exit`` and an unhandled exception; a SIGTERM
+    handler covers the cancellation case, since Python does not run ``atexit``
+    for a signal-terminated process. SIGKILL is unreachable by design -- that
+    is what ``cleanup_deployments.py`` is for.
+    """
+    global _sweep_fallbacks_installed
+    if _sweep_fallbacks_installed:
+        return
+    _sweep_fallbacks_installed = True
+
+    import atexit
+    import signal
+
+    # Idempotent: a successful sweep empties the tracking list, so the normal
+    # path leaves these with nothing to do.
+    atexit.register(_sweep_live_deployments)
+
+    previous = signal.getsignal(signal.SIGTERM)
+
+    def on_sigterm(signum: int, frame: Any) -> None:
+        _sweep_live_deployments()
+        if callable(previous):
+            previous(signum, frame)
+        elif previous == signal.SIG_DFL:
+            signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            os.kill(os.getpid(), signum)
+
+    try:
+        signal.signal(signal.SIGTERM, on_sigterm)
+    except ValueError:  # pragma: no cover - not the main thread
+        logger.debug('Not the main thread; no SIGTERM sweep installed')
 
 
 def pytest_unconfigure(config: pytest.Config) -> None:

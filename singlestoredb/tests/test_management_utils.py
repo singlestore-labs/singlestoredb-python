@@ -788,10 +788,29 @@ class TestDeploymentTracking(unittest.TestCase):
 
     def test_a_deployment_that_no_longer_exists_is_left_alone(self):
         obj = self._deployment('wg-1')
-        obj.refresh = MagicMock(side_effect=KeyError('gone'))
+        obj.refresh = MagicMock(
+            side_effect=ManagementError(errno=404, msg='not found'),
+        )
         self.utils.track(obj)
         self.assertEqual(self.utils.cleanup_tracked(), [])
         self.assertIsNone(obj.terminated_with)
+        self.assertEqual(self.utils._tracked, [])
+
+    def test_a_refresh_that_fails_transiently_is_still_terminated(self):
+        """Only a 404 means gone. Guessing "gone" on a 503 would skip the
+        termination and leave the deployment running and billing."""
+        for exc in (
+            ManagementError(errno=503, msg='service unavailable'),
+            KeyError('connection dropped'),
+        ):
+            obj = self._deployment('wg-1')
+            obj.refresh = MagicMock(side_effect=exc)
+            self.utils.track(obj)
+            self.assertEqual(
+                self.utils.cleanup_tracked(), ["Deployment 'wg-1'"],
+                f'{exc!r} was taken as already gone',
+            )
+            self.assertTrue(obj.terminated_with)
 
     def test_children_are_terminated_before_their_parents(self):
         group = self._deployment('wg-1')
@@ -829,6 +848,90 @@ class TestDeploymentTracking(unittest.TestCase):
         # reported against whatever happens to run next.
         self.assertEqual(self.utils.cleanup_tracked(), ["Deployment 'b'"])
         self.assertTrue(second.terminated_with)
+
+        # 'a' stays tracked so the end-of-session sweep retries it. Dropping it
+        # here is how one transient error used to leak a cluster for good.
+        self.assertEqual(self.utils.tracked_labels(), ["Deployment 'a'"])
+        first.terminate = MagicMock()
+        self.assertEqual(self.utils.cleanup_tracked(), ["Deployment 'a'"])
+        self.assertEqual(self.utils.tracked_labels(), [])
+
+    def test_a_create_that_fails_while_waiting_still_tracks_the_orphan(self):
+        """The headline leak: a creator makes the deployment and only then
+        waits for it, so a wait that times out raises after the server has a
+        live cluster. Tracking wraps the return value, so without recovery
+        nothing registers it -- silently, with no summary line."""
+        orphan = self._deployment('cl-test-shared-0-abc')
+        receiver = SimpleNamespace(clusters=[orphan])
+
+        def create_then_fail_waiting(recv, name, **kwargs):
+            # What create_cluster does: the cluster exists by now, and the
+            # wait is what raises.
+            raise ManagementError(msg=f'Exceeded waiting time for {name}')
+
+        wrapped = self.utils._tracking_wrapper(
+            create_then_fail_waiting, lambda recv: recv.clusters,
+        )
+        with self.assertRaises(ManagementError):
+            wrapped(receiver, 'cl-test-shared-0-abc', wait_on_active=True)
+
+        self.assertEqual(
+            self.utils.tracked_labels(),
+            [
+                "Deployment 'cl-test-shared-0-abc' (left behind by a failed "
+                'create)',
+            ],
+        )
+        self.assertEqual(len(self.utils.cleanup_tracked()), 1)
+        self.assertTrue(orphan.terminated_with)
+
+    def test_an_interrupt_during_the_wait_also_recovers_the_orphan(self):
+        """Ctrl-C during wait_on_active leaves the same live cluster a timeout
+        does, so the wrapper catches BaseException rather than Exception."""
+        orphan = self._deployment('cl-1')
+        receiver = SimpleNamespace(clusters=[orphan])
+
+        def interrupted(recv, name, **kwargs):
+            raise KeyboardInterrupt
+
+        wrapped = self.utils._tracking_wrapper(
+            interrupted, lambda recv: recv.clusters,
+        )
+        with self.assertRaises(KeyboardInterrupt):
+            wrapped(receiver, 'cl-1')
+        self.assertEqual(len(self.utils._tracked), 1)
+
+    def test_a_mocked_receiver_is_not_searched_for_orphans(self):
+        """The unit tests drive these creators with patched transports; a
+        failure there names nothing real to recover."""
+        def boom(recv, name, **kwargs):
+            raise ManagementError(msg='boom')
+
+        wrapped = self.utils._tracking_wrapper(boom, lambda recv: recv.clusters)
+        with self.assertRaises(ManagementError):
+            wrapped(MagicMock(), 'cl-1')
+        self.assertEqual(self.utils._tracked, [])
+
+    def test_orphan_recovery_matches_on_the_name_keyword_too(self):
+        orphan = self._deployment('cl-1')
+        receiver = SimpleNamespace(clusters=[self._deployment('other'), orphan])
+        self.utils._recover_orphan(
+            receiver, lambda recv: recv.clusters, (), {'name': 'cl-1'},
+        )
+        self.assertEqual(len(self.utils._tracked), 1)
+        self.assertIs(self.utils._tracked[0][2], orphan)
+
+    def test_orphan_recovery_never_raises(self):
+        """It runs while the caller's exception is propagating, so a failure
+        here must not replace the real error."""
+        receiver = SimpleNamespace()
+        self.utils._recover_orphan(
+            receiver,
+            lambda recv: recv.clusters,  # AttributeError
+            ('cl-1',),
+            {},
+        )
+        self.assertEqual(self.utils._tracked, [])
 
     def test_untrack_drops_a_deployment(self):
         obj = self.utils.track(self._deployment('a'))
@@ -868,7 +971,7 @@ class TestDeploymentTracking(unittest.TestCase):
         import importlib
 
         self.utils.install_deployment_tracking()
-        for module_name, class_name, method_name in self.utils._CREATORS:
+        for module_name, class_name, method_name, _ in self.utils._CREATORS:
             klass = getattr(importlib.import_module(module_name), class_name)
             method = getattr(klass, method_name, None)
             self.assertIsNotNone(
@@ -878,6 +981,28 @@ class TestDeploymentTracking(unittest.TestCase):
                 hasattr(method, '__wrapped__'),
                 f'{class_name}.{method_name} is not tracked',
             )
+
+    def test_every_creator_takes_name_first_and_has_a_finder(self):
+        """``_recover_orphan`` reads the name from the first argument and
+        searches the collection the finder returns, so both have to hold."""
+        import importlib
+        import inspect
+
+        for module_name, class_name, method_name, finder in \
+                self.utils._CREATORS:
+            klass = getattr(importlib.import_module(module_name), class_name)
+            method = getattr(klass, method_name)
+            params = list(
+                inspect.signature(
+                    getattr(method, '__wrapped__', method),
+                ).parameters,
+            )
+            self.assertEqual(
+                params[:2], ['self', 'name'],
+                f'{class_name}.{method_name} no longer takes name first, so '
+                'a failed create would not be recoverable',
+            )
+            self.assertTrue(callable(finder))
 
 
 class TestSharedClusterPool(unittest.TestCase):

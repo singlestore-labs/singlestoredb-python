@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 
 import singlestoredb as s2
 from singlestoredb.connection import build_params
+from singlestoredb.exceptions import ManagementError
 
 
 logger = logging.getLogger(__name__)
@@ -369,6 +370,50 @@ def track(obj: Any, label: str = '') -> Any:
     return obj
 
 
+def _recover_orphan(
+    receiver: Any,
+    finder: Any,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
+) -> None:
+    """
+    Track the deployment a *failed* creation call left running.
+
+    Every creator brings the deployment into existence and only then waits for
+    it: ``create_cluster`` has its ``get_cluster`` before ``_wait_on_state``
+    (``management/v2/cluster.py:1426``). So a wait that times out, hits a
+    transient error, or is interrupted raises *after* the server has a live,
+    billable deployment -- and since tracking wraps the return value, nothing
+    is ever registered. That leak is silent: no per-class sweep, no
+    end-of-session sweep, and no mention in the summary.
+
+    The name is the first argument to every creator, so the orphan can be
+    found by listing and matching on it. Failures here are logged, not raised:
+    this runs while another exception is propagating, and replacing the
+    caller's error with a cleanup error would hide the real failure.
+    """
+    name = kwargs.get('name') or (args[0] if args else None)
+    if not isinstance(name, str):
+        return
+
+    try:
+        for obj in finder(receiver):
+            if getattr(obj, 'name', None) != name:
+                continue
+            track(
+                obj,
+                '{} {!r} (left behind by a failed create)'.format(
+                    type(obj).__name__, name,
+                ),
+            )
+            return
+    except Exception as exc:
+        logger.warning(
+            f'Could not look for a deployment named {name!r} left behind by '
+            f'a failed create; it may still be running: {exc}',
+        )
+
+
 def untrack(obj: Any) -> None:
     """Forget a deployment that has been terminated."""
     for i, entry in reversed(list(enumerate(_tracked))):
@@ -416,34 +461,75 @@ def _creator_is_mocked(target: Any) -> bool:
     )
 
 
-#: (module, class, method) triples that bring a billable deployment into
-#: existence. Wrapping them is what makes tracking automatic, so a new test
-#: cannot leak a cluster by forgetting to register it.
+#: (module, class, method, finder) tuples for the calls that bring a billable
+#: deployment into existence. Wrapping them is what makes tracking automatic,
+#: so a new test cannot leak a cluster by forgetting to register it.
+#:
+#: ``finder`` takes the receiver -- the manager, or the group for
+#: ``WorkspaceGroup.create_workspace`` -- and returns the collection to search
+#: for a deployment the call created but did not return. See
+#: :func:`_recover_orphan`.
 _CREATORS = [
     (
         'singlestoredb.management.v1.workspace', 'WorkspaceManager',
         'create_workspace_group',
+        lambda recv: recv.workspace_groups,
     ),
     (
         'singlestoredb.management.v1.workspace', 'WorkspaceManager',
         'create_workspace',
+        # WorkspaceManager has no `workspaces` of its own, so the search goes
+        # group by group. Only ever walked on the failure path.
+        lambda recv: [w for g in recv.workspace_groups for w in g.workspaces],
     ),
     (
         'singlestoredb.management.v1.workspace', 'WorkspaceManager',
         'create_starter_workspace',
+        lambda recv: recv.starter_workspaces,
     ),
     (
         'singlestoredb.management.v1.workspace', 'WorkspaceGroup',
         'create_workspace',
+        lambda recv: recv.workspaces,
     ),
-    ('singlestoredb.management.v2.cluster', 'ClusterManager', 'create_cluster'),
+    (
+        'singlestoredb.management.v2.cluster', 'ClusterManager',
+        'create_cluster',
+        lambda recv: recv.clusters,
+    ),
     (
         'singlestoredb.management.v2.cluster', 'ClusterManager',
         'create_starter_cluster',
+        lambda recv: recv.starter_clusters,
     ),
 ]
 
 _tracking_installed = False
+
+
+def _tracking_wrapper(func: Any, finder: Any) -> Any:
+    """
+    Wrap a creation method so its result -- or its orphan -- gets tracked.
+
+    On success the returned deployment is registered. On failure the
+    deployment the call already brought into existence is looked up and
+    registered instead; see :func:`_recover_orphan` for why one exists.
+    """
+    import functools
+
+    @functools.wraps(func)
+    def wrapper(receiver: Any, *args: Any, **kwargs: Any) -> Any:
+        try:
+            return track(func(receiver, *args, **kwargs))
+        except BaseException:
+            # BaseException, not Exception: a KeyboardInterrupt during the
+            # twenty-minute wait_on_active wait leaves the same live
+            # deployment behind as a timeout does.
+            if not _is_mocked(receiver):
+                _recover_orphan(receiver, finder, args, kwargs)
+            raise
+
+    return wrapper
 
 
 def install_deployment_tracking() -> None:
@@ -459,19 +545,15 @@ def install_deployment_tracking() -> None:
         return
     _tracking_installed = True
 
-    import functools
     import importlib
 
-    def wrap(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            return track(func(*args, **kwargs))
-        return wrapper
-
-    for module_name, class_name, method_name in _CREATORS:
+    for module_name, class_name, method_name, finder in _CREATORS:
         try:
             klass = getattr(importlib.import_module(module_name), class_name)
-            setattr(klass, method_name, wrap(getattr(klass, method_name)))
+            setattr(
+                klass, method_name,
+                _tracking_wrapper(getattr(klass, method_name), finder),
+            )
         except AttributeError as exc:
             # A renamed method must not silently stop being tracked.
             logger.warning(
@@ -486,14 +568,31 @@ def _is_gone(obj: Any) -> bool:
 
     The local copy is stale -- a test that terminated in its own teardown
     still holds an object whose ``terminated_at`` is None -- so ask the
-    server. A refresh that fails is taken as gone, which is the whole point
-    of the question for anything that 404s.
+    server.
+
+    Only a 404 counts as gone. Any other refresh failure reports "still
+    there": answering "gone" on a transient 5xx or a dropped connection
+    skips the termination below, and a cluster left running costs money,
+    whereas a redundant terminate on something already gone is one wasted
+    round trip.
     """
     if hasattr(obj, 'refresh'):
         try:
             obj.refresh()
-        except Exception:
-            return True
+        except ManagementError as exc:
+            if exc.errno == 404:
+                return True
+            logger.warning(
+                f'Could not refresh {obj!r} to see whether it is already '
+                f'gone; assuming it is still live: {exc}',
+            )
+            return False
+        except Exception as exc:
+            logger.warning(
+                f'Could not refresh {obj!r} to see whether it is already '
+                f'gone; assuming it is still live: {exc}',
+            )
+            return False
     if getattr(obj, 'terminated_at', None) is not None:
         return True
     return str(getattr(obj, 'state', '') or '').upper() in (
@@ -522,20 +621,36 @@ def cleanup_tracked(owner: Optional[str] = None) -> List[str]:
     # Last created, first terminated: a workspace goes before the group that
     # holds it.
     entries = [x for x in reversed(_tracked) if owner is None or x[0] == owner]
-    for entry in entries:
-        _tracked.remove(entry)
 
     removed = []
-    for _, label, obj in entries:
+    for entry in entries:
+        _, label, obj = entry
         if _is_gone(obj):
+            _tracked.remove(entry)
             continue
         try:
             terminate(obj)
         except Exception as exc:
+            # Deliberately left in ``_tracked``, so the end-of-session sweep
+            # tries again. Dropping the entry first -- as this used to -- meant
+            # one transient error was enough to leak the deployment for good,
+            # and it did not even appear in the summary below.
             logger.warning(f'Could not terminate {label}: {exc}')
         else:
+            _tracked.remove(entry)
             removed.append(label)
     return removed
+
+
+def tracked_labels() -> List[str]:
+    """
+    Labels of every deployment still tracked, i.e. not yet swept.
+
+    After the end-of-session sweep this should be empty; anything left is a
+    deployment that is still live and still costing money, so conftest
+    reports it rather than letting the run end quietly.
+    """
+    return [label for _, label, _ in _tracked]
 
 
 #
