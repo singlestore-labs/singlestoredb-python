@@ -740,6 +740,8 @@ class TestDeploymentTracking(unittest.TestCase):
         self.utils = utils
         self.saved = list(utils._tracked)
         utils._tracked.clear()
+        self.saved_in_flight = list(utils._in_flight)
+        utils._in_flight.clear()
         self.addCleanup(self._restore)
         self.owner = utils.get_owner()
         self.addCleanup(lambda: utils.set_owner(self.owner))
@@ -747,6 +749,8 @@ class TestDeploymentTracking(unittest.TestCase):
     def _restore(self):
         self.utils._tracked.clear()
         self.utils._tracked.extend(self.saved)
+        self.utils._in_flight.clear()
+        self.utils._in_flight.extend(self.saved_in_flight)
 
     def _deployment(self, name, terminated_at=None, state='ACTIVE'):
         """A stand-in that is not a Mock, so tracking does not skip it."""
@@ -910,6 +914,94 @@ class TestDeploymentTracking(unittest.TestCase):
         wrapped = self.utils._tracking_wrapper(boom, lambda recv: recv.clusters)
         with self.assertRaises(ManagementError):
             wrapped(MagicMock(), 'cl-1')
+        self.assertEqual(self.utils._tracked, [])
+
+    def test_a_real_manager_with_a_patched_post_is_not_searched_either(self):
+        """The receiver of these creators is the manager itself, which has no
+        ``_manager``. Checking for one made a real manager with a patched
+        ``_post`` -- what the unit tests drive -- read as live, so the recovery
+        fired an actual management API GET from a unit test."""
+        receiver = SimpleNamespace(_get=object(), _post=MagicMock())
+
+        def boom(recv, name, **kwargs):
+            raise ManagementError(msg='boom')
+
+        def finder(recv):
+            raise AssertionError('recovery called the live API')
+
+        wrapped = self.utils._tracking_wrapper(boom, finder)
+        with self.assertRaises(ManagementError):
+            wrapped(receiver, 'cl-1')
+        self.assertEqual(self.utils._tracked, [])
+        self.assertEqual(self.utils._in_flight, [])
+
+    def test_a_create_killed_mid_wait_is_recovered_by_the_sweep(self):
+        """The second half of the same leak: a create that has POSTed and is
+        blocked in ``wait_on_active`` is not tracked yet, and the wrapper's
+        ``except`` never runs if the process is killed. So the shutdown sweep
+        recovers whatever is in flight before it walks ``_tracked``."""
+        orphan = self._deployment('cl-1')
+        receiver = SimpleNamespace(clusters=[orphan])
+
+        def create_then_wait(recv, name, **kwargs):
+            # Stands in for the sweep firing from SIGTERM/atexit while the
+            # wait is still blocked.
+            self.assertEqual(len(self.utils._in_flight), 1)
+            self.utils.recover_in_flight()
+            raise AssertionError('the process would have been killed here')
+
+        wrapped = self.utils._tracking_wrapper(
+            create_then_wait, lambda recv: recv.clusters,
+        )
+        with self.assertRaises(AssertionError):
+            wrapped(receiver, 'cl-1', wait_on_active=True)
+
+        # Recovered once, not twice: the entry is popped as it is drained, so
+        # the wrapper's own except finds nothing left to recover.
+        self.assertEqual(
+            self.utils.tracked_labels(),
+            ["Deployment 'cl-1' (left behind by a failed create)"],
+        )
+        self.assertEqual(self.utils._in_flight, [])
+
+    def test_a_finished_create_leaves_nothing_in_flight(self):
+        receiver = SimpleNamespace(clusters=[])
+
+        def finder(recv):
+            return recv.clusters
+
+        made = self._deployment('cl-1')
+        wrapped = self.utils._tracking_wrapper(
+            lambda recv, name, **kwargs: made, finder,
+        )
+        self.assertIs(wrapped(receiver, 'cl-1'), made)
+        self.assertEqual(self.utils._in_flight, [])
+        self.assertEqual(len(self.utils._tracked), 1)
+
+        def boom(recv, name, **kwargs):
+            raise ManagementError(msg='boom')
+
+        receiver.clusters = [self._deployment('cl-2')]
+        with self.assertRaises(ManagementError):
+            self.utils._tracking_wrapper(boom, finder)(receiver, 'cl-2')
+        self.assertEqual(self.utils._in_flight, [])
+        # The orphan was recovered once, not once per code path.
+        self.assertEqual(len(self.utils._tracked), 2)
+
+    def test_a_mocked_receiver_never_enters_the_in_flight_list(self):
+        def create(recv, name, **kwargs):
+            raise AssertionError(str(self.utils._in_flight))
+
+        wrapped = self.utils._tracking_wrapper(
+            create, lambda recv: recv.clusters,
+        )
+        with self.assertRaises(AssertionError) as raised:
+            wrapped(MagicMock(), 'cl-1')
+        self.assertEqual(str(raised.exception), '[]')
+        self.assertEqual(self.utils._in_flight, [])
+
+    def test_recovering_nothing_in_flight_is_a_no_op(self):
+        self.utils.recover_in_flight()
         self.assertEqual(self.utils._tracked, [])
 
     def test_orphan_recovery_matches_on_the_name_keyword_too(self):

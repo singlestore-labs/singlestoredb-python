@@ -193,8 +193,17 @@ def _sweep_live_deployments(owner: Optional[str] = None) -> None:
     the deployments it had already created would otherwise stay live -- and
     billed -- indefinitely. Anything a test created is swept here whether or
     not the test that made it ran to completion.
+
+    A whole-session sweep -- ``owner is None``, so ``pytest_unconfigure``,
+    ``atexit`` or SIGTERM -- first recovers the creations still in progress.
+    Those have POSTed but are blocked waiting for the deployment to come up, so
+    nothing has tracked them yet, and killing the process here would leak them.
+    The per-class sweep skips that step: it runs between tests, where no
+    creation is in flight.
     """
     try:
+        if owner is None:
+            _test_utils().recover_in_flight()
         removed = _test_utils().cleanup_tracked(owner)
     except Exception as exc:  # pragma: no cover - shutdown path
         print(f'\n✗ Failed to sweep leftover deployments: {exc}')
@@ -254,6 +263,11 @@ def _install_sweep_fallbacks() -> None:
     handler covers the cancellation case, since Python does not run ``atexit``
     for a signal-terminated process. SIGKILL is unreachable by design -- that
     is what ``cleanup_deployments.py`` is for.
+
+    Both paths go through ``_sweep_live_deployments()`` with no owner, which
+    recovers the creations still waiting on their deployment before sweeping --
+    a job cancelled mid ``wait_on_active`` is otherwise the one leak these
+    handlers cannot see.
     """
     global _sweep_fallbacks_installed
     if _sweep_fallbacks_installed:

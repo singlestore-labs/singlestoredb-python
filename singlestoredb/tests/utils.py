@@ -310,6 +310,14 @@ def drop_user(name: str) -> None:
 #: than idling -- and billing -- until the session ends.
 _tracked: List[Tuple[str, str, Any]] = []
 
+#: (receiver, finder, args, kwargs) for every creation call currently
+#: executing. A creator POSTs and only then waits for the deployment to come
+#: up, so for the whole ``wait_on_active`` window -- twenty minutes for a
+#: cluster -- something billable exists that nothing has registered yet:
+#: ``_tracking_wrapper`` tracks on return and recovers in its ``except``, and
+#: neither runs if the process is killed. See :func:`recover_in_flight`.
+_in_flight: List[Tuple[Any, Any, Tuple[Any, ...], Dict[str, Any]]] = []
+
 #: Test class currently running, as set by conftest.
 _owner = ''
 
@@ -440,8 +448,9 @@ def _creator_is_mocked(target: Any) -> bool:
 
     The unit tests call the creation methods with ``_post`` patched, and the
     objects they get back name deployments that do not exist, so they must not
-    be tracked. ``target`` is the manager, or -- through :func:`_is_mocked` --
-    whatever a created object holds in ``_manager``.
+    be tracked. ``target`` is the creation call's receiver -- a manager, or the
+    ``WorkspaceGroup`` of ``WorkspaceGroup.create_workspace`` -- or, through
+    :func:`_is_mocked`, whatever a created object holds in ``_manager``.
     """
     from unittest.mock import NonCallableMock
 
@@ -514,22 +523,82 @@ def _tracking_wrapper(func: Any, finder: Any) -> Any:
     On success the returned deployment is registered. On failure the
     deployment the call already brought into existence is looked up and
     registered instead; see :func:`_recover_orphan` for why one exists.
+
+    The call is also listed in ``_in_flight`` for its duration, so a sweep
+    that runs while it is still waiting -- SIGTERM, atexit -- can recover the
+    orphan itself rather than being killed before the ``except`` below gets to
+    (see :func:`recover_in_flight`).
+
+    ``_creator_is_mocked``, not ``_is_mocked``: the receiver is the manager (or
+    the workspace group), and ``_is_mocked`` looks for a ``_manager``
+    attribute, which a manager does not have -- so a real manager with a
+    patched ``_post`` would read as live and the recovery would fire a real
+    API call from a unit test. ``_creator_is_mocked`` inspects the receiver's
+    own transport and handles both receiver shapes.
     """
     import functools
 
     @functools.wraps(func)
     def wrapper(receiver: Any, *args: Any, **kwargs: Any) -> Any:
+        mocked = _creator_is_mocked(receiver)
+        entry = (receiver, finder, args, kwargs)
+        if not mocked:
+            _in_flight.append(entry)
         try:
             return track(func(receiver, *args, **kwargs))
         except BaseException:
             # BaseException, not Exception: a KeyboardInterrupt during the
             # twenty-minute wait_on_active wait leaves the same live
             # deployment behind as a timeout does.
-            if not _is_mocked(receiver):
+            #
+            # Only if the entry is still listed: claiming it is what keeps this
+            # from tracking the orphan a second time when a sweep already
+            # recovered it mid-wait and then let the call unwind.
+            if not mocked and _drop_in_flight(entry):
                 _recover_orphan(receiver, finder, args, kwargs)
             raise
+        finally:
+            if not mocked:
+                _drop_in_flight(entry)
 
     return wrapper
+
+
+def _drop_in_flight(entry: Tuple[Any, Any, Tuple[Any, ...], Any]) -> bool:
+    """
+    Remove one in-flight entry, and say whether it was still there.
+
+    By identity, and only this entry: two creations with equal arguments --
+    a retried create, say -- would otherwise pop each other's.
+    """
+    for i, other in reversed(list(enumerate(_in_flight))):
+        if other is entry:
+            _in_flight.pop(i)
+            return True
+    return False
+
+
+def recover_in_flight() -> None:
+    """
+    Track the deployments that creation calls still in progress have created.
+
+    A creator POSTs, then waits. Everything that registers a deployment runs
+    after that wait -- ``track()`` on return, ``_recover_orphan()`` in the
+    wrapper's ``except`` -- so a sweep triggered from outside the call, by
+    SIGTERM or atexit, sees nothing in ``_tracked`` and the deployment is left
+    running. A cancelled CI job during a shared-pool build is exactly that
+    case.
+
+    So each in-flight call is looked up the same way a failed one is, putting
+    whatever the server already created into ``_tracked`` before the sweep
+    walks it. Entries are popped as they are drained, so a handler that
+    returns and lets the wrapper's own ``except`` run cannot recover twice.
+    Never raises: ``_recover_orphan`` logs its own failures, and this runs on
+    the way out.
+    """
+    while _in_flight:
+        receiver, finder, args, kwargs = _in_flight.pop()
+        _recover_orphan(receiver, finder, args, kwargs)
 
 
 def install_deployment_tracking() -> None:
