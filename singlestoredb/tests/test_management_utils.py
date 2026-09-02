@@ -239,6 +239,50 @@ class TestFolderTransferPaths(unittest.TestCase):
             for target in targets:
                 self.assertNotIn('\\', target)
 
+    def test_stage_upload_folder_strips_leading_prefix_segments(self):
+        """A '/foo' or './foo' prefix must not survive into the remote path.
+
+        ``listdir`` and ``download_folder`` already pass
+        ``strip_leading=True``, and the stage routes interpolate the path into
+        a URL, so a leading '/' would produce a doubled slash.
+        """
+        import tempfile
+        for prefix in ('/dest', './dest'):
+            stage = self._make_stage()
+            stage.exists = MagicMock(return_value=False)
+            stage.upload_file = MagicMock()
+            stage.info = MagicMock()
+            with tempfile.TemporaryDirectory() as tmp:
+                root, _, _ = self._make_local_tree(tmp)
+                stage.upload_folder(root, prefix)
+            targets = sorted(
+                call.args[1] for call in stage.upload_file.call_args_list
+            )
+            self.assertEqual(
+                targets, ['dest/keep.py', 'dest/sub/skip.pyc'],
+                f'prefix {prefix!r} produced {targets}',
+            )
+
+    def test_file_space_upload_folder_strips_leading_prefix_segments(self):
+        """``FileSpace._upload`` builds ``files/fs/{location}/{path}``, so a
+        leading '/' would request ``files/fs/<loc>//dest/...``."""
+        import tempfile
+        for prefix in ('/dest', './dest'):
+            space = self._make_file_space()
+            space.upload_file = MagicMock()
+            space.info = MagicMock()
+            with tempfile.TemporaryDirectory() as tmp:
+                root, _, _ = self._make_local_tree(tmp)
+                space.upload_folder(root, prefix)
+            targets = sorted(
+                call.kwargs['path']
+                for call in space.upload_file.call_args_list
+            )
+            self.assertEqual(
+                targets, ['dest/keep.py', 'dest/sub/skip.pyc'],
+                f'prefix {prefix!r} produced {targets}',
+            )
+
     def test_stage_upload_folder_applies_ignore_globs(self):
         import tempfile
         stage = self._make_stage()
@@ -306,6 +350,52 @@ class TestFolderTransferPaths(unittest.TestCase):
                 for call in space.upload_file.call_args_list
             ]
             self.assertEqual(uploaded, ['keep.py'])
+
+
+class TestCustomModelUploadPaths(unittest.TestCase):
+    """``UPLOAD CUSTOM MODEL`` must not replay the local directory tree into
+    the models space. The handler is hidden (``_enabled = False``) and so has
+    no live coverage."""
+
+    def _run(self, local_path):
+        from singlestoredb.fusion.handlers.models import UploadCustomModelHandler
+        handler = UploadCustomModelHandler.__new__(UploadCustomModelHandler)
+        space = MagicMock()
+        with patch(
+            'singlestoredb.fusion.handlers.models.get_file_space',
+            return_value=space,
+        ):
+            handler.run(
+                dict(
+                    model_name='mymodel',
+                    local_path=local_path,
+                    overwrite=False,
+                ),
+            )
+        return space
+
+    def test_single_file_uploads_under_the_model_name(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            local = os.path.join(tmp, 'nested', 'weights.bin')
+            os.makedirs(os.path.dirname(local))
+            with open(local, 'w') as f:
+                f.write('x')
+            space = self._run(local)
+        space.upload_folder.assert_not_called()
+        self.assertEqual(
+            space.upload_file.call_args.kwargs['path'],
+            'mymodel/weights.bin',
+        )
+
+    def test_a_directory_still_goes_through_upload_folder(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            space = self._run(tmp)
+        space.upload_file.assert_not_called()
+        self.assertEqual(
+            space.upload_folder.call_args.kwargs['path'], 'mymodel',
+        )
 
 
 class TestRecursiveDownloadPathTraversal(unittest.TestCase):

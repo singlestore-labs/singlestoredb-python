@@ -212,7 +212,7 @@ Grammar constraints, verified in `fusion/handler.py`:
 
 `CREATE CLUSTER` clauses map onto `create_cluster()` (`v2/cluster.py:1110`):
 `IN REGION` (+ optional `WITH PROVIDER` to disambiguate), `IN PROJECT`,
-`WITH SIZE`, `WITH SCALE FACTOR`, `AUTO SUSPEND AFTER ... WITH TYPE ...`,
+`WITH SIZE`, `USING SCALE FACTOR`, `AUTO SUSPEND AFTER ... WITH TYPE ...`,
 `ENABLE KAI`, `WITH CACHE CONFIG`, `WITH FIREWALL RANGES`, `ALLOW ALL TRAFFIC`,
 `WITH UPDATE WINDOW`, `EXPIRES AT`, `WAIT ON ACTIVE`. Reuse
 `CreateWorkspaceHandler.run`'s auto-suspend seconds table
@@ -225,7 +225,7 @@ what `CREATE WORKSPACE GROUP` and `CREATE WORKSPACE` between them expose, so
 that a v1 script has a v2 counterpart for everything it says; `deploymentType`
 and `multiAZ` have no v1 counterpart. Every other v2-only clause here earns its
 place: `WITH PROVIDER` replaces the missing `IN REGION ID`, `IN PROJECT` is
-required by `POST /v2/clusters`, and `WITH SCALE FACTOR` is the other half of
+required by `POST /v2/clusters`, and `USING SCALE FACTOR` is the other half of
 `sizeConfig`. Both dropped options remain on
 `ClusterManager.create_cluster`.
 

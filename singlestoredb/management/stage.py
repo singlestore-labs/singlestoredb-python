@@ -234,7 +234,7 @@ class Stage(FileLocation):
         if not os.path.isdir(local_path):
             raise NotADirectoryError(f'local path is not a directory: {local_path}')
 
-        stage_prefix = normalize_remote_path(stage_path)
+        stage_prefix = normalize_remote_path(stage_path, strip_leading=True)
 
         if self.exists(stage_prefix) and not self.is_dir(stage_prefix):
             raise NotADirectoryError(f'stage path is not a directory: {stage_path}')

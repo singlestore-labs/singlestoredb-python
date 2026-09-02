@@ -753,7 +753,7 @@ class FileSpace(FileLocation):
 
         local_root = os.path.normpath(str(local_path))
         root_name = os.path.basename(local_root)
-        remote_prefix = normalize_remote_path(path)
+        remote_prefix = normalize_remote_path(path, strip_leading=True)
 
         for dir_path, dirs, files in os.walk(local_root):
             if ignore_files:

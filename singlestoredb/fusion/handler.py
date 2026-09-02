@@ -743,15 +743,15 @@ class SQLHandler(NodeVisitor):
 
     def visit_compound(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Compound name."""
-        print(visited_children)
         return flatten(visited_children)[0]
 
     def visit_number(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Numeric value."""
-        # Read the matched text rather than the children: the fraction group in
-        # the `number` regex is optional, so for a bare integer the first
-        # flattened child is the empty string it did not match.
-        return float(node.text.strip())
+        # The `number` rule is `<regex> ws*`, so node.text carries the trailing
+        # whitespace *and* any trailing /* comment */. Take the regex child's
+        # text: unlike flatten(visited_children)[0] it is not confused by the
+        # optional fraction group, which matches empty for a bare integer.
+        return float(node.children[0].text)
 
     def visit_integer(self, node: Node, visited_children: Iterable[Any]) -> Any:
         """Integer value."""

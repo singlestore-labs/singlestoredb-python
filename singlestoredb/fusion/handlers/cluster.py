@@ -350,7 +350,7 @@ class CreateClusterHandler(SQLHandler):
         [ with_provider ]
         [ in_project ]
         [ with_size ]
-        [ with_scale_factor ]
+        [ using_scale_factor ]
         [ auto_suspend ]
         [ enable_kai ]
         [ with_cache_config ]
@@ -383,7 +383,7 @@ class CreateClusterHandler(SQLHandler):
     with_size = WITH SIZE '<size>'
 
     # Scale factor
-    with_scale_factor = WITH SCALE FACTOR <number>
+    using_scale_factor = USING SCALE FACTOR <number>
 
     # Auto-suspend
     auto_suspend = AUTO SUSPEND AFTER suspend_after_value suspend_after_units suspend_type
@@ -501,7 +501,7 @@ class CreateClusterHandler(SQLHandler):
             provider=region['provider'],
             region=region['region'],
             size=params['with_size'],
-            scale_factor=params['with_scale_factor'],
+            scale_factor=params['using_scale_factor'],
             firewall_ranges=params['with_firewall_ranges'],
             allow_all_traffic=params['allow_all_traffic'],
             auto_suspend=_auto_suspend(params),

@@ -246,7 +246,10 @@ class TestFusion(unittest.TestCase):
             "CREATE CLUSTER IF NOT EXISTS 'fusion-parse-test' "
             "IN REGION 'us-east-1' WITH PROVIDER 'AWS' "
             "IN PROJECT 'Some Project' "
-            "WITH SIZE 'S-00' WITH SCALE FACTOR 1 "
+            # The /* ... */ is matched by the `ws*` tail of the `number` rule,
+            # so it lands inside the number node -- visit_number must read the
+            # regex match, not the whole node's text.
+            "WITH SIZE 'S-00' USING SCALE FACTOR 1 /* scale comment */ "
             'AUTO SUSPEND AFTER 30 MINUTES WITH TYPE IDLE '
             'ENABLE KAI WITH CACHE CONFIG 2 '
             "WITH FIREWALL RANGES '0.0.0.0/0' ALLOW ALL TRAFFIC "
@@ -266,7 +269,7 @@ class TestFusion(unittest.TestCase):
         assert params['with_provider'] == 'AWS'
         assert params['in_project'] == {'project_name': 'Some Project'}
         # <number> must accept a bare integer, not only 1.0
-        assert params['with_scale_factor'] == 1.0
+        assert params['using_scale_factor'] == 1.0
         # The clause is one flat dict, not a list of one dict per sub-rule.
         assert params['auto_suspend'] == dict(
             suspend_after_value=30,

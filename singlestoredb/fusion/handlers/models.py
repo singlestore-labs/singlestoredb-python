@@ -153,7 +153,9 @@ class UploadCustomModelHandler(SQLHandler):
         else:
             file_space.upload_file(
                 local_path=local_path,
-                path=normalize_remote_path(f'{model_name}/{local_path}'),
+                path=normalize_remote_path(
+                    f'{model_name}/{os.path.basename(local_path)}',
+                ),
                 overwrite=params['overwrite'],
             )
 
