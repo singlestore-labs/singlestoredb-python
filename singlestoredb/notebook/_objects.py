@@ -63,12 +63,12 @@ class Stage(object):
             if not x.startswith('_')
         ]:
 
-            def make_wrapper(m: str, is_method: bool = False) -> Any:
+            def make_annotation_wrapper(m: str) -> Any:
                 def wrap(self: Stage) -> Any:
                     return getattr(_mgmt.get_stage(), m)
-                return property(functools.update_wrapper(wrap, attr))
+                return property(wrap)
 
-            setattr(cls, name, make_wrapper(m=name))
+            setattr(cls, name, make_annotation_wrapper(m=name))
 
         cls.__doc__ = _StageBase.__doc__
 
@@ -105,12 +105,12 @@ class WorkspaceGroup(object):
             if not x.startswith('_')
         ]:
 
-            def make_wrapper(m: str, is_method: bool = False) -> Any:
+            def make_annotation_wrapper(m: str) -> Any:
                 def wrap(self: WorkspaceGroup) -> Any:
                     return getattr(_ws.get_workspace_group(), m)
-                return property(functools.update_wrapper(wrap, attr))
+                return property(wrap)
 
-            setattr(cls, name, make_wrapper(m=name))
+            setattr(cls, name, make_annotation_wrapper(m=name))
 
         cls.__doc__ = _ws.WorkspaceGroup.__doc__
 
@@ -153,12 +153,12 @@ class Workspace(object):
             if not x.startswith('_')
         ]:
 
-            def make_wrapper(m: str, is_method: bool = False) -> Any:
+            def make_annotation_wrapper(m: str) -> Any:
                 def wrap(self: Workspace) -> Any:
                     return getattr(_ws.get_workspace(), m)
-                return property(functools.update_wrapper(wrap, attr))
+                return property(wrap)
 
-            setattr(cls, name, make_wrapper(m=name))
+            setattr(cls, name, make_annotation_wrapper(m=name))
 
         cls.__doc__ = _ws.Workspace.__doc__
 
@@ -201,12 +201,12 @@ class Organization(object):
             if not x.startswith('_')
         ]:
 
-            def make_wrapper(m: str, is_method: bool = False) -> Any:
+            def make_annotation_wrapper(m: str) -> Any:
                 def wrap(self: Organization) -> Any:
                     return getattr(_mgmt.get_organization(), m)
-                return property(functools.update_wrapper(wrap, attr))
+                return property(wrap)
 
-            setattr(cls, name, make_wrapper(m=name))
+            setattr(cls, name, make_annotation_wrapper(m=name))
 
         cls.__doc__ = _OrganizationBase.__doc__
 
