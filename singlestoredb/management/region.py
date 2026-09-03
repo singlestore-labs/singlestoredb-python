@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""SingleStoreDB Cluster Management."""
+"""SingleStoreDB Region Management."""
 from typing import Dict
 from typing import Optional
 
@@ -8,16 +8,16 @@ from .utils import NamedList
 from .utils import vars_to_str
 
 
-class Region(object):
+class Region:
     """
     Cluster region information.
 
     This object is not directly instantiated. It is used in results
-    of ``WorkspaceManager`` API calls.
+    of ``ClusterManager`` API calls.
 
     See Also
     --------
-    :attr:`WorkspaceManager.regions`
+    :attr:`ClusterManager.regions`
 
     """
 
@@ -25,7 +25,7 @@ class Region(object):
         self, name: str, provider: str, id: Optional[str] = None,
         region_name: Optional[str] = None,
     ) -> None:
-        """Use :attr:`WorkspaceManager.regions` instead."""
+        """Use :attr:`ClusterManager.regions` instead."""
         #: Unique ID of the region
         self.id = id
 
@@ -57,8 +57,8 @@ class Region(object):
         ----------
         obj : dict
             Key-value pairs to retrieve region information from
-        manager : WorkspaceManager, optional
-            The WorkspaceManager the Region belongs to
+        manager : ClusterManager, optional
+            The ClusterManager the Region belongs to
 
         Returns
         -------
@@ -87,11 +87,11 @@ class RegionManager(Manager):
     Parameters
     ----------
     access_token : str, optional
-        The API key or other access token for the workspace management API
+        The API key or other access token for the management API
     version : str, optional
         Version of the API to use
     base_url : str, optional
-        Base URL of the workspace management API
+        Base URL of the management API
 
     See Also
     --------
@@ -122,17 +122,18 @@ class RegionManager(Manager):
 
     def list_shared_tier_regions(self) -> NamedList[Region]:
         """
-        List regions that support shared tier workspaces.
+        List regions that support shared tier deployments.
 
         Returns
         -------
         NamedList[Region]
-            List of regions that support shared tier workspaces
+            List of regions that support shared tier deployments
 
         Raises
         ------
         ManagementError
             If there is an error getting the regions
+
         """
         res = self._get('regions/sharedtier')
         return NamedList(
@@ -151,19 +152,28 @@ def manage_regions(
     Parameters
     ----------
     access_token : str, optional
-        The API key or other access token for the workspace management API
+        The API key or other access token for the management API
     version : str, optional
-        Version of the API to use
+        Version of the API to use. Defaults to the ``management.version``
+        option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
+        variable). ``'v1'`` is deprecated and raises a
+        :class:`DeprecationWarning`.
     base_url : str, optional
-        Base URL of the workspace management API
+        Base URL of the management API
 
     Returns
     -------
     :class:`RegionManager`
 
     """
-    return RegionManager(
+    from ._version_import import _import_versioned_module
+    from ._version_import import _resolve_version
+    from ._version_import import _warn_if_deprecated_version
+    ver = _resolve_version(version)
+    _warn_if_deprecated_version(ver)
+    mod = _import_versioned_module(ver, 'region')
+    return mod.RegionManager(
         access_token=access_token,
-        version=version,
+        version=ver,
         base_url=base_url,
     )

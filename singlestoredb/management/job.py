@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """SingleStoreDB Cloud Scheduled Notebook Job."""
 import datetime
-import time
 from enum import Enum
 from typing import Any
 from typing import Dict
@@ -10,11 +9,11 @@ from typing import Optional
 from typing import Type
 from typing import Union
 
+from . import timing
 from ..exceptions import ManagementError
 from .manager import Manager
 from .utils import camel_to_snake
 from .utils import from_datetime
-from .utils import get_cluster_id
 from .utils import get_database_name
 from .utils import get_virtual_workspace_id
 from .utils import get_workspace_id
@@ -52,9 +51,35 @@ class Mode(Enum):
 
 
 class TargetType(Enum):
+    """
+    Job target type, spanning both management API versions.
+
+    The wire vocabulary differs by version, and ``'Cluster'`` unhelpfully
+    means *different things* at each: at v1 it is a legacy self-managed
+    cluster, at v2 it is the resource that v1 called a workspace. This enum
+    holds the union so the read path (:meth:`from_str`) round-trips either
+    version's value without having to know which version produced it. The
+    *write* path is version-specific -- see ``JobsManager._resolve_target``.
+
+    ==========================  =========  ===================================
+    Value                       Versions   Meaning
+    ==========================  =========  ===================================
+    ``'Workspace'``             v1         Workspace
+    ``'VirtualWorkspace'``      v1         Starter (shared tier) workspace
+    ``'Cluster'``               v1         Legacy self-managed cluster
+    ``'Cluster'``               v2         Cluster (the v1 "workspace")
+    ``'VirtualCluster'``        v2         Starter (shared tier) cluster
+    ==========================  =========  ===================================
+
+    Only the read path ever sees the v1 sense of ``'Cluster'``: the write path
+    takes its target from the notebook environment, which names a workspace or
+    starter deployment and never a legacy self-managed cluster.
+    """
+
     WORKSPACE = 'Workspace'
     CLUSTER = 'Cluster'
     VIRTUAL_WORKSPACE = 'VirtualWorkspace'
+    VIRTUAL_CLUSTER = 'VirtualCluster'
 
     @classmethod
     def from_str(cls, s: str) -> 'TargetType':
@@ -545,7 +570,7 @@ class TargetConfig(object):
         return str(self)
 
 
-class Job(object):
+class Job:
     """
     Scheduled Notebook Job definition.
 
@@ -634,9 +659,9 @@ class Job(object):
         return self._manager._wait_for_job(self, timeout)
 
     def get_executions(
-            self,
-            start_execution_number: int,
-            end_execution_number: int,
+        self,
+        start_execution_number: int,
+        end_execution_number: int,
     ) -> ExecutionsData:
         """Get executions for the job."""
         if self._manager is None:
@@ -668,7 +693,7 @@ class Job(object):
         return str(self)
 
 
-class JobsManager(object):
+class JobsManager:
     """
     SingleStoreDB scheduled notebook jobs manager.
 
@@ -676,16 +701,48 @@ class JobsManager(object):
 
     Parameters
     ----------
-    manager : WorkspaceManager, optional
-        The WorkspaceManager the JobsManager belongs to
+    manager : ClusterManager, optional
+        The ClusterManager the JobsManager belongs to
 
     See Also
     --------
     :attr:`Organization.jobs`
     """
 
+    #: ``targetType`` sent for a regular deployment. This is the only part of
+    #: the jobs API whose vocabulary changed at v2 (``'Workspace'`` became
+    #: ``'Cluster'``), so the v1 subclass overrides these three attributes
+    #: instead of reimplementing ``schedule``.
+    _deployment_target_type = TargetType.CLUSTER
+
+    #: ``targetType`` sent for a starter / shared-tier deployment.
+    _starter_target_type = TargetType.VIRTUAL_CLUSTER
+
     def __init__(self, manager: Optional[Manager]):
         self._manager = manager
+
+    def _resolve_target(self, target_config: Dict[str, Any]) -> None:
+        """
+        Fill in ``targetID`` / ``targetType`` from the ambient environment.
+
+        The deployment the job should run against is taken from the
+        environment variables set by the notebook runtime:
+        ``SINGLESTOREDB_VIRTUAL_WORKSPACE`` for a starter deployment, and
+        ``SINGLESTOREDB_WORKSPACE`` for a regular one -- the latter holds a
+        cluster ID at v2 and a workspace ID at v1. Which ``targetType`` string
+        names each kind of deployment is version-specific; see the
+        ``_*_target_type`` class attributes.
+        """
+        starter_id = get_virtual_workspace_id()
+        deployment_id = get_workspace_id()
+
+        if starter_id is not None:
+            target_config['targetID'] = starter_id
+            target_config['targetType'] = self._starter_target_type.value
+
+        elif deployment_id is not None:
+            target_config['targetID'] = deployment_id
+            target_config['targetType'] = self._deployment_target_type.value
 
     def schedule(
         self,
@@ -699,6 +756,7 @@ class JobsManager(object):
         runtime_name: Optional[str] = None,
         resume_target: Optional[bool] = None,
         parameters: Optional[Dict[str, Any]] = None,
+        max_allowed_execution_duration_in_minutes: Optional[int] = None,
     ) -> Job:
         """Creates and returns a scheduled notebook job."""
         if self._manager is None:
@@ -722,6 +780,10 @@ class JobsManager(object):
         if runtime_name is not None:
             execution_config['runtimeName'] = runtime_name
 
+        if max_allowed_execution_duration_in_minutes is not None:
+            execution_config['maxAllowedExecutionDurationInMinutes'] = \
+                max_allowed_execution_duration_in_minutes
+
         target_config = None  # type: Optional[Dict[str, Any]]
         database_name = get_database_name()
         if database_name is not None:
@@ -732,20 +794,7 @@ class JobsManager(object):
             if resume_target is not None:
                 target_config['resumeTarget'] = resume_target
 
-            workspace_id = get_workspace_id()
-            virtual_workspace_id = get_virtual_workspace_id()
-            cluster_id = get_cluster_id()
-            if virtual_workspace_id is not None:
-                target_config['targetID'] = virtual_workspace_id
-                target_config['targetType'] = TargetType.VIRTUAL_WORKSPACE.value
-
-            elif workspace_id is not None:
-                target_config['targetID'] = workspace_id
-                target_config['targetType'] = TargetType.WORKSPACE.value
-
-            elif cluster_id is not None:
-                target_config['targetID'] = cluster_id
-                target_config['targetType'] = TargetType.CLUSTER.value
+            self._resolve_target(target_config)
 
         job_run_json = dict(
             schedule=schedule,
@@ -832,7 +881,7 @@ class JobsManager(object):
                 return True
             if job.schedule.mode == Mode.RECURRING:
                 raise ValueError(f'Cannot wait for recurring job {job_id}')
-            time.sleep(5)
+            timing.sleep(5, 'job completion')
 
     def get(self, job_id: str) -> Job:
         """Get a job by its ID."""
@@ -843,10 +892,10 @@ class JobsManager(object):
         return Job.from_dict(res, self)
 
     def get_executions(
-            self,
-            job_id: str,
-            start_execution_number: int,
-            end_execution_number: int,
+        self,
+        job_id: str,
+        start_execution_number: int,
+        end_execution_number: int,
     ) -> ExecutionsData:
         """Get executions for a job by its ID."""
         if self._manager is None:

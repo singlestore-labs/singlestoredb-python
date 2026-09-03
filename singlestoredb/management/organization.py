@@ -1,16 +1,59 @@
 #!/usr/bin/env python
 """SingleStoreDB Cloud Organization."""
 import datetime
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Type
 from typing import Union
 
 from ..exceptions import ManagementError
-from .inference_api import InferenceAPIManager
+from ._version_import import _versioned_attr
 from .job import JobsManager
 from .manager import Manager
+from .utils import to_datetime
 from .utils import vars_to_str
+
+
+def get_organization(version: Optional[str] = None) -> 'Organization':
+    """
+    Get the current organization.
+
+    Parameters
+    ----------
+    version : str, optional
+        Version of the API to use. Defaults to the ``management.version``
+        option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
+        variable).
+
+    Returns
+    -------
+    :class:`Organization`
+
+    """
+    return _versioned_attr('get_organization', version)()
+
+
+def get_secret(name: str, version: Optional[str] = None) -> Optional[str]:
+    """
+    Get the value of a secret in the current organization.
+
+    Parameters
+    ----------
+    name : str
+        Name of the secret
+    version : str, optional
+        Version of the API to use. Defaults to the ``management.version``
+        option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
+        variable).
+
+    Returns
+    -------
+    str or None
+
+    """
+    return _versioned_attr('get_secret', version)(name)
 
 
 def listify(x: Union[str, List[str]]) -> List[str]:
@@ -38,9 +81,9 @@ class Secret(object):
         id: str,
         name: str,
         created_by: str,
-        created_at: Union[str, datetime.datetime],
+        created_at: Optional[Union[str, datetime.datetime]],
         last_updated_by: str,
-        last_updated_at: Union[str, datetime.datetime],
+        last_updated_at: Optional[Union[str, datetime.datetime]],
         value: Optional[str] = None,
         deleted_by: Optional[str] = None,
         deleted_at: Optional[Union[str, datetime.datetime]] = None,
@@ -91,12 +134,12 @@ class Secret(object):
             id=obj['secretID'],
             name=obj['name'],
             created_by=obj['createdBy'],
-            created_at=obj['createdAt'],
+            created_at=to_datetime(obj.get('createdAt')),
             last_updated_by=obj['lastUpdatedBy'],
-            last_updated_at=obj['lastUpdatedAt'],
+            last_updated_at=to_datetime(obj.get('lastUpdatedAt')),
             value=obj.get('value'),
             deleted_by=obj.get('deletedBy'),
-            deleted_at=obj.get('deletedAt'),
+            deleted_at=to_datetime(obj.get('deletedAt')),
         )
 
         return out
@@ -110,16 +153,16 @@ class Secret(object):
         return str(self)
 
 
-class Organization(object):
+class Organization:
     """
     Organization in SingleStoreDB Cloud portal.
 
     This object is not directly instantiated. It is used in results
-    of ``WorkspaceManager`` API calls.
+    of ``ClusterManager`` API calls.
 
     See Also
     --------
-    :attr:`WorkspaceManager.organization`
+    :attr:`ClusterManager.organization`
 
     """
 
@@ -127,8 +170,19 @@ class Organization(object):
     name: str
     firewall_ranges: List[str]
 
+    #: Sub-manager classes reached through this organization. The
+    #: ``organizations/current`` and ``secrets`` routes are identical at v1 and
+    #: v2, so ``Organization`` itself is version-neutral; only the managers it
+    #: hands out differ. These name the current-version managers, and
+    #: ``v1/organization.py`` repoints them back to the v1 classes.
+    _jobs_manager_class: Type[JobsManager] = JobsManager
+
+    #: Inference API manager class, or ``None`` if the version has no
+    #: inference routes. There are none from v2 onward.
+    _inference_api_manager_class: Optional[Type[Any]] = None
+
     def __init__(self, id: str, name: str, firewall_ranges: List[str]):
-        """Use :attr:`WorkspaceManager.organization` instead."""
+        """Use :attr:`ClusterManager.organization` instead."""
         #: Unique ID of the organization
         self.id = id
 
@@ -177,8 +231,8 @@ class Organization(object):
         ----------
         obj : dict
             Key-value pairs to retrieve organization information from
-        manager : WorkspaceManager, optional
-            The WorkspaceManager the Organization belongs to
+        manager : ClusterManager, optional
+            The ClusterManager the Organization belongs to
 
         Returns
         -------
@@ -200,27 +254,51 @@ class Organization(object):
 
         Parameters
         ----------
-        manager : WorkspaceManager, optional
-            The WorkspaceManager the JobsManager belongs to
+        manager : ClusterManager, optional
+            The ClusterManager the JobsManager belongs to
 
         Returns
         -------
         :class:`JobsManager`
         """
-        return JobsManager(self._manager)
+        return self._jobs_manager_class(self._manager)
 
     @property
-    def inference_apis(self) -> InferenceAPIManager:
+    def inference_apis(self) -> Any:
         """
         Retrieve a SingleStoreDB inference api manager.
-
-        Parameters
-        ----------
-        manager : WorkspaceManager, optional
-            The WorkspaceManager the InferenceAPIManager belongs to
 
         Returns
         -------
         :class:`InferenceAPIManager`
+
+        Raises
+        ------
+        ManagementError
+            If the API version has no inference routes
+
         """
-        return InferenceAPIManager(self._manager)
+        if self._inference_api_manager_class is None:
+            raise ManagementError(
+                msg='The inference API is not available in this version of '
+                    'the management API. None of the inferenceapis/ routes '
+                    'exist past v1.',
+            )
+        return self._inference_api_manager_class(self._manager)
+
+
+class Organizations(object):
+    """Organizations."""
+
+    #: The ``Organization`` class this hands out. Version subclasses repoint
+    #: this so the organization carries the right sub-managers.
+    _organization_class: Type[Organization] = Organization
+
+    def __init__(self, manager: Manager):
+        self._manager = manager
+
+    @property
+    def current(self) -> Organization:
+        """Get current organization."""
+        res = self._manager._get('organizations/current').json()
+        return self._organization_class.from_dict(res, self._manager)

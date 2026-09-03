@@ -1,7 +1,8 @@
 #!/usr/bin/env python
-"""SingleStoreDB Cluster Management."""
+"""Version-neutral helpers shared by the SingleStoreDB management API."""
 import datetime
 import functools
+import glob
 import itertools
 import os
 import re
@@ -12,6 +13,7 @@ from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import SupportsIndex
 from typing import Tuple
 from typing import TypeVar
@@ -20,6 +22,7 @@ from urllib.parse import urlparse
 
 from .. import converters
 from ..config import get_option
+from ..exceptions import ManagementError
 from ..utils import events
 
 JSON = Union[str, List[str], Dict[str, 'JSON']]
@@ -36,35 +39,47 @@ else:
 
 
 class TTLProperty(object):
-    """Property with time limit."""
+    """
+    Property with time limit.
+
+    The value is cached on the instance, not on the descriptor. A descriptor is
+    shared by every instance of the class it is defined on, and what these
+    properties return is not: a manager's project list belongs to one
+    organization, so a descriptor-wide cache would hand one manager's list to a
+    manager holding a different token.
+    """
 
     def __init__(self, fget: Callable[[Any], Any], ttl: datetime.timedelta):
         self.fget = fget
         self.ttl = ttl
-        self._last_executed = datetime.datetime(2000, 1, 1)
-        self._last_result = None
         self.__doc__ = fget.__doc__
         self._name = ''
 
-    def reset(self) -> None:
-        self._last_executed = datetime.datetime(2000, 1, 1)
-        self._last_result = None
-
     def __set_name__(self, owner: Any, name: str) -> None:
         self._name = name
+
+    @property
+    def _cache_key(self) -> str:
+        return f'_ttl_cache_{self._name or id(self)}'
+
+    def reset(self, obj: Any) -> None:
+        """Discard the value cached for ``obj``, if any."""
+        obj.__dict__.pop(self._cache_key, None)
 
     def __get__(self, obj: Any, objtype: Any = None) -> Any:
         if obj is None:
             return self
 
-        if self._last_result is not None \
-                and (datetime.datetime.now() - self._last_executed) < self.ttl:
-            return self._last_result
+        cached = obj.__dict__.get(self._cache_key)
+        if cached is not None:
+            value, fetched_at = cached
+            if (datetime.datetime.now() - fetched_at) < self.ttl:
+                return value
 
-        self._last_result = self.fget(obj)
-        self._last_executed = datetime.datetime.now()
+        value = self.fget(obj)
+        obj.__dict__[self._cache_key] = (value, datetime.datetime.now())
 
-        return self._last_result
+        return value
 
 
 def ttl_property(ttl: datetime.timedelta) -> Callable[[Any], Any]:
@@ -224,13 +239,38 @@ def get_token() -> Optional[str]:
 
 
 def get_cluster_id() -> Optional[str]:
-    """Return the cluster id for the current token or environment."""
-    return os.environ.get('SINGLESTOREDB_CLUSTER') or None
+    """
+    Return the cluster id for the current token or environment.
+
+    The v2 spelling of :func:`get_workspace_id`, and the same value: there is
+    no ``SINGLESTOREDB_CLUSTER``, because the notebook environment publishes
+    the current deployment as ``SINGLESTOREDB_WORKSPACE`` whatever the API
+    version calls it.
+    """
+    return get_workspace_id()
 
 
 def get_workspace_id() -> Optional[str]:
-    """Return the workspace id for the current token or environment."""
+    """
+    Return the deployment id for the current token or environment.
+
+    ``SINGLESTOREDB_WORKSPACE`` is the notebook environment's name for the
+    current deployment at every API version: the workspace ID at v1, and the
+    cluster ID from v2 onward.
+    """
     return os.environ.get('SINGLESTOREDB_WORKSPACE') or None
+
+
+def get_project_id() -> Optional[str]:
+    """
+    Return the project id or name for the current token or environment.
+
+    ``SINGLESTOREDB_PROJECT`` is a single value for both spellings, so the
+    caller decides which it is -- see ``PROJECT_ID_RE`` in
+    :mod:`singlestoredb.management.v2.cluster`. Projects are a v2 resource;
+    there is no v1 equivalent.
+    """
+    return os.environ.get('SINGLESTOREDB_PROJECT') or None
 
 
 def get_virtual_workspace_id() -> Optional[str]:
@@ -241,6 +281,102 @@ def get_virtual_workspace_id() -> Optional[str]:
 def get_database_name() -> Optional[str]:
     """Return the default database name for the current token or environment."""
     return os.environ.get('SINGLESTOREDB_DEFAULT_DATABASE') or None
+
+
+def normalize_remote_path(path: PathLike, *, strip_leading: bool = False) -> str:
+    """Normalize a caller-supplied remote path to POSIX form.
+
+    Remote FileSpace / Stage paths always use ``/``. Callers may build a
+    path with :func:`os.path.join`, which uses the local separator, so
+    backslashes are converted to ``/`` before the path is used. Duplicate
+    separators are collapsed and the trailing separator is removed, so the
+    result can safely be concatenated with ``'/' + rel``.
+
+    Parameters
+    ----------
+    path : Path or str
+        Remote path to normalize
+    strip_leading : bool, optional
+        Also remove leading ``./`` and ``/`` segments, making the path
+        relative to the remote root
+
+    Returns
+    -------
+    str
+
+    """
+    out = str(path).replace('\\', '/')
+    if strip_leading:
+        out = re.sub(r'^(\./|/)+', r'', out)
+    out = re.sub(r'/{2,}', r'/', out)
+    return re.sub(r'/+$', r'', out)
+
+
+def ensure_within(local_root: PathLike, target: PathLike) -> str:
+    """Verify ``target`` resolves inside ``local_root``.
+
+    Returns the normalized (but unresolved) path on success. The
+    containment check uses :func:`os.path.realpath` so symlink trickery
+    can't escape ``local_root``. Raises :class:`ManagementError` if
+    ``target`` would escape ``local_root``, e.g. via ``..`` segments
+    coming from an untrusted remote listing.
+    """
+    target_str = os.fspath(target)
+    normalized = os.path.normpath(target_str)
+    base = os.path.realpath(os.fspath(local_root))
+    resolved = os.path.realpath(target_str)
+    if resolved != base and not resolved.startswith(base + os.sep):
+        raise ManagementError(
+            msg=f'Refusing to write outside destination: {target_str}',
+        )
+    return normalized
+
+
+def resolve_ignore_files(
+    local_root: PathLike,
+    ignore: Optional[Union[PathLike, List[PathLike]]],
+) -> Set[str]:
+    """Expand ``ignore`` glob patterns into a set of local file paths.
+
+    Relative patterns are resolved against ``local_root`` rather than the
+    process working directory, so patterns like ``**/*.pyc`` match the tree
+    actually being uploaded. Absolute patterns are used as given. Results are
+    normalized with :func:`os.path.normpath`, so callers must normalize the
+    paths they test for membership too — a raw ``os.walk`` result such as
+    ``./a.pyc`` will not compare equal to the normalized ``a.pyc``.
+
+    Parameters
+    ----------
+    local_root : Path or str
+        Local directory the patterns are relative to
+    ignore : Path or str or List[Path] or List[str], optional
+        Glob pattern(s) of files to ignore
+
+    Returns
+    -------
+    Set[str]
+
+    """
+    out: Set[str] = set()
+
+    if not ignore:
+        return out
+
+    root = os.path.normpath(os.fspath(local_root))
+    patterns = ignore if isinstance(ignore, list) else [ignore]
+
+    for item in patterns:
+        pattern = os.fspath(item)
+        if not os.path.isabs(pattern):
+            pattern = os.path.join(root, pattern)
+        # Always recursive so '**' works regardless of the caller's
+        # recursion setting.
+        out.update(
+            os.path.normpath(x)
+            for x in glob.glob(pattern, recursive=True)
+        )
+
+    return out
 
 
 def enable_http_tracing() -> None:

@@ -438,6 +438,282 @@ These are not in the scope of this audit pass but are worth noting:
 3. **`fields=` query param** on every GET — intentionally skipped per scope.
 4. **DR / identity / privateConnections / delegatedEntities sub-resources** on
    workspace groups — intentionally skipped per scope.
+5. **`GET /projects` was missing from the spec dump, and `projectID` is required
+   on `POST /v2/clusters`.** Both confirmed live against
+   `https://api.singlestore.com` (2026-08-21):
+
+   - `GET /v1/projects` and `GET /v2/projects` both return
+     `[{projectID, name, edition, createdAt}]`, with `edition` one of
+     `SHARED | STANDARD | ENTERPRISE`. Neither route appeared anywhere in the
+     1.1.124 `dev-docs/management_api.openapi` snapshot this audit was written
+     against — one instance of that dump not being authoritative. The refreshed
+     dump (1.2.171, 2026-08-25) does document `/v2/projects`; `/v1/projects` is
+     still unpublished.
+   - `POST /v2/clusters` fails with `400 projectID is required` for any body
+     without it, including one that is otherwise complete. `POST
+     /v1/workspaceGroups` assigns a project implicitly: every group in the test
+     organization sits in `Standard Project` without the SDK ever sending an ID.
+     Handled by `ClusterManager._resolve_project_id`, which takes the caller's
+     `project`, then `SINGLESTOREDB_PROJECT`, then the organization's only
+     project, and otherwise raises naming the candidates. Both the argument and
+     the environment variable accept a project *name* as well as an ID:
+     `_project_id_for` treats a UUID as an ID and anything else as a name to
+     look up, which is safe because the route answers `400 uuid: incorrect UUID
+     length` for a non-UUID ID. The API does not promise names are unique, so an
+     ambiguous name raises rather than resolving to the first match.
+   - `POST /v2/sharedtier/virtualClusters` does **not** require `projectID` —
+     validation runs through to `databaseName` without it — so
+     `create_starter_cluster` resolves `project` only when one is given.
+   - Field-validation order on `POST /v2/clusters` is `region` → `projectID` →
+     `firewallRanges` (which must be present, `[]` to disallow all inbound
+     traffic) → `sizeConfig`.
+     **Correction (2026-08-28): the size field is `sizeConfig`, not `size`.**
+     It was `size` when this was recorded. The rename shipped on 2026-08-26,
+     was backed out the next morning (verified live 2026-08-27: `sizeConfig`
+     drew `400 ... unknown field "sizeConfig"`), and landed again by
+     2026-08-28, when `size` began drawing `400 request body contains an
+     unknown field "size"`. Only the outer key changed; the object inside is
+     still `{size, scaleFactor}`, and `PATCH /v2/clusters/{id}` moved with it.
+6. **`POST /v2/sharedtier/virtualClusters` accepts only `AWS` | `AZURE` | `GCP`
+   verbatim.** Also confirmed live (2026-08-21). Any other capitalization —
+   including the mixed-case `Azure` that `GET /v2/regions` itself reports —
+   fails with `500 Unspecified is not a valid CloudServiceProvider`, so a
+   region's `provider` cannot be passed through as-is. `POST /v2/clusters` is
+   case-insensitive on the same field (only an unknown provider is rejected,
+   with `400 invalid provider ...; value must be aws or azure or gcp`).
+   `create_starter_cluster` upper-cases it; `create_cluster` does not.
+   The v1 starter route is a different path, and the v1 shared-tier region list
+   reports only `AWS us-east-1`, so v1 never hit this.
+   **Correction (verified live 2026-08-24): `GET /v2/regions/sharedtier` is
+   *not* missing.** An earlier pass of this audit recorded it as a 404 and a
+   "real gap"; that was wrong. The route returns **200** with
+   `[{"region": "US East 1 (N. Virginia)", "provider": "AWS",
+   "regionName": "us-east-1"}]` — the same shape and the same content as at v1.
+   So shared-tier regions *are* discoverable from v2 and a v2-only client need
+   not hard-code them. `RegionManager.list_shared_tier_regions` and
+   `ClusterManager.shared_tier_regions` both implement it, and neither raises.
+   The 36 entries `GET /v2/regions` returns still carry only `region`,
+   `provider`, `regionName` with nothing marking shared-tier capability, so the
+   `sharedtier` route remains the only way to tell: sending a region absent
+   from it fails at create time with `500 error creating virtual workspace
+   (<name>): no shared tier region found for provider AWS and region
+   us-east-2`.
+7. **v2 deployment name format.** `POST /v2/clusters` requires the name to match
+   `[a-z0-9]([a-z0-9-]*[a-z0-9])?` at 1-32 characters: an uppercase letter, an
+   underscore, a dot, a space, or a leading/trailing hyphen draws `400 name:
+   must be in a valid format`, and anything longer draws `400 name: the length
+   must be between 1 and 32`. Repeated hyphens are accepted.
+   `POST /v2/sharedtier/virtualClusters` applies none of this — it took
+   `STARTER_cl_test_abc-` unchanged. Neither rule is in the spec dump.
+   Full validation order on `POST /v2/clusters`: `region` presence →
+   `projectID` → `firewallRanges` → `sizeConfig` → `name` → region existence.
+8. **`POST /v2/clusters` ignores `adminPassword` and generates its own.**
+   Confirmed live (2026-08-21) with two throwaway clusters, both since
+   terminated. Whatever password is sent, the created cluster's `admin` user
+   gets a server-generated one, returned as `adminPassword` in the *create
+   response only* — `GET /v2/clusters/{id}` has no such field. Losing that
+   value means losing `admin` access to the cluster. v1 honored the password it
+   was given, so nothing in the v1 wrapper had to keep it. `create_cluster`
+   therefore carries it onto the returned object as
+   `Cluster.admin_password` (backed by a private attribute so it stays out of
+   `str()`/`repr()`), and the `admin_password` parameter's docstring carries a
+   warning that v2 discards it. Not in the spec dump.
+
+   **Re-confirmed 2026-08-25 with a connection attempt**, which the original
+   probe had not made — the earlier evidence was only that the create response
+   echoed a value different from the one posted, which on its own does not
+   establish which of the two authenticates. One throwaway `S-00`
+   (`probe-adminpw-1787666027`, since terminated) created with
+   `adminPassword: 'Probe-Sent-Pw-2026a!'` returned the generated
+   `'{:D}TK*[F3Ll}Ups2pNv'`. Connecting as `admin` over the MySQL protocol with
+   the value we *sent* was refused with `1045: Access denied for user 'admin'`;
+   the same connection with the *returned* value succeeded. The generated
+   password is therefore the real credential, and the sent one is discarded
+   rather than merely unreported. The reference documents the field
+   (`docs.singlestore.com/cloud/reference/management-api/reference/`), so this
+   is a server-behavior bug and not a missing parameter — worth raising with
+   the API team on that basis.
+
+   **The documented invalid-password fallback does not explain it.** The
+   reference states the password must be ≥14 characters with an uppercase, a
+   lowercase, a numeric and a special character, at most two consecutive
+   sequential characters and at most three consecutive identical characters, and
+   that "if a password is not specified **or if an invalid password is
+   provided**, a valid password is generated and returned in the response
+   object." That fallback is silent and therefore indistinguishable from the
+   field being ignored, so the probe was re-run 2026-08-25 on two password
+   shapes at once, on two throwaway clusters (`probe-pw-random-1787666958`,
+   `probe-pw-original-1787666958`, both since terminated):
+
+   | | `Xq7#vTm2$pLw9Kz@` | `Probe-Sent-Pw-2026a!` |
+   |---|---|---|
+   | POST echoed what we sent | no | no |
+   | sent value authenticates | **no** (1045) | **no** (1045) |
+   | returned value authenticates | yes | yes |
+
+   The first is random, 16 characters, all four character classes, no sequential
+   run, no repeated character and no dictionary word — it trips no documented
+   rule, nor the guessable undocumented ones (a dictionary check on
+   `Probe`/`Sent`, or `-` not counting as special). It was discarded identically.
+   The generated replacements came back 25-26 characters. So the field is inert
+   on this route rather than rejecting non-compliant input. Not ruled out: that
+   the generate-always behavior is specific to this organization, its tier, or
+   `aws/us-east-1` — every probe has run there.
+
+   Incidental findings from these probes, none in the spec dump:
+   `POST /v2/clusters` rejects a null `firewallRanges` with
+   `400 firewallRanges cannot be null (indicate empty list [] to disallow all
+   inbound traffic)` **even when `allowAllTraffic: true` is sent** — the field
+   is unconditionally required, so `allow_all_traffic` alone is not a usable
+   way to open a new cluster. And the create error text calls the resource a
+   workspace (`error creating workspace (<name>): ...`) despite the v2 cluster
+   vocabulary, including in the on-demand quota rejection.
+9. **`PATCH /v2/clusters/{id}` accepts `name` and silently ignores it.**
+   Confirmed live (2026-08-21) with a throwaway cluster, since terminated.
+   `name` is a *known* field on the route — an unknown field draws
+   `400 request body contains an unknown field "bogusField"` and `name` does
+   not — and the PATCH returns success and even cycles the cluster through
+   PENDING, but the name never changes in `GET /v2/clusters/{id}` or
+   `GET /v2/clusters` (polled for two minutes). v1 workspace groups *could* be
+   renamed, so this is a v2 regression rather than a wrapper bug; the accepted
+   field makes it undetectable from the client. Worth raising with the API
+   team. `Cluster.update()` still passes the field through — there is nothing
+   better for it to do — and `TestCluster::test_update` pins the behavior.
+   Separately, the same route applies changes **asynchronously**: after a
+   `PATCH` with new `firewallRanges`, the immediately following
+   `GET /v2/clusters/{id}` still reports the old ranges while the cluster is
+   PENDING, so the trailing `refresh()` inside `Cluster.update()` does not
+   reflect the change.
+   **Wrapper status:** `Cluster.update()` now takes
+   `wait_on_active`/`wait_interval`/`wait_timeout`, defaulting to `False` for
+   backward compatibility. With it, `update()` waits for ACTIVE and then — if
+   `firewall_ranges` or `allow_all_traffic` was passed — for the new ranges to
+   be reported, before the trailing `refresh()`. On this path the firewall wait
+   compares against the ranges that were requested rather than merely checking
+   for non-empty, because the pre-PATCH ranges are already non-empty; see
+   `ClusterManager._wait_on_firewall`. The asynchrony itself is still an API
+   bug: a caller who does not opt in still gets stale values back, and the SDK
+   is only papering over it. Worth raising with the API team alongside the
+   silently-ignored `name`.
+10. **Stage path normalization is inconsistent for directories.** Pre-existing
+    behavior in the shared `management/stage.py`, not v2-specific.
+    `mkdir()`/`rmdir()` append the trailing slash themselves
+    (`re.sub(r'/*$', '', path) + '/'`), but `info()` — and therefore
+    `exists()`, `is_dir()`, `is_file()` — pass the path through unchanged, so
+    `mkdir('d')` followed by `is_dir('d')` returns `False` while
+    `is_dir('d/')` returns `True`. The v1 suite happens to pass the slash
+    everywhere, which is why this never surfaced. Candidate fix: normalize in
+    `info()` too, or in `_fs_path()`.
+11. **`Stage.open(path, 'r')` on a missing object raises `ManagementError`,
+    not `FileNotFoundError`.** Also pre-existing shared behavior. The rest of
+    `open()`'s builtin-open emulation raises `OSError` subclasses
+    (`FileExistsError` for `'x'` on an existing path, `IsADirectoryError` from
+    `_download_file`), so the bare 404 coming through is an inconsistency
+    rather than a deliberate contract. Left as-is because changing it is
+    visible to v1 callers too; pinned by `TestStage::test_open`.
+12. **`POST /v2/clusters` applies `firewallRanges` asynchronously, outside the
+    state machine.** Confirmed live (2026-08-21): a cluster created with
+    `firewallRanges: ['0.0.0.0/0']` reaches ACTIVE with a resolvable endpoint
+    while `GET /v2/clusters/{id}` still reports `firewallRanges: []` — which
+    is deny-all, so connection attempts in that window time out at the TCP
+    level rather than failing authentication. `create_cluster()`'s
+    `wait_on_active` and its endpoint wait both completed before the firewall
+    landed, so the documented "wait until usable" contract was not actually
+    met: an SDK caller could get back an ACTIVE cluster whose endpoint refused
+    every connection. How long the gap lasts varies — one run had the firewall
+    in place by the time the tests ran, the next did not, which is what made
+    `TestCluster::test_connect` flaky.
+    **Wrapper status: fixed.** `ClusterManager._wait_on_firewall()` polls
+    `GET /v2/clusters/{id}` until the cluster admits inbound traffic, and
+    `create_cluster()` calls it under `wait_on_active`, after `_wait_on_state`
+    and `_wait_on_endpoint`, whenever `firewall_ranges` or `allow_all_traffic`
+    was requested. "Admits traffic" means non-empty `firewallRanges` **or**
+    `allowAllTraffic` — see item 13, the API stores a requested `0.0.0.0/0` as
+    the latter — rather than equality with the requested ranges, which the
+    server is free to normalize. The wait
+    is skipped for `firewall_ranges=[]`, which is a legitimate deny-all request
+    (see item 5) and would otherwise hang for the full timeout. The helper
+    lives in `v2/cluster.py` rather than the shared `manager.py` because this
+    is a v2 quirk and the v1 workspace path must not be affected. The live
+    suite's `_wait_for_firewall()` workaround is gone; `TestCluster.setUpClass`
+    now just asserts the SDK delivered a firewall that admits something.
+    The API behavior is still a bug — a caller passing `wait_on_active=False`,
+    or using `GET` directly, still sees the deny-all window — and is worth
+    raising with the API team.
+    **The wrapper fix is not airtight.** Observed 2026-08-25 on
+    `probe-pw-random-1787666958`: `create_cluster(wait_on_active=True,
+    firewall_ranges=['0.0.0.0/0'], allow_all_traffic=True)` returned, and the
+    *first* connection attempt still failed with `2003 ... (timed out)` — a TCP
+    timeout, the deny-all signature — while a second attempt seconds later
+    authenticated fine against the same endpoint. So `_wait_on_firewall()`
+    observed a cluster the `GET` already described as admitting traffic before
+    the data plane actually did. Polling the control plane cannot close this;
+    only a connect-retry loop would. Left as-is because it is the API's race to
+    fix, but any test that connects immediately after `create_cluster` should
+    retry rather than trust the first attempt.
+13. **`POST /v2/clusters` stores `firewallRanges: ['0.0.0.0/0']` as
+    `allowAllTraffic: True` with `firewallRanges: []`.** Confirmed live
+    (2026-08-21) on a cluster since terminated: after the create settled,
+    `GET /v2/clusters/{id}` reported `firewallRanges: []` and
+    `allowAllTraffic: True`, and the endpoint accepted connections — port 3306
+    open — so the empty list there does *not* mean deny-all in that
+    combination. The round trip is lossy: what was asked for as a range comes
+    back as a boolean, so a client cannot compare a create request against the
+    resulting cluster field by field. This is not consistent between runs
+    either — an earlier run of the same test had `firewallRanges:
+    ['0.0.0.0/0']` stored verbatim (that is what item 9's "still reports the
+    old ranges" observation was made against), which suggests either
+    region-dependent handling or an ordering effect in how the two fields are
+    written. Worth raising with the API team.
+    **Wrapper status:** `_wait_on_firewall()` treats either representation as
+    "reachable", and the update path additionally accepts `allowAllTraffic` as
+    satisfying a requested `0.0.0.0/0`. `Cluster.allow_all_traffic` was already
+    parsed, so nothing else changed.
+14. **Four v1 workspace-group capabilities have no v2 equivalent.** Recorded
+    here so that `CREATE CLUSTER` can be read against a list rather than
+    against `create_workspace_group`'s signature. `create_workspace_group`
+    posts `adminPassword`, `backupBucketKMSKeyID`, `dataBucketKMSKeyID` and
+    `smartDR`; `POST /v2/clusters` has none of the last three, and ignores the
+    first (item 8). Only `highAvailabilityTwoZones` survives the move, renamed
+    to `multiAZ` (`v2/cluster.py:250`).
+
+    Consequence for the Fusion grammar: `CREATE CLUSTER` deliberately offers no
+    `WITH PASSWORD`, KMS-key or `SMART DR` clause. A clause for any of them
+    would parse, be sent, and be dropped without comment — worse than not
+    offering it, because the statement would read as though it had taken
+    effect. The three KMS/DR fields are flag-only in the spec dump (see
+    cross-cutting item 2), so their absence at v2 is not independently
+    confirmable from the dump either.
+
+    Because the password is generated and reported only in the create response,
+    `CREATE CLUSTER` returns a one-row result carrying `Name`, `ID`, `Endpoint`
+    and `AdminPassword`. `CREATE WORKSPACE GROUP` returns no row, and the
+    divergence is deliberate: at v1 the caller already knew the password
+    because it chose it, and at v2 a cluster created without capturing the
+    response has no reachable `admin` user.
+
+    **Both previously open questions were settled on 2026-08-25** by one
+    throwaway `S-00` (`probe-adminpw-1787666027`, since terminated); see the
+    re-confirmation paragraph in item 8 for the POST half.
+
+    - **`PATCH /v2/clusters/{id}` does not honour `adminPassword` either.** The
+      PATCH was accepted and the cluster reported ACTIVE, but connecting as
+      `admin` with the patched value was refused with `1045: Access denied`,
+      while the password generated by the original create *continued to work*.
+      This is the same accept-and-silently-ignore shape item 9 records for
+      `name`. `WITH PASSWORD` is therefore not implementable as
+      create-then-PATCH, and `CREATE CLUSTER` keeps returning the generated
+      password as its `AdminPassword` column instead.
+
+      The first run of this probe allowed only a 30-second settle window and
+      never saw the cluster leave ACTIVE, so a slow-but-honored PATCH would have
+      looked ignored. Re-run 2026-08-25 with a 180-second window on two clusters
+      and two password shapes (see item 8): in all cases the patched value was
+      refused with `1045: Access denied` while the password generated by the
+      original create still authenticated. The timing caveat is closed.
+    - Re-confirmation of item 8 against the current API: **done**, and it holds.
+      The re-check mattered because finding 6's `GET /v2/regions/sharedtier`
+      claim had since been corrected from a live probe.
 
 ---
 
@@ -470,8 +746,24 @@ test churn:
    - `WorkspaceManager.create_starter_workspace`: `project_id`.
 4. **v2/ override layer** — v2 classes subclass v1 (per ADR 0001) and only
    override what differs. Adding fields in v1 propagates to v2 automatically
-   through inheritance — **no v2 changes are needed for any work in this
-   audit**.
+   through inheritance, so the *field* additions in this audit need no v2
+   counterpart.
+
+   > **Correction.** An earlier revision of this section concluded that "no v2
+   > changes are needed for any work in this audit." That was drawn from the
+   > stale, partial `dev-docs/management_api.openapi` snapshot and is wrong.
+   > v2 is not a field-compatible overlay on v1: it replaces the two-level
+   > `workspaceGroups` → `workspaces` hierarchy with a single flat `clusters`
+   > resource, and it moves the Stage, shared-tier, egress, and metrics paths.
+   > Inheritance alone therefore leaves v2 sending v1 paths to `/v2/`, which
+   > 404s. See `docs/adr/0001-versioned-management-api-wrappers.md`.
+   >
+   > `dev-docs/management_api.openapi` is **not authoritative**. It was
+   > refreshed from `https://api.singlestore.com/spec` on 2026-08-25 (1.2.171),
+   > which fixed the v2 coverage but dropped all but nine v1 routes; the
+   > `egress` family is still missing at both versions. Confirm endpoint
+   > existence by probing the live API (see the header comment in that file),
+   > not by reading the spec.
 
 ---
 

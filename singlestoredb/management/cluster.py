@@ -1,431 +1,37 @@
 #!/usr/bin/env python
-"""SingleStoreDB Cluster Management."""
-import datetime
-import warnings
-from typing import Any
-from typing import Dict
-from typing import List
+"""
+SingleStoreDB Cluster Management.
+
+Clusters are the flat deployment resource introduced by management API v2, so
+the names below come from :mod:`singlestoredb.management.v2.cluster`. There is
+no v1 cluster resource; :func:`manage_clusters` defaults to v2 accordingly.
+"""
 from typing import Optional
-from typing import Union
 
-from .. import config
-from .. import connection
-from ..exceptions import ManagementError
-from .manager import Manager
-from .region import Region
-from .utils import NamedList
-from .utils import to_datetime
-from .utils import vars_to_str
-
-
-class Cluster(object):
-    """
-    SingleStoreDB cluster definition.
-
-    This object is not instantiated directly. It is used in the results
-    of API calls on the :class:`ClusterManager`. Clusters are created using
-    :meth:`ClusterManager.create_cluster`, or existing clusters are accessed by either
-    :attr:`ClusterManager.clusters` or by calling :meth:`ClusterManager.get_cluster`.
-
-    See Also
-    --------
-    :meth:`ClusterManager.create_cluster`
-    :meth:`ClusterManager.get_cluster`
-    :attr:`ClusterManager.clusters`
-
-    """
-
-    def __init__(
-        self, name: str, id: str, region: Region, size: str,
-        units: float, state: str, version: str,
-        created_at: Union[str, datetime.datetime],
-        expires_at: Optional[Union[str, datetime.datetime]] = None,
-        firewall_ranges: Optional[List[str]] = None,
-        terminated_at: Optional[Union[str, datetime.datetime]] = None,
-        endpoint: Optional[str] = None,
-    ):
-        """Use :attr:`ClusterManager.clusters` or :meth:`ClusterManager.get_cluster`."""
-        #: Name of the cluster
-        self.name = name.strip()
-
-        #: Unique ID of the cluster
-        self.id = id
-
-        #: Region of the cluster (see :class:`Region`)
-        self.region = region
-
-        #: Size of the cluster in cluster size notation (S-00, S-1, etc.)
-        self.size = size
-
-        #: Size of the cluster in units such as 0.25, 1.0, etc.
-        self.units = units
-
-        #: State of the cluster: PendingCreation, Transitioning, Active,
-        #: Terminated, Suspended, Resuming, Failed
-        self.state = state.strip()
-
-        #: Version of the SingleStoreDB server
-        self.version = version.strip()
-
-        #: Timestamp of when the cluster was created
-        self.created_at = to_datetime(created_at)
-
-        #: Timestamp of when the cluster expires
-        self.expires_at = to_datetime(expires_at)
-
-        #: List of allowed incoming IP addresses / ranges
-        self.firewall_ranges = firewall_ranges
-
-        #: Timestamp of when the cluster was terminated
-        self.terminated_at = to_datetime(terminated_at)
-
-        #: Hostname (or IP address) of the cluster database server
-        self.endpoint = endpoint
-
-        self._manager: Optional[ClusterManager] = None
-
-    def __str__(self) -> str:
-        """Return string representation."""
-        return vars_to_str(self)
-
-    def __repr__(self) -> str:
-        """Return string representation."""
-        return str(self)
-
-    @classmethod
-    def from_dict(cls, obj: Dict[str, Any], manager: 'ClusterManager') -> 'Cluster':
-        """
-        Construct a Cluster from a dictionary of values.
-
-        Parameters
-        ----------
-        obj : dict
-            Dictionary of values
-        manager : ClusterManager, optional
-            The ClusterManager the Cluster belongs to
-
-        Returns
-        -------
-        :class:`Cluster`
-
-        """
-        out = cls(
-            name=obj['name'], id=obj['clusterID'],
-            region=Region.from_dict(obj['region'], manager),
-            size=obj.get('size', 'Unknown'), units=obj.get('units', float('nan')),
-            state=obj['state'], version=obj['version'],
-            created_at=obj['createdAt'], expires_at=obj.get('expiresAt'),
-            firewall_ranges=obj.get('firewallRanges'),
-            terminated_at=obj.get('terminatedAt'),
-            endpoint=obj.get('endpoint'),
-        )
-        out._manager = manager
-        return out
-
-    def refresh(self) -> 'Cluster':
-        """Update the object to the current state."""
-        if self._manager is None:
-            raise ManagementError(
-                msg='No cluster manager is associated with this object.',
-            )
-        new_obj = self._manager.get_cluster(self.id)
-        for name, value in vars(new_obj).items():
-            setattr(self, name, value)
-        return self
-
-    def update(
-        self, name: Optional[str] = None,
-        admin_password: Optional[str] = None,
-        expires_at: Optional[str] = None,
-        size: Optional[str] = None, firewall_ranges: Optional[List[str]] = None,
-    ) -> None:
-        """
-        Update the cluster definition.
-
-        Parameters
-        ----------
-        name : str, optional
-            Cluster name
-        admim_password : str, optional
-            Admin password for the cluster
-        expires_at : str, optional
-            Timestamp when the cluster expires
-        size : str, optional
-            Cluster size in cluster size notation (S-00, S-1, etc.)
-        firewall_ranges : Sequence[str], optional
-            List of allowed incoming IP addresses
-
-        """
-        if self._manager is None:
-            raise ManagementError(
-                msg='No cluster manager is associated with this object.',
-            )
-        data = {
-            k: v for k, v in dict(
-                name=name, adminPassword=admin_password,
-                expiresAt=expires_at, size=size,
-                firewallRanges=firewall_ranges,
-            ).items() if v is not None
-        }
-        self._manager._patch(f'clusters/{self.id}', json=data)
-        self.refresh()
-
-    def suspend(
-        self,
-        wait_on_suspended: bool = False,
-        wait_interval: int = 20,
-        wait_timeout: int = 600,
-    ) -> None:
-        """
-        Suspend the cluster.
-
-        Parameters
-        ----------
-        wait_on_suspended : bool, optional
-            Wait for the cluster to go into 'Suspended' mode before returning
-        wait_interval : int, optional
-            Number of seconds between each server check
-        wait_timeout : int, optional
-            Total number of seconds to check server before giving up
-
-        Raises
-        ------
-        ManagementError
-            If timeout is reached
-
-        """
-        if self._manager is None:
-            raise ManagementError(
-                msg='No cluster manager is associated with this object.',
-            )
-        self._manager._post(
-            f'clusters/{self.id}/suspend',
-            headers={'Content-Type': 'application/x-www-form-urlencoded'},
-        )
-        if wait_on_suspended:
-            self._manager._wait_on_state(
-                self._manager.get_cluster(self.id),
-                'Suspended', interval=wait_interval, timeout=wait_timeout,
-            )
-            self.refresh()
-
-    def resume(
-        self,
-        wait_on_resumed: bool = False,
-        wait_interval: int = 20,
-        wait_timeout: int = 600,
-    ) -> None:
-        """
-        Resume the cluster.
-
-        Parameters
-        ----------
-        wait_on_resumed : bool, optional
-            Wait for the cluster to go into 'Resumed' or 'Active' mode before returning
-        wait_interval : int, optional
-            Number of seconds between each server check
-        wait_timeout : int, optional
-            Total number of seconds to check server before giving up
-
-        Raises
-        ------
-        ManagementError
-            If timeout is reached
-
-        """
-        if self._manager is None:
-            raise ManagementError(
-                msg='No cluster manager is associated with this object.',
-            )
-        self._manager._post(
-            f'clusters/{self.id}/resume',
-            headers={'Content-Type': 'application/x-www-form-urlencoded'},
-        )
-        if wait_on_resumed:
-            self._manager._wait_on_state(
-                self._manager.get_cluster(self.id),
-                ['Resumed', 'Active'], interval=wait_interval, timeout=wait_timeout,
-            )
-            self.refresh()
-
-    def terminate(
-        self,
-        wait_on_terminated: bool = False,
-        wait_interval: int = 10,
-        wait_timeout: int = 600,
-    ) -> None:
-        """
-        Terminate the cluster.
-
-        Parameters
-        ----------
-        wait_on_terminated : bool, optional
-            Wait for the cluster to go into 'Terminated' mode before returning
-        wait_interval : int, optional
-            Number of seconds between each server check
-        wait_timeout : int, optional
-            Total number of seconds to check server before giving up
-
-        Raises
-        ------
-        ManagementError
-            If timeout is reached
-
-        """
-        if self._manager is None:
-            raise ManagementError(
-                msg='No cluster manager is associated with this object.',
-            )
-        self._manager._delete(f'clusters/{self.id}')
-        if wait_on_terminated:
-            self._manager._wait_on_state(
-                self._manager.get_cluster(self.id),
-                'Terminated', interval=wait_interval, timeout=wait_timeout,
-            )
-            self.refresh()
-
-    def connect(self, **kwargs: Any) -> connection.Connection:
-        """
-        Create a connection to the database server for this cluster.
-
-        Parameters
-        ----------
-        **kwargs : keyword-arguments, optional
-            Parameters to the SingleStoreDB `connect` function except host
-            and port which are supplied by the cluster object
-
-        Returns
-        -------
-        :class:`Connection`
-
-        """
-        if not self.endpoint:
-            raise ManagementError(
-                msg='An endpoint has not been set in '
-                'this cluster configuration',
-            )
-        kwargs['host'] = self.endpoint
-        return connection.connect(**kwargs)
-
-
-class ClusterManager(Manager):
-    """
-    SingleStoreDB cluster manager.
-
-    This class should be instantiated using :func:`singlestoredb.manage_cluster`.
-
-    Parameters
-    ----------
-    access_token : str, optional
-        The API key or other access token for the cluster management API
-    version : str, optional
-        Version of the API to use
-    base_url : str, optional
-        Base URL of the cluster management API
-
-    See Also
-    --------
-    :func:`singlestoredb.manage_cluster`
-
-    """
-
-    #: Cluster management API version if none is specified.
-    default_version = 'v0beta'
-
-    #: Base URL if none is specified.
-    default_base_url = config.get_option('management.base_url') \
-        or 'https://api.singlestore.com'
-
-    #: Object type
-    obj_type = 'cluster'
-
-    @property
-    def clusters(self) -> NamedList[Cluster]:
-        """Return a list of available clusters."""
-        res = self._get('clusters')
-        return NamedList([Cluster.from_dict(item, self) for item in res.json()])
-
-    @property
-    def regions(self) -> NamedList[Region]:
-        """Return a list of available regions."""
-        res = self._get('regions')
-        return NamedList([Region.from_dict(item, self) for item in res.json()])
-
-    def create_cluster(
-        self, name: str, region: Union[str, Region], admin_password: str,
-        firewall_ranges: List[str], expires_at: Optional[str] = None,
-        size: Optional[str] = None, plan: Optional[str] = None,
-        wait_on_active: bool = False, wait_timeout: int = 600,
-        wait_interval: int = 20,
-    ) -> Cluster:
-        """
-        Create a new cluster.
-
-        Parameters
-        ----------
-        name : str
-            Name of the cluster
-        region : str or Region
-            The region ID of the cluster
-        admin_password : str
-            Admin password for the cluster
-        firewall_ranges : Sequence[str], optional
-            List of allowed incoming IP addresses
-        expires_at : str, optional
-            Timestamp of when the cluster expires
-        size : str, optional
-            Cluster size in cluster size notation (S-00, S-1, etc.)
-        plan : str, optional
-            Internal use only
-        wait_on_active : bool, optional
-            Wait for the cluster to be active before returning
-        wait_timeout : int, optional
-            Maximum number of seconds to wait before raising an exception
-            if wait=True
-        wait_interval : int, optional
-            Number of seconds between each polling interval
-
-        Returns
-        -------
-        :class:`Cluster`
-
-        """
-        if isinstance(region, Region) and region.id:
-            region = region.id
-        res = self._post(
-            'clusters', json=dict(
-                name=name, regionID=region, adminPassword=admin_password,
-                expiresAt=expires_at, size=size, firewallRanges=firewall_ranges,
-                plan=plan,
-            ),
-        )
-        out = self.get_cluster(res.json()['clusterID'])
-        if wait_on_active:
-            out = self._wait_on_state(
-                out, 'Active', interval=wait_interval,
-                timeout=wait_timeout,
-            )
-        return out
-
-    def get_cluster(self, id: str) -> Cluster:
-        """
-        Retrieve a cluster definition.
-
-        Parameters
-        ----------
-        id : str
-            ID of the cluster
-
-        Returns
-        -------
-        :class:`Cluster`
-
-        """
-        res = self._get(f'clusters/{id}')
-        return Cluster.from_dict(res.json(), manager=self)
-
-
-def manage_cluster(
+from ._version_import import _import_versioned_module
+from ._version_import import DEFAULT_VERSION
+from .v2.cluster import Cluster as Cluster
+from .v2.cluster import ClusterManager as ClusterManager
+from .v2.cluster import get_cluster as get_cluster
+from .v2.cluster import get_organization as get_organization
+from .v2.cluster import get_secret as get_secret
+from .v2.cluster import get_stage as get_stage
+from .v2.cluster import Project as Project
+from .v2.cluster import PROJECT_ID_RE as PROJECT_ID_RE
+from .v2.cluster import SHAREDTIER_PATH as SHAREDTIER_PATH
+from .v2.cluster import Stage as Stage
+from .v2.cluster import StageObject as StageObject
+from .v2.cluster import StarterCluster as StarterCluster
+
+#: API version used by :func:`manage_clusters` when neither the caller nor the
+#: ``management.version`` option names one. Clusters exist at every version
+#: from v2 on, so this follows
+#: :data:`~singlestoredb.management._version_import.DEFAULT_VERSION` rather
+#: than naming a version of its own; v1 is rejected below instead.
+DEFAULT_CLUSTER_VERSION = DEFAULT_VERSION
+
+
+def manage_clusters(
     access_token: Optional[str] = None,
     version: Optional[str] = None,
     base_url: Optional[str] = None,
@@ -440,23 +46,43 @@ def manage_cluster(
     access_token : str, optional
         The API key or other access token for the cluster management API
     version : str, optional
-        Version of the API to use
+        Version of the API to use. Defaults to the ``management.version``
+        option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
+        variable), or to :data:`DEFAULT_CLUSTER_VERSION` when that is unset.
     base_url : str, optional
         Base URL of the cluster management API
-    organization_id: str, optional
+    organization_id : str, optional
         ID of organization, if using a JWT for authentication
 
     Returns
     -------
     :class:`ClusterManager`
 
+    Raises
+    ------
+    :class:`ManagementError`
+        If ``v1`` is the resolved version, whether requested by the caller or
+        by the ``management.version`` option. Clusters were introduced in v2;
+        the v1 equivalents are workspaces, reached with
+        :func:`singlestoredb.manage_workspaces`.
+
     """
-    warnings.warn(
-        'The cluster management API is deprecated; '
-        'use manage_workspaces instead.',
-        category=DeprecationWarning,
-    )
-    return ClusterManager(
+    from ..exceptions import ManagementError
+    from ._version_import import _resolve_version
+    # Follows the management.version option like the other public entry points
+    # rather than pinning the front door to one version, so a future version is
+    # picked up from the environment. A bare call lands on the current default,
+    # which has clusters; an explicit 'v1' does not and raises below.
+    ver = _resolve_version(version, default=DEFAULT_CLUSTER_VERSION)
+    if ver == 'v1':
+        raise ManagementError(
+            msg='clusters do not exist in management API v1; they replaced '
+                'workspaces in v2. Use manage_workspaces() instead, or ask '
+                'for v2, either with version="v2" here or by setting the '
+                'management.version option.',
+        )
+    mod = _import_versioned_module(ver, 'cluster')
+    return mod.ClusterManager(
         access_token=access_token, base_url=base_url,
-        version=version, organization_id=organization_id,
+        version=ver, organization_id=organization_id,
     )

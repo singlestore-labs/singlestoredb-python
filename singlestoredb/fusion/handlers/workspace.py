@@ -1,4 +1,19 @@
 #!/usr/bin/env python3
+"""
+Fusion SQL handlers for the management API v1 workspace vocabulary.
+
+**Deprecated.** ``handlers/cluster.py`` is the v2 replacement, and v2 is the
+default everywhere else in the SDK. Every command here except ``SHOW REGIONS``
+sets ``_deprecated_by`` naming its ``CLUSTER`` counterpart, so it still runs but
+warns once per execution; see :class:`ShowRegionsHandler` for why that one is the
+exception. Nothing is removed and no grammar changed -- an existing v1 script
+keeps working, it just says where to go. This module is what gets deleted when
+``management/v1/`` goes.
+
+Pinned to v1 through :func:`.utils.get_workspace_manager`: these commands *are*
+the v1 vocabulary, so they must not follow the ``management.version`` option onto
+a version that has no workspaces.
+"""
 import json
 from typing import Any
 from typing import Dict
@@ -77,6 +92,8 @@ class UseWorkspaceHandler(SQLHandler):
         USE WORKSPACE 'examplews' IN GROUP 'my-workspace-group';
 
     """
+    _deprecated_by = 'USE CLUSTER'
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         from singlestoredb.notebook import portal
 
@@ -176,8 +193,17 @@ class ShowRegionsHandler(SQLHandler):
 
         SHOW REGIONS LIKE 'US%' ORDER BY Name;
 
+    See Also
+    --------
+    * ``SHOW CLUSTER REGIONS``, the management API v2 equivalent
+
     """
 
+    # Deliberately *not* deprecated, unlike every other command in this module.
+    # It is the one v1 command whose v2 counterpart drops a column rather than
+    # renaming things: v2 has no region IDs, so ``SHOW CLUSTER REGIONS`` cannot
+    # report ``ID``. Warning here would push callers who need that column toward
+    # something that does not have it. Revisit if v2 ever grows region IDs.
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         manager = get_workspace_manager()
 
@@ -235,6 +261,8 @@ class ShowWorkspaceGroupsHandler(SQLHandler):
     * ``SHOW WORKSPACES``
 
     """
+
+    _deprecated_by = 'SHOW CLUSTERS'
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         manager = get_workspace_manager()
@@ -326,6 +354,8 @@ class ShowWorkspacesHandler(SQLHandler):
     * ``SHOW WORKSPACE GROUPS``
 
     """
+
+    _deprecated_by = 'SHOW CLUSTERS'
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         res = FusionSQLResult()
@@ -471,6 +501,8 @@ class CreateWorkspaceGroupHandler(SQLHandler):
 
     """
 
+    _deprecated_by = 'CREATE CLUSTER'
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         manager = get_workspace_manager()
 
@@ -606,6 +638,8 @@ class CreateWorkspaceHandler(SQLHandler):
 
     """  # noqa: E501
 
+    _deprecated_by = 'CREATE CLUSTER'
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         workspace_group = get_workspace_group(params)
 
@@ -708,6 +742,8 @@ class SuspendWorkspaceHandler(SQLHandler):
 
     """  # noqa: E501
 
+    _deprecated_by = 'SUSPEND CLUSTER'
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         ws = get_workspace(params)
         ws.suspend(wait_on_suspended=params['wait_on_suspended'])
@@ -783,6 +819,8 @@ class ResumeWorkspaceHandler(SQLHandler):
 
     """  # noqa: E501
 
+    _deprecated_by = 'RESUME CLUSTER'
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         ws = get_workspace(params)
         ws.resume(
@@ -850,6 +888,8 @@ class DropWorkspaceGroupHandler(SQLHandler):
     * ``DROP WORKSPACE``
 
     """
+
+    _deprecated_by = 'DROP CLUSTER'
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         try:
@@ -938,6 +978,8 @@ class DropWorkspaceHandler(SQLHandler):
     * ``DROP WORKSPACE GROUP``
 
     """
+
+    _deprecated_by = 'DROP CLUSTER'
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         try:

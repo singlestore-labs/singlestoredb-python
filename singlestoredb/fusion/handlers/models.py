@@ -5,12 +5,21 @@ from typing import Dict
 from typing import Optional
 
 from .. import result
+from ...management.utils import normalize_remote_path
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
 from .files import ShowFilesHandler
 from .utils import get_file_space
 from .utils import get_inference_api
 from .utils import get_inference_api_manager
+
+
+# Every handler in this module is hidden -- ``_enabled = False``, so it only
+# registers when SINGLESTOREDB_FUSION_ENABLE_HIDDEN is set. The models surface
+# is v1-only: the START/STOP/SHOW/DROP MODEL commands ride the ``inferenceapis/``
+# routes, which do not exist past v1, and the CUSTOM MODEL commands are the same
+# generation of API. Rather than let the grammar advertise commands that have no
+# v2 equivalent, none of them are registered by default.
 
 
 class ShowCustomModelsHandler(ShowFilesHandler):
@@ -70,6 +79,8 @@ class ShowCustomModelsHandler(ShowFilesHandler):
 
     """  # noqa: E501
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         params['file_location'] = 'MODELS'
 
@@ -122,6 +133,8 @@ class UploadCustomModelHandler(SQLHandler):
 
     """  # noqa: E501
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         params['file_location'] = 'MODELS'
 
@@ -130,16 +143,19 @@ class UploadCustomModelHandler(SQLHandler):
 
         file_space = get_file_space(params)
 
+        # Remote paths always use '/', so they can't be built with os.path.join
         if os.path.isdir(local_path):
             file_space.upload_folder(
                 local_path=local_path,
-                path=os.path.join(model_name, ''),
+                path=model_name,
                 overwrite=params['overwrite'],
             )
         else:
             file_space.upload_file(
                 local_path=local_path,
-                path=os.path.join(model_name, local_path),
+                path=normalize_remote_path(
+                    f'{model_name}/{os.path.basename(local_path)}',
+                ),
                 overwrite=params['overwrite'],
             )
 
@@ -199,6 +215,8 @@ class DownloadCustomModelHandler(SQLHandler):
 
     """  # noqa: E501
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         params['file_location'] = 'MODELS'
 
@@ -206,7 +224,7 @@ class DownloadCustomModelHandler(SQLHandler):
 
         model_name = params['model_name']
         file_space.download_folder(
-            path=os.path.join(model_name, ''),
+            path=model_name,
             local_path=params['local_path'] or model_name,
             overwrite=params['overwrite'],
         )
@@ -240,9 +258,12 @@ class DropCustomModelHandler(SQLHandler):
 
     """  # noqa: E501
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         params['file_location'] = 'MODELS'
-        path = os.path.join(params['model_name'], '')
+        # Remote paths always use '/', so they can't be built with os.path.join
+        path = normalize_remote_path(params['model_name']) + '/'
 
         file_space = get_file_space(params)
         file_space.removedirs(path=path)
@@ -280,6 +301,8 @@ class StartModelHandler(SQLHandler):
     * ``SHOW MODELS``
 
     """  # noqa: E501
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         inference_api = get_inference_api(params)
@@ -329,6 +352,8 @@ class StopModelHandler(SQLHandler):
 
     """  # noqa: E501
 
+    _enabled = False
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         inference_api = get_inference_api(params)
         operation_result = inference_api.stop()
@@ -370,6 +395,8 @@ class ShowModelsHandler(SQLHandler):
     * ``DROP MODEL model_name``
 
     """  # noqa: E501
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         inference_api_manager = get_inference_api_manager()
@@ -421,6 +448,8 @@ class DropModelHandler(SQLHandler):
     * ``SHOW MODELS``
 
     """  # noqa: E501
+
+    _enabled = False
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         inference_api = get_inference_api(params)

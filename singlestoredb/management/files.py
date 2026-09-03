@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import glob
 import io
 import os
 import re
@@ -21,7 +20,10 @@ from typing import Union
 from .. import config
 from ..exceptions import ManagementError
 from .manager import Manager
+from .utils import ensure_within
+from .utils import normalize_remote_path
 from .utils import PathLike
+from .utils import resolve_ignore_files
 from .utils import to_datetime
 from .utils import vars_to_str
 
@@ -30,14 +32,15 @@ SHARED_SPACE = 'shared'
 MODELS_SPACE = 'models'
 
 
-class FilesObject(object):
+class FilesObject:
     """
     File / folder object.
 
-    It can belong to either a workspace stage or personal/shared space.
+    It can belong to either a deployment's stage or personal/shared space.
 
     This object is not instantiated directly. It is used in the results
-    of various operations in ``WorkspaceGroup.stage``, ``FilesManager.personal_space``,
+    of various operations in ``Cluster.stage`` (``WorkspaceGroup.stage`` at
+    management API v1), ``FilesManager.personal_space``,
     ``FilesManager.shared_space`` and ``FilesManager.models_space`` methods.
 
     """
@@ -89,12 +92,13 @@ class FilesObject(object):
         self.content: List[str] = content or []
 
         self._location: Optional[FileLocation] = None
+        self._manager: Optional[Manager] = None
 
     @classmethod
     def from_dict(
         cls,
         obj: Dict[str, Any],
-        location: FileLocation,
+        location: Optional[FileLocation] = None,
     ) -> FilesObject:
         """
         Construct a FilesObject from a dictionary of values.
@@ -123,6 +127,8 @@ class FilesObject(object):
             writable=bool(obj['writable']),
         )
         out._location = location
+        if location is not None:
+            out._manager = location._manager
         return out
 
     def __str__(self) -> str:
@@ -352,6 +358,8 @@ class FilesObjectBytesReader(io.BytesIO):
 
 class FileLocation(ABC):
 
+    _manager: Manager
+
     @abstractmethod
     def open(
         self,
@@ -469,7 +477,7 @@ class FileLocation(ABC):
     def download_folder(
         self,
         path: PathLike,
-        local_path: PathLike = '.',
+        local_path: Optional[PathLike] = None,
         *,
         overwrite: bool = False,
     ) -> None:
@@ -517,8 +525,9 @@ class FilesManager(Manager):
 
     """
 
-    #: Management API version if none is specified.
-    default_version = config.get_option('management.version') or 'v1'
+    # The Files routes are the same at every version, so ``default_version``
+    # is inherited from ``Manager`` rather than pinned here: it picks the URL,
+    # not the implementation.
 
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url') \
@@ -558,7 +567,10 @@ def manage_files(
     access_token : str, optional
         The API key or other access token for the files management API
     version : str, optional
-        Version of the API to use
+        Version of the API to use. Defaults to the ``management.version``
+        option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
+        variable). ``'v1'`` is deprecated and raises a
+        :class:`DeprecationWarning`.
     base_url : str, optional
         Base URL of the files management API
     organization_id : str, optional
@@ -569,9 +581,15 @@ def manage_files(
     :class:`FilesManager`
 
     """
-    return FilesManager(
+    from ._version_import import _import_versioned_module
+    from ._version_import import _resolve_version
+    from ._version_import import _warn_if_deprecated_version
+    ver = _resolve_version(version)
+    _warn_if_deprecated_version(ver)
+    mod = _import_versioned_module(ver, 'files')
+    return mod.FilesManager(
         access_token=access_token, base_url=base_url,
-        version=version, organization_id=organization_id,
+        version=ver, organization_id=organization_id,
     )
 
 
@@ -714,8 +732,10 @@ class FileSpace(FileLocation):
         include_root : bool, optional
             Should the local root folder itself be uploaded as the top folder?
         ignore : Path or str or List[Path] or List[str], optional
-            Glob patterns of files to ignore, for example, '**/*.pyc` will
-            ignore all '*.pyc' files in the directory tree
+            Glob patterns of files or folders to ignore, for example,
+            ``**/*.pyc`` will ignore all ``*.pyc`` files in the directory
+            tree, and ``**/__pycache__`` will ignore those folders entirely.
+            Relative patterns are resolved against ``local_path``.
 
         """
         if not os.path.isdir(local_path):
@@ -724,30 +744,41 @@ class FileSpace(FileLocation):
         if not path:
             path = local_path
 
-        ignore_files = set()
-        if ignore:
-            if isinstance(ignore, list):
-                for item in ignore:
-                    ignore_files.update(glob.glob(str(item), recursive=recursive))
-            else:
-                ignore_files.update(glob.glob(str(ignore), recursive=recursive))
+        ignore_files = resolve_ignore_files(local_path, ignore)
 
-        for dir_path, _, files in os.walk(str(local_path)):
+        local_root = os.path.normpath(str(local_path))
+        root_name = os.path.basename(local_root)
+        remote_prefix = normalize_remote_path(path, strip_leading=True)
+
+        for dir_path, dirs, files in os.walk(local_root):
+            if ignore_files:
+                # Prune ignored folders so their contents are skipped too
+                dirs[:] = [
+                    d for d in dirs
+                    if os.path.normpath(os.path.join(dir_path, d))
+                    not in ignore_files
+                ]
             for fname in files:
-                if ignore_files and fname in ignore_files:
+                # Normalized so it compares equal to the normalized
+                # glob results in ignore_files (e.g. local_path='.')
+                local_file_path = os.path.normpath(os.path.join(dir_path, fname))
+                if ignore_files and local_file_path in ignore_files:
                     continue
 
-                local_file_path = os.path.join(dir_path, fname)
-                remote_path = os.path.join(
-                    path,
-                    local_file_path.lstrip(str(local_path)),
-                )
+                rel = os.path.relpath(local_file_path, local_root)
+                if include_root:
+                    rel = os.path.join(root_name, rel)
+                # Remote paths always use '/', whatever the local platform
+                rel = rel.replace(os.sep, '/')
+                remote_path = f'{remote_prefix}/{rel}' if remote_prefix else rel
                 self.upload_file(
                     local_path=local_file_path,
                     path=remote_path,
                     overwrite=overwrite,
                 )
-        return self.info(path)
+            if not recursive:
+                break
+        return self.info(remote_prefix)
 
     def _upload(
         self,
@@ -1020,8 +1051,7 @@ class FileSpace(FileLocation):
         List[str] or List[FilesObject]
 
         """
-        path = re.sub(r'^(\./|/)+', r'', str(path))
-        path = re.sub(r'/+$', r'', path) + '/'
+        path = normalize_remote_path(path, strip_leading=True) + '/'
 
         # Validate via listing GET; if response lacks 'content', it's not a directory
         try:
@@ -1136,29 +1166,43 @@ class FileSpace(FileLocation):
     def download_folder(
         self,
         path: PathLike,
-        local_path: PathLike = '.',
+        local_path: Optional[PathLike] = None,
         *,
         overwrite: bool = False,
     ) -> None:
         """
         Download a FileSpace folder to a local directory.
 
+        The contents of ``path`` are written into ``local_path``, which is
+        created as the destination folder.
+
         Parameters
         ----------
         path : Path or str
             Directory path
-        local_path : Path or str
-            Path to local directory target location
+        local_path : Path or str, optional
+            Local directory to create and download into. Defaults to the
+            name of the ``path`` folder in the current directory.
         overwrite : bool, optional
             Should an existing directory / files be overwritten if they exist?
 
         """
+        # Remote paths always use '/', whatever the local platform
+        remote_prefix = normalize_remote_path(path, strip_leading=True)
 
-        if local_path is not None and not overwrite and os.path.exists(local_path):
+        if local_path is None:
+            local_path = os.path.basename(remote_prefix)
+            if not local_path:
+                raise ValueError(
+                    'local_path must be specified when downloading '
+                    'the root folder',
+                )
+
+        if not overwrite and os.path.exists(local_path):
             raise OSError('target path already exists; use overwrite=True to replace')
 
         # listdir validates directory; no extra info call needed
-        entries = self.listdir(path, recursive=True, return_objects=True)
+        entries = self.listdir(remote_prefix, recursive=True, return_objects=True)
         for entry in entries:
             # Each entry is a FilesObject with path relative to root and type
             if not isinstance(entry, FilesObject):  # defensive: skip unexpected
@@ -1166,14 +1210,18 @@ class FileSpace(FileLocation):
             rel_path = entry.path
             if entry.type == 'directory':
                 # Ensure local directory exists; no remote call needed
-                target_dir = os.path.normpath(os.path.join(local_path, rel_path))
+                target_dir = ensure_within(
+                    local_path, os.path.join(local_path, rel_path),
+                )
                 os.makedirs(target_dir, exist_ok=True)
                 continue
-            remote_path = os.path.join(path, rel_path)
-            target_file = os.path.normpath(
-                os.path.join(local_path, rel_path),
+            remote_path = (
+                f'{remote_prefix}/{rel_path}' if remote_prefix else rel_path
             )
-            os.makedirs(os.path.dirname(target_file), exist_ok=True)
+            target_file = ensure_within(
+                local_path, os.path.join(local_path, rel_path),
+            )
+            os.makedirs(os.path.dirname(target_file) or '.', exist_ok=True)
             self._download_file(
                 remote_path, target_file,
                 overwrite=overwrite, _skip_dir_check=True,
