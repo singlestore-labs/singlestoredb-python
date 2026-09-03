@@ -13,6 +13,7 @@ import ast
 import contextlib
 import importlib
 import os
+import subprocess
 import sys
 import unittest
 import warnings
@@ -149,9 +150,9 @@ class TestConfigOption(unittest.TestCase):
         ``default_version`` must not be frozen from the config option at
         import time -- that let a v1 class declare itself to be v2.
 
-        ``Manager``/``FilesManager`` are level-set to v2, matching the option
-        default; ``WorkspaceManager`` is a v1 class and pins itself. Setting
-        the option must move none of them.
+        ``Manager`` takes the shared ``DEFAULT_VERSION`` and ``FilesManager``
+        inherits it; ``WorkspaceManager`` is a v1 class and pins itself.
+        Setting the option must move none of them.
         """
         from singlestoredb.management.manager import Manager
         from singlestoredb.management.v1.workspace import WorkspaceManager
@@ -161,6 +162,32 @@ class TestConfigOption(unittest.TestCase):
             with management_version(value):
                 for cls, want in expected.items():
                     self.assertEqual(cls.default_version, want, cls.__name__)
+
+    def test_default_version_ignores_the_environment_variable(self):
+        """
+        The same guard for ``SINGLESTOREDB_MANAGEMENT_VERSION``, which the
+        in-process check above cannot reach: the option's *registered default*
+        absorbs the environment variable at import
+        (``utils/config.py``, ``Option.__init__``), so resolving
+        ``default_version`` through ``config.get_default()`` would hand a v2
+        class a v1 URL whenever the variable was set. A fresh interpreter is
+        the only way to see it.
+        """
+        script = (
+            'from singlestoredb.management.manager import Manager;'
+            'from singlestoredb.management.files import FilesManager;'
+            'from singlestoredb.management import _version_import as vi;'
+            'from singlestoredb import config;'
+            'print(Manager.default_version, FilesManager.default_version,'
+            ' vi.DEFAULT_VERSION, config.get_option("management.version"))'
+        )
+        env = dict(os.environ, SINGLESTOREDB_MANAGEMENT_VERSION='v1')
+        out = subprocess.run(
+            [sys.executable, '-c', script],
+            env=env, capture_output=True, text=True, check=True,
+        ).stdout.split()
+        # The option follows the variable; the class attributes do not.
+        self.assertEqual(out, ['v2', 'v2', 'v2', 'v1'])
 
 
 class TestManageRoutingForAllFactories(unittest.TestCase):

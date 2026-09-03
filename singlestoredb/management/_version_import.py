@@ -6,6 +6,9 @@ import warnings
 from typing import Any
 from typing import Optional
 
+from .. import config
+from .._management_version import DEFAULT_MANAGEMENT_VERSION
+from .._management_version import DEPRECATED_MANAGEMENT_VERSION
 from ..exceptions import ManagementError
 
 
@@ -13,13 +16,15 @@ _VERSION_RE = re.compile(r'^v\d+$')
 
 #: API version used when neither the caller nor the ``management.version``
 #: option names one -- i.e. when the option has been explicitly blanked out,
-#: since it otherwise carries this same default itself.
-DEFAULT_VERSION = 'v2'
+#: since it otherwise carries this same default itself. Everything that should
+#: follow the current version reads this, so it is fixed in one place:
+#: :data:`singlestoredb._management_version.DEFAULT_MANAGEMENT_VERSION`.
+DEFAULT_VERSION = DEFAULT_MANAGEMENT_VERSION
 
 #: The version this SDK is winding down. Everything under
 #: ``singlestoredb.management.v1`` goes away with it, so any *public* entry
 #: point that resolves to it warns -- see :func:`_warn_if_deprecated_version`.
-DEPRECATED_VERSION = 'v1'
+DEPRECATED_VERSION = DEPRECATED_MANAGEMENT_VERSION
 
 
 def _warn_if_deprecated_version(version: str, stacklevel: int = 3) -> None:
@@ -88,7 +93,6 @@ def _resolve_version(
     str
 
     """
-    from .. import config
     return version or config.get_option('management.version') \
         or default or DEFAULT_VERSION
 

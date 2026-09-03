@@ -124,10 +124,6 @@ class RegionManager(Manager):
         """
         List regions that support shared tier deployments.
 
-        ``GET regions/sharedtier`` answers at both v1 and v2 with the same
-        shape as ``GET regions``, so the one implementation serves both
-        (verified live 2026-08-24).
-
         Returns
         -------
         NamedList[Region]
@@ -160,10 +156,8 @@ def manage_regions(
     version : str, optional
         Version of the API to use. Defaults to the ``management.version``
         option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
-        variable), which names ``v2``. Passing ``'v1'`` -- or inheriting it
-        from the option -- raises a :class:`DeprecationWarning`; ``regions``
-        and ``regions/sharedtier`` answer identically at both versions, so
-        there is nothing to keep v1 for here.
+        variable). ``'v1'`` is deprecated and raises a
+        :class:`DeprecationWarning`.
     base_url : str, optional
         Base URL of the management API
 

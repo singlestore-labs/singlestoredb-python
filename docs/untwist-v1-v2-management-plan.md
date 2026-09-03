@@ -137,6 +137,16 @@ each `ver = version or config.get_option('management.version') or 'v1'`.
 option-reads to literals by commit 393570e1 — reading the option at import froze it and let
 a v1 class declare itself v2. **Do not reintroduce option-reads here.**
 
+**Since superseded, 2026-09-03:** there are now two literals, not four. A class that
+implements one version's routes still pins that version (`v1/workspace.py`, `v2/cluster.py`);
+a version-neutral one takes `DEFAULT_VERSION`, which is
+`singlestoredb._management_version.DEFAULT_MANAGEMENT_VERSION` — the same constant that
+supplies the `management.version` option default, so the two cannot drift. `FilesManager` no
+longer declares `default_version` at all and inherits `Manager`'s. That is not an
+option-read: the constant is fixed at build time and no setting moves it. Note that
+`config.get_default()` is *also* an option-read for this purpose — `Option.__init__` folds
+`SINGLESTOREDB_MANAGEMENT_VERSION` into the registered default.
+
 **URL construction** — the single site, `manager.py:90-93`:
 `urljoin(self._base_url_root, version or type(self).default_version) + '/'`. Version is a
 path segment, not a separate host.

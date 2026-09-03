@@ -364,16 +364,10 @@ class Cluster:
         :class:`Cluster`
 
         """
-        # Size is reported as an object: dict(size='S-00', scaleFactor=1)
-        #
-        # The rename of this field to ``sizeConfig`` shipped on 2026-08-26, was
-        # backed out the next morning, and landed again by 2026-08-28, when
-        # ``POST /v2/clusters`` began answering ``400 request body contains an
-        # unknown field "size"``. The request bodies below send ``sizeConfig``
-        # accordingly; both keys are read here, since a field that has already
-        # been reverted once may be reverted again, and a response carrying the
-        # other name would otherwise silently leave
-        # :attr:`Cluster.size` as None. The ``size`` argument and
+        # Size is reported as an object: dict(size='S-00', scaleFactor=1),
+        # keyed as ``sizeConfig``. The older ``size`` key is read as a
+        # fallback, so a response using either name still populates
+        # :attr:`Cluster.size`. The ``size`` argument and
         # :attr:`Cluster.size` are wrapper-side names either way.
         size_spec = obj.get('sizeConfig') or obj.get('size') or {}
 
@@ -972,7 +966,9 @@ class ClusterManager(Manager):
 
     """
 
-    #: Cluster management API version if none is specified.
+    #: Cluster management API version if none is specified. A literal, because
+    #: this class implements the v2 routes; it does not follow whatever the
+    #: current default version is.
     default_version = 'v2'
 
     #: Base URL if none is specified.
@@ -1068,20 +1064,15 @@ class ClusterManager(Manager):
         By default the wait is for the cluster to admit *anything* -- either
         non-empty ``firewall_ranges`` or ``allow_all_traffic`` -- rather than
         for set-equality with the ranges that were requested, because the
-        server normalizes: verified live, ``firewallRanges: ['0.0.0.0/0']``
-        comes back as ``allowAllTraffic: True`` with ``firewallRanges: []``,
-        and that cluster accepts connections. Admitting something is the
-        property that actually matters on a fresh cluster -- it is the
+        server normalizes: ``firewallRanges: ['0.0.0.0/0']`` comes back as
+        ``allowAllTraffic: True`` with ``firewallRanges: []``. Admitting
+        something is the property that matters on a fresh cluster -- it is the
         difference between deny-all and reachable.
 
         On an *existing* cluster that already admits traffic, that says
         nothing. Pass ``expected`` there to wait for the specific ranges
         instead; a requested ``0.0.0.0/0`` is also satisfied by
         ``allow_all_traffic``, which is how the server stores it.
-
-        This lives here rather than in
-        :class:`~singlestoredb.management.manager.Manager` because it is
-        specific to the cluster routes.
 
         Parameters
         ----------
@@ -1546,13 +1537,7 @@ class ClusterManager(Manager):
         """
         Return a list of regions that support starter clusters.
 
-        ``GET /v2/regions/sharedtier`` answers with the same shape as
-        ``GET /v2/regions`` (verified live 2026-08-24), so this returns
-        :class:`Region` objects just like :attr:`regions`.
-
-        Cached on the same one-hour terms as :attr:`regions`; the set of
-        regions offering a shared tier changes on the scale of product
-        announcements, not of a session.
+        Cached for one hour, like :attr:`regions`.
 
         """
         res = self._get('regions/sharedtier')

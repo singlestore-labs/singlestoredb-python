@@ -4,6 +4,7 @@ import functools
 import os
 
 from . import auth
+from ._management_version import DEFAULT_MANAGEMENT_VERSION
 from .utils.config import check_bool  # noqa: F401
 from .utils.config import check_dict_str_str  # noqa: F401
 from .utils.config import check_float  # noqa: F401
@@ -309,12 +310,12 @@ register_option(
     environ=['SINGLESTOREDB_MANAGEMENT_BASE_URL'],
 )
 
-# v2 is the default (PART 7 of the v1/v2 untwist). Set this to 'v1' -- or pass
-# version='v1' to a manage_* factory -- to address the v1 endpoints, which
-# remain reachable until management/v1/ is removed. Kept in step with
-# Manager.default_version and FilesManager.default_version.
+# Set this to 'v1' -- or pass version='v1' to a manage_* factory -- to address
+# the v1 endpoints, which remain reachable until management/v1/ is removed.
+# The default comes from _management_version so that this option, the manage_*
+# factories, and Manager.default_version all move together.
 register_option(
-    'management.version', 'string', check_str, 'v2',
+    'management.version', 'string', check_str, DEFAULT_MANAGEMENT_VERSION,
     'Specifies the version for the management API.',
     environ=['SINGLESTOREDB_MANAGEMENT_VERSION'],
 )

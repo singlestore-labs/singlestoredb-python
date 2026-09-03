@@ -525,12 +525,9 @@ class FilesManager(Manager):
 
     """
 
-    #: Management API version if none is specified. See the note on
-    #: ``Manager.default_version``; ``manage_files()`` reads the
-    #: ``management.version`` option at call time instead.
-    #: Kept in step with the ``management.version`` option default. The Files
-    #: API is unchanged at v2, so this picks the URL, not the implementation.
-    default_version = 'v2'
+    # The Files routes are the same at every version, so ``default_version``
+    # is inherited from ``Manager`` rather than pinned here: it picks the URL,
+    # not the implementation.
 
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url') \
@@ -572,10 +569,8 @@ def manage_files(
     version : str, optional
         Version of the API to use. Defaults to the ``management.version``
         option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
-        variable), which names ``v2``. Passing ``'v1'`` -- or inheriting it
-        from the option -- raises a :class:`DeprecationWarning`; the Files
-        routes are identical at both versions, so there is nothing to keep
-        v1 for here.
+        variable). ``'v1'`` is deprecated and raises a
+        :class:`DeprecationWarning`.
     base_url : str, optional
         Base URL of the files management API
     organization_id : str, optional

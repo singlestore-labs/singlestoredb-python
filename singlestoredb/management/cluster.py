@@ -9,6 +9,7 @@ no v1 cluster resource; :func:`manage_clusters` defaults to v2 accordingly.
 from typing import Optional
 
 from ._version_import import _import_versioned_module
+from ._version_import import DEFAULT_VERSION
 from .v2.cluster import Cluster as Cluster
 from .v2.cluster import ClusterManager as ClusterManager
 from .v2.cluster import get_cluster as get_cluster
@@ -23,8 +24,11 @@ from .v2.cluster import StageObject as StageObject
 from .v2.cluster import StarterCluster as StarterCluster
 
 #: API version used by :func:`manage_clusters` when neither the caller nor the
-#: ``management.version`` option names one.
-DEFAULT_CLUSTER_VERSION = 'v2'
+#: ``management.version`` option names one. Clusters exist at every version
+#: from v2 on, so this follows
+#: :data:`~singlestoredb.management._version_import.DEFAULT_VERSION` rather
+#: than naming a version of its own; v1 is rejected below instead.
+DEFAULT_CLUSTER_VERSION = DEFAULT_VERSION
 
 
 def manage_clusters(
@@ -67,8 +71,8 @@ def manage_clusters(
     from ._version_import import _resolve_version
     # Follows the management.version option like the other public entry points
     # rather than pinning the front door to one version, so a future version is
-    # picked up from the environment. The option now defaults to 'v2', so a
-    # bare call succeeds; an explicit 'v1' still has no clusters and raises.
+    # picked up from the environment. A bare call lands on the current default,
+    # which has clusters; an explicit 'v1' does not and raises below.
     ver = _resolve_version(version, default=DEFAULT_CLUSTER_VERSION)
     if ver == 'v1':
         raise ManagementError(

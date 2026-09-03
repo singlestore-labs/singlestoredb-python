@@ -59,9 +59,10 @@ def _manage_workspaces_v1(
     if ver != 'v1':
         raise ManagementError(
             msg=f'workspaces do not exist in management API {ver}; they were '
-                'replaced by clusters. Use manage_clusters() instead, or ask '
-                'for v1, either with version="v1" here or by setting the '
-                'management.version option.',
+                'replaced by clusters. Use manage_clusters() instead, or pass '
+                'version="v1" here. Note that the management.version option '
+                'does not reach this function: workspaces are v1-only, so it '
+                'has nothing to select.',
         )
     mod = _import_versioned_module(ver, 'workspace')
     return mod.WorkspaceManager(
@@ -93,8 +94,7 @@ def manage_workspaces(
         Version of the API to use. Defaults to ``'v1'``, **not** to the
         ``management.version`` option: workspaces exist only at v1, so there is
         no version for this function to dispatch on. Passing anything else
-        raises. Note that this makes ``manage_workspaces()`` the one public
-        entry point the option does not steer -- see the note below.
+        raises. This is the one public entry point the option does not steer.
     base_url : str, optional
         Base URL of the workspace management API
     organization_id : str, optional
@@ -121,27 +121,17 @@ def manage_workspaces(
         stacklevel=2,
     )
     # Pinned to v1 rather than resolved through the management.version option.
+    # The option selects between implementations of a resource that exists at
+    # more than one version; workspaces exist only at v1, so there is nothing
+    # here for it to select, and resolving it would make a bare
+    # manage_workspaces() raise as soon as the default moved past v1 -- v1
+    # ceasing to work rather than v1 being deprecated. Callers are steered to
+    # clusters by the deprecation warning above, not by an exception.
     #
-    # An earlier cut of the v2 default flip did resolve the option here, for
-    # symmetry with the other public entry points and so that a caller whose org
-    # had outgrown v1 would be told to move rather than quietly handed a v1
-    # manager. The cost was too high: because the option now defaults to v2, a
-    # bare manage_workspaces() -- the overwhelmingly common call -- started
-    # raising, which is v1 ceasing to work rather than v1 being deprecated.
-    #
-    # Pinning is also the more honest reading of the option. It selects between
-    # implementations of a resource that exists at more than one version;
-    # workspaces exist only at v1, so there is nothing here for it to select.
-    # Callers are steered to clusters by the deprecation warning above, not by
-    # an exception.
-    #
-    # This is deliberately *not* symmetrical with manage_clusters(), which does
-    # consult the option and raises when it names v1. The asymmetry is in what
-    # the option's value tells you now that it defaults to v2: reading 'v2' is
-    # no signal at all, since that is just the default, so it cannot justify
-    # refusing a workspace manager. Reading 'v1' is a signal -- nobody arrives
-    # at it without setting it -- so manage_clusters() is right to treat it as a
-    # deliberate request it cannot satisfy.
+    # Deliberately *not* symmetrical with manage_clusters(), which does consult
+    # the option and raises when it names v1: an option reading v1 is a
+    # deliberate request that manage_clusters() cannot satisfy, whereas an
+    # option sitting at its default says nothing about workspaces.
     return _manage_workspaces_v1(
         access_token, version, base_url,
         organization_id=organization_id,

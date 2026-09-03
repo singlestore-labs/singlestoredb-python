@@ -19,6 +19,7 @@ from . import timing
 from .. import config
 from ..exceptions import ManagementError
 from ..exceptions import OperationalError
+from ._version_import import DEFAULT_VERSION
 from .utils import get_token
 
 
@@ -100,13 +101,15 @@ def is_jwt(token: str) -> bool:
 class Manager:
     """SingleStoreDB manager base class."""
 
-    #: Management API version if none is specified. A literal, not the
-    #: ``management.version`` option: the option is read by the ``manage_*``
-    #: factories at call time, so reading it here would freeze it at import
-    #: and let a v1 class declare itself to be v2.
-    #: Kept in step with the ``management.version`` option default, which is
-    #: also v2; a v1 class pins itself instead of inheriting this.
-    default_version = 'v2'
+    #: Management API version if none is specified. The shared
+    #: :data:`~singlestoredb.management._version_import.DEFAULT_VERSION`, which
+    #: also supplies the ``management.version`` option default, so the two
+    #: cannot drift. Deliberately not a reading of that option: it is read by
+    #: the ``manage_*`` factories at call time, and reading it here would let a
+    #: version-specific class declare itself to be whatever the option happened
+    #: to say. A class that implements one specific version pins that version
+    #: as a literal instead of inheriting this.
+    default_version = DEFAULT_VERSION
 
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url') \

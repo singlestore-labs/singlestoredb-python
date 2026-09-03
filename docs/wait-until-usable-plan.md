@@ -237,10 +237,19 @@ if ver == 'v1':
 
 `management/cluster.py:72`. `DEFAULT_CLUSTER_VERSION` survives as the fallback
 for an *explicitly blanked* option, which is the same role
-`_version_import.DEFAULT_VERSION` plays for `manage_workspaces()`. The `v1` →
-`ManagementError` path is unchanged, and it now fires for an option-supplied
-`v1` as well as an explicit argument — which is the intended reading of "clusters
-do not exist in v1", not a regression.
+`_version_import.DEFAULT_VERSION` plays for every other neutral entry point.
+(Not for `manage_workspaces()`, which is pinned to `v1` and reads neither.) The
+`v1` → `ManagementError` path is unchanged, and it now fires for an
+option-supplied `v1` as well as an explicit argument — which is the intended
+reading of "clusters do not exist in v1", not a regression.
+
+**Since superseded, 2026-09-03:** `DEFAULT_CLUSTER_VERSION` no longer names a
+version of its own — it is `DEFAULT_VERSION`, which is
+`singlestoredb._management_version.DEFAULT_MANAGEMENT_VERSION`, the one literal
+that also supplies the `management.version` option default. Clusters exist at
+every version from v2 on, so the cluster front door has nothing of its own to
+name; the "no clusters at v1" rule is carried by the explicit `v1` guard alone.
+The line numbers cited above predate that change.
 
 Verify: unit tests for all four cases — no option set, option `v1`, option
 `v2`, explicit `version='v1'` still raising.
