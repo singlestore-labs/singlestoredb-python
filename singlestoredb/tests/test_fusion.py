@@ -423,8 +423,15 @@ class TestFusion(unittest.TestCase):
                 ),
             )
 
-    def test_stage_handlers_accept_in_cluster(self):
-        """All six Stage handlers take IN CLUSTER, IN GROUP and a bare IN."""
+    def test_stage_handlers_name_a_deployment_with_a_bare_in(self):
+        """
+        All six Stage handlers take a bare ``IN``, and no ``IN CLUSTER``.
+
+        A deployment is named the same way whatever kind it is, so there is
+        nothing for a qualified spelling to disambiguate -- ``IN CLUSTER`` would
+        resolve exactly where the bare ``IN`` already does. ``IN GROUP`` is kept
+        only because it already parses.
+        """
         from singlestoredb.fusion import registry
         from singlestoredb.fusion.handler import SQLHandler
         from singlestoredb.fusion.handlers import stage
@@ -439,27 +446,34 @@ class TestFusion(unittest.TestCase):
         for cls in handlers:
             cls.compile()
             grammar = cls._grammar
-            assert 'in_cluster = IN CLUSTER' in grammar, cls.__name__
+            assert 'IN CLUSTER' not in grammar, cls.__name__
             assert 'in_group = IN GROUP' in grammar, cls.__name__
-            # in_cluster must precede the bare in_deployment in the
-            # alternation, or IN would win before CLUSTER is considered.
-            alternation = 'in = { in_cluster | in_group | in_deployment }'
+            # in_group must precede the bare in_deployment in the alternation,
+            # or IN would win before GROUP is considered and IN GROUP 'x' would
+            # parse as a deployment named GROUP.
+            alternation = 'in = { in_group | in_deployment }'
             assert alternation in grammar, cls.__name__
 
         # SHOW STAGE FILES is representative; the clause is identical on all six.
         cls = registry._handlers['SHOW STAGE FILES']
         cls.compile()
         for sql, key in [
-            ("SHOW STAGE FILES IN CLUSTER 'c1'", 'in_cluster'),
-            ("SHOW STAGE FILES IN CLUSTER ID 'abc'", 'in_cluster'),
             ("SHOW STAGE FILES IN GROUP 'g1'", 'in_group'),
+            ("SHOW STAGE FILES IN GROUP ID 'abc'", 'in_group'),
             ("SHOW STAGE FILES IN 'd1'", 'in_deployment'),
+            ("SHOW STAGE FILES IN ID 'abc'", 'in_deployment'),
         ]:
             inst = cls.__new__(cls)
             inst.connection = None
             inst._handled = set()
             params = inst.visit(cls.grammar.parse(sql))
             assert key in params['in'], (sql, params['in'])
+
+        # IN CLUSTER no longer parses at all. It must not quietly become a
+        # deployment named CLUSTER, which is what dropping in_cluster from the
+        # alternation would do if CLUSTER were a valid <deployment-name>.
+        with self.assertRaises(Exception):
+            cls.grammar.parse("SHOW STAGE FILES IN CLUSTER 'c1'")
 
     def test_fusion_managers_are_version_pinned(self):
         """
@@ -581,7 +595,7 @@ class TestFusion(unittest.TestCase):
         """
         ``IN GROUP`` resolves against clusters, and says so when it misses.
 
-        The spelling is only a synonym for ``IN CLUSTER``, so a caller who typed
+        The spelling is only a synonym for a bare ``IN``, so a caller who typed
         it meaning a v1 workspace group gets no match -- and, without the hint,
         no way to tell that from a genuinely absent cluster. The other
         spellings must not carry the hint, or it becomes noise on every miss.
@@ -618,10 +632,9 @@ class TestFusion(unittest.TestCase):
             assert needle in msg
             assert 'IN GROUP' in msg, msg
 
-        # The cluster and bare spellings get the plain message.
+        # The bare spellings get the plain message.
         for params in (
             dict(deployment_name='c1'),
-            {'in': dict(in_cluster=dict(deployment_name='c1'))},
             {'in': dict(in_deployment=dict(deployment_name='c1'))},
             dict(in_deployment=dict(deployment_id=group_id)),
         ):
@@ -1997,18 +2010,15 @@ class TestStageFusion(unittest.TestCase):
             'subdir2/',
         ]
 
-        # List files in a specific deployment. All four spellings address the
-        # same cluster: IN CLUSTER is the v2-native one, IN GROUP is kept as a
-        # synonym so existing scripts keep working, and the bare IN was always
-        # version-neutral.
+        # List files in a specific deployment. A bare IN names it; IN GROUP is
+        # kept as a synonym so existing scripts keep working. Both address the
+        # same cluster.
         expected = [
             'new_test_1.sql',
             'subdir1/',
             'subdir2/',
         ]
         for clause in [
-            f"in cluster id '{self.cluster.id}'",
-            f"in cluster '{self.cluster.name}'",
             f"in group id '{self.cluster.id}'",
             f"in group '{self.cluster.name}'",
             f"in id '{self.cluster.id}'",
@@ -2021,7 +2031,7 @@ class TestStageFusion(unittest.TestCase):
 
         # Check the other cluster, by both spellings
         for clause in [
-            f"in cluster '{self.cluster_2.name}'",
+            f"in '{self.cluster_2.name}'",
             f"in group '{self.cluster_2.name}'",
         ]:
             self.cur.execute(f'show stage files {clause}')

@@ -417,7 +417,6 @@ _DEPLOYMENT_KEYS: Tuple[Tuple[Tuple[str, ...], bool], ...] = (
     ((), False),
     (('in_deployment',), False),
     (('group',), True),
-    (('in', 'in_cluster'), False),
     (('in', 'in_group'), True),
     (('in', 'in_deployment'), False),
 )
@@ -429,7 +428,7 @@ _DEPLOYMENT_KEYS: Tuple[Tuple[Tuple[str, ...], bool], ...] = (
 # group otherwise gets a bare miss with nothing to explain it.
 #
 _GROUP_SPELLING_HINT = (
-    ' -- IN GROUP is a synonym for IN CLUSTER, so it resolves against '
+    ' -- IN GROUP is a synonym for a bare IN, so it resolves against '
     'clusters; a workspace group name or ID is not one and will not be found. '
     'Name the cluster instead.'
 )
@@ -476,17 +475,17 @@ def get_deployment(
         * params['group']['deployment_id']
         * params['in_deployment']['deployment_name']
         * params['in_deployment']['deployment_id']
-        * params['in']['in_cluster']['deployment_name']
-        * params['in']['in_cluster']['deployment_id']
         * params['in']['in_group']['deployment_name']
         * params['in']['in_group']['deployment_id']
         * params['in']['in_deployment']['deployment_name']
         * params['in']['in_deployment']['deployment_id']
 
-    The ``group`` and ``in_group`` keys stay wired so that the existing
-    ``IN GROUP`` spelling keeps parsing as a synonym for ``IN CLUSTER``. It is
-    only a synonym -- it resolves against clusters like every other spelling --
-    so a value that arrived through one of those keys and then missed earns
+    A bare ``IN`` is the spelling to use: a deployment is named the same way
+    whatever kind it is, so there is nothing for the clause to disambiguate.
+    The ``group`` and ``in_group`` keys stay wired only so that the existing
+    ``IN GROUP`` spelling keeps parsing. It is a synonym -- it resolves against
+    clusters like every other spelling -- so a value that arrived through one
+    of those keys and then missed earns
     :data:`_GROUP_SPELLING_HINT`, which is the difference between a workspace
     group name and an absent cluster.
 
@@ -574,7 +573,7 @@ def get_deployment(
             'API v2 reports as a cluster attribute rather than something that '
             'can be looked up -- clusters are flat. Set '
             'SINGLESTOREDB_WORKSPACE to the cluster ID instead, or name the '
-            'deployment with IN CLUSTER.',
+            'deployment with IN.',
         )
 
     raise KeyError('no deployment was specified')

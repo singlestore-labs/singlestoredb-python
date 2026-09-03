@@ -13,9 +13,9 @@ unrelated option onto the other one.
 Every handler here resolves its target with ``get_cluster({})``, which reads
 ``SINGLESTOREDB_WORKSPACE``. At v1 it was ``get_workspace_group({})``, reading
 ``SINGLESTOREDB_WORKSPACE_GROUP`` -- so the environment variable that names the
-export target changed with the version. There is deliberately no ``IN CLUSTER``
-clause: none of these commands took a target clause at v1 either, and adding one
-is a grammar change rather than part of the version move.
+export target changed with the version. There is deliberately no ``IN`` clause:
+none of these commands took a target clause at v1 either, and adding one is a
+grammar change rather than part of the version move.
 
 All handlers are hidden (``_enabled = False``), so they only register under
 ``SINGLESTOREDB_FUSION_ENABLE_HIDDEN``.
