@@ -3,9 +3,8 @@
 SingleStoreDB Job Management API v1 -- **deprecated**.
 
 .. deprecated::
-   Deprecated with the rest of :mod:`singlestoredb.management.v1`. Use
-   :mod:`singlestoredb.management.job`, whose ``JobsManager`` sends the v2
-   ``targetType`` vocabulary, reached from :attr:`Organization.jobs` at v2.
+   Use :mod:`singlestoredb.management.job`, reached from
+   :attr:`Organization.jobs`.
 """
 from ..job import Execution as Execution
 from ..job import ExecutionConfig as ExecutionConfig
@@ -28,17 +27,16 @@ class JobsManager(_JobsManager):
     SingleStoreDB scheduled notebook jobs manager (API v1).
 
     .. deprecated::
-       Use :class:`singlestoredb.management.job.JobsManager`, the v2 class.
+       Use :class:`singlestoredb.management.job.JobsManager`.
 
-    The ``jobs`` routes themselves are unchanged from v1 to v2. What changed
-    is the ``targetConfig.targetType`` vocabulary: v1's ``'Workspace'`` and
-    ``'VirtualWorkspace'`` became ``'Cluster'`` and ``'VirtualCluster'``.
+    The ``jobs`` routes are the shared ones; what is specific here is the
+    ``targetConfig.targetType`` vocabulary this manager schedules with,
+    ``'Workspace'`` and ``'VirtualWorkspace'``.
 
-    Note that ``'Cluster'`` means different things at the two versions: a
-    legacy self-managed cluster at v1, and the resource v1 called a workspace
-    from v2 onward. Only the read path ever sees the v1 sense of it -- the
-    deployment a job is scheduled against comes from
-    ``SINGLESTOREDB_WORKSPACE``, which never names a legacy cluster.
+    ``'Cluster'`` is a third value these routes accept, naming a legacy
+    self-managed cluster. Only the read path ever sees it -- the deployment a
+    job is scheduled against comes from ``SINGLESTOREDB_WORKSPACE``, which
+    never names a legacy cluster.
     """
 
     _deployment_target_type = TargetType.WORKSPACE

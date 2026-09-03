@@ -69,7 +69,7 @@ from . import rowdat_1
 from . import utils
 from ... import connection
 from ...config import get_option
-from ...management.workspace import _manage_workspaces_v1
+from ...management.stage import get_stage
 from ...mysql.constants import FIELD_TYPE as ft
 from ..signature import get_signature
 from ..signature import signature_to_sql
@@ -1992,23 +1992,20 @@ class Application(object):
             if not url.path or url.path == '/':
                 raise ValueError(f'no stage path was specified: {destination}')
 
-            mgr = _manage_workspaces_v1()
-            if url.hostname:
-                wsg = mgr.get_workspace_group(url.hostname)
-            # Pinned to v1: SINGLESTOREDB_WORKSPACE_GROUP holds a group ID, and
-            # a group is an addressable resource only at v1.
-            elif os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP'):
-                wsg = mgr.get_workspace_group(
-                    os.environ['SINGLESTOREDB_WORKSPACE_GROUP'],
-                )
-            else:
-                raise ValueError(f'no workspace group specified: {destination}')
+            # The host names the deployment whose Stage is wanted: a cluster at
+            # v2, a workspace group at v1. With no host, get_stage falls back to
+            # the deployment named by the environment -- SINGLESTOREDB_WORKSPACE
+            # at v2, SINGLESTOREDB_WORKSPACE_GROUP at v1.
+            try:
+                stage = get_stage(url.hostname or None)
+            except RuntimeError:
+                raise ValueError(f'no deployment specified: {destination}')
 
             # Make intermediate directories
             if url.path.count('/') > 1:
-                wsg.stage.mkdirs(os.path.dirname(url.path))
+                stage.mkdirs(os.path.dirname(url.path))
 
-            wsg.stage.upload_file(
+            stage.upload_file(
                 local_path, url.path + f'{name}.env',
                 overwrite=overwrite,
             )
@@ -2207,23 +2204,21 @@ def main(argv: Optional[List[str]] = None) -> None:
                 if url.path.endswith('/'):
                     raise ValueError(f'an environment file must be specified: {f}')
 
-                mgr = _manage_workspaces_v1()
-                if url.hostname:
-                    wsg = mgr.get_workspace_group(url.hostname)
-                # Pinned to v1: SINGLESTOREDB_WORKSPACE_GROUP holds a group ID,
-                # and a group is an addressable resource only at v1.
-                elif os.environ.get('SINGLESTOREDB_WORKSPACE_GROUP'):
-                    wsg = mgr.get_workspace_group(
-                        os.environ['SINGLESTOREDB_WORKSPACE_GROUP'],
-                    )
-                else:
-                    raise ValueError(f'no workspace group specified: {f}')
+                # The host names the deployment whose Stage is wanted: a cluster
+                # at v2, a workspace group at v1. With no host, get_stage falls
+                # back to the deployment named by the environment --
+                # SINGLESTOREDB_WORKSPACE at v2,
+                # SINGLESTOREDB_WORKSPACE_GROUP at v1.
+                try:
+                    stage = get_stage(url.hostname or None)
+                except RuntimeError:
+                    raise ValueError(f'no deployment specified: {f}')
 
                 if tmpdir is None:
                     tmpdir = tempfile.TemporaryDirectory()
 
                 local_path = os.path.join(tmpdir.name, url.path.split('/')[-1])
-                wsg.stage.download_file(url.path, local_path)
+                stage.download_file(url.path, local_path)
                 args.functions[i] = local_path
 
             elif f.startswith('http://') or f.startswith('https://'):

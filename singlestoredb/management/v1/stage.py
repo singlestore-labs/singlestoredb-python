@@ -3,8 +3,7 @@
 SingleStoreDB Stage Management API v1 -- **deprecated**.
 
 .. deprecated::
-   Deprecated with the rest of :mod:`singlestoredb.management.v1`. Use
-   :mod:`singlestoredb.management.stage`, whose ``Stage`` is the v2 route.
+   Use :mod:`singlestoredb.management.stage`.
 """
 from ..stage import Stage as _Stage
 from ..utils import PathLike
@@ -12,15 +11,14 @@ from ..utils import PathLike
 
 class Stage(_Stage):
     """
-    Stage file space for a v1 workspace group or starter workspace.
+    Stage file space for a workspace group or starter workspace.
 
     .. deprecated::
-       Use :class:`singlestoredb.management.stage.Stage`, the v2 route, reached
-       from :attr:`Cluster.stage` or :func:`singlestoredb.management.get_stage`.
+       Use :class:`singlestoredb.management.stage.Stage`, reached from
+       :attr:`Cluster.stage` or :func:`singlestoredb.management.get_stage`.
 
-    At v1 Stage is a top-level resource keyed by deployment ID:
-    ``stage/{id}/fs/``. From v2 onward it is nested under the cluster, which
-    is what the shared base implements.
+    Here Stage is a top-level resource keyed by deployment ID:
+    ``stage/{id}/fs/``, which is why this subclass overrides the path.
     """
 
     def _fs_path(self, path: PathLike = '') -> str:

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Fusion SQL handlers for the management API v2 cluster vocabulary.
+Fusion SQL handlers for the management API cluster vocabulary.
 
-Kept separate from :mod:`singlestoredb.fusion.handlers.workspace` on purpose.
-That module is pinned to v1 through :func:`get_workspace_manager` and this one
-is pinned to v2 through :func:`get_cluster_manager`; mixing two API versions in
-one module invites reaching for the wrong manager. Keeping them apart also
-makes retiring the v1 surface a matter of deleting a file.
+Every handler here reaches the API through :func:`get_cluster_manager`, so the
+``CLUSTER`` commands always address the cluster resource whatever the
+``management.version`` option is set to.
 
-The two vocabularies coexist: v1's nested ``WorkspaceGroup``/``Workspace`` pair
-and v2's single flat ``Cluster``. A cluster is created in one statement, where
-a workspace needed two, and v2 has no region IDs -- so there is deliberately no
-``IN REGION ID`` alternate here, unlike ``CREATE WORKSPACE GROUP``.
+A cluster is a single flat deployment resource: one ``CREATE CLUSTER``
+statement provisions it, and the compute settings (size, auto-suspend, cache)
+and the deployment-wide settings (firewall, update window, expiration) all live
+on the one object. A region is identified by its ``(provider, region_name)``
+pair rather than by an ID, so ``IN REGION`` takes a name and there is no
+``IN REGION ID`` alternate.
 """
 import json
 from typing import Any
@@ -19,6 +19,7 @@ from typing import Dict
 from typing import Optional
 
 from .. import result
+from ...management.cluster import ClusterManager
 from ..handler import SQLHandler
 from ..result import FusionSQLResult
 from .utils import dt_isoformat
@@ -41,8 +42,7 @@ def _auto_suspend(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not params.get('auto_suspend'):
         return None
     # The clause parses to one flat dict, not a list of one dict per
-    # sub-rule. CreateWorkspaceHandler indexes it as a list, which is why
-    # ``CREATE WORKSPACE ... AUTO SUSPEND`` raises; do not copy that.
+    # sub-rule, so index it directly.
     clause = params['auto_suspend']
     units = clause['suspend_after_units'].upper()
     return dict(
@@ -77,28 +77,47 @@ def _cluster_project_id(cluster: Any) -> Optional[str]:
     return project.id
 
 
-def _resolve_region(params: Dict[str, Any]) -> Dict[str, Any]:
+def _resolve_region(
+    params: Dict[str, Any],
+    manager: ClusterManager,
+) -> Dict[str, Any]:
     """
     Resolve an ``IN REGION`` clause to ``create_cluster`` keywords.
 
-    v2 has no region IDs, so a region is identified by its
-    ``(provider, region_name)`` pair. ``GET /v2/regions`` reports both a
+    A region is identified by its ``(provider, region_name)`` pair rather than
+    by an ID. ``GET /v2/regions`` reports both a
     display name (``region``, e.g. ``US East 1 (N. Virginia)``) and a provider
     slug (``regionName``, e.g. ``us-east-1``), and a cluster's own ``region``
     field is the *slug* -- so a display name has to be translated before it is
-    posted. Matching accepts either spelling.
+    posted. Matching accepts either spelling, case-insensitively: the display
+    names are mixed case, ``WITH PROVIDER`` is already case-insensitive, and
+    ``SHOW CLUSTER REGIONS`` matches its ``LIKE`` pattern case-insensitively
+    too, so a name that command finds has to be a name this clause accepts. A
+    match is returned in the API's own spelling, not the caller's.
 
     An unmatched literal is passed through untouched rather than rejected: the
     region list is cached, and the API gives a clearer error for an unknown
-    region than a stale local list can.
+    region than a stale local list can. Note what a miss costs, which is why
+    the match is lenient -- the provider is only ever recovered *from* a match,
+    so an unmatched region is posted with no provider at all unless the caller
+    also wrote ``WITH PROVIDER``.
+
+    Takes the caller's ``manager`` rather than building its own, because
+    :attr:`ClusterManager.regions` caches on the manager instance, not on the
+    class (see ``management.utils.TTLProperty``). With a throwaway manager here
+    the region list would be fetched a second time, the first being the lookup
+    ``Cluster.from_dict`` does on the caller's manager to fill in the display
+    name of the region of the cluster just created.
     """
     region_name = params['in_region']['region_name']
     provider = params.get('with_provider') or None
 
-    manager = get_cluster_manager()
+    wanted = region_name.casefold()
     matches = [
         x for x in manager.regions
-        if region_name in (x.name, x.region_name)
+        if wanted in [
+            y.casefold() for y in (x.name, x.region_name) if y
+        ]
     ]
     if provider:
         matches = [
@@ -133,9 +152,9 @@ class ShowClustersHandler(SQLHandler):
 
     Description
     -----------
-    Displays information on clusters. A cluster is the flat deployment
-    resource of management API v2, replacing the v1 pairing of a workspace
-    group with the workspaces inside it.
+    Displays information on clusters. A cluster is a single flat deployment
+    resource: its compute settings and its deployment-wide settings all live
+    on the one object.
 
     Arguments
     ---------
@@ -234,8 +253,8 @@ class ShowClusterRegionsHandler(SQLHandler):
       specified number.
     * Use the ``ORDER BY`` clause to sort the results by the specified
       key. By default, the results are sorted in the ascending order.
-    * There is no ``ID`` column. Management API v2 assigns no region IDs;
-      a region is identified by its provider and region name, which is why
+    * There is no ``ID`` column. The API assigns no region IDs; a region is
+      identified by its provider and region name, which is why
       ``CREATE CLUSTER`` has no ``IN REGION ID`` clause.
     * ``Name`` is the display name, for example
       ``US East 1 (N. Virginia)``. ``RegionName`` is the cloud provider's
@@ -250,8 +269,9 @@ class ShowClusterRegionsHandler(SQLHandler):
 
     See Also
     --------
-    * ``SHOW REGIONS``, the management API v1 equivalent, which reports an
-      ``ID`` column.
+    * ``CREATE CLUSTER``, whose ``IN REGION`` clause takes one of these names.
+    * ``SHOW STARTER CLUSTER REGIONS``, the subset of these that a starter
+      cluster can use.
 
     """
 
@@ -414,9 +434,7 @@ class CreateClusterHandler(SQLHandler):
 
     Description
     -----------
-    Creates a cluster. A cluster is created in a single statement, unlike
-    management API v1, which needed a ``CREATE WORKSPACE GROUP`` followed by
-    a ``CREATE WORKSPACE``.
+    Creates a cluster.
 
     Arguments
     ---------
@@ -425,9 +443,9 @@ class CreateClusterHandler(SQLHandler):
       a letter or digit.
     * ``<region-name>``: The display name or the cloud provider name of the
       region to create the cluster in, as reported by
-      ``SHOW CLUSTER REGIONS``.
+      ``SHOW CLUSTER REGIONS``. Matched without regard to case.
     * ``<provider>``: The cloud provider (AWS, GCP or Azure), if the region
-      name alone is ambiguous.
+      name alone is ambiguous. Matched without regard to case.
     * ``<project-id>`` or ``<project-name>``: The ID or name of the project
       to create the cluster in.
     * ``<size>``: The size of the cluster in cluster size notation, for
@@ -443,24 +461,18 @@ class CreateClusterHandler(SQLHandler):
     * ``IN PROJECT`` is optional in an organization with a single project,
       which is then used automatically. In an organization with several, the
       clause is required; ``SHOW PROJECTS`` lists the candidates.
-    * There is no ``IN REGION ID`` clause. Management API v2 assigns no
-      region IDs, so a region is named rather than identified.
     * To allow incoming traffic from any IP address, use the
       ``ALLOW ALL TRAFFIC`` clause.
     * The ``WAIT ON ACTIVE`` clause pauses execution until the cluster
       reaches the ``ACTIVE`` state.
-    * Unlike ``CREATE WORKSPACE GROUP``, this command returns a row. The
-      admin password is generated by the API and reported when the cluster
-      is created and at no later point, so it is returned here; a cluster
-      created without capturing it has no reachable ``admin`` user.
-    * There are no KMS key or ``SMART DR`` clauses. Management API v2 has no
-      equivalent of v1's ``backupBucketKMSKeyID``, ``dataBucketKMSKeyID`` or
-      ``smartDR``, so such clauses would be silently dropped.
-    * The clause list deliberately stops at what ``CREATE WORKSPACE GROUP`` and
-      ``CREATE WORKSPACE`` between them expose, so a v1 script has a v2
-      counterpart for everything it says. The API's ``deploymentType`` and
-      ``multiAZ`` have no such counterpart and are not surfaced here; reach
-      them through ``ClusterManager.create_cluster``, which still takes both.
+    * This command returns a row. The admin password is generated by the API
+      and reported when the cluster is created and at no later point, so it is
+      returned here; a cluster created without capturing it has no reachable
+      ``admin`` user.
+    * There are no KMS key or ``SMART DR`` clauses. The API takes no such
+      parameters, so those clauses would be silently dropped.
+    * The API's ``deploymentType`` and ``multiAZ`` are not surfaced as clauses;
+      reach them through ``ClusterManager.create_cluster``, which takes both.
 
     Example
     -------
@@ -494,7 +506,7 @@ class CreateClusterHandler(SQLHandler):
                 return None
 
         project = get_project(params)
-        region = _resolve_region(params)
+        region = _resolve_region(params, manager)
 
         cluster = manager.create_cluster(
             params['cluster_name'],
@@ -682,14 +694,11 @@ class DropClusterHandler(SQLHandler):
       only if a cluster with the specified ID or name exists.
     * Use the ``WAIT ON TERMINATED`` clause to pause query execution until
       the cluster is in the ``TERMINATED`` state.
-    * There is no ``FORCE`` clause. At v1 it meant "terminate the workspace
-      group even though it still contains workspaces", and a cluster is flat,
-      so there are no children for it to override. ``DELETE /v2/clusters``
-      does still take a ``force`` query parameter, which
-      ``Cluster.terminate()`` documents as "even if it is in use" -- a
-      different meaning that has not been confirmed against the live API. The
-      clause is withheld rather than guessed at; see item 14 of
-      ``docs/management-api-audit.md``.
+    * There is no ``FORCE`` clause. ``DELETE /v2/clusters`` does take a
+      ``force`` query parameter, which ``Cluster.terminate()`` documents as
+      "even if it is in use", but that meaning has not been confirmed against
+      the live API. The clause is withheld rather than guessed at; see item 14
+      of ``docs/management-api-audit.md``.
     * All databases attached to the cluster are detached when the cluster
       is deleted.
 
@@ -761,8 +770,8 @@ class UseClusterHandler(SQLHandler):
       cluster name can be specified as ``@@CURRENT``.
     * Specify the ``WITH DATABASE`` clause to select a default
       database for the session.
-    * There is no ``IN GROUP`` clause. A cluster is flat, so unlike
-      ``USE WORKSPACE`` there is no containing group to search in.
+    * There is no ``IN GROUP`` clause. A cluster is flat, so there is no
+      containing group to search in.
     * This command only works in a notebook session in the
       Managed Service.
 
@@ -818,8 +827,8 @@ class ShowStarterClustersHandler(SQLHandler):
 
     Description
     -----------
-    Displays information on starter clusters, the shared-tier deployments
-    of management API v2.
+    Displays information on starter clusters, the shared-tier deployment
+    resource.
 
     Arguments
     ---------
@@ -882,6 +891,74 @@ class ShowStarterClustersHandler(SQLHandler):
 ShowStarterClustersHandler.register(overwrite=True)
 
 
+class ShowStarterClusterRegionsHandler(SQLHandler):
+    """
+    SHOW STARTER CLUSTER REGIONS [ <like> ]
+        [ <order-by> ]
+        [ <limit> ];
+
+    Description
+    -----------
+    Returns the regions available for creating starter clusters. These are a
+    subset of the regions ``SHOW CLUSTER REGIONS`` reports: the shared-tier
+    route accepts only the regions listed here.
+
+    Arguments
+    ---------
+    * ``<pattern>``: A pattern similar to SQL LIKE clause.
+      Uses ``%`` as the wildcard character.
+
+    Remarks
+    -------
+    * Use the ``LIKE`` clause to specify a pattern and return only the
+      regions that match the specified pattern.
+    * The ``LIMIT`` clause limits the number of results to the
+      specified number.
+    * Use the ``ORDER BY`` clause to sort the results by the specified
+      key. By default, the results are sorted in the ascending order.
+    * The columns are those of ``SHOW CLUSTER REGIONS``: ``Name`` is the
+      display name, for example ``US East 1 (N. Virginia)``, and
+      ``RegionName`` is the cloud provider's own name for it, for example
+      ``us-east-1``.
+    * ``CREATE STARTER CLUSTER`` needs both the ``RegionName`` and the
+      ``Provider`` from this listing, and accepts no region ID.
+
+    Example
+    -------
+    The following command returns the starter cluster regions in the US,
+    sorted by name::
+
+        SHOW STARTER CLUSTER REGIONS LIKE 'US%' ORDER BY Name;
+
+    See Also
+    --------
+    * ``CREATE STARTER CLUSTER``
+    * ``SHOW CLUSTER REGIONS``, the regions a full cluster can use.
+
+    """
+
+    def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
+        manager = get_cluster_manager()
+
+        res = FusionSQLResult()
+        res.add_field('Name', result.STRING)
+        res.add_field('Provider', result.STRING)
+        res.add_field('RegionName', result.STRING)
+
+        res.set_rows([
+            (x.name, x.provider, x.region_name)
+            for x in manager.shared_tier_regions
+        ])
+
+        if params['like']:
+            res = res.like(Name=params['like'])
+
+        return res.order_by(**params['order_by']).limit(params['limit'])
+
+
+ShowStarterClusterRegionsHandler.register(overwrite=True)
+
+
 class CreateStarterClusterHandler(SQLHandler):
     """
     CREATE STARTER CLUSTER [ if_not_exists ] cluster_name
@@ -907,25 +984,29 @@ class CreateStarterClusterHandler(SQLHandler):
 
     Description
     -----------
-    Creates a starter cluster, the shared-tier deployment of management
-    API v2.
+    Creates a starter cluster, the shared-tier deployment resource.
 
     Arguments
     ---------
     * ``<cluster-name>``: The name of the starter cluster.
     * ``<database-name>``: The name of the database to create in it.
     * ``<region-name>``: The cloud provider name of the region, for
-      example ``us-east-1``.
-    * ``<provider>``: The cloud provider: AWS, GCP or Azure.
+      example ``us-east-1``. Unlike ``CREATE CLUSTER``, this is sent to the
+      API as written rather than matched against a region listing, so it must
+      be spelled exactly as ``SHOW STARTER CLUSTER REGIONS`` reports it,
+      including case.
+    * ``<provider>``: The cloud provider: AWS, GCP or Azure. Any
+      capitalization is accepted.
 
     Remarks
     -------
     * Specify the ``IF NOT EXISTS`` clause to create the starter cluster
       only if one with the given name does not already exist.
-    * Not every region supports starter clusters. Only the regions
-      reported by ``SHOW CLUSTER REGIONS`` are accepted, and both the
-      provider and the region name are required because there is nothing
-      to infer them from.
+    * Not every region supports starter clusters. Only the regions reported
+      by ``SHOW STARTER CLUSTER REGIONS`` are accepted -- that is a subset of
+      ``SHOW CLUSTER REGIONS``, so a region valid for ``CREATE CLUSTER`` is
+      not necessarily valid here. Both the provider and the region name are
+      required because there is nothing to infer them from.
 
     Example
     -------
@@ -937,6 +1018,7 @@ class CreateStarterClusterHandler(SQLHandler):
 
     See Also
     --------
+    * ``SHOW STARTER CLUSTER REGIONS``
     * ``SHOW STARTER CLUSTERS``
     * ``DROP STARTER CLUSTER``
 

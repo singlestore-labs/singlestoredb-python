@@ -3,9 +3,7 @@
 SingleStoreDB export service (API v2).
 
 Table egress is driven through ``clusters/{id}/egress/...``, so an export is
-owned by a :class:`~singlestoredb.management.v2.cluster.Cluster`. Nothing here
-imports from :mod:`singlestoredb.management.v1`; see
-``TestVersionPackagesAreIndependent``.
+owned by a :class:`~singlestoredb.management.v2.cluster.Cluster`.
 """
 from __future__ import annotations
 

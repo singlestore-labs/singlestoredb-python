@@ -2,20 +2,10 @@
 """
 SingleStoreDB Cluster Management API v2.
 
-At v2 the two-level v1 hierarchy of workspace groups containing workspaces
-collapses into a single flat ``clusters`` resource: a v2 cluster carries the
-union of the fields v1 split between ``Workspace`` and ``WorkspaceGroup``.
-There is no ``/v2/workspaceGroups`` and no ``/v2/workspaces`` -- both return
-``404 page not found``.
-
-This module deliberately shares no code and no vocabulary with
-:mod:`singlestoredb.management.v1`. The v1 package is intended to be deletable
-in one step once the v1 endpoints are retired (see
-``TestVersionPackagesAreIndependent``), so everything here either is written
-fresh or is imported from the version-neutral modules directly under
-:mod:`singlestoredb.management`. The v1 names live
-entirely in :mod:`singlestoredb.management.v1`, so nothing in this module has to
-know what a workspace was.
+A deployment is a single flat ``clusters`` resource: one :class:`Cluster`
+carries both the deployment's own settings -- size, state, connection endpoints
+-- and the account-level settings around it, such as the firewall ranges and the
+admin credentials.
 """
 from __future__ import annotations
 
@@ -87,8 +77,8 @@ def _project_from_id(
 def get_organization() -> Organization:
     """Get the organization."""
     from ..cluster import manage_clusters
-    # Pinned: these helpers are the v2 module's own, so they must not follow
-    # the management.version option out of v2.
+    # Pinned: this module's helpers are v2's own, so they must not follow the
+    # management.version option elsewhere.
     return manage_clusters(version='v2').organization
 
 
@@ -108,11 +98,10 @@ def get_cluster(
     cluster : Cluster or str, optional
         A cluster object, or the name or ID of a cluster. If not given,
         ``SINGLESTOREDB_WORKSPACE`` is used: the notebook environment publishes
-        no ``SINGLESTOREDB_CLUSTER``, and that variable carries the cluster ID
-        at v2 just as it carried the workspace ID at v1.
-        ``SINGLESTOREDB_WORKSPACE_GROUP`` is *not* consulted -- it holds a group
-        ID, which v2 reports only as the read-only :attr:`Cluster.group` and
-        offers no route to look up.
+        no ``SINGLESTOREDB_CLUSTER``, and that variable carries the ID of the
+        current cluster. ``SINGLESTOREDB_WORKSPACE_GROUP`` is *not* consulted --
+        it holds a group ID, which is reported only as the read-only
+        :attr:`Cluster.group` and offers no route to look up.
 
     Returns
     -------
@@ -230,7 +219,7 @@ class Cluster:
         #: TRANSITIONING, RESUMING, FAILED
         self.state = state.strip()
 
-        #: Unique ID of the group the cluster belongs to. v2 has no group
+        #: Unique ID of the group the cluster belongs to. There is no group
         #: route, so this is an opaque ID rather than a lookup key.
         self.group = group
 
@@ -258,8 +247,8 @@ class Cluster:
         #: Cloud provider hosting the cluster (AWS | GCP | Azure)
         self.provider = provider
 
-        #: Region the cluster is deployed in. Unlike v1, v2 does not report a
-        #: region ID; a region is identified by the
+        #: Region the cluster is deployed in. No region ID is reported; a
+        #: region is identified by the
         #: ``(provider, region_name)`` pair. A string is taken as the provider
         #: region name, e.g., ``us-east-1``; :meth:`from_dict` resolves it
         #: against :attr:`ClusterManager.regions` so that the display name is
@@ -283,12 +272,10 @@ class Cluster:
         #: Deployment type of the cluster (PRODUCTION | NON-PRODUCTION)
         self.deployment_type = deployment_type
 
-        #: Whether SingleStore Kai is enabled on this cluster. v1 spelled this
-        #: field ``kaiEnabled``.
+        #: Whether SingleStore Kai is enabled on this cluster
         self.kai = kai
 
-        #: Whether the cluster is deployed across multiple availability zones.
-        #: v1 spelled this ``highAvailabilityTwoZones``.
+        #: Whether the cluster is deployed across multiple availability zones
         self.multi_az = multi_az
 
         #: Should all inbound traffic be allowed?
@@ -362,8 +349,8 @@ class Cluster:
         """
         Construct a Cluster from a dictionary of values.
 
-        Every field other than the name and ID is optional: the v2 API omits
-        null fields entirely rather than returning them as ``null``.
+        Every field other than the name and ID is optional: the API omits null
+        fields entirely rather than returning them as ``null``.
 
         Parameters
         ----------
@@ -390,7 +377,7 @@ class Cluster:
         # :attr:`Cluster.size` are wrapper-side names either way.
         size_spec = obj.get('sizeConfig') or obj.get('size') or {}
 
-        # v2 reports the provider region name and no region ID, so the region
+        # The provider region name is reported and no region ID, so the region
         # is matched on the ``(provider, region_name)`` pair to recover the
         # display name. An unmatched region still yields a Region, built from
         # what the cluster itself reports.
@@ -509,7 +496,7 @@ class Cluster:
             Name of the cluster
         size : str, optional
             Size of the cluster in cluster size notation, such as "S-1".
-            Resizing is done through this field; v2 has no ``resize`` route.
+            Resizing is done through this field; there is no ``resize`` route.
             Sent nested in a ``size`` object alongside ``scale_factor``.
         scale_factor : float, optional
             Scale factor for the cluster
@@ -1092,9 +1079,9 @@ class ClusterManager(Manager):
         instead; a requested ``0.0.0.0/0`` is also satisfied by
         ``allow_all_traffic``, which is how the server stores it.
 
-        This lives in the v2 package rather than in
-        :class:`~singlestoredb.management.manager.Manager` because it is a v2
-        API quirk; the v1 workspace path must not be affected.
+        This lives here rather than in
+        :class:`~singlestoredb.management.manager.Manager` because it is
+        specific to the cluster routes.
 
         Parameters
         ----------
@@ -1215,9 +1202,8 @@ class ClusterManager(Manager):
         """
         Return the project ID a new deployment should be created in.
 
-        ``POST /v2/clusters`` requires ``projectID``, where the v1 workspace
-        group route assigned one implicitly. In priority order: the project
-        named by the caller, the ``SINGLESTOREDB_PROJECT`` environment variable
+        ``POST /v2/clusters`` requires ``projectID``. In priority order: the
+        project named by the caller, the ``SINGLESTOREDB_PROJECT`` variable
         the notebook environment sets, or the organization's only project. An
         organization with more than one project has no default -- naming the
         candidates is more useful than picking one.
@@ -1302,9 +1288,9 @@ class ClusterManager(Manager):
             Name of the cluster
         region : str or Region, optional
             Region to create the cluster in. A :class:`Region` supplies both
-            halves of the ``(provider, region_name)`` pair v2 identifies a
-            region by; a string is taken as the provider region name, e.g.,
-            ``us-east-1``, and needs ``provider`` alongside it. v2 has no
+            halves of the ``(provider, region_name)`` pair that identifies a
+            region; a string is taken as the provider region name, e.g.,
+            ``us-east-1``, and needs ``provider`` alongside it. There are no
             region IDs.
         provider : str, optional
             Cloud provider for the cluster (AWS | GCP | Azure). Only needed
@@ -1325,7 +1311,7 @@ class ClusterManager(Manager):
         admin_password : str, optional
             Admin password for the cluster.
 
-            .. warning:: v2 ignores this. ``POST /v2/clusters`` generates the
+            .. warning:: This is ignored. ``POST /v2/clusters`` generates the
                admin password regardless of what is sent and returns the
                generated value, so read
                :attr:`Cluster.admin_password` off the returned cluster instead
@@ -1555,7 +1541,7 @@ class ClusterManager(Manager):
 
         return self.get_starter_cluster(cluster_id)
 
-    @property
+    @ttl_property(datetime.timedelta(hours=1))
     def shared_tier_regions(self) -> NamedList[Region]:
         """
         Return a list of regions that support starter clusters.
@@ -1563,6 +1549,10 @@ class ClusterManager(Manager):
         ``GET /v2/regions/sharedtier`` answers with the same shape as
         ``GET /v2/regions`` (verified live 2026-08-24), so this returns
         :class:`Region` objects just like :attr:`regions`.
+
+        Cached on the same one-hour terms as :attr:`regions`; the set of
+        regions offering a shared tier changes on the scale of product
+        announcements, not of a session.
 
         """
         res = self._get('regions/sharedtier')

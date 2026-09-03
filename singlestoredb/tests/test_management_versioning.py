@@ -603,7 +603,9 @@ class TestV1IsDocumentedAsDeprecated(unittest.TestCase):
         from singlestoredb.management.v1 import inference_api
         doc = inference_api.__doc__.lower()
         self.assertIn('not** deprecated', doc)
-        self.assertIn('no v2 counterpart', doc)
+        # The reason: these routes are served nowhere else, so there is no
+        # replacement to send callers to.
+        self.assertIn('nowhere else', doc)
 
     def test_v1_only_classes_name_their_v2_replacement(self):
         """

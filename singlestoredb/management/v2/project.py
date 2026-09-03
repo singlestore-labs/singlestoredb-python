@@ -2,12 +2,9 @@
 """
 SingleStoreDB Project API v2.
 
-``GET /v2/projects`` lists the projects in the current organization. The route
-is absent from ``dev-docs/management_api.openapi`` but is live, and v2 needs it:
-``POST /v2/clusters`` rejects a body without ``projectID``
-(``400 projectID is required``), where ``POST /v1/workspaceGroups`` assigned one
-implicitly. The identical route answers at v1, but nothing at v1 has to send a
-project ID, so this stays with the version that does.
+``GET /v2/projects`` lists the projects in the current organization. A project
+ID is required to create a cluster: ``POST /v2/clusters`` rejects a body without
+``projectID`` (``400 projectID is required``).
 """
 from __future__ import annotations
 

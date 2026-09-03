@@ -3,11 +3,9 @@
 SingleStoreDB export service (management API v1) -- **deprecated**.
 
 .. deprecated::
-   Deprecated with the rest of :mod:`singlestoredb.management.v1`. Table egress
-   is driven through ``clusters/{id}/egress/...`` at v2, so an export is owned
-   by a :class:`~singlestoredb.management.cluster.Cluster` rather than by a
-   workspace group. Use :mod:`singlestoredb.management.export`, which is the v2
-   implementation, and the ``CLUSTER``-based Fusion ``EXPORT`` grammar.
+   Use :mod:`singlestoredb.management.export`, where an export is owned by a
+   :class:`~singlestoredb.management.cluster.Cluster`, and the ``CLUSTER``-based
+   Fusion ``EXPORT`` grammar.
 """
 from __future__ import annotations
 
@@ -31,7 +29,7 @@ class ExportService(object):
 
     .. deprecated::
        Use :class:`singlestoredb.management.export.ExportService`, which takes a
-       :class:`Cluster` instead of a :class:`WorkspaceGroup`.
+       :class:`Cluster`.
     """
 
     database: str
@@ -254,11 +252,11 @@ class ExportService(object):
 
 class ExportStatus(object):
     """
-    Status of a v1 export.
+    Status of an export.
 
     .. deprecated::
        Use :class:`singlestoredb.management.export.ExportStatus`, which is keyed
-       by a :class:`Cluster` instead of a :class:`WorkspaceGroup`.
+       by a :class:`Cluster`.
     """
 
     export_id: str

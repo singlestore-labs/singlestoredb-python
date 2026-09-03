@@ -4,6 +4,7 @@ import os
 from typing import Any
 from typing import Dict
 from typing import Optional
+from typing import Tuple
 from typing import Union
 
 from ...exceptions import ManagementError
@@ -407,6 +408,54 @@ def get_project(params: Dict[str, Any]) -> Optional[Project]:
         raise
 
 
+#
+# The parameter keys :func:`get_deployment` accepts, in resolution order, each
+# paired with whether the spelling is the ``GROUP`` one. An empty path means the
+# value sits directly on ``params``.
+#
+_DEPLOYMENT_KEYS: Tuple[Tuple[Tuple[str, ...], bool], ...] = (
+    ((), False),
+    (('in_deployment',), False),
+    (('group',), True),
+    (('in', 'in_cluster'), False),
+    (('in', 'in_group'), True),
+    (('in', 'in_deployment'), False),
+)
+
+#
+# Appended to a "not found" message when the value came through a ``GROUP`` key.
+# ``IN GROUP`` is only a synonym here, so it resolves against clusters like
+# every other spelling; a caller who typed it because they meant a v1 workspace
+# group otherwise gets a bare miss with nothing to explain it.
+#
+_GROUP_SPELLING_HINT = (
+    ' -- IN GROUP is a synonym for IN CLUSTER, so it resolves against '
+    'clusters; a workspace group name or ID is not one and will not be found. '
+    'Name the cluster instead.'
+)
+
+
+def _deployment_param(
+    params: Dict[str, Any],
+    field: str,
+) -> Tuple[Optional[str], bool]:
+    """
+    Return the first value of ``field`` found in ``params``.
+
+    The second element of the return value is True when the value was reached
+    through one of the ``GROUP`` keys, which is what earns the caller
+    :data:`_GROUP_SPELLING_HINT` if the lookup then misses.
+    """
+    for path, is_group in _DEPLOYMENT_KEYS:
+        container: Any = params
+        for key in path:
+            container = container.get(key) or {}
+        value = container.get(field)
+        if value:
+            return value, is_group
+    return None, False
+
+
 def get_deployment(
         params: Dict[str, Any],
 ) -> Union[Cluster, StarterCluster]:
@@ -435,7 +484,11 @@ def get_deployment(
         * params['in']['in_deployment']['deployment_id']
 
     The ``group`` and ``in_group`` keys stay wired so that the existing
-    ``IN GROUP`` spelling keeps parsing as a synonym for ``IN CLUSTER``.
+    ``IN GROUP`` spelling keeps parsing as a synonym for ``IN CLUSTER``. It is
+    only a synonym -- it resolves against clusters like every other spelling --
+    so a value that arrived through one of those keys and then missed earns
+    :data:`_GROUP_SPELLING_HINT`, which is the difference between a workspace
+    group name and an absent cluster.
 
     Or, from ``SINGLESTOREDB_WORKSPACE``, which is what the notebook
     environment calls the current deployment whatever the API version calls it.
@@ -446,12 +499,9 @@ def get_deployment(
     #
     # Search for deployment by name
     #
-    deployment_name = params.get('deployment_name') or \
-        (params.get('in_deployment') or {}).get('deployment_name') or \
-        (params.get('group') or {}).get('deployment_name') or \
-        ((params.get('in') or {}).get('in_cluster') or {}).get('deployment_name') or \
-        ((params.get('in') or {}).get('in_group') or {}).get('deployment_name') or \
-        ((params.get('in') or {}).get('in_deployment') or {}).get('deployment_name')
+    deployment_name, name_from_group = _deployment_param(
+        params, 'deployment_name',
+    )
 
     if deployment_name:
         # Standard cluster
@@ -485,20 +535,21 @@ def get_deployment(
                 f'found: {ids}',
             )
 
-        raise KeyError(f'no deployment found with name: {deployment_name}')
+        raise KeyError(
+            f'no deployment found with name: {deployment_name}'
+            f'{_GROUP_SPELLING_HINT if name_from_group else ""}',
+        )
 
     #
     # Search for deployment by ID
     #
-    deployment_id = params.get('deployment_id') or \
-        (params.get('in_deployment') or {}).get('deployment_id') or \
-        (params.get('group') or {}).get('deployment_id') or \
-        ((params.get('in') or {}).get('in_cluster') or {}).get('deployment_id') or \
-        ((params.get('in') or {}).get('in_group') or {}).get('deployment_id') or \
-        ((params.get('in') or {}).get('in_deployment') or {}).get('deployment_id')
+    deployment_id, id_from_group = _deployment_param(params, 'deployment_id')
 
     if deployment_id:
-        return _deployment_by_id(manager, deployment_id)
+        return _deployment_by_id(
+            manager, deployment_id,
+            hint=_GROUP_SPELLING_HINT if id_from_group else '',
+        )
 
     #
     # Use the deployment named by the environment. v1 had a branch per
@@ -533,6 +584,7 @@ def _deployment_by_id(
     manager: ClusterManager,
     deployment_id: str,
     envvar: Optional[str] = None,
+    hint: str = '',
 ) -> Union[Cluster, StarterCluster]:
     """Look an ID up as a cluster, then as a starter cluster."""
     source = f' (from {envvar})' if envvar else ''
@@ -546,7 +598,7 @@ def _deployment_by_id(
     except ManagementError as exc:
         if _is_missing(exc):
             raise KeyError(
-                f'no deployment found with ID: {deployment_id}{source}',
+                f'no deployment found with ID: {deployment_id}{source}{hint}',
             )
         raise
 

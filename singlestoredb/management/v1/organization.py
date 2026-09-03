@@ -3,9 +3,7 @@
 SingleStoreDB Organization API v1 -- **deprecated**.
 
 .. deprecated::
-   Deprecated with the rest of :mod:`singlestoredb.management.v1`. Use
-   :mod:`singlestoredb.management.organization`, whose ``Organization`` hands
-   out the v2 sub-managers, reached from
+   Use :mod:`singlestoredb.management.organization`, reached from
    :func:`singlestoredb.management.get_organization`.
 """
 from ..organization import Organization as _Organization
@@ -20,13 +18,12 @@ class Organization(_Organization):
     Organization in SingleStoreDB Cloud portal (API v1).
 
     .. deprecated::
-       Use :class:`singlestoredb.management.organization.Organization`, the v2
-       class.
+       Use :class:`singlestoredb.management.organization.Organization`.
 
-    ``organizations/current`` and ``secrets`` respond identically at v1 and v2,
-    so the only v1 difference is which sub-managers this organization hands
-    out. Getting this repoint wrong would silently send v2 ``targetType``
-    values on v1 job schedules.
+    ``organizations/current`` and ``secrets`` are the shared routes; all this
+    subclass does is hand out the sub-managers that belong to this API version,
+    which is what keeps job schedules on the ``targetType`` vocabulary these
+    routes expect.
     """
 
     _jobs_manager_class = JobsManager
@@ -38,8 +35,7 @@ class Organizations(_Organizations):
     Organizations (API v1).
 
     .. deprecated::
-       Use :class:`singlestoredb.management.organization.Organizations`, the v2
-       class.
+       Use :class:`singlestoredb.management.organization.Organizations`.
     """
 
     _organization_class = Organization

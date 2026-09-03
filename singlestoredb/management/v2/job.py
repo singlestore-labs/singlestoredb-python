@@ -2,9 +2,9 @@
 """
 SingleStoreDB Job Management API v2.
 
-The jobs routes and their ``targetConfig.targetType`` vocabulary are what the
-shared :mod:`singlestoredb.management.job` module implements, so this module
-only re-exports it.
+The jobs routes and their ``targetConfig.targetType`` vocabulary are
+implemented in :mod:`singlestoredb.management.job`, so this module only
+re-exports it.
 """
 from ..job import Execution as Execution
 from ..job import ExecutionConfig as ExecutionConfig

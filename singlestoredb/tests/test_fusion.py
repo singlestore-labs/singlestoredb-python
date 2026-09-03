@@ -99,6 +99,7 @@ class TestFusion(unittest.TestCase):
             'SHOW CLUSTERS', 'SHOW CLUSTER REGIONS', 'SHOW PROJECTS',
             'CREATE CLUSTER', 'DROP CLUSTER', 'SUSPEND CLUSTER',
             'RESUME CLUSTER', 'USE CLUSTER', 'SHOW STARTER CLUSTERS',
+            'SHOW STARTER CLUSTER REGIONS',
             'CREATE STARTER CLUSTER', 'DROP STARTER CLUSTER',
         }
         missing = want - set(registry._handlers)
@@ -118,6 +119,112 @@ class TestFusion(unittest.TestCase):
         assert registry.get_handler('SHOW CLUSTER STATUS') is None
         assert registry.get_handler('SHOW CLUSTERS') is not None
         assert registry.get_handler('SHOW CLUSTER REGIONS') is not None
+
+    def test_in_region_is_matched_without_regard_to_case(self):
+        """
+        ``IN REGION`` must match a region whatever case it is written in.
+
+        A miss is not an error -- the literal is passed through for the API to
+        rule on -- but the provider is only ever recovered *from* a match, so a
+        case-sensitive comparison would quietly post a region with no provider
+        alongside it. Both spellings of the name, and either case, must match
+        and must come back in the API's own spelling.
+        """
+        from unittest import mock
+
+        from singlestoredb.fusion.handlers import cluster as handlers
+        from singlestoredb.management.region import Region
+
+        regions = [
+            Region(
+                name='US East 1 (N. Virginia)',
+                provider='AWS', region_name='us-east-1',
+            ),
+        ]
+        manager = mock.MagicMock()
+        type(manager).regions = mock.PropertyMock(return_value=regions)
+
+        want = dict(provider='AWS', region='us-east-1')
+        for written in (
+            'us-east-1', 'US-EAST-1', 'Us-East-1',
+            'US East 1 (N. Virginia)', 'us east 1 (n. virginia)',
+        ):
+            params = {'in_region': {'region_name': written}}
+            got = handlers._resolve_region(params, manager)
+            assert got == want, (written, got)
+
+        # A provider is matched without regard to case too, and narrows an
+        # otherwise ambiguous name.
+        for written in ('AWS', 'aws', 'Aws'):
+            params = {
+                'in_region': {'region_name': 'US-EAST-1'},
+                'with_provider': written,
+            }
+            got = handlers._resolve_region(params, manager)
+            assert got == want, (written, got)
+
+        # An unknown region is still passed through untouched.
+        params = {'in_region': {'region_name': 'mars-north-1'}}
+        assert handlers._resolve_region(params, manager) == \
+            dict(provider=None, region='mars-north-1')
+
+        # An ambiguous name reports every candidate rather than picking one.
+        regions.append(
+            Region(
+                name='US East 1 (N. Virginia)',
+                provider='GCP', region_name='us-east1',
+            ),
+        )
+        params = {'in_region': {'region_name': 'us east 1 (n. virginia)'}}
+        with self.assertRaises(ValueError) as cm:
+            handlers._resolve_region(params, manager)
+        assert 'more than one region matches' in str(cm.exception), cm.exception
+
+    def test_starter_cluster_regions_uses_the_shared_tier_list(self):
+        """
+        ``SHOW STARTER CLUSTER REGIONS`` must not report every region.
+
+        The shared-tier route accepts only the regions
+        ``ClusterManager.shared_tier_regions`` reports, which are a subset of
+        ``ClusterManager.regions``. Listing the latter would offer regions
+        that ``CREATE STARTER CLUSTER`` then rejects, which is the mistake
+        this command exists to prevent.
+        """
+        from unittest import mock
+
+        from singlestoredb.fusion.handlers import cluster as handlers
+        from singlestoredb.management.region import Region
+
+        shared = [
+            Region(
+                name='US East 1 (N. Virginia)',
+                provider='AWS', region_name='us-east-1',
+            ),
+        ]
+        every = shared + [
+            Region(
+                name='US East 2 (Ohio)',
+                provider='AWS', region_name='us-east-2',
+            ),
+        ]
+
+        manager = mock.MagicMock()
+        type(manager).shared_tier_regions = mock.PropertyMock(
+            return_value=shared,
+        )
+        type(manager).regions = mock.PropertyMock(return_value=every)
+
+        with mock.patch.object(
+            handlers, 'get_cluster_manager', return_value=manager,
+        ):
+            handler = handlers.ShowStarterClusterRegionsHandler(self.conn)
+            handler.compile()
+            res = handler.execute('SHOW STARTER CLUSTER REGIONS;')
+
+        assert [x[0] for x in res.description] == \
+            ['Name', 'Provider', 'RegionName'], res.description
+        assert [tuple(x) for x in res.rows] == \
+            [('US East 1 (N. Virginia)', 'AWS', 'us-east-1')], res.rows
 
     def test_create_cluster_grammar(self):
         from singlestoredb.fusion import registry
@@ -469,6 +576,57 @@ class TestFusion(unittest.TestCase):
         msg = str(cm.exception)
         assert 'SINGLESTOREDB_WORKSPACE_GROUP' in msg
         assert 'SINGLESTOREDB_WORKSPACE' in msg
+
+    def test_deployment_miss_through_in_group_explains_the_synonym(self):
+        """
+        ``IN GROUP`` resolves against clusters, and says so when it misses.
+
+        The spelling is only a synonym for ``IN CLUSTER``, so a caller who typed
+        it meaning a v1 workspace group gets no match -- and, without the hint,
+        no way to tell that from a genuinely absent cluster. The other
+        spellings must not carry the hint, or it becomes noise on every miss.
+        """
+        from unittest.mock import MagicMock
+        from unittest.mock import patch
+
+        from singlestoredb.fusion.handlers import utils
+
+        group_id = '11111111-1111-4111-8111-111111111111'
+        manager = MagicMock()
+        manager.clusters = []
+        manager.starter_clusters = []
+        manager.get_cluster.side_effect = s2.ManagementError(errno=404)
+        manager.get_starter_cluster.side_effect = s2.ManagementError(errno=404)
+
+        def message(params):
+            with patch.object(
+                utils, 'get_cluster_manager', return_value=manager,
+            ):
+                self._fusion_env()
+                with self.assertRaises(KeyError) as cm:
+                    utils.get_deployment(params)
+            return str(cm.exception)
+
+        # By name and by ID, through both GROUP spellings.
+        for params, needle in (
+            (dict(group=dict(deployment_name='wsg1')), 'wsg1'),
+            ({'in': dict(in_group=dict(deployment_name='wsg1'))}, 'wsg1'),
+            (dict(group=dict(deployment_id=group_id)), group_id),
+            ({'in': dict(in_group=dict(deployment_id=group_id))}, group_id),
+        ):
+            msg = message(params)
+            assert needle in msg
+            assert 'IN GROUP' in msg, msg
+
+        # The cluster and bare spellings get the plain message.
+        for params in (
+            dict(deployment_name='c1'),
+            {'in': dict(in_cluster=dict(deployment_name='c1'))},
+            {'in': dict(in_deployment=dict(deployment_name='c1'))},
+            dict(in_deployment=dict(deployment_id=group_id)),
+        ):
+            msg = message(params)
+            assert 'IN GROUP' not in msg, msg
 
 
 @pytest.mark.management
