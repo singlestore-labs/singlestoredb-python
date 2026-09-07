@@ -47,6 +47,13 @@ class TestInjectOtelHeaders(unittest.TestCase):
         finally:
             client.close()
 
+    def test_openai_default_timeout_is_600(self):
+        client = httpx.Client(timeout=httpx.Timeout(600.0))
+        try:
+            self.assertEqual(client.timeout.read, 600.0)
+        finally:
+            client.close()
+
 
 if __name__ == '__main__':
     unittest.main()

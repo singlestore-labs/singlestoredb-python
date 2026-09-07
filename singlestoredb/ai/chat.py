@@ -187,12 +187,16 @@ def SingleStoreChatFactory(
         streaming=streaming,
     )
     http_async_client = kwargs.pop('http_async_client', None)
+    default_timeout = httpx.Timeout(600.0)
     if http_client is None:
-        http_client = httpx.Client(timeout=httpx.Timeout(None))
+        http_client = httpx.Client(timeout=default_timeout)
     _attach_otel_request_hook(http_client)
     openai_kwargs['http_client'] = http_client
     if http_async_client is None:
-        http_async_client = httpx.AsyncClient(timeout=httpx.Timeout(None))
+        async_timeout = (
+            http_client.timeout if http_client is not None else default_timeout
+        )
+        http_async_client = httpx.AsyncClient(timeout=async_timeout)
     _attach_otel_request_hook(http_async_client)
     openai_kwargs['http_async_client'] = http_async_client
     return ChatOpenAI(
