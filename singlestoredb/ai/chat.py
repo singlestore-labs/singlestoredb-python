@@ -10,6 +10,27 @@ from singlestoredb import manage_workspaces
 from singlestoredb.management.inference_api import InferenceAPIInfo
 
 
+try:
+    from langchain_openai import ChatOpenAI
+except ImportError:
+    raise ImportError(
+        'Could not import langchain_openai python package. '
+        'Please install it with `pip install langchain_openai`.',
+    )
+
+try:
+    from langchain_aws import ChatBedrockConverse
+except ImportError:
+    raise ImportError(
+        'Could not import langchain-aws python package. '
+        'Please install it with `pip install langchain-aws`.',
+    )
+
+import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
+
+
 def _inject_otel_headers(headers: Any) -> None:
     try:
         from opentelemetry.propagate import inject as otel_inject
@@ -31,27 +52,6 @@ def _attach_otel_request_hook(
     hooks = client.event_hooks.setdefault('request', [])
     if _httpx_inject_otel not in hooks:
         hooks.append(_httpx_inject_otel)
-
-
-try:
-    from langchain_openai import ChatOpenAI
-except ImportError:
-    raise ImportError(
-        'Could not import langchain_openai python package. '
-        'Please install it with `pip install langchain_openai`.',
-    )
-
-try:
-    from langchain_aws import ChatBedrockConverse
-except ImportError:
-    raise ImportError(
-        'Could not import langchain-aws python package. '
-        'Please install it with `pip install langchain-aws`.',
-    )
-
-import boto3
-from botocore import UNSIGNED
-from botocore.config import Config
 
 
 def SingleStoreChatFactory(
