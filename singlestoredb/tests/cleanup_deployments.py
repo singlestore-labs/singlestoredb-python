@@ -87,6 +87,12 @@ LEGACY_PATTERNS = [
     # TestFilesFusion's workspace group, which nothing in the class ever
     # read; it creates no deployment at all now
     re.compile(r'^Files Fusion Testing [0-9a-f]+$'),
+    # 'Group <hex>'. No revision of this repo generates this, so it is here
+    # on the owner's say-so rather than by attribution. Eight hex characters
+    # minimum, which is what the ones in the organization have: the bare
+    # 'Group 1' / 'Group 2' that a person or the portal produces is a real
+    # deployment someone is using, and a plain [0-9a-f]+ would match it.
+    re.compile(r'^Group [0-9a-f]{8,}$'),
 ]
 
 

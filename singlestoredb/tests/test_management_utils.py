@@ -1529,6 +1529,10 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
             'Stage Fusion Testing 1 f00e4647f2c664fb',
             'Stage Fusion Testing 2 f00e4647f2c664fb',
             'Files Fusion Testing 1beb5e18ba06e135',
+            # Unattributed -- no revision here generates it -- but present in
+            # the organization and swept on the owner's say-so
+            'Group 3fed3756',
+            'Group 3fed37563fed3756',
         ):
             self.assertTrue(self.mod.is_test_deployment(name), name)
 
@@ -1542,11 +1546,11 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
             'analytics-fusion-cluster',
             'Fusion Testing',
             'a-fusion-cluster-deadbeef-prod',
-            # Deliberately not matched: groups shaped like this turned up in
-            # the organization, but no revision of this repo generates the
-            # name, so a pattern for it would be a guess with a live
-            # workspace group on the other end. --show-unmatched reports it.
-            'Group 3fed3756',
+            # The 'Group <hex>' pattern must not reach a name a person or the
+            # portal produced -- that is someone's live workspace group
+            'Group 1',
+            'Group 2',
+            'Group deadbeef prod',
         ):
             self.assertFalse(self.mod.is_test_deployment(name), name)
 
