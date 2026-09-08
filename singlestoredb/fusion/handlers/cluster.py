@@ -90,7 +90,7 @@ def _resolve_region(
     slug (``regionName``, e.g. ``us-east-1``), and a cluster's own ``region``
     field is the *slug* -- so a display name has to be translated before it is
     posted. Matching accepts either spelling, case-insensitively: the display
-    names are mixed case, ``WITH PROVIDER`` is already case-insensitive, and
+    names are mixed case, ``USING PROVIDER`` is already case-insensitive, and
     ``SHOW CLUSTER REGIONS`` matches its ``LIKE`` pattern case-insensitively
     too, so a name that command finds has to be a name this clause accepts. A
     match is returned in the API's own spelling, not the caller's.
@@ -100,7 +100,7 @@ def _resolve_region(
     region than a stale local list can. Note what a miss costs, which is why
     the match is lenient -- the provider is only ever recovered *from* a match,
     so an unmatched region is posted with no provider at all unless the caller
-    also wrote ``WITH PROVIDER``.
+    also wrote ``USING PROVIDER``.
 
     Takes the caller's ``manager`` rather than building its own, because
     :attr:`ClusterManager.regions` caches on the manager instance, not on the
@@ -110,7 +110,7 @@ def _resolve_region(
     name of the region of the cluster just created.
     """
     region_name = params['in_region']['region_name']
-    provider = params.get('with_provider') or None
+    provider = params.get('using_provider') or None
 
     wanted = region_name.casefold()
     matches = [
@@ -131,7 +131,7 @@ def _resolve_region(
         )
         raise ValueError(
             f'more than one region matches "{region_name}": {found}; '
-            'use the WITH PROVIDER clause to select one',
+            'use the USING PROVIDER clause to select one',
         )
 
     if matches:
@@ -367,7 +367,7 @@ class CreateClusterHandler(SQLHandler):
     """
     CREATE CLUSTER [ if_not_exists ] cluster_name
         in_region
-        [ with_provider ]
+        [ using_provider ]
         [ in_project ]
         [ with_size ]
         [ using_scale_factor ]
@@ -392,7 +392,7 @@ class CreateClusterHandler(SQLHandler):
     region_name = '<region-name>'
 
     # Cloud provider, to disambiguate a region name
-    with_provider = WITH PROVIDER '<provider>'
+    using_provider = USING PROVIDER '<provider>'
 
     # Project to create the cluster in
     in_project = IN PROJECT { project_id | project_name }
@@ -964,7 +964,7 @@ class CreateStarterClusterHandler(SQLHandler):
     CREATE STARTER CLUSTER [ if_not_exists ] cluster_name
         with_database
         in_region
-        with_provider
+        using_provider
     ;
 
     # Only create the starter cluster if it doesn't exist already
@@ -980,7 +980,7 @@ class CreateStarterClusterHandler(SQLHandler):
     in_region = IN REGION '<region-name>'
 
     # Cloud provider to create the starter cluster in
-    with_provider = WITH PROVIDER '<provider>'
+    using_provider = USING PROVIDER '<provider>'
 
     Description
     -----------
@@ -1014,7 +1014,7 @@ class CreateStarterClusterHandler(SQLHandler):
     a database named **scratchdb**::
 
         CREATE STARTER CLUSTER 'scratch' WITH DATABASE 'scratchdb'
-            IN REGION 'us-east-1' WITH PROVIDER 'AWS';
+            IN REGION 'us-east-1' USING PROVIDER 'AWS';
 
     See Also
     --------
@@ -1039,7 +1039,7 @@ class CreateStarterClusterHandler(SQLHandler):
         manager.create_starter_cluster(
             params['cluster_name'],
             database_name=params['with_database'],
-            provider=params['with_provider'],
+            provider=params['using_provider'],
             region=params['in_region'],
         )
 

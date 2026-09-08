@@ -193,7 +193,7 @@ Handlers, following the docstring-grammar style of `handlers/workspace.py`:
 | `DropClusterHandler` | `DROP CLUSTER [IF EXISTS] c [WAIT ON TERMINATED] [FORCE]` |
 | `UseClusterHandler` | `USE CLUSTER c [WITH DATABASE d]` |
 | `ShowStarterClustersHandler` | `SHOW STARTER CLUSTERS [<like>] [<extended>] [<order-by>] [<limit>]` |
-| `CreateStarterClusterHandler` | `CREATE STARTER CLUSTER [IF NOT EXISTS] n WITH DATABASE d IN REGION r WITH PROVIDER p` |
+| `CreateStarterClusterHandler` | `CREATE STARTER CLUSTER [IF NOT EXISTS] n WITH DATABASE d IN REGION r USING PROVIDER p` |
 | `DropStarterClusterHandler` | `DROP STARTER CLUSTER [IF EXISTS] c` |
 
 Each ends with `<Class>.register(overwrite=True)`.
@@ -211,7 +211,7 @@ Grammar constraints, verified in `fusion/handler.py`:
   (`handler.py:449`), as with `CREATE WORKSPACE GROUP`.
 
 `CREATE CLUSTER` clauses map onto `create_cluster()` (`v2/cluster.py:1110`):
-`IN REGION` (+ optional `WITH PROVIDER` to disambiguate), `IN PROJECT`,
+`IN REGION` (+ optional `USING PROVIDER` to disambiguate), `IN PROJECT`,
 `WITH SIZE`, `USING SCALE FACTOR`, `AUTO SUSPEND AFTER ... WITH TYPE ...`,
 `ENABLE KAI`, `WITH CACHE CONFIG`, `WITH FIREWALL RANGES`, `ALLOW ALL TRAFFIC`,
 `WITH UPDATE WINDOW`, `EXPIRES AT`, `WAIT ON ACTIVE`. Reuse
@@ -224,7 +224,7 @@ shipped in the first cut and were removed. The clause list is meant to stop at
 what `CREATE WORKSPACE GROUP` and `CREATE WORKSPACE` between them expose, so
 that a v1 script has a v2 counterpart for everything it says; `deploymentType`
 and `multiAZ` have no v1 counterpart. Every other v2-only clause here earns its
-place: `WITH PROVIDER` replaces the missing `IN REGION ID`, `IN PROJECT` is
+place: `USING PROVIDER` replaces the missing `IN REGION ID`, `IN PROJECT` is
 required by `POST /v2/clusters`, and `USING SCALE FACTOR` is the other half of
 `sizeConfig`. Both dropped options remain on
 `ClusterManager.create_cluster`.
@@ -233,7 +233,7 @@ required by `POST /v2/clusters`, and `USING SCALE FACTOR` is the other half of
 `PATCH /v2/clusters/{id}` honours `adminPassword`, so there is no way to
 implement the clause. **No region-ID alternate** — v2 has
 none. Region resolution matches on both `.name` and `.region_name`, requires
-`WITH PROVIDER` to break ties, and passes an unmatched literal straight through.
+`USING PROVIDER` to break ties, and passes an unmatched literal straight through.
 
 Columns: `SHOW CLUSTERS` → `Name`, `ID`, `Region`, `Size`, `State`; extended adds
 `Provider`, `Endpoint`, `DeploymentType`, `FirewallRanges`, `ProjectID`,

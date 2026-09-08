@@ -158,7 +158,7 @@ class TestFusion(unittest.TestCase):
         for written in ('AWS', 'aws', 'Aws'):
             params = {
                 'in_region': {'region_name': 'US-EAST-1'},
-                'with_provider': written,
+                'using_provider': written,
             }
             got = handlers._resolve_region(params, manager)
             assert got == want, (written, got)
@@ -352,7 +352,7 @@ class TestFusion(unittest.TestCase):
 
         sql = (
             "CREATE CLUSTER IF NOT EXISTS 'fusion-parse-test' "
-            "IN REGION 'us-east-1' WITH PROVIDER 'AWS' "
+            "IN REGION 'us-east-1' USING PROVIDER 'AWS' "
             "IN PROJECT 'Some Project' "
             # The /* ... */ is matched by the `ws*` tail of the `number` rule,
             # so it lands inside the number node -- visit_number must read the
@@ -374,7 +374,7 @@ class TestFusion(unittest.TestCase):
 
         assert params['cluster_name'] == 'fusion-parse-test'
         assert params['in_region'] == {'region_name': 'us-east-1'}
-        assert params['with_provider'] == 'AWS'
+        assert params['using_provider'] == 'AWS'
         assert params['in_project'] == {'project_name': 'Some Project'}
         # <number> must accept a bare integer, not only 1.0
         assert params['using_scale_factor'] == 1.0
