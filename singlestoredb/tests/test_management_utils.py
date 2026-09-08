@@ -1514,6 +1514,10 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
             'd-fusion-cluster-deadbeef',
             'jobs-fusion-deadbeef',
             'stage-fusion-2-deadbeef',
+            'Create WG Test deadbeefdeadbeef',
+            # The decimal id(self) that test named it with before, so groups
+            # stranded by older runs are still reachable
+            'Create WG Test 140234981234',
         ):
             self.assertTrue(self.mod.is_test_deployment(name), name)
 
@@ -1561,7 +1565,7 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
         ), patch.object(
             s2, 'manage_workspaces', side_effect=RuntimeError('no v1'),
         ):
-            found, spared = self.mod.find_leftovers(**kwargs)
+            found, spared, self.unmatched = self.mod.find_leftovers(**kwargs)
         return [x[1].name for x in found], spared
 
     def test_the_age_filter_spares_a_deployment_a_live_run_may_own(self):
@@ -1603,6 +1607,26 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
         # sweep a deployment a live run owns.
         obj = self._cluster('cl-test-naive', hours=1, naive=True)
         self.assertAlmostEqual(self.mod._age_hours(obj), 1, delta=0.1)
+
+    def test_an_unrecognized_name_is_reported_not_swept(self):
+        # The failure this guards against is silent accumulation: a test that
+        # names a deployment outside PATTERNS leaves strays the sweep reports
+        # as 'none found'.
+        names, _ = self._find([
+            self._cluster('cl-test-known', hours=10),
+            self._cluster('some-persons-cluster', hours=10),
+        ])
+        self.assertEqual(names, ['cl-test-known'])
+        self.assertEqual(len(self.unmatched), 1)
+        self.assertIn('some-persons-cluster', self.unmatched[0])
+        self.assertIn('10.0h old', self.unmatched[0])
+
+    def test_a_terminated_deployment_is_not_reported_as_unrecognized(self):
+        obj = self._cluster('some-persons-cluster', hours=10)
+        obj.terminated_at = 'yes'
+        names, _ = self._find([obj])
+        self.assertEqual(names, [])
+        self.assertEqual(self.unmatched, [])
 
     def test_zero_sweeps_everything_matched(self):
         names, spared = self._find(

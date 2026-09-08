@@ -1009,7 +1009,11 @@ class TestWorkspaceFusion(unittest.TestCase):
         mgr = s2.manage_workspaces(version='v1')
 
         reg = [x for x in mgr.regions if x.name.startswith('US')][0]
-        wg_name = f'Create WG Test {id(self)}'
+        # Random, not id(self): an address repeats across processes, so two
+        # workers running this test could pick the same name, and it reads
+        # nothing like a generated name to anyone looking at the organization.
+        # Whatever this is, it has to keep matching cleanup_deployments.
+        wg_name = f'Create WG Test {secrets.token_hex(8)}'
 
         try:
             self.cur.execute(
@@ -1052,10 +1056,21 @@ class TestWorkspaceFusion(unittest.TestCase):
             self.cur.execute(f'drop workspace group if exists id {wg_id}')
 
         finally:
-            try:
-                mgr.workspace_groups[wg_name].terminate(force=True)
-            except Exception:
-                pass
+            # Only what is still live: the body drops the group itself, and a
+            # terminated record can still be listed for a while afterwards.
+            # Failures are reported rather than swallowed -- that is the
+            # difference between a group that went away and one still billing.
+            for wg in [
+                x for x in mgr.workspace_groups
+                if x.name == wg_name and x.terminated_at is None
+            ]:
+                try:
+                    wg.terminate(force=True)
+                except Exception as exc:
+                    print(
+                        f'Could not terminate workspace group {wg_name!r}; '
+                        f'it may still be live: {exc}',
+                    )
 
 
 class _ClusterFusionMixin:
@@ -1562,13 +1577,15 @@ class TestClusterFusionProject(_ClusterFusionMixin, unittest.TestCase):
         """v2 has no region IDs, so the v1 spelling must be rejected."""
         with self.assertRaises(Exception):
             self.cur.execute(
-                'create cluster "g-fusion-cluster" in region id "abc"',
+                f'create cluster "g-fusion-cluster-{self.id}" '
+                'in region id "abc"',
             )
 
     def test_unknown_project_raises(self):
         with self.assertRaises(KeyError):
             self.cur.execute(
-                'create cluster "h-fusion-cluster" in region "us-east-1" '
+                f'create cluster "h-fusion-cluster-{self.id}" '
+                'in region "us-east-1" '
                 'in project "no such project xyz"',
             )
 

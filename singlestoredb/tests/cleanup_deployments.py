@@ -14,6 +14,10 @@ run::
     python -m singlestoredb.tests.cleanup_deployments
     python -m singlestoredb.tests.cleanup_deployments --yes
 
+If the organization is visibly full of strays and this reports none, the names
+are not in ``PATTERNS``. ``--show-unmatched`` lists every live deployment the
+tool does not recognize, which is how an unconventionally named one gets found.
+
 This tool is organization-wide, not run-scoped: it matches on names, and a
 name says which suite made a deployment but not which run. A concurrent run's
 fixtures look exactly like stranded ones. Age is the only thing separating
@@ -56,6 +60,11 @@ PATTERNS = [
     re.compile(r'^[a-z]-fusion-cluster-[0-9a-f]+$'),
     re.compile(r'^jobs-fusion-[0-9a-f]+$'),
     re.compile(r'^stage-fusion-\d-[0-9a-f]+$'),
+    # test_create_drop_workspace_group's subject. Hex covers the decimal
+    # id(self) the test used to name it with, so groups stranded by older
+    # runs -- which this pattern did not match, and which therefore piled up
+    # invisibly -- are reaped too.
+    re.compile(r'^Create WG Test [0-9a-f]+$'),
 ]
 
 
@@ -83,7 +92,7 @@ def _age_hours(obj: Any) -> Optional[float]:
 def find_leftovers(
     older_than: float = DEFAULT_MIN_AGE_HOURS,
     include_unknown_age: bool = False,
-) -> Tuple[List[Tuple[str, Any]], List[str]]:
+) -> Tuple[List[Tuple[str, Any]], List[str], List[str]]:
     """
     List the live, test-named deployments in the current organization.
 
@@ -93,19 +102,34 @@ def find_leftovers(
 
     Returns
     -------
-    (List[Tuple[str, Any]], List[str])
-        The deployments to sweep, and labels for the ones held back by the
-        age guard so the caller can say what it did not touch.
+    (List[Tuple[str, Any]], List[str], List[str])
+        The deployments to sweep, labels for the ones held back by the age
+        guard so the caller can say what it did not touch, and labels for the
+        live deployments whose names :data:`PATTERNS` does not recognize.
+
+        That third list is the answer to "the organization is full of strays
+        and this tool says there are none". A test that names a deployment
+        outside the conventions above is invisible here, so it accumulates
+        silently -- which is exactly what ``Create WG Test <id(self)>`` did.
+        Reporting the unrecognized names makes the next one findable.
 
     """
     found: List[Tuple[str, Any]] = []
     spared: List[str] = []
+    unmatched: List[str] = []
 
     def keep(obj: Any) -> bool:
         name = getattr(obj, 'name', None)
-        if not is_test_deployment(name):
-            return False
         if getattr(obj, 'terminated_at', None) is not None:
+            return False
+        if not is_test_deployment(name):
+            age = _age_hours(obj)
+            unmatched.append(
+                '{}{}'.format(
+                    name or '<unnamed>',
+                    '' if age is None else f' ({age:.1f}h old)',
+                ),
+            )
             return False
 
         # Age is the only thing separating a stranded deployment from one a
@@ -162,7 +186,7 @@ def find_leftovers(
                     f'starter workspace {starter.name} ({starter.id})', starter,
                 ))
 
-    return found, spared
+    return found, spared, unmatched
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -185,11 +209,34 @@ def main(argv: Optional[List[str]] = None) -> int:
              '(skipped by default, since an unknown age cannot be shown to '
              'be old enough)',
     )
+    parser.add_argument(
+        '--show-unmatched', action='store_true',
+        help='also list the live deployments this tool does not recognize as '
+             "the suite's, without touching them. Run this when the "
+             'organization looks full of strays but the sweep finds none: a '
+             'test that names a deployment outside the conventions in '
+             'PATTERNS is invisible here until its name is added',
+    )
     args = parser.parse_args(argv)
 
-    leftovers, spared = find_leftovers(
+    leftovers, spared, unmatched = find_leftovers(
         args.older_than, args.include_unknown_age,
     )
+
+    if args.show_unmatched:
+        if unmatched:
+            print(
+                f'{len(unmatched)} live deployment(s) not recognized as the '
+                "suite's, and so never swept:",
+            )
+            for label in sorted(unmatched):
+                print(f'  ? {label}')
+            print(
+                '\nIf one of these was made by a test, add its name to '
+                'PATTERNS in this module.\n',
+            )
+        else:
+            print('Every live deployment is recognized by PATTERNS.\n')
 
     if spared:
         print(
