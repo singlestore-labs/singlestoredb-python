@@ -1521,6 +1521,17 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
         ):
             self.assertTrue(self.mod.is_test_deployment(name), name)
 
+    def test_retired_names_still_match(self):
+        # main still creates these, and it carries no sweep at all, so they
+        # keep arriving. Stranded deployments are billed whichever revision
+        # made them.
+        for name in (
+            'Stage Fusion Testing 1 f00e4647f2c664fb',
+            'Stage Fusion Testing 2 f00e4647f2c664fb',
+            'Files Fusion Testing 1beb5e18ba06e135',
+        ):
+            self.assertTrue(self.mod.is_test_deployment(name), name)
+
     def test_names_a_person_chose_do_not_match(self):
         for name in (
             None,
@@ -1531,6 +1542,11 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
             'analytics-fusion-cluster',
             'Fusion Testing',
             'a-fusion-cluster-deadbeef-prod',
+            # Deliberately not matched: groups shaped like this turned up in
+            # the organization, but no revision of this repo generates the
+            # name, so a pattern for it would be a guess with a live
+            # workspace group on the other end. --show-unmatched reports it.
+            'Group 3fed3756',
         ):
             self.assertFalse(self.mod.is_test_deployment(name), name)
 
