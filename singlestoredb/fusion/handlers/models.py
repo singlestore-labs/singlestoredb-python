@@ -151,12 +151,15 @@ class UploadCustomModelHandler(SQLHandler):
                 overwrite=params['overwrite'],
             )
         else:
-            file_space.upload_file(
+            # Nothing here reads the uploaded file's metadata, so don't pay
+            # the request that fetching it costs.
+            file_space._upload_local_file(
                 local_path=local_path,
                 path=normalize_remote_path(
                     f'{model_name}/{os.path.basename(local_path)}',
                 ),
                 overwrite=params['overwrite'],
+                fetch_info=False,
             )
 
         return None

@@ -399,8 +399,59 @@ class FileLocation(ABC):
         path: PathLike,
         *,
         overwrite: bool = False,
-    ) -> FilesObject:
+        fetch_info: bool = True,
+    ) -> Optional[FilesObject]:
         pass
+
+    def _upload_local_file(
+        self,
+        local_path: Union[PathLike, io.IOBase],
+        path: PathLike,
+        *,
+        overwrite: bool = False,
+        fetch_info: bool = True,
+    ) -> Optional[FilesObject]:
+        """
+        Upload a local file or open file object to a remote path.
+
+        This is what ``upload_file`` does, minus the return type promise, so
+        that callers which discard the result -- the Fusion upload handlers --
+        can pass ``fetch_info=False`` and save the metadata request that
+        building a :class:`FilesObject` costs.
+
+        Parameters
+        ----------
+        local_path : Path or str or file-like
+            Path to the local file or an open file object
+        path : Path or str
+            Path to the remote file
+        overwrite : bool, optional
+            Should the ``path`` be overwritten if it exists already?
+        fetch_info : bool, optional
+            Should the metadata of the uploaded file be fetched and returned?
+
+        Returns
+        -------
+        FilesObject - ``fetch_info`` is True
+        None - ``fetch_info`` is False
+
+        """
+        if isinstance(local_path, io.IOBase):
+            return self._upload(
+                local_path, path,
+                overwrite=overwrite, fetch_info=fetch_info,
+            )
+
+        if not os.path.isfile(local_path):
+            raise IsADirectoryError(f'local path is not a file: {local_path}')
+
+        # The handle has to close even when ``_upload`` raises on a
+        # non-overwrite conflict, which it does before touching the content.
+        with open(local_path, 'rb') as infile:
+            return self._upload(
+                infile, path,
+                overwrite=overwrite, fetch_info=fetch_info,
+            )
 
     @abstractmethod
     def mkdir(self, path: PathLike, overwrite: bool = False) -> FilesObject:
@@ -687,21 +738,10 @@ class FileSpace(FileLocation):
             Should the ``path`` be overwritten if it exists already?
 
         """
-        if isinstance(local_path, io.IOBase):
-            pass
-        elif not os.path.isfile(local_path):
-            raise IsADirectoryError(f'local path is not a file: {local_path}')
-
-        if self.exists(path):
-            if not overwrite:
-                raise OSError(f'file path already exists: {path}')
-
-            self.remove(path)
-
-        if isinstance(local_path, io.IOBase):
-            return self._upload(local_path, path, overwrite=overwrite)
-
-        return self._upload(open(local_path, 'rb'), path, overwrite=overwrite)
+        return cast(
+            FilesObject,
+            self._upload_local_file(local_path, path, overwrite=overwrite),
+        )
 
     def upload_folder(
         self,
@@ -786,7 +826,8 @@ class FileSpace(FileLocation):
         path: PathLike,
         *,
         overwrite: bool = False,
-    ) -> FilesObject:
+        fetch_info: bool = True,
+    ) -> Optional[FilesObject]:
         """
         Upload content to a file.
 
@@ -798,6 +839,10 @@ class FileSpace(FileLocation):
             Path to the file
         overwrite : bool, optional
             Should the ``path`` be overwritten if it exists already?
+        fetch_info : bool, optional
+            Should the metadata of the uploaded file be fetched and returned?
+            The write response carries only the name and path, so a
+            :class:`FilesObject` costs an extra request.
 
         """
         if self.exists(path):
@@ -811,7 +856,7 @@ class FileSpace(FileLocation):
             headers={'Content-Type': None},
         )
 
-        return self.info(path)
+        return self.info(path) if fetch_info else None
 
     def mkdir(self, path: PathLike, overwrite: bool = False) -> FilesObject:
         """

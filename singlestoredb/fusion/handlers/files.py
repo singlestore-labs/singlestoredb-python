@@ -198,9 +198,11 @@ class UploadFileHandler(SQLHandler):
 
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         file_space = get_file_space(params)
-        file_space.upload_file(
+        # Nothing here reads the uploaded file's metadata, so don't pay the
+        # request that fetching it costs.
+        file_space._upload_local_file(
             params['local_path'], params['path'],
-            overwrite=params['overwrite'],
+            overwrite=params['overwrite'], fetch_info=False,
         )
         return None
 

@@ -9,6 +9,7 @@ import re
 import secrets
 import unittest
 import uuid
+from types import SimpleNamespace
 from typing import Any
 from typing import Dict
 from typing import List
@@ -849,6 +850,147 @@ def shared_clusters(count: int = 1) -> List[Any]:
         set_owner(prev)
 
     return _pool[:count]
+
+
+class CountingManager:
+    """
+    Stand-in for a :class:`Manager` that records every request.
+
+    Enough of the management API's filesystem behaviour is simulated for a
+    :class:`Stage` or :class:`FileSpace` to be driven end to end without a
+    deployment: paths listed in ``existing`` answer metadata requests, and
+    anything else raises the 404 ``ManagementError`` that ``exists`` reads.
+    Writes and deletes update that set, so a sequence of operations sees the
+    effect of the ones before it.
+
+    ``calls`` holds one ``(method, path)`` pair per request, in order, which
+    is what makes the round-trip count of an operation assertable. The paths
+    are the remote path the caller asked for, with the route prefix
+    (``clusters/<id>/stage/fs/``, ``files/fs/<space>/``) and any query string
+    removed, so the same expectations read the same for Stage and for a file
+    space.
+
+    Parameters
+    ----------
+    existing : iterable of str, optional
+        Remote paths that already exist. A path ending in ``/`` is a folder.
+
+    """
+
+    def __init__(self, existing: Any = ()):
+        self.existing = {self._key(x) for x in existing}
+        self.calls: List[Tuple[str, str]] = []
+
+    @staticmethod
+    def _key(path: Any) -> str:
+        """Reduce a request path to the remote path it addresses."""
+        path = str(path).split('?')[0]
+        # 'files/fs/<space>/<path>' for a file space, '<resource>/fs/<path>'
+        # for a Stage at either version
+        path = re.sub(r'^files/fs/[^/]+/', r'', path)
+        path = re.split(r'/fs/', path, maxsplit=1)[-1]
+        # A trailing '/' marks a folder, but the routes collapse runs of them
+        return re.sub(r'/+$', r'/', path).lstrip('/')
+
+    def _response(self, key: str) -> Any:
+        """Return a metadata response for an existing path."""
+        is_dir = key.endswith('/')
+        return SimpleNamespace(
+            json=lambda: dict(
+                name=key.rstrip('/').rsplit('/', 1)[-1],
+                path=key,
+                size=0 if is_dir else 8,
+                type='directory' if is_dir else 'file',
+                format='',
+                mimetype='' if is_dir else 'text/plain',
+                writable=True,
+                content=[] if is_dir else None,
+            ),
+            content=b'' if is_dir else b'contents',
+        )
+
+    def _get(self, path: Any, params: Any = None, **kwargs: Any) -> Any:
+        key = self._key(path)
+        self.calls.append(('GET', key))
+        if key not in self.existing:
+            # A folder resolves whether or not the caller asked for it with a
+            # trailing '/', the way the routes behave
+            if not key.endswith('/') and f'{key}/' in self.existing:
+                return self._response(f'{key}/')
+            raise ManagementError(errno=404, msg=f'path does not exist: {key}')
+        return self._response(key)
+
+    def _put(self, path: Any, **kwargs: Any) -> Any:
+        key = self._key(path)
+        if 'isFile=false' in str(path):
+            key = re.sub(r'/*$', r'/', key)
+        self.calls.append(('PUT', key))
+        self.existing.add(key)
+        return SimpleNamespace(
+            json=lambda: dict(name=key.rsplit('/', 1)[-1], path=key),
+            content=b'',
+        )
+
+    def _patch(self, path: Any, json: Any = None, **kwargs: Any) -> Any:
+        key = self._key(path)
+        self.calls.append(('PATCH', key))
+        self.existing.discard(key)
+        self.existing.add(self._key((json or {}).get('newPath', key)))
+        return SimpleNamespace(json=lambda: {}, content=b'')
+
+    def _delete(self, path: Any, **kwargs: Any) -> Any:
+        key = self._key(path)
+        self.calls.append(('DELETE', key))
+        self.existing.discard(key)
+        return SimpleNamespace(json=lambda: {}, content=b'')
+
+    def counts(self) -> Dict[str, int]:
+        """Return the number of recorded requests per method."""
+        out: Dict[str, int] = {}
+        for method, _ in self.calls:
+            out[method] = out.get(method, 0) + 1
+        return out
+
+
+def counting_stage(existing: Any = (), stage_cls: Any = None) -> Tuple[Any, Any]:
+    """
+    Return a ``(Stage, CountingManager)`` pair wired to no deployment.
+
+    Parameters
+    ----------
+    existing : iterable of str, optional
+        Stage paths that already exist
+    stage_cls : type, optional
+        ``Stage`` class to instantiate. Defaults to the version-neutral one;
+        pass ``v1.stage.Stage`` to exercise the v1 route prefix, which the
+        recorded paths have stripped either way.
+
+    """
+    if stage_cls is None:
+        from singlestoredb.management.stage import Stage as stage_cls
+    manager = CountingManager(existing)
+    stage = stage_cls.__new__(stage_cls)
+    stage._deployment_id = 'deployment-id'
+    stage._manager = manager
+    return stage, manager
+
+
+def counting_file_space(existing: Any = ()) -> Tuple[Any, Any]:
+    """
+    Return a ``(FileSpace, CountingManager)`` pair wired to no organization.
+
+    Parameters
+    ----------
+    existing : iterable of str, optional
+        File paths that already exist
+
+    """
+    from singlestoredb.management.files import FileSpace
+    manager = CountingManager(existing)
+    space = FileSpace.__new__(FileSpace)
+    space._location = 'personal'
+    space._manager = manager
+    return space, manager
 
 
 def clear_stage(deployment: Any) -> None:

@@ -180,21 +180,10 @@ class Stage(FileLocation):
             Should the ``stage_path`` be overwritten if it exists already?
 
         """
-        if isinstance(local_path, io.IOBase):
-            pass
-        elif not os.path.isfile(local_path):
-            raise IsADirectoryError(f'local path is not a file: {local_path}')
-
-        if self.exists(stage_path):
-            if not overwrite:
-                raise OSError(f'stage path already exists: {stage_path}')
-
-            self.remove(stage_path)
-
-        if isinstance(local_path, io.IOBase):
-            return self._upload(local_path, stage_path, overwrite=overwrite)
-
-        return self._upload(open(local_path, 'rb'), stage_path, overwrite=overwrite)
+        return cast(
+            FilesObject,
+            self._upload_local_file(local_path, stage_path, overwrite=overwrite),
+        )
 
     def upload_folder(
         self,
@@ -276,7 +265,8 @@ class Stage(FileLocation):
         stage_path: PathLike,
         *,
         overwrite: bool = False,
-    ) -> FilesObject:
+        fetch_info: bool = True,
+    ) -> Optional[FilesObject]:
         """
         Upload content to a stage file.
 
@@ -288,6 +278,10 @@ class Stage(FileLocation):
             Path to the stage file
         overwrite : bool, optional
             Should the ``stage_path`` be overwritten if it exists already?
+        fetch_info : bool, optional
+            Should the metadata of the uploaded file be fetched and returned?
+            The write response carries only the name and path, so a
+            :class:`FilesObject` costs an extra request.
 
         """
         if self.exists(stage_path):
@@ -301,7 +295,7 @@ class Stage(FileLocation):
             headers={'Content-Type': None},
         )
 
-        return self.info(stage_path)
+        return self.info(stage_path) if fetch_info else None
 
     def mkdir(self, stage_path: PathLike, overwrite: bool = False) -> FilesObject:
         """

@@ -10,6 +10,7 @@ only because that is where the bugs were found.
 import datetime
 import os
 import pathlib
+import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -17,6 +18,8 @@ from unittest.mock import patch
 
 from singlestoredb.exceptions import ManagementError
 from singlestoredb.management.utils import normalize_remote_path
+from singlestoredb.tests.utils import counting_file_space
+from singlestoredb.tests.utils import counting_stage
 
 
 TEST_DIR = pathlib.Path(os.path.dirname(__file__))
@@ -384,7 +387,7 @@ class TestCustomModelUploadPaths(unittest.TestCase):
             space = self._run(local)
         space.upload_folder.assert_not_called()
         self.assertEqual(
-            space.upload_file.call_args.kwargs['path'],
+            space._upload_local_file.call_args.kwargs['path'],
             'mymodel/weights.bin',
         )
 
@@ -392,7 +395,7 @@ class TestCustomModelUploadPaths(unittest.TestCase):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             space = self._run(tmp)
-        space.upload_file.assert_not_called()
+        space._upload_local_file.assert_not_called()
         self.assertEqual(
             space.upload_folder.call_args.kwargs['path'], 'mymodel',
         )
@@ -475,6 +478,166 @@ class TestRecursiveDownloadPathTraversal(unittest.TestCase):
                 stage.download_folder('remote', target, overwrite=True)
             self.assertIn('outside destination', str(ctx.exception))
             stage._download_file.assert_not_called()
+
+
+class TestUploadRoundTrips(unittest.TestCase):
+    """An upload must not repeat work it has already done.
+
+    The counts pinned here are the Stage / file space half of the six requests
+    ``UPLOAD FILE TO STAGE`` costs; the two that resolve ``IN '<name>'`` are
+    made before a ``Stage`` exists and so cannot be seen from here. Against
+    the numbers in ``docs/stage-upload-round-trips-plan.md``, add two.
+    """
+
+    def _local_file(self, tmp, content='contents'):
+        local = os.path.join(tmp, 'local.csv')
+        with open(local, 'w') as f:
+            f.write(content)
+        return local
+
+    def test_a_fresh_upload_costs_one_check_and_one_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local = self._local_file(tmp)
+            stage, manager = counting_stage()
+            obj = stage.upload_file(local, 'remote.csv')
+        # Was four: upload_file and _upload each checked exists()
+        self.assertEqual(
+            manager.calls, [
+                ('GET', 'remote.csv'),   # exists()
+                ('PUT', 'remote.csv'),   # the upload
+                ('GET', 'remote.csv'),   # info() for the return value
+            ],
+        )
+        # The public contract still hands back a populated object
+        self.assertEqual(obj.name, 'remote.csv')
+        self.assertEqual(obj.path, 'remote.csv')
+        self.assertEqual(obj.type, 'file')
+        self.assertEqual(obj.size, 8)
+        self.assertTrue(obj.writable)
+
+    def test_an_overwrite_costs_one_check_and_one_delete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local = self._local_file(tmp)
+            stage, manager = counting_stage(existing=['remote.csv'])
+            stage.upload_file(local, 'remote.csv', overwrite=True)
+        # Was six: the duplicated exists() dragged a second remove() check in
+        self.assertEqual(
+            manager.calls, [
+                ('GET', 'remote.csv'),      # exists()
+                ('GET', 'remote.csv'),      # remove()'s is_dir()
+                ('DELETE', 'remote.csv'),
+                ('PUT', 'remote.csv'),
+                ('GET', 'remote.csv'),      # info() for the return value
+            ],
+        )
+
+    def test_a_conflict_still_raises_and_closes_the_local_file(self):
+        opened = []
+        real_open = open
+
+        def recording_open(*args, **kwargs):
+            handle = real_open(*args, **kwargs)
+            opened.append(handle)
+            return handle
+
+        with tempfile.TemporaryDirectory() as tmp:
+            local = self._local_file(tmp)
+            stage, manager = counting_stage(existing=['remote.csv'])
+            with patch('builtins.open', recording_open):
+                with self.assertRaises(OSError) as ctx:
+                    stage.upload_file(local, 'remote.csv')
+        self.assertIn('stage path already exists', str(ctx.exception))
+        self.assertEqual(manager.calls, [('GET', 'remote.csv')])
+        # The conflict is now detected inside _upload, which is after the
+        # local file has been opened, so that handle has to close on the way
+        # out rather than wait for the collector
+        self.assertTrue(opened)
+        self.assertTrue(all(handle.closed for handle in opened))
+
+    def test_a_local_directory_is_rejected_before_any_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stage, manager = counting_stage()
+            with self.assertRaises(IsADirectoryError):
+                stage.upload_file(tmp, 'remote.csv')
+        self.assertEqual(manager.calls, [])
+
+    def test_the_fusion_path_skips_the_metadata_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local = self._local_file(tmp)
+            stage, manager = counting_stage()
+            out = stage._upload_local_file(local, 'remote.csv', fetch_info=False)
+        self.assertIsNone(out)
+        self.assertEqual(
+            manager.calls, [('GET', 'remote.csv'), ('PUT', 'remote.csv')],
+        )
+
+    def test_the_fusion_handler_takes_that_path(self):
+        from singlestoredb.fusion.handlers.stage import UploadStageFileHandler
+        handler = UploadStageFileHandler.__new__(UploadStageFileHandler)
+        with tempfile.TemporaryDirectory() as tmp:
+            local = self._local_file(tmp)
+            stage, manager = counting_stage()
+            with patch(
+                'singlestoredb.fusion.handlers.stage.get_deployment',
+                return_value=SimpleNamespace(stage=stage),
+            ):
+                handler.run(
+                    dict(
+                        local_path=local,
+                        stage_path='remote.csv',
+                        overwrite=False,
+                    ),
+                )
+        self.assertEqual(
+            manager.calls, [('GET', 'remote.csv'), ('PUT', 'remote.csv')],
+        )
+
+    def test_a_file_space_upload_costs_the_same(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local = self._local_file(tmp)
+            space, manager = counting_file_space()
+            obj = space.upload_file(local, 'remote.csv')
+            fresh = list(manager.calls)
+
+            manager.calls.clear()
+            out = space._upload_local_file(
+                local, 'other.csv', fetch_info=False,
+            )
+        self.assertEqual(
+            fresh, [
+                ('GET', 'remote.csv'),
+                ('PUT', 'remote.csv'),
+                ('GET', 'remote.csv'),
+            ],
+        )
+        self.assertEqual(obj.type, 'file')
+        self.assertIsNone(out)
+        self.assertEqual(
+            manager.calls, [('GET', 'other.csv'), ('PUT', 'other.csv')],
+        )
+
+    def test_a_file_space_conflict_names_the_file_space(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local = self._local_file(tmp)
+            space, _ = counting_file_space(existing=['remote.csv'])
+            with self.assertRaises(OSError) as ctx:
+                space.upload_file(local, 'remote.csv')
+        self.assertIn('file path already exists', str(ctx.exception))
+
+    def test_a_folder_upload_pays_the_saving_per_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = os.path.join(tmp, 'src')
+            os.makedirs(root)
+            for name in ('a.csv', 'b.csv'):
+                with open(os.path.join(root, name), 'w') as f:
+                    f.write('x')
+            stage, manager = counting_stage(existing=['dest/'])
+            stage.upload_folder(root, 'dest')
+        # Two files: one exists() + one PUT + one info() each, plus the
+        # exists() / is_dir() on the destination and the closing info().
+        # Was eleven -- one duplicated exists() per file.
+        self.assertEqual(len(manager.calls), 9)
+        self.assertEqual(manager.counts()['PUT'], 2)
 
 
 class TestRemotePathUtils(unittest.TestCase):
