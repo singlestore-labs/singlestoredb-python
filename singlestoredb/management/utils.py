@@ -263,12 +263,21 @@ def get_workspace_id() -> Optional[str]:
 
 def get_project_id() -> Optional[str]:
     """
-    Return the project id or name for the current token or environment.
+    Return the inference API project id for the current environment.
 
-    ``SINGLESTOREDB_PROJECT`` is a single value for both spellings, so the
-    caller decides which it is -- see ``PROJECT_ID_RE`` in
-    :mod:`singlestoredb.management.v2.cluster`. Projects are a v2 resource;
-    there is no v1 equivalent.
+    ``SINGLESTOREDB_PROJECT`` is *not* a project of the cluster management API,
+    despite the name. The notebook environment sets both, and they disagree: a
+    notebook attached to a cluster in one management project reports an
+    unrelated ID here, one that draws ``404 project not found`` from
+    ``GET /v2/projects/{id}``. It names a project of the inference API, which is
+    a separate service with its own namespace, and
+    :class:`singlestoredb.management.inference_api.InferenceAPIManager` is its
+    only legitimate consumer.
+
+    To pick the management project a new deployment belongs in, use
+    :meth:`singlestoredb.management.v2.cluster.ClusterManager.
+    _resolve_project_id`, which reads the project off the current deployment
+    instead.
     """
     return os.environ.get('SINGLESTOREDB_PROJECT') or None
 

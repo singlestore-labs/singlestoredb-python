@@ -208,6 +208,13 @@ path segment, not a separate host.
 `SINGLESTOREDB_WORKSPACE` at every API version — a workspace ID at v1, a cluster
 ID at v2 — plus `SINGLESTOREDB_WORKSPACE_GROUP` for the group ID and
 `SINGLESTOREDB_PROJECT` for the project. So:
+- **⚠ Further correction (established while testing the notebooks).**
+  "`SINGLESTOREDB_PROJECT` for the project" is wrong. It names a project of the
+  *inference* API, an unrelated namespace: a notebook attached to a cluster in
+  `Standard Project` publishes an ID there that `GET /v2/projects/{id}` answers
+  `404 project not found` for. It is not a deployment variable at all, and
+  nothing on the cluster write path reads it — `_resolve_project_id()` takes the
+  project off the current deployment instead.
 - `CLUSTER_ENV_VARS` collapses to `('SINGLESTOREDB_WORKSPACE',)`, and
   `get_cluster_id()` is simply the v2 spelling of `get_workspace_id()`. **Landed
   as a deletion:** a one-element tuple is not worth a name, so the constant is

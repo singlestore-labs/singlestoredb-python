@@ -533,12 +533,15 @@ class TestFusion(unittest.TestCase):
             os.environ.pop(name, None)
         os.environ.update(values)
 
-    def test_project_falls_back_to_the_environment(self):
+    def test_project_resolves_the_clause_and_nothing_else(self):
         """
-        ``IN PROJECT`` is optional when the environment names a project.
+        ``IN PROJECT`` is the only thing ``get_project`` reads.
 
-        The notebook environment publishes ``SINGLESTOREDB_PROJECT``, which may
-        hold either a name or an ID, so both spellings have to resolve.
+        Absent the clause it returns ``None``, leaving the choice to
+        ``ClusterManager._resolve_project_id``, which reads the project off the
+        current deployment. ``SINGLESTOREDB_PROJECT`` is not consulted: it names
+        an inference API project, so resolving it here turned every notebook's
+        ``CREATE CLUSTER`` into a 404.
         """
         from unittest.mock import MagicMock
         from unittest.mock import patch
@@ -552,20 +555,20 @@ class TestFusion(unittest.TestCase):
         manager.projects = [by_name]
 
         with patch.object(utils, 'get_cluster_manager', return_value=manager):
-            self._fusion_env(SINGLESTOREDB_PROJECT=project_id)
-            assert utils.get_project({}) is manager.get_project.return_value
-            manager.get_project.assert_called_once_with(project_id)
-
-            self._fusion_env(SINGLESTOREDB_PROJECT='My Project')
-            assert utils.get_project({}) is by_name
-
-            # A clause still wins over the environment.
-            self._fusion_env(SINGLESTOREDB_PROJECT='My Project')
+            self._fusion_env()
             assert utils.get_project(
                 dict(in_project=dict(project_id=project_id)),
             ) is manager.get_project.return_value
+            manager.get_project.assert_called_once_with(project_id)
 
-            self._fusion_env()
+            assert utils.get_project(
+                dict(in_project=dict(project_name='My Project')),
+            ) is by_name
+
+            assert utils.get_project({}) is None
+
+            # Still None with the environment variable set.
+            self._fusion_env(SINGLESTOREDB_PROJECT=project_id)
             assert utils.get_project({}) is None
 
     def test_deployment_refuses_the_group_environment_variable(self):
@@ -1102,14 +1105,14 @@ class _ClusterFusionMixin:
     @classmethod
     def _project_id(cls, mgr):
         """Pick the project to deploy into, or skip. POST requires one."""
-        from_env = os.environ.get('SINGLESTOREDB_PROJECT')
+        from_env = os.environ.get('SINGLESTOREDB_TEST_PROJECT')
         if from_env:
             return from_env
         standard = [x for x in mgr.projects if x.edition == 'STANDARD']
         if not standard:
             raise unittest.SkipTest(
                 'No STANDARD project in this organization; set '
-                'SINGLESTOREDB_PROJECT to the project to deploy into',
+                'SINGLESTOREDB_TEST_PROJECT to the project to deploy into',
             )
         return standard[0].id
 

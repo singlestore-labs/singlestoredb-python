@@ -86,11 +86,14 @@ def _project_id(manager):
     Return the project ID the live v2 suites deploy into, or skip the test.
 
     ``POST /v2/clusters`` requires ``projectID``, so a project has to be chosen
-    before anything can be created. ``SINGLESTOREDB_PROJECT`` wins if it is set;
-    otherwise the STANDARD-edition project is used, which is where every
+    before anything can be created. ``SINGLESTOREDB_TEST_PROJECT`` wins if it is
+    set; otherwise the STANDARD-edition project is used, which is where every
     workspace group the v1 suites create already lands.
+
+    Not ``SINGLESTOREDB_PROJECT``: that names an inference API project, not one
+    of these, and pointing the suites at it deploys nothing.
     """
-    from_env = os.environ.get('SINGLESTOREDB_PROJECT')
+    from_env = os.environ.get('SINGLESTOREDB_TEST_PROJECT')
     if from_env:
         return from_env
 
@@ -98,7 +101,7 @@ def _project_id(manager):
     if not standard:
         raise unittest.SkipTest(
             'No STANDARD project in this organization; set '
-            'SINGLESTOREDB_PROJECT to the project to deploy into',
+            'SINGLESTOREDB_TEST_PROJECT to the project to deploy into',
         )
     return standard[0].id
 
@@ -687,11 +690,28 @@ class TestProjects(unittest.TestCase):
         return mgr
 
     def _without_env(self):
-        """Patch the environment with SINGLESTOREDB_PROJECT removed."""
+        """
+        Patch the environment with the deployment variables removed.
+
+        ``SINGLESTOREDB_WORKSPACE`` is what ``_resolve_project_id`` reads, so it
+        has to go for the fall-through cases to be reached. ``SINGLESTOREDB_
+        PROJECT`` goes too, so that a test running in a notebook cannot pass by
+        accident on a variable the resolver is supposed to ignore.
+        """
         ctx = patch.dict(os.environ)
         ctx.start()
         os.environ.pop('SINGLESTOREDB_PROJECT', None)
+        os.environ.pop('SINGLESTOREDB_WORKSPACE', None)
         self.addCleanup(ctx.stop)
+
+    def _in_deployment(self, mgr, project_id):
+        """Present ``mgr`` as running in a deployment in ``project_id``."""
+        self._without_env()
+        os.environ['SINGLESTOREDB_WORKSPACE'] = FAKE_CLUSTER_ID
+        mgr.get_cluster = MagicMock(
+            return_value=MagicMock(project=Project(id=project_id, name='p')),
+        )
+        return mgr
 
     def test_projects_lists_from_the_projects_endpoint(self):
         mgr = self._make_cluster_manager(self.PROJECTS)
@@ -714,25 +734,65 @@ class TestProjects(unittest.TestCase):
         mgr._get.assert_called_once_with(f'projects/{FAKE_STANDARD_PROJECT_ID}')
         self.assertEqual(project.name, 'Standard Project')
 
-    def test_explicit_project_id_wins_over_the_environment(self):
-        mgr = self._make_cluster_manager()
-        with patch.dict(
-            os.environ, {'SINGLESTOREDB_PROJECT': FAKE_STANDARD_PROJECT_ID},
-        ):
-            self.assertEqual(
-                mgr._resolve_project_id(FAKE_PROJECT_ID), FAKE_PROJECT_ID,
-            )
+    def test_explicit_project_id_wins_over_the_current_deployment(self):
+        mgr = self._in_deployment(
+            self._make_cluster_manager(), FAKE_STANDARD_PROJECT_ID,
+        )
+        self.assertEqual(
+            mgr._resolve_project_id(FAKE_PROJECT_ID), FAKE_PROJECT_ID,
+        )
+        # The caller settled it, so the deployment is never fetched.
+        mgr.get_cluster.assert_not_called()
 
-    def test_environment_used_when_no_project_id_is_passed(self):
+    def test_the_current_deployment_supplies_the_default_project(self):
+        """
+        A new cluster lands in the project the current one is in.
+
+        This is what makes ``IN PROJECT`` optional in a notebook attached to a
+        deployment, even in an organization with several projects.
+        """
+        mgr = self._in_deployment(
+            self._make_cluster_manager(self.PROJECTS), FAKE_STANDARD_PROJECT_ID,
+        )
+        self.assertEqual(mgr._resolve_project_id(), FAKE_STANDARD_PROJECT_ID)
+        mgr.get_cluster.assert_called_once_with(FAKE_CLUSTER_ID)
+        # The deployment reports an ID, so no project listing is needed.
+        mgr._get.assert_not_called()
+
+    def test_an_unresolvable_deployment_falls_through(self):
+        """
+        A deployment that cannot be read is not an error here.
+
+        The variable also names starter clusters, which are not clusters, and
+        can go stale. Either way there are further defaults to try, so the
+        lookup failing must not surface.
+        """
+        mgr = self._in_deployment(
+            self._make_cluster_manager(self.PROJECTS[:1]), FAKE_PROJECT_ID,
+        )
+        mgr.get_cluster.side_effect = ManagementError(
+            errno=404, msg='cluster not found',
+        )
+        self.assertEqual(mgr._resolve_project_id(), FAKE_SHARED_PROJECT_ID)
+
+    def test_singlestoredb_project_is_not_a_management_project(self):
+        """
+        ``SINGLESTOREDB_PROJECT`` is an inference API project and is ignored.
+
+        The notebook environment sets it to an ID that draws ``404 project not
+        found`` from ``GET /v2/projects/{id}``. Reading it here made every
+        ``CREATE CLUSTER`` from a notebook fail, so the resolver must not look
+        at it at all -- not even as a hint.
+        """
+        self._without_env()
         mgr = self._make_cluster_manager(self.PROJECTS)
         with patch.dict(
             os.environ, {'SINGLESTOREDB_PROJECT': FAKE_STANDARD_PROJECT_ID},
         ):
-            self.assertEqual(
-                mgr._resolve_project_id(), FAKE_STANDARD_PROJECT_ID,
-            )
-        # An ID answers without listing projects.
-        mgr._get.assert_not_called()
+            with self.assertRaises(ManagementError) as cm:
+                mgr._resolve_project_id()
+        # Ignored, so this is the ordinary "more than one project" refusal.
+        self.assertIn('more than one', str(cm.exception))
 
     def test_a_project_may_be_named_instead_of_identified(self):
         mgr = self._make_cluster_manager(self.PROJECTS)
@@ -746,23 +806,11 @@ class TestProjects(unittest.TestCase):
         mgr = self._make_cluster_manager(self.PROJECTS)
         project = mgr.projects['Standard Project']
         mgr._get.reset_mock()
-        with patch.dict(
-            os.environ, {'SINGLESTOREDB_PROJECT': FAKE_SHARED_PROJECT_ID},
-        ):
-            self.assertEqual(
-                mgr._resolve_project_id(project), FAKE_STANDARD_PROJECT_ID,
-            )
+        self.assertEqual(
+            mgr._resolve_project_id(project), FAKE_STANDARD_PROJECT_ID,
+        )
         # A Project carries its ID, so no lookup is needed.
         mgr._get.assert_not_called()
-
-    def test_the_environment_may_name_a_project(self):
-        mgr = self._make_cluster_manager(self.PROJECTS)
-        with patch.dict(
-            os.environ, {'SINGLESTOREDB_PROJECT': 'Shared Project'},
-        ):
-            self.assertEqual(
-                mgr._resolve_project_id(), FAKE_SHARED_PROJECT_ID,
-            )
 
     def test_an_unknown_project_name_raises_and_lists_the_projects(self):
         mgr = self._make_cluster_manager(self.PROJECTS)
@@ -815,7 +863,9 @@ class TestProjects(unittest.TestCase):
         msg = str(cm.exception)
         self.assertIn(FAKE_SHARED_PROJECT_ID, msg)
         self.assertIn('Standard Project', msg)
-        self.assertIn('SINGLESTOREDB_PROJECT', msg)
+        self.assertIn('project=', msg)
+        # Never point the caller at a variable that names something else.
+        self.assertNotIn('SINGLESTOREDB_PROJECT', msg)
 
     def test_no_projects_raises(self):
         self._without_env()

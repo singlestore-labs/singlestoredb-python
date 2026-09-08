@@ -1259,12 +1259,12 @@ class TestSharedClusterPool(unittest.TestCase):
         with self._patched(projects=('SHARED',)):
             with self.assertRaises(unittest.SkipTest) as cm:
                 self.utils.shared_clusters(1)
-        self.assertIn('SINGLESTOREDB_PROJECT', str(cm.exception))
+        self.assertIn('SINGLESTOREDB_TEST_PROJECT', str(cm.exception))
         self.assertEqual(self.created, [])
 
     def test_an_explicit_project_does_not_need_a_standard_one(self):
         with patch.dict(
-            os.environ, {'SINGLESTOREDB_PROJECT': 'chosen-project'},
+            os.environ, {'SINGLESTOREDB_TEST_PROJECT': 'chosen-project'},
         ):
             with self._patched(projects=('SHARED',)):
                 self.utils.shared_clusters(1)

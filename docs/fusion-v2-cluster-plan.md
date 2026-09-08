@@ -145,12 +145,18 @@ only `job.py` moves. Add alongside it:
 - `get_starter_cluster(params)` — same shape against `starter_clusters` /
   `get_starter_cluster()`.
 - `get_project(params)` — resolves an `IN PROJECT` clause by name against
-  `manager.projects` or by ID via `get_project()`, falling back to
-  `management/utils.py`'s `get_project_id()` (`SINGLESTOREDB_PROJECT`, set by
-  the notebook environment and holding either a name or an ID — told apart by
-  `PROJECT_ID_RE`) and
-  returning `None` when neither names a project so `create_cluster` falls
-  through to `_resolve_project_id()`.
+  `manager.projects` or by ID via `get_project()`, and returns `None` when the
+  clause is absent so `create_cluster` falls through to `_resolve_project_id()`.
+
+  **⚠ Correction (established while testing the notebooks).** This originally
+  fell back to `management/utils.py`'s `get_project_id()`
+  (`SINGLESTOREDB_PROJECT`) when the clause was absent. That was wrong:
+  `SINGLESTOREDB_PROJECT` is an *inference API* project, a separate namespace,
+  and its IDs draw `404 project not found` from `GET /v2/projects/{id}`. A
+  notebook attached to a cluster in `Standard Project` reports an unrelated ID
+  there, so the fallback made every `CREATE CLUSTER` from a notebook fail. The
+  fallback is gone; `_resolve_project_id()` now reads the project off the
+  current deployment instead.
 - `get_deployment(params)` — **repointed in place** to v2. Verified safe:
   `stage.py` is its only consumer, so the workspace handlers are unaffected.
   `workspace_groups`→`clusters`, `starter_workspaces`→`starter_clusters`,

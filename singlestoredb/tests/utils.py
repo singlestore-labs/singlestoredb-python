@@ -810,13 +810,13 @@ def shared_clusters(count: int = 1) -> List[Any]:
         _pool_skip = 'No US regions reported by the v2 API'
         raise unittest.SkipTest(_pool_skip)
 
-    project_id = os.environ.get('SINGLESTOREDB_PROJECT')
+    project_id = os.environ.get('SINGLESTOREDB_TEST_PROJECT')
     if not project_id:
         standard = [x for x in mgr.projects if x.edition == 'STANDARD']
         if not standard:
             _pool_skip = (
                 'No STANDARD project in this organization; set '
-                'SINGLESTOREDB_PROJECT to the project to deploy into'
+                'SINGLESTOREDB_TEST_PROJECT to the project to deploy into'
             )
             raise unittest.SkipTest(_pool_skip)
         project_id = standard[0].id

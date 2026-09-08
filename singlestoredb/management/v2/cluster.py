@@ -30,7 +30,6 @@ from ..stage import Stage as Stage
 from ..stage import StageObject as StageObject
 from ..utils import camel_to_snake_dict
 from ..utils import get_cluster_id
-from ..utils import get_project_id
 from ..utils import NamedList
 from ..utils import PathLike
 from ..utils import snake_to_camel_dict
@@ -1186,6 +1185,31 @@ class ClusterManager(Manager):
 
         return matches[0].id
 
+    def _current_deployment_project_id(self) -> Optional[str]:
+        """
+        Return the project of the deployment this code is running in.
+
+        A notebook publishes the deployment it is attached to as
+        ``SINGLESTOREDB_WORKSPACE``, and a deployment reports its own
+        ``projectID``, so the project a new cluster most likely belongs in is
+        the one the current cluster is already in.
+
+        Returns ``None`` whenever that cannot be established, which covers
+        running outside a notebook, a deployment that is not a cluster -- a
+        starter cluster publishes the same variable -- and a stale ID. None of
+        those are errors here: the caller has further defaults to try.
+        """
+        deployment_id = get_cluster_id()
+        if not deployment_id:
+            return None
+
+        try:
+            project = self.get_cluster(deployment_id).project
+        except ManagementError:
+            return None
+
+        return project.id if project is not None else None
+
     def _resolve_project_id(
         self,
         project: Union[str, Project, None] = None,
@@ -1194,14 +1218,19 @@ class ClusterManager(Manager):
         Return the project ID a new deployment should be created in.
 
         ``POST /v2/clusters`` requires ``projectID``. In priority order: the
-        project named by the caller, the ``SINGLESTOREDB_PROJECT`` variable
-        the notebook environment sets, or the organization's only project. An
-        organization with more than one project has no default -- naming the
-        candidates is more useful than picking one.
+        project named by the caller, the project of the deployment this code is
+        running in, or the organization's only project. An organization with
+        more than one project and nothing else to go on has no default --
+        naming the candidates is more useful than picking one.
 
-        The caller may give a :class:`Project`, a project name or a project ID,
-        and the environment variable either a name or an ID; see
-        :meth:`_project_id_for`.
+        The caller may give a :class:`Project`, a project name or a project ID;
+        see :meth:`_project_id_for`.
+
+        Note that ``SINGLESTOREDB_PROJECT`` is deliberately not consulted. The
+        notebook environment sets it, but not to a project of this API: it
+        names a project of the inference API, a separate namespace whose IDs do
+        not resolve here. See :func:`singlestoredb.management.utils.
+        get_project_id`.
 
         Parameters
         ----------
@@ -1221,9 +1250,9 @@ class ClusterManager(Manager):
         if project:
             return self._project_id_for(project)
 
-        from_env = get_project_id()
-        if from_env:
-            return self._project_id_for(from_env)
+        from_deployment = self._current_deployment_project_id()
+        if from_deployment:
+            return from_deployment
 
         projects = self.projects
         if len(projects) == 1:
@@ -1237,9 +1266,8 @@ class ClusterManager(Manager):
 
         raise ManagementError(
             msg='A project is required to create a cluster and the current '
-                'organization has more than one. Pass project= or set the '
-                'SINGLESTOREDB_PROJECT environment variable to the name or ID '
-                'of one of: ' +
+                'organization has more than one. Pass project= naming one '
+                'of: ' +
                 ', '.join(f'{x.name} ({x.id})' for x in projects) + '.',
         )
 
@@ -1331,8 +1359,8 @@ class ClusterManager(Manager):
             its ID; a string that is not a UUID is looked up as a name.
             Required by the API; if it is not
             given it is resolved by :meth:`_resolve_project_id` from the
-            ``SINGLESTOREDB_PROJECT`` environment variable or from the
-            organization's only project.
+            deployment this code is running in, or from the organization's only
+            project.
         wait_on_active : bool, optional
             Wait for the cluster to be usable before returning: first for the
             state to become ACTIVE, then for the endpoint, then -- if a

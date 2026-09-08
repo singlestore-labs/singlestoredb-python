@@ -115,6 +115,15 @@ plan docs; introducing the constants is more new surface for no gain.
   `management/utils.py` is less surface than a literal read left in a different
   package.
 
+  **⚠ Correction (established while testing the notebooks).** The accessor
+  stays, but it does not mean what this item assumed. `SINGLESTOREDB_PROJECT`
+  names an *inference API* project, not a cluster management project: the two
+  namespaces are unrelated, and the ID a notebook publishes there answers `404
+  project not found` from `GET /v2/projects/{id}`. So `get_project_id()` has
+  exactly one legitimate caller, `inference_api.py`, and neither
+  `_resolve_project_id` nor the Fusion `get_project` reads it any more. The
+  accessor is now the place that documents the distinction.
+
 `CLUSTER_ENV_VARS` did once exist (`v2/cluster.py`, deleted in `3a9ebb04` when
 one variable was left); the plan-doc references to it are now annotated as
 historical rather than deleted. `SINGLESTOREDB_WORKSPACE_GROUP` is untouched: the

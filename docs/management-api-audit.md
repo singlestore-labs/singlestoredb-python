@@ -454,13 +454,21 @@ These are not in the scope of this audit pass but are worth noting:
      /v1/workspaceGroups` assigns a project implicitly: every group in the test
      organization sits in `Standard Project` without the SDK ever sending an ID.
      Handled by `ClusterManager._resolve_project_id`, which takes the caller's
-     `project`, then `SINGLESTOREDB_PROJECT`, then the organization's only
-     project, and otherwise raises naming the candidates. Both the argument and
-     the environment variable accept a project *name* as well as an ID:
+     `project`, then the project of the deployment the code is running in, then
+     the organization's only project, and otherwise raises naming the
+     candidates. The argument accepts a project *name* as well as an ID:
      `_project_id_for` treats a UUID as an ID and anything else as a name to
      look up, which is safe because the route answers `400 uuid: incorrect UUID
      length` for a non-UUID ID. The API does not promise names are unique, so an
      ambiguous name raises rather than resolving to the first match.
+
+     **⚠ Correction (established while testing the notebooks).** Priority two
+     was originally `SINGLESTOREDB_PROJECT`. That variable names a project of
+     the *inference* API, not of this one — a notebook reports an ID there that
+     `GET /v2/projects/{id}` answers `404 project not found` for — so reading it
+     broke `CREATE CLUSTER` in every notebook. Reading the project off the
+     current deployment replaces it and is a better default anyway: a new
+     cluster lands beside the one it was created from.
    - `POST /v2/sharedtier/virtualClusters` does **not** require `projectID` —
      validation runs through to `databaseName` without it — so
      `create_starter_cluster` resolves `project` only when one is given.

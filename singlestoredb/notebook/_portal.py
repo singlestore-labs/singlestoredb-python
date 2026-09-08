@@ -286,9 +286,11 @@ class Portal(object):
         """
         Project ID.
 
-        The project new deployments are created in. May be a project name
-        rather than an ID; the management API accepts either wherever a project
-        can be named.
+        The inference API project, which is not a project of the cluster
+        management API: the two are separate namespaces and the notebook
+        environment reports different IDs for them. Do not pass this where a
+        management project is wanted -- see
+        :func:`singlestoredb.management.utils.get_project_id`.
         """
         try:
             return self._connection_info['project']

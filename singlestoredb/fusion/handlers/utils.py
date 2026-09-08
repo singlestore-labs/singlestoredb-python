@@ -13,13 +13,11 @@ from ...management.cluster import Cluster
 from ...management.cluster import ClusterManager
 from ...management.cluster import manage_clusters
 from ...management.cluster import Project
-from ...management.cluster import PROJECT_ID_RE
 from ...management.cluster import StarterCluster
 from ...management.files import FilesManager
 from ...management.files import FileSpace
 from ...management.files import manage_files
 from ...management.utils import get_cluster_id
-from ...management.utils import get_project_id
 from ...management.utils import get_workspace_id
 from ...management.v1.inference_api import InferenceAPIInfo
 from ...management.v1.inference_api import InferenceAPIManager
@@ -344,13 +342,14 @@ def get_starter_cluster(params: Dict[str, Any]) -> StarterCluster:
 
 def get_project(params: Dict[str, Any]) -> Optional[Project]:
     """
-    Resolve an ``IN PROJECT`` clause, or the project named by the environment.
+    Resolve an ``IN PROJECT`` clause.
 
-    Returns ``None`` when neither names a project, so that ``CREATE CLUSTER``
-    falls through to ``ClusterManager._resolve_project_id``, which picks the
-    organization's only project or raises naming the candidates. The clause is
-    therefore optional in a single-project organization and required in one
-    with several.
+    Returns ``None`` when the clause is absent, so that ``CREATE CLUSTER`` falls
+    through to ``ClusterManager._resolve_project_id``, which reads the project
+    off the deployment the command is running in, else picks the organization's
+    only project, else raises naming the candidates. The clause is therefore
+    needed only to override that, or in an organization with several projects
+    reached from outside a deployment.
 
     This function will get a project name or ID from the following parameters:
 
@@ -359,27 +358,14 @@ def get_project(params: Dict[str, Any]) -> Optional[Project]:
         * params['in_project']['project_name']
         * params['in_project']['project_id']
 
-    Or, from ``SINGLESTOREDB_PROJECT``, which the SingleStore notebook
-    environment sets and which may hold either a project name or a project ID.
-
     """
     project_name = params.get('project_name') or \
         (params.get('in_project') or {}).get('project_name')
     project_id = params.get('project_id') or \
         (params.get('in_project') or {}).get('project_id')
 
-    source = ''
     if not project_name and not project_id:
-        from_env = get_project_id()
-        if not from_env:
-            return None
-        source = ' (from SINGLESTOREDB_PROJECT)'
-        # The environment variable is a single value for both spellings, so it
-        # is read as an ID only when it is shaped like one; see PROJECT_ID_RE.
-        if PROJECT_ID_RE.match(from_env):
-            project_id = from_env
-        else:
-            project_name = from_env
+        return None
 
     manager = get_cluster_manager()
 
@@ -387,9 +373,7 @@ def get_project(params: Dict[str, Any]) -> Optional[Project]:
         projects = [x for x in manager.projects if x.name == project_name]
 
         if not projects:
-            raise KeyError(
-                f'no project found with name: {project_name}{source}',
-            )
+            raise KeyError(f'no project found with name: {project_name}')
 
         if len(projects) > 1:
             ids = ', '.join(x.id for x in projects)
@@ -404,7 +388,7 @@ def get_project(params: Dict[str, Any]) -> Optional[Project]:
         return manager.get_project(project_id)
     except ManagementError as exc:
         if _is_missing(exc):
-            raise KeyError(f'no project found with ID: {project_id}{source}')
+            raise KeyError(f'no project found with ID: {project_id}')
         raise
 
 
