@@ -3,10 +3,9 @@
 Fusion SQL handlers for the management API v1 workspace vocabulary.
 
 **Deprecated.** ``handlers/cluster.py`` is the v2 replacement, and v2 is the
-default everywhere else in the SDK. Every command here except ``SHOW REGIONS``
-sets ``_deprecated_by`` naming its ``CLUSTER`` counterpart, so it still runs but
-warns once per execution; see :class:`ShowRegionsHandler` for why that one is the
-exception. Nothing is removed and no grammar changed -- an existing v1 script
+default everywhere else in the SDK. Every command here sets ``_deprecated_by``
+naming its ``CLUSTER`` counterpart, so it still runs but warns once per
+execution. Nothing is removed and no grammar changed -- an existing v1 script
 keeps working, it just says where to go. This module is what gets deleted when
 ``management/v1/`` goes.
 
@@ -185,6 +184,9 @@ class ShowRegionsHandler(SQLHandler):
       specified number.
     * Use the ``ORDER BY`` clause to sort the results by the specified
       key. By default, the results are sorted in the ascending order.
+    * The ``ID`` column has no counterpart in ``SHOW CLUSTER REGIONS``: v2
+      assigns no region IDs and identifies a region by its provider and
+      region name instead.
 
     Example
     -------
@@ -195,15 +197,18 @@ class ShowRegionsHandler(SQLHandler):
 
     See Also
     --------
-    * ``SHOW CLUSTER REGIONS``, the management API v2 equivalent
+    * ``SHOW CLUSTER REGIONS``, the management API v2 replacement
 
     """
 
-    # Deliberately *not* deprecated, unlike every other command in this module.
-    # It is the one v1 command whose v2 counterpart drops a column rather than
-    # renaming things: v2 has no region IDs, so ``SHOW CLUSTER REGIONS`` cannot
-    # report ``ID``. Warning here would push callers who need that column toward
-    # something that does not have it. Revisit if v2 ever grows region IDs.
+    # Not a column-for-column replacement, unlike the rest of this module: v2
+    # has no region IDs, so ``SHOW CLUSTER REGIONS`` reports ``Provider`` and
+    # ``RegionName`` where this reports ``ID``. Deprecated anyway, because this
+    # command reads the v1 API and that is what is going away -- a caller
+    # holding a v1 region ID needs to hear that now, not when the route stops
+    # answering.
+    _deprecated_by = 'SHOW CLUSTER REGIONS'
+
     def run(self, params: Dict[str, Any]) -> Optional[FusionSQLResult]:
         manager = get_workspace_manager()
 

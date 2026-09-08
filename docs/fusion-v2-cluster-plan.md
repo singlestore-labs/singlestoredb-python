@@ -242,8 +242,11 @@ a `Region`, whose `name` is the display name and `region_name` the provider slug
 `SHOW CLUSTER REGIONS` → `Name`, `Provider`, `RegionName` (no `ID`, since
 v2 has none). `SHOW PROJECTS` → `Name`, `ID`, `Edition`, `CreatedAt`.
 
-`SHOW REGIONS` (`workspace.py:148`) is **left alone on v1** so its `ID` column
-keeps working; `SHOW CLUSTER REGIONS` is the v2-native replacement.
+`SHOW REGIONS` stays on v1 — it *is* a v1 command — and is deprecated by
+`SHOW CLUSTER REGIONS` along with the rest of `workspace.py`. The pairing is not
+column-for-column: v1 reports `ID`, which v2 has no equivalent for. It warns
+anyway, because the v1 route is what is going away, so a caller depending on that
+`ID` needs to know now.
 
 `USE CLUSTER` mirrors `UseWorkspaceHandler` (`workspace.py:16`) but flat — no
 `IN GROUP`, so it sets `portal.workspace = <id>` or the 2-tuple with a database.

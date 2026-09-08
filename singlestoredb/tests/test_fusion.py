@@ -265,10 +265,11 @@ class TestFusion(unittest.TestCase):
         """
         Every v1 WORKSPACE command points at its v2 CLUSTER replacement.
 
-        ``SHOW REGIONS`` is the sole exception -- v2 assigns no region IDs, so
-        ``SHOW CLUSTER REGIONS`` cannot report the ``ID`` column and is not a
-        drop-in. Asserted so that adding a v1 command without a pointer, or
-        quietly deprecating ``SHOW REGIONS``, fails here.
+        No exceptions: every command in the module reads the v1 API, so every
+        one of them warns. ``SHOW REGIONS`` is the loosest pairing -- v2 assigns
+        no region IDs, so ``SHOW CLUSTER REGIONS`` reports ``RegionName`` where
+        it reports ``ID`` -- but it is still where a caller has to go. Asserted
+        so that adding a v1 command without a pointer fails here.
         """
         from singlestoredb.fusion import registry
 
@@ -283,7 +284,7 @@ class TestFusion(unittest.TestCase):
             else:
                 undeprecated.add(key)
 
-        assert undeprecated == {'SHOW REGIONS'}, undeprecated
+        assert not undeprecated, undeprecated
 
     def test_v2_cluster_commands_are_not_deprecated(self):
         """The replacements must not themselves warn."""
