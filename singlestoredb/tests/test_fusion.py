@@ -1383,7 +1383,7 @@ class TestClusterFusionCreateDrop(_ClusterFusionMixin, unittest.TestCase):
         try:
             self.cur.execute(
                 f'create cluster "{name}" in region "{region.region_name}" '
-                f'with provider "{region.provider}" '
+                f'using provider "{region.provider}" '
                 f'in project id "{type(self).project_id}" '
                 'with size "S-00" wait on active',
             )
