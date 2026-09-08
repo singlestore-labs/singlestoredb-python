@@ -187,7 +187,7 @@ def SingleStoreChatFactory(
         streaming=streaming,
     )
     http_async_client = kwargs.pop('http_async_client', None)
-    default_timeout = httpx.Timeout(600.0)
+    default_timeout = httpx.Timeout(timeout=600.0, connect=5.0)
     if http_client is None:
         http_client = httpx.Client(timeout=default_timeout)
     _attach_otel_request_hook(http_client)

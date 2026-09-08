@@ -25,6 +25,7 @@ class TestInjectOtelHeaders(unittest.TestCase):
         fake_propagate = ModuleType('opentelemetry.propagate')
         fake_propagate.inject = fake_inject
         fake_otel = ModuleType('opentelemetry')
+        fake_otel.__path__ = []  # mark as package for submodules
         with patch.dict(
             'sys.modules',
             {
@@ -61,8 +62,10 @@ class TestInjectOtelHeaders(unittest.TestCase):
         try:
             self.assertIsNotNone(http_client)
             self.assertEqual(http_client.timeout.read, 600.0)
+            self.assertEqual(http_client.timeout.connect, 5.0)
             self.assertIsNotNone(http_async_client)
             self.assertEqual(http_async_client.timeout.read, 600.0)
+            self.assertEqual(http_async_client.timeout.connect, 5.0)
         finally:
             if http_client:
                 http_client.close()
