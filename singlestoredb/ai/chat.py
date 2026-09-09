@@ -9,6 +9,7 @@ import httpx
 from singlestoredb import manage_workspaces
 from singlestoredb.management.inference_api import InferenceAPIInfo
 
+
 try:
     from langchain_openai import ChatOpenAI
 except ImportError:
@@ -28,6 +29,29 @@ except ImportError:
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
+
+
+def _inject_otel_headers(headers: Any) -> None:
+    try:
+        from opentelemetry.propagate import inject as otel_inject
+    except ImportError:
+        return
+    try:
+        otel_inject(headers)
+    except Exception:
+        return
+
+
+def _httpx_inject_otel(request: httpx.Request) -> None:
+    _inject_otel_headers(request.headers)
+
+
+def _attach_otel_request_hook(
+    client: Union[httpx.Client, httpx.AsyncClient],
+) -> None:
+    hooks = client.event_hooks.setdefault('request', [])
+    if _httpx_inject_otel not in hooks:
+        hooks.append(_httpx_inject_otel)
 
 
 def SingleStoreChatFactory(
@@ -119,6 +143,7 @@ def SingleStoreChatFactory(
                 obo_val = obo_token_getter()
                 if obo_val:
                     request.headers['X-S2-OBO'] = obo_val
+            _inject_otel_headers(request.headers)
             request.headers.pop('X-Amz-Date', None)
             request.headers.pop('X-Amz-Security-Token', None)
 
@@ -161,8 +186,19 @@ def SingleStoreChatFactory(
         model=model_name,
         streaming=streaming,
     )
-    if http_client is not None:
-        openai_kwargs['http_client'] = http_client
+    http_async_client = kwargs.pop('http_async_client', None)
+    default_timeout = httpx.Timeout(timeout=600.0, connect=5.0)
+    if http_client is None:
+        http_client = httpx.Client(timeout=default_timeout)
+    _attach_otel_request_hook(http_client)
+    openai_kwargs['http_client'] = http_client
+    if http_async_client is None:
+        async_timeout = (
+            http_client.timeout if http_client is not None else default_timeout
+        )
+        http_async_client = httpx.AsyncClient(timeout=async_timeout)
+    _attach_otel_request_hook(http_async_client)
+    openai_kwargs['http_async_client'] = http_async_client
     return ChatOpenAI(
         **openai_kwargs,
         **kwargs,
