@@ -15,11 +15,13 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
+from unittest import mock
 from urllib.parse import urlparse
 
 import singlestoredb as s2
 from singlestoredb.connection import build_params
 from singlestoredb.exceptions import ManagementError
+from singlestoredb.management.v2.cluster import ClusterManager as _ClusterManager
 
 
 logger = logging.getLogger(__name__)
@@ -991,6 +993,216 @@ def counting_file_space(existing: Any = ()) -> Tuple[Any, Any]:
     space._location = 'personal'
     space._manager = manager
     return space, manager
+
+
+#: IDs for the fixtures :func:`counting_cluster_manager` builds by default.
+COUNTING_CLUSTER_NAME = 'counting-cluster'
+COUNTING_CLUSTER_ID = 'ffffffff-0000-0000-0000-000000000001'
+COUNTING_PROJECT_ID = 'ffffffff-0000-0000-0000-000000000002'
+
+
+def cluster_payload(
+    name: str,
+    id: str,
+    project_id: Optional[str] = None,
+    region: Optional[str] = None,
+    **extra: Any,
+) -> Dict[str, Any]:
+    """
+    Return one item of a ``GET /v2/clusters`` response.
+
+    ``region`` is omitted unless asked for: a payload that carries one makes
+    ``Cluster.from_dict`` resolve it against ``ClusterManager.regions``, which
+    is a request of its own, and the callers here are counting the requests an
+    upload makes rather than that one.
+
+    Parameters
+    ----------
+    name : str
+        Name of the cluster
+    id : str
+        Cluster ID
+    project_id : str, optional
+        Value for ``projectID``
+    region : str, optional
+        Value for ``region``, the provider region name
+    **extra : keyword arguments, optional
+        Further response keys, in the API's own spelling
+
+    """
+    out: Dict[str, Any] = dict(
+        name=name, clusterID=id, state='ACTIVE',
+        sizeConfig=dict(size='S-00', scaleFactor=1.0),
+    )
+    if project_id is not None:
+        out['projectID'] = project_id
+    if region is not None:
+        out['region'] = region
+    out.update(extra)
+    return out
+
+
+def project_payload(
+    id: str,
+    name: str,
+    edition: str = 'STANDARD',
+) -> Dict[str, Any]:
+    """Return one item of a ``GET /v2/projects`` response."""
+    return dict(projectID=id, name=name, edition=edition)
+
+
+class CountingClusterManager(_ClusterManager):
+    """
+    A :class:`ClusterManager` that answers from fixtures and records requests.
+
+    This is :class:`CountingManager` widened to a whole Fusion statement: the
+    management routes a statement resolves its deployment through
+    (``clusters``, ``clusters/<id>``, ``projects``, ``regions``,
+    ``sharedtier/virtualClusters``) are served from the lists given here, and
+    Stage's own filesystem routes are delegated to a :class:`CountingManager`
+    sharing this object's ``calls`` list, so one ordered record covers both.
+
+    Any other route raises, so a request nobody accounted for cannot slip
+    through as a mock's default return value.
+
+    Parameters
+    ----------
+    clusters : list of dict, optional
+        ``GET /v2/clusters`` items; see :func:`cluster_payload`
+    projects : list of dict, optional
+        ``GET /v2/projects`` items; see :func:`project_payload`
+    starter_clusters : list of dict, optional
+        ``GET /v2/sharedtier/virtualClusters`` items
+    regions : list of dict, optional
+        ``GET /v2/regions`` items
+    existing : iterable of str, optional
+        Stage paths that already exist; a path ending in ``/`` is a folder
+
+    """
+
+    def __init__(
+        self,
+        clusters: Any = None,
+        projects: Any = None,
+        starter_clusters: Any = (),
+        regions: Any = (),
+        existing: Any = (),
+    ):
+        # Deliberately not calling ClusterManager.__init__: it wants an access
+        # token and a base URL, and nothing here makes a request.
+        if clusters is None:
+            clusters = [
+                cluster_payload(
+                    COUNTING_CLUSTER_NAME, COUNTING_CLUSTER_ID,
+                    project_id=COUNTING_PROJECT_ID,
+                ),
+            ]
+        if projects is None:
+            projects = [project_payload(COUNTING_PROJECT_ID, 'Test Project')]
+
+        self._cluster_payloads = list(clusters)
+        self._project_payloads = list(projects)
+        self._starter_cluster_payloads = list(starter_clusters)
+        self._region_payloads = list(regions)
+
+        #: Serves the Stage filesystem routes
+        self.files = CountingManager(existing)
+
+        #: One ``(method, path)`` pair per request, in order
+        self.calls = self.files.calls
+
+    def _get(self, path: Any, params: Any = None, **kwargs: Any) -> Any:
+        if '/fs/' in str(path):
+            return self.files._get(path, params=params, **kwargs)
+
+        key = str(path).split('?')[0]
+        self.calls.append(('GET', key))
+
+        if key == 'clusters':
+            return SimpleNamespace(json=lambda: self._cluster_payloads)
+        if key == 'projects':
+            return SimpleNamespace(json=lambda: self._project_payloads)
+        if key == 'regions':
+            return SimpleNamespace(json=lambda: self._region_payloads)
+        if key == 'sharedtier/virtualClusters':
+            return SimpleNamespace(json=lambda: self._starter_cluster_payloads)
+
+        if key.startswith('clusters/'):
+            wanted = key.split('/', 1)[1]
+            for item in self._cluster_payloads:
+                if item['clusterID'] == wanted:
+                    return SimpleNamespace(json=lambda item=item: item)
+            raise ManagementError(errno=404, msg=f'cluster not found: {wanted}')
+
+        raise AssertionError(f'unexpected request: GET {key}')
+
+    def _put(self, path: Any, **kwargs: Any) -> Any:
+        if '/fs/' in str(path):
+            return self.files._put(path, **kwargs)
+        raise AssertionError(f'unexpected request: PUT {path}')
+
+    def _patch(self, path: Any, **kwargs: Any) -> Any:
+        if '/fs/' in str(path):
+            return self.files._patch(path, **kwargs)
+        raise AssertionError(f'unexpected request: PATCH {path}')
+
+    def _delete(self, path: Any, **kwargs: Any) -> Any:
+        if '/fs/' in str(path):
+            return self.files._delete(path, **kwargs)
+        raise AssertionError(f'unexpected request: DELETE {path}')
+
+    def _post(self, path: Any, **kwargs: Any) -> Any:
+        raise AssertionError(f'unexpected request: POST {path}')
+
+    def counts(self) -> Dict[str, int]:
+        """Return the number of recorded requests per method."""
+        return self.files.counts()
+
+
+def counting_cluster_manager(**kwargs: Any) -> CountingClusterManager:
+    """Return a :class:`CountingClusterManager`; see it for the arguments."""
+    return CountingClusterManager(**kwargs)
+
+
+def run_fusion_statement(sql: str, manager: Any) -> Any:
+    """
+    Execute one Fusion statement against a counting cluster manager.
+
+    The statement is parsed and run the way a cursor would run it, so the
+    requests recorded on ``manager.calls`` are the ones the whole statement
+    costs -- deployment resolution included -- rather than the ones a single
+    :class:`Stage` call makes.
+
+    Parameters
+    ----------
+    sql : str
+        The Fusion statement
+    manager : CountingClusterManager
+        The manager every handler in the statement resolves through
+
+    Returns
+    -------
+    FusionSQLResult
+
+    """
+    from singlestoredb.fusion import registry
+    from singlestoredb.fusion.handlers import cluster as cluster_handlers
+    from singlestoredb.fusion.handlers import utils as handler_utils
+
+    # The results are formatted against the connection's decoders; there is no
+    # connection here and nothing to decode.
+    conn = SimpleNamespace(decoders={}, _results_type='tuples')
+
+    with mock.patch.dict(os.environ, {'SINGLESTOREDB_FUSION_ENABLED': '1'}):
+        handler = registry.get_handler(sql)
+        if handler is None:
+            raise ValueError(f'no Fusion handler for statement: {sql}')
+        with mock.patch.object(
+            handler_utils, 'get_cluster_manager', return_value=manager,
+        ), mock.patch.object(
+            cluster_handlers, 'get_cluster_manager', return_value=manager,
+        ):
+            return handler(conn).execute(sql)
 
 
 def clear_stage(deployment: Any) -> None:

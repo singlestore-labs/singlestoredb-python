@@ -520,16 +520,27 @@ class TestUploadRoundTrips(unittest.TestCase):
             local = self._local_file(tmp)
             stage, manager = counting_stage(existing=['remote.csv'])
             stage.upload_file(local, 'remote.csv', overwrite=True)
-        # Was six: the duplicated exists() dragged a second remove() check in
+        # Was six: the duplicated exists() dragged a second remove() check in,
+        # and then the remaining exists()/is_dir() pair was the same GET twice
         self.assertEqual(
             manager.calls, [
-                ('GET', 'remote.csv'),      # exists()
-                ('GET', 'remote.csv'),      # remove()'s is_dir()
+                ('GET', 'remote.csv'),      # the one metadata fetch
                 ('DELETE', 'remote.csv'),
                 ('PUT', 'remote.csv'),
                 ('GET', 'remote.csv'),      # info() for the return value
             ],
         )
+
+    def test_an_overwrite_of_a_folder_raises_on_the_one_check(self):
+        # The IsADirectoryError remove() used to raise through _upload is
+        # raised by _upload itself now, with the same message.
+        with tempfile.TemporaryDirectory() as tmp:
+            local = self._local_file(tmp)
+            stage, manager = counting_stage(existing=['remote.csv/'])
+            with self.assertRaises(IsADirectoryError) as ctx:
+                stage.upload_file(local, 'remote.csv', overwrite=True)
+        self.assertIn('use rmdir or removedirs', str(ctx.exception))
+        self.assertEqual(manager.calls, [('GET', 'remote.csv')])
 
     def test_a_conflict_still_raises_and_closes_the_local_file(self):
         opened = []
@@ -623,6 +634,29 @@ class TestUploadRoundTrips(unittest.TestCase):
             with self.assertRaises(OSError) as ctx:
                 space.upload_file(local, 'remote.csv')
         self.assertIn('file path already exists', str(ctx.exception))
+
+    def test_a_file_space_overwrite_also_checks_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local = self._local_file(tmp)
+            space, manager = counting_file_space(existing=['remote.csv'])
+            space.upload_file(local, 'remote.csv', overwrite=True)
+        self.assertEqual(
+            manager.calls, [
+                ('GET', 'remote.csv'),
+                ('DELETE', 'remote.csv'),
+                ('PUT', 'remote.csv'),
+                ('GET', 'remote.csv'),
+            ],
+        )
+
+    def test_a_file_space_overwrite_of_a_folder_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local = self._local_file(tmp)
+            space, manager = counting_file_space(existing=['remote.csv/'])
+            with self.assertRaises(IsADirectoryError) as ctx:
+                space.upload_file(local, 'remote.csv', overwrite=True)
+        self.assertIn('file path is a directory', str(ctx.exception))
+        self.assertEqual(manager.calls, [('GET', 'remote.csv')])
 
     def test_a_folder_upload_pays_the_saving_per_file(self):
         with tempfile.TemporaryDirectory() as tmp:

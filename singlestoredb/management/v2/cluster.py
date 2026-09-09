@@ -15,6 +15,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 from typing import Union
 
 from .. import timing
@@ -71,6 +72,44 @@ def _project_from_id(
         (x for x in manager.projects if x.id == project_id),
         Project(id=project_id, name='<unknown>'),
     )
+
+
+def _project_args(
+    project: Union[str, Project, None],
+) -> Tuple[Optional[Project], Optional[str]]:
+    """
+    Split a ``project`` constructor argument into a project and a project ID.
+
+    A :class:`Project` is a resolved project and is kept as it stands; a string
+    is a project ID, which :func:`_lazy_project` resolves when it is asked for.
+    """
+    if isinstance(project, Project):
+        return project, project.id
+    return None, project
+
+
+def _lazy_project(deployment: Any) -> Optional[Project]:
+    """
+    Return the project of a deployment that reported only its project ID.
+
+    Resolving the ID costs a ``GET /v2/projects`` for the first deployment a
+    manager resolves one for, so it happens on demand: a listing of N
+    deployments that nobody asks the project of costs nothing, and one that is
+    asked costs the one request, because :attr:`ClusterManager.projects` is
+    cached.
+
+    Works on anything carrying the ``_project``, ``_project_id`` and
+    ``_manager`` attributes, which is :class:`Cluster` and
+    :class:`StarterCluster`.
+    """
+    if deployment._project is None and deployment._project_id is not None:
+        manager = deployment._manager
+        deployment._project = (
+            Project(id=deployment._project_id, name='<unknown>')
+            if manager is None
+            else _project_from_id(manager, deployment._project_id)
+        )
+    return deployment._project
 
 
 def get_organization() -> Organization:
@@ -161,7 +200,6 @@ class Cluster:
     endpoint: Optional[str]
     provider: Optional[str]
     region: Optional[Region]
-    project: Optional[Project]
     deployment_type: Optional[str]
     kai: Optional[bool]
     multi_az: Optional[bool]
@@ -260,13 +298,10 @@ class Cluster:
             )
         self.region = region
 
-        #: Project the cluster belongs to. A string is taken as the project
-        #: ID; :meth:`from_dict` resolves it against
-        #: :attr:`ClusterManager.projects` so that the name and edition are
-        #: filled in too.
-        if isinstance(project, str):
-            project = Project(id=project, name='<unknown>')
-        self.project = project
+        # Project the cluster belongs to; see the project property. A string
+        # is taken as the project ID and is not resolved until it is asked
+        # for, so that listing clusters costs no GET /v2/projects.
+        self._project, self._project_id = _project_args(project)
 
         #: Deployment type of the cluster (PRODUCTION | NON-PRODUCTION)
         self.deployment_type = deployment_type
@@ -319,6 +354,20 @@ class Cluster:
         # Set by ClusterManager.create_cluster only; see the admin_password
         # property. Private so it stays out of str() / repr().
         self._admin_password: Optional[str] = None
+
+    @property
+    def project(self) -> Optional[Project]:
+        """
+        Project the cluster belongs to, or ``None`` if it reported no project.
+
+        A cluster reports only its ``projectID``, so the rest of the project
+        comes from :attr:`ClusterManager.projects` -- a request, and one that
+        listing clusters would otherwise pay for every row, so it is made the
+        first time this is read rather than when the cluster is built. An ID
+        that matches no project still yields a :class:`Project` carrying the
+        ID, so ``cluster.project.id`` is always readable.
+        """
+        return _lazy_project(self)
 
     @property
     def admin_password(self) -> Optional[str]:
@@ -406,7 +455,7 @@ class Cluster:
             endpoint=obj.get('endpoint'),
             provider=provider,
             region=region,
-            project=_project_from_id(manager, obj.get('projectID')),
+            project=obj.get('projectID'),
             deployment_type=obj.get('deploymentType'),
             kai=obj.get('kai'),
             multi_az=obj.get('multiAZ'),
@@ -735,7 +784,6 @@ class StarterCluster:
     endpoint: Optional[str]
     mysql_dml_port: Optional[int]
     websocket_port: Optional[int]
-    project: Optional[Project]
 
     def __init__(
         self,
@@ -766,15 +814,24 @@ class StarterCluster:
         #: WebSocket port for the starter cluster
         self.websocket_port = websocket_port
 
-        #: Project the starter cluster belongs to. A string is taken as the
-        #: project ID; :meth:`from_dict` resolves it against
-        #: :attr:`ClusterManager.projects` so that the name and edition are
-        #: filled in too.
-        if isinstance(project, str):
-            project = Project(id=project, name='<unknown>')
-        self.project = project
+        # Project the starter cluster belongs to; see the project property. A
+        # string is taken as the project ID and is not resolved until it is
+        # asked for, so that listing starter clusters costs no
+        # GET /v2/projects.
+        self._project, self._project_id = _project_args(project)
 
         self._manager: Optional[ClusterManager] = None
+
+    @property
+    def project(self) -> Optional[Project]:
+        """
+        Project the starter cluster belongs to, or ``None`` if it reported
+        no project.
+
+        Resolved on first read from :attr:`ClusterManager.projects`; see
+        :attr:`Cluster.project`.
+        """
+        return _lazy_project(self)
 
     def __str__(self) -> str:
         """Return string representation."""
@@ -810,7 +867,7 @@ class StarterCluster:
             endpoint=obj.get('endpoint'),
             mysql_dml_port=obj.get('mysqlDmlPort'),
             websocket_port=obj.get('websocketPort'),
-            project=_project_from_id(manager, obj.get('projectID')),
+            project=obj.get('projectID'),
         )
         out._manager = manager
         return out
@@ -1017,10 +1074,10 @@ class ClusterManager(Manager):
         """
         Return a list of projects in the current organization.
 
-        Cached like :attr:`regions`, because every :class:`Cluster` built by
-        :meth:`Cluster.from_dict` resolves its project against this list and
-        listing clusters would otherwise cost a ``GET /v2/projects`` per
-        cluster.
+        Cached like :attr:`regions`, because :attr:`Cluster.project` resolves
+        against this list and a caller reading it per row of a listing --
+        ``SHOW CLUSTERS EXTENDED`` does -- would otherwise cost a
+        ``GET /v2/projects`` per cluster.
         """
         res = self._get('projects')
         return NamedList([Project.from_dict(item, self) for item in res.json()])

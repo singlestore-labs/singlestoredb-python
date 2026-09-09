@@ -21,6 +21,7 @@ import os
 import random
 import re
 import secrets
+import tempfile
 import unittest
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -1072,6 +1073,115 @@ class TestClusterFromDict(unittest.TestCase):
         c = Cluster.from_dict(self._payload(), MagicMock())
         self.assertEqual(
             c.stage._fs_path('a.sql'), 'clusters/cl-1/stage/fs/a.sql',
+        )
+
+
+class TestStatementRoundTrips(unittest.TestCase):
+    """
+    What a whole Fusion statement costs in requests.
+
+    ``CountingManager`` pins the requests a single :class:`Stage` call makes
+    (``test_management_utils.py``); this pins the requests a statement makes,
+    deployment resolution included, which is where the redundant ones were.
+    """
+
+    def _local_file(self, tmp):
+        path = os.path.join(tmp, 'stats.csv')
+        with open(path, 'w') as f:
+            f.write('a,b\n1,2\n')
+        return path
+
+    def _upload(self, suffix='', existing=(), clusters=None):
+        """Run one ``UPLOAD FILE TO STAGE ... IN '<name>'`` and return the manager."""
+        mgr = utils.counting_cluster_manager(existing=existing, clusters=clusters)
+        with tempfile.TemporaryDirectory() as tmp:
+            local = self._local_file(tmp)
+            utils.run_fusion_statement(
+                "UPLOAD FILE TO STAGE 'stats.csv' "
+                f"IN '{utils.COUNTING_CLUSTER_NAME}' FROM '{local}'{suffix}",
+                mgr,
+            )
+        return mgr
+
+    def test_a_plain_upload_costs_three_requests(self):
+        mgr = self._upload()
+        self.assertEqual(
+            mgr.calls, [
+                ('GET', 'clusters'),
+                ('GET', 'stats.csv'),
+                ('PUT', 'stats.csv'),
+            ],
+        )
+
+    def test_an_upload_fetches_no_projects(self):
+        # Resolving a deployment by name reads the cluster listing, and
+        # nothing on that path reads a project, so a lazy Cluster.project
+        # keeps GET /v2/projects out of an upload entirely.
+        mgr = self._upload()
+        self.assertNotIn(('GET', 'projects'), mgr.calls)
+
+    def test_an_overwrite_costs_four_requests(self):
+        # One metadata GET, not two: _upload branches on the object it already
+        # fetched rather than asking again through remove()'s is_dir().
+        mgr = self._upload(suffix=' OVERWRITE', existing=['stats.csv'])
+        self.assertEqual(
+            mgr.calls, [
+                ('GET', 'clusters'),
+                ('GET', 'stats.csv'),
+                ('DELETE', 'stats.csv'),
+                ('PUT', 'stats.csv'),
+            ],
+        )
+
+    def test_an_upload_over_a_folder_still_raises(self):
+        with self.assertRaises(IsADirectoryError) as cm:
+            self._upload(suffix=' OVERWRITE', existing=['stats.csv/'])
+        self.assertIn('use rmdir or removedirs', str(cm.exception))
+
+    def test_a_conflict_without_overwrite_still_raises(self):
+        with self.assertRaises(OSError) as cm:
+            self._upload(existing=['stats.csv'])
+        self.assertIn('stage path already exists', str(cm.exception))
+
+    def test_a_region_on_the_payload_costs_a_region_request(self):
+        # Not addressed by the lazy project: Cluster.from_dict still resolves
+        # its region eagerly, so a realistic listing pays for that too.
+        mgr = self._upload(
+            clusters=[
+                utils.cluster_payload(
+                    utils.COUNTING_CLUSTER_NAME, utils.COUNTING_CLUSTER_ID,
+                    project_id=utils.COUNTING_PROJECT_ID, region='us-east-1',
+                ),
+            ],
+        )
+        self.assertIn(('GET', 'regions'), mgr.calls)
+
+    def test_show_clusters_extended_reports_the_project_once(self):
+        # .project is lazy now, so EXTENDED reads it per row -- and the
+        # one-hour ttl_property on ClusterManager.projects is what keeps that
+        # at one GET /v2/projects however many rows there are.
+        mgr = utils.counting_cluster_manager(
+            clusters=[
+                utils.cluster_payload(
+                    f'c{i}', f'{utils.COUNTING_CLUSTER_ID[:-1]}{i}',
+                    project_id=utils.COUNTING_PROJECT_ID,
+                )
+                for i in range(3)
+            ],
+        )
+        res = utils.run_fusion_statement('SHOW CLUSTERS EXTENDED', mgr)
+        columns = [x[0] for x in res.description]
+        rows = [dict(zip(columns, row)) for row in res.rows]
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(
+            [x['ProjectID'] for x in rows],
+            [utils.COUNTING_PROJECT_ID] * 3,
+        )
+        self.assertEqual(mgr.calls.count(('GET', 'projects')), 1)
+        # The project name is what the listing is for; the handler reports the
+        # ID, so read it off the clusters themselves.
+        self.assertEqual(
+            [x.project.name for x in mgr.clusters], ['Test Project'] * 3,
         )
 
 

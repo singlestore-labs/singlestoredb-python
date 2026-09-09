@@ -471,6 +471,33 @@ class FileLocation(ABC):
     def info(self, path: PathLike) -> FilesObject:
         pass
 
+    def _info_or_none(self, path: PathLike) -> Optional[FilesObject]:
+        """
+        Return the metadata of ``path``, or ``None`` if it does not exist.
+
+        This is what :meth:`exists` asks and then throws away. A caller that
+        goes on to branch on *what* the path is -- ``_upload`` does, on whether
+        it is a directory -- reads the object instead and so pays for one
+        request rather than one per question.
+
+        Parameters
+        ----------
+        path : Path or str
+            Path to the remote object
+
+        Returns
+        -------
+        FilesObject - the path exists
+        None - it does not
+
+        """
+        try:
+            return self.info(path)
+        except ManagementError as exc:
+            if exc.errno == 404:
+                return None
+            raise
+
     @abstractmethod
     def exists(self, path: PathLike) -> bool:
         pass
@@ -845,10 +872,16 @@ class FileSpace(FileLocation):
             :class:`FilesObject` costs an extra request.
 
         """
-        if self.exists(path):
+        # One metadata request, not two: exists() and remove()'s is_dir() are
+        # the same GET on the same path, so the object is fetched once here and
+        # every branch reads it.
+        existing = self._info_or_none(path)
+        if existing is not None:
             if not overwrite:
                 raise OSError(f'file path already exists: {path}')
-            self.remove(path)
+            if existing.type == 'directory':
+                raise IsADirectoryError('file path is a directory')
+            self._manager._delete(f'files/fs/{self._location}/{path}')
 
         self._manager._put(
             f'files/fs/{self._location}/{path}',

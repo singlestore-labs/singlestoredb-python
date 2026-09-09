@@ -284,10 +284,19 @@ class Stage(FileLocation):
             :class:`FilesObject` costs an extra request.
 
         """
-        if self.exists(stage_path):
+        # One metadata request, not two: exists() and remove()'s is_dir() are
+        # the same GET on the same path, so the object is fetched once here and
+        # every branch reads it.
+        existing = self._info_or_none(stage_path)
+        if existing is not None:
             if not overwrite:
                 raise OSError(f'stage path already exists: {stage_path}')
-            self.remove(stage_path)
+            if existing.type == 'directory':
+                raise IsADirectoryError(
+                    'stage path is a directory, '
+                    f'use rmdir or removedirs: {stage_path}',
+                )
+            self._manager._delete(self._fs_path(stage_path))
 
         self._manager._put(
             self._fs_path(stage_path),
