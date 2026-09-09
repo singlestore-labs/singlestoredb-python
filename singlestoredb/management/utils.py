@@ -464,10 +464,27 @@ def from_datetime(
     return out
 
 
-def vars_to_str(obj: Any) -> str:
-    """Render a string representation of vars(obj)."""
+def vars_to_str(obj: Any, extra: Optional[Dict[str, Any]] = None) -> str:
+    """
+    Render a string representation of vars(obj).
+
+    Parameters
+    ----------
+    obj : Any
+        The object to render. Attributes whose name starts with ``_``, and
+        those with a falsy value, are left out.
+    extra : dict, optional
+        Attributes to report that ``vars(obj)`` does not hold. This is for a
+        lazily resolved property, whose value must not be fetched merely to
+        print the object: the owner passes what it already has, which is either
+        the resolved value or the ID it would resolve. Reported and sorted like
+        any other attribute, and left out on a falsy value the same way.
+
+    """
     attrs = []
-    obj_vars = vars(obj)
+    obj_vars = dict(vars(obj))
+    if extra:
+        obj_vars.update(extra)
     if 'name' in obj_vars:
         attrs.append('name={}'.format(repr(obj_vars['name'])))
     if 'id' in obj_vars:

@@ -27,15 +27,14 @@ Rows 4 and 6 are gone as of `400d5b71` — Stage 1. Row 2 is gone with Stage 2,
 and Stage 1c collapsed the `OVERWRITE` path's second metadata `GET`. The live
 count is now rows 1, 3 and 5: **three**, or four with `OVERWRITE`.
 
-One call the table missed: a cluster payload that carries a `region` makes
+One call the table missed: a cluster payload that carries a `region` made
 `Cluster.from_dict` resolve it against `ClusterManager.regions`, which is a
-`GET /v2/regions` on the first cluster a manager builds — the same eager-resolve
-shape Stage 2 removed from the project, and the same one-hour `ttl_property`
-holding it to one call per manager. So the live figure for a fresh manager is
-one more than the count above. It is pinned by
-`test_a_region_on_the_payload_costs_a_region_request` rather than fixed;
-`Cluster.region` would want the same lazy treatment as `Cluster.project`, and
-that is not in this plan.
+`GET /v2/regions` on the first cluster a manager built — the same eager-resolve
+shape Stage 2 removed from the project. So the live figure for a fresh manager
+was one more than the count above. `Cluster.region` got the same lazy treatment
+as `Cluster.project` at the same time, so the three-call figure now holds for a
+realistic listing too;
+`test_a_region_on_the_payload_costs_nothing` pins it.
 
 ### The part we cannot fix
 
@@ -217,15 +216,28 @@ cluster count.
 over a stored `_project_id`, resolved by `_lazy_project` on first read
 (`v2/cluster.py`). `_project_from_id` and its `<unknown>` fallback are unchanged
 and still what does the resolving; a `Project` passed to the constructor is
-still kept as it stands. Two consequences worth knowing:
+still kept as it stands.
 
-* `str(cluster)` no longer includes `project=...`. `vars_to_str` skips
-  underscored attributes, and the alternative — resolving in `__repr__` — would
-  make printing a cluster issue a request.
-* `SHOW CLUSTERS EXTENDED` reports `ProjectID`, not the project name; the plan
-  said "name". `TestStatementRoundTrips.test_show_clusters_extended_reports_the_project_once`
-  asserts the column the handler actually has and reads `.project.name` off the
-  clusters to cover the name.
+`Cluster.region` was given the same treatment in the same pass — `_region_args`
+stores the reported name, `_lazy_region` matches it against
+`ClusterManager.regions` on first read and falls back to a `Region` built from
+what the cluster itself reported. That is the "one call the table missed" above,
+and it is why the three-call figure holds for a payload carrying a region.
+
+Two consequences worth knowing:
+
+* Neither lazy value is in `vars(cluster)`, so `vars_to_str` would drop both
+  from `str(cluster)` — and resolving them in `__repr__` would make printing a
+  cluster issue two requests. `vars_to_str` grew an `extra=` argument for
+  exactly this: `Cluster.__str__` passes the resolved object if something has
+  already read the property and the reported ID / name otherwise, so printing
+  stays free. `test_printing_a_cluster_costs_nothing` and
+  `test_printing_a_cluster_shows_what_is_resolved` pin both halves.
+* `SHOW CLUSTERS EXTENDED` reported `ProjectID`, not the project name the plan
+  said. Renamed to `ProjectName`, along with `SHOW STARTER CLUSTERS EXTENDED`'s
+  column, since `_project_from_id`'s `<unknown>` fallback means the name is
+  always readable. Column-name assertions in `test_fusion.py` and the
+  `docs/fusion-v2-cluster-plan.md` column list moved with it.
 
 **The harness:** `CountingClusterManager`, `counting_cluster_manager` and
 `run_fusion_statement` in `singlestoredb/tests/utils.py`, next to the

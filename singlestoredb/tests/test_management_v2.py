@@ -1143,9 +1143,11 @@ class TestStatementRoundTrips(unittest.TestCase):
             self._upload(existing=['stats.csv'])
         self.assertIn('stage path already exists', str(cm.exception))
 
-    def test_a_region_on_the_payload_costs_a_region_request(self):
-        # Not addressed by the lazy project: Cluster.from_dict still resolves
-        # its region eagerly, so a realistic listing pays for that too.
+    def test_a_region_on_the_payload_costs_nothing(self):
+        # A cluster payload carrying a region used to make from_dict match it
+        # against ClusterManager.regions, so a realistic listing paid for a
+        # GET /v2/regions the upload never looked at. Cluster.region is lazy
+        # for the same reason Cluster.project is.
         mgr = self._upload(
             clusters=[
                 utils.cluster_payload(
@@ -1154,35 +1156,68 @@ class TestStatementRoundTrips(unittest.TestCase):
                 ),
             ],
         )
-        self.assertIn(('GET', 'regions'), mgr.calls)
+        self.assertNotIn(('GET', 'regions'), mgr.calls)
+        self.assertEqual(
+            mgr.calls, [
+                ('GET', 'clusters'),
+                ('GET', 'stats.csv'),
+                ('PUT', 'stats.csv'),
+            ],
+        )
+
+    def _three_clusters(self):
+        return utils.counting_cluster_manager(
+            clusters=[
+                utils.cluster_payload(
+                    f'c{i}', f'{utils.COUNTING_CLUSTER_ID[:-1]}{i}',
+                    project_id=utils.COUNTING_PROJECT_ID, region='us-east-1',
+                )
+                for i in range(3)
+            ],
+        )
 
     def test_show_clusters_extended_reports_the_project_once(self):
         # .project is lazy now, so EXTENDED reads it per row -- and the
         # one-hour ttl_property on ClusterManager.projects is what keeps that
         # at one GET /v2/projects however many rows there are.
-        mgr = utils.counting_cluster_manager(
-            clusters=[
-                utils.cluster_payload(
-                    f'c{i}', f'{utils.COUNTING_CLUSTER_ID[:-1]}{i}',
-                    project_id=utils.COUNTING_PROJECT_ID,
-                )
-                for i in range(3)
-            ],
-        )
+        mgr = self._three_clusters()
         res = utils.run_fusion_statement('SHOW CLUSTERS EXTENDED', mgr)
         columns = [x[0] for x in res.description]
         rows = [dict(zip(columns, row)) for row in res.rows]
         self.assertEqual(len(rows), 3)
         self.assertEqual(
-            [x['ProjectID'] for x in rows],
-            [utils.COUNTING_PROJECT_ID] * 3,
+            [x['ProjectName'] for x in rows], ['Test Project'] * 3,
         )
         self.assertEqual(mgr.calls.count(('GET', 'projects')), 1)
-        # The project name is what the listing is for; the handler reports the
-        # ID, so read it off the clusters themselves.
-        self.assertEqual(
-            [x.project.name for x in mgr.clusters], ['Test Project'] * 3,
-        )
+
+    def test_show_clusters_extended_reports_the_region_once(self):
+        # Same shape for the lazy region: read per row, fetched once.
+        mgr = self._three_clusters()
+        res = utils.run_fusion_statement('SHOW CLUSTERS EXTENDED', mgr)
+        columns = [x[0] for x in res.description]
+        rows = [dict(zip(columns, row)) for row in res.rows]
+        self.assertEqual([x['Region'] for x in rows], ['us-east-1'] * 3)
+        self.assertEqual(mgr.calls.count(('GET', 'regions')), 1)
+
+    def test_printing_a_cluster_costs_nothing(self):
+        # vars_to_str skips the underscored attributes the lazy properties are
+        # stored in, so Cluster.__str__ hands it the unresolved ID / name.
+        # Printing a cluster must not turn into two requests.
+        mgr = self._three_clusters()
+        cluster = mgr.clusters[0]
+        before = list(mgr.calls)
+        text = str(cluster)
+        self.assertEqual(mgr.calls, before)
+        self.assertIn(f'project={utils.COUNTING_PROJECT_ID!r}', text)
+        self.assertIn("region='us-east-1'", text)
+
+    def test_printing_a_cluster_shows_what_is_resolved(self):
+        # Once something has read the property, the resolved object is what
+        # gets reported.
+        mgr = self._three_clusters()
+        cluster = mgr.clusters[0]
+        self.assertEqual(cluster.project.name, 'Test Project')
+        self.assertIn("project=Project(name='Test Project'", str(cluster))
 
 
 class TestDeploymentEnvVars(unittest.TestCase):

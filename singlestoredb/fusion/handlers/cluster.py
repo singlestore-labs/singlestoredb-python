@@ -69,12 +69,12 @@ def _cluster_region(cluster: Any) -> Optional[str]:
     return region.region_name or region.name
 
 
-def _cluster_project_id(cluster: Any) -> Optional[str]:
-    """Return the ID of the project a deployment belongs to."""
+def _cluster_project_name(cluster: Any) -> Optional[str]:
+    """Return the name of the project a deployment belongs to."""
     project = cluster.project
     if project is None:
         return None
-    return project.id
+    return project.name
 
 
 def _resolve_region(
@@ -201,7 +201,7 @@ class ShowClustersHandler(SQLHandler):
             res.add_field('Endpoint', result.STRING)
             res.add_field('DeploymentType', result.STRING)
             res.add_field('FirewallRanges', result.JSON)
-            res.add_field('ProjectID', result.STRING)
+            res.add_field('ProjectName', result.STRING)
             res.add_field('CreatedAt', result.DATETIME)
             res.add_field('TerminatedAt', result.DATETIME)
 
@@ -210,7 +210,7 @@ class ShowClustersHandler(SQLHandler):
                     x.name, x.id, _cluster_region(x), x.size, x.state,
                     x.provider, x.endpoint, x.deployment_type,
                     json.dumps(x.firewall_ranges or []),
-                    _cluster_project_id(x),
+                    _cluster_project_name(x),
                     dt_isoformat(x.created_at),
                     dt_isoformat(x.terminated_at),
                 )
@@ -869,12 +869,12 @@ class ShowStarterClustersHandler(SQLHandler):
 
         if params['extended']:
             res.add_field('Endpoint', result.STRING)
-            res.add_field('ProjectID', result.STRING)
+            res.add_field('ProjectName', result.STRING)
 
             def fields(x: Any) -> Any:
                 return (
                     x.name, x.id, x.database_name,
-                    x.endpoint, _cluster_project_id(x),
+                    x.endpoint, _cluster_project_name(x),
                 )
         else:
             def fields(x: Any) -> Any:

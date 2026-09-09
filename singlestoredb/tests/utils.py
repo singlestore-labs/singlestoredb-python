@@ -1011,10 +1011,10 @@ def cluster_payload(
     """
     Return one item of a ``GET /v2/clusters`` response.
 
-    ``region`` is omitted unless asked for: a payload that carries one makes
-    ``Cluster.from_dict`` resolve it against ``ClusterManager.regions``, which
-    is a request of its own, and the callers here are counting the requests an
-    upload makes rather than that one.
+    ``region`` is omitted unless asked for, so a caller can say which of the
+    lazy properties it is exercising: reading ``Cluster.region`` resolves the
+    name against ``ClusterManager.regions``, which is a request, and only a
+    payload carrying a region has anything to resolve.
 
     Parameters
     ----------

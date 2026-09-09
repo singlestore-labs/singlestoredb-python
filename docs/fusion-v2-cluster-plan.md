@@ -242,7 +242,7 @@ none. Region resolution matches on both `.name` and `.region_name`, requires
 `USING PROVIDER` to break ties, and passes an unmatched literal straight through.
 
 Columns: `SHOW CLUSTERS` → `Name`, `ID`, `Region`, `Size`, `State`; extended adds
-`Provider`, `Endpoint`, `DeploymentType`, `FirewallRanges`, `ProjectID`,
+`Provider`, `Endpoint`, `DeploymentType`, `FirewallRanges`, `ProjectName`,
 `CreatedAt`, `TerminatedAt`. Report `x.region.region_name` — `Cluster.region` is
 a `Region`, whose `name` is the display name and `region_name` the provider slug.
 `SHOW CLUSTER REGIONS` → `Name`, `Provider`, `RegionName` (no `ID`, since

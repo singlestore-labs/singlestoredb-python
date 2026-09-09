@@ -1239,7 +1239,7 @@ class TestClusterFusion(_ClusterFusionMixin, unittest.TestCase):
         cols = [x[0] for x in self.cur.description]
         assert cols == [
             'Name', 'ID', 'Region', 'Size', 'State', 'Provider', 'Endpoint',
-            'DeploymentType', 'FirewallRanges', 'ProjectID', 'CreatedAt',
+            'DeploymentType', 'FirewallRanges', 'ProjectName', 'CreatedAt',
             'TerminatedAt',
         ], cols
 
@@ -1248,7 +1248,10 @@ class TestClusterFusion(_ClusterFusionMixin, unittest.TestCase):
         # Region is the provider slug; Cluster has no region object at v2.
         assert row[2], row
         assert row[5], row
-        assert row[9] == type(self).project_id, row
+        # ProjectName, not the ID: the column reports the name the project
+        # listing gives for the ID the cluster was deployed into.
+        project = type(self).manager.projects[type(self).project_id]
+        assert row[9] == project.name, row
 
     def test_show_clusters_like(self):
         self.cur.execute(f'show clusters like "a-fusion-cluster-{self.id}"')
@@ -1332,7 +1335,7 @@ class TestClusterFusionReadOnly(_ClusterFusionMixin, unittest.TestCase):
         self.cur.execute('show starter clusters extended')
         cols = [x[0] for x in self.cur.description]
         assert cols == [
-            'Name', 'ID', 'DatabaseName', 'Endpoint', 'ProjectID',
+            'Name', 'ID', 'DatabaseName', 'Endpoint', 'ProjectName',
         ], cols
 
     def test_drop_starter_cluster_if_exists(self):

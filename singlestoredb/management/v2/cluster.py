@@ -54,7 +54,7 @@ PROJECT_ID_RE = re.compile(
 
 
 def _project_from_id(
-    manager: 'ClusterManager',
+    manager: Optional['ClusterManager'],
     project_id: Optional[str],
 ) -> Optional[Project]:
     """
@@ -63,14 +63,45 @@ def _project_from_id(
     A deployment reports only its ``projectID``, so the rest of the project is
     recovered from :attr:`ClusterManager.projects` -- a cached list, so this
     costs nothing per deployment after the first. An ID that matches no project
-    still yields a :class:`Project`, carrying the ID and nothing else, so that
-    ``cluster.project.id`` is always readable.
+    -- or no manager to match it against -- still yields a :class:`Project`,
+    carrying the ID and nothing else, so that ``cluster.project.id`` is always
+    readable.
     """
     if project_id is None:
         return None
+    if manager is None:
+        return Project(id=project_id, name='<unknown>')
     return next(
         (x for x in manager.projects if x.id == project_id),
         Project(id=project_id, name='<unknown>'),
+    )
+
+
+def _region_from_name(
+    manager: Optional['ClusterManager'],
+    region_name: Optional[str],
+    provider: Optional[str],
+) -> Optional[Region]:
+    """
+    Return the region a deployment reported, as reported by ``manager``.
+
+    No region ID is reported, so a region is identified by the
+    ``(provider, region_name)`` pair, and the display name lives only in
+    :attr:`ClusterManager.regions` -- a cached list, so this costs nothing per
+    deployment after the first. An unmatched pair -- or no manager to match it
+    against -- still yields a :class:`Region`, built from what the deployment
+    itself reports, so that ``cluster.region.region_name`` is always readable.
+    """
+    if region_name is None:
+        return None
+    if manager is not None:
+        for region in manager.regions:
+            if region.region_name == region_name and region.provider == provider:
+                return region
+    return Region(
+        name=region_name,
+        provider=provider or '<unknown>',
+        region_name=region_name,
     )
 
 
@@ -88,6 +119,21 @@ def _project_args(
     return None, project
 
 
+def _region_args(
+    region: Union[str, Region, None],
+) -> Tuple[Optional[Region], Optional[str]]:
+    """
+    Split a ``region`` constructor argument into a region and a region name.
+
+    A :class:`Region` is a resolved region and is kept as it stands; a string is
+    a provider region name, e.g. ``us-east-1``, which :func:`_lazy_region`
+    resolves when it is asked for.
+    """
+    if isinstance(region, Region):
+        return region, region.region_name or region.name
+    return None, region
+
+
 def _lazy_project(deployment: Any) -> Optional[Project]:
     """
     Return the project of a deployment that reported only its project ID.
@@ -103,13 +149,25 @@ def _lazy_project(deployment: Any) -> Optional[Project]:
     :class:`StarterCluster`.
     """
     if deployment._project is None and deployment._project_id is not None:
-        manager = deployment._manager
-        deployment._project = (
-            Project(id=deployment._project_id, name='<unknown>')
-            if manager is None
-            else _project_from_id(manager, deployment._project_id)
+        deployment._project = _project_from_id(
+            deployment._manager, deployment._project_id,
         )
     return deployment._project
+
+
+def _lazy_region(deployment: Any) -> Optional[Region]:
+    """
+    Return the region of a deployment that reported only a region name.
+
+    On demand, and for the same reason as :func:`_lazy_project`: matching the
+    name costs a ``GET /v2/regions``, and a listing whose regions nobody reads
+    should not pay it.
+    """
+    if deployment._region is None and deployment._region_name is not None:
+        deployment._region = _region_from_name(
+            deployment._manager, deployment._region_name, deployment.provider,
+        )
+    return deployment._region
 
 
 def get_organization() -> Organization:
@@ -199,7 +257,6 @@ class Cluster:
     last_resumed_at: Optional[datetime.datetime]
     endpoint: Optional[str]
     provider: Optional[str]
-    region: Optional[Region]
     deployment_type: Optional[str]
     kai: Optional[bool]
     multi_az: Optional[bool]
@@ -284,19 +341,11 @@ class Cluster:
         #: Cloud provider hosting the cluster (AWS | GCP | Azure)
         self.provider = provider
 
-        #: Region the cluster is deployed in. No region ID is reported; a
-        #: region is identified by the
-        #: ``(provider, region_name)`` pair. A string is taken as the provider
-        #: region name, e.g., ``us-east-1``; :meth:`from_dict` resolves it
-        #: against :attr:`ClusterManager.regions` so that the display name is
-        #: filled in too.
-        if isinstance(region, str):
-            region = Region(
-                name=region,
-                provider=provider or '<unknown>',
-                region_name=region,
-            )
-        self.region = region
+        # Region the cluster is deployed in; see the region property. A string
+        # is taken as the provider region name, e.g. us-east-1, and is not
+        # resolved until it is asked for, so that listing clusters costs no
+        # GET /v2/regions.
+        self._region, self._region_name = _region_args(region)
 
         # Project the cluster belongs to; see the project property. A string
         # is taken as the project ID and is not resolved until it is asked
@@ -356,6 +405,21 @@ class Cluster:
         self._admin_password: Optional[str] = None
 
     @property
+    def region(self) -> Optional[Region]:
+        """
+        Region the cluster is deployed in, or ``None`` if it reported none.
+
+        No region ID is reported: a region is identified by the
+        ``(provider, region_name)`` pair, and the display name lives only in
+        :attr:`ClusterManager.regions` -- a request, and one that listing
+        clusters would otherwise pay for every row, so it is made the first time
+        this is read rather than when the cluster is built. An unmatched pair
+        still yields a :class:`Region` built from what the cluster itself
+        reports, so ``cluster.region.region_name`` is always readable.
+        """
+        return _lazy_region(self)
+
+    @property
     def project(self) -> Optional[Project]:
         """
         Project the cluster belongs to, or ``None`` if it reported no project.
@@ -386,7 +450,16 @@ class Cluster:
 
     def __str__(self) -> str:
         """Return string representation."""
-        return vars_to_str(self)
+        # project and region are resolved lazily, so they are not in vars(self).
+        # Report whatever is already in hand -- the resolved object if something
+        # has read the property, otherwise the ID / name the cluster itself
+        # reported -- so that printing a cluster never issues a request.
+        return vars_to_str(
+            self, extra=dict(
+                project=self._project or self._project_id,
+                region=self._region or self._region_name,
+            ),
+        )
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -419,28 +492,6 @@ class Cluster:
         # :attr:`Cluster.size` are wrapper-side names either way.
         size_spec = obj.get('sizeConfig') or obj.get('size') or {}
 
-        # The provider region name is reported and no region ID, so the region
-        # is matched on the ``(provider, region_name)`` pair to recover the
-        # display name. An unmatched region still yields a Region, built from
-        # what the cluster itself reports.
-        provider = obj.get('provider')
-        region_name = obj.get('region')
-        region: Optional[Region] = None
-        if region_name is not None:
-            region = next(
-                (
-                    x for x in manager.regions
-                    if x.region_name == region_name and x.provider == provider
-                ),
-                None,
-            )
-            if region is None:
-                region = Region(
-                    name=region_name,
-                    provider=provider or '<unknown>',
-                    region_name=region_name,
-                )
-
         out = cls(
             name=obj['name'],
             id=obj['clusterID'],
@@ -453,8 +504,11 @@ class Cluster:
             expires_at=obj.get('expiresAt'),
             last_resumed_at=obj.get('lastResumedAt'),
             endpoint=obj.get('endpoint'),
-            provider=provider,
-            region=region,
+            provider=obj.get('provider'),
+            # The provider region name and the project ID are all the response
+            # carries; the region and project properties resolve them against
+            # the manager's cached listings when they are read.
+            region=obj.get('region'),
             project=obj.get('projectID'),
             deployment_type=obj.get('deploymentType'),
             kai=obj.get('kai'),
@@ -835,7 +889,11 @@ class StarterCluster:
 
     def __str__(self) -> str:
         """Return string representation."""
-        return vars_to_str(self)
+        # See Cluster.__str__: project is lazy, so report what is in hand
+        # rather than resolving it just to print.
+        return vars_to_str(
+            self, extra=dict(project=self._project or self._project_id),
+        )
 
     def __repr__(self) -> str:
         """Return string representation."""
@@ -1065,7 +1123,14 @@ class ClusterManager(Manager):
 
     @ttl_property(datetime.timedelta(hours=1))
     def regions(self) -> NamedList[Region]:
-        """Return a list of available regions."""
+        """
+        Return a list of available regions.
+
+        Cached for the same reason as :attr:`projects`: :attr:`Cluster.region`
+        resolves against this list, and a caller reading it per row of a
+        listing -- ``SHOW CLUSTERS`` does -- would otherwise cost a
+        ``GET /v2/regions`` per cluster.
+        """
         res = self._get('regions')
         return NamedList([Region.from_dict(item, self) for item in res.json()])
 
