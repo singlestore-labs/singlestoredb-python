@@ -1102,6 +1102,42 @@ class TestDeploymentTracking(unittest.TestCase):
             wrapped(receiver, 'cl-1')
         self.assertEqual(len(self.utils._tracked), 1)
 
+    def test_a_mocked_receiver_does_not_track_what_it_returns(self):
+        """A unit test's stubbed ``get_cluster`` hands back a real Cluster
+        whose ``_manager`` is None, or a bare sentinel. ``track()`` calls
+        anything it cannot place real -- rightly, since guessing "fake" leaks
+        a billable cluster -- so it would register both, and the end-of-session
+        summary would report phantom live deployments. The receiver's verdict
+        is what decides."""
+        mgr = SimpleNamespace(
+            _get=MagicMock(), _post=MagicMock(), _delete=MagicMock(),
+        )
+        returned = self._deployment('my-cluster')
+        returned._manager = None
+
+        for value in (returned, 'sentinel'):
+            wrapped = self.utils._tracking_wrapper(
+                lambda recv, name, value=value, **kwargs: value,
+                lambda recv: [],
+            )
+            self.assertIs(wrapped(mgr, 'my-cluster'), value)
+
+        self.assertEqual(self.utils.tracked_labels(), [])
+
+    def test_a_real_receiver_still_tracks_what_it_returns(self):
+        """The other side of the check above: an unrecognisable return value
+        from a real manager is still swept, because a cluster left running
+        costs money and a redundant terminate costs one round trip."""
+        mgr = SimpleNamespace(_get=object(), _post=object(), _delete=object())
+        returned = self._deployment('cl-1')
+        returned._manager = None
+
+        wrapped = self.utils._tracking_wrapper(
+            lambda recv, name, **kwargs: returned, lambda recv: [],
+        )
+        wrapped(mgr, 'cl-1')
+        self.assertEqual(self.utils.tracked_labels(), ["Deployment 'cl-1'"])
+
     def test_a_mocked_receiver_is_not_searched_for_orphans(self):
         """The unit tests drive these creators with patched transports; a
         failure there names nothing real to recover."""

@@ -538,6 +538,14 @@ def _tracking_wrapper(func: Any, finder: Any) -> Any:
     patched ``_post`` would read as live and the recovery would fire a real
     API call from a unit test. ``_creator_is_mocked`` inspects the receiver's
     own transport and handles both receiver shapes.
+
+    That same verdict also decides whether the *result* is tracked, rather than
+    leaving it to ``track()``. ``track()`` can only judge what it is handed,
+    and it is deliberately biased toward "real" for anything it cannot place --
+    including an object whose ``_manager`` is ``None``, which is exactly what a
+    unit test's stubbed ``get_cluster`` returns. Nothing a mocked creator
+    returns names a deployment that exists, so the receiver's verdict is the
+    authoritative one and it is the one used here.
     """
     import functools
 
@@ -548,7 +556,8 @@ def _tracking_wrapper(func: Any, finder: Any) -> Any:
         if not mocked:
             _in_flight.append(entry)
         try:
-            return track(func(receiver, *args, **kwargs))
+            out = func(receiver, *args, **kwargs)
+            return out if mocked else track(out)
         except BaseException:
             # BaseException, not Exception: a KeyboardInterrupt during the
             # twenty-minute wait_on_active wait leaves the same live
