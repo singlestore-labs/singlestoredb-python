@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.17.3 - September 10, 2026
+----------------------------
+* Propagate OpenTelemetry context on inference API calls (#132)
+
 v1.17.2 - August 26, 2026
 -------------------------
 * Client-side model-aware tokenization for Nova embeddings (#130)
