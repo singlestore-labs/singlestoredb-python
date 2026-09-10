@@ -29,7 +29,10 @@ Available Fixtures:
 import logging
 import os
 from collections.abc import Iterator
+from typing import Any
+from typing import List
 from typing import Optional
+from typing import Tuple
 
 import pytest
 
@@ -48,6 +51,18 @@ logger = logging.getLogger(__name__)
 _container_manager: Optional[_TestContainerManager] = None
 
 
+def _test_utils() -> Any:
+    """
+    Return the test helper module.
+
+    Imported through a function returning ``Any`` because ``tests/utils.py``
+    carries a module-level ``# type: ignore``, which leaves mypy with no
+    attributes to check against.
+    """
+    from singlestoredb.tests import utils
+    return utils
+
+
 def pytest_configure(config: pytest.Config) -> None:
     """
     Pytest hook that runs before test collection.
@@ -57,6 +72,11 @@ def pytest_configure(config: pytest.Config) -> None:
     parameters at import time, so we need the environment set up early.
     """
     global _container_manager
+
+    # Before any test module is imported: a setUpClass can create clusters,
+    # and they have to be tracked from the first one.
+    _test_utils().install_deployment_tracking()
+    _install_sweep_fallbacks()
 
     # Prevent double initialization - pytest_configure can be called multiple times
     if _container_manager is not None:
@@ -134,13 +154,159 @@ def pytest_configure(config: pytest.Config) -> None:
         logger.debug(f'Using existing SINGLESTOREDB_URL={url}')
 
 
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """
+    Sweep the previous test class's deployments before the next one starts.
+
+    This hook runs before pytest triggers ``setUpClass``, so by the time a
+    class begins the one before it is finished -- ``tearDownClass`` included,
+    or skipped because ``setUpClass`` raised. Sweeping here rather than only
+    at the end of the session means a leaked cluster is billed for one class,
+    not for the rest of the run.
+    """
+    utils = _test_utils()
+
+    try:
+        cls = getattr(item, 'cls', None)
+        module = getattr(item, 'module', None)
+        owner = '{}.{}'.format(
+            module.__name__ if module is not None else '',
+            cls.__name__ if cls is not None else '',
+        )
+    except Exception:  # pragma: no cover - non-python items
+        return
+
+    if owner == utils.get_owner():
+        return
+
+    previous = utils.get_owner()
+    utils.set_owner(owner)
+    if previous:
+        _sweep_live_deployments(previous)
+
+
+def _sweep_live_deployments(owner: Optional[str] = None) -> None:
+    """
+    Terminate workspace groups, workspaces and clusters tests left behind.
+
+    A class whose ``setUpClass`` raises never gets its ``tearDownClass``, so
+    the deployments it had already created would otherwise stay live -- and
+    billed -- indefinitely. Anything a test created is swept here whether or
+    not the test that made it ran to completion.
+
+    A whole-session sweep -- ``owner is None``, so ``pytest_unconfigure``,
+    ``atexit`` or SIGTERM -- first recovers the creations still in progress.
+    Those have POSTed but are blocked waiting for the deployment to come up, so
+    nothing has tracked them yet, and killing the process here would leak them.
+    The per-class sweep skips that step: it runs between tests, where no
+    creation is in flight.
+    """
+    try:
+        if owner is None:
+            _test_utils().recover_in_flight()
+        removed = _test_utils().cleanup_tracked(owner)
+    except Exception as exc:  # pragma: no cover - shutdown path
+        print(f'\n✗ Failed to sweep leftover deployments: {exc}')
+        logger.error(f'Failed to sweep leftover deployments: {exc}')
+        return
+
+    if removed:
+        print('\n' + '=' * 70)
+        print('Terminated deployments left behind by tests:')
+        for label in removed:
+            print(f'  - {label}')
+        print('=' * 70)
+        logger.info(f'Swept {len(removed)} leftover deployment(s)')
+
+    # A deployment still tracked after a full sweep is one the sweep could not
+    # terminate -- it is live and billing. Say so loudly rather than letting
+    # the run end quietly; `python -m singlestoredb.tests.cleanup_deployments`
+    # is the way to reap it.
+    if owner is None:
+        try:
+            stranded = _test_utils().tracked_labels()
+        except Exception:  # pragma: no cover - shutdown path
+            return
+        if stranded:
+            print('\n' + '!' * 70)
+            print(
+                'STILL LIVE -- these deployments could not be terminated and '
+                'are costing money:',
+            )
+            for label in stranded:
+                print(f'  - {label}')
+            print(
+                'Reap them with: python -m singlestoredb.tests.'
+                'cleanup_deployments --yes',
+            )
+            print('!' * 70)
+            logger.error(f'{len(stranded)} deployment(s) left live')
+
+
+#: Set once the atexit/signal fallbacks are in place, so a repeated
+#: ``pytest_configure`` does not stack handlers.
+_sweep_fallbacks_installed = False
+
+
+def _install_sweep_fallbacks() -> None:
+    """
+    Sweep leftover deployments even when ``pytest_unconfigure`` never runs.
+
+    ``pytest_unconfigure`` is the normal path, but it is skipped whenever the
+    process does not shut down through pytest: a cancelled CI job, a killed
+    xdist worker holding the shared cluster pool, or an interpreter crash. The
+    pool is the expensive case -- it is attributed to owner ``''``, so no
+    per-class sweep ever touches it, and ``pytest_unconfigure`` is its only
+    scheduled cleanup.
+
+    ``atexit`` covers ``sys.exit`` and an unhandled exception; a SIGTERM
+    handler covers the cancellation case, since Python does not run ``atexit``
+    for a signal-terminated process. SIGKILL is unreachable by design -- that
+    is what ``cleanup_deployments.py`` is for.
+
+    Both paths go through ``_sweep_live_deployments()`` with no owner, which
+    recovers the creations still waiting on their deployment before sweeping --
+    a job cancelled mid ``wait_on_active`` is otherwise the one leak these
+    handlers cannot see.
+    """
+    global _sweep_fallbacks_installed
+    if _sweep_fallbacks_installed:
+        return
+    _sweep_fallbacks_installed = True
+
+    import atexit
+    import signal
+
+    # Idempotent: a successful sweep empties the tracking list, so the normal
+    # path leaves these with nothing to do.
+    atexit.register(_sweep_live_deployments)
+
+    previous = signal.getsignal(signal.SIGTERM)
+
+    def on_sigterm(signum: int, frame: Any) -> None:
+        _sweep_live_deployments()
+        if callable(previous):
+            previous(signum, frame)
+        elif previous == signal.SIG_DFL:
+            signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            os.kill(os.getpid(), signum)
+
+    try:
+        signal.signal(signal.SIGTERM, on_sigterm)
+    except ValueError:  # pragma: no cover - not the main thread
+        logger.debug('Not the main thread; no SIGTERM sweep installed')
+
+
 def pytest_unconfigure(config: pytest.Config) -> None:
     """
     Pytest hook that runs after all tests complete.
 
-    Cleans up the Docker container if one was started.
+    Terminates any live deployment a test left behind, then cleans up the
+    Docker container if one was started.
     """
     global _container_manager
+
+    _sweep_live_deployments()
 
     if _container_manager is not None and not _container_manager.use_existing:
         print('\n' + '=' * 70)
@@ -155,6 +321,126 @@ def pytest_unconfigure(config: pytest.Config) -> None:
             print(f'✗ Failed to stop Docker container: {e}')
             print('=' * 70)
             logger.error(f'Failed to stop Docker container: {e}')
+
+
+#: Management API timings per test, collected when SINGLESTOREDB_MANAGEMENT_TRACE
+#: is set. Kept here rather than on the config object so that
+#: ``pytest_terminal_summary`` can read it without a fixture.
+#:
+#: Every test that ran under an active trace is in here, including the ones that
+#: made no management call at all: ``trace_management_api_class`` subtracts this
+#: list from the class total to get the fixture share, so a test missing from it
+#: has its wall clock charged to ``setUpClass``. The event-less ones are
+#: filtered out at report time by :func:`_traced` instead.
+_management_traces: List[Tuple[str, Any]] = []
+
+#: The same, for the class fixtures rather than the tests. Separate because the
+#: two overlap: a class trace spans its tests as well as its fixtures, so the
+#: fixture share is what is left after the tests' events are taken out of it.
+_management_fixture_traces: List[Tuple[str, Any]] = []
+
+
+@pytest.fixture(autouse=True)
+def trace_management_api(request: pytest.FixtureRequest) -> Iterator[None]:
+    """
+    Record where each test's management API time went.
+
+    Only active when ``SINGLESTOREDB_MANAGEMENT_TRACE`` is set, and reported by
+    :func:`pytest_terminal_summary`. The per-event stderr log the same variable
+    turns on is swallowed by pytest's capturing unless ``-s`` is given, so the
+    summary is written through the terminal reporter instead, which is always
+    shown.
+    """
+    from singlestoredb.management import timing
+
+    if not timing.logging_enabled():
+        yield
+        return
+
+    with timing.trace() as trace:
+        yield
+
+    _management_traces.append((request.node.nodeid, trace))
+
+
+@pytest.fixture(scope='class', autouse=True)
+def trace_management_api_class(request: pytest.FixtureRequest) -> Iterator[None]:
+    """
+    Record what a class's ``setUpClass``/``tearDownClass`` cost.
+
+    :func:`trace_management_api` is function-scoped, so it opens after
+    ``setUpClass`` has already run and closes before ``tearDownClass`` -- which
+    made the most expensive management calls in the suite invisible. The
+    fixtures here deploy the clusters and workspace groups the tests share, so
+    a run could report 5592 traced seconds out of 10125 and only three
+    ``POST clusters``.
+
+    This trace spans the whole class, tests included, and
+    :func:`timing.Trace.of` subtracts the tests back out: the events are the
+    same objects in both traces, since :func:`timing._emit` hands each one to
+    every trace active in the context, so identity separates them exactly.
+    """
+    from singlestoredb.management import timing
+
+    if not timing.logging_enabled():
+        yield
+        return
+
+    # The tests of this class are the ones appended from here on.
+    first_test = len(_management_traces)
+    with timing.trace() as trace:
+        yield
+
+    tests = [x[1] for x in _management_traces[first_test:]]
+    in_a_test = {id(x) for one in tests for x in one.events}
+    fixtures = timing.Trace.of(
+        [x for x in trace.events if id(x) not in in_a_test],
+        trace.elapsed - sum(x.elapsed for x in tests),
+    )
+    if fixtures.events:
+        _management_fixture_traces.append((request.node.nodeid, fixtures))
+
+
+def _traced(traces: List[Tuple[str, Any]]) -> List[Tuple[str, Any]]:
+    """
+    Drop the traces that recorded no management call.
+
+    ``_management_traces`` holds every test so that the fixture arithmetic is
+    right, but a test that made no management call has nothing to report and its
+    wall clock would inflate the combined total.
+    """
+    return [x for x in traces if x[1].events]
+
+
+def pytest_terminal_summary(terminalreporter: Any) -> None:
+    """Report the management API time the run spent, if it was traced."""
+    tests = _traced(_management_traces)
+    fixtures = _traced(_management_fixture_traces)
+    if not tests and not fixtures:
+        return
+
+    from singlestoredb.management import timing
+
+    terminalreporter.write_sep('=', 'management API timing')
+    combined = timing.Trace.combine(x[1] for x in tests + fixtures)
+    terminalreporter.write_line(combined.summary())
+
+    for heading, traces in (
+        ('slowest traced tests', tests),
+        ('slowest traced class fixtures', fixtures),
+    ):
+        if not traces:
+            continue
+        slowest = sorted(traces, key=lambda x: x[1].elapsed, reverse=True)[:10]
+        terminalreporter.write_line('')
+        terminalreporter.write_line(f'  {heading}')
+        for nodeid, trace in slowest:
+            terminalreporter.write_line(
+                '  {:>8.3f}s  requests={:>7.3f}s waiting={:>8.3f}s  {}'.format(
+                    trace.elapsed, trace.total(timing.REQUEST),
+                    trace.total(timing.WAIT), nodeid,
+                ),
+            )
 
 
 @pytest.fixture(scope='session', autouse=True)

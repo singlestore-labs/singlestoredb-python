@@ -1,12 +1,32 @@
 #!/usr/bin/env python
 # type: ignore
-"""SingleStoreDB Management API testing."""
+"""
+SingleStoreDB v1 Management API testing.
+
+Everything here targets management API v1 -- workspaces, workspace groups and
+the resources hanging off them. No test in this file may branch on version;
+the v2 equivalents live in ``test_management_v2.py``, the version-neutral
+helper units in ``test_management_utils.py``, and the structural cross-version
+invariants in ``test_management_versioning.py``.
+
+The whole module carries ``@pytest.mark.management_v1`` (see ``pytestmark``
+below) so that the v1 endpoints can be switched off as a group now that
+``management.version`` defaults to v2: ``-m 'not management_v1'`` for a normal
+run, ``-m 'management_v1'`` for the nightly that still proves v1 works. The
+marker is separate from ``management`` because this file also holds mocked
+units that need no token -- those are v1-specific too, and go away with
+``management/v1/``.
+"""
+import datetime
 import os
 import pathlib
 import random
 import re
 import secrets
 import unittest
+from unittest.mock import MagicMock
+from unittest.mock import patch
+from unittest.mock import PropertyMock
 
 import pytest
 
@@ -19,6 +39,9 @@ from singlestoredb.management.utils import NamedList
 
 TEST_DIR = pathlib.Path(os.path.dirname(__file__))
 
+#: Applies to every test in this module, live or mocked.
+pytestmark = pytest.mark.management_v1
+
 
 def clean_name(s):
     """Change all non-word characters to -."""
@@ -28,172 +51,6 @@ def clean_name(s):
 def shared_database_name(s):
     """Return a shared database name. Cannot contain special characters except -"""
     return re.sub(r'[^\w]', '', s).replace('-', '_').lower()
-
-
-@pytest.mark.skip(reason='Legacy cluster Management API is going away')
-@pytest.mark.management
-class TestCluster(unittest.TestCase):
-
-    manager = None
-    cluster = None
-    password = None
-
-    @classmethod
-    def setUpClass(cls):
-        cls.manager = s2.manage_cluster()
-
-        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
-
-        cls.cluster = cls.manager.create_cluster(
-            clean_name('cm-test-{}'.format(secrets.token_urlsafe(20)[:20])),
-            region=random.choice(us_regions).id,
-            admin_password=cls.password,
-            firewall_ranges=['0.0.0.0/0'],
-            expires_at='1h',
-            size='S-00',
-            wait_on_active=True,
-        )
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.cluster is not None:
-            cls.cluster.terminate()
-        cls.cluster = None
-        cls.manager = None
-        cls.password = None
-
-    def test_str(self):
-        assert self.cluster.name in str(self.cluster.name)
-
-    def test_repr(self):
-        assert repr(self.cluster) == str(self.cluster)
-
-    def test_region_str(self):
-        s = str(self.cluster.region)
-        assert 'Azure' in s or 'GCP' in s or 'AWS' in s, s
-
-    def test_region_repr(self):
-        assert repr(self.cluster.region) == str(self.cluster.region)
-
-    def test_regions(self):
-        out = self.manager.regions
-        providers = {x.provider for x in out}
-        names = [x.name for x in out]
-        assert 'Azure' in providers, providers
-        assert 'GCP' in providers, providers
-        assert 'AWS' in providers, providers
-
-        objs = {}
-        ids = []
-        for item in out:
-            ids.append(item.id)
-            objs[item.id] = item
-            if item.name not in objs:
-                objs[item.name] = item
-
-        name = random.choice(names)
-        assert out[name] == objs[name]
-        id = random.choice(ids)
-        assert out[id] == objs[id]
-
-    def test_clusters(self):
-        clusters = self.manager.clusters
-        ids = [x.id for x in clusters]
-        assert self.cluster.id in ids, ids
-
-    def test_get_cluster(self):
-        clus = self.manager.get_cluster(self.cluster.id)
-        assert clus.id == self.cluster.id, clus.id
-
-        with self.assertRaises(s2.ManagementError) as cm:
-            clus = self.manager.get_cluster('bad id')
-
-        assert 'UUID' in cm.exception.msg, cm.exception.msg
-
-    def test_update(self):
-        assert self.cluster.name.startswith('cm-test-')
-
-        name = self.cluster.name.replace('cm-test-', 'cm-foo-')
-        self.cluster.update(name=name)
-
-        clus = self.manager.get_cluster(self.cluster.id)
-        assert clus.name == name, clus.name
-
-    def test_suspend_resume(self):
-        trues = ['1', 'on', 'true']
-        do_test = os.environ.get('SINGLESTOREDB_TEST_SUSPEND', '0').lower() in trues
-
-        if not do_test:
-            self.skipTest(
-                'Suspend / resume tests skipped by default due to '
-                'being time consuming; set SINGLESTOREDB_TEST_SUSPEND=1 '
-                'to enable',
-            )
-
-        assert self.cluster.state != 'Suspended', self.cluster.state
-
-        self.cluster.suspend(wait_on_suspended=True)
-        assert self.cluster.state == 'Suspended', self.cluster.state
-
-        self.cluster.resume(wait_on_resumed=True)
-        assert self.cluster.state == 'Active', self.cluster.state
-
-    def test_no_manager(self):
-        clus = self.manager.get_cluster(self.cluster.id)
-        clus._manager = None
-
-        with self.assertRaises(s2.ManagementError) as cm:
-            clus.refresh()
-
-        assert 'No cluster manager' in cm.exception.msg, cm.exception.msg
-
-        with self.assertRaises(s2.ManagementError) as cm:
-            clus.update()
-
-        assert 'No cluster manager' in cm.exception.msg, cm.exception.msg
-
-        with self.assertRaises(s2.ManagementError) as cm:
-            clus.suspend()
-
-        assert 'No cluster manager' in cm.exception.msg, cm.exception.msg
-
-        with self.assertRaises(s2.ManagementError) as cm:
-            clus.resume()
-
-        assert 'No cluster manager' in cm.exception.msg, cm.exception.msg
-
-        with self.assertRaises(s2.ManagementError) as cm:
-            clus.terminate()
-
-        assert 'No cluster manager' in cm.exception.msg, cm.exception.msg
-
-    def test_connect(self):
-        trues = ['1', 'on', 'true']
-        pure_python = os.environ.get('SINGLESTOREDB_PURE_PYTHON', '0').lower() in trues
-
-        self.skipTest('Connection test is disable due to flakey server')
-
-        if pure_python:
-            self.skipTest('Connections through managed service are disabled')
-
-        try:
-            with self.cluster.connect(user='admin', password=self.password) as conn:
-                with conn.cursor() as cur:
-                    cur.execute('show databases')
-                    assert 'cluster' in [x[0] for x in list(cur)]
-        except s2.ManagementError as exc:
-            if 'endpoint has not been set' not in str(exc):
-                self.skipTest('No endpoint in response. Skipping connection test.')
-
-        # Test missing endpoint
-        clus = self.manager.get_cluster(self.cluster.id)
-        clus.endpoint = None
-
-        with self.assertRaises(s2.ManagementError) as cm:
-            clus.connect(user='admin', password=self.password)
-
-        assert 'endpoint' in cm.exception.msg, cm.exception.msg
 
 
 @pytest.mark.management
@@ -206,7 +63,9 @@ class TestWorkspace(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspaces()
+        # Pinned: manage_workspaces() follows the management.version
+        # option, and this is the v1 suite.
+        cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
         cls.password = secrets.token_urlsafe(20) + '-x&$'
@@ -286,8 +145,13 @@ class TestWorkspace(unittest.TestCase):
 
         objs = {}
         for item in workspace_groups:
-            objs[item.id] = item
-            objs[item.name] = item
+            # setdefault, and name before id, so this resolves a key the way
+            # NamedList._find_item does: to the *first* match. Plain assignment
+            # kept the last, which disagrees as soon as the listing carries two
+            # entries of one name -- terminated groups stay in the listing, so
+            # a suite that recreates a group under its old name produces that.
+            objs.setdefault(item.name, item)
+            objs.setdefault(item.id, item)
 
         name = random.choice(names)
         assert workspace_groups[name] == objs[name]
@@ -306,8 +170,9 @@ class TestWorkspace(unittest.TestCase):
 
         objs = {}
         for item in spaces:
-            objs[item.id] = item
-            objs[item.name] = item
+            # First match wins, as in test_workspace_groups above.
+            objs.setdefault(item.name, item)
+            objs.setdefault(item.id, item)
 
         name = random.choice(names)
         assert spaces[name] == objs[name]
@@ -379,7 +244,7 @@ class TestStarterWorkspace(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspaces()
+        cls.manager = s2.manage_workspaces(version='v1')
 
         shared_tier_regions: NamedList[Region] = [
             x for x in cls.manager.shared_tier_regions if 'US' in x.name
@@ -439,8 +304,9 @@ class TestStarterWorkspace(unittest.TestCase):
 
         objs = {}
         for item in workspaces:
-            objs[item.id] = item
-            objs[item.name] = item
+            # First match wins, as in test_workspace_groups above.
+            objs.setdefault(item.name, item)
+            objs.setdefault(item.id, item)
 
         name = random.choice(names)
         assert workspaces[name] == objs[name]
@@ -489,7 +355,7 @@ class TestStage(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspaces()
+        cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
         cls.password = secrets.token_urlsafe(20) + '-x&$'
@@ -1037,32 +903,19 @@ class TestStage(unittest.TestCase):
 class TestSecrets(unittest.TestCase):
 
     manager = None
-    wg = None
-    password = None
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspaces()
-
-        us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
-
-        name = clean_name(secrets.token_urlsafe(20)[:20])
-
-        cls.wg = cls.manager.create_workspace_group(
-            f'wg-test-{name}',
-            region=random.choice(us_regions).id,
-            admin_password=cls.password,
-            firewall_ranges=['0.0.0.0/0'],
-        )
+        # No deployment: a secret belongs to the organization, not to a
+        # workspace group, and test_get_secret reaches it through
+        # organizations.current. This used to create a group with a firewall
+        # and an admin password that nothing in the class ever read -- a
+        # provisioning wait and a teardown for an unused fixture.
+        cls.manager = s2.manage_workspaces(version='v1')
 
     @classmethod
     def tearDownClass(cls):
-        if cls.wg is not None:
-            cls.wg.terminate(force=True)
-        cls.wg = None
         cls.manager = None
-        cls.password = None
 
     def test_get_secret(self):
         # manually create secret and then get secret
@@ -1101,7 +954,7 @@ class TestJob(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_workspaces()
+        cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
         cls.password = secrets.token_urlsafe(20) + '-x&$'
@@ -1252,7 +1105,9 @@ class TestFileSpaces(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = s2.manage_files()
+        # Pinned: manage_files() follows the management.version option, and
+        # this is the v1 suite.
+        cls.manager = s2.manage_files(version='v1')
         cls.personal_space = cls.manager.personal_space
         cls.shared_space = cls.manager.shared_space
 
@@ -1588,7 +1443,9 @@ class TestRegions(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up the test environment."""
-        cls.manager = s2.manage_regions()
+        # Pinned: manage_regions() follows the management.version option, and
+        # this is the v1 suite.
+        cls.manager = s2.manage_regions(version='v1')
 
     @classmethod
     def tearDownClass(cls):
@@ -1651,3 +1508,516 @@ class TestRegions(unittest.TestCase):
 
         # Test __repr__
         assert repr(region) == str(region)
+
+
+#
+# v1 behavior units. These need neither a management token nor a
+# container -- they drive the v1 entity classes against fake API
+# payloads. Anything version-neutral belongs in
+# test_management_utils.py instead.
+#
+
+FAKE_TOKEN = 'test-token-12345'
+FAKE_BASE_URL = 'https://api.example.com'
+FAKE_ORG_ID = 'org-12345'
+
+
+def _make_workspace_manager(version='v1', organization_id=FAKE_ORG_ID):
+    """Construct a v1 WorkspaceManager with patched token resolver."""
+    from singlestoredb.management.v1.workspace import WorkspaceManager
+    with patch(
+        'singlestoredb.management.manager.get_token',
+        return_value=FAKE_TOKEN,
+    ):
+        return WorkspaceManager(
+            access_token=FAKE_TOKEN,
+            base_url=FAKE_BASE_URL,
+            version=version,
+            organization_id=organization_id,
+        )
+
+
+def _make_workspace_group(manager=None, group_id='wsg-456', extra_obj=None):
+    """Build a v1 WorkspaceGroup from a fake API response.
+
+    ``WorkspaceGroup.from_dict`` calls ``manager.regions`` to resolve the
+    region; we stub it so no network call is made.
+    """
+    from singlestoredb.management.v1.workspace import WorkspaceGroup
+    from singlestoredb.management.v1.workspace import WorkspaceManager
+    mgr = manager or _make_workspace_manager()
+    obj = {
+        'name': 'test-group',
+        'workspaceGroupID': group_id,
+        'createdAt': '2024-01-01T00:00:00Z',
+        'regionID': 'region-789',
+        'firewallRanges': ['0.0.0.0/0'],
+    }
+    if extra_obj:
+        obj.update(extra_obj)
+    with patch.object(
+        WorkspaceManager, 'regions',
+        new_callable=PropertyMock, return_value=[],
+    ):
+        wg = WorkspaceGroup.from_dict(obj, mgr)
+    return wg, mgr, obj
+
+
+class TestTokenStorageFix(unittest.TestCase):
+    """Test that Manager authenticates with the resolved token."""
+
+    @patch('singlestoredb.management.manager.is_jwt', return_value=False)
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_none_token_resolves(self, _mock_token, _mock_jwt):
+        """When access_token=None, the resolved token is used."""
+        from singlestoredb.management.v1.workspace import WorkspaceManager
+        mgr = WorkspaceManager(
+            access_token=None,
+            base_url=FAKE_BASE_URL,
+            version='v1',
+        )
+        self.assertEqual(
+            mgr._sess.headers['Authorization'], f'Bearer {FAKE_TOKEN}',
+        )
+
+    @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
+    def test_explicit_token_used_as_is(self, _mock_token):
+        """When access_token is provided, it's used directly."""
+        from singlestoredb.management.v1.workspace import WorkspaceManager
+        mgr = WorkspaceManager(
+            access_token='my-explicit-token',
+            base_url=FAKE_BASE_URL,
+            version='v1',
+        )
+        self.assertEqual(
+            mgr._sess.headers['Authorization'], 'Bearer my-explicit-token',
+        )
+
+
+class TestWorkspaceFromDictNewFields(unittest.TestCase):
+    """
+    Coverage for the staged additions in ``v1/workspace.py``:
+    ``auto_scale``, ``kai_enabled``, ``scale_factor``, plus the widened
+    ``cache_config`` (now float).
+    """
+
+    def _base_obj(self):
+        return {
+            'name': 'test-ws',
+            'workspaceID': 'ws-1',
+            'workspaceGroupID': 'wsg-1',
+            'size': 'S-00',
+            'state': 'Active',
+            'createdAt': '2024-01-01T00:00:00Z',
+        }
+
+    def test_new_fields_present(self):
+        from singlestoredb.management.v1.workspace import Workspace
+        mgr = _make_workspace_manager()
+        obj = self._base_obj()
+        obj.update({
+            'autoScale': {
+                'sensitivity': 'HIGH',
+                'maxScaleFactor': 4.0,
+                'changedAt': '2024-01-01T00:00:00Z',
+                'lastAutoScaledAt': '2024-01-02T00:00:00Z',
+            },
+            'kaiEnabled': True,
+            'scaleFactor': 2.5,
+            'cacheConfig': 1.5,
+        })
+        ws = Workspace.from_dict(obj, mgr)
+        # auto_scale keys are camel_to_snake_dict-converted
+        self.assertEqual(ws.auto_scale['sensitivity'], 'HIGH')
+        self.assertEqual(ws.auto_scale['max_scale_factor'], 4.0)
+        self.assertEqual(ws.auto_scale['changed_at'], '2024-01-01T00:00:00Z')
+        self.assertEqual(
+            ws.auto_scale['last_auto_scaled_at'], '2024-01-02T00:00:00Z',
+        )
+        self.assertNotIn('maxScaleFactor', ws.auto_scale)
+        self.assertIs(ws.kai_enabled, True)
+        self.assertEqual(ws.scale_factor, 2.5)
+        self.assertEqual(ws.cache_config, 1.5)
+
+    def test_new_fields_default_to_none(self):
+        from singlestoredb.management.v1.workspace import Workspace
+        mgr = _make_workspace_manager()
+        ws = Workspace.from_dict(self._base_obj(), mgr)
+        self.assertIsNone(ws.auto_scale)
+        self.assertIsNone(ws.kai_enabled)
+        self.assertIsNone(ws.scale_factor)
+
+
+class TestWorkspaceUpdatePosting(unittest.TestCase):
+    """``Workspace.update`` must include the new fields in the PATCH body."""
+
+    def _make_workspace(self, mgr):
+        from singlestoredb.management.v1.workspace import Workspace
+        obj = {
+            'name': 'test-ws',
+            'workspaceID': 'ws-1',
+            'workspaceGroupID': 'wsg-1',
+            'size': 'S-00',
+            'state': 'Active',
+            'createdAt': '2024-01-01T00:00:00Z',
+        }
+        return Workspace.from_dict(obj, mgr)
+
+    def test_update_posts_new_fields_only_when_set(self):
+        mgr = _make_workspace_manager()
+        mgr._patch = MagicMock()
+        ws = self._make_workspace(mgr)
+        ws.refresh = MagicMock()
+
+        ws.update(
+            auto_scale={'sensitivity': 'HIGH'},
+            enable_kai=True,
+            scale_factor=2.0,
+            cache_config=1.5,
+        )
+
+        mgr._patch.assert_called_once()
+        args, kwargs = mgr._patch.call_args
+        self.assertEqual(args[0], 'workspaces/ws-1')
+        body = kwargs['json']
+        self.assertEqual(body['autoScale'], {'sensitivity': 'HIGH'})
+        self.assertIs(body['enableKai'], True)
+        self.assertEqual(body['scaleFactor'], 2.0)
+        self.assertEqual(body['cacheConfig'], 1.5)
+
+    def test_update_omits_keys_when_param_none(self):
+        mgr = _make_workspace_manager()
+        mgr._patch = MagicMock()
+        ws = self._make_workspace(mgr)
+        ws.refresh = MagicMock()
+
+        ws.update(size='S-1')
+
+        body = mgr._patch.call_args.kwargs['json']
+        self.assertEqual(body, {'size': 'S-1'})
+        self.assertNotIn('autoScale', body)
+        self.assertNotIn('enableKai', body)
+        self.assertNotIn('scaleFactor', body)
+
+
+class TestWorkspaceGroupNewFields(unittest.TestCase):
+    """Coverage for the new staged fields on ``WorkspaceGroup.from_dict``."""
+
+    def _obj_with_new_fields(self):
+        return {
+            'name': 'test-group',
+            'workspaceGroupID': 'wsg-1',
+            'createdAt': '2024-01-01T00:00:00Z',
+            'regionID': 'region-789',
+            'firewallRanges': ['0.0.0.0/0'],
+            'allowAllTraffic': True,
+            'deploymentType': 'PRODUCTION',
+            'expiresAt': '2025-06-30T23:59:59Z',
+            'highAvailabilityTwoZones': True,
+            'optInPreviewFeature': False,
+            'outboundAllowList': '203.0.113.0/24',
+            'projectID': 'proj-1',
+            'projectName': 'my-project',
+            'smartDRStatus': 'ACTIVE',
+            'state': 'ACTIVE',
+            'updateWindow': {'day': 0, 'hour': 4},
+            'provider': 'aws',
+            'regionName': 'us-east-1',
+        }
+
+    def test_all_new_fields_mapped(self):
+        from singlestoredb.management.v1.workspace import WorkspaceGroup
+        mgr = _make_workspace_manager()
+        with patch.object(
+            type(mgr), 'regions',
+            new_callable=PropertyMock, return_value=[],
+        ):
+            wg = WorkspaceGroup.from_dict(self._obj_with_new_fields(), mgr)
+        self.assertEqual(wg.deployment_type, 'PRODUCTION')
+        self.assertIsInstance(wg.expires_at, datetime.datetime)
+        self.assertIs(wg.high_availability_two_zones, True)
+        self.assertIs(wg.opt_in_preview_feature, False)
+        self.assertEqual(wg.outbound_allow_list, '203.0.113.0/24')
+        self.assertEqual(wg.project_id, 'proj-1')
+        self.assertEqual(wg.project_name, 'my-project')
+        self.assertEqual(wg.smart_dr_status, 'ACTIVE')
+        self.assertEqual(wg.state, 'ACTIVE')
+        # update_window stays a raw dict (not snake-cased)
+        self.assertEqual(wg.update_window, {'day': 0, 'hour': 4})
+        self.assertEqual(wg.provider, 'aws')
+        self.assertEqual(wg.region_name, 'us-east-1')
+
+    def test_new_fields_default_to_none(self):
+        wg, _, _ = _make_workspace_group()
+        self.assertIsNone(wg.deployment_type)
+        self.assertIsNone(wg.expires_at)
+        self.assertIsNone(wg.high_availability_two_zones)
+        self.assertIsNone(wg.opt_in_preview_feature)
+        self.assertIsNone(wg.outbound_allow_list)
+        self.assertIsNone(wg.project_id)
+        self.assertIsNone(wg.project_name)
+        self.assertIsNone(wg.smart_dr_status)
+        self.assertIsNone(wg.state)
+        self.assertIsNone(wg.update_window)
+        self.assertIsNone(wg.provider)
+        self.assertIsNone(wg.region_name)
+
+
+class TestWorkspaceGroupCreateUpdatePosting(unittest.TestCase):
+    """Body coverage for create_workspace_group / WorkspaceGroup.update."""
+
+    def test_create_workspace_group_posts_new_fields(self):
+        mgr = _make_workspace_manager()
+        # Make get_workspace_group a no-op; we only inspect the POST body.
+        post_response = MagicMock()
+        post_response.json.return_value = {'workspaceGroupID': 'wsg-new'}
+        mgr._post = MagicMock(return_value=post_response)
+        mgr.get_workspace_group = MagicMock(return_value='sentinel')
+
+        result = mgr.create_workspace_group(
+            name='wg-1',
+            region='region-789',
+            firewall_ranges=['0.0.0.0/0'],
+            provider='aws',
+            region_name='us-east-1',
+            deployment_type='PRODUCTION',
+            high_availability_two_zones=True,
+            opt_in_preview_feature=False,
+            project_id='proj-1',
+        )
+
+        self.assertEqual(result, 'sentinel')
+        body = mgr._post.call_args.kwargs['json']
+        self.assertEqual(body['provider'], 'aws')
+        self.assertEqual(body['regionName'], 'us-east-1')
+        self.assertEqual(body['deploymentType'], 'PRODUCTION')
+        self.assertIs(body['highAvailabilityTwoZones'], True)
+        self.assertIs(body['optInPreviewFeature'], False)
+        self.assertEqual(body['projectID'], 'proj-1')
+
+    def test_workspace_group_update_includes_deployment_type(self):
+        wg, mgr, _ = _make_workspace_group()
+        mgr._patch = MagicMock()
+        wg.refresh = MagicMock()
+
+        wg.update(deployment_type='NON-PRODUCTION', name='renamed')
+
+        body = mgr._patch.call_args.kwargs['json']
+        self.assertEqual(body['deploymentType'], 'NON-PRODUCTION')
+        self.assertEqual(body['name'], 'renamed')
+
+    def test_workspace_group_update_omits_unset_fields(self):
+        wg, mgr, _ = _make_workspace_group()
+        mgr._patch = MagicMock()
+        wg.refresh = MagicMock()
+
+        wg.update(name='renamed')
+
+        body = mgr._patch.call_args.kwargs['json']
+        self.assertNotIn('deploymentType', body)
+
+
+class TestJobsManagerScheduleDuration(unittest.TestCase):
+    """
+    Coverage for the staged ``max_allowed_execution_duration_in_minutes``
+    parameter on ``JobsManager.schedule``.
+    """
+
+    def _patch_post(self, mgr, response_obj):
+        post_response = MagicMock()
+        post_response.json.return_value = response_obj
+        mgr._post = MagicMock(return_value=post_response)
+        return post_response
+
+    def _fake_job_response(self):
+        return {
+            'jobID': 'job-1',
+            'name': 'j',
+            'description': None,
+            'enqueuedBy': 'me',
+            'createdAt': '2024-01-01T00:00:00Z',
+            'completedExecutionsCount': 0,
+            'jobMetadata': [],
+            'terminatedAt': None,
+            'executionConfig': {
+                'createSnapshot': True,
+                'notebookPath': '/x.ipynb',
+            },
+            'schedule': {'mode': 'Once'},
+            'targetConfig': None,
+        }
+
+    def test_duration_present_when_set(self):
+        from singlestoredb.management.v1.job import JobsManager
+        from singlestoredb.management.v1.job import Mode
+
+        ws_mgr = _make_workspace_manager()
+        jobs = JobsManager(ws_mgr)
+        self._patch_post(ws_mgr, self._fake_job_response())
+
+        with patch(
+            'singlestoredb.management.v1.job.Job.from_dict',
+            return_value='sentinel',
+        ):
+            jobs.schedule(
+                notebook_path='/x.ipynb',
+                mode=Mode.ONCE,
+                create_snapshot=True,
+                max_allowed_execution_duration_in_minutes=42,
+            )
+
+        body = ws_mgr._post.call_args.kwargs['json']
+        self.assertEqual(
+            body['executionConfig']['maxAllowedExecutionDurationInMinutes'],
+            42,
+        )
+
+    def test_duration_absent_when_unset(self):
+        from singlestoredb.management.v1.job import JobsManager
+        from singlestoredb.management.v1.job import Mode
+
+        ws_mgr = _make_workspace_manager()
+        jobs = JobsManager(ws_mgr)
+        self._patch_post(ws_mgr, self._fake_job_response())
+
+        with patch(
+            'singlestoredb.management.v1.job.Job.from_dict',
+            return_value='sentinel',
+        ):
+            jobs.schedule(
+                notebook_path='/x.ipynb',
+                mode=Mode.ONCE,
+                create_snapshot=True,
+            )
+
+        body = ws_mgr._post.call_args.kwargs['json']
+        self.assertNotIn(
+            'maxAllowedExecutionDurationInMinutes',
+            body['executionConfig'],
+        )
+
+
+class TestWorkspaceGroupRegionResolution(unittest.TestCase):
+    """
+    ``WorkspaceGroup.from_dict`` resolves its region through a fallback
+    ladder: match on ``regionID`` first, then on ``(region_name, provider)``
+    for regions that carry no ID, then the payload's own fields, then
+    ``<unknown>``.
+    """
+
+    def _region_without_id(self, name, provider, region_name):
+        from singlestoredb.management.v1.region import Region
+        return Region(
+            name=name, provider=provider, id=None, region_name=region_name,
+        )
+
+    def _wg_payload(self, **overrides):
+        obj = {
+            'name': 'test-group',
+            'workspaceGroupID': 'wsg-1',
+            'createdAt': '2024-01-01T00:00:00Z',
+            'regionID': 'region-uuid-1',
+            'regionName': 'us-west1',
+            'provider': 'GCP',
+        }
+        obj.update(overrides)
+        return obj
+
+    def test_resolves_by_region_name_and_provider_when_no_id(self):
+        from singlestoredb.management.v1.workspace import (
+            WorkspaceGroup, WorkspaceManager,
+        )
+        mgr = MagicMock(spec=WorkspaceManager)
+        mgr.regions = [
+            self._region_without_id('us-west1', 'GCP', 'us-west1'),
+            self._region_without_id('eu-central-1', 'AWS', 'eu-central-1'),
+        ]
+        wg = WorkspaceGroup.from_dict(self._wg_payload(), mgr)
+        self.assertEqual(wg.region.name, 'us-west1')
+        self.assertEqual(wg.region.provider, 'GCP')
+        self.assertEqual(wg.region.region_name, 'us-west1')
+
+    def test_match_by_id_wins(self):
+        from singlestoredb.management.v1.region import Region
+        from singlestoredb.management.v1.workspace import (
+            WorkspaceGroup, WorkspaceManager,
+        )
+        mgr = MagicMock(spec=WorkspaceManager)
+        mgr.regions = [
+            Region(
+                name='us-west1', provider='GCP',
+                id='region-uuid-1', region_name='us-west1',
+            ),
+        ]
+        wg = WorkspaceGroup.from_dict(self._wg_payload(), mgr)
+        self.assertEqual(wg.region.id, 'region-uuid-1')
+        self.assertEqual(wg.region.name, 'us-west1')
+
+    def test_no_match_falls_back_to_payload_fields(self):
+        from singlestoredb.management.v1.workspace import (
+            WorkspaceGroup, WorkspaceManager,
+        )
+        mgr = MagicMock(spec=WorkspaceManager)
+        mgr.regions = []
+        wg = WorkspaceGroup.from_dict(self._wg_payload(), mgr)
+        self.assertEqual(wg.region.name, 'us-west1')
+        self.assertEqual(wg.region.provider, 'GCP')
+        self.assertEqual(wg.region.id, 'region-uuid-1')
+        self.assertEqual(wg.region.region_name, 'us-west1')
+
+    def test_no_match_no_payload_fields_uses_unknown(self):
+        from singlestoredb.management.v1.workspace import (
+            WorkspaceGroup, WorkspaceManager,
+        )
+        mgr = MagicMock(spec=WorkspaceManager)
+        mgr.regions = []
+        obj = {
+            'name': 'test-group',
+            'workspaceGroupID': 'wsg-1',
+            'createdAt': '2024-01-01T00:00:00Z',
+        }
+        wg = WorkspaceGroup.from_dict(obj, mgr)
+        self.assertEqual(wg.region.name, '<unknown>')
+        self.assertEqual(wg.region.provider, '<unknown>')
+        self.assertIsNone(wg.region.id)
+
+
+class TestDateTimeParsingFixes(unittest.TestCase):
+    """
+    Regression test for commit 85faf724: ISO8601-Z timestamp parsing
+    on entities that go through ``to_datetime``.
+    """
+
+    def test_workspace_created_at_parsed(self):
+        from singlestoredb.management.v1.workspace import Workspace
+        mgr = _make_workspace_manager()
+        obj = {
+            'name': 'test-ws',
+            'workspaceID': 'ws-1',
+            'workspaceGroupID': 'wsg-1',
+            'size': 'S-00',
+            'state': 'Active',
+            'createdAt': '2024-03-15T12:30:45Z',
+            'lastResumedAt': '2024-03-16T08:00:00.123Z',
+        }
+        ws = Workspace.from_dict(obj, mgr)
+        self.assertIsInstance(ws.created_at, datetime.datetime)
+        self.assertEqual(ws.created_at.year, 2024)
+        self.assertEqual(ws.created_at.month, 3)
+        self.assertEqual(ws.created_at.day, 15)
+        self.assertEqual(ws.created_at.hour, 12)
+        self.assertIsInstance(ws.last_resumed_at, datetime.datetime)
+
+    def test_workspace_group_expires_at_parsed(self):
+        wg, _, _ = _make_workspace_group(
+            extra_obj={'expiresAt': '2025-06-30T23:59:59Z'},
+        )
+        self.assertIsInstance(wg.expires_at, datetime.datetime)
+        self.assertEqual(wg.expires_at.year, 2025)
+
+    def test_workspace_group_terminated_at_zero_returns_none(self):
+        """The sentinel 0001-01-01 timestamp must round-trip to None."""
+        wg, _, _ = _make_workspace_group(
+            extra_obj={'terminatedAt': '0001-01-01T00:00:00Z'},
+        )
+        self.assertIsNone(wg.terminated_at)

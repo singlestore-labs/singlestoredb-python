@@ -1,0 +1,1559 @@
+#!/usr/bin/env python
+"""
+SingleStoreDB Workspace Management (management API v1) -- **deprecated**.
+
+.. deprecated::
+   Use :mod:`singlestoredb.management.cluster`, where a deployment is the flat
+   :class:`~singlestoredb.management.cluster.Cluster` rather than a workspace
+   group containing workspaces. The replacements are:
+
+   ============================================  ====================
+   Deprecated                                    Use instead
+   ============================================  ====================
+   :func:`singlestoredb.manage_workspaces`       ``manage_clusters``
+   :class:`WorkspaceManager`                     ``ClusterManager``
+   :class:`WorkspaceGroup` + :class:`Workspace`  ``Cluster``
+   :class:`StarterWorkspace`                     ``StarterCluster``
+   :func:`get_workspace_group`                   ``get_cluster``
+   :func:`get_workspace`                         ``get_cluster``
+   :func:`get_stage`                             ``get_stage``
+   ============================================  ====================
+
+   :func:`get_workspace_group` and :func:`get_workspace` both collapse onto
+   ``get_cluster``, which reads ``SINGLESTOREDB_WORKSPACE`` alone and finds a
+   cluster ID in it, where the two functions here read
+   ``SINGLESTOREDB_WORKSPACE_GROUP`` and ``SINGLESTOREDB_WORKSPACE``
+   respectively. ``get_stage`` keeps its name and moves to the
+   version-neutral :mod:`singlestoredb.management`.
+"""
+from __future__ import annotations
+
+import datetime
+import io
+import os
+import re
+from typing import Any
+from typing import cast
+from typing import Dict
+from typing import List
+from typing import Literal
+from typing import Optional
+from typing import overload
+from typing import Union
+
+from .. import timing
+from ... import config
+from ... import connection
+from ...exceptions import ManagementError
+from ..billing import Billing as Billing
+from ..manager import Manager
+from ..region import Region
+from ..stage import StageObject as StageObject
+from ..utils import camel_to_snake_dict
+from ..utils import ensure_within
+from ..utils import from_datetime
+from ..utils import NamedList
+from ..utils import normalize_remote_path
+from ..utils import PathLike
+from ..utils import resolve_ignore_files
+from ..utils import snake_to_camel
+from ..utils import snake_to_camel_dict
+from ..utils import to_datetime
+from ..utils import ttl_property
+from ..utils import vars_to_str
+from .organization import Organization
+from .organization import Organizations as Organizations
+from .stage import Stage as Stage
+
+#: Base management API path for the shared-tier resource.
+SHAREDTIER_PATH = 'sharedtier/virtualWorkspaces'
+
+
+def get_organization() -> Organization:
+    """
+    Get the organization.
+
+    .. deprecated::
+       Call :func:`singlestoredb.management.get_organization`, which
+       dispatches on the ``management.version`` option.
+    """
+    from ..workspace import _manage_workspaces_v1
+    return _manage_workspaces_v1().organization
+
+
+def get_secret(name: str) -> Optional[str]:
+    """
+    Get a secret from the organization.
+
+    .. deprecated::
+       Call :func:`singlestoredb.management.get_secret`, which dispatches on
+       the ``management.version`` option.
+    """
+    return get_organization().get_secret(name).value
+
+
+def get_workspace_group(
+    workspace_group: Optional[Union[WorkspaceGroup, str]] = None,
+) -> WorkspaceGroup:
+    """
+    Get the workspace group.
+
+    .. deprecated::
+       Use :func:`singlestoredb.management.cluster.get_cluster`.
+
+    Falls back to ``SINGLESTOREDB_WORKSPACE_GROUP``, the notebook environment's
+    group ID. :func:`singlestoredb.management.cluster.get_cluster` ignores that
+    variable and reads ``SINGLESTOREDB_WORKSPACE`` instead.
+    """
+    from ..workspace import _manage_workspaces_v1
+    if isinstance(workspace_group, WorkspaceGroup):
+        return workspace_group
+    elif workspace_group:
+        return _manage_workspaces_v1().workspace_groups[workspace_group]
+    elif 'SINGLESTOREDB_WORKSPACE_GROUP' in os.environ:
+        return _manage_workspaces_v1().workspace_groups[
+            os.environ['SINGLESTOREDB_WORKSPACE_GROUP']
+        ]
+    raise RuntimeError('no workspace group specified')
+
+
+def get_stage(
+    workspace_group: Optional[Union[WorkspaceGroup, str]] = None,
+) -> Stage:
+    """
+    Get the stage for the workspace group.
+
+    .. deprecated::
+       Call :func:`singlestoredb.management.get_stage`, which dispatches on
+       the ``management.version`` option.
+    """
+    return get_workspace_group(workspace_group).stage
+
+
+def get_workspace(
+    workspace_group: Optional[Union[WorkspaceGroup, str]] = None,
+    workspace: Optional[Union[Workspace, str]] = None,
+) -> Workspace:
+    """
+    Get a workspace within a workspace group.
+
+    .. deprecated::
+       Use :func:`singlestoredb.management.cluster.get_cluster`, which reads
+       the same ``SINGLESTOREDB_WORKSPACE`` variable but finds a cluster ID in
+       it.
+
+    Falls back to ``SINGLESTOREDB_WORKSPACE``, the notebook environment's name
+    for the current deployment, whose value here is a workspace ID.
+    """
+    if isinstance(workspace, Workspace):
+        return workspace
+    wg = get_workspace_group(workspace_group)
+    if workspace:
+        return wg.workspaces[workspace]
+    elif 'SINGLESTOREDB_WORKSPACE' in os.environ:
+        return wg.workspaces[
+            os.environ['SINGLESTOREDB_WORKSPACE']
+        ]
+    raise RuntimeError('no workspace group specified')
+
+
+class Workspace:
+    """
+    SingleStoreDB workspace definition.
+
+    .. deprecated::
+       Use :class:`singlestoredb.management.cluster.Cluster`, which is flat:
+       it carries the size and state this class holds together with the region
+       and Stage that :class:`WorkspaceGroup` held, so there is no separate
+       group object to look it up through.
+
+    This object is not instantiated directly. It is used in the results
+    of API calls on the :class:`WorkspaceManager`. Workspaces are created using
+    :meth:`WorkspaceManager.create_workspace`, or existing workspaces are
+    accessed by either :attr:`WorkspaceManager.workspaces` or by calling
+    :meth:`WorkspaceManager.get_workspace`.
+
+    See Also
+    --------
+    :meth:`WorkspaceManager.create_workspace`
+    :meth:`WorkspaceManager.get_workspace`
+    :attr:`WorkspaceManager.workspaces`
+
+    """
+
+    name: str
+    id: str
+    group_id: str
+    size: str
+    state: str
+    created_at: Optional[datetime.datetime]
+    terminated_at: Optional[datetime.datetime]
+    endpoint: Optional[str]
+    auto_suspend: Optional[Dict[str, Any]]
+    cache_config: Optional[float]
+    deployment_type: Optional[str]
+    resume_attachments: Optional[List[Dict[str, Any]]]
+    scaling_progress: Optional[int]
+    last_resumed_at: Optional[datetime.datetime]
+    auto_scale: Optional[Dict[str, Any]]
+    kai_enabled: Optional[bool]
+    scale_factor: Optional[float]
+
+    def __init__(
+        self,
+        name: str,
+        workspace_id: str,
+        workspace_group: Union[str, 'WorkspaceGroup'],
+        size: str,
+        state: str,
+        created_at: Union[str, datetime.datetime],
+        terminated_at: Optional[Union[str, datetime.datetime]] = None,
+        endpoint: Optional[str] = None,
+        auto_suspend: Optional[Dict[str, Any]] = None,
+        cache_config: Optional[float] = None,
+        deployment_type: Optional[str] = None,
+        resume_attachments: Optional[List[Dict[str, Any]]] = None,
+        scaling_progress: Optional[int] = None,
+        last_resumed_at: Optional[Union[str, datetime.datetime]] = None,
+        auto_scale: Optional[Dict[str, Any]] = None,
+        kai_enabled: Optional[bool] = None,
+        scale_factor: Optional[float] = None,
+    ):
+        #: Name of the workspace
+        self.name = name
+
+        #: Unique ID of the workspace
+        self.id = workspace_id
+
+        #: Unique ID of the workspace group
+        if isinstance(workspace_group, WorkspaceGroup):
+            self.group_id = workspace_group.id
+        else:
+            self.group_id = workspace_group
+
+        #: Size of the workspace in workspace size notation (S-00, S-1, etc.)
+        self.size = size
+
+        #: State of the workspace: PendingCreation, Transitioning, Active,
+        #: Terminated, Suspended, Resuming, Failed
+        self.state = state.strip()
+
+        #: Timestamp of when the workspace was created
+        self.created_at = to_datetime(created_at)
+
+        #: Timestamp of when the workspace was terminated
+        self.terminated_at = to_datetime(terminated_at)
+
+        #: Hostname (or IP address) of the workspace database server
+        self.endpoint = endpoint
+
+        #: Current auto-suspend settings
+        self.auto_suspend = camel_to_snake_dict(auto_suspend)
+
+        #: Multiplier for the persistent cache
+        self.cache_config = cache_config
+
+        #: Deployment type of the workspace
+        self.deployment_type = deployment_type
+
+        #: Database attachments
+        self.resume_attachments = [
+            camel_to_snake_dict(x)  # type: ignore
+            for x in resume_attachments or []
+            if x is not None
+        ]
+
+        #: Current progress percentage for scaling the workspace
+        self.scaling_progress = scaling_progress
+
+        #: Timestamp when workspace was last resumed
+        self.last_resumed_at = to_datetime(last_resumed_at)
+
+        #: Auto-scale settings for the workspace
+        self.auto_scale = camel_to_snake_dict(auto_scale)
+
+        #: Whether Kai is enabled on this workspace
+        self.kai_enabled = kai_enabled
+
+        #: Current scale factor for the workspace
+        self.scale_factor = scale_factor
+
+        self._manager: Optional[WorkspaceManager] = None
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
+    @classmethod
+    def from_dict(cls, obj: Dict[str, Any], manager: 'WorkspaceManager') -> 'Workspace':
+        """
+        Construct a Workspace from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+        manager : WorkspaceManager, optional
+            The WorkspaceManager the Workspace belongs to
+
+        Returns
+        -------
+        :class:`Workspace`
+
+        """
+        out = cls(
+            name=obj['name'],
+            workspace_id=obj['workspaceID'],
+            workspace_group=obj['workspaceGroupID'],
+            size=obj.get('size', 'Unknown'),
+            state=obj['state'],
+            created_at=obj['createdAt'],
+            terminated_at=obj.get('terminatedAt'),
+            endpoint=obj.get('endpoint'),
+            auto_suspend=obj.get('autoSuspend'),
+            cache_config=obj.get('cacheConfig'),
+            deployment_type=obj.get('deploymentType'),
+            last_resumed_at=obj.get('lastResumedAt'),
+            resume_attachments=obj.get('resumeAttachments'),
+            scaling_progress=obj.get('scalingProgress'),
+            auto_scale=obj.get('autoScale'),
+            kai_enabled=obj.get('kaiEnabled'),
+            scale_factor=obj.get('scaleFactor'),
+        )
+        out._manager = manager
+        return out
+
+    def update(
+        self,
+        auto_suspend: Optional[Dict[str, Any]] = None,
+        cache_config: Optional[float] = None,
+        deployment_type: Optional[str] = None,
+        size: Optional[str] = None,
+        auto_scale: Optional[Dict[str, Any]] = None,
+        enable_kai: Optional[bool] = None,
+        scale_factor: Optional[float] = None,
+    ) -> None:
+        """
+        Update the workspace definition.
+
+        Parameters
+        ----------
+        auto_suspend : Dict[str, Any], optional
+            Auto-suspend mode for the workspace: IDLE, SCHEDULED, DISABLED
+        cache_config : float, optional
+            Specifies the multiplier for the persistent cache associated
+            with the workspace. If specified, it enables the cache configuration
+            multiplier. It can have one of the following values: 1, 2, or 4.
+        deployment_type : str, optional
+            The deployment type that will be applied to all the workspaces
+            within the group
+        size : str, optional
+            Size of the workspace (in workspace size notation), such as "S-1".
+        auto_scale : Dict[str, Any], optional
+            Auto-scale settings for the workspace.
+        enable_kai : bool, optional
+            Whether to enable SingleStore Kai on this workspace.
+        scale_factor : float, optional
+            Scale factor for the workspace.
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        data = {
+            k: v for k, v in dict(
+                autoSuspend=snake_to_camel_dict(auto_suspend),
+                cacheConfig=cache_config,
+                deploymentType=deployment_type,
+                size=size,
+                autoScale=snake_to_camel_dict(auto_scale),
+                enableKai=enable_kai,
+                scaleFactor=scale_factor,
+            ).items() if v is not None
+        }
+        self._manager._patch(f'workspaces/{self.id}', json=data)
+        self.refresh()
+
+    def refresh(self) -> Workspace:
+        """Update the object to the current state."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        new_obj = self._manager.get_workspace(self.id)
+        for name, value in vars(new_obj).items():
+            setattr(self, name, value)
+        return self
+
+    def terminate(
+        self,
+        wait_on_terminated: bool = False,
+        wait_interval: int = 10,
+        wait_timeout: int = 600,
+        force: bool = False,
+    ) -> None:
+        """
+        Terminate the workspace.
+
+        Parameters
+        ----------
+        wait_on_terminated : bool, optional
+            Wait for the workspace to go into 'Terminated' mode before returning
+        wait_interval : int, optional
+            Number of seconds between each server check
+        wait_timeout : int, optional
+            Total number of seconds to check server before giving up
+        force : bool, optional
+            Should the workspace group be terminated even if it has workspaces?
+
+        Raises
+        ------
+        ManagementError
+            If timeout is reached
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        force_str = 'true' if force else 'false'
+        self._manager._delete(f'workspaces/{self.id}?force={force_str}')
+        if wait_on_terminated:
+            self._manager._wait_on_state(
+                self._manager.get_workspace(self.id),
+                'Terminated', interval=wait_interval, timeout=wait_timeout,
+            )
+            self.refresh()
+
+    def connect(self, **kwargs: Any) -> connection.Connection:
+        """
+        Create a connection to the database server for this workspace.
+
+        Parameters
+        ----------
+        **kwargs : keyword-arguments, optional
+            Parameters to the SingleStoreDB `connect` function except host
+            and port which are supplied by the workspace object
+
+        Returns
+        -------
+        :class:`Connection`
+
+        """
+        if not self.endpoint:
+            raise ManagementError(
+                msg='An endpoint has not been set in this workspace configuration',
+            )
+        kwargs['host'] = self.endpoint
+        return connection.connect(**kwargs)
+
+    def suspend(
+        self,
+        wait_on_suspended: bool = False,
+        wait_interval: int = 20,
+        wait_timeout: int = 600,
+    ) -> None:
+        """
+        Suspend the workspace.
+
+        Parameters
+        ----------
+        wait_on_suspended : bool, optional
+            Wait for the workspace to go into 'Suspended' mode before returning
+        wait_interval : int, optional
+            Number of seconds between each server check
+        wait_timeout : int, optional
+            Total number of seconds to check server before giving up
+
+        Raises
+        ------
+        ManagementError
+            If timeout is reached
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        self._manager._post(f'workspaces/{self.id}/suspend')
+        if wait_on_suspended:
+            self._manager._wait_on_state(
+                self._manager.get_workspace(self.id),
+                'Suspended', interval=wait_interval, timeout=wait_timeout,
+            )
+            self.refresh()
+
+    def resume(
+        self,
+        disable_auto_suspend: bool = False,
+        wait_on_resumed: bool = False,
+        wait_interval: int = 20,
+        wait_timeout: int = 600,
+    ) -> None:
+        """
+        Resume the workspace.
+
+        Parameters
+        ----------
+        disable_auto_suspend : bool, optional
+            Should auto-suspend be disabled?
+        wait_on_resumed : bool, optional
+            Wait for the workspace to go into 'Resumed' or 'Active' mode before returning
+        wait_interval : int, optional
+            Number of seconds between each server check
+        wait_timeout : int, optional
+            Total number of seconds to check server before giving up
+
+        Raises
+        ------
+        ManagementError
+            If timeout is reached
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        self._manager._post(
+            f'workspaces/{self.id}/resume',
+            json=dict(disableAutoSuspend=disable_auto_suspend),
+        )
+        if wait_on_resumed:
+            self._manager._wait_on_state(
+                self._manager.get_workspace(self.id),
+                ['Resumed', 'Active'], interval=wait_interval, timeout=wait_timeout,
+            )
+            self.refresh()
+
+
+class WorkspaceGroup:
+    """
+    SingleStoreDB workspace group definition.
+
+    .. deprecated::
+       Use :class:`singlestoredb.management.cluster.Cluster`. It has no
+       container resource: what this class held -- region, firewall ranges,
+       Stage, the workspaces inside it -- belongs to the cluster itself, and
+       :meth:`ClusterManager.create_cluster` replaces the two-step
+       create-group-then-create-workspace dance. Grouping is expressed by a
+       :class:`~singlestoredb.management.cluster.Project` instead, which is an
+       organizational unit rather than a deployment parent.
+
+    This object is not instantiated directly. It is used in the results
+    of API calls on the :class:`WorkspaceManager`. Workspace groups are created using
+    :meth:`WorkspaceManager.create_workspace_group`, or existing workspace groups are
+    accessed by either :attr:`WorkspaceManager.workspace_groups` or by calling
+    :meth:`WorkspaceManager.get_workspace_group`.
+
+    See Also
+    --------
+    :meth:`WorkspaceManager.create_workspace_group`
+    :meth:`WorkspaceManager.get_workspace_group`
+    :attr:`WorkspaceManager.workspace_groups`
+
+    """
+
+    name: str
+    id: str
+    created_at: Optional[datetime.datetime]
+    region: Optional[Region]
+    firewall_ranges: List[str]
+    terminated_at: Optional[datetime.datetime]
+    allow_all_traffic: bool
+    deployment_type: Optional[str]
+    expires_at: Optional[datetime.datetime]
+    high_availability_two_zones: Optional[bool]
+    opt_in_preview_feature: Optional[bool]
+    outbound_allow_list: Optional[str]
+    project_id: Optional[str]
+    project_name: Optional[str]
+    smart_dr_status: Optional[str]
+    state: Optional[str]
+    update_window: Optional[Dict[str, Any]]
+    provider: Optional[str]
+    region_name: Optional[str]
+
+    def __init__(
+        self,
+        name: str,
+        id: str,
+        created_at: Union[str, datetime.datetime],
+        region: Optional[Region],
+        firewall_ranges: List[str],
+        terminated_at: Optional[Union[str, datetime.datetime]],
+        allow_all_traffic: Optional[bool],
+        deployment_type: Optional[str] = None,
+        expires_at: Optional[Union[str, datetime.datetime]] = None,
+        high_availability_two_zones: Optional[bool] = None,
+        opt_in_preview_feature: Optional[bool] = None,
+        outbound_allow_list: Optional[str] = None,
+        project_id: Optional[str] = None,
+        project_name: Optional[str] = None,
+        smart_dr_status: Optional[str] = None,
+        state: Optional[str] = None,
+        update_window: Optional[Dict[str, Any]] = None,
+        provider: Optional[str] = None,
+        region_name: Optional[str] = None,
+    ):
+        #: Name of the workspace group
+        self.name = name
+
+        #: Unique ID of the workspace group
+        self.id = id
+
+        #: Timestamp of when the workspace group was created
+        self.created_at = to_datetime(created_at)
+
+        #: Region of the workspace group (see :class:`Region`)
+        self.region = region
+
+        #: List of allowed incoming IP addresses / ranges
+        self.firewall_ranges = firewall_ranges
+
+        #: Timestamp of when the workspace group was terminated
+        self.terminated_at = to_datetime(terminated_at)
+
+        #: Should all traffic be allowed?
+        self.allow_all_traffic = allow_all_traffic or False
+
+        #: Deployment type of the workspace group (PRODUCTION | NON-PRODUCTION)
+        self.deployment_type = deployment_type
+
+        #: Timestamp of when the workspace group will expire
+        self.expires_at = to_datetime(expires_at)
+
+        #: Whether high availability across two zones is enabled
+        self.high_availability_two_zones = high_availability_two_zones
+
+        #: Whether preview features are opted in
+        self.opt_in_preview_feature = opt_in_preview_feature
+
+        #: Account ID for outbound connections
+        self.outbound_allow_list = outbound_allow_list
+
+        #: Project ID associated with the workspace group
+        self.project_id = project_id
+
+        #: Project name associated with the workspace group
+        self.project_name = project_name
+
+        #: SmartDR status of the workspace group (ACTIVE | STANDBY)
+        self.smart_dr_status = smart_dr_status
+
+        #: State of the workspace group (ACTIVE | PENDING | FAILED | TERMINATED)
+        self.state = state
+
+        #: Update window settings: dict(day=0-6, hour=0-23)
+        self.update_window = update_window
+
+        #: Cloud provider as returned by the API (raw)
+        self.provider = provider
+
+        #: Cloud provider region name as returned by the API (raw)
+        self.region_name = region_name
+
+        self._manager: Optional[WorkspaceManager] = None
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
+    @classmethod
+    def from_dict(
+        cls, obj: Dict[str, Any], manager: 'WorkspaceManager',
+    ) -> 'WorkspaceGroup':
+        """
+        Construct a WorkspaceGroup from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+        manager : WorkspaceManager, optional
+            The WorkspaceManager the WorkspaceGroup belongs to
+
+        Returns
+        -------
+        :class:`WorkspaceGroup`
+
+        """
+        region_id = obj.get('regionID')
+        region_name = obj.get('regionName')
+        provider = obj.get('provider')
+        region = None
+        if region_id is not None:
+            region = next(
+                (x for x in manager.regions if x.id == region_id), None,
+            )
+        if region is None and region_name is not None:
+            region = next(
+                (
+                    x for x in manager.regions
+                    if x.region_name == region_name and x.provider == provider
+                ),
+                None,
+            )
+        if region is None:
+            region = Region(
+                name=region_name or '<unknown>',
+                provider=provider or '<unknown>',
+                id=region_id,
+                region_name=region_name,
+            )
+        out = cls(
+            name=obj['name'],
+            id=obj['workspaceGroupID'],
+            created_at=obj['createdAt'],
+            region=region,
+            firewall_ranges=obj.get('firewallRanges', []),
+            terminated_at=obj.get('terminatedAt'),
+            allow_all_traffic=obj.get('allowAllTraffic'),
+            deployment_type=obj.get('deploymentType'),
+            expires_at=obj.get('expiresAt'),
+            high_availability_two_zones=obj.get('highAvailabilityTwoZones'),
+            opt_in_preview_feature=obj.get('optInPreviewFeature'),
+            outbound_allow_list=obj.get('outboundAllowList'),
+            project_id=obj.get('projectID'),
+            project_name=obj.get('projectName'),
+            smart_dr_status=obj.get('smartDRStatus'),
+            state=obj.get('state'),
+            update_window=obj.get('updateWindow'),
+            provider=obj.get('provider'),
+            region_name=obj.get('regionName'),
+        )
+        out._manager = manager
+        return out
+
+    @property
+    def organization(self) -> Organization:
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        return self._manager.organization
+
+    @property
+    def stage(self) -> Stage:
+        """Stage manager."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        return Stage(self.id, self._manager)
+
+    stages = stage
+
+    def refresh(self) -> 'WorkspaceGroup':
+        """Update the object to the current state."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        new_obj = self._manager.get_workspace_group(self.id)
+        for name, value in vars(new_obj).items():
+            setattr(self, name, value)
+        return self
+
+    def update(
+        self,
+        name: Optional[str] = None,
+        firewall_ranges: Optional[List[str]] = None,
+        admin_password: Optional[str] = None,
+        expires_at: Optional[str] = None,
+        allow_all_traffic: Optional[bool] = None,
+        update_window: Optional[Dict[str, int]] = None,
+        deployment_type: Optional[str] = None,
+    ) -> None:
+        """
+        Update the workspace group definition.
+
+        Parameters
+        ----------
+        name : str, optional
+            Name of the workspace group
+        firewall_ranges : list[str], optional
+            List of allowed CIDR ranges. An empty list indicates that all
+            inbound requests are allowed.
+        admin_password : str, optional
+            Admin password for the workspace group. If no password is supplied,
+            a password will be generated and retured in the response.
+        expires_at : str, optional
+            The timestamp of when the workspace group will expire.
+            If the expiration time is not specified,
+            the workspace group will have no expiration time.
+            At expiration, the workspace group is terminated and all the data is lost.
+            Expiration time can be specified as a timestamp or duration.
+            Example: "2021-01-02T15:04:05Z07:00", "2021-01-02", "3h30m"
+        allow_all_traffic : bool, optional
+            Allow all traffic to the workspace group
+        update_window : Dict[str, int], optional
+            Specify the day and hour of an update window: dict(day=0-6, hour=0-23)
+        deployment_type : str, optional
+            The deployment type that will be applied to all the workspaces
+            within the group (PRODUCTION | NON-PRODUCTION)
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        data = {
+            k: v for k, v in dict(
+                name=name,
+                firewallRanges=firewall_ranges,
+                adminPassword=admin_password,
+                expiresAt=expires_at,
+                allowAllTraffic=allow_all_traffic,
+                updateWindow=snake_to_camel_dict(update_window),
+                deploymentType=deployment_type,
+            ).items() if v is not None
+        }
+        self._manager._patch(f'workspaceGroups/{self.id}', json=data)
+        self.refresh()
+
+    def terminate(
+        self, force: bool = False,
+        wait_on_terminated: bool = False,
+        wait_interval: int = 10,
+        wait_timeout: int = 600,
+    ) -> None:
+        """
+        Terminate the workspace group.
+
+        Parameters
+        ----------
+        force : bool, optional
+            Terminate a workspace group even if it has active workspaces
+        wait_on_terminated : bool, optional
+            Wait for the workspace group to go into 'Terminated' mode before returning
+        wait_interval : int, optional
+            Number of seconds between each server check
+        wait_timeout : int, optional
+            Total number of seconds to check server before giving up
+
+        Raises
+        ------
+        ManagementError
+            If timeout is reached
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        self._manager._delete(f'workspaceGroups/{self.id}', params=dict(force=force))
+        if wait_on_terminated:
+            remaining = float(wait_timeout)
+            while True:
+                started_at = timing.now()
+                self.refresh()
+                if self.terminated_at is not None:
+                    break
+                if remaining <= 0:
+                    raise ManagementError(
+                        msg='Exceeded waiting time for WorkspaceGroup to terminate',
+                    )
+                timing.sleep(wait_interval, 'workspace group terminated')
+                # Charged by measured time, so the refresh above counts against
+                # the timeout too. See timing.poll_cost.
+                remaining -= timing.poll_cost(started_at, wait_interval)
+
+    def create_workspace(
+        self,
+        name: str,
+        size: Optional[str] = None,
+        auto_suspend: Optional[Dict[str, Any]] = None,
+        cache_config: Optional[float] = None,
+        enable_kai: Optional[bool] = None,
+        wait_on_active: bool = False,
+        wait_interval: int = 10,
+        wait_timeout: int = 600,
+        auto_scale: Optional[Dict[str, Any]] = None,
+        scale_factor: Optional[float] = None,
+    ) -> Workspace:
+        """
+        Create a new workspace.
+
+        Parameters
+        ----------
+        name : str
+            Name of the workspace
+        size : str, optional
+            Workspace size in workspace size notation (S-00, S-1, etc.)
+        auto_suspend : Dict[str, Any], optional
+            Auto suspend settings for the workspace. If this field is not
+            provided, no settings will be enabled.
+        cache_config : float, optional
+            Specifies the multiplier for the persistent cache associated
+            with the workspace. If specified, it enables the cache configuration
+            multiplier. It can have one of the following values: 1, 2, or 4.
+        enable_kai : bool, optional
+            Whether to create a SingleStore Kai-enabled workspace
+        wait_on_active : bool, optional
+            Wait for the workspace to be active before returning
+        wait_timeout : int, optional
+            Maximum number of seconds to wait before raising an exception
+            if wait=True
+        wait_interval : int, optional
+            Number of seconds between each polling interval
+        auto_scale : Dict[str, Any], optional
+            Auto-scale settings for the workspace.
+        scale_factor : float, optional
+            Scale factor for the workspace.
+
+        Returns
+        -------
+        :class:`Workspace`
+
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        out = self._manager.create_workspace(
+            name=name,
+            workspace_group=self,
+            size=size,
+            auto_suspend=snake_to_camel_dict(auto_suspend),
+            cache_config=cache_config,
+            enable_kai=enable_kai,
+            wait_on_active=wait_on_active,
+            wait_interval=wait_interval,
+            wait_timeout=wait_timeout,
+            auto_scale=snake_to_camel_dict(auto_scale),
+            scale_factor=scale_factor,
+        )
+
+        return out
+
+    @property
+    def workspaces(self) -> NamedList[Workspace]:
+        """Return a list of available workspaces."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get('workspaces', params=dict(workspaceGroupID=self.id))
+        return NamedList(
+            [Workspace.from_dict(item, self._manager) for item in res.json()],
+        )
+
+
+class StarterWorkspace:
+    """
+    SingleStoreDB starter workspace definition.
+
+    .. deprecated::
+       Use :class:`singlestoredb.management.cluster.StarterCluster`.
+
+    This object is not instantiated directly. It is used in the results
+    of API calls on the :class:`WorkspaceManager`. Existing starter workspaces are
+    accessed by either :attr:`WorkspaceManager.starter_workspaces` or by calling
+    :meth:`WorkspaceManager.get_starter_workspace`.
+
+    See Also
+    --------
+    :meth:`WorkspaceManager.get_starter_workspace`
+    :meth:`WorkspaceManager.create_starter_workspace`
+    :meth:`WorkspaceManager.terminate_starter_workspace`
+    :meth:`WorkspaceManager.create_starter_workspace_user`
+    :attr:`WorkspaceManager.starter_workspaces`
+
+    """
+
+    name: str
+    id: str
+    database_name: str
+    endpoint: Optional[str]
+    mysql_dml_port: Optional[int]
+    websocket_port: Optional[int]
+    project_id: Optional[str]
+
+    def __init__(
+        self,
+        name: str,
+        id: str,
+        database_name: str,
+        endpoint: Optional[str] = None,
+        mysql_dml_port: Optional[int] = None,
+        websocket_port: Optional[int] = None,
+        project_id: Optional[str] = None,
+    ):
+        #: Name of the starter workspace
+        self.name = name
+
+        #: Unique ID of the starter workspace
+        self.id = id
+
+        #: Name of the database associated with the starter workspace
+        self.database_name = database_name
+
+        #: Endpoint to connect to the starter workspace. The endpoint is in the form
+        #: of ``hostname:port``
+        self.endpoint = endpoint
+
+        #: MySQL DML port for the starter workspace
+        self.mysql_dml_port = mysql_dml_port
+
+        #: WebSocket port for the starter workspace
+        self.websocket_port = websocket_port
+
+        #: Project ID associated with the starter workspace
+        self.project_id = project_id
+
+        self._manager: Optional[WorkspaceManager] = None
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return vars_to_str(self)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return str(self)
+
+    @classmethod
+    def from_dict(
+        cls, obj: Dict[str, Any], manager: 'WorkspaceManager',
+    ) -> 'StarterWorkspace':
+        """
+        Construct a StarterWorkspace from a dictionary of values.
+
+        Parameters
+        ----------
+        obj : dict
+            Dictionary of values
+        manager : WorkspaceManager, optional
+            The WorkspaceManager the StarterWorkspace belongs to
+
+        Returns
+        -------
+        :class:`StarterWorkspace`
+
+        """
+        out = cls(
+            name=obj['name'],
+            id=obj['virtualWorkspaceID'],
+            database_name=obj['databaseName'],
+            endpoint=obj.get('endpoint'),
+            mysql_dml_port=obj.get('mysqlDmlPort'),
+            websocket_port=obj.get('websocketPort'),
+            project_id=obj.get('projectID'),
+        )
+        out._manager = manager
+        return out
+
+    def connect(self, **kwargs: Any) -> connection.Connection:
+        """
+        Create a connection to the database server for this starter workspace.
+
+        Parameters
+        ----------
+        **kwargs : keyword-arguments, optional
+            Parameters to the SingleStoreDB `connect` function except host
+            and port which are supplied by the starter workspace object
+
+        Returns
+        -------
+        :class:`Connection`
+
+        """
+        if not self.endpoint:
+            raise ManagementError(
+                msg='An endpoint has not been set in this '
+                    'starter workspace configuration',
+            )
+
+        kwargs['host'] = self.endpoint
+        kwargs['database'] = self.database_name
+
+        return connection.connect(**kwargs)
+
+    def terminate(self) -> None:
+        """Terminate the starter workspace."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        self._manager._delete(f'{SHAREDTIER_PATH}/{self.id}')
+
+    def refresh(self) -> StarterWorkspace:
+        """Update the object to the current state."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        new_obj = self._manager.get_starter_workspace(self.id)
+        for name, value in vars(new_obj).items():
+            setattr(self, name, value)
+        return self
+
+    @property
+    def organization(self) -> Organization:
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        return self._manager.organization
+
+    @property
+    def stage(self) -> Stage:
+        """Stage manager."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        return Stage(self.id, self._manager)
+
+    stages = stage
+
+    @property
+    def starter_workspaces(self) -> NamedList['StarterWorkspace']:
+        """Return a list of available starter workspaces."""
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+        res = self._manager._get(SHAREDTIER_PATH)
+        return NamedList(
+            [type(self).from_dict(item, self._manager) for item in res.json()],
+        )
+
+    def create_user(
+        self,
+        username: str,
+        password: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """
+        Create a new user for this starter workspace.
+
+        Parameters
+        ----------
+        username : str
+            The starter workspace user name to connect the new user to the database
+        password : str, optional
+            Password for the new user. If not provided, a password will be
+            auto-generated by the system.
+
+        Returns
+        -------
+        Dict[str, str]
+            Dictionary containing 'userID' and 'password' of the created user
+
+        Raises
+        ------
+        ManagementError
+            If no workspace manager is associated with this object.
+        """
+        if self._manager is None:
+            raise ManagementError(
+                msg='No workspace manager is associated with this object.',
+            )
+
+        payload = {
+            'userName': username,
+        }
+        if password is not None:
+            payload['password'] = password
+
+        res = self._manager._post(
+            f'{SHAREDTIER_PATH}/{self.id}/users',
+            json=payload,
+        )
+
+        response_data = res.json()
+        user_id = response_data.get('userID')
+        if not user_id:
+            raise ManagementError(msg='No userID returned from API')
+
+        # Return the password provided by user or generated by API
+        returned_password = password if password is not None \
+            else response_data.get('password')
+        if not returned_password:
+            raise ManagementError(msg='No password available from API response')
+
+        return {
+            'user_id': user_id,
+            'password': returned_password,
+        }
+
+
+class WorkspaceManager(Manager):
+    """
+    SingleStoreDB workspace manager.
+
+    .. deprecated::
+       Use :class:`singlestoredb.management.cluster.ClusterManager`, via
+       :func:`singlestoredb.manage_clusters`. ``manage_workspaces()`` warns
+       and requires ``version='v1'``, since that is not what the
+       ``management.version`` option defaults to.
+
+    This class should be instantiated using :func:`singlestoredb.manage_workspaces`.
+
+    Parameters
+    ----------
+    access_token : str, optional
+        The API key or other access token for the workspace management API
+    version : str, optional
+        Version of the API to use
+    base_url : str, optional
+        Base URL of the workspace management API
+
+    See Also
+    --------
+    :func:`singlestoredb.manage_workspaces`
+
+    """
+
+    #: Workspace management API version if none is specified. Workspaces are
+    #: served by v1 alone, so this is a literal rather than a reading of the
+    #: ``management.version`` option.
+    default_version = 'v1'
+
+    #: Base URL if none is specified.
+    default_base_url = config.get_option('management.base_url') \
+        or 'https://api.singlestore.com'
+
+    #: Object type
+    obj_type = 'workspace'
+
+    @property
+    def workspace_groups(self) -> NamedList[WorkspaceGroup]:
+        """Return a list of available workspace groups."""
+        res = self._get('workspaceGroups')
+        return NamedList([WorkspaceGroup.from_dict(item, self) for item in res.json()])
+
+    @property
+    def starter_workspaces(self) -> NamedList[StarterWorkspace]:
+        """Return a list of available starter workspaces."""
+        res = self._get(SHAREDTIER_PATH)
+        return NamedList([StarterWorkspace.from_dict(item, self) for item in res.json()])
+
+    @property
+    def organizations(self) -> Organizations:
+        """Return the organizations."""
+        return Organizations(self)
+
+    @property
+    def organization(self) -> Organization:
+        """ Return the current organization."""
+        return self.organizations.current
+
+    @property
+    def billing(self) -> Billing:
+        """Return the current billing information."""
+        return Billing(self)
+
+    @ttl_property(datetime.timedelta(hours=1))
+    def regions(self) -> NamedList[Region]:
+        """Return a list of available regions."""
+        res = self._get('regions')
+        return NamedList([Region.from_dict(item, self) for item in res.json()])
+
+    @ttl_property(datetime.timedelta(hours=1))
+    def shared_tier_regions(self) -> NamedList[Region]:
+        """Return a list of regions that support shared tier workspaces."""
+        res = self._get('regions/sharedtier')
+        return NamedList(
+            [Region.from_dict(item, self) for item in res.json()],
+        )
+
+    def create_workspace_group(
+        self,
+        name: str,
+        region: Union[str, Region],
+        firewall_ranges: List[str],
+        admin_password: Optional[str] = None,
+        backup_bucket_kms_key_id: Optional[str] = None,
+        data_bucket_kms_key_id: Optional[str] = None,
+        expires_at: Optional[str] = None,
+        smart_dr: Optional[bool] = None,
+        allow_all_traffic: Optional[bool] = None,
+        update_window: Optional[Dict[str, int]] = None,
+        provider: Optional[str] = None,
+        region_name: Optional[str] = None,
+        deployment_type: Optional[str] = None,
+        high_availability_two_zones: Optional[bool] = None,
+        opt_in_preview_feature: Optional[bool] = None,
+        project_id: Optional[str] = None,
+    ) -> WorkspaceGroup:
+        """
+        Create a new workspace group.
+
+        Parameters
+        ----------
+        name : str
+            Name of the workspace group
+        region : str or Region
+            ID of the region where the workspace group should be created
+        firewall_ranges : list[str]
+            List of allowed CIDR ranges. An empty list indicates that all
+            inbound requests are allowed.
+        admin_password : str, optional
+            Admin password for the workspace group. If no password is supplied,
+            a password will be generated and retured in the response.
+        backup_bucket_kms_key_id : str, optional
+            Specifies the KMS key ID associated with the backup bucket.
+            If specified, enables Customer-Managed Encryption Keys (CMEK)
+            encryption for the backup bucket of the workspace group.
+            This feature is only supported in workspace groups deployed in AWS.
+        data_bucket_kms_key_id : str, optional
+            Specifies the KMS key ID associated with the data bucket.
+            If specified, enables Customer-Managed Encryption Keys (CMEK)
+            encryption for the data bucket and Amazon Elastic Block Store
+            (EBS) volumes of the workspace group. This feature is only supported
+            in workspace groups deployed in AWS.
+        expires_at : str, optional
+            The timestamp of when the workspace group will expire.
+            If the expiration time is not specified,
+            the workspace group will have no expiration time.
+            At expiration, the workspace group is terminated and all the data is lost.
+            Expiration time can be specified as a timestamp or duration.
+            Example: "2021-01-02T15:04:05Z07:00", "2021-01-02", "3h30m"
+        smart_dr : bool, optional
+            Enables Smart Disaster Recovery (SmartDR) for the workspace group.
+            SmartDR is a disaster recovery solution that ensures seamless and
+            continuous replication of data from the primary region to a secondary region
+        allow_all_traffic : bool, optional
+            Allow all traffic to the workspace group
+        update_window : Dict[str, int], optional
+            Specify the day and hour of an update window: dict(day=0-6, hour=0-23)
+        provider : str, optional
+            Cloud provider for the workspace group (e.g., 'AWS', 'GCP', 'AZURE').
+            Used together with ``region_name`` as an alternative to ``region``.
+        region_name : str, optional
+            Cloud provider region name for the workspace group. Used together
+            with ``provider`` as an alternative to ``region``.
+        deployment_type : str, optional
+            Deployment type for workspaces in this group (PRODUCTION |
+            NON-PRODUCTION).
+        high_availability_two_zones : bool, optional
+            Whether to enable high availability across two zones.
+        opt_in_preview_feature : bool, optional
+            Whether to opt in to preview features.
+        project_id : str, optional
+            Project ID to associate the workspace group with.
+
+        Returns
+        -------
+        :class:`WorkspaceGroup`
+
+        """
+        region_id: Optional[str] = None
+        if isinstance(region, Region):
+            if region.id:
+                region_id = region.id
+            else:
+                if provider is None:
+                    provider = region.provider
+                if region_name is None:
+                    region_name = region.region_name
+        else:
+            region_id = region
+        res = self._post(
+            'workspaceGroups', json=dict(
+                name=name, regionID=region_id,
+                adminPassword=admin_password,
+                backupBucketKMSKeyID=backup_bucket_kms_key_id,
+                dataBucketKMSKeyID=data_bucket_kms_key_id,
+                firewallRanges=firewall_ranges or [],
+                expiresAt=expires_at,
+                smartDR=smart_dr,
+                allowAllTraffic=allow_all_traffic,
+                updateWindow=snake_to_camel_dict(update_window),
+                provider=provider,
+                regionName=region_name,
+                deploymentType=deployment_type,
+                highAvailabilityTwoZones=high_availability_two_zones,
+                optInPreviewFeature=opt_in_preview_feature,
+                projectID=project_id,
+            ),
+        )
+        return self.get_workspace_group(res.json()['workspaceGroupID'])
+
+    def create_workspace(
+        self,
+        name: str,
+        workspace_group: Union[str, WorkspaceGroup],
+        size: Optional[str] = None,
+        auto_suspend: Optional[Dict[str, Any]] = None,
+        cache_config: Optional[float] = None,
+        enable_kai: Optional[bool] = None,
+        wait_on_active: bool = False,
+        wait_interval: int = 10,
+        wait_timeout: int = 600,
+        auto_scale: Optional[Dict[str, Any]] = None,
+        scale_factor: Optional[float] = None,
+    ) -> Workspace:
+        """
+        Create a new workspace.
+
+        Parameters
+        ----------
+        name : str
+            Name of the workspace
+        workspace_group : str or WorkspaceGroup
+            The workspace ID of the workspace
+        size : str, optional
+            Workspace size in workspace size notation (S-00, S-1, etc.)
+        auto_suspend : Dict[str, Any], optional
+            Auto suspend settings for the workspace. If this field is not
+            provided, no settings will be enabled.
+        cache_config : float, optional
+            Specifies the multiplier for the persistent cache associated
+            with the workspace. If specified, it enables the cache configuration
+            multiplier. It can have one of the following values: 1, 2, or 4.
+        enable_kai : bool, optional
+            Whether to create a SingleStore Kai-enabled workspace
+        wait_on_active : bool, optional
+            Wait for the workspace to be active before returning
+        wait_timeout : int, optional
+            Maximum number of seconds to wait before raising an exception
+            if wait=True
+        wait_interval : int, optional
+            Number of seconds between each polling interval
+        auto_scale : Dict[str, Any], optional
+            Auto-scale settings for the workspace.
+        scale_factor : float, optional
+            Scale factor for the workspace.
+
+        Returns
+        -------
+        :class:`Workspace`
+
+        """
+        if isinstance(workspace_group, WorkspaceGroup):
+            workspace_group = workspace_group.id
+        res = self._post(
+            'workspaces', json=dict(
+                name=name,
+                workspaceGroupID=workspace_group,
+                size=size,
+                autoSuspend=snake_to_camel_dict(auto_suspend),
+                cacheConfig=cache_config,
+                enableKai=enable_kai,
+                autoScale=snake_to_camel_dict(auto_scale),
+                scaleFactor=scale_factor,
+            ),
+        )
+        out = self.get_workspace(res.json()['workspaceID'])
+        if wait_on_active:
+            out = self._wait_on_state(
+                out,
+                'Active',
+                interval=wait_interval,
+                timeout=wait_timeout,
+            )
+            # After workspace is active, wait for endpoint to be ready
+            out = self._wait_on_endpoint(
+                out,
+                interval=wait_interval,
+                timeout=wait_timeout,
+            )
+        return out
+
+    def get_workspace_group(self, id: str) -> WorkspaceGroup:
+        """
+        Retrieve a workspace group definition.
+
+        Parameters
+        ----------
+        id : str
+            ID of the workspace group
+
+        Returns
+        -------
+        :class:`WorkspaceGroup`
+
+        """
+        res = self._get(f'workspaceGroups/{id}')
+        return WorkspaceGroup.from_dict(res.json(), manager=self)
+
+    def get_workspace(self, id: str) -> Workspace:
+        """
+        Retrieve a workspace definition.
+
+        Parameters
+        ----------
+        id : str
+            ID of the workspace
+
+        Returns
+        -------
+        :class:`Workspace`
+
+        """
+        res = self._get(f'workspaces/{id}')
+        return Workspace.from_dict(res.json(), manager=self)
+
+    def get_starter_workspace(self, id: str) -> StarterWorkspace:
+        """
+        Retrieve a starter workspace definition.
+
+        Parameters
+        ----------
+        id : str
+            ID of the starter workspace
+
+        Returns
+        -------
+        :class:`StarterWorkspace`
+
+        """
+        res = self._get(f'{SHAREDTIER_PATH}/{id}')
+        return StarterWorkspace.from_dict(res.json(), manager=self)
+
+    def create_starter_workspace(
+        self,
+        name: str,
+        database_name: str,
+        provider: str,
+        region_name: str,
+        project_id: Optional[str] = None,
+    ) -> 'StarterWorkspace':
+        """
+        Create a new starter (shared tier) workspace.
+
+        Parameters
+        ----------
+        name : str
+            Name of the starter workspace
+        database_name : str
+            Name of the database for the starter workspace
+        provider : str
+            Cloud provider for the starter workspace (e.g., 'aws', 'gcp', 'azure')
+        region_name : str
+            Cloud provider region for the starter workspace (e.g., 'us-east-1')
+        project_id : str, optional
+            Project ID to associate the starter workspace with.
+
+        Returns
+        -------
+        :class:`StarterWorkspace`
+        """
+
+        payload: Dict[str, Any] = {
+            'name': name,
+            'databaseName': database_name,
+            'provider': provider,
+            'regionName': region_name,
+        }
+        if project_id is not None:
+            payload['projectID'] = project_id
+
+        res = self._post(SHAREDTIER_PATH, json=payload)
+        virtual_workspace_id = res.json().get('virtualWorkspaceID')
+        if not virtual_workspace_id:
+            raise ManagementError(msg='No virtualWorkspaceID returned from API')
+
+        res = self._get(f'{SHAREDTIER_PATH}/{virtual_workspace_id}')
+        return StarterWorkspace.from_dict(res.json(), self)

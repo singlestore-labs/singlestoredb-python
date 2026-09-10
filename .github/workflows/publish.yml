@@ -114,7 +114,10 @@ jobs:
           CIBW_BUILD: "cp39-*"
           CIBW_SKIP: "pp* *-musllinux* *-manylinux_i686"
           CIBW_TEST_COMMAND: "pytest -v --pyargs singlestoredb.tests.test_basics"
-          CIBW_TEST_REQUIRES: "pytest"
+          # xdist because pyproject.toml's addopts sets -n/--dist, and PYTHONPATH
+          # points --pyargs at the workspace, so that pyproject is the inifile
+          # here. Without the plugin pytest exits on the unknown arguments.
+          CIBW_TEST_REQUIRES: "pytest pytest-xdist"
           CIBW_ENVIRONMENT: "SINGLESTOREDB_URL='mysql://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0'"
           PYTHONPATH: ${{ github.workspace }}
 

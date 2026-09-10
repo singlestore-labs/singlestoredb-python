@@ -1,14 +1,23 @@
 #!/usr/bin/env python
-"""SingleStoreDB Cloud Inference API."""
+"""
+SingleStoreDB Cloud Inference API (v1 only).
+
+Deliberately **not** deprecated, unlike the rest of
+:mod:`singlestoredb.management.v1`: the ``inference/*`` routes are served here
+and nowhere else. Reached through :attr:`Organization.inference_apis`, which is
+why ``fusion/handlers/utils.get_inference_api_manager`` and the
+:mod:`singlestoredb.ai` helpers resolve this package directly rather than
+following the ``management.version`` option, and do so without warning.
+"""
 import os
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 
-from .utils import vars_to_str
-from singlestoredb.exceptions import ManagementError
-from singlestoredb.management.manager import Manager
+from ...exceptions import ManagementError
+from ..manager import Manager
+from ..utils import vars_to_str
 
 
 class ModelOperationResult(object):
@@ -140,7 +149,7 @@ class ModelOperationResult(object):
         return str(self)
 
 
-class InferenceAPIInfo(object):
+class InferenceAPIInfo:
     """
     Inference API definition.
 
@@ -192,7 +201,7 @@ class InferenceAPIInfo(object):
 
         Returns
         -------
-        :class:`Job`
+        :class:`InferenceAPIInfo`
 
         """
         out = cls(
@@ -257,7 +266,7 @@ class InferenceAPIInfo(object):
         return self._manager.drop(self.name)
 
 
-class InferenceAPIManager(object):
+class InferenceAPIManager:
     """
     SingleStoreDB Inference APIs manager.
 

@@ -122,7 +122,13 @@ jobs:
 
       - name: Run tests
         if: ${{ matrix.driver == 'https' }}
-        run: pytest -v --pyargs singlestoredb.tests.test_basics
+        # -n 0 overrides the -n 3 in pyproject.toml's addopts: the Data API is
+        # not run in parallel. This job avoids the `RESTART PROXY` hazard the
+        # code-check/coverage HTTP steps hit -- no SINGLESTOREDB_INIT_DB_URL
+        # here, so load_sql's setup connection is itself HTTP and skips that
+        # branch -- but the driver is the same one, so it gets the same
+        # treatment rather than being the lone parallel Data API run.
+        run: pytest -v -n 0 --pyargs singlestoredb.tests.test_basics
         env:
           PYTHONPATH: ${{ github.workspace }}
           SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"

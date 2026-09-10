@@ -7,14 +7,19 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
 from typing import Union
 from urllib.parse import urljoin
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
+from . import timing
 from .. import config
 from ..exceptions import ManagementError
 from ..exceptions import OperationalError
+from ._version_import import DEFAULT_VERSION
 from .utils import get_token
 
 
@@ -30,6 +35,59 @@ def set_organization(kwargs: Dict[str, Any]) -> None:
         kwargs['params']['organizationID'] = org
 
 
+#: Methods that may be replayed after a transport-level failure. POST is
+#: absent on purpose: a dropped connection does not say whether the server
+#: acted on the request, and replaying ``POST /clusters`` would deploy twice.
+#: Everything the long ``wait_on_*`` loops issue is a GET, so the retries
+#: cover the failure mode that actually shows up -- a keep-alive connection
+#: the far end closed while the client was sleeping between polls, which
+#: surfaces as ``RemoteDisconnected`` on the next request.
+RETRY_METHODS = frozenset(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'])
+
+#: Status codes worth retrying. These are the transient ones; a 4xx other
+#: than 429 is a client error that will fail again identically.
+RETRY_STATUSES = frozenset([429, 500, 502, 503, 504])
+
+
+def build_retry(
+    total: Optional[int] = None,
+    backoff_factor: Optional[float] = None,
+) -> Retry:
+    """Build the retry policy used by every manager session."""
+    if total is None:
+        total = int(os.environ.get('SINGLESTOREDB_MANAGEMENT_RETRIES', '4'))
+    if backoff_factor is None:
+        backoff_factor = float(
+            os.environ.get('SINGLESTOREDB_MANAGEMENT_RETRY_BACKOFF', '0.5'),
+        )
+    return Retry(
+        total=total,
+        connect=total,
+        read=total,
+        status=total,
+        allowed_methods=RETRY_METHODS,
+        status_forcelist=RETRY_STATUSES,
+        backoff_factor=backoff_factor,
+        # Let ``Manager._check`` raise the error with the response body in it
+        # rather than urllib3 raising a bare MaxRetryError.
+        raise_on_status=False,
+        respect_retry_after_header=True,
+    )
+
+
+def default_timeout() -> Tuple[float, float]:
+    """
+    Return the (connect, read) timeout applied when a caller gives none.
+
+    Without this a stalled connection hangs the client forever instead of
+    failing and being retried.
+    """
+    return (
+        float(os.environ.get('SINGLESTOREDB_MANAGEMENT_CONNECT_TIMEOUT', '10')),
+        float(os.environ.get('SINGLESTOREDB_MANAGEMENT_READ_TIMEOUT', '180')),
+    )
+
+
 def is_jwt(token: str) -> bool:
     """Is the given token a JWT?"""
     import jwt
@@ -40,11 +98,18 @@ def is_jwt(token: str) -> bool:
         return False
 
 
-class Manager(object):
+class Manager:
     """SingleStoreDB manager base class."""
 
-    #: Management API version if none is specified.
-    default_version = config.get_option('management.version') or 'v1'
+    #: Management API version if none is specified. The shared
+    #: :data:`~singlestoredb.management._version_import.DEFAULT_VERSION`, which
+    #: also supplies the ``management.version`` option default, so the two
+    #: cannot drift. Deliberately not a reading of that option: it is read by
+    #: the ``manage_*`` factories at call time, and reading it here would let a
+    #: version-specific class declare itself to be whatever the option happened
+    #: to say. A class that implements one specific version pins that version
+    #: as a literal instead of inheriting this.
+    default_version = DEFAULT_VERSION
 
     #: Base URL if none is specified.
     default_base_url = config.get_option('management.base_url') \
@@ -64,8 +129,17 @@ class Manager(object):
         if not new_access_token:
             raise ManagementError(msg='No management token was configured.')
 
+        base_url_root = (
+            base_url
+            or config.get_option('management.base_url')
+            or type(self).default_base_url
+        )
+
         self._is_jwt = not access_token and new_access_token and is_jwt(new_access_token)
         self._sess = requests.Session()
+        adapter = HTTPAdapter(max_retries=build_retry())
+        self._sess.mount('http://', adapter)
+        self._sess.mount('https://', adapter)
         self._sess.headers.update({
             'Authorization': f'Bearer {new_access_token}',
             'Content-Type': 'application/json',
@@ -74,9 +148,7 @@ class Manager(object):
         })
 
         self._base_url = urljoin(
-            base_url
-            or config.get_option('management.base_url')
-            or type(self).default_base_url,
+            base_url_root,
             version or type(self).default_version,
         ) + '/'
 
@@ -126,9 +198,31 @@ class Manager(object):
         # Refresh the JWT as needed
         if self._is_jwt:
             self._sess.headers.update({'Authorization': f'Bearer {get_token()}'})
-        return getattr(self._sess, method.lower())(
-            urljoin(self._base_url, path), *args, **kwargs,
+        kwargs.setdefault('timeout', default_timeout())
+        url = urljoin(self._base_url, path)
+        # Every management HTTP call comes through here, so this is the one
+        # place request time has to be recorded. See management.timing.
+        started_at = time.monotonic()
+        try:
+            res = getattr(self._sess, method.lower())(url, *args, **kwargs)
+        except requests.exceptions.RequestException as exc:
+            timing.record_request(
+                method, path, time.monotonic() - started_at, started_at,
+                error=exc,
+            )
+            # A transport failure otherwise escapes as a bare
+            # requests.ConnectionError / ReadTimeout naming neither the route
+            # nor the method, which makes it indistinguishable from a bug in
+            # the caller. Retries for the replayable methods are already
+            # exhausted by the time this is reached.
+            raise ManagementError(
+                msg=f'{type(exc).__name__} on {method.upper()} {url}: {exc}',
+            ) from exc
+        timing.record_request(
+            method, path, time.monotonic() - started_at, started_at,
+            response=res,
         )
+        return res
 
     def _get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         """
@@ -298,17 +392,24 @@ class Manager(object):
                 ),
             )
 
+        remaining = float(timeout)
         while True:
             if getattr(out, 'state').lower() in states:
                 break
-            if timeout <= 0:
+            if remaining <= 0:
                 raise ManagementError(
                     msg=f'Exceeded waiting time for {self.obj_type} to become '
                         '{}.'.format(', '.join(states)),
                 )
-            time.sleep(interval)
-            timeout -= interval
+            started_at = timing.now()
+            timing.sleep(
+                interval,
+                '{} state -> {}'.format(self.obj_type, ', '.join(states)),
+            )
             out = getattr(self, f'get_{self.obj_type}')(out.id)
+            # Charged after the refetch, and by measured time: the refetch is
+            # part of what the iteration cost. See timing.poll_cost.
+            remaining -= timing.poll_cost(started_at, interval)
 
         return out
 
@@ -324,7 +425,8 @@ class Manager(object):
         Parameters
         ----------
         out : Any
-            Workspace object with a connect method
+            Deployment object with a connect method -- a ``Cluster`` or
+            ``StarterCluster`` at v2, a ``Workspace`` at v1
         interval : int, optional
             Interval between each connection attempt (default: 10 seconds)
         timeout : int, optional
@@ -351,23 +453,32 @@ class Manager(object):
                 msg=f'{type(out).__name__} object does not have a valid endpoint',
             )
 
+        remaining = float(timeout)
         while True:
+            started_at = timing.now()
             try:
                 # Try to establish a connection to the endpoint using context manager
-                with out.connect(connect_timeout=5):
-                    pass
+                with timing.timed(f'{self.obj_type} endpoint connect'):
+                    with out.connect(connect_timeout=5):
+                        pass
+                # Connected, so the endpoint is ready. Without this the loop
+                # reconnects forever on success and only ever leaves through
+                # the 1045 branch or the timeout.
+                break
             except Exception as exc:
                 # If we get an 'access denied' error, that means that the server is
                 # up and we just aren't authenticating.
                 if isinstance(exc, OperationalError) and exc.errno == 1045:
                     break
                 # If connection fails, check timeout and retry
-                if timeout <= 0:
+                if remaining <= 0:
                     raise ManagementError(
                         msg=f'Exceeded waiting time for {self.obj_type} endpoint '
                             'to become ready',
                     )
-                time.sleep(interval)
-                timeout -= interval
+                timing.sleep(interval, f'{self.obj_type} endpoint')
+                # The failed connect attempt is part of what the iteration
+                # cost: connect_timeout is 5 seconds on top of the sleep.
+                remaining -= timing.poll_cost(started_at, interval)
 
         return out

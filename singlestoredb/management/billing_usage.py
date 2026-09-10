@@ -8,10 +8,11 @@ from typing import Optional
 
 from .manager import Manager
 from .utils import camel_to_snake
+from .utils import to_datetime_strict
 from .utils import vars_to_str
 
 
-class UsageItem(object):
+class UsageItem:
     """Usage statistics."""
 
     def __init__(
@@ -67,9 +68,9 @@ class UsageItem(object):
         Parameters
         ----------
         obj : dict
-            Key-value pairs to retrieve billling usage information from
-        manager : WorkspaceManager, optional
-            The WorkspaceManager the UsageItem belongs to
+            Key-value pairs to retrieve billing usage information from
+        manager : ClusterManager, optional
+            The ClusterManager the UsageItem belongs to
 
         Returns
         -------
@@ -77,19 +78,19 @@ class UsageItem(object):
 
         """
         out = cls(
-            end_time=datetime.datetime.fromisoformat(obj['endTime']),
-            start_time=datetime.datetime.fromisoformat(obj['startTime']),
+            end_time=to_datetime_strict(obj['endTime']),
+            start_time=to_datetime_strict(obj['startTime']),
             owner_id=obj['ownerId'],
             resource_id=obj['resourceId'],
             resource_name=obj['resourceName'],
-            resource_type=obj['resource_type'],
+            resource_type=obj['resourceType'],
             value=obj['value'],
         )
         out._manager = manager
         return out
 
 
-class BillingUsageItem(object):
+class BillingUsageItem:
     """Billing usage item."""
 
     def __init__(
@@ -98,7 +99,7 @@ class BillingUsageItem(object):
         metric: str,
         usage: List[UsageItem],
     ):
-        """Use :attr:`WorkspaceManager.billing.usage` instead."""
+        """Use :attr:`ClusterManager.billing.usage` instead."""
         #: Description of the usage metric
         self.description = description
 
@@ -118,7 +119,7 @@ class BillingUsageItem(object):
         """Return string representation."""
         return str(self)
 
-    @ classmethod
+    @classmethod
     def from_dict(
         cls,
         obj: Dict[str, Any],
@@ -130,9 +131,9 @@ class BillingUsageItem(object):
         Parameters
         ----------
         obj : dict
-            Key-value pairs to retrieve billling usage information from
-        manager : WorkspaceManager, optional
-            The WorkspaceManager the BillingUsageItem belongs to
+            Key-value pairs to retrieve billing usage information from
+        manager : ClusterManager, optional
+            The ClusterManager the BillingUsageItem belongs to
 
         Returns
         -------
@@ -142,7 +143,7 @@ class BillingUsageItem(object):
         out = cls(
             description=obj['description'],
             metric=str(camel_to_snake(obj['metric'])),
-            usage=[UsageItem.from_dict(x, manager) for x in obj['Usage']],
+            usage=[UsageItem.from_dict(x, manager) for x in obj['usage']],
         )
         out._manager = manager
         return out
