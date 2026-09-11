@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # type: ignore
-"""
+r"""
 Terminate deployments left behind by earlier test runs.
 
 The test suite now sweeps what it creates (see ``utils.track()`` and the
@@ -25,6 +25,19 @@ them, so ``--older-than`` defaults to a span longer than a full suite rather
 than to zero -- raise it if your runs can take longer than that, and only
 pass ``--older-than 0`` when you know nothing else is running.
 
+The other direction -- clearing out what a recent session made, rather than
+what an old one stranded -- is ``--since``, which replaces the age guard with
+a calendar cutoff, and ``--any-name``, which drops the name gate. Clearing
+every workspace group created yesterday or today::
+
+    python -m singlestoredb.tests.cleanup_deployments \
+        --kind workspace-group --any-name --since yesterday --yes
+
+Those two flags together remove both of the guards that keep this tool off
+deployments it did not create, so ``--kind`` matters: without it the same
+cutoff sweeps every cluster of that age as well, the shared pool included.
+Read the dry run before adding ``--yes``.
+
 For deployments the current process created, nothing here is needed: those
 are tracked as they are created and swept per test class by ``conftest.py``,
 which cannot see -- or touch -- another run's deployments.
@@ -41,6 +54,7 @@ import datetime
 import re
 import sys
 import warnings
+from collections.abc import Container
 from typing import Any
 from typing import List
 from typing import Optional
@@ -48,6 +62,15 @@ from typing import Tuple
 
 import singlestoredb as s2
 
+
+#: The kinds of deployment this tool can sweep, in the order it lists them.
+#: ``--kind`` selects from these; the default is all of them.
+KINDS = (
+    'cluster',
+    'starter-cluster',
+    'workspace-group',
+    'starter-workspace',
+)
 
 #: Hours a deployment must have existed before it is treated as stranded.
 #: The slowest class creates three clusters with a 1200s wait each and then
@@ -103,8 +126,8 @@ def is_test_deployment(name: Optional[str]) -> bool:
     return any(x.match(name) for x in PATTERNS + LEGACY_PATTERNS)
 
 
-def _age_hours(obj: Any) -> Optional[float]:
-    """Hours since creation, or None if the API did not report it."""
+def _created_at(obj: Any) -> Optional[datetime.datetime]:
+    """When this deployment was created, or None if the API did not say."""
     created = getattr(obj, 'created_at', None)
     if not isinstance(created, datetime.datetime):
         return None
@@ -113,13 +136,50 @@ def _age_hours(obj: Any) -> Optional[float]:
         # would overstate the age by the offset, which is the direction that
         # sweeps a deployment a live run still owns.
         created = created.replace(tzinfo=datetime.timezone.utc)
+    return created
+
+
+def _age_hours(obj: Any) -> Optional[float]:
+    """Hours since creation, or None if the API did not report it."""
+    created = _created_at(obj)
+    if created is None:
+        return None
     now = datetime.datetime.now(tz=datetime.timezone.utc)
     return (now - created).total_seconds() / 3600.0
+
+
+def parse_since(text: str) -> datetime.datetime:
+    """
+    Read a ``--since`` value as the local midnight starting that day.
+
+    ``today``, ``yesterday`` or an ISO date. The cutoff is local midnight
+    rather than a UTC one because the caller is thinking in their own
+    calendar days -- "created yesterday" means yesterday where they are.
+    """
+    today = datetime.date.today()
+    if text == 'today':
+        day = today
+    elif text == 'yesterday':
+        day = today - datetime.timedelta(days=1)
+    else:
+        try:
+            day = datetime.date.fromisoformat(text)
+        except ValueError:
+            raise argparse.ArgumentTypeError(
+                f'{text!r} is not a date; expected YYYY-MM-DD, '
+                "'today' or 'yesterday'",
+            )
+    # A naive datetime's astimezone() reads it as local time, which is what
+    # gives midnight the caller's offset rather than UTC's.
+    return datetime.datetime.combine(day, datetime.time.min).astimezone()
 
 
 def find_leftovers(
     older_than: float = DEFAULT_MIN_AGE_HOURS,
     include_unknown_age: bool = False,
+    since: Optional[datetime.datetime] = None,
+    any_name: bool = False,
+    kinds: Container[str] = KINDS,
 ) -> Tuple[List[Tuple[str, Any]], List[str], List[str]]:
     """
     List the live, test-named deployments in the current organization.
@@ -127,6 +187,13 @@ def find_leftovers(
     Both API versions are asked: v1 owns workspace groups and workspaces,
     v2 owns clusters, and a suite that has run under either may have left
     something behind.
+
+    ``since`` replaces the ``older_than`` guard with the opposite test --
+    created at or after that moment, rather than old enough to be stranded --
+    and ``any_name`` drops the name gate, which makes every live deployment a
+    candidate. Between them they turn this from "sweep what the suite
+    stranded" into "clear out this organization", so ``kinds`` is what keeps
+    such a run off deployments the caller did not mean.
 
     Returns
     -------
@@ -150,7 +217,7 @@ def find_leftovers(
         name = getattr(obj, 'name', None)
         if getattr(obj, 'terminated_at', None) is not None:
             return False
-        if not is_test_deployment(name):
+        if not any_name and not is_test_deployment(name):
             age = _age_hours(obj)
             unmatched.append(
                 '{}{}'.format(
@@ -164,55 +231,75 @@ def find_leftovers(
         # concurrent run is using right now: names carry a per-class random
         # id, not a per-run one, and a cluster name is capped at 32
         # characters, so there is no room to stamp a run id into it.
-        age = _age_hours(obj)
-        if age is None:
+        created = _created_at(obj)
+        if created is None:
             if not include_unknown_age:
                 spared.append(f'{name} (creation time not reported)')
                 return False
             return True
+        if since is not None:
+            if created < since:
+                spared.append(
+                    f'{name} (created {created.astimezone():%Y-%m-%d %H:%M}, '
+                    'before the cutoff)',
+                )
+                return False
+            return True
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        age = (now - created).total_seconds() / 3600.0
         if older_than > 0 and age < older_than:
-            spared.append(f'{name} ({age:.1f}h old)')
+            spared.append(f'{name} ({age:.1f}h old, too new)')
             return False
         return True
 
-    try:
-        clusters = s2.manage_clusters(version='v2')
-    except Exception as exc:
-        print(f'! Could not reach management API v2: {exc}', file=sys.stderr)
-    else:
-        for cluster in clusters.clusters:
-            if keep(cluster):
-                found.append((f'cluster {cluster.name} ({cluster.id})', cluster))
-        for starter in clusters.starter_clusters:
-            if keep(starter):
-                found.append((
-                    f'starter cluster {starter.name} ({starter.id})', starter,
-                ))
+    if 'cluster' in kinds or 'starter-cluster' in kinds:
+        try:
+            clusters = s2.manage_clusters(version='v2')
+        except Exception as exc:
+            print(f'! Could not reach management API v2: {exc}', file=sys.stderr)
+        else:
+            if 'cluster' in kinds:
+                for cluster in clusters.clusters:
+                    if keep(cluster):
+                        found.append((
+                            f'cluster {cluster.name} ({cluster.id})', cluster,
+                        ))
+            if 'starter-cluster' in kinds:
+                for starter in clusters.starter_clusters:
+                    if keep(starter):
+                        found.append((
+                            f'starter cluster {starter.name} ({starter.id})',
+                            starter,
+                        ))
 
-    try:
-        # v1 is deprecated, and asking for it here is the point: workspace
-        # groups exist nowhere else, so the warning is noise on every run.
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                'ignore', category=DeprecationWarning,
-                message='.*manage_workspaces.*',
-            )
-            workspaces = s2.manage_workspaces(version='v1')
-    except Exception as exc:
-        print(f'! Could not reach management API v1: {exc}', file=sys.stderr)
-    else:
-        for group in workspaces.workspace_groups:
-            if keep(group):
-                # The group takes its workspaces with it, so they are not
-                # listed separately.
-                found.append((
-                    f'workspace group {group.name} ({group.id})', group,
-                ))
-        for starter in workspaces.starter_workspaces:
-            if keep(starter):
-                found.append((
-                    f'starter workspace {starter.name} ({starter.id})', starter,
-                ))
+    if 'workspace-group' in kinds or 'starter-workspace' in kinds:
+        try:
+            # v1 is deprecated, and asking for it here is the point: workspace
+            # groups exist nowhere else, so the warning is noise on every run.
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    'ignore', category=DeprecationWarning,
+                    message='.*manage_workspaces.*',
+                )
+                workspaces = s2.manage_workspaces(version='v1')
+        except Exception as exc:
+            print(f'! Could not reach management API v1: {exc}', file=sys.stderr)
+        else:
+            if 'workspace-group' in kinds:
+                for group in workspaces.workspace_groups:
+                    if keep(group):
+                        # The group takes its workspaces with it, so they are
+                        # not listed separately.
+                        found.append((
+                            f'workspace group {group.name} ({group.id})', group,
+                        ))
+            if 'starter-workspace' in kinds:
+                for starter in workspaces.starter_workspaces:
+                    if keep(starter):
+                        found.append((
+                            f'starter workspace {starter.name} ({starter.id})',
+                            starter,
+                        ))
 
     return found, spared, unmatched
 
@@ -232,10 +319,33 @@ def main(argv: Optional[List[str]] = None) -> int:
              'is still using',
     )
     parser.add_argument(
+        '--since', type=parse_since, metavar='DATE',
+        help="sweep what was created on or after DATE -- 'today', "
+             "'yesterday' or YYYY-MM-DD, counted from local midnight -- "
+             'instead of what is older than --older-than. This is for '
+             'clearing out a recent session rather than reaping strays, so '
+             'it removes the guard against terminating a deployment a live '
+             'run owns: pair it with --kind',
+    )
+    parser.add_argument(
+        '--any-name', action='store_true',
+        help='consider every live deployment, not only the ones named like '
+             "the test suite's. This will terminate deployments nothing in "
+             'this repo created, including ones a colleague is using, so '
+             'read the dry run first',
+    )
+    parser.add_argument(
+        '--kind', action='append', choices=KINDS, dest='kinds',
+        metavar='KIND',
+        help='restrict the sweep to this kind of deployment; repeatable. '
+             f'One of: {", ".join(KINDS)}. Defaults to all of them, which is '
+             'rarely what you want alongside --any-name',
+    )
+    parser.add_argument(
         '--include-unknown-age', action='store_true',
         help='also sweep matches whose creation time the API did not report '
-             '(skipped by default, since an unknown age cannot be shown to '
-             'be old enough)',
+             '(skipped by default, since an unknown age can be shown neither '
+             'to be old enough nor to fall after --since)',
     )
     parser.add_argument(
         '--show-unmatched', action='store_true',
@@ -247,9 +357,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    kinds = args.kinds or list(KINDS)
+
     leftovers, spared, unmatched = find_leftovers(
         args.older_than, args.include_unknown_age,
+        since=args.since, any_name=args.any_name, kinds=kinds,
     )
+
+    if args.since is not None:
+        print(
+            'Selecting {} created on or after {:%Y-%m-%d %H:%M %Z}, {}.\n'
+            .format(
+                '/'.join(kinds),
+                args.since,
+                'any name' if args.any_name
+                else 'named like the test suite',
+            ),
+        )
 
     if args.show_unmatched:
         if unmatched:
@@ -267,19 +391,18 @@ def main(argv: Optional[List[str]] = None) -> int:
             print('Every live deployment is recognized by PATTERNS.\n')
 
     if spared:
-        print(
-            f'{len(spared)} match(es) left alone, too new to be sure no '
-            'run owns them:',
-        )
+        print(f'{len(spared)} match(es) left alone by the age filter:')
         for label in spared:
             print(f'  - {label}')
         print()
 
+    subject = 'deployment' if args.any_name else 'test deployment'
+
     if not leftovers:
-        print('No leftover test deployments found.')
+        print(f'No matching {subject}s found.')
         return 0
 
-    print(f'{len(leftovers)} leftover test deployment(s):')
+    print(f'{len(leftovers)} matching {subject}(s):')
     for label, _ in leftovers:
         print(f'  - {label}')
 

@@ -1725,6 +1725,95 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
         self.assertEqual(names, ['cl-test-brand-new'])
         self.assertEqual(spared, [])
 
+    def test_since_inverts_the_age_filter(self):
+        # --since is for clearing out a recent session, so it must select what
+        # the age guard rejects and reject what the age guard selects.
+        recent = self._cluster('cl-test-today', hours=2)
+        stale = self._cluster('cl-test-last-week', hours=24 * 7)
+
+        names, spared = self._find(
+            [recent, stale],
+            since=datetime.datetime.now(tz=datetime.timezone.utc)
+            - datetime.timedelta(hours=30),
+        )
+
+        self.assertEqual(names, ['cl-test-today'])
+        self.assertEqual(len(spared), 1)
+        self.assertIn('cl-test-last-week', spared[0])
+
+    def test_since_ignores_older_than(self):
+        # Both guards applying would leave a window nothing falls into, so a
+        # caller passing --since gets the calendar cutoff alone.
+        names, _ = self._find(
+            [self._cluster('cl-test-today', hours=1)],
+            older_than=self.mod.DEFAULT_MIN_AGE_HOURS,
+            since=datetime.datetime.now(tz=datetime.timezone.utc)
+            - datetime.timedelta(hours=30),
+        )
+        self.assertEqual(names, ['cl-test-today'])
+
+    def test_since_still_spares_an_unreported_creation_time(self):
+        # An unknown creation time cannot be shown to fall inside the window.
+        names, spared = self._find(
+            [self._cluster('cl-test-ageless')],
+            since=datetime.datetime.now(tz=datetime.timezone.utc),
+        )
+        self.assertEqual(names, [])
+        self.assertIn('cl-test-ageless', spared[0])
+
+    def test_any_name_drops_the_name_gate(self):
+        names, _ = self._find(
+            [self._cluster('some-persons-cluster', hours=10)],
+            older_than=2, any_name=True,
+        )
+        self.assertEqual(names, ['some-persons-cluster'])
+        # Nothing is unrecognized once every name counts.
+        self.assertEqual(self.unmatched, [])
+
+    def test_kind_keeps_the_sweep_off_the_other_apis(self):
+        # This is the only guard left when --any-name and --since are both
+        # given, so a kind that was not asked for must not even be listed.
+        import singlestoredb as s2
+
+        clusters = MagicMock()
+        clusters.clusters = [self._cluster('anything', hours=10)]
+        clusters.starter_clusters = []
+        workspaces = MagicMock()
+        workspaces.workspace_groups = [self._cluster('a group', hours=10)]
+        workspaces.starter_workspaces = [self._cluster('a starter', hours=10)]
+
+        with patch.object(
+            s2, 'manage_clusters', return_value=clusters,
+        ) as clusters_call, patch.object(
+            s2, 'manage_workspaces', return_value=workspaces,
+        ):
+            found, _, _ = self.mod.find_leftovers(
+                older_than=2, any_name=True, kinds=['workspace-group'],
+            )
+
+        self.assertEqual([x[1].name for x in found], ['a group'])
+        clusters_call.assert_not_called()
+
+    def test_since_reads_a_day_as_local_midnight(self):
+        for text, expected in (
+            ('today', datetime.date.today()),
+            (
+                'yesterday',
+                datetime.date.today() - datetime.timedelta(days=1),
+            ),
+            ('2026-09-01', datetime.date(2026, 9, 1)),
+        ):
+            cutoff = self.mod.parse_since(text)
+            self.assertEqual(cutoff.date(), expected, text)
+            self.assertEqual(cutoff.hour, 0, text)
+            # Aware, or comparing it with a created_at raises.
+            self.assertIsNotNone(cutoff.tzinfo, text)
+
+    def test_a_since_that_is_not_a_date_is_rejected(self):
+        import argparse
+        with self.assertRaises(argparse.ArgumentTypeError):
+            self.mod.parse_since('last tuesday')
+
 
 if __name__ == '__main__':
     unittest.main()
