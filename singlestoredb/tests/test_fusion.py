@@ -430,8 +430,10 @@ class TestFusion(unittest.TestCase):
 
         A deployment is named the same way whatever kind it is, so there is
         nothing for a qualified spelling to disambiguate -- ``IN CLUSTER`` would
-        resolve exactly where the bare ``IN`` already does. ``IN GROUP`` is kept
-        only because it already parses.
+        resolve exactly where the bare ``IN`` already does. ``IN GROUP`` stays
+        because it names something else: a v1 workspace group, which is why it
+        carries its own ``group_id``/``group_name`` placeholders rather than the
+        ``deployment_*`` ones.
         """
         from singlestoredb.fusion import registry
         from singlestoredb.fusion.handler import SQLHandler
@@ -449,6 +451,10 @@ class TestFusion(unittest.TestCase):
             grammar = cls._grammar
             assert 'IN CLUSTER' not in grammar, cls.__name__
             assert 'in_group = IN GROUP' in grammar, cls.__name__
+            # IN GROUP carries the group placeholders, so a group name never
+            # reaches the deployment lookup.
+            assert 'in_group = IN GROUP { group_id | group_name }' in grammar, \
+                cls.__name__
             # in_group must precede the bare in_deployment in the alternation,
             # or IN would win before GROUP is considered and IN GROUP 'x' would
             # parse as a deployment named GROUP.
@@ -493,7 +499,14 @@ class TestFusion(unittest.TestCase):
         for func in (utils.get_cluster_manager, utils.get_files_manager):
             assert "version='v2'" in inspect.getsource(func), func.__name__
 
-    def test_get_deployment_resolves_against_v2(self):
+    def test_get_deployment_resolves_a_bare_in_against_v2(self):
+        """
+        The deployment lookup is v2 only; the group lookup is v1 only.
+
+        Keeping them in separate functions is what makes the order of the two
+        enforceable -- clusters first, group second -- so the split is asserted
+        here rather than only through behaviour.
+        """
         import inspect
 
         from singlestoredb.fusion.handlers import utils
@@ -501,6 +514,10 @@ class TestFusion(unittest.TestCase):
         src = inspect.getsource(utils.get_deployment)
         assert 'workspace_groups' not in src
         assert 'clusters' in src
+
+        src = inspect.getsource(utils._workspace_group)
+        assert 'workspace_groups' in src
+        assert 'clusters' not in src
 
     def test_job_commands_use_the_cluster_manager(self):
         """
@@ -595,55 +612,207 @@ class TestFusion(unittest.TestCase):
         assert 'SINGLESTOREDB_WORKSPACE_GROUP' in msg
         assert 'SINGLESTOREDB_WORKSPACE' in msg
 
-    def test_deployment_miss_through_in_group_explains_the_synonym(self):
+    def test_in_group_resolves_a_workspace_group_against_v1(self):
         """
-        ``IN GROUP`` resolves against clusters, and says so when it misses.
+        ``IN GROUP`` names a v1 workspace group, by name and by ID.
 
-        The spelling is only a synonym for a bare ``IN``, so a caller who typed
-        it meaning a v1 workspace group gets no match -- and, without the hint,
-        no way to tell that from a genuinely absent cluster. The other
-        spellings must not carry the hint, or it becomes noise on every miss.
+        Stage is attached to the group itself at v1, so a group names a Stage on
+        its own. The cluster manager must not be touched at all: a group ID is
+        not a cluster ID, and looking one up as the other is what made this
+        spelling miss.
         """
+        from unittest.mock import MagicMock
+        from unittest.mock import patch
+
+        from singlestoredb.fusion.handlers import utils
+        from singlestoredb.warnings import DeprecatedFeatureWarning
+
+        group_id = '11111111-1111-4111-8111-111111111111'
+        group = MagicMock()
+        group.id = group_id
+        group.name = 'wsg1'
+
+        v1 = MagicMock()
+        v1.workspace_groups = [group]
+        v1.get_workspace_group.return_value = group
+        clusters = MagicMock()
+
+        def resolve(params):
+            with patch.object(utils, 'get_workspace_manager', return_value=v1), \
+                    patch.object(
+                        utils, 'get_cluster_manager', return_value=clusters,
+                    ):
+                self._fusion_env()
+                with self.assertWarns(DeprecatedFeatureWarning):
+                    return utils.get_deployment(params)
+
+        for params in (
+            dict(group=dict(group_name='wsg1')),
+            {'in': dict(in_group=dict(group_name='wsg1'))},
+            dict(group=dict(group_id=group_id)),
+            {'in': dict(in_group=dict(group_id=group_id))},
+        ):
+            assert resolve(params) is group, params
+
+        clusters.assert_not_called()
+        assert not clusters.method_calls, clusters.method_calls
+
+    def test_in_group_falls_back_to_a_starter_workspace(self):
+        """
+        A name or ID that is no group's is tried as a starter workspace.
+
+        A starter workspace owns its Stage the same way a group does and was
+        reachable through this spelling before, so it stays reachable.
+        """
+        from unittest.mock import MagicMock
+        from unittest.mock import patch
+
+        from singlestoredb.fusion.handlers import utils
+        from singlestoredb.warnings import DeprecatedFeatureWarning
+
+        starter_id = '22222222-2222-4222-8222-222222222222'
+        starter = MagicMock()
+        starter.id = starter_id
+        starter.name = 'starter1'
+
+        v1 = MagicMock()
+        v1.workspace_groups = []
+        v1.starter_workspaces = [starter]
+        v1.get_workspace_group.side_effect = s2.ManagementError(errno=404)
+        v1.get_starter_workspace.return_value = starter
+
+        def resolve(params):
+            with patch.object(utils, 'get_workspace_manager', return_value=v1):
+                self._fusion_env()
+                with self.assertWarns(DeprecatedFeatureWarning):
+                    return utils.get_deployment(params)
+
+        for params in (
+            {'in': dict(in_group=dict(group_name='starter1'))},
+            {'in': dict(in_group=dict(group_id=starter_id))},
+        ):
+            assert resolve(params) is starter, params
+
+    def test_bare_in_falls_back_to_a_workspace_group(self):
+        """
+        A bare ``IN`` that matches no cluster is tried as a workspace group.
+
+        A bare ``IN`` named a workspace group before the Stage commands moved to
+        v2 -- a group was the only kind of Stage owner there was -- so a
+        statement written then keeps working, with a warning naming ``IN GROUP``
+        and the version the resource belongs to.
+        """
+        from unittest.mock import MagicMock
+        from unittest.mock import patch
+
+        from singlestoredb.fusion.handlers import utils
+        from singlestoredb.warnings import DeprecatedFeatureWarning
+
+        group_id = '11111111-1111-4111-8111-111111111111'
+        group = MagicMock()
+        group.id = group_id
+        group.name = 'wsg1'
+
+        v1 = MagicMock()
+        v1.workspace_groups = [group]
+        v1.starter_workspaces = []
+        v1.get_workspace_group.return_value = group
+
+        clusters = MagicMock()
+        clusters.clusters = []
+        clusters.starter_clusters = []
+        clusters.get_cluster.side_effect = s2.ManagementError(errno=404)
+        clusters.get_starter_cluster.side_effect = s2.ManagementError(errno=404)
+
+        def resolve(params):
+            with patch.object(utils, 'get_workspace_manager', return_value=v1), \
+                    patch.object(
+                        utils, 'get_cluster_manager', return_value=clusters,
+                    ):
+                self._fusion_env()
+                with self.assertWarns(DeprecatedFeatureWarning) as caught:
+                    return utils.get_deployment(params), caught
+
+        for params in (
+            dict(deployment_name='wsg1'),
+            {'in': dict(in_deployment=dict(deployment_name='wsg1'))},
+            {'in': dict(in_deployment=dict(deployment_id=group_id))},
+        ):
+            found, caught = resolve(params)
+            assert found is group, params
+            msg = str(caught.warning)
+            assert 'IN GROUP' in msg, msg
+            assert 'workspace group' in msg, msg
+
+    def test_bare_in_prefers_a_cluster_over_a_group_of_the_same_name(self):
+        """
+        The fallback is second, so nothing that resolves today changes meaning.
+
+        A name that is both a cluster's and a workspace group's has to stay the
+        cluster's, and quietly: the fallback was not reached, so there is
+        nothing deprecated about the statement.
+        """
+        import warnings
+        from unittest.mock import MagicMock
+        from unittest.mock import patch
+
+        from singlestoredb.fusion.handlers import utils
+
+        cluster = MagicMock()
+        cluster.name = 'shared-name'
+        clusters = MagicMock()
+        clusters.clusters = [cluster]
+
+        v1 = MagicMock()
+
+        with patch.object(utils, 'get_workspace_manager', return_value=v1), \
+                patch.object(
+                    utils, 'get_cluster_manager', return_value=clusters,
+                ):
+            self._fusion_env()
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter('always')
+                found = utils.get_deployment(
+                    dict(deployment_name='shared-name'),
+                )
+
+        assert found is cluster
+        assert not caught, [str(x.message) for x in caught]
+        # The v1 manager must not even be built: the fallback is the only thing
+        # that needs it, and it was not reached.
+        assert not v1.method_calls, v1.method_calls
+
+    def test_in_group_miss_names_the_workspace_group(self):
+        """A miss says what was looked for, not what a cluster would be."""
+        import warnings
         from unittest.mock import MagicMock
         from unittest.mock import patch
 
         from singlestoredb.fusion.handlers import utils
 
         group_id = '11111111-1111-4111-8111-111111111111'
-        manager = MagicMock()
-        manager.clusters = []
-        manager.starter_clusters = []
-        manager.get_cluster.side_effect = s2.ManagementError(errno=404)
-        manager.get_starter_cluster.side_effect = s2.ManagementError(errno=404)
+        v1 = MagicMock()
+        v1.workspace_groups = []
+        v1.starter_workspaces = []
+        v1.get_workspace_group.side_effect = s2.ManagementError(errno=404)
+        v1.get_starter_workspace.side_effect = s2.ManagementError(errno=404)
 
         def message(params):
-            with patch.object(
-                utils, 'get_cluster_manager', return_value=manager,
-            ):
+            with patch.object(utils, 'get_workspace_manager', return_value=v1):
                 self._fusion_env()
                 with self.assertRaises(KeyError) as cm:
-                    utils.get_deployment(params)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('ignore')
+                        utils.get_deployment(params)
             return str(cm.exception)
 
-        # By name and by ID, through both GROUP spellings.
         for params, needle in (
-            (dict(group=dict(deployment_name='wsg1')), 'wsg1'),
-            ({'in': dict(in_group=dict(deployment_name='wsg1'))}, 'wsg1'),
-            (dict(group=dict(deployment_id=group_id)), group_id),
-            ({'in': dict(in_group=dict(deployment_id=group_id))}, group_id),
+            ({'in': dict(in_group=dict(group_name='wsg1'))}, 'wsg1'),
+            ({'in': dict(in_group=dict(group_id=group_id))}, group_id),
         ):
             msg = message(params)
-            assert needle in msg
-            assert 'IN GROUP' in msg, msg
-
-        # The bare spellings get the plain message.
-        for params in (
-            dict(deployment_name='c1'),
-            {'in': dict(in_deployment=dict(deployment_name='c1'))},
-            dict(in_deployment=dict(deployment_id=group_id)),
-        ):
-            msg = message(params)
-            assert 'IN GROUP' not in msg, msg
+            assert needle in msg, msg
+            assert 'workspace group' in msg, msg
 
 
 @pytest.mark.management
@@ -723,6 +892,28 @@ class TestWorkspaceFusion(unittest.TestCase):
         except Exception:
             # traceback.print_exc()
             pass
+
+    def test_stage_in_group_addresses_the_workspace_group(self):
+        """
+        ``SHOW STAGE FILES IN GROUP`` reaches a real v1 workspace group.
+
+        The Stage commands themselves are v2, so this is the one clause of
+        theirs that belongs in this suite: it names a workspace group, whose
+        Stage lives at ``stage/{group_id}/fs/``. A freshly created group's Stage
+        is empty, which is enough to prove the route was reached -- a cluster
+        lookup would have raised instead.
+        """
+        from singlestoredb.warnings import DeprecatedFeatureWarning
+
+        wg = type(self).workspace_groups[0]
+
+        for clause in [
+            f"in group id '{wg.id}'",
+            f"in group '{wg.name}'",
+        ]:
+            with self.assertWarns(DeprecatedFeatureWarning):
+                self.cur.execute(f'show stage files {clause}')
+            assert len(list(self.cur)) == 0, clause
 
     def test_show_regions(self):
         self.cur.execute('show regions')
@@ -1872,7 +2063,7 @@ class TestStageFusion(unittest.TestCase):
 
         # Two clusters from the shared pool rather than two of this class's
         # own. Nothing here mutates a cluster, and the second one exists only
-        # so IN GROUP can name a deployment other than the default. Deploying
+        # so a bare IN can name a deployment other than the default. Deploying
         # them was 891s of the run; see
         # docs/shared-deployment-pool-plan.md.
         cls.cluster, cls.cluster_2 = utils.shared_clusters(2)
@@ -2034,17 +2225,16 @@ class TestStageFusion(unittest.TestCase):
             'subdir2/',
         ]
 
-        # List files in a specific deployment. A bare IN names it; IN GROUP is
-        # kept as a synonym so existing scripts keep working. Both address the
-        # same cluster.
+        # List files in a specific deployment. A bare IN is the only spelling
+        # that names one: IN GROUP names a v1 workspace group instead, which is
+        # a different resource, so it is not tested against a cluster here --
+        # TestWorkspaceFusion covers it against a real group.
         expected = [
             'new_test_1.sql',
             'subdir1/',
             'subdir2/',
         ]
         for clause in [
-            f"in group id '{self.cluster.id}'",
-            f"in group '{self.cluster.name}'",
             f"in id '{self.cluster.id}'",
             f"in '{self.cluster.name}'",
         ]:
@@ -2053,13 +2243,9 @@ class TestStageFusion(unittest.TestCase):
             assert len(files) == 3, (clause, files)
             assert list(sorted(x[0] for x in files)) == expected, clause
 
-        # Check the other cluster, by both spellings
-        for clause in [
-            f"in '{self.cluster_2.name}'",
-            f"in group '{self.cluster_2.name}'",
-        ]:
-            self.cur.execute(f'show stage files {clause}')
-            assert len(list(self.cur)) == 0, clause
+        # Check the other cluster
+        self.cur.execute(f"show stage files in '{self.cluster_2.name}'")
+        assert len(list(self.cur)) == 0
 
         # Limit results
         self.cur.execute('''

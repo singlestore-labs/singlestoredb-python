@@ -25,7 +25,7 @@ Per-class fixture cost from that run:
 | **total** | **2190s** | **5 clusters** |
 
 All four need is *a* live cluster. `TestStageFusion` needs two, because it
-exercises `IN GROUP '<other cluster>'`; two therefore covers all four classes.
+exercises `IN '<other cluster>'`; two therefore covers all four classes.
 
 Pool cost is one 2-cluster deployment, ~890s (which is what `TestStageFusion`
 measures today for exactly that). **2190s -> ~890s.**

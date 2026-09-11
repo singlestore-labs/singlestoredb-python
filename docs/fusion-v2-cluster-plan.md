@@ -163,7 +163,16 @@ only `job.py` moves. Add alongside it:
   `get_workspace_group`→`get_cluster`, `get_starter_workspace`→`get_starter_cluster`;
   the two env branches collapse into a single `get_cluster_id()` read trying
   cluster then starter cluster on 404. Keep the `params['group']` keys wired so
-  the existing `IN GROUP` spelling still parses as a synonym.
+  the existing `IN GROUP` spelling still parses.
+
+  **Revised as shipped.** `IN GROUP` is not a synonym for a bare `IN`. Making it
+  one meant a workspace group name resolving against clusters, so it always
+  missed — the spelling parsed but could not work. It instead names a workspace
+  group and resolves against v1 through `_get_stage_group()`, warning
+  `DeprecatedFeatureWarning`, and carries its own `group_id`/`group_name`
+  placeholders. Stage is attached to the group itself at v1
+  (`stage/{group_id}/fs/`), so a group names a Stage without a workspace.
+
   `SINGLESTOREDB_WORKSPACE_GROUP`, if set and nothing else matched, raises a
   `KeyError` pointing at `SINGLESTOREDB_WORKSPACE` — its value is a group ID,
   which v2 reports only as the read-only `Cluster.group` and offers no route

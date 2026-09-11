@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import datetime
 import os
+import warnings
 from typing import Any
 from typing import Dict
 from typing import Optional
@@ -22,9 +23,11 @@ from ...management.utils import get_workspace_id
 from ...management.v1.inference_api import InferenceAPIInfo
 from ...management.v1.inference_api import InferenceAPIManager
 from ...management.workspace import _manage_workspaces_v1
+from ...management.workspace import StarterWorkspace
 from ...management.workspace import Workspace
 from ...management.workspace import WorkspaceGroup
 from ...management.workspace import WorkspaceManager
+from ...warnings import DeprecatedFeatureWarning
 
 
 def get_workspace_manager() -> WorkspaceManager:
@@ -393,98 +396,227 @@ def get_project(params: Dict[str, Any]) -> Optional[Project]:
 
 
 #
-# The parameter keys :func:`get_deployment` accepts, in resolution order, each
-# paired with whether the spelling is the ``GROUP`` one. An empty path means the
-# value sits directly on ``params``.
+# The parameter keys :func:`get_deployment` accepts, in resolution order. An
+# empty path means the value sits directly on ``params``. The ``GROUP``
+# spellings are not here: they name a different resource and are resolved by
+# :func:`_get_stage_group` before any of these are consulted. A value that
+# arrives through one of these can still end up at a workspace group, but only
+# as the fallback in :func:`_group_fallback`.
 #
-_DEPLOYMENT_KEYS: Tuple[Tuple[Tuple[str, ...], bool], ...] = (
-    ((), False),
-    (('in_deployment',), False),
-    (('group',), True),
-    (('in', 'in_group'), True),
-    (('in', 'in_deployment'), False),
+_DEPLOYMENT_KEYS: Tuple[Tuple[str, ...], ...] = (
+    (),
+    ('in_deployment',),
+    ('in', 'in_deployment'),
 )
 
 #
-# Appended to a "not found" message when the value came through a ``GROUP`` key.
-# ``IN GROUP`` is only a synonym here, so it resolves against clusters like
-# every other spelling; a caller who typed it because they meant a v1 workspace
-# group otherwise gets a bare miss with nothing to explain it.
+# The parameter keys the ``IN GROUP`` spelling arrives under, in resolution
+# order. These carry ``group_id``/``group_name`` rather than the
+# ``deployment_*`` fields, because a workspace group is a different resource
+# from a deployment rather than another way of naming one.
 #
-_GROUP_SPELLING_HINT = (
-    ' -- IN GROUP is a synonym for a bare IN, so it resolves against '
-    'clusters; a workspace group name or ID is not one and will not be found. '
-    'Name the cluster instead.'
+_GROUP_KEYS: Tuple[Tuple[str, ...], ...] = (
+    ('group',),
+    ('in', 'in_group'),
 )
 
 
-def _deployment_param(
+def _first_param(
     params: Dict[str, Any],
+    paths: Tuple[Tuple[str, ...], ...],
     field: str,
-) -> Tuple[Optional[str], bool]:
-    """
-    Return the first value of ``field`` found in ``params``.
-
-    The second element of the return value is True when the value was reached
-    through one of the ``GROUP`` keys, which is what earns the caller
-    :data:`_GROUP_SPELLING_HINT` if the lookup then misses.
-    """
-    for path, is_group in _DEPLOYMENT_KEYS:
+) -> Optional[str]:
+    """Return the first value of ``field`` found along ``paths``."""
+    for path in paths:
         container: Any = params
         for key in path:
             container = container.get(key) or {}
         value = container.get(field)
         if value:
-            return value, is_group
-    return None, False
+            return str(value)
+    return None
+
+
+def _workspace_group(
+    name: Optional[str] = None,
+    id: Optional[str] = None,
+) -> Optional[Union[WorkspaceGroup, StarterWorkspace]]:
+    """
+    Look a workspace group up by name or ID, or return None if there is none.
+
+    A workspace group is a management API v1 resource, so this goes through the
+    v1 manager whatever the rest of the statement addresses. Stage is attached
+    to the group itself at v1 -- the route is ``stage/{group_id}/fs/`` -- so a
+    group names a Stage on its own, with no workspace to add. A starter
+    workspace owns its Stage the same way and is the fallback for a name or ID
+    that is no group's, because both were reachable this way before.
+
+    Returns None rather than raising, so the caller can say whether a miss
+    means "no such group" or "no such deployment either".
+    """
+    manager = get_workspace_manager()
+
+    if name:
+        groups = [x for x in manager.workspace_groups if x.name == name]
+
+        if len(groups) == 1:
+            return groups[0]
+
+        elif len(groups) > 1:
+            ids = ', '.join(x.id for x in groups)
+            raise ValueError(
+                f'more than one workspace group with given name was '
+                f'found: {ids}',
+            )
+
+        starters = [x for x in manager.starter_workspaces if x.name == name]
+
+        if len(starters) == 1:
+            return starters[0]
+
+        elif len(starters) > 1:
+            ids = ', '.join(x.id for x in starters)
+            raise ValueError(
+                'more than one starter workspace with given name was '
+                f'found: {ids}',
+            )
+
+        return None
+
+    assert id is not None
+    try:
+        return manager.get_workspace_group(id)
+    except ManagementError as exc:
+        if not _is_missing(exc):
+            raise
+    try:
+        return manager.get_starter_workspace(id)
+    except ManagementError as exc:
+        if not _is_missing(exc):
+            raise
+    return None
+
+
+def _get_stage_group(
+    params: Dict[str, Any],
+) -> Optional[Union[WorkspaceGroup, StarterWorkspace]]:
+    """
+    Resolve the ``IN GROUP`` spelling, or return None if it was not used.
+
+    Returns None when no group was named, which is the caller's signal to
+    resolve a deployment instead. A named group that does not exist raises: the
+    clause says what resource was meant, so there is nothing else to try.
+    """
+    group_name = _first_param(params, _GROUP_KEYS, 'group_name')
+    group_id = _first_param(params, _GROUP_KEYS, 'group_id')
+
+    if not group_name and not group_id:
+        return None
+
+    # Warned before the lookup, so a caller who named a group that is gone
+    # still hears that the spelling itself is going. stacklevel reaches the
+    # handler method: user code is an unknown number of execute() frames
+    # further up, so there is no frame count that lands on it.
+    warnings.warn(
+        'IN GROUP names a workspace group, which is a management API v1 '
+        'resource and is deprecated. Use IN <deployment> to name a cluster '
+        'instead.',
+        DeprecatedFeatureWarning, stacklevel=3,
+    )
+
+    group = _workspace_group(name=group_name, id=group_id)
+    if group is None:
+        raise KeyError(
+            'no workspace group found with '
+            f'{"name" if group_name else "ID"}: {group_name or group_id}',
+        )
+    return group
+
+
+def _group_fallback(
+    name: Optional[str] = None,
+    id: Optional[str] = None,
+) -> Optional[Union[WorkspaceGroup, StarterWorkspace]]:
+    """
+    Try a name or ID that matched no deployment as a workspace group.
+
+    A bare ``IN`` named a workspace group before the Stage commands moved to
+    v2, because a group was the only kind of Stage owner there was. So a value
+    that matches no cluster is tried as a group rather than reported missing,
+    and a statement written against v1 keeps working -- with a warning, since
+    the resource it names goes away with ``management/v1/``.
+
+    The deployment lookup goes first, so a name that is both a cluster's and a
+    group's is the cluster's, and nothing that resolves today changes meaning.
+    """
+    group = _workspace_group(name=name, id=id)
+    if group is None:
+        return None
+
+    warnings.warn(
+        f'{name or id} is a workspace group, not a deployment. A workspace '
+        'group is a management API v1 resource and is deprecated: name it '
+        'with IN GROUP while it lasts, and a cluster with IN.',
+        DeprecatedFeatureWarning, stacklevel=3,
+    )
+    return group
 
 
 def get_deployment(
         params: Dict[str, Any],
-) -> Union[Cluster, StarterCluster]:
+) -> Union[Cluster, StarterCluster, WorkspaceGroup, StarterWorkspace]:
     """
-    Find a cluster or starter cluster matching deployment_id or deployment_name.
+    Find the Stage owner named by the statement.
 
-    Resolves against management API v2, so a "deployment" here is a
-    :class:`Cluster` or a :class:`StarterCluster`. ``stage.py`` is the only
-    consumer, and it touches nothing but ``deployment.stage``, which both
-    classes provide.
+    ``stage.py`` is the only consumer, and it touches nothing but
+    ``.stage``, which every class returned here provides.
 
-    This function will get a deployment name or ID from the
-    following parameters:
+    A bare ``IN`` names a deployment, resolved against management API v2, so it
+    yields a :class:`Cluster` or a :class:`StarterCluster`. It is the spelling
+    to use: a deployment is named the same way whatever kind it is, so there is
+    nothing for a qualified spelling to disambiguate. It is read from:
 
         * params['deployment_name']
         * params['deployment_id']
-        * params['group']['deployment_name']
-        * params['group']['deployment_id']
         * params['in_deployment']['deployment_name']
         * params['in_deployment']['deployment_id']
-        * params['in']['in_group']['deployment_name']
-        * params['in']['in_group']['deployment_id']
         * params['in']['in_deployment']['deployment_name']
         * params['in']['in_deployment']['deployment_id']
 
-    A bare ``IN`` is the spelling to use: a deployment is named the same way
-    whatever kind it is, so there is nothing for the clause to disambiguate.
-    The ``group`` and ``in_group`` keys stay wired only so that the existing
-    ``IN GROUP`` spelling keeps parsing. It is a synonym -- it resolves against
-    clusters like every other spelling -- so a value that arrived through one
-    of those keys and then missed earns
-    :data:`_GROUP_SPELLING_HINT`, which is the difference between a workspace
-    group name and an absent cluster.
+    ``IN GROUP`` names a workspace group instead, resolved against v1 by
+    :func:`_get_stage_group` from:
 
-    Or, from ``SINGLESTOREDB_WORKSPACE``, which is what the notebook
-    environment calls the current deployment whatever the API version calls it.
+        * params['group']['group_name']
+        * params['group']['group_id']
+        * params['in']['in_group']['group_name']
+        * params['in']['in_group']['group_id']
+
+    The two clauses are not synonyms: they name different resources at
+    different versions, and ``IN GROUP`` goes away with ``management/v1/``. It
+    is checked first, so a group is never looked for among clusters.
+
+    They are not exclusive either. A bare ``IN`` that matches no deployment
+    falls back to :func:`_group_fallback`, because a bare ``IN`` named a
+    workspace group before the Stage commands moved to v2 and a statement
+    written then should keep working. The fallback is second, so a name that is
+    both a cluster's and a group's is the cluster's.
+
+    With neither clause, the deployment comes from ``SINGLESTOREDB_WORKSPACE``,
+    which is what the notebook environment calls the current deployment
+    whatever the API version calls it. That path does not fall back -- see
+    :func:`_deployment_by_id`.
 
     """
+    group = _get_stage_group(params)
+    if group is not None:
+        return group
+
     manager = get_cluster_manager()
 
     #
     # Search for deployment by name
     #
-    deployment_name, name_from_group = _deployment_param(
-        params, 'deployment_name',
-    )
+    deployment_name = _first_param(params, _DEPLOYMENT_KEYS, 'deployment_name')
 
     if deployment_name:
         # Standard cluster
@@ -518,28 +650,26 @@ def get_deployment(
                 f'found: {ids}',
             )
 
-        raise KeyError(
-            f'no deployment found with name: {deployment_name}'
-            f'{_GROUP_SPELLING_HINT if name_from_group else ""}',
-        )
+        # No cluster of that name: try it as a workspace group, which is what
+        # a bare IN named before the Stage commands moved to v2.
+        group = _group_fallback(name=deployment_name)
+        if group is not None:
+            return group
+
+        raise KeyError(f'no deployment found with name: {deployment_name}')
 
     #
     # Search for deployment by ID
     #
-    deployment_id, id_from_group = _deployment_param(params, 'deployment_id')
+    deployment_id = _first_param(params, _DEPLOYMENT_KEYS, 'deployment_id')
 
     if deployment_id:
-        return _deployment_by_id(
-            manager, deployment_id,
-            hint=_GROUP_SPELLING_HINT if id_from_group else '',
-        )
+        return _deployment_by_id(manager, deployment_id, fall_back=True)
 
     #
-    # Use the deployment named by the environment. v1 had a branch per
-    # environment variable because a group, a workspace and a legacy cluster
-    # were different resources; at v2 there is one deployment resource and the
-    # environment names it once, so one lookup tries cluster then starter
-    # cluster.
+    # Use the deployment named by the environment. There is one deployment
+    # resource and the environment names it once, so one lookup tries cluster
+    # then starter cluster.
     #
     from_env = get_cluster_id()
     if from_env:
@@ -552,6 +682,10 @@ def get_deployment(
         # only as the read-only Cluster.group attribute -- there is no group
         # route to look it up with, so guessing which cluster was meant could
         # target the wrong deployment.
+        #
+        # Unreachable from a notebook, which never publishes this variable
+        # without SINGLESTOREDB_WORKSPACE, resolved above. It is here for a
+        # value set by hand.
         raise KeyError(
             'SINGLESTOREDB_WORKSPACE_GROUP holds a group ID, which management '
             'API v2 reports as a cluster attribute rather than something that '
@@ -567,9 +701,16 @@ def _deployment_by_id(
     manager: ClusterManager,
     deployment_id: str,
     envvar: Optional[str] = None,
-    hint: str = '',
-) -> Union[Cluster, StarterCluster]:
-    """Look an ID up as a cluster, then as a starter cluster."""
+    fall_back: bool = False,
+) -> Union[Cluster, StarterCluster, WorkspaceGroup, StarterWorkspace]:
+    """
+    Look an ID up as a cluster, then as a starter cluster.
+
+    ``fall_back`` then tries it as a workspace group, for an ID the statement
+    named itself. An ID from the environment does not fall back: at v1 that
+    variable held a *workspace* ID, which is no group's, so the lookup could
+    only ever add a wasted round trip to a failure.
+    """
     source = f' (from {envvar})' if envvar else ''
     try:
         return manager.get_cluster(deployment_id)
@@ -579,11 +720,15 @@ def _deployment_by_id(
     try:
         return manager.get_starter_cluster(deployment_id)
     except ManagementError as exc:
-        if _is_missing(exc):
-            raise KeyError(
-                f'no deployment found with ID: {deployment_id}{source}{hint}',
-            )
-        raise
+        if not _is_missing(exc):
+            raise
+
+    if fall_back:
+        group = _group_fallback(id=deployment_id)
+        if group is not None:
+            return group
+
+    raise KeyError(f'no deployment found with ID: {deployment_id}{source}')
 
 
 def get_file_space(params: Dict[str, Any]) -> FileSpace:

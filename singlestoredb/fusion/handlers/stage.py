@@ -1,4 +1,17 @@
 #!/usr/bin/env python3
+"""
+Fusion SQL handlers for Stage.
+
+Every handler names its Stage owner through the same ``in`` clause, which has
+two spellings for two different resources. A bare ``IN`` names a deployment and
+resolves against management API v2, which is the one to use. ``IN GROUP`` names
+a workspace group and resolves against v1, where Stage is attached to the group
+rather than to a workspace; it is deprecated and goes away with
+``management/v1/``. A bare ``IN`` also falls back to a workspace group when it
+matches no deployment, warning as it does, so that statements written before
+Stage moved to v2 keep resolving. :func:`.utils.get_deployment` resolves all of
+this, and everything it can return exposes ``.stage``.
+"""
 from typing import Any
 from typing import Dict
 from typing import Optional
@@ -19,7 +32,7 @@ class ShowStageFilesHandler(SQLHandler):
 
     # Deployment
     in = { in_group | in_deployment }
-    in_group = IN GROUP { deployment_id | deployment_name }
+    in_group = IN GROUP { group_id | group_name }
     in_deployment = IN { deployment_id | deployment_name }
 
     # ID of deployment
@@ -27,6 +40,12 @@ class ShowStageFilesHandler(SQLHandler):
 
     # Name of deployment
     deployment_name = '<deployment-name>'
+
+    # ID of workspace group
+    group_id = ID '<group-id>'
+
+    # Name of workspace group
+    group_name = '<group-name>'
 
     # Stage path to list
     at_path = AT '<path>'
@@ -50,6 +69,10 @@ class ShowStageFilesHandler(SQLHandler):
       the Stage is attached.
     * ``<deployment-name>``: The name of the deployment in which
       which the Stage is attached.
+    * ``<group-id>``: The ID of the workspace group in which the
+      Stage is attached.
+    * ``<group-name>``: The name of the workspace group in which
+      the Stage is attached.
     * ``<path>``: A path in the Stage.
     * ``<pattern>``: A pattern similar to SQL LIKE clause.
       Uses ``%`` as the wildcard character.
@@ -66,6 +89,11 @@ class ShowStageFilesHandler(SQLHandler):
       the files from.
     * The ``IN`` clause specifies the ID or the name of the
       deployment in which the Stage is attached.
+    * The ``IN GROUP`` clause names a workspace group instead. A workspace
+      group is a management API v1 resource, so this spelling is deprecated
+      and goes away with v1; use ``IN`` to name a cluster. A bare ``IN`` still
+      accepts a workspace group as well, for statements written before the
+      Stage commands moved to v2, and warns when it resolves one.
     * Use the ``RECURSIVE`` clause to list the files recursively.
     * To return more information about the files, use the ``EXTENDED``
       clause.
@@ -142,7 +170,7 @@ class UploadStageFileHandler(SQLHandler):
 
     # Deployment
     in = { in_group | in_deployment }
-    in_group = IN GROUP { deployment_id | deployment_name }
+    in_group = IN GROUP { group_id | group_name }
     in_deployment = IN { deployment_id | deployment_name }
 
     # ID of deployment
@@ -150,6 +178,12 @@ class UploadStageFileHandler(SQLHandler):
 
     # Name of deployment
     deployment_name = '<deployment-name>'
+
+    # ID of workspace group
+    group_id = ID '<group-id>'
+
+    # Name of workspace group
+    group_name = '<group-name>'
 
     # Path to local file
     local_path = '<local-path>'
@@ -171,13 +205,22 @@ class UploadStageFileHandler(SQLHandler):
       is attached.
     * ``<deployment-name>``: The name of the deployment in which
       which the Stage is attached.
+    * ``<group-id>``: The ID of the workspace group in which the
+      Stage is attached.
+    * ``<group-name>``: The name of the workspace group in which
+      the Stage is attached.
     * ``<local-path>``: The path to the file to upload in the local
       directory.
 
     Remarks
     -------
-    * The ``IN`` clause specifies the ID or the name of the workspace
-      group in which the Stage is attached.
+    * The ``IN`` clause specifies the ID or the name of the
+      deployment in which the Stage is attached.
+    * The ``IN GROUP`` clause names a workspace group instead. A workspace
+      group is a management API v1 resource, so this spelling is deprecated
+      and goes away with v1; use ``IN`` to name a cluster. A bare ``IN`` still
+      accepts a workspace group as well, for statements written before the
+      Stage commands moved to v2, and warns when it resolves one.
     * If the ``OVERWRITE`` clause is specified, any existing file at the
       specified path in the Stage is overwritten.
 
@@ -222,7 +265,7 @@ class DownloadStageFileHandler(SQLHandler):
 
     # Deployment
     in = { in_group | in_deployment }
-    in_group = IN GROUP { deployment_id | deployment_name }
+    in_group = IN GROUP { group_id | group_name }
     in_deployment = IN { deployment_id | deployment_name }
 
     # ID of deployment
@@ -230,6 +273,12 @@ class DownloadStageFileHandler(SQLHandler):
 
     # Name of deployment
     deployment_name = '<deployment-name>'
+
+    # ID of workspace group
+    group_id = ID '<group-id>'
+
+    # Name of workspace group
+    group_name = '<group-name>'
 
     # Path to local file
     local_path = TO '<local-path>'
@@ -254,6 +303,10 @@ class DownloadStageFileHandler(SQLHandler):
       Stage is attached.
     * ``<deployment-name>``: The name of the deployment in which
       which the Stage is attached.
+    * ``<group-id>``: The ID of the workspace group in which the
+      Stage is attached.
+    * ``<group-name>``: The name of the workspace group in which
+      the Stage is attached.
     * ``<encoding>``: The encoding to apply to the downloaded file.
     * ``<local-path>``: Specifies the path in the local directory
       where the file is downloaded.
@@ -264,6 +317,11 @@ class DownloadStageFileHandler(SQLHandler):
       the download location is overwritten.
     * The ``IN`` clause specifies the ID or the name of the
       deployment in which the Stage is attached.
+    * The ``IN GROUP`` clause names a workspace group instead. A workspace
+      group is a management API v1 resource, so this spelling is deprecated
+      and goes away with v1; use ``IN`` to name a cluster. A bare ``IN`` still
+      accepts a workspace group as well, for statements written before the
+      Stage commands moved to v2, and warns when it resolves one.
     * By default, files are downloaded in binary encoding. To view
       the contents of the file on the standard output, use the
       ``ENCODING`` clause and specify an encoding.
@@ -324,7 +382,7 @@ class DropStageFileHandler(SQLHandler):
 
     # Deployment
     in = { in_group | in_deployment }
-    in_group = IN GROUP { deployment_id | deployment_name }
+    in_group = IN GROUP { group_id | group_name }
     in_deployment = IN { deployment_id | deployment_name }
 
     # ID of deployment
@@ -332,6 +390,12 @@ class DropStageFileHandler(SQLHandler):
 
     # Name of deployment
     deployment_name = '<deployment-name>'
+
+    # ID of workspace group
+    group_id = ID '<group-id>'
+
+    # Name of workspace group
+    group_name = '<group-name>'
 
     Description
     -----------
@@ -347,11 +411,20 @@ class DropStageFileHandler(SQLHandler):
       Stage is attached.
     * ``<deployment-name>``: The name of the deployment in which
       which the Stage is attached.
+    * ``<group-id>``: The ID of the workspace group in which the
+      Stage is attached.
+    * ``<group-name>``: The name of the workspace group in which
+      the Stage is attached.
 
     Remarks
     -------
     * The ``IN`` clause specifies the ID or the name of the
       deployment in which the Stage is attached.
+    * The ``IN GROUP`` clause names a workspace group instead. A workspace
+      group is a management API v1 resource, so this spelling is deprecated
+      and goes away with v1; use ``IN`` to name a cluster. A bare ``IN`` still
+      accepts a workspace group as well, for statements written before the
+      Stage commands moved to v2, and warns when it resolves one.
 
     Example
     --------
@@ -386,7 +459,7 @@ class DropStageFolderHandler(SQLHandler):
 
     # Deployment
     in = { in_group | in_deployment }
-    in_group = IN GROUP { deployment_id | deployment_name }
+    in_group = IN GROUP { group_id | group_name }
     in_deployment = IN { deployment_id | deployment_name }
 
     # ID of deployment
@@ -394,6 +467,12 @@ class DropStageFolderHandler(SQLHandler):
 
     # Name of deployment
     deployment_name = '<deployment-name>'
+
+    # ID of workspace group
+    group_id = ID '<group-id>'
+
+    # Name of workspace group
+    group_name = '<group-name>'
 
     # Should folders be deleted recursively?
     recursive = RECURSIVE
@@ -412,11 +491,22 @@ class DropStageFolderHandler(SQLHandler):
       Stage is attached.
     * ``<deployment-name>``: The name of the deployment in which
       which the Stage is attached.
+    * ``<group-id>``: The ID of the workspace group in which the
+      Stage is attached.
+    * ``<group-name>``: The name of the workspace group in which
+      the Stage is attached.
 
     Remarks
     -------
     * The ``RECURSIVE`` clause indicates that the specified folder
       is deleted recursively.
+    * The ``IN`` clause specifies the ID or the name of the
+      deployment in which the Stage is attached.
+    * The ``IN GROUP`` clause names a workspace group instead. A workspace
+      group is a management API v1 resource, so this spelling is deprecated
+      and goes away with v1; use ``IN`` to name a cluster. A bare ``IN`` still
+      accepts a workspace group as well, for statements written before the
+      Stage commands moved to v2, and warns when it resolves one.
 
     Example
     -------
@@ -451,7 +541,7 @@ class CreateStageFolderHandler(SQLHandler):
 
     # Deployment
     in = { in_group | in_deployment }
-    in_group = IN GROUP { deployment_id | deployment_name }
+    in_group = IN GROUP { group_id | group_name }
     in_deployment = IN { deployment_id | deployment_name }
 
     # ID of deployment
@@ -459,6 +549,12 @@ class CreateStageFolderHandler(SQLHandler):
 
     # Name of deployment
     deployment_name = '<deployment-name>'
+
+    # ID of workspace group
+    group_id = ID '<group-id>'
+
+    # Name of workspace group
+    group_name = '<group-name>'
 
     # Path to stage folder
     stage_path = '<stage-path>'
@@ -478,6 +574,10 @@ class CreateStageFolderHandler(SQLHandler):
       the Stage is attached.
     * ``<deployment-name>``: The name of the deployment in
       which the Stage is attached.
+    * ``<group-id>``: The ID of the workspace group in which the
+      Stage is attached.
+    * ``<group-name>``: The name of the workspace group in which
+      the Stage is attached.
 
     Remarks
     -------
@@ -485,6 +585,11 @@ class CreateStageFolderHandler(SQLHandler):
       folder at the specified path is overwritten.
     * The ``IN`` clause specifies the ID or the name of
       the deployment in which the Stage is attached.
+    * The ``IN GROUP`` clause names a workspace group instead. A workspace
+      group is a management API v1 resource, so this spelling is deprecated
+      and goes away with v1; use ``IN`` to name a cluster. A bare ``IN`` still
+      accepts a workspace group as well, for statements written before the
+      Stage commands moved to v2, and warns when it resolves one.
 
     Example
     -------
