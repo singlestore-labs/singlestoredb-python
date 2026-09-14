@@ -535,6 +535,132 @@ class TestFusion(unittest.TestCase):
         assert 'get_workspace_manager' not in src
         assert src.count('get_cluster_manager().organizations.current.jobs') == 8
 
+    #: Minimal ``POST jobs`` response, enough for ``Job.from_dict``. The
+    #: handlers read nothing but ``jobID`` off it.
+    _JOB_RESPONSE = {
+        'completedExecutionsCount': 0,
+        'createdAt': '2026-09-14T00:00:00Z',
+        'enqueuedBy': 'someone@example.com',
+        'executionConfig': {
+            'createSnapshot': False,
+            'maxAllowedExecutionDurationInMinutes': 0,
+            'notebookPath': 'nb.ipynb',
+        },
+        'jobID': 'job-1',
+        'jobMetadata': [],
+        'schedule': {'mode': 'Once'},
+    }
+
+    def _job_request_body(self, sql, **env):
+        """
+        Return the ``POST jobs`` body a JOB statement produces.
+
+        The manager is mocked at the request layer rather than replaced, so the
+        body is the one ``JobsManager`` really assembles -- which is the whole
+        point: the target is not in the statement, so this is the only place it
+        can be observed.
+        """
+        from unittest.mock import MagicMock
+        from unittest.mock import patch
+
+        from singlestoredb.fusion import registry
+        from singlestoredb.fusion.handlers import job as job_handlers
+        from singlestoredb.management.job import JobsManager
+
+        api = MagicMock()
+        api._post.return_value.json.return_value = self._JOB_RESPONSE
+
+        clusters = MagicMock()
+        clusters.organizations.current.jobs = JobsManager(api)
+
+        handler = registry.get_handler(sql)
+        assert handler is not None, sql
+        inst = handler.__new__(handler)
+        inst.connection = None
+        inst._handled = set()
+        params = inst.visit(handler.grammar.parse(sql))
+        for key, value in list(params.items()):
+            params[key] = inst.validate_rule(key, value)
+
+        with patch.object(
+            job_handlers, 'get_cluster_manager', return_value=clusters,
+        ):
+            self._fusion_env(**env)
+            inst.run(params)
+
+        route, kwargs = api._post.call_args
+        assert route == ('jobs',), route
+        return kwargs['json']
+
+    def test_job_commands_target_the_environment_deployment(self):
+        """
+        Nothing in the JOB grammar names a deployment, so pin what does.
+
+        ``targetID`` comes from the environment and ``targetType`` from the
+        manager the handler picked, and no statement can assert either -- the
+        pairing is only visible in the request body. There is no live coverage
+        of a workspace target left either: ``TestJobsFusion`` targets a v2
+        cluster, so this is what holds the write-path vocabulary in place.
+        """
+        from singlestoredb.management.job import TargetType
+
+        cluster_id = '11111111-1111-4111-8111-111111111111'
+        starter_id = '22222222-2222-4222-8222-222222222222'
+
+        body = self._job_request_body(
+            "RUN JOB USING NOTEBOOK 'nb.ipynb' "
+            "WITH RUNTIME 'notebooks-cpu-small'",
+            SINGLESTOREDB_WORKSPACE=cluster_id,
+            SINGLESTOREDB_DEFAULT_DATABASE='dbtest',
+        )
+        assert body['targetConfig'] == dict(
+            databaseName='dbtest',
+            targetID=cluster_id,
+            targetType=TargetType.CLUSTER.value,
+        )
+        assert body['schedule']['mode'] == 'Once'
+        assert body['executionConfig']['notebookPath'] == 'nb.ipynb'
+        assert body['executionConfig']['runtimeName'] == 'notebooks-cpu-small'
+
+        # A starter deployment is named by its own variable, wins over the
+        # regular one, and takes the matching targetType.
+        body = self._job_request_body(
+            "RUN JOB USING NOTEBOOK 'nb.ipynb'",
+            SINGLESTOREDB_WORKSPACE=cluster_id,
+            SINGLESTOREDB_VIRTUAL_WORKSPACE=starter_id,
+            SINGLESTOREDB_DEFAULT_DATABASE='dbtest',
+        )
+        assert body['targetConfig']['targetID'] == starter_id
+        assert body['targetConfig']['targetType'] == \
+            TargetType.VIRTUAL_CLUSTER.value
+
+        # SCHEDULE JOB assembles the same target, and is the only one of the
+        # two that can carry RESUME TARGET.
+        body = self._job_request_body(
+            "SCHEDULE JOB USING NOTEBOOK 'nb.ipynb' WITH MODE 'Recurring' "
+            'EXECUTE EVERY 2 HOURS RESUME TARGET',
+            SINGLESTOREDB_WORKSPACE=cluster_id,
+            SINGLESTOREDB_DEFAULT_DATABASE='dbtest',
+        )
+        assert body['targetConfig'] == dict(
+            databaseName='dbtest',
+            resumeTarget=True,
+            targetID=cluster_id,
+            targetType=TargetType.CLUSTER.value,
+        )
+        assert body['schedule'] == dict(
+            mode='Recurring', executionIntervalInMinutes=120,
+        )
+
+        # The whole targetConfig hangs off the database variable: without it
+        # the job is submitted with no target at all, whatever deployment the
+        # environment names.
+        body = self._job_request_body(
+            "RUN JOB USING NOTEBOOK 'nb.ipynb'",
+            SINGLESTOREDB_WORKSPACE=cluster_id,
+        )
+        assert 'targetConfig' not in body
+
     def _fusion_env(self, **values):
         """Run with only the deployment variables in ``values`` set."""
         from unittest.mock import patch
@@ -544,8 +670,10 @@ class TestFusion(unittest.TestCase):
         self.addCleanup(ctx.stop)
         for name in (
             'SINGLESTOREDB_WORKSPACE',
+            'SINGLESTOREDB_VIRTUAL_WORKSPACE',
             'SINGLESTOREDB_WORKSPACE_GROUP',
             'SINGLESTOREDB_PROJECT',
+            'SINGLESTOREDB_DEFAULT_DATABASE',
         ):
             os.environ.pop(name, None)
         os.environ.update(values)
@@ -2129,7 +2257,7 @@ class TestStageFusion(unittest.TestCase):
         if self.cluster is not None:
             self.cur.execute(f'''
                 show stage files
-                    in group id '{self.cluster.id}' recursive
+                    in id '{self.cluster.id}' recursive
             ''')
             files = list(self.cur)
             folders = []
@@ -2139,18 +2267,18 @@ class TestStageFusion(unittest.TestCase):
                     continue
                 self.cur.execute(f'''
                     drop stage file '{file[0]}'
-                        in group id '{self.cluster.id}'
+                        in id '{self.cluster.id}'
                 ''')
             for folder in folders:
                 self.cur.execute(f'''
                     drop stage folder '{folder[0]}'
-                        in group id '{self.cluster.id}'
+                        in id '{self.cluster.id}'
                 ''')
 
         if self.cluster_2 is not None:
             self.cur.execute(f'''
                 show stage files
-                    in group id '{self.cluster_2.id}' recursive
+                    in id '{self.cluster_2.id}' recursive
             ''')
             files = list(self.cur)
             folders = []
@@ -2160,12 +2288,12 @@ class TestStageFusion(unittest.TestCase):
                     continue
                 self.cur.execute(f'''
                     drop stage file '{file[0]}'
-                        in group id '{self.cluster_2.id}'
+                        in id '{self.cluster_2.id}'
                 ''')
             for folder in folders:
                 self.cur.execute(f'''
                     drop stage folder '{folder[0]}'
-                        in group id '{self.cluster_2.id}'
+                        in id '{self.cluster_2.id}'
                 ''')
 
     def test_show_stage(self):
@@ -2339,13 +2467,13 @@ class TestStageFusion(unittest.TestCase):
         # Copy file to stage 2
         self.cur.execute(f'''
             upload file to stage 'dl_test2.sql'
-                in group '{self.cluster_2.name}'
+                in '{self.cluster_2.name}'
                 from '{test2_sql}'
         ''')
 
         # Make sure only one file in stage 2
         self.cur.execute(f'''
-            show stage files in group '{self.cluster_2.name}'
+            show stage files in '{self.cluster_2.name}'
         ''')
         files = list(self.cur)
         assert len(files) == 1
@@ -2363,7 +2491,7 @@ class TestStageFusion(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             self.cur.execute(f'''
                 download stage file 'dl_test2.sql'
-                    in group '{self.cluster_2.name}'
+                    in '{self.cluster_2.name}'
                     to '{tmpdir}/dl_test2.sql'
             ''')
             with open(os.path.join(tmpdir, 'dl_test2.sql'), 'r') as dl_file:
@@ -2394,7 +2522,7 @@ class TestStageFusion(unittest.TestCase):
         # Copy file to stage 2
         self.cur.execute(f'''
             upload file to stage 'new_test2.sql'
-                in group '{self.cluster_2.name}'
+                in '{self.cluster_2.name}'
                 from '{test2_sql}'
         ''')
 
@@ -2408,7 +2536,7 @@ class TestStageFusion(unittest.TestCase):
 
         # Make sure only one file in stage 2
         self.cur.execute(f'''
-            show stage files in group '{self.cluster_2.name}' recursive
+            show stage files in '{self.cluster_2.name}' recursive
         ''')
         files = list(self.cur)
         assert len(files) == 1
@@ -2424,13 +2552,13 @@ class TestStageFusion(unittest.TestCase):
 
         # Make subdir
         self.cur.execute(f'''
-            create stage folder 'data' in group '{self.cluster_2.name}'
+            create stage folder 'data' in '{self.cluster_2.name}'
         ''')
 
         # Upload file using workspace ID
         self.cur.execute(f'''
             upload file to stage 'data/new_test2_sub.sql'
-                in group id '{self.cluster_2.id}'
+                in id '{self.cluster_2.id}'
                 from '{test2_sql}'
         ''')
 
@@ -2444,7 +2572,7 @@ class TestStageFusion(unittest.TestCase):
 
         # Make sure two files in stage 2
         self.cur.execute(f'''
-            show stage files in group id '{self.cluster_2.id}' recursive
+            show stage files in id '{self.cluster_2.id}' recursive
         ''')
         files = list(self.cur)
         assert len(files) == 3
@@ -2455,19 +2583,19 @@ class TestStageFusion(unittest.TestCase):
         with self.assertRaises(OSError):
             self.cur.execute(f'''
                 upload file to stage 'data/new_test2_sub.sql'
-                    in group id '{self.cluster_2.id}'
+                    in id '{self.cluster_2.id}'
                     from '{test2_sql}'
             ''')
 
         self.cur.execute(f'''
             upload file to stage 'data/new_test2_sub.sql'
-                in group id '{self.cluster_2.id}'
+                in id '{self.cluster_2.id}'
                 from '{test2_sql}' overwrite
         ''')
 
         # Make sure two files in stage 2
         self.cur.execute(f'''
-            show stage files in group id '{self.cluster_2.id}' recursive
+            show stage files in id '{self.cluster_2.id}' recursive
         ''')
         files = list(self.cur)
         assert len(files) == 3
@@ -2477,7 +2605,7 @@ class TestStageFusion(unittest.TestCase):
         # Test LIKE clause
         self.cur.execute(f'''
             show stage files
-                in group id '{self.cluster_2.id}'
+                in id '{self.cluster_2.id}'
                 like '%_sub%' recursive
         ''')
         files = list(self.cur)
@@ -2498,7 +2626,7 @@ class TestStageFusion(unittest.TestCase):
 
         # Make sure two files in stage 2
         self.cur.execute(f'''
-            show stage files in group id '{self.cluster_2.id}' recursive
+            show stage files in id '{self.cluster_2.id}' recursive
         ''')
         files = list(self.cur)
         assert len(files) == 3
@@ -2509,17 +2637,17 @@ class TestStageFusion(unittest.TestCase):
         with self.assertRaises(OSError):
             self.cur.execute(f'''
                 drop stage folder 'data'
-                    in group id '{self.cluster_2.id}'
+                    in id '{self.cluster_2.id}'
             ''')
 
         self.cur.execute(f'''
             drop stage file 'data/new_test2_sub.sql'
-                in group id '{self.cluster_2.id}'
+                in id '{self.cluster_2.id}'
         ''')
 
         # Make sure one file and one directory in stage 2
         self.cur.execute(f'''
-            show stage files in group id '{self.cluster_2.id}' recursive
+            show stage files in id '{self.cluster_2.id}' recursive
         ''')
         files = list(self.cur)
         assert len(files) == 2
@@ -2528,12 +2656,12 @@ class TestStageFusion(unittest.TestCase):
         # Drop stage folder from stage 2
         self.cur.execute(f'''
             drop stage folder 'data'
-                in group id '{self.cluster_2.id}'
+                in id '{self.cluster_2.id}'
         ''')
 
         # Make sure one file in stage 2
         self.cur.execute(f'''
-            show stage files in group id '{self.cluster_2.id}' recursive
+            show stage files in id '{self.cluster_2.id}' recursive
         ''')
         files = list(self.cur)
         assert len(files) == 1
@@ -2542,12 +2670,12 @@ class TestStageFusion(unittest.TestCase):
         # Drop last file
         self.cur.execute(f'''
             drop stage file 'new_test2.sql'
-                in group id '{self.cluster_2.id}'
+                in id '{self.cluster_2.id}'
         ''')
 
         # Make sure no files in stage 2
         self.cur.execute(f'''
-            show stage files in group id '{self.cluster_2.id}' recursive
+            show stage files in id '{self.cluster_2.id}' recursive
         ''')
         files = list(self.cur)
         assert len(files) == 0

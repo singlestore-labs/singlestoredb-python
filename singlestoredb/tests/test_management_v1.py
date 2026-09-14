@@ -249,10 +249,18 @@ class TestStarterWorkspace(unittest.TestCase):
         shared_tier_regions: NamedList[Region] = [
             x for x in cls.manager.shared_tier_regions if 'US' in x.name
         ]
-        cls.starter_username = 'starter_user'
-        cls.password = secrets.token_urlsafe(20)
-
         name = shared_database_name(secrets.token_urlsafe(20)[:20])
+
+        # The starter-tier user name has to be unique across every starter
+        # deployment in the project, not just within this one: creating the
+        # same name in a second starter deployment fails while the first is
+        # live. So it is namespaced like the deployment and the database are,
+        # or this class collides with TestStarterCluster in test_management_v2
+        # -- they run on different xdist workers -- and with any starter
+        # deployment an earlier failed run leaked. The API answers the
+        # collision with a bare 500, which names nothing.
+        cls.starter_username = f'starter_user_{name[:8]}'
+        cls.password = secrets.token_urlsafe(20)
 
         cls.database_name = f'starter_db_{name}'
 

@@ -1507,10 +1507,17 @@ class TestStarterCluster(unittest.TestCase):
                 'organization',
             )
 
-        cls.starter_username = 'starter_user'
+        name = shared_database_name(secrets.token_urlsafe(20)[:20])
+
+        # Namespaced for the same reason as the database: the starter-tier user
+        # name has to be unique across the project's starter deployments, not
+        # just within this one, so a fixed name collides with
+        # TestStarterWorkspace in test_management_v1 -- which runs on another
+        # xdist worker -- and with anything an earlier failed run leaked. The
+        # API reports the collision as a bare 500.
+        cls.starter_username = f'starter_user_{name[:8]}'
         cls.password = secrets.token_urlsafe(20)
 
-        name = shared_database_name(secrets.token_urlsafe(20)[:20])
         cls.database_name = f'starter_db_{name}'
 
         region = random.choice(regions)
