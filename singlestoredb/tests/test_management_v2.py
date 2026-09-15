@@ -1765,25 +1765,36 @@ class TestSecrets(unittest.TestCase):
         cls.manager = None
 
     def test_get_secret(self):
-        name = f'secret_{id(self)}'
+        # A fixed name, deliberately not one built from id(self): that is a
+        # process-local address, so a name built from it can never match what
+        # an interrupted run left behind, which makes the cleanup below dead
+        # code. A secret is org-scoped and permanent and nothing sweeps them,
+        # so a leaked one is leaked for good. Distinct from the v1 suite's
+        # 'secret_name' so the two suites do not delete each other's.
+        name = 'secret_v2_test'
 
         # Clear a leftover secret from a previous run
         try:
-            secret = self.manager.organizations.current.get_secret(name)
-            self.manager._delete(f'secrets/{secret.id}')
+            leftover = self.manager.organizations.current.get_secret(name)
+            self.manager._delete(f'secrets/{leftover.id}')
         except s2.ManagementError:
             pass
 
-        self.manager._post(
+        created = self.manager._post(
             'secrets',
             json=dict(name=name, value='secret_value'),
-        )
+        ).json()
+
+        # The ID comes from the create response rather than from the lookup
+        # under test: binding it inside the try would leave the cleanup raising
+        # UnboundLocalError over whatever the lookup actually failed with.
+        secret_id = created['secret']['secretID']
         try:
             secret = self.manager.organizations.current.get_secret(name)
             assert secret.name == name
             assert secret.value == 'secret_value'
         finally:
-            self.manager._delete(f'secrets/{secret.id}')
+            self.manager._delete(f'secrets/{secret_id}')
 
 
 @pytest.mark.management
