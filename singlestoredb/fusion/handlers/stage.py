@@ -2,15 +2,19 @@
 """
 Fusion SQL handlers for Stage.
 
-Every handler names its Stage owner through the same ``in`` clause, which has
-two spellings for two different resources. A bare ``IN`` names a deployment and
-resolves against management API v2, which is the one to use. ``IN GROUP`` names
-a workspace group and resolves against v1, where Stage is attached to the group
-rather than to a workspace; it is deprecated and goes away with
-``management/v1/``. A bare ``IN`` also falls back to a workspace group when it
-matches no deployment, warning as it does, so that statements written before
-Stage moved to v2 keep resolving. :func:`.utils.get_deployment` resolves all of
-this, and everything it can return exposes ``.stage``.
+Every handler names its Stage owner through the same ``in`` clause. A bare
+``IN`` is the spelling to use, and it needs no keyword to say what kind of
+owner it names: the value is resolved as a deployment against management API
+v2, and failing that as a workspace group against v1, where Stage is attached
+to the group rather than to a workspace. Both are silent, because naming a
+group this way is what Stage statements always did -- a group was the only kind
+of Stage owner before v2 -- and which kind a given name belongs to is a fact
+about the org rather than about the statement.
+
+``IN GROUP`` names a workspace group explicitly, and is the one deprecated
+spelling here: it goes away with ``management/v1/``, and dropping the keyword
+is an edit that works today either way. :func:`.utils.get_deployment` resolves
+all of this, and everything it can return exposes ``.stage``.
 """
 from typing import Any
 from typing import Dict
@@ -87,13 +91,13 @@ class ShowStageFilesHandler(SQLHandler):
       key. By default, the results are sorted in the ascending order.
     * The ``AT`` clause specifies the path in the Stage to list
       the files from.
-    * The ``IN`` clause specifies the ID or the name of the
-      deployment in which the Stage is attached.
-    * The ``IN GROUP`` clause names a workspace group instead. A workspace
-      group is a management API v1 resource, so this spelling is deprecated
-      and goes away with v1; use ``IN`` to name a cluster. A bare ``IN`` still
-      accepts a workspace group as well, for statements written before the
-      Stage commands moved to v2, and warns when it resolves one.
+    * The ``IN`` clause specifies the ID or the name of the deployment --
+      or, for a Stage that has not moved off one, the workspace group --
+      in which the Stage is attached.
+    * The ``IN GROUP`` clause names a workspace group explicitly. It is
+      deprecated and goes away with management API v1, which is the version
+      workspace groups belong to: drop the ``GROUP`` keyword, since a bare
+      ``IN`` resolves a workspace group too.
     * Use the ``RECURSIVE`` clause to list the files recursively.
     * To return more information about the files, use the ``EXTENDED``
       clause.
@@ -214,13 +218,13 @@ class UploadStageFileHandler(SQLHandler):
 
     Remarks
     -------
-    * The ``IN`` clause specifies the ID or the name of the
-      deployment in which the Stage is attached.
-    * The ``IN GROUP`` clause names a workspace group instead. A workspace
-      group is a management API v1 resource, so this spelling is deprecated
-      and goes away with v1; use ``IN`` to name a cluster. A bare ``IN`` still
-      accepts a workspace group as well, for statements written before the
-      Stage commands moved to v2, and warns when it resolves one.
+    * The ``IN`` clause specifies the ID or the name of the deployment --
+      or, for a Stage that has not moved off one, the workspace group --
+      in which the Stage is attached.
+    * The ``IN GROUP`` clause names a workspace group explicitly. It is
+      deprecated and goes away with management API v1, which is the version
+      workspace groups belong to: drop the ``GROUP`` keyword, since a bare
+      ``IN`` resolves a workspace group too.
     * If the ``OVERWRITE`` clause is specified, any existing file at the
       specified path in the Stage is overwritten.
 
@@ -315,13 +319,13 @@ class DownloadStageFileHandler(SQLHandler):
     -------
     * If the ``OVERWRITE`` clause is specified, any existing file at
       the download location is overwritten.
-    * The ``IN`` clause specifies the ID or the name of the
-      deployment in which the Stage is attached.
-    * The ``IN GROUP`` clause names a workspace group instead. A workspace
-      group is a management API v1 resource, so this spelling is deprecated
-      and goes away with v1; use ``IN`` to name a cluster. A bare ``IN`` still
-      accepts a workspace group as well, for statements written before the
-      Stage commands moved to v2, and warns when it resolves one.
+    * The ``IN`` clause specifies the ID or the name of the deployment --
+      or, for a Stage that has not moved off one, the workspace group --
+      in which the Stage is attached.
+    * The ``IN GROUP`` clause names a workspace group explicitly. It is
+      deprecated and goes away with management API v1, which is the version
+      workspace groups belong to: drop the ``GROUP`` keyword, since a bare
+      ``IN`` resolves a workspace group too.
     * By default, files are downloaded in binary encoding. To view
       the contents of the file on the standard output, use the
       ``ENCODING`` clause and specify an encoding.
@@ -418,13 +422,13 @@ class DropStageFileHandler(SQLHandler):
 
     Remarks
     -------
-    * The ``IN`` clause specifies the ID or the name of the
-      deployment in which the Stage is attached.
-    * The ``IN GROUP`` clause names a workspace group instead. A workspace
-      group is a management API v1 resource, so this spelling is deprecated
-      and goes away with v1; use ``IN`` to name a cluster. A bare ``IN`` still
-      accepts a workspace group as well, for statements written before the
-      Stage commands moved to v2, and warns when it resolves one.
+    * The ``IN`` clause specifies the ID or the name of the deployment --
+      or, for a Stage that has not moved off one, the workspace group --
+      in which the Stage is attached.
+    * The ``IN GROUP`` clause names a workspace group explicitly. It is
+      deprecated and goes away with management API v1, which is the version
+      workspace groups belong to: drop the ``GROUP`` keyword, since a bare
+      ``IN`` resolves a workspace group too.
 
     Example
     --------
@@ -500,13 +504,13 @@ class DropStageFolderHandler(SQLHandler):
     -------
     * The ``RECURSIVE`` clause indicates that the specified folder
       is deleted recursively.
-    * The ``IN`` clause specifies the ID or the name of the
-      deployment in which the Stage is attached.
-    * The ``IN GROUP`` clause names a workspace group instead. A workspace
-      group is a management API v1 resource, so this spelling is deprecated
-      and goes away with v1; use ``IN`` to name a cluster. A bare ``IN`` still
-      accepts a workspace group as well, for statements written before the
-      Stage commands moved to v2, and warns when it resolves one.
+    * The ``IN`` clause specifies the ID or the name of the deployment --
+      or, for a Stage that has not moved off one, the workspace group --
+      in which the Stage is attached.
+    * The ``IN GROUP`` clause names a workspace group explicitly. It is
+      deprecated and goes away with management API v1, which is the version
+      workspace groups belong to: drop the ``GROUP`` keyword, since a bare
+      ``IN`` resolves a workspace group too.
 
     Example
     -------
@@ -583,13 +587,13 @@ class CreateStageFolderHandler(SQLHandler):
     -------
     * If the ``OVERWRITE`` clause is specified, any existing
       folder at the specified path is overwritten.
-    * The ``IN`` clause specifies the ID or the name of
-      the deployment in which the Stage is attached.
-    * The ``IN GROUP`` clause names a workspace group instead. A workspace
-      group is a management API v1 resource, so this spelling is deprecated
-      and goes away with v1; use ``IN`` to name a cluster. A bare ``IN`` still
-      accepts a workspace group as well, for statements written before the
-      Stage commands moved to v2, and warns when it resolves one.
+    * The ``IN`` clause specifies the ID or the name of the deployment --
+      or, for a Stage that has not moved off one, the workspace group --
+      in which the Stage is attached.
+    * The ``IN GROUP`` clause names a workspace group explicitly. It is
+      deprecated and goes away with management API v1, which is the version
+      workspace groups belong to: drop the ``GROUP`` keyword, since a bare
+      ``IN`` resolves a workspace group too.
 
     Example
     -------

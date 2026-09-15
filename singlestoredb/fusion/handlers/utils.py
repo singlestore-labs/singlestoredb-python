@@ -517,10 +517,15 @@ def _get_stage_group(
     # still hears that the spelling itself is going. stacklevel reaches the
     # handler method: user code is an unknown number of execute() frames
     # further up, so there is no frame count that lands on it.
+    #
+    # The warning is about the clause, not the resource: a bare IN resolves a
+    # workspace group too, so dropping the GROUP keyword is an edit the caller
+    # can make today whether or not their Stage has moved to a cluster.
     warnings.warn(
-        'IN GROUP names a workspace group, which is a management API v1 '
-        'resource and is deprecated. Use IN <deployment> to name a cluster '
-        'instead.',
+        'IN GROUP is deprecated: it names a workspace group explicitly, and '
+        'workspace groups are a management API v1 resource that goes away '
+        'with v1. Use a bare IN instead, which names a deployment or a '
+        'workspace group.',
         DeprecatedFeatureWarning, stacklevel=3,
     )
 
@@ -543,23 +548,22 @@ def _group_fallback(
     A bare ``IN`` named a workspace group before the Stage commands moved to
     v2, because a group was the only kind of Stage owner there was. So a value
     that matches no cluster is tried as a group rather than reported missing,
-    and a statement written against v1 keeps working -- with a warning, since
-    the resource it names goes away with ``management/v1/``.
+    and ``IN`` names either kind of Stage owner.
+
+    This is deliberately silent. Naming a group with a bare ``IN`` was always
+    how a Stage was addressed, so there is no statement to correct: the
+    spelling the user wrote is the one to keep writing, and whether it lands on
+    a cluster or a group is a fact about their org, not about their SQL. The
+    group resource does go away with ``management/v1/``, but a warning here
+    would ask for a migration that no edit to the statement can perform --
+    the same reason :func:`.workspace._manage_workspaces_v1` exists. ``IN
+    GROUP`` still warns, because that spelling *is* something the user can
+    change.
 
     The deployment lookup goes first, so a name that is both a cluster's and a
     group's is the cluster's, and nothing that resolves today changes meaning.
     """
-    group = _workspace_group(name=name, id=id)
-    if group is None:
-        return None
-
-    warnings.warn(
-        f'{name or id} is a workspace group, not a deployment. A workspace '
-        'group is a management API v1 resource and is deprecated: name it '
-        'with IN GROUP while it lasts, and a cluster with IN.',
-        DeprecatedFeatureWarning, stacklevel=3,
-    )
-    return group
+    return _workspace_group(name=name, id=id)
 
 
 def get_deployment(
@@ -591,15 +595,17 @@ def get_deployment(
         * params['in']['in_group']['group_name']
         * params['in']['in_group']['group_id']
 
-    The two clauses are not synonyms: they name different resources at
-    different versions, and ``IN GROUP`` goes away with ``management/v1/``. It
-    is checked first, so a group is never looked for among clusters.
+    ``IN GROUP`` is not a second way of naming a deployment: it names a
+    different resource at a different version, and it goes away with
+    ``management/v1/``. It is checked first, so a group is never looked for
+    among clusters.
 
-    They are not exclusive either. A bare ``IN`` that matches no deployment
-    falls back to :func:`_group_fallback`, because a bare ``IN`` named a
-    workspace group before the Stage commands moved to v2 and a statement
-    written then should keep working. The fallback is second, so a name that is
-    both a cluster's and a group's is the cluster's.
+    It is not the only way to reach a group, though. A bare ``IN`` that matches
+    no deployment falls back to :func:`_group_fallback`, so ``IN`` names either
+    kind of Stage owner and needs no keyword to say which -- a bare ``IN``
+    named a workspace group before the Stage commands moved to v2, and that is
+    still what it does when that is what the name belongs to. The fallback is
+    second, so a name that is both a cluster's and a group's is the cluster's.
 
     With neither clause, the deployment comes from ``SINGLESTOREDB_WORKSPACE``,
     which is what the notebook environment calls the current deployment

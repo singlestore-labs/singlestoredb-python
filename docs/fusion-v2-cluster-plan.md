@@ -173,6 +173,15 @@ only `job.py` moves. Add alongside it:
   placeholders. Stage is attached to the group itself at v1
   (`stage/{group_id}/fs/`), so a group names a Stage without a workspace.
 
+  A bare `IN` that matches no cluster or starter cluster then falls back to a
+  workspace group through `_group_fallback()`, so `IN` names either kind of
+  Stage owner. That path is **silent**: a bare `IN` naming a group is what
+  Stage statements always did — a group was the only kind of Stage owner
+  before v2 — so there is no statement for a warning to ask the caller to
+  correct, and which kind of resource a name belongs to is a fact about the
+  org. Only `IN GROUP` warns, because dropping that keyword is an edit the
+  caller can make today whichever resource they are on.
+
   `SINGLESTOREDB_WORKSPACE_GROUP`, if set and nothing else matched, raises a
   `KeyError` pointing at `SINGLESTOREDB_WORKSPACE` — its value is a group ID,
   which v2 reports only as the read-only `Cluster.group` and offers no route

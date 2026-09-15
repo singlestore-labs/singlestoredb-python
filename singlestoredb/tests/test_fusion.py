@@ -827,14 +827,15 @@ class TestFusion(unittest.TestCase):
 
         A bare ``IN`` named a workspace group before the Stage commands moved to
         v2 -- a group was the only kind of Stage owner there was -- so a
-        statement written then keeps working, with a warning naming ``IN GROUP``
-        and the version the resource belongs to.
+        statement written then keeps working, and silently: ``IN`` is the
+        spelling to use for either kind of owner, so there is nothing about the
+        statement to warn about. Only ``IN GROUP`` warns.
         """
+        import warnings
         from unittest.mock import MagicMock
         from unittest.mock import patch
 
         from singlestoredb.fusion.handlers import utils
-        from singlestoredb.warnings import DeprecatedFeatureWarning
 
         group_id = '11111111-1111-4111-8111-111111111111'
         group = MagicMock()
@@ -858,7 +859,8 @@ class TestFusion(unittest.TestCase):
                         utils, 'get_cluster_manager', return_value=clusters,
                     ):
                 self._fusion_env()
-                with self.assertWarns(DeprecatedFeatureWarning) as caught:
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter('always')
                     return utils.get_deployment(params), caught
 
         for params in (
@@ -868,9 +870,7 @@ class TestFusion(unittest.TestCase):
         ):
             found, caught = resolve(params)
             assert found is group, params
-            msg = str(caught.warning)
-            assert 'IN GROUP' in msg, msg
-            assert 'workspace group' in msg, msg
+            assert not caught, (params, [str(x.message) for x in caught])
 
     def test_bare_in_prefers_a_cluster_over_a_group_of_the_same_name(self):
         """
