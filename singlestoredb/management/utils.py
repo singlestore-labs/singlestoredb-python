@@ -38,7 +38,7 @@ else:
     PathLikeABC = os.PathLike[str]
 
 
-class TTLProperty(object):
+class TTLProperty(property):
     """
     Property with time limit.
 
@@ -47,10 +47,18 @@ class TTLProperty(object):
     properties return is not: a manager's project list belongs to one
     organization, so a descriptor-wide cache would hand one manager's list to a
     manager holding a different token.
+
+    Subclassing :class:`property` is what makes the decorated members read as
+    attributes rather than methods -- to :func:`isinstance` checks, and to
+    Sphinx, which documents anything else as a callable and so would tell
+    readers to write ``manager.projects()``.
     """
 
     def __init__(self, fget: Callable[[Any], Any], ttl: datetime.timedelta):
-        self.fget = fget
+        super().__init__(fget)
+        # ``property.fget`` is Optional to mypy and read-only at runtime, so the
+        # getter is kept here as well rather than narrowed at each call.
+        self._fget = fget
         self.ttl = ttl
         self.__doc__ = fget.__doc__
         self._name = ''
@@ -76,7 +84,7 @@ class TTLProperty(object):
             if (datetime.datetime.now() - fetched_at) < self.ttl:
                 return value
 
-        value = self.fget(obj)
+        value = self._fget(obj)
         obj.__dict__[self._cache_key] = (value, datetime.datetime.now())
 
         return value
