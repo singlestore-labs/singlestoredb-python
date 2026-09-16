@@ -58,6 +58,7 @@ test = [
     "pydantic",
     "pytest",
     "pytest-cov",
+    "pytest-xdist",
     "singlestore-vectorstore>=0.1.2",
     "uvicorn",
 ]
@@ -90,8 +91,27 @@ exclude = ["docs*", "resources*", "examples*", "licenses*"]
 "*" = ["*.typed", "*.sql", "*.csv", "*.ipynb"]
 
 [tool.pytest.ini_options]
+# Parallel by default. Both options are overridable on the command line, which
+# comes after addopts: -n 1 or -n 0 for a serial run (0 takes xdist out of the
+# picture entirely, which is what --pdb needs), --dist load to change grouping.
+#
+# loadgroup rather than xdist's default load: the default splits a unittest
+# class across workers, and each one then runs setUpClass itself, so one shared
+# cluster fixture becomes N deployments. loadgroup keeps a class on one worker
+# and honours the xdist_group marks below. It is here rather than in the
+# invocation because forgetting it costs real money.
+#
+# 3 workers, not `auto`: the ceiling is the management API's tolerance for
+# concurrent provisioning and the org's cluster quota, not this host's CPUs.
+#
+# Note that xdist must be installed for pytest to start at all with these set
+# (`pip install -e ".[test]"`), that SINGLESTOREDB_MANAGEMENT_TRACE's terminal
+# summary needs -n 0, and that USE_DATA_API=1 in parallel is unverified.
+addopts = ["-n", "3", "--dist", "loadgroup"]
 markers = [
     "management",
+    "management_v1: exercises the v1 management API, which v2 has replaced. Deselect with -m 'not management_v1'; the v1 endpoints only need a nightly gate now that v2 is the default.",
+    "xdist_group: pytest-xdist's own marker, declared here so a run without the plugin installed does not warn on it. Applied to the classes that borrow from the shared cluster pool; see singlestoredb/tests/utils.py.",
 ]
 
 [tool.mypy]

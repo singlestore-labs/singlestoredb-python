@@ -171,8 +171,13 @@ jobs:
           SINGLESTOREDB_FUSION_ENABLE_HIDDEN: "1"
 
       - name: Run HTTP protocol tests
+        # -n 0 overrides the -n 3 in pyproject.toml's addopts: the HTTP/Data API
+        # run must be serial. Setup goes over SINGLESTOREDB_INIT_DB_URL (MySQL),
+        # so load_sql takes its `SET GLOBAL HTTP_PROXY_PORT` + `RESTART PROXY`
+        # branch (singlestoredb/tests/utils.py:227) once per worker, and a proxy
+        # restart drops any HTTP request another worker has in flight.
         run: |
-          pytest -v -m 'not management' --cov=singlestoredb --pyargs singlestoredb.tests
+          pytest -v -n 0 -m 'not management' --cov=singlestoredb --pyargs singlestoredb.tests
         env:
           COVERAGE_FILE: "coverage-http.cov"
           SINGLESTOREDB_URL: "http://root:root@127.0.0.1:9081"

@@ -4,6 +4,7 @@ import functools
 import os
 
 from . import auth
+from ._management_version import DEFAULT_MANAGEMENT_VERSION
 from .utils.config import check_bool  # noqa: F401
 from .utils.config import check_dict_str_str  # noqa: F401
 from .utils.config import check_float  # noqa: F401
@@ -309,10 +310,21 @@ register_option(
     environ=['SINGLESTOREDB_MANAGEMENT_BASE_URL'],
 )
 
+# Set this to 'v1' -- or pass version='v1' to a manage_* factory -- to address
+# the v1 endpoints, which remain reachable until management/v1/ is removed.
+# The default comes from _management_version so that this option, the manage_*
+# factories, and Manager.default_version all move together.
 register_option(
-    'management.version', 'string', check_str, 'v1',
+    'management.version', 'string', check_str, DEFAULT_MANAGEMENT_VERSION,
     'Specifies the version for the management API.',
     environ=['SINGLESTOREDB_MANAGEMENT_VERSION'],
+)
+
+register_option(
+    'management.trace', 'bool', check_bool, False,
+    'Log the duration of every management API request and every poll '
+    'the wait_on_* loops sleep through to stderr.',
+    environ=['SINGLESTOREDB_MANAGEMENT_TRACE'],
 )
 
 

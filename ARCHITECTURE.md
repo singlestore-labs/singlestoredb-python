@@ -26,7 +26,7 @@ the components fit together, their responsibilities, and their interactions.
 
 The SingleStoreDB Python SDK provides:
 - **DB-API 2.0 compliant interface** to SingleStore databases
-- **Cloud management API** for workspace and cluster lifecycle management
+- **Cloud management API** for cluster lifecycle management
 - **Fusion SQL** for client-side SQL command extension
 - **External Functions** (UDFs) for deploying Python functions to SingleStore
 - **AI integrations** for chat and embeddings
@@ -70,20 +70,26 @@ singlestoredb/
 │
 ├── management/              # Cloud management API
 │   ├── manager.py           # Base REST client
-│   ├── workspace.py         # Workspace/WorkspaceGroup/Stage
+│   ├── cluster.py           # Cluster/StarterCluster
+│   ├── project.py           # Project definitions
+│   ├── stage.py             # Stage file storage
 │   ├── organization.py      # Organization management
 │   ├── region.py            # Region definitions
 │   ├── job.py               # Job management
 │   ├── files.py             # File operations
 │   ├── billing_usage.py     # Billing and usage tracking
-│   └── export.py            # Data export operations
+│   ├── export.py            # Data export operations
+│   ├── workspace.py         # v1 re-exports (deprecated)
+│   ├── v1/                  # Version 1 routes (deprecated)
+│   └── v2/                  # Version 2 routes (default)
 │
 ├── fusion/                  # Client-side SQL extensions
 │   ├── handler.py           # SQLHandler base class
 │   ├── registry.py          # Handler registration
 │   ├── result.py            # FusionSQLResult
 │   └── handlers/            # Built-in handlers
-│       ├── workspace.py     # Workspace commands
+│       ├── cluster.py       # Cluster commands
+│       ├── workspace.py     # Workspace commands (deprecated)
 │       ├── stage.py         # Stage commands
 │       ├── job.py           # Job commands
 │       ├── files.py         # File commands
@@ -128,7 +134,7 @@ layer provides a unified interface with protocol-specific implementations.
 
 ### Connection Architecture
 
-The entry point is `singlestoredb.connect()` in `singlestoredb/connection.py:1312`:
+The entry point is `singlestoredb.connect()` in `singlestoredb/connection.py:1354`:
 
 ```python
 import singlestoredb as s2
@@ -252,7 +258,7 @@ conn.show.plan(plan_id)     # SHOW PLAN <id> - execution plan details
 
 **Fusion SQL Integration:**
 - Client-side interception of extended SQL commands
-- Workspace management via SQL syntax
+- Cluster management via SQL syntax
 - Stage (file storage) operations via SQL
 
 **Multiple Result Formats:**
@@ -431,6 +437,18 @@ export SINGLESTOREDB_FUSION_ENABLED=1
 The management API (`singlestoredb/management/`) provides programmatic access to
 SingleStore's cloud management features.
 
+The API is versioned. Version-neutral code lives in the top-level modules, whose
+base classes implement version 2 — the default, set once in
+`singlestoredb/_management_version.py`. `management/v1/` holds the version 1
+overrides and `management/v2/` pins the version 2 routes. Version is selected by
+the `management.version` option (`SINGLESTOREDB_MANAGEMENT_VERSION`) or a
+`version=` argument to any `manage_*` function.
+
+Version 2 replaced version 1's workspace groups and workspaces with a single
+flat `Cluster` resource, so `WorkspaceManager`, `WorkspaceGroup` and `Workspace`
+are deprecated in favor of `ClusterManager` and `Cluster`. Grouping is expressed
+by `Project`, an organizational unit rather than a deployment parent.
+
 ### Architecture
 
 ```
@@ -448,12 +466,12 @@ SingleStore's cloud management features.
                                    │
                                    ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        WorkspaceManager                             │
-│                    singlestoredb/management/workspace.py            │
+│                          ClusterManager                             │
+│                    singlestoredb/management/cluster.py              │
 ├─────────────────────────────────────────────────────────────────────┤
-│  workspace_groups()    regions()           organizations()          │
-│  create_workspace()    get_workspace()     billing()                │
-│  starter_workspaces()  create_workspace_group()                     │
+│  clusters              regions              organizations           │
+│  create_cluster()      get_cluster()        billing                 │
+│  starter_clusters      projects             get_project()           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -463,24 +481,24 @@ SingleStore's cloud management features.
 import singlestoredb as s2
 
 # Initialize manager with API token
-mgr = s2.manage_workspaces()
+mgr = s2.manage_clusters()
 
-# List workspace groups
-for wg in mgr.workspace_groups():
-    print(wg.name, wg.id)
+# List clusters
+for c in mgr.clusters:
+    print(c.name, c.id)
 
-# Create a workspace
-ws = mgr.create_workspace(
-    name='my-workspace',
-    workspace_group=wg,
+# Create a cluster
+c = mgr.create_cluster(
+    name='my-cluster',
+    region='US West 2 (Oregon)',
     size='S-00',
 )
 
-# Connect to workspace
-conn = ws.connect()
+# Connect to the cluster
+conn = c.connect()
 
 # Stage operations (file storage)
-stage = wg.stage
+stage = c.stage
 stage.upload_file('local.csv', '/data/uploaded.csv')
 stage.download_file('/data/uploaded.csv', 'downloaded.csv')
 stage.listdir('/data')
@@ -491,13 +509,17 @@ stage.listdir('/data')
 | Class | File | Purpose |
 |-------|------|---------|
 | `Manager` | `manager.py` | Base REST client with auth |
-| `WorkspaceManager` | `workspace.py` | Main management interface |
-| `WorkspaceGroup` | `workspace.py` | Group of workspaces |
-| `Workspace` | `workspace.py` | Database instance |
-| `Stage` | `workspace.py` | File storage operations |
-| `StarterWorkspace` | `workspace.py` | Free tier workspace |
+| `ClusterManager` | `cluster.py` | Main management interface |
+| `Cluster` | `cluster.py` | Database deployment |
+| `StarterCluster` | `cluster.py` | Shared-tier deployment |
+| `Project` | `project.py` | Grouping for an org's clusters |
+| `Stage` | `stage.py` | File storage operations |
 | `Organization` | `organization.py` | Organization management |
-| `Billing` | `workspace.py` | Usage and billing |
+| `Billing` | `billing.py` | Usage and billing |
+| `WorkspaceManager` | `v1/workspace.py` | v1 interface (deprecated) |
+| `WorkspaceGroup` | `v1/workspace.py` | v1 group of workspaces (deprecated) |
+| `Workspace` | `v1/workspace.py` | v1 database instance (deprecated) |
+| `StarterWorkspace` | `v1/workspace.py` | v1 shared tier (deprecated) |
 
 ---
 
@@ -598,7 +620,8 @@ Located in `singlestoredb/fusion/handlers/`:
 
 | Handler | Commands |
 |---------|----------|
-| `workspace.py` | `SHOW WORKSPACE GROUPS`, `CREATE WORKSPACE`, etc. |
+| `cluster.py` | `SHOW CLUSTERS`, `CREATE CLUSTER`, `SHOW PROJECTS`, etc. |
+| `workspace.py` | `SHOW WORKSPACE GROUPS`, `CREATE WORKSPACE`, etc. (deprecated) |
 | `stage.py` | `UPLOAD`, `DOWNLOAD`, `CREATE STAGE FOLDER` |
 | `job.py` | `SHOW JOBS`, `CREATE JOB`, `DROP JOB` |
 | `files.py` | File management commands |
@@ -1131,12 +1154,13 @@ Feature options:
 | Purpose | Primary File |
 |---------|-------------|
 | Entry point | `singlestoredb/__init__.py` |
-| Connect function | `singlestoredb/connection.py:1312` |
+| Connect function | `singlestoredb/connection.py:1354` |
 | MySQL connection | `singlestoredb/mysql/connection.py` |
 | Cursor types | `singlestoredb/mysql/cursors.py` |
 | HTTP connection | `singlestoredb/http/connection.py` |
 | Configuration | `singlestoredb/config.py` |
-| Management API | `singlestoredb/management/workspace.py` |
+| Management API | `singlestoredb/management/cluster.py` |
+| Management API version default | `singlestoredb/_management_version.py` |
 | Fusion handlers | `singlestoredb/fusion/handler.py` |
 | UDF decorator | `singlestoredb/functions/decorator.py` |
 | Plugin UDF server | `singlestoredb/functions/ext/plugin/server.py` |

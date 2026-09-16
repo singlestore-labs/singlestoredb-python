@@ -13,8 +13,8 @@ analytics and vector search.
   (port 9000) using the same interface
 - **Flexible Result Formats**: Return query results as tuples, dictionaries, named
   tuples, NumPy arrays, Pandas DataFrames, Polars DataFrames, or PyArrow Tables
-- **Workspace Management**: Full API for managing SingleStore Cloud workspaces,
-  clusters, regions, and files programmatically
+- **Deployment Management**: Full API for managing SingleStore Cloud clusters,
+  projects, regions, and files programmatically
 - **Vector Store**: Pinecone-compatible vector database API for similarity search
   applications with built-in connection pooling
 - **User-Defined Functions**: Deploy Python functions as SingleStore UDFs with
@@ -173,29 +173,37 @@ df = cur.fetchone()
 
 ## Management API
 
-The SDK provides a workspace management API for managing SingleStore deployments
-programmatically. This includes creating and managing workspaces, clusters,
+The SDK provides a management API for managing SingleStore deployments
+programmatically. This includes creating and managing clusters, projects,
 regions, and files.
 
 ```python
 import singlestoredb as s2
 
-# Get a workspace manager (uses SINGLESTOREDB_MANAGEMENT_TOKEN env var by default)
-manager = s2.manage_workspaces()
+# Get a cluster manager (uses SINGLESTOREDB_MANAGEMENT_TOKEN env var by default)
+manager = s2.manage_clusters()
 
-# List all workspaces
-for ws in manager.workspaces:
-    print(ws.name, ws.state)
+# List all clusters
+for c in manager.clusters:
+    print(c.name, c.state)
 
-# Create a new workspace
-ws = manager.workspaces.create(
-    name='my-workspace',
-    workspace_group_id='<group-id>',
+# Create a new cluster
+c = manager.create_cluster(
+    name='my-cluster',
+    region='US West 2 (Oregon)',
+    size='S-00',
 )
 ```
 
+The API is versioned, and version 2 — the flat `Cluster` resource shown above —
+is the default. Version 1, which called a deployment a `Workspace` inside a
+`WorkspaceGroup` and is reached through `s2.manage_workspaces()`, still works
+but is deprecated in its entirety. Select a version with the
+`management.version` option (`SINGLESTOREDB_MANAGEMENT_VERSION`) or by passing
+`version=` to any `manage_*` function.
+
 See the [API documentation](https://singlestore-labs.github.io/singlestoredb-python)
-for full details on workspace, cluster, region, and file management.
+for full details on cluster, project, region, and file management.
 
 ## Vector Store
 
@@ -225,7 +233,7 @@ Pinecone-compatible operations for vector similarity search.
 Fusion SQL extends the SQL commands handled by the client with custom
 handlers. These commands are processed locally rather than sent to the
 database server. Built-in handlers provide SQL-like commands for managing
-workspaces, running notebook jobs, and more.
+clusters, running notebook jobs, and more.
 
 ```python
 import os
@@ -235,22 +243,23 @@ import singlestoredb as s2
 conn = s2.connect()
 
 # Show available cloud regions
-conn.execute('SHOW REGIONS')
+conn.execute('SHOW CLUSTER REGIONS')
 
-# List workspace groups
-conn.execute('SHOW WORKSPACE GROUPS')
+# List clusters
+conn.execute('SHOW CLUSTERS EXTENDED')
 
-# List workspaces in a specific group
-conn.execute("SHOW WORKSPACES IN GROUP 'my-group' EXTENDED")
-
-# Create a new workspace group
+# Create a new cluster
 conn.execute("""
-    CREATE WORKSPACE GROUP 'analytics-team'
+    CREATE CLUSTER 'analytics-team'
     IN REGION 'US West 2 (Oregon)'
-    WITH PASSWORD 'my-password'
+    WITH SIZE 'S-00'
     WITH FIREWALL RANGES '10.0.0.0/8'
 """)
 ```
+
+The `WORKSPACE` and `WORKSPACE GROUP` commands, and the version-less
+`SHOW REGIONS`, still work but are deprecated along with the rest of management
+API v1.
 
 See [singlestoredb/fusion/README.md](singlestoredb/fusion/README.md)
 for details on writing custom Fusion SQL handlers.
