@@ -46,11 +46,11 @@ autodoc_default_flags = ['show-inheritance']
 autoclass_content = 'class'
 
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/', None),
-    'pandas': ('http://pandas.pydata.org/pandas-docs/version/0.19.2/', None),
-    'numpy': ('http://docs.scipy.org/doc/numpy/', None),
-    'scipy': ('http://docs.scipy.org/doc/scipy/reference/', None),
-    'matplotlib': ('http://matplotlib.sourceforge.net/', None),
+    'python': ('https://docs.python.org/3/', None),
+    'pandas': ('https://pandas.pydata.org/docs/', None),
+    'numpy': ('https://numpy.org/doc/stable/', None),
+    'scipy': ('https://docs.scipy.org/doc/scipy/', None),
+    'matplotlib': ('https://matplotlib.org/stable/', None),
 }
 
 # Add any paths that contain templates here, relative to this directory.

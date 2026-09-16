@@ -560,7 +560,7 @@ To interact with files in your Stage, use the :attr:`Cluster.stage` attribute
 (:attr:`WorkspaceGroup.stage` at v1). It will return a :class:`Stage` object
 which defines the following methods and attributes.
 
-.. currentmodule:: singlestoredb.management.workspace
+.. currentmodule:: singlestoredb.management.stage
 
 .. autosummary::
    :toctree: generated/
@@ -641,11 +641,11 @@ personal, shared, or model files.
 FilesObject
 ...........
 
-:class:`FilesObject`s are returned by the :meth:`StageObject.upload_file`
-:meth:`FilesObject.upload_folder`, :meth:`FilesObject.mkdir`,
-:meth:`FilesObject.rename`, and :meth:`FilesObject.info` methods.
+:class:`FilesObject`s are returned by the :meth:`FileSpace.upload_file`,
+:meth:`FileSpace.upload_folder`, :meth:`FileSpace.mkdir`,
+:meth:`FileSpace.rename`, and :meth:`FileSpace.info` methods.
 
-.. currentmodule:: singlestoredb.management.workspace
+.. currentmodule:: singlestoredb.management.files
 
 .. autosummary::
    :toctree: generated/
