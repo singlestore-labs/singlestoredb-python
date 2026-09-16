@@ -697,8 +697,7 @@ class DropClusterHandler(SQLHandler):
     * There is no ``FORCE`` clause. ``DELETE /v2/clusters`` does take a
       ``force`` query parameter, which ``Cluster.terminate()`` documents as
       "even if it is in use", but that meaning has not been confirmed against
-      the live API. The clause is withheld rather than guessed at; see item 14
-      of ``docs/management-api-audit.md``.
+      the live API, so the clause is withheld rather than guessed at.
     * All databases attached to the cluster are detached when the cluster
       is deleted.
 

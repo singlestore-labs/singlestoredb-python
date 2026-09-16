@@ -2192,8 +2192,7 @@ class TestStageFusion(unittest.TestCase):
         # Two clusters from the shared pool rather than two of this class's
         # own. Nothing here mutates a cluster, and the second one exists only
         # so a bare IN can name a deployment other than the default. Deploying
-        # them was 891s of the run; see
-        # docs/shared-deployment-pool-plan.md.
+        # them was 891s of the run; see utils.shared_clusters.
         cls.cluster, cls.cluster_2 = utils.shared_clusters(2)
 
         # The stage paths below are fixed rather than namespaced, and the

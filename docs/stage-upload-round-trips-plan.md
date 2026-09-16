@@ -236,8 +236,7 @@ Two consequences worth knowing:
 * `SHOW CLUSTERS EXTENDED` reported `ProjectID`, not the project name the plan
   said. Renamed to `ProjectName`, along with `SHOW STARTER CLUSTERS EXTENDED`'s
   column, since `_project_from_id`'s `<unknown>` fallback means the name is
-  always readable. Column-name assertions in `test_fusion.py` and the
-  `docs/fusion-v2-cluster-plan.md` column list moved with it.
+  always readable. Column-name assertions in `test_fusion.py` moved with it.
 
 **The harness:** `CountingClusterManager`, `counting_cluster_manager` and
 `run_fusion_statement` in `singlestoredb/tests/utils.py`, next to the

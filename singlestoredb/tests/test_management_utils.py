@@ -483,10 +483,10 @@ class TestRecursiveDownloadPathTraversal(unittest.TestCase):
 class TestUploadRoundTrips(unittest.TestCase):
     """An upload must not repeat work it has already done.
 
-    The counts pinned here are the Stage / file space half of the six requests
+    The counts pinned here are the Stage / file space half of what
     ``UPLOAD FILE TO STAGE`` costs; the two that resolve ``IN '<name>'`` are
-    made before a ``Stage`` exists and so cannot be seen from here. Against
-    the numbers in ``docs/stage-upload-round-trips-plan.md``, add two.
+    made before a ``Stage`` exists and so cannot be seen from here. For the
+    whole-statement count, add two.
     """
 
     def _local_file(self, tmp, content='contents'):

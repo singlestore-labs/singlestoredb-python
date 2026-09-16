@@ -744,9 +744,17 @@ def tracked_labels() -> List[str]:
 # cannot be made faster -- so the only lever is deploying fewer of them.
 #
 # The pool is built on first use and reused for the rest of the process. A
-# class must not mutate what it borrows: anything that PATCHes, suspends or
-# terminates its subject keeps deploying its own (see
-# ``docs/shared-deployment-pool-plan.md`` for which classes those are and why).
+# class must not mutate what it borrows, so anything whose subject *is* the
+# deployment keeps deploying its own: ``TestCluster`` and ``TestWorkspace``
+# (``test_update`` PATCHes the cluster and cycles it back through PENDING),
+# ``TestClusterFusionCreateDrop`` and ``TestClusterFusionSuspendResume``. So
+# does ``TestWorkspaceFusion``, whose workspace groups are the subject of its
+# ``SHOW WORKSPACE GROUPS`` assertions and cost 40s to deploy unwaited anyway.
+#
+# What makes the four borrowers safe is that each scopes its assertions to
+# itself: every Stage path is namespaced with the class's ``cls.id``, job
+# listings filter by job id rather than listing a deployment's jobs, and none
+# of them asserts a row count over an org-wide listing.
 #
 # The pool is process-wide, so under ``pytest-xdist`` every worker that gets a
 # borrowing class builds a pool of its own. The ``xdist_group`` marks below

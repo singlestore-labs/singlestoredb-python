@@ -1628,8 +1628,7 @@ class TestStage(unittest.TestCase):
         #
         # A shared one: every assertion below is scoped to one path, and every
         # path is namespaced with id(self), so what another class left in this
-        # cluster's stage is invisible here. See
-        # docs/shared-deployment-pool-plan.md.
+        # cluster's stage is invisible here. See utils.shared_clusters.
         cls.cluster = utils.shared_clusters(1)[0]
 
         # v2 generates the admin password; see TestCluster.setUpClass.
