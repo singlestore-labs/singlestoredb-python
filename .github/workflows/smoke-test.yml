@@ -32,8 +32,15 @@ jobs:
         # fixed everywhere below. The project is named here rather than read
         # from a repo variable so the deployment target is visible in the
         # workflow and does not depend on repository settings.
+        #
+        # POST /v2/clusters generates its own admin password and ignores any
+        # that is sent, so the script resets it to CLUSTER_PASSWORD over SQL
+        # once the cluster is up. That keeps the credential a secret the runner
+        # masks everywhere, instead of a job output: the runner refuses to write
+        # an output whose value is masked, so a generated password could not
+        # reach these jobs at all.
         run: |
-          python resources/create_test_cluster.py --token="${{ secrets.CLUSTER_API_KEY }}" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
@@ -41,11 +48,6 @@ jobs:
       cluster-id: ${{ steps.initialize-database.outputs.cluster-id }}
       cluster-host: ${{ steps.initialize-database.outputs.cluster-host }}
       cluster-database: ${{ steps.initialize-database.outputs.cluster-database }}
-      # POST /v2/clusters generates the admin password and reports it only on
-      # the create response, so it travels as a job output rather than living
-      # in secrets. Job outputs are not secrets: every job below re-masks it.
-      cluster-password: ${{ steps.initialize-database.outputs.cluster-password }}
-      cluster-password-url: ${{ steps.initialize-database.outputs.cluster-password-url }}
 
 
   smoke-test:
@@ -109,17 +111,6 @@ jobs:
             buffered: 1
 
     steps:
-      # ::add-mask:: does not cross job boundaries, so the generated admin
-      # password arrives here unmasked and has to be registered again before
-      # any step can echo it into the log.
-      - name: Mask cluster password
-        env:
-          CLUSTER_PASSWORD: ${{ needs.setup-database.outputs.cluster-password }}
-          CLUSTER_PASSWORD_URL: ${{ needs.setup-database.outputs.cluster-password-url }}
-        run: |
-          echo "::add-mask::$CLUSTER_PASSWORD"
-          echo "::add-mask::$CLUSTER_PASSWORD_URL"
-
       - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
@@ -138,10 +129,10 @@ jobs:
         run: pytest -v --pyargs singlestoredb.tests.test_basics
         env:
           PYTHONPATH: ${{ github.workspace }}
-          # cluster-password-url, not cluster-password: the generated password
-          # is drawn from the full printable set and has to be percent-encoded
-          # to survive the userinfo half of the URL.
-          SINGLESTOREDB_URL: "${{ matrix.driver }}://admin:${{ needs.setup-database.outputs.cluster-password-url }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
+          # CLUSTER_PASSWORD goes into the userinfo half of a URL here, so it
+          # has to be free of characters that would need percent-encoding --
+          # ':', '@', '/', '%' and the like. Keep the secret alphanumeric.
+          SINGLESTOREDB_URL: "${{ matrix.driver }}://admin:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
 
       - name: Run tests
         if: ${{ matrix.driver == 'https' }}
@@ -154,7 +145,7 @@ jobs:
         run: pytest -v -n 0 --pyargs singlestoredb.tests.test_basics
         env:
           PYTHONPATH: ${{ github.workspace }}
-          SINGLESTOREDB_URL: "${{ matrix.driver }}://admin:${{ needs.setup-database.outputs.cluster-password-url }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
+          SINGLESTOREDB_URL: "${{ matrix.driver }}://admin:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
 
 
   shutdown-database:
@@ -163,15 +154,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ::add-mask:: does not cross job boundaries; see the smoke-test job.
-      - name: Mask cluster password
-        env:
-          CLUSTER_PASSWORD: ${{ needs.setup-database.outputs.cluster-password }}
-          CLUSTER_PASSWORD_URL: ${{ needs.setup-database.outputs.cluster-password-url }}
-        run: |
-          echo "::add-mask::$CLUSTER_PASSWORD"
-          echo "::add-mask::$CLUSTER_PASSWORD_URL"
-
       - uses: actions/checkout@v7
 
       - name: Set up Python 3.11
@@ -189,13 +171,13 @@ jobs:
       - name: Drop database
         if: ${{ always() }}
         # The password reaches the script through the environment rather than
-        # being interpolated into the command: the generated value can contain
-        # any printable character, including ones the shell would act on.
+        # being interpolated into the command, so the shell never sees its
+        # characters.
         run: |
           python resources/drop_db.py --user admin --password "$CLUSTER_PASSWORD" --host "$CLUSTER_HOST" --port 3306 --database "$CLUSTER_DATABASE"
         env:
           PYTHONPATH: ${{ github.workspace }}
-          CLUSTER_PASSWORD: ${{ needs.setup-database.outputs.cluster-password }}
+          CLUSTER_PASSWORD: ${{ secrets.CLUSTER_PASSWORD }}
           CLUSTER_HOST: ${{ needs.setup-database.outputs.cluster-host }}
           CLUSTER_DATABASE: ${{ needs.setup-database.outputs.cluster-database }}
 

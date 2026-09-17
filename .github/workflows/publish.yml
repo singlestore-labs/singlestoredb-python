@@ -53,8 +53,15 @@ jobs:
         # fixed everywhere below. The project is named here rather than read
         # from a repo variable so the deployment target is visible in the
         # workflow and does not depend on repository settings.
+        #
+        # POST /v2/clusters generates its own admin password and ignores any
+        # that is sent, so the script resets it to CLUSTER_PASSWORD over SQL
+        # once the cluster is up. That keeps the credential a secret the runner
+        # masks everywhere, instead of a job output: the runner refuses to write
+        # an output whose value is masked, so a generated password could not
+        # reach these jobs at all.
         run: |
-          python resources/create_test_cluster.py --token="${{ secrets.CLUSTER_API_KEY }}" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
@@ -62,11 +69,6 @@ jobs:
       cluster-id: ${{ steps.initialize-database.outputs.cluster-id }}
       cluster-host: ${{ steps.initialize-database.outputs.cluster-host }}
       cluster-database: ${{ steps.initialize-database.outputs.cluster-database }}
-      # POST /v2/clusters generates the admin password and reports it only on
-      # the create response, so it travels as a job output rather than living
-      # in secrets. Job outputs are not secrets: every job below re-masks it.
-      cluster-password: ${{ steps.initialize-database.outputs.cluster-password }}
-      cluster-password-url: ${{ steps.initialize-database.outputs.cluster-password-url }}
 
   build-and-test:
     needs: setup-database
@@ -82,17 +84,6 @@ jobs:
           - windows-2022
 
     steps:
-      # ::add-mask:: does not cross job boundaries, so the generated admin
-      # password arrives here unmasked and has to be registered again before
-      # any step can echo it into the log.
-      - name: Mask cluster password
-        env:
-          CLUSTER_PASSWORD: ${{ needs.setup-database.outputs.cluster-password }}
-          CLUSTER_PASSWORD_URL: ${{ needs.setup-database.outputs.cluster-password-url }}
-        run: |
-          echo "::add-mask::$CLUSTER_PASSWORD"
-          echo "::add-mask::$CLUSTER_PASSWORD_URL"
-
       - uses: actions/checkout@v7
 
       # This job's matrix varies only over os; cibuildwheel supplies its own
@@ -140,12 +131,10 @@ jobs:
           # points --pyargs at the workspace, so that pyproject is the inifile
           # here. Without the plugin pytest exits on the unknown arguments.
           CIBW_TEST_REQUIRES: "pytest pytest-xdist"
-          # cluster-password-url, not cluster-password: the generated password
-          # is drawn from the full printable set, and this value has to survive
-          # both the userinfo half of the URL and the single-quoted shell word
-          # cibuildwheel evaluates. Percent-encoding leaves only unreserved
-          # characters and %, which are inert in both.
-          CIBW_ENVIRONMENT: "SINGLESTOREDB_URL='mysql://admin:${{ needs.setup-database.outputs.cluster-password-url }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0'"
+          # CLUSTER_PASSWORD has to survive both the userinfo half of the URL
+          # and the single-quoted shell word cibuildwheel evaluates, so keep the
+          # secret alphanumeric: no ':', '@', '/', '%' or quote characters.
+          CIBW_ENVIRONMENT: "SINGLESTOREDB_URL='mysql://admin:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0'"
           PYTHONPATH: ${{ github.workspace }}
 
 #     - name: Build conda
@@ -255,15 +244,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ::add-mask:: does not cross job boundaries; see the build-and-test job.
-      - name: Mask cluster password
-        env:
-          CLUSTER_PASSWORD: ${{ needs.setup-database.outputs.cluster-password }}
-          CLUSTER_PASSWORD_URL: ${{ needs.setup-database.outputs.cluster-password-url }}
-        run: |
-          echo "::add-mask::$CLUSTER_PASSWORD"
-          echo "::add-mask::$CLUSTER_PASSWORD_URL"
-
       - uses: actions/checkout@v7
 
       - name: Install dependencies
@@ -275,13 +255,13 @@ jobs:
       - name: Drop database
         if: ${{ always() }}
         # The password reaches the script through the environment rather than
-        # being interpolated into the command: the generated value can contain
-        # any printable character, including ones the shell would act on.
+        # being interpolated into the command, so the shell never sees its
+        # characters.
         run: |
           python resources/drop_db.py --user admin --password "$CLUSTER_PASSWORD" --host "$CLUSTER_HOST" --port 3306 --database "$CLUSTER_DATABASE"
         env:
           PYTHONPATH: ${{ github.workspace }}
-          CLUSTER_PASSWORD: ${{ needs.setup-database.outputs.cluster-password }}
+          CLUSTER_PASSWORD: ${{ secrets.CLUSTER_PASSWORD }}
           CLUSTER_HOST: ${{ needs.setup-database.outputs.cluster-host }}
           CLUSTER_DATABASE: ${{ needs.setup-database.outputs.cluster-database }}
 

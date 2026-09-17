@@ -2,7 +2,6 @@
 # type: ignore
 from __future__ import annotations
 
-import json
 import os
 import random
 import re
@@ -10,7 +9,6 @@ import subprocess
 import sys
 import uuid
 from optparse import OptionParser
-from urllib.parse import quote
 
 import singlestoredb as s2
 
@@ -34,6 +32,12 @@ parser.add_option(
     '-s', '--size',
     default='S-00',
     help='size of the cluster (S-00)',
+)
+parser.add_option(
+    '-p', '--password',
+    help='password to give the admin user once the cluster is up; required, '
+         'because the password the API generates cannot be handed to another '
+         'CI job (see below)',
 )
 parser.add_option(
     '-t', '--token',
@@ -66,6 +70,10 @@ parser.add_option(
 
 if len(args) != 1:
     parser.print_help()
+    sys.exit(1)
+
+if not options.password:
+    print('ERROR: --password is required', file=sys.stderr)
     sys.exit(1)
 
 if options.init_sql and not os.path.isfile(options.init_sql):
@@ -160,25 +168,13 @@ cluster = mgr.create_cluster(
 # after any refresh(). See item 9 of docs/management-api-audit.md: the API
 # accepts an adminPassword on both POST and PATCH and ignores both, which is
 # why this is read back rather than set.
-password = cluster.admin_password
-if not password:
+generated = cluster.admin_password
+if not generated:
     print(
         'ERROR: cluster was created without a readable admin password',
         file=sys.stderr,
     )
     sys.exit(1)
-
-# The generated password is drawn from the full printable set -- one observed
-# value was ``{:D}TK*[F3Ll}Ups2pNv`` -- so it cannot be dropped into the
-# userinfo half of a connection URL as-is. Percent-encode everything, since
-# the URL parser runs unquote_plus over the password
-# (singlestoredb/connection.py:287); encoding ``+`` too is what keeps that from
-# turning into a space.
-password_url = quote(password, safe='')
-
-database = options.database
-if not database:
-    database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
 
 host = cluster.endpoint
 if ':' in host:
@@ -187,35 +183,51 @@ if ':' in host:
 else:
     port = 3306
 
-# Print cluster information
+# Trade the generated password for the caller's, because the generated one
+# cannot leave this process. A caller running under GitHub Actions has to mask
+# it, and the runner drops any output whose value matches a mask -- "Skip output
+# 'cluster-password' since it may contain secret" -- so masking it and passing
+# it to another job are mutually exclusive. The password the caller already
+# holds has neither problem.
+#
+# ALTER USER is the statement that works: SET PASSWORD wants a pre-hashed value
+# and rejects a literal with '1372: Password hash should be a 41-digit
+# hexadecimal number'. Verified against a live S-00 cluster, including that the
+# control plane leaves the new password alone afterwards.
+password = options.password
+escaped = password.replace('\\', '\\\\').replace("'", "\\'")
+
+with s2.connect(
+    host=host, port=port, user='admin',
+    password=generated, connect_timeout=30,
+) as conn:
+    with conn.cursor() as cur:
+        cur.execute(f"ALTER USER 'admin'@'%' IDENTIFIED BY '{escaped}'")
+
+database = options.database
+if not database:
+    database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
+
+# Print cluster information. No password is reported: the caller passed it in,
+# so it already knows it, and under GitHub Actions it is a secret the runner
+# masks on its own.
 if options.output == 'env':
     print(f'CLUSTER_ID={cluster.id}')
     print(f'CLUSTER_HOST={host}')
     print(f'CLUSTER_PORT={port}')
     print(f'CLUSTER_DATABASE={database}')
-    print(f'CLUSTER_PASSWORD={password}')
-    print(f'CLUSTER_PASSWORD_URL={password_url}')
 elif options.output == 'github':
-    # Register both forms with the runner before anything can log them. This
-    # only holds within this job; each job that consumes the outputs has to
-    # mask them again for itself.
-    print(f'::add-mask::{password}')
-    print(f'::add-mask::{password_url}')
     with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
         print(f'cluster-id={cluster.id}', file=output)
         print(f'cluster-host={host}', file=output)
         print(f'cluster-port={port}', file=output)
         print(f'cluster-database={database}', file=output)
-        print(f'cluster-password={password}', file=output)
-        print(f'cluster-password-url={password_url}', file=output)
 elif options.output == 'json':
     print('{')
     print(f'  "cluster-id": "{cluster.id}",')
     print(f'  "cluster-host": "{host}",')
     print(f'  "cluster-port": {port},')
-    print(f'  "cluster-database": "{database}",')
-    print(f'  "cluster-password": {json.dumps(password)},')
-    print(f'  "cluster-password-url": "{password_url}"')
+    print(f'  "cluster-database": "{database}"')
     print('}')
 
 # Initialize the database
