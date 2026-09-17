@@ -137,8 +137,12 @@ jobs:
 
       - name: Run MySQL protocol tests (with management API)
         if: steps.check-changes.outputs.changes-detected == 'true'
+        # -m 'not management_v1' keeps the v2 management coverage while dropping
+        # the deprecated v1 suite, which coverage.yml runs nightly instead. The
+        # -m 'not management' steps below need no second term: they already
+        # exclude everything v1 deploys.
         run: |
-          pytest -v --cov=singlestoredb --pyargs singlestoredb.tests
+          pytest -v -m 'not management_v1' --cov=singlestoredb --pyargs singlestoredb.tests
         env:
           COVERAGE_FILE: "coverage-mysql.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3307"

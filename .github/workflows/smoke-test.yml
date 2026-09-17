@@ -29,7 +29,7 @@ jobs:
       - name: Initialize database
         id: initialize-database
         run: |
-          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
+          python resources/create_test_cluster.py --token="${{ secrets.CLUSTER_API_KEY }}" --project="${{ vars.CLUSTER_PROJECT }}" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
@@ -37,6 +37,11 @@ jobs:
       cluster-id: ${{ steps.initialize-database.outputs.cluster-id }}
       cluster-host: ${{ steps.initialize-database.outputs.cluster-host }}
       cluster-database: ${{ steps.initialize-database.outputs.cluster-database }}
+      # POST /v2/clusters generates the admin password and reports it only on
+      # the create response, so it travels as a job output rather than living
+      # in secrets. Job outputs are not secrets: every job below re-masks it.
+      cluster-password: ${{ steps.initialize-database.outputs.cluster-password }}
+      cluster-password-url: ${{ steps.initialize-database.outputs.cluster-password-url }}
 
 
   smoke-test:
@@ -100,6 +105,17 @@ jobs:
             buffered: 1
 
     steps:
+      # ::add-mask:: does not cross job boundaries, so the generated admin
+      # password arrives here unmasked and has to be registered again before
+      # any step can echo it into the log.
+      - name: Mask cluster password
+        env:
+          CLUSTER_PASSWORD: ${{ needs.setup-database.outputs.cluster-password }}
+          CLUSTER_PASSWORD_URL: ${{ needs.setup-database.outputs.cluster-password-url }}
+        run: |
+          echo "::add-mask::$CLUSTER_PASSWORD"
+          echo "::add-mask::$CLUSTER_PASSWORD_URL"
+
       - uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
@@ -118,7 +134,10 @@ jobs:
         run: pytest -v --pyargs singlestoredb.tests.test_basics
         env:
           PYTHONPATH: ${{ github.workspace }}
-          SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
+          # cluster-password-url, not cluster-password: the generated password
+          # is drawn from the full printable set and has to be percent-encoded
+          # to survive the userinfo half of the URL.
+          SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ needs.setup-database.outputs.cluster-password-url }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
 
       - name: Run tests
         if: ${{ matrix.driver == 'https' }}
@@ -131,7 +150,7 @@ jobs:
         run: pytest -v -n 0 --pyargs singlestoredb.tests.test_basics
         env:
           PYTHONPATH: ${{ github.workspace }}
-          SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
+          SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ needs.setup-database.outputs.cluster-password-url }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
 
 
   shutdown-database:
@@ -140,6 +159,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ::add-mask:: does not cross job boundaries; see the smoke-test job.
+      - name: Mask cluster password
+        env:
+          CLUSTER_PASSWORD: ${{ needs.setup-database.outputs.cluster-password }}
+          CLUSTER_PASSWORD_URL: ${{ needs.setup-database.outputs.cluster-password-url }}
+        run: |
+          echo "::add-mask::$CLUSTER_PASSWORD"
+          echo "::add-mask::$CLUSTER_PASSWORD_URL"
+
       - uses: actions/checkout@v4
 
       - name: Set up Python 3.11
@@ -156,14 +184,21 @@ jobs:
 
       - name: Drop database
         if: ${{ always() }}
+        # The password reaches the script through the environment rather than
+        # being interpolated into the command: the generated value can contain
+        # any printable character, including ones the shell would act on.
         run: |
-          python resources/drop_db.py --user "${{ secrets.CLUSTER_USER }}" --password "${{ secrets.CLUSTER_PASSWORD }}" --host "${{ needs.setup-database.outputs.cluster-host }}" --port 3306 --database "${{ needs.setup-database.outputs.cluster-database }}"
+          python resources/drop_db.py --user "$CLUSTER_USER" --password "$CLUSTER_PASSWORD" --host "$CLUSTER_HOST" --port 3306 --database "$CLUSTER_DATABASE"
         env:
           PYTHONPATH: ${{ github.workspace }}
+          CLUSTER_USER: ${{ secrets.CLUSTER_USER }}
+          CLUSTER_PASSWORD: ${{ needs.setup-database.outputs.cluster-password }}
+          CLUSTER_HOST: ${{ needs.setup-database.outputs.cluster-host }}
+          CLUSTER_DATABASE: ${{ needs.setup-database.outputs.cluster-database }}
 
-      - name: Shutdown workspace
+      - name: Shutdown cluster
         if: ${{ always() }}
         run: |
-          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v1/workspaces/${{ env.CLUSTER_ID }}"
+          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v2/clusters/${{ env.CLUSTER_ID }}?force=true"
         env:
           CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}

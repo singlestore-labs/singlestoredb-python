@@ -2,45 +2,47 @@
 # type: ignore
 from __future__ import annotations
 
+import json
 import os
 import random
 import re
-import secrets
 import subprocess
 import sys
-import time
 import uuid
 from optparse import OptionParser
+from urllib.parse import quote
 
 import singlestoredb as s2
 
 
 # Handle command-line options
-usage = 'usage: %prog [options] workspace-name'
+usage = 'usage: %prog [options] cluster-name'
 parser = OptionParser(usage=usage)
 parser.add_option(
     '-r', '--region',
     default='AWS::*US East 1*',
-    help='region pattern or ID',
-)
-parser.add_option(
-    '-p', '--password',
-    default=secrets.token_urlsafe(20) + '-x&$',
-    help='admin password',
+    help='region pattern to deploy into, as provider::name '
+         '(AWS::*US East 1*); * is a wildcard',
 )
 parser.add_option(
     '-e', '--expires',
     default='4h',
-    help='timestamp when workspace should expire (4h)',
+    help='when the cluster should expire, as a timestamp or a '
+         'duration such as 4h (4h)',
 )
 parser.add_option(
     '-s', '--size',
     default='S-00',
-    help='size of the workspace (S-00)',
+    help='size of the cluster (S-00)',
 )
 parser.add_option(
     '-t', '--token',
-    help='API key for the workspace management API',
+    help='API key for the management API',
+)
+parser.add_option(
+    '--project',
+    help='ID or name of the project to deploy into; defaults to the '
+         'organization\'s STANDARD-edition project',
 )
 parser.add_option(
     '--http-port', type='int',
@@ -53,7 +55,7 @@ parser.add_option(
 parser.add_option(
     '-o', '--output',
     default='env', choices=['env', 'github', 'json'],
-    help='report workspace information in the requested format: github, env, json',
+    help='report cluster information in the requested format: github, env, json',
 )
 parser.add_option(
     '-d', '--database',
@@ -67,111 +69,153 @@ if len(args) != 1:
     sys.exit(1)
 
 if options.init_sql and not os.path.isfile(options.init_sql):
-    print('ERROR: Could not locate SQL file: {options.init_sql}', file=sys.stderr)
+    print(f'ERROR: Could not locate SQL file: {options.init_sql}', file=sys.stderr)
     sys.exit(1)
 
 
-# Connect to workspace. This is still the deprecated v1 workspace-group
-# grammar because the v1 test suite it sets up needs workspace groups;
-# it gets ported to manage_clusters() when that suite goes. Pinned to v1
-# because manage_workspaces() otherwise follows the management.version option.
-wm = s2.manage_workspaces(options.token or None, version='v1')
+# Pin v2 explicitly rather than following the ambient management.version
+# option: this script provisions clusters, which only exist in v2.
+mgr = s2.manage_clusters(options.token or None, version='v2')
 
-# Find matching region
-if '::' in options.region:
-    pattern = options.region.replace('*', '.*')
-    regions = wm.regions
-    for item in random.sample(regions, k=len(regions)):
-        region_name = '{}::{}'.format(item.provider, item.name)
-        if re.match(pattern, region_name):
-            options.region = item.id
-            break
 
-if '::' in options.region:
+# Find a matching region. A v2 region is identified by the
+# (provider, region_name) pair rather than by an ID, so the matched Region
+# object is what gets handed to create_cluster. Candidates are shuffled to
+# spread deployments across whichever regions match.
+#
+# The pattern is tried against both the display name and the provider region
+# name -- 'US East 1' and 'us-east-1' -- so it does not matter which of the two
+# a given listing puts in Region.name.
+pattern = options.region.replace('*', '.*')
+regions = list(mgr.regions)
+
+
+def candidates(item):
+    """Return the names ``item`` can be matched by, most specific first."""
+    for label in (item.name, item.region_name):
+        if label:
+            yield f'{item.provider}::{label}' if '::' in options.region else label
+
+
+region = None
+for item in random.sample(regions, k=len(regions)):
+    if any(re.match(pattern, x) for x in candidates(item)):
+        region = item
+        break
+
+if region is None:
     print(
-        'ERROR: Could not find a region mating the pattern: '
-        '{options.region}', file=sys.stderr,
+        'ERROR: Could not find a region matching the pattern '
+        f'{options.region}; the API reports: ' +
+        ', '.join(sorted(f'{x.provider}::{x.name}' for x in regions)),
+        file=sys.stderr,
     )
     sys.exit(1)
 
 
-# Create workspace group
-wg_name = 'Python Client Testing'
-
-wgs = [x for x in wm.workspace_groups if x.name == wg_name]
-if len(wgs) > 1:
-    print('ERROR: There is more than one workspace group with the specified name.')
-    sys.exit(1)
-elif len(wgs) == 1:
-    wg = wgs[0]
+# Choose a project. projectID is required by POST /v2/clusters and only
+# auto-resolves for an organization with a single project, so pick the
+# STANDARD-edition one when it was not named explicitly.
+if options.project:
+    project_id = options.project
 else:
-    wg = wm.create_workspace_group(
-        wg_name,
-        region=options.region,
-        admin_password=options.password,
-        # firewall_ranges=requests.get('https://api.github.com/meta').json()['actions'],
-        firewall_ranges=['0.0.0.0/0'],
-        allow_all_traffic=True,
-    )
+    projects = list(mgr.projects)
+    standard = [x for x in projects if x.edition == 'STANDARD']
+    if not standard:
+        print(
+            'ERROR: No STANDARD-edition project in this organization; pass '
+            '--project with one of: ' +
+            ', '.join(f'{x.name} ({x.id}, {x.edition})' for x in projects),
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    project_id = standard[0].id
 
-# Make sure the workspace group exists before continuing
-timeout = 300
-while timeout > 0 and not [x for x in wm.workspace_groups if x.name == wg_name]:
-    time.sleep(10)
-    timeout -= 10
 
-ws_name = re.sub(r'^-|-$', r'', re.sub(r'-+', r'-', re.sub(r'\s+', '-', args[0].lower())))
+# A cluster name must match [a-z0-9]([a-z0-9-]*[a-z0-9])? and be 1-32
+# characters, so everything outside that alphabet becomes a hyphen, runs of
+# hyphens collapse, and the result is truncated with any hyphen the cut
+# exposes trimmed off again.
+name = re.sub(r'[^a-z0-9]+', '-', args[0].lower()).strip('-')[:32].rstrip('-')
+if not name:
+    print(f'ERROR: Cluster name is empty after cleaning: {args[0]}', file=sys.stderr)
+    sys.exit(1)
 
-ws = wg.create_workspace(
-    ws_name,
+
+# wait_on_active covers ACTIVE, then the endpoint, then the firewall, so the
+# cluster is actually reachable by the time this returns.
+cluster = mgr.create_cluster(
+    name,
+    region=region,
     size=options.size,
+    firewall_ranges=['0.0.0.0/0'],
+    expires_at=options.expires,
+    project=project_id,
     wait_on_active=True,
+    wait_timeout=1200,
 )
 
-# Make sure the endpoint exists before continuing
-timeout = 300
-while timeout > 0 and not ws.endpoint:
-    time.sleep(10)
-    ws.refresh()
-    timeout -= 10
-
-if not ws.endpoint:
-    print('ERROR: Endpoint was never activated.')
+# The API generates the admin password and reports it only on the create
+# response -- there is no route that will hand it back later, and it is None
+# after any refresh(). See item 9 of docs/management-api-audit.md: the API
+# accepts an adminPassword on both POST and PATCH and ignores both, which is
+# why this is read back rather than set.
+password = cluster.admin_password
+if not password:
+    print(
+        'ERROR: cluster was created without a readable admin password',
+        file=sys.stderr,
+    )
     sys.exit(1)
 
-
-# Extra pause for server to become available
-time.sleep(10)
+# The generated password is drawn from the full printable set -- one observed
+# value was ``{:D}TK*[F3Ll}Ups2pNv`` -- so it cannot be dropped into the
+# userinfo half of a connection URL as-is. Percent-encode everything, since
+# the URL parser runs unquote_plus over the password
+# (singlestoredb/connection.py:287); encoding ``+`` too is what keeps that from
+# turning into a space.
+password_url = quote(password, safe='')
 
 database = options.database
 if not database:
     database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
 
-host = ws.endpoint
+host = cluster.endpoint
 if ':' in host:
     host, port = host.split(':', 1)
     port = int(port)
 else:
     port = 3306
 
-# Print workspace information
+# Print cluster information
 if options.output == 'env':
-    print(f'CLUSTER_ID={ws.id}')
+    print(f'CLUSTER_ID={cluster.id}')
     print(f'CLUSTER_HOST={host}')
     print(f'CLUSTER_PORT={port}')
     print(f'CLUSTER_DATABASE={database}')
+    print(f'CLUSTER_PASSWORD={password}')
+    print(f'CLUSTER_PASSWORD_URL={password_url}')
 elif options.output == 'github':
+    # Register both forms with the runner before anything can log them. This
+    # only holds within this job; each job that consumes the outputs has to
+    # mask them again for itself.
+    print(f'::add-mask::{password}')
+    print(f'::add-mask::{password_url}')
     with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-        print(f'cluster-id={ws.id}', file=output)
+        print(f'cluster-id={cluster.id}', file=output)
         print(f'cluster-host={host}', file=output)
         print(f'cluster-port={port}', file=output)
         print(f'cluster-database={database}', file=output)
+        print(f'cluster-password={password}', file=output)
+        print(f'cluster-password-url={password_url}', file=output)
 elif options.output == 'json':
     print('{')
-    print(f'  "cluster-id": "{ws.id}",')
+    print(f'  "cluster-id": "{cluster.id}",')
     print(f'  "cluster-host": "{host}",')
-    print(f'  "cluster-port": {port}')
-    print(f'  "cluster-database": {database}')
+    print(f'  "cluster-port": {port},')
+    print(f'  "cluster-database": "{database}",')
+    print(f'  "cluster-password": {json.dumps(password)},')
+    print(f'  "cluster-password-url": "{password_url}"')
     print('}')
 
 # Initialize the database
@@ -179,7 +223,7 @@ if options.init_sql:
     init_db = [
         os.path.join(os.path.dirname(__file__), 'init_db.py'),
         '--host', str(host), '--port', str(port),
-        '--user', 'admin', '--password', options.password,
+        '--user', 'admin', '--password', password,
         '--database', database,
     ]
 

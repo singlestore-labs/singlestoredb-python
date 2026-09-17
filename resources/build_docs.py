@@ -384,6 +384,11 @@ class DocBuilder:
         # Change workspace.Stage to workspace.stage
         content = re.sub(r'>workspace\.Stage\.', r'>workspace.stage.', content)
 
+        # Change cluster.Stage to cluster.stage. Stage is re-exported from the
+        # v2 cluster module, so it is documented under both names for as long
+        # as management/workspace.py is still documented.
+        content = re.sub(r'>cluster\.Stage\.', r'>cluster.stage.', content)
+
         # Fix class/method links
         content = re.sub(
             r'(<a\s+[^>]+>)?(\s*<code[^>]*>\s*<span\s+class="pre">\s*)([\w\.]+)(\s*</span>\s*</code>)',
