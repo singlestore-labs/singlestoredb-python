@@ -31,7 +31,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          fetch-depth: 2
+          # Full history, because the change detector below diffs against
+          # origin/main. A shallow clone does not create that ref -- with
+          # fetch-depth: 2 every diff died on `fatal: bad revision
+          # 'origin/main'`, which the detector read as "nothing changed", so
+          # the management step never ran on a PR.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -94,7 +99,10 @@ jobs:
 
           for DIR in $MONITORED_DIRS; do
             if [ -d "$DIR" ]; then
-              CHANGED_FILES=$(git diff --name-only $BASE_COMMIT HEAD -- "$DIR" || true)
+              # No `|| true` here: a git failure means the comparison did not
+              # happen, and swallowing it silently downgrades the run to the
+              # no-management path instead of reporting the breakage.
+              CHANGED_FILES=$(git diff --name-only "$BASE_COMMIT" HEAD -- "$DIR")
               if [ -n "$CHANGED_FILES" ]; then
                 echo "✅ Changes detected in: $DIR"
                 echo "Files changed:"
