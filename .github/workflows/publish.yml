@@ -49,8 +49,12 @@ jobs:
 
       - name: Initialize database
         id: initialize-database
+        # A new cluster has exactly one user, admin, which is why that name is
+        # fixed everywhere below. The project is named here rather than read
+        # from a repo variable so the deployment target is visible in the
+        # workflow and does not depend on repository settings.
         run: |
-          python resources/create_test_cluster.py --token="${{ secrets.CLUSTER_API_KEY }}" --project="${{ vars.CLUSTER_PROJECT }}" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
+          python resources/create_test_cluster.py --token="${{ secrets.CLUSTER_API_KEY }}" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
@@ -139,7 +143,7 @@ jobs:
           # both the userinfo half of the URL and the single-quoted shell word
           # cibuildwheel evaluates. Percent-encoding leaves only unreserved
           # characters and %, which are inert in both.
-          CIBW_ENVIRONMENT: "SINGLESTOREDB_URL='mysql://${{ secrets.CLUSTER_USER }}:${{ needs.setup-database.outputs.cluster-password-url }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0'"
+          CIBW_ENVIRONMENT: "SINGLESTOREDB_URL='mysql://admin:${{ needs.setup-database.outputs.cluster-password-url }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0'"
           PYTHONPATH: ${{ github.workspace }}
 
 #     - name: Build conda
@@ -272,10 +276,9 @@ jobs:
         # being interpolated into the command: the generated value can contain
         # any printable character, including ones the shell would act on.
         run: |
-          python resources/drop_db.py --user "$CLUSTER_USER" --password "$CLUSTER_PASSWORD" --host "$CLUSTER_HOST" --port 3306 --database "$CLUSTER_DATABASE"
+          python resources/drop_db.py --user admin --password "$CLUSTER_PASSWORD" --host "$CLUSTER_HOST" --port 3306 --database "$CLUSTER_DATABASE"
         env:
           PYTHONPATH: ${{ github.workspace }}
-          CLUSTER_USER: ${{ secrets.CLUSTER_USER }}
           CLUSTER_PASSWORD: ${{ needs.setup-database.outputs.cluster-password }}
           CLUSTER_HOST: ${{ needs.setup-database.outputs.cluster-host }}
           CLUSTER_DATABASE: ${{ needs.setup-database.outputs.cluster-database }}

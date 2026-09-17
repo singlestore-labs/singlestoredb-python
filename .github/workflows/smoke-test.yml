@@ -28,8 +28,12 @@ jobs:
 
       - name: Initialize database
         id: initialize-database
+        # A new cluster has exactly one user, admin, which is why that name is
+        # fixed everywhere below. The project is named here rather than read
+        # from a repo variable so the deployment target is visible in the
+        # workflow and does not depend on repository settings.
         run: |
-          python resources/create_test_cluster.py --token="${{ secrets.CLUSTER_API_KEY }}" --project="${{ vars.CLUSTER_PROJECT }}" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
+          python resources/create_test_cluster.py --token="${{ secrets.CLUSTER_API_KEY }}" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
@@ -137,7 +141,7 @@ jobs:
           # cluster-password-url, not cluster-password: the generated password
           # is drawn from the full printable set and has to be percent-encoded
           # to survive the userinfo half of the URL.
-          SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ needs.setup-database.outputs.cluster-password-url }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
+          SINGLESTOREDB_URL: "${{ matrix.driver }}://admin:${{ needs.setup-database.outputs.cluster-password-url }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
 
       - name: Run tests
         if: ${{ matrix.driver == 'https' }}
@@ -150,7 +154,7 @@ jobs:
         run: pytest -v -n 0 --pyargs singlestoredb.tests.test_basics
         env:
           PYTHONPATH: ${{ github.workspace }}
-          SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ needs.setup-database.outputs.cluster-password-url }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
+          SINGLESTOREDB_URL: "${{ matrix.driver }}://admin:${{ needs.setup-database.outputs.cluster-password-url }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
 
 
   shutdown-database:
@@ -188,10 +192,9 @@ jobs:
         # being interpolated into the command: the generated value can contain
         # any printable character, including ones the shell would act on.
         run: |
-          python resources/drop_db.py --user "$CLUSTER_USER" --password "$CLUSTER_PASSWORD" --host "$CLUSTER_HOST" --port 3306 --database "$CLUSTER_DATABASE"
+          python resources/drop_db.py --user admin --password "$CLUSTER_PASSWORD" --host "$CLUSTER_HOST" --port 3306 --database "$CLUSTER_DATABASE"
         env:
           PYTHONPATH: ${{ github.workspace }}
-          CLUSTER_USER: ${{ secrets.CLUSTER_USER }}
           CLUSTER_PASSWORD: ${{ needs.setup-database.outputs.cluster-password }}
           CLUSTER_HOST: ${{ needs.setup-database.outputs.cluster-host }}
           CLUSTER_DATABASE: ${{ needs.setup-database.outputs.cluster-database }}
