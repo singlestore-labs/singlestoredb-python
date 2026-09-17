@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -93,10 +93,12 @@ jobs:
           echo "::add-mask::$CLUSTER_PASSWORD"
           echo "::add-mask::$CLUSTER_PASSWORD_URL"
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+      # This job's matrix varies only over os; cibuildwheel supplies its own
+      # interpreters, so 3.10 here is just the host Python that drives it.
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
           cache: "pip"
@@ -120,7 +122,7 @@ jobs:
 
       - name: Set up QEMU
         if: runner.os == 'Linux'
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
         with:
           platforms: all
 
@@ -200,7 +202,7 @@ jobs:
       url: https://pypi.org/p/singlestoredb
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Download Linux wheels and sdist
         uses: actions/download-artifact@v4
@@ -262,7 +264,7 @@ jobs:
           echo "::add-mask::$CLUSTER_PASSWORD"
           echo "::add-mask::$CLUSTER_PASSWORD_URL"
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |

@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 2
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
           cache: "pip"
@@ -78,8 +78,8 @@ jobs:
           COMMIT_MSG=$(git log -1 --format='%s' HEAD)
           if [[ "$COMMIT_MSG" =~ ^Prepare\ for\ v[0-9]+\.[0-9]+\.[0-9]+\ release$ ]]; then
             echo "🚀 Release preparation commit detected: $COMMIT_MSG"
-            echo "changes-detected=true" >> $GITHUB_OUTPUT
-            echo "changed-directories=release" >> $GITHUB_OUTPUT
+            echo "changes-detected=true" >> "$GITHUB_OUTPUT"
+            echo "changed-directories=release" >> "$GITHUB_OUTPUT"
             echo ""
             echo "🎯 RESULT: Full test suite will run for release preparation"
             exit 0
@@ -98,6 +98,8 @@ jobs:
               if [ -n "$CHANGED_FILES" ]; then
                 echo "✅ Changes detected in: $DIR"
                 echo "Files changed:"
+                # shellcheck disable=SC2001  # prefixing every line, which
+                # ${var//search/replace} cannot do
                 echo "$CHANGED_FILES" | sed 's/^/  - /'
                 CHANGES_FOUND=true
                 if [ -z "$CHANGED_DIRS" ]; then
@@ -115,13 +117,13 @@ jobs:
 
           # Set outputs
           if [ "$CHANGES_FOUND" = true ]; then
-            echo "changes-detected=true" >> $GITHUB_OUTPUT
-            echo "changed-directories=$CHANGED_DIRS" >> $GITHUB_OUTPUT
+            echo "changes-detected=true" >> "$GITHUB_OUTPUT"
+            echo "changed-directories=$CHANGED_DIRS" >> "$GITHUB_OUTPUT"
             echo ""
             echo "🎯 RESULT: Changes detected in monitored directories"
           else
-            echo "changes-detected=false" >> $GITHUB_OUTPUT
-            echo "changed-directories=" >> $GITHUB_OUTPUT
+            echo "changes-detected=false" >> "$GITHUB_OUTPUT"
+            echo "changed-directories=" >> "$GITHUB_OUTPUT"
             echo ""
             echo "🎯 RESULT: No changes in monitored directories"
           fi
