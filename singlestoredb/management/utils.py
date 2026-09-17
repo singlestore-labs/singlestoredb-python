@@ -408,6 +408,80 @@ def enable_http_tracing() -> None:
     requests_log.propagate = True
 
 
+#: A Go ``time.Time`` rendered by its ``String()`` method:
+#: ``2026-09-17 14:42:41.445984 +0000 UTC``. ``GET /v2/clusters/{id}`` reports
+#: ``expiresAt`` in this shape while every other timestamp it returns is
+#: RFC 3339, and the trailing zone name is not ISO 8601, so the whole value
+#: fails to parse and the expiration silently reads as unset. The zone name and
+#: the monotonic-clock reading Go appends to some values are both optional.
+_GO_DATETIME_RE = re.compile(
+    r'^(?P<stamp>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?)'
+    r'(?:\s*(?P<offset>[+-]\d{2}:?\d{2}))?'
+    r'(?:\s+(?P<zone>[A-Za-z]\S*))?'
+    r'(?:\s+m=\S+)?$',
+)
+
+
+def _normalize_datetime(obj: str) -> str:
+    """
+    Return ``obj`` as something :func:`converters.datetime_fromisoformat` reads.
+
+    Handles the two shapes the management API returns -- RFC 3339 and the Go
+    ``time.Time.String()`` form -- by reducing both to a bare ISO 8601
+    timestamp plus an optional numeric offset. Fractional seconds are padded to
+    microseconds, since Go trims trailing zeros.
+
+    Parameters
+    ----------
+    obj : str
+        Timestamp as reported by the API
+
+    Returns
+    -------
+    str
+
+    """
+    match = _GO_DATETIME_RE.match(obj.strip())
+    if match is None:
+        # Not a shape this recognizes; hand it over untouched so the converter
+        # gets its usual chance to make sense of it.
+        return obj.replace('Z', '')
+
+    stamp = match.group('stamp')
+
+    # Fix datetimes with truncated zeros
+    if '.' in stamp:
+        stamp, micros = stamp.split('.', 1)
+        micros = micros[:6] + '0' * (6 - len(micros))
+        stamp = stamp + '.' + micros
+
+    return stamp + (match.group('offset') or '')
+
+
+def _as_naive_utc(obj: datetime.datetime) -> datetime.datetime:
+    """
+    Return ``obj`` as a naive UTC datetime.
+
+    An RFC 3339 timestamp loses its ``Z`` before it is parsed, so it arrives
+    here naive and already meaning UTC. A value carrying a numeric offset is
+    shifted onto UTC and stripped, so both shapes end up on the one convention
+    -- otherwise two timestamps read off the same object could not be compared.
+
+    Parameters
+    ----------
+    obj : datetime.datetime
+        Parsed timestamp, with or without a timezone
+
+    Returns
+    -------
+    datetime.datetime
+
+    """
+    if obj.tzinfo is None:
+        return obj
+    return obj.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+
 def to_datetime(
     obj: Optional[Union[str, datetime.datetime]],
 ) -> Optional[datetime.datetime]:
@@ -418,18 +492,14 @@ def to_datetime(
         return obj
     if obj == '0001-01-01T00:00:00Z':
         return None
-    obj = obj.replace('Z', '')
-    # Fix datetimes with truncated zeros
-    if '.' in obj:
-        obj, micros = obj.split('.', 1)
-        micros = micros + '0' * (6 - len(micros))
-        obj = obj + '.' + micros
-    out = converters.datetime_fromisoformat(obj)
+    out = converters.datetime_fromisoformat(_normalize_datetime(obj))
     if isinstance(out, str):
         return None
     if isinstance(out, datetime.date) and not isinstance(out, datetime.datetime):
         return datetime.datetime(out.year, out.month, out.day)
-    return out
+    if out is None:
+        return None
+    return _as_naive_utc(out)
 
 
 def to_datetime_strict(
@@ -442,20 +512,14 @@ def to_datetime_strict(
         return obj
     if obj == '0001-01-01T00:00:00Z':
         raise ValueError('not possible to convert 0001-01-01T00:00:00Z to datetime')
-    obj = obj.replace('Z', '')
-    # Fix datetimes with truncated zeros
-    if '.' in obj:
-        obj, micros = obj.split('.', 1)
-        micros = micros + '0' * (6 - len(micros))
-        obj = obj + '.' + micros
-    out = converters.datetime_fromisoformat(obj)
+    out = converters.datetime_fromisoformat(_normalize_datetime(obj))
     if not out:
         raise TypeError('not possible to convert None to datetime')
     if isinstance(out, str):
         raise ValueError('value cannot be str')
     if isinstance(out, datetime.date) and not isinstance(out, datetime.datetime):
         return datetime.datetime(out.year, out.month, out.day)
-    return out
+    return _as_naive_utc(out)
 
 
 def from_datetime(

@@ -18,6 +18,8 @@ from unittest.mock import patch
 
 from singlestoredb.exceptions import ManagementError
 from singlestoredb.management.utils import normalize_remote_path
+from singlestoredb.management.utils import to_datetime
+from singlestoredb.management.utils import to_datetime_strict
 from singlestoredb.tests.utils import counting_file_space
 from singlestoredb.tests.utils import counting_stage
 
@@ -1813,6 +1815,76 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
         import argparse
         with self.assertRaises(argparse.ArgumentTypeError):
             self.mod.parse_since('last tuesday')
+
+
+class TestToDatetime(unittest.TestCase):
+    """
+    ``to_datetime`` has to read both timestamp shapes the API returns.
+
+    Most fields come back as RFC 3339, but ``GET /v2/clusters/{id}`` reports
+    ``expiresAt`` as a Go ``time.Time.String()`` rendering -- verified live:
+    ``2026-09-17 14:42:41.445984 +0000 UTC`` against a ``createdAt`` of
+    ``2026-09-17T13:42:41.493848Z`` on the same cluster. The trailing zone name
+    is not ISO 8601, and parsing it used to fail into ``None``, which reads as
+    "this cluster never expires".
+    """
+
+    def test_rfc_3339(self):
+        out = to_datetime('2026-09-17T13:42:41.493848Z')
+        self.assertEqual(out, datetime.datetime(2026, 9, 17, 13, 42, 41, 493848))
+
+    def test_go_time_string(self):
+        out = to_datetime('2026-09-17 14:42:41.445984 +0000 UTC')
+        self.assertEqual(out, datetime.datetime(2026, 9, 17, 14, 42, 41, 445984))
+
+    def test_go_time_string_with_truncated_fraction(self):
+        # Go trims trailing zeros, so the fraction is not always 6 digits.
+        out = to_datetime('2026-09-17 14:42:41.4 +0000 UTC')
+        self.assertEqual(out, datetime.datetime(2026, 9, 17, 14, 42, 41, 400000))
+
+    def test_go_time_string_with_monotonic_reading(self):
+        out = to_datetime(
+            '2026-09-17 14:42:41.445984 +0000 UTC m=+0.000000001',
+        )
+        self.assertEqual(out, datetime.datetime(2026, 9, 17, 14, 42, 41, 445984))
+
+    def test_offset_is_applied_and_dropped(self):
+        # Shifted onto UTC and left naive, matching the RFC 3339 values, so two
+        # timestamps read off one object can be compared.
+        out = to_datetime('2026-09-17 09:42:41 -0500 EST')
+        self.assertEqual(out, datetime.datetime(2026, 9, 17, 14, 42, 41))
+        self.assertIsNone(out.tzinfo)
+
+    def test_both_shapes_subtract(self):
+        created = to_datetime('2026-09-17T13:42:41.493848Z')
+        expires = to_datetime('2026-09-17 14:42:41.445984 +0000 UTC')
+        self.assertAlmostEqual(
+            (expires - created).total_seconds(), 3600, delta=1,
+        )
+
+    def test_date_only(self):
+        out = to_datetime('2026-09-17')
+        self.assertEqual(out, datetime.datetime(2026, 9, 17))
+
+    def test_zero_sentinel_and_unparseable_are_none(self):
+        self.assertIsNone(to_datetime('0001-01-01T00:00:00Z'))
+        self.assertIsNone(to_datetime(None))
+        self.assertIsNone(to_datetime(''))
+        self.assertIsNone(to_datetime('not a date'))
+
+    def test_datetime_passes_through(self):
+        given = datetime.datetime(2026, 9, 17, 13, 42, 41)
+        self.assertIs(to_datetime(given), given)
+
+    def test_strict_reads_the_go_shape_too(self):
+        out = to_datetime_strict('2026-09-17 14:42:41.445984 +0000 UTC')
+        self.assertEqual(out, datetime.datetime(2026, 9, 17, 14, 42, 41, 445984))
+
+    def test_strict_still_raises_on_nothing(self):
+        with self.assertRaises(TypeError):
+            to_datetime_strict(None)
+        with self.assertRaises(ValueError):
+            to_datetime_strict('0001-01-01T00:00:00Z')
 
 
 if __name__ == '__main__':
