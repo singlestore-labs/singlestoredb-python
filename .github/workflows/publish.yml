@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
@@ -93,12 +93,12 @@ jobs:
           echo "::add-mask::$CLUSTER_PASSWORD"
           echo "::add-mask::$CLUSTER_PASSWORD_URL"
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # This job's matrix varies only over os; cibuildwheel supplies its own
       # interpreters, so 3.10 here is just the host Python that drives it.
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.10"
           cache: "pip"
@@ -174,14 +174,14 @@ jobs:
           mv ./wheelhouse/*.whl ./dist/.
 
       - name: Archive source dist and wheel
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: artifacts-${{ runner.os }}
           path: dist
           retention-days: 2
 
 #    - name: Archive conda
-#       uses: actions/upload-artifact@v6
+#       uses: actions/upload-artifact@v7
 #       with:
 #         name: conda-${{ matrix.os }}
 #         path: ./conda-bld
@@ -202,22 +202,22 @@ jobs:
       url: https://pypi.org/p/singlestoredb
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Download Linux wheels and sdist
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: artifacts-Linux
           path: dist
 
       - name: Download Windows wheels and sdist
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: artifacts-Windows
           path: dist
 
       - name: Download Mac wheels and sdist
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: artifacts-macOS
           path: dist
@@ -264,7 +264,7 @@ jobs:
           echo "::add-mask::$CLUSTER_PASSWORD"
           echo "::add-mask::$CLUSTER_PASSWORD_URL"
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
