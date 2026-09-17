@@ -455,7 +455,14 @@ def _normalize_datetime(obj: str) -> str:
         micros = micros[:6] + '0' * (6 - len(micros))
         stamp = stamp + '.' + micros
 
-    return stamp + (match.group('offset') or '')
+    # Go writes the offset without a separator (+0000). Only Python 3.11 and
+    # later accept that spelling; 3.9 and 3.10 want +00:00, so always emit the
+    # colon.
+    offset = match.group('offset') or ''
+    if offset and ':' not in offset:
+        offset = offset[:3] + ':' + offset[3:]
+
+    return stamp + offset
 
 
 def _as_naive_utc(obj: datetime.datetime) -> datetime.datetime:

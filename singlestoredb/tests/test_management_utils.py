@@ -17,6 +17,7 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from singlestoredb.exceptions import ManagementError
+from singlestoredb.management.utils import _normalize_datetime
 from singlestoredb.management.utils import normalize_remote_path
 from singlestoredb.management.utils import to_datetime
 from singlestoredb.management.utils import to_datetime_strict
@@ -1836,6 +1837,26 @@ class TestToDatetime(unittest.TestCase):
     def test_go_time_string(self):
         out = to_datetime('2026-09-17 14:42:41.445984 +0000 UTC')
         self.assertEqual(out, datetime.datetime(2026, 9, 17, 14, 42, 41, 445984))
+
+    def test_offset_is_normalized_to_include_a_colon(self):
+        # Go writes +0000; datetime.fromisoformat only accepts that spelling on
+        # 3.11 and later, so the normalizer has to insert the colon itself. This
+        # asserts on the normalized string rather than on a parsed result
+        # because the parsed result is only wrong on 3.9 and 3.10, which would
+        # leave the failure invisible to anyone testing on a newer interpreter.
+        self.assertEqual(
+            _normalize_datetime('2026-09-17 14:42:41.445984 +0000 UTC'),
+            '2026-09-17 14:42:41.445984+00:00',
+        )
+        self.assertEqual(
+            _normalize_datetime('2026-09-17 09:42:41 +0530 IST'),
+            '2026-09-17 09:42:41+05:30',
+        )
+        # An offset that already carries a colon is left as it is.
+        self.assertEqual(
+            _normalize_datetime('2026-09-17 09:42:41 +05:30 IST'),
+            '2026-09-17 09:42:41+05:30',
+        )
 
     def test_go_time_string_with_truncated_fraction(self):
         # Go trims trailing zeros, so the fraction is not always 6 digits.
