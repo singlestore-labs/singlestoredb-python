@@ -22,10 +22,10 @@ jobs:
           ROOT_PASSWORD: "root"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
           python-version: "3.10"
           cache: "pip"
@@ -36,8 +36,11 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run MySQL protocol tests
+        # -m 'not management_v1' keeps the v2 management coverage while dropping
+        # the deprecated v1 suite; the management-v1-tests job below is where
+        # that runs.
         run: |
-          pytest -v --cov=singlestoredb --pyargs singlestoredb.tests
+          pytest -v -m 'not management_v1' --cov=singlestoredb --pyargs singlestoredb.tests
         env:
           COVERAGE_FILE: "coverage-mysql.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3307"
@@ -82,3 +85,46 @@ jobs:
           coverage report
           coverage xml
           coverage html
+
+  # The deprecated v1 management API. management.version defaults to v2, so this
+  # is a legacy gate: it runs here nightly rather than on every PR, and it is
+  # what gets deleted along with management/v1/. Selects both the mocked v1
+  # units and the live v1 deployments, plus test_fusion's v1 WORKSPACE grammar.
+  management-v1-tests:
+    runs-on: ubuntu-latest
+    environment: Base
+
+    services:
+      singlestore:
+        image: ghcr.io/singlestore-labs/singlestoredb-dev:latest
+        ports:
+          - 3307:3306
+          - 8081:8080
+          - 9081:9081
+        env:
+          SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
+          ROOT_PASSWORD: "root"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run v1 management API tests
+        run: |
+          pytest -v -m 'management_v1' --pyargs singlestoredb.tests
+        env:
+          SINGLESTOREDB_URL: "root:root@127.0.0.1:3307"
+          SINGLESTOREDB_PURE_PYTHON: 0
+          SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
+          SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
+          SINGLESTOREDB_FUSION_ENABLE_HIDDEN: "1"

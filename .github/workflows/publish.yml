@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
@@ -49,8 +49,19 @@ jobs:
 
       - name: Initialize database
         id: initialize-database
+        # A new cluster has exactly one user, admin, which is why that name is
+        # fixed everywhere below. The project is named here rather than read
+        # from a repo variable so the deployment target is visible in the
+        # workflow and does not depend on repository settings.
+        #
+        # POST /v2/clusters generates its own admin password and ignores any
+        # that is sent, so the script resets it to CLUSTER_PASSWORD over SQL
+        # once the cluster is up. That keeps the credential a secret the runner
+        # masks everywhere, instead of a job output: the runner refuses to write
+        # an output whose value is masked, so a generated password could not
+        # reach these jobs at all.
         run: |
-          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
@@ -73,10 +84,12 @@ jobs:
           - windows-2022
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+      # This job's matrix varies only over os; cibuildwheel supplies its own
+      # interpreters, so 3.10 here is just the host Python that drives it.
+      - name: Set up Python
+        uses: actions/setup-python@v7
         with:
           python-version: "3.10"
           cache: "pip"
@@ -100,7 +113,7 @@ jobs:
 
       - name: Set up QEMU
         if: runner.os == 'Linux'
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: all
 
@@ -118,7 +131,10 @@ jobs:
           # points --pyargs at the workspace, so that pyproject is the inifile
           # here. Without the plugin pytest exits on the unknown arguments.
           CIBW_TEST_REQUIRES: "pytest pytest-xdist"
-          CIBW_ENVIRONMENT: "SINGLESTOREDB_URL='mysql://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0'"
+          # CLUSTER_PASSWORD has to survive both the userinfo half of the URL
+          # and the single-quoted shell word cibuildwheel evaluates, so keep the
+          # secret alphanumeric: no ':', '@', '/', '%' or quote characters.
+          CIBW_ENVIRONMENT: "SINGLESTOREDB_URL='mysql://admin:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0'"
           PYTHONPATH: ${{ github.workspace }}
 
 #     - name: Build conda
@@ -147,14 +163,14 @@ jobs:
           mv ./wheelhouse/*.whl ./dist/.
 
       - name: Archive source dist and wheel
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: artifacts-${{ runner.os }}
           path: dist
           retention-days: 2
 
 #    - name: Archive conda
-#       uses: actions/upload-artifact@v4
+#       uses: actions/upload-artifact@v7
 #       with:
 #         name: conda-${{ matrix.os }}
 #         path: ./conda-bld
@@ -175,22 +191,22 @@ jobs:
       url: https://pypi.org/p/singlestoredb
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: Download Linux wheels and sdist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: artifacts-Linux
           path: dist
 
       - name: Download Windows wheels and sdist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: artifacts-Windows
           path: dist
 
       - name: Download Mac wheels and sdist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: artifacts-macOS
           path: dist
@@ -228,7 +244,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
@@ -238,14 +254,28 @@ jobs:
 
       - name: Drop database
         if: ${{ always() }}
+        # The password reaches the script through the environment rather than
+        # being interpolated into the command, so the shell never sees its
+        # characters.
         run: |
-          python resources/drop_db.py --user "${{ secrets.CLUSTER_USER }}" --password "${{ secrets.CLUSTER_PASSWORD }}" --host "${{ needs.setup-database.outputs.cluster-host }}" --port 3306 --database "${{ needs.setup-database.outputs.cluster-database }}"
+          python resources/drop_db.py --user admin --password "$CLUSTER_PASSWORD" --host "$CLUSTER_HOST" --port 3306 --database "$CLUSTER_DATABASE"
         env:
           PYTHONPATH: ${{ github.workspace }}
+          CLUSTER_PASSWORD: ${{ secrets.CLUSTER_PASSWORD }}
+          CLUSTER_HOST: ${{ needs.setup-database.outputs.cluster-host }}
+          CLUSTER_DATABASE: ${{ needs.setup-database.outputs.cluster-database }}
 
-      - name: Shutdown workspace
+      - name: Shutdown cluster
         if: ${{ always() }}
+        # An empty ID would send the DELETE to /v2/clusters/ and leave a live
+        # cluster behind, so say so loudly instead: at that point the ID has to
+        # be recovered by hand. --fail-with-body is what makes a refused DELETE
+        # fail this step rather than printing the error and exiting 0.
         run: |
-          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v1/workspaces/${{ env.CLUSTER_ID }}"
+          if [ -z "$CLUSTER_ID" ]; then
+            echo "::error::No cluster ID from setup-database; the cluster (if any) must be terminated by hand"
+            exit 1
+          fi
+          curl --fail-with-body -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v2/clusters/$CLUSTER_ID?force=true"
         env:
           CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}
