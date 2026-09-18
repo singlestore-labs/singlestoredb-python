@@ -414,9 +414,13 @@ def enable_http_tracing() -> None:
 #: RFC 3339, and the trailing zone name is not ISO 8601, so the whole value
 #: fails to parse and the expiration silently reads as unset. The zone name and
 #: the monotonic-clock reading Go appends to some values are both optional.
+#: An RFC 3339 ``Z`` counts as an offset here so that shape goes down the same
+#: path: its fraction needs the same padding, and until it matched, a value like
+#: ``...20.43888Z`` reached the converter with five digits, which only 3.11 and
+#: later parse.
 _GO_DATETIME_RE = re.compile(
     r'^(?P<stamp>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?)'
-    r'(?:\s*(?P<offset>[+-]\d{2}:?\d{2}))?'
+    r'(?:\s*(?P<offset>[Zz]|[+-]\d{2}:?\d{2}))?'
     r'(?:\s+(?P<zone>[A-Za-z]\S*))?'
     r'(?:\s+m=\S+)?$',
 )
@@ -429,7 +433,8 @@ def _normalize_datetime(obj: str) -> str:
     Handles the two shapes the management API returns -- RFC 3339 and the Go
     ``time.Time.String()`` form -- by reducing both to a bare ISO 8601
     timestamp plus an optional numeric offset. Fractional seconds are padded to
-    microseconds, since Go trims trailing zeros.
+    microseconds -- Go trims trailing zeros, and ``datetime.fromisoformat``
+    accepts only 3 or 6 digits before Python 3.11.
 
     Parameters
     ----------
@@ -457,9 +462,11 @@ def _normalize_datetime(obj: str) -> str:
 
     # Go writes the offset without a separator (+0000). Only Python 3.11 and
     # later accept that spelling; 3.9 and 3.10 want +00:00, so always emit the
-    # colon.
+    # colon. Z is spelled out for the same reason: nothing before 3.11 reads it.
     offset = match.group('offset') or ''
-    if offset and ':' not in offset:
+    if offset in ('Z', 'z'):
+        offset = '+00:00'
+    elif offset and ':' not in offset:
         offset = offset[:3] + ':' + offset[3:]
 
     return stamp + offset
@@ -469,10 +476,11 @@ def _as_naive_utc(obj: datetime.datetime) -> datetime.datetime:
     """
     Return ``obj`` as a naive UTC datetime.
 
-    An RFC 3339 timestamp loses its ``Z`` before it is parsed, so it arrives
-    here naive and already meaning UTC. A value carrying a numeric offset is
-    shifted onto UTC and stripped, so both shapes end up on the one convention
-    -- otherwise two timestamps read off the same object could not be compared.
+    A value carrying an offset -- which is every recognized shape, since an
+    RFC 3339 ``Z`` is normalized to ``+00:00`` -- is shifted onto UTC and
+    stripped. A value that arrives naive is already meaning UTC and is left
+    alone. Both end up on the one convention -- otherwise two timestamps read
+    off the same object could not be compared.
 
     Parameters
     ----------

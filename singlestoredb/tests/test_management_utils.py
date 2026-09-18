@@ -1858,6 +1858,27 @@ class TestToDatetime(unittest.TestCase):
             '2026-09-17 09:42:41+05:30',
         )
 
+    def test_rfc_3339_fraction_is_padded(self):
+        # The API trims trailing zeros here too: a job's createdAt came back as
+        # '2026-09-18T12:39:20.43888Z'. Only 3.11 and later read a fraction that
+        # is neither 3 nor 6 digits, so before Z was recognized as an offset this
+        # value skipped the padding and to_datetime_strict raised on 3.10.
+        self.assertEqual(
+            _normalize_datetime('2026-09-18T12:39:20.43888Z'),
+            '2026-09-18T12:39:20.438880+00:00',
+        )
+        self.assertEqual(
+            to_datetime_strict('2026-09-18T12:39:20.43888Z'),
+            datetime.datetime(2026, 9, 18, 12, 39, 20, 438880),
+        )
+
+    def test_rfc_3339_nanoseconds_are_truncated(self):
+        # Nine digits does not fit a datetime; the extra ones are dropped.
+        self.assertEqual(
+            _normalize_datetime('2026-09-18T12:39:20.438880123Z'),
+            '2026-09-18T12:39:20.438880+00:00',
+        )
+
     def test_go_time_string_with_truncated_fraction(self):
         # Go trims trailing zeros, so the fraction is not always 6 digits.
         out = to_datetime('2026-09-17 14:42:41.4 +0000 UTC')
