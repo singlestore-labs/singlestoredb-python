@@ -59,12 +59,18 @@ jobs:
       matrix:
         os:
           - ubuntu-24.04
+        # Every version from the floor in pyproject.toml (requires-python
+        # >=3.9) up to the newest final release. 3.15 is deliberately absent:
+        # as of 2026-09-18 it is at rc2 with GA planned for 2026-10-01, and
+        # setup-python needs allow-prereleases plus an explicit "3.15.0-rc.2"
+        # to install it at all. Add a bare "3.15" once it ships.
         python-version:
           - "3.9"
           - "3.10"
           - "3.11"
           - "3.12"
           - "3.13"
+          - "3.14"
         driver:
           - mysql
           - https
