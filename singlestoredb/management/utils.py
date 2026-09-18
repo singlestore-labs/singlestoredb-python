@@ -472,6 +472,31 @@ def _normalize_datetime(obj: str) -> str:
     return stamp + offset
 
 
+def _is_go_zero_time(obj: Union[datetime.date, datetime.datetime]) -> bool:
+    """
+    Return whether ``obj`` is Go's zero time, which means "unset".
+
+    A Go ``time.Time`` that was never assigned renders as January 1 of year 1,
+    and the API returns that for a field it has no value for -- most visibly an
+    ``expiresAt`` on a resource that does not expire. It arrives spelled either
+    way the two timestamp shapes allow: ``0001-01-01T00:00:00Z`` and
+    ``0001-01-01 00:00:00 +0000 UTC``. Testing the parsed value rather than the
+    string covers both, along with any offset or monotonic reading that comes
+    with them.
+
+    Parameters
+    ----------
+    obj : datetime.date or datetime.datetime
+        Parsed timestamp
+
+    Returns
+    -------
+    bool
+
+    """
+    return (obj.year, obj.month, obj.day) == (1, 1, 1)
+
+
 def _as_naive_utc(obj: datetime.datetime) -> datetime.datetime:
     """
     Return ``obj`` as a naive UTC datetime.
@@ -505,15 +530,18 @@ def to_datetime(
         return None
     if isinstance(obj, datetime.datetime):
         return obj
-    if obj == '0001-01-01T00:00:00Z':
-        return None
     out = converters.datetime_fromisoformat(_normalize_datetime(obj))
     if isinstance(out, str):
         return None
-    if isinstance(out, datetime.date) and not isinstance(out, datetime.datetime):
-        return datetime.datetime(out.year, out.month, out.day)
     if out is None:
         return None
+    # Before _as_naive_utc: shifting an aware year-1 value onto UTC can carry it
+    # below datetime.MINYEAR, which raises rather than returning the None this
+    # value means.
+    if _is_go_zero_time(out):
+        return None
+    if isinstance(out, datetime.date) and not isinstance(out, datetime.datetime):
+        return datetime.datetime(out.year, out.month, out.day)
     return _as_naive_utc(out)
 
 
@@ -525,13 +553,15 @@ def to_datetime_strict(
         raise TypeError('not possible to convert None to datetime')
     if isinstance(obj, datetime.datetime):
         return obj
-    if obj == '0001-01-01T00:00:00Z':
-        raise ValueError('not possible to convert 0001-01-01T00:00:00Z to datetime')
     out = converters.datetime_fromisoformat(_normalize_datetime(obj))
     if not out:
         raise TypeError('not possible to convert None to datetime')
     if isinstance(out, str):
         raise ValueError('value cannot be str')
+    # See to_datetime: checked here rather than after the UTC shift, which can
+    # raise on a year-1 value.
+    if _is_go_zero_time(out):
+        raise ValueError(f'not possible to convert {obj} to datetime')
     if isinstance(out, datetime.date) and not isinstance(out, datetime.datetime):
         return datetime.datetime(out.year, out.month, out.day)
     return _as_naive_utc(out)

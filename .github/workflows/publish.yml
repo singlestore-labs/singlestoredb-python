@@ -267,7 +267,15 @@ jobs:
 
       - name: Shutdown cluster
         if: ${{ always() }}
+        # An empty ID would send the DELETE to /v2/clusters/ and leave a live
+        # cluster behind, so say so loudly instead: at that point the ID has to
+        # be recovered by hand. --fail-with-body is what makes a refused DELETE
+        # fail this step rather than printing the error and exiting 0.
         run: |
-          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v2/clusters/${{ env.CLUSTER_ID }}?force=true"
+          if [ -z "$CLUSTER_ID" ]; then
+            echo "::error::No cluster ID from setup-database; the cluster (if any) must be terminated by hand"
+            exit 1
+          fi
+          curl --fail-with-body -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v2/clusters/$CLUSTER_ID?force=true"
         env:
           CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}

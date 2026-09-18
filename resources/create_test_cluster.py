@@ -163,6 +163,44 @@ cluster = mgr.create_cluster(
     wait_timeout=1200,
 )
 
+host = cluster.endpoint
+if ':' in host:
+    host, port = host.split(':', 1)
+    port = int(port)
+else:
+    port = 3306
+
+database = options.database
+if not database:
+    database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
+
+# Report before touching the cluster any further. Everything below can fail
+# against a cluster that already exists and is already billing, and the caller's
+# only handle on it is the ID reported here -- a CI teardown job with an empty
+# cluster-id output would issue its DELETE against /v2/clusters/ and leak the
+# cluster it was meant to remove.
+#
+# No password is reported: the caller passed it in, so it already knows it, and
+# under GitHub Actions it is a secret the runner masks on its own.
+if options.output == 'env':
+    print(f'CLUSTER_ID={cluster.id}')
+    print(f'CLUSTER_HOST={host}')
+    print(f'CLUSTER_PORT={port}')
+    print(f'CLUSTER_DATABASE={database}')
+elif options.output == 'github':
+    with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+        print(f'cluster-id={cluster.id}', file=output)
+        print(f'cluster-host={host}', file=output)
+        print(f'cluster-port={port}', file=output)
+        print(f'cluster-database={database}', file=output)
+elif options.output == 'json':
+    print('{')
+    print(f'  "cluster-id": "{cluster.id}",')
+    print(f'  "cluster-host": "{host}",')
+    print(f'  "cluster-port": {port},')
+    print(f'  "cluster-database": "{database}"')
+    print('}')
+
 # The API generates the admin password and reports it only on the create
 # response -- there is no route that will hand it back later, and it is None
 # after any refresh(). See item 9 of docs/management-api-audit.md: the API
@@ -175,13 +213,6 @@ if not generated:
         file=sys.stderr,
     )
     sys.exit(1)
-
-host = cluster.endpoint
-if ':' in host:
-    host, port = host.split(':', 1)
-    port = int(port)
-else:
-    port = 3306
 
 # Trade the generated password for the caller's, because the generated one
 # cannot leave this process. A caller running under GitHub Actions has to mask
@@ -203,32 +234,6 @@ with s2.connect(
 ) as conn:
     with conn.cursor() as cur:
         cur.execute(f"ALTER USER 'admin'@'%' IDENTIFIED BY '{escaped}'")
-
-database = options.database
-if not database:
-    database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
-
-# Print cluster information. No password is reported: the caller passed it in,
-# so it already knows it, and under GitHub Actions it is a secret the runner
-# masks on its own.
-if options.output == 'env':
-    print(f'CLUSTER_ID={cluster.id}')
-    print(f'CLUSTER_HOST={host}')
-    print(f'CLUSTER_PORT={port}')
-    print(f'CLUSTER_DATABASE={database}')
-elif options.output == 'github':
-    with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-        print(f'cluster-id={cluster.id}', file=output)
-        print(f'cluster-host={host}', file=output)
-        print(f'cluster-port={port}', file=output)
-        print(f'cluster-database={database}', file=output)
-elif options.output == 'json':
-    print('{')
-    print(f'  "cluster-id": "{cluster.id}",')
-    print(f'  "cluster-host": "{host}",')
-    print(f'  "cluster-port": {port},')
-    print(f'  "cluster-database": "{database}"')
-    print('}')
 
 # Initialize the database
 if options.init_sql:

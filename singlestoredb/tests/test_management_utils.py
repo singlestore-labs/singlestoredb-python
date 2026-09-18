@@ -1914,6 +1914,19 @@ class TestToDatetime(unittest.TestCase):
         self.assertIsNone(to_datetime(''))
         self.assertIsNone(to_datetime('not a date'))
 
+    def test_the_go_spelling_of_the_zero_sentinel_is_none_too(self):
+        # Go's zero time means "unset" -- an expiresAt on a resource that does
+        # not expire -- and arrives in whichever shape the field uses. Reading
+        # the Go spelling as a real timestamp reported year 1 as an expiry.
+        self.assertIsNone(to_datetime('0001-01-01 00:00:00 +0000 UTC'))
+        # Recognized from the parsed value, so the trimmings Go may add do not
+        # each need their own literal.
+        self.assertIsNone(
+            to_datetime('0001-01-01 00:00:00 +0000 UTC m=+0.000000001'),
+        )
+        self.assertIsNone(to_datetime('0001-01-01 00:00:00 +0000 GMT'))
+        self.assertIsNone(to_datetime('0001-01-01'))
+
     def test_datetime_passes_through(self):
         given = datetime.datetime(2026, 9, 17, 13, 42, 41)
         self.assertIs(to_datetime(given), given)
@@ -1927,6 +1940,10 @@ class TestToDatetime(unittest.TestCase):
             to_datetime_strict(None)
         with self.assertRaises(ValueError):
             to_datetime_strict('0001-01-01T00:00:00Z')
+
+    def test_strict_raises_on_the_go_spelling_of_the_sentinel(self):
+        with self.assertRaises(ValueError):
+            to_datetime_strict('0001-01-01 00:00:00 +0000 UTC')
 
 
 if __name__ == '__main__':
