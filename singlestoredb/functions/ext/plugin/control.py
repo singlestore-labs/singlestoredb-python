@@ -1,7 +1,32 @@
 """
 Control signal dispatch for @@health, @@functions, @@register, @@delete.
 
-Matches the Rust wasm-udf-server's dispatch_control_signal behavior.
+Matches the Rust wasm-udf-server's dispatch_control_signal behavior, including
+the structured-error-code shape from ADR 0001
+(``{"error": "...", "code": "SCREAMING_SNAKE"}`` on errors). The authoritative
+catalog of codes lives in ADR 0001 in the ``wasm-udf-server`` repo; the codes
+emitted from this module are:
+
+- ``UNKNOWN_SIGNAL`` — unrecognized ``@@``-prefixed signal name.
+- ``INTERNAL_ERROR`` — cross-cutting fallback for unexpected handler exceptions.
+- ``REGISTER_MISSING_PAYLOAD`` — ``@@register`` called with an empty body.
+- ``REGISTER_INVALID_PAYLOAD`` — ``@@register`` body failed JSON parsing or
+  field validation.
+- ``REGISTER_FUNC_EXISTS`` — function with the same name is already registered
+  and ``replace`` was not requested.
+- ``REGISTER_FUNC_NOT_DYNAMIC`` — registration targets a name reserved by a
+  base/built-in function. This covers both replacing a base function (when
+  ``replace`` is requested) and registering a new function whose name collides
+  with a base function (even when ``replace`` is not requested).
+- ``DELETE_MISSING_PAYLOAD`` — ``@@delete`` called with an empty body.
+- ``DELETE_INVALID_PAYLOAD`` — ``@@delete`` body failed JSON parsing or field
+  validation.
+- ``DELETE_FUNC_NOT_REGISTERED`` — target function exists but was not
+  dynamically registered, so it cannot be deleted.
+- ``DELETE_FUNC_NOT_FOUND`` — target function does not exist.
+
+The ``REGISTER_DISABLED`` and ``DELETE_DISABLED`` codes from that catalog have
+no call site here because this server has no registration enable/disable flag.
 """
 from __future__ import annotations
 
@@ -11,6 +36,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .registry import describe_functions_json
+from .registry import FunctionExistsError
+from .registry import FunctionNotDynamicError
+from .registry import FunctionNotFoundError
 
 if TYPE_CHECKING:
     from .server import SharedRegistry
@@ -22,7 +50,19 @@ logger = logging.getLogger('plugin.control')
 class ControlResult:
     """Result of a control signal dispatch."""
     ok: bool
-    data: str  # JSON response on success, error message on failure
+    # JSON response. On success (``ok=True``) this is a handler-specific
+    # document such as ``{"status":"ok"}`` or ``{"functions":[...]}``. On
+    # failure (``ok=False``) this is the ADR 0001 error shape
+    # ``{"error":"...","code":"..."}``.
+    data: str
+
+
+def _err(message: str, code: str) -> ControlResult:
+    """Build an error ControlResult with the ADR 0001 JSON shape."""
+    return ControlResult(
+        ok=False,
+        data=json.dumps({'error': message, 'code': code}),
+    )
 
 
 def dispatch_control_signal(
@@ -46,12 +86,12 @@ def dispatch_control_signal(
                 request_data, shared_registry, pipe_write_fd,
             )
         else:
-            return ControlResult(
-                ok=False,
-                data=f'Unknown control signal: {signal_name}',
+            return _err(
+                f'Unknown control signal: {signal_name}',
+                'UNKNOWN_SIGNAL',
             )
     except Exception as e:
-        return ControlResult(ok=False, data=str(e))
+        return _err(str(e), 'INTERNAL_ERROR')
 
 
 def _handle_health() -> ControlResult:
@@ -83,39 +123,59 @@ def _handle_register(
     own registry and re-fork all workers.
     """
     if not request_data:
-        return ControlResult(ok=False, data='Missing registration payload')
+        return _err('Missing registration payload', 'REGISTER_MISSING_PAYLOAD')
 
     try:
         body = json.loads(request_data)
-    except json.JSONDecodeError as e:
-        return ControlResult(ok=False, data=f'Invalid JSON: {e}')
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        return _err(f'Invalid JSON: {e}', 'REGISTER_INVALID_PAYLOAD')
+
+    if not isinstance(body, dict):
+        return _err(
+            'Request body must be a JSON object',
+            'REGISTER_INVALID_PAYLOAD',
+        )
 
     function_name = body.get('name')
     if not function_name:
-        return ControlResult(
-            ok=False, data='Missing required field: name',
+        return _err(
+            'Missing required field: name', 'REGISTER_INVALID_PAYLOAD',
+        )
+    if not isinstance(function_name, str):
+        return _err(
+            'Field "name" must be a string', 'REGISTER_INVALID_PAYLOAD',
         )
 
     args = body.get('args')
     if not isinstance(args, list):
-        return ControlResult(
-            ok=False, data='Missing required field: args (must be an array)',
+        return _err(
+            'Missing required field: args (must be an array)',
+            'REGISTER_INVALID_PAYLOAD',
         )
 
     returns = body.get('returns')
     if not isinstance(returns, list):
-        return ControlResult(
-            ok=False,
-            data='Missing required field: returns (must be an array)',
+        return _err(
+            'Missing required field: returns (must be an array)',
+            'REGISTER_INVALID_PAYLOAD',
         )
 
     func_body = body.get('body')
     if not func_body:
-        return ControlResult(
-            ok=False, data='Missing required field: body',
+        return _err(
+            'Missing required field: body', 'REGISTER_INVALID_PAYLOAD',
+        )
+    if not isinstance(func_body, str):
+        return _err(
+            'Field "body" must be a string', 'REGISTER_INVALID_PAYLOAD',
         )
 
     replace = body.get('replace', False)
+    if not isinstance(replace, bool):
+        return _err(
+            'Field "replace" must be a boolean',
+            'REGISTER_INVALID_PAYLOAD',
+        )
 
     # Build signature JSON matching describe-functions schema
     signature = json.dumps({
@@ -126,8 +186,12 @@ def _handle_register(
 
     try:
         shared_registry.create_function(signature, func_body, replace)
-    except Exception as e:
-        return ControlResult(ok=False, data=str(e))
+    except FunctionExistsError as e:
+        return _err(str(e), 'REGISTER_FUNC_EXISTS')
+    except FunctionNotDynamicError as e:
+        return _err(str(e), 'REGISTER_FUNC_NOT_DYNAMIC')
+    except (ValueError, SyntaxError, TypeError) as e:
+        return _err(str(e), 'REGISTER_INVALID_PAYLOAD')
 
     # Notify main process so it can re-fork workers with updated state
     if pipe_write_fd is not None:
@@ -151,23 +215,37 @@ def _handle_delete(
 ) -> ControlResult:
     """Handle @@delete: delete a dynamically registered function."""
     if not request_data:
-        return ControlResult(ok=False, data='Missing deletion payload')
+        return _err('Missing deletion payload', 'DELETE_MISSING_PAYLOAD')
 
     try:
         body = json.loads(request_data)
-    except json.JSONDecodeError as e:
-        return ControlResult(ok=False, data=f'Invalid JSON: {e}')
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        return _err(f'Invalid JSON: {e}', 'DELETE_INVALID_PAYLOAD')
+
+    if not isinstance(body, dict):
+        return _err(
+            'Request body must be a JSON object',
+            'DELETE_INVALID_PAYLOAD',
+        )
 
     function_name = body.get('name')
     if not function_name:
-        return ControlResult(
-            ok=False, data='Missing required field: name',
+        return _err(
+            'Missing required field: name', 'DELETE_INVALID_PAYLOAD',
+        )
+    if not isinstance(function_name, str):
+        return _err(
+            'Field "name" must be a string', 'DELETE_INVALID_PAYLOAD',
         )
 
     try:
         shared_registry.delete_function(function_name)
-    except ValueError as e:
-        return ControlResult(ok=False, data=str(e))
+    except FunctionNotDynamicError as e:
+        return _err(str(e), 'DELETE_FUNC_NOT_REGISTERED')
+    except FunctionNotFoundError as e:
+        return _err(str(e), 'DELETE_FUNC_NOT_FOUND')
+    except Exception as e:
+        return _err(str(e), 'INTERNAL_ERROR')
 
     # Notify main process so it can re-fork workers with updated state
     if pipe_write_fd is not None:
