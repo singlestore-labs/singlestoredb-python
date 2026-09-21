@@ -85,7 +85,14 @@ class TestWorkspace(unittest.TestCase):
                 wait_on_active=True,
             )
         except Exception:
-            cls.workspace_group.terminate(force=True)
+            # Guarded: an unguarded terminate here replaces the create failure
+            # with whatever the DELETE raised, which both hides the real error
+            # and leaves the group live with nothing having reported why.
+            # utils.cleanup_tracked retries it and says so.
+            try:
+                cls.workspace_group.terminate(force=True)
+            except Exception:
+                pass
             raise
 
     @classmethod
@@ -937,18 +944,30 @@ class TestSecrets(unittest.TestCase):
         except s2.ManagementError:
             pass
 
-        self.manager._post(
+        created = self.manager._post(
             'secrets',
             json=dict(
                 name='secret_name',
                 value='secret_value',
             ),
-        )
+        ).json()
 
-        secret = self.manager.organizations.current.get_secret('secret_name')
+        # The ID comes from the create response rather than from the lookup
+        # under test: binding it inside the try would leave the cleanup raising
+        # UnboundLocalError over whatever the lookup actually failed with.
+        # Without this the secret outlived every run -- it was only ever
+        # removed opportunistically by the sweep at the top of the *next* one.
+        # test_management_v2.py's twin already does it this way.
+        secret_id = created['secret']['secretID']
+        try:
+            secret = self.manager.organizations.current.get_secret(
+                'secret_name',
+            )
 
-        assert secret.name == 'secret_name'
-        assert secret.value == 'secret_value'
+            assert secret.name == 'secret_name'
+            assert secret.value == 'secret_value'
+        finally:
+            self.manager._delete(f'secrets/{secret_id}')
 
 
 @pytest.mark.management
@@ -982,7 +1001,14 @@ class TestJob(unittest.TestCase):
                 wait_on_active=True,
             )
         except Exception:
-            cls.workspace_group.terminate(force=True)
+            # Guarded: an unguarded terminate here replaces the create failure
+            # with whatever the DELETE raised, which both hides the real error
+            # and leaves the group live with nothing having reported why.
+            # utils.cleanup_tracked retries it and says so.
+            try:
+                cls.workspace_group.terminate(force=True)
+            except Exception:
+                pass
             raise
 
     @classmethod

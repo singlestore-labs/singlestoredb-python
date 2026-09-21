@@ -850,7 +850,15 @@ class WorkspaceGroup:
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
-        self._manager._delete(f'workspaceGroups/{self.id}', params=dict(force=force))
+        # 'true'/'false', not the bool: requests renders a bool param with
+        # str(), so force=True went out as force=True. Workspace.terminate
+        # above already builds the lowercase form by hand; this matches it.
+        # force is what makes a group with live workspaces in it go away, so
+        # the value being read is not optional.
+        self._manager._delete(
+            f'workspaceGroups/{self.id}',
+            params=dict(force='true' if force else 'false'),
+        )
         if wait_on_terminated:
             remaining = float(wait_timeout)
             while True:

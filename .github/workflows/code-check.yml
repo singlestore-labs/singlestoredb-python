@@ -16,6 +16,12 @@ jobs:
       contents: read
       actions: write
 
+    # One ledger for the whole job, so the cleanup step at the end can reap
+    # what any of the pytest steps created. See the matching block in
+    # coverage.yml.
+    env:
+      SINGLESTOREDB_TEST_DEPLOYMENT_LOG: ${{ github.workspace }}/deployments.jsonl
+
     services:
       singlestore:
         image: ghcr.io/singlestore-labs/singlestoredb-dev:latest
@@ -209,3 +215,16 @@ jobs:
           coverage report
           coverage xml
           coverage html
+
+      # if: always() is the whole point -- this has to run when the job is
+      # cancelled, which is what left three clusters billing in run
+      # 35631802648 (see the matching step in coverage.yml). On a PR the
+      # management step above only runs when the change detector fires, so most
+      # runs reach this with an empty ledger and it reports nothing.
+      - name: Terminate any deployment the tests left behind
+        if: always()
+        run: |
+          python -m singlestoredb.tests.cleanup_deployments \
+            --ledger "$SINGLESTOREDB_TEST_DEPLOYMENT_LOG" --yes
+        env:
+          SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}

@@ -297,6 +297,75 @@ def _install_sweep_fallbacks() -> None:
         logger.debug('Not the main thread; no SIGTERM sweep installed')
 
 
+#: Key the workers stash their stranded deployment labels under in
+#: ``config.workeroutput``.
+_STRANDED_KEY = 'singlestoredb_stranded_deployments'
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """
+    Sweep in an xdist worker, and hand what survived to the controller.
+
+    ``addopts`` is ``-n 2`` (``pyproject.toml``), so under the default the
+    sweep and its ``STILL LIVE`` banner run in a worker, whose stdout the
+    controller discards. A leak was therefore silent even when the sweep did
+    run and fail -- the one case the banner exists to make loud.
+
+    ``config.workeroutput`` is the channel xdist provides for exactly this, and
+    it only exists in a worker: its absence is the ``-n 0`` case, where
+    ``pytest_unconfigure`` prints directly to a terminal someone is reading and
+    nothing here is needed.
+
+    Sweeping here rather than leaving it all to ``pytest_unconfigure`` is what
+    makes the labels available at all. xdist's own
+    ``pytest_sessionfinish`` is a hookwrapper that sends ``workeroutput`` after
+    yielding, so anything written to it from this hook is still included --
+    but ``pytest_unconfigure`` runs after the send, so a sweep that waited
+    until then would have nothing left to report. The sweep is idempotent (a
+    successful one empties ``_tracked``), so the later call simply finds
+    nothing to do.
+    """
+    workeroutput = getattr(session.config, 'workeroutput', None)
+    if workeroutput is None:
+        return
+
+    _sweep_live_deployments()
+
+    try:
+        workeroutput[_STRANDED_KEY] = _test_utils().tracked_labels()
+    except Exception:  # pragma: no cover - shutdown path
+        pass
+
+
+def pytest_testnodedown(node: Any, error: Any) -> None:
+    """
+    Report, on the controller, what a worker could not terminate.
+
+    Runs in the controller process, whose output the user actually sees. The
+    worker's own banner went to a captured stream; this is the copy that gets
+    read.
+    """
+    stranded = getattr(node, 'workeroutput', {}).get(_STRANDED_KEY) or []
+    if not stranded:
+        return
+
+    print('\n' + '!' * 70)
+    print(
+        f'STILL LIVE on {node.gateway.id} -- these deployments could not be '
+        'terminated and are costing money:',
+    )
+    for label in stranded:
+        print(f'  - {label}')
+    print(
+        'Reap them with: python -m singlestoredb.tests.cleanup_deployments '
+        '--yes',
+    )
+    print('!' * 70)
+    logger.error(
+        f'{len(stranded)} deployment(s) left live by {node.gateway.id}',
+    )
+
+
 def pytest_unconfigure(config: pytest.Config) -> None:
     """
     Pytest hook that runs after all tests complete.

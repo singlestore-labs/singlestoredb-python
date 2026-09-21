@@ -990,10 +990,24 @@ class TestWorkspaceFusion(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if not cls.dbexisted:
-            utils.drop_database(cls.dbname)
+        # Deployments first, and each one guarded. Dropping the database first
+        # -- as this used to -- meant a database error aborted the teardown
+        # before a single group was terminated, and an unguarded loop meant a
+        # failure on the first group abandoned the other two. Three workspace
+        # groups is the most expensive thing this file leaks.
         while cls.workspace_groups:
-            cls.workspace_groups.pop().terminate(force=True)
+            group = cls.workspace_groups.pop()
+            try:
+                group.terminate(force=True)
+            except Exception:
+                # Left to utils.cleanup_tracked, which retries and then reports
+                # it; raising here would replace the test's own failure.
+                pass
+        try:
+            if not cls.dbexisted:
+                utils.drop_database(cls.dbname)
+        except Exception:
+            pass
 
     def setUp(self):
         self.enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLED')
@@ -1489,8 +1503,9 @@ class _ClusterFusionMixin:
 
     @classmethod
     def tearDownClass(cls):
-        if not cls.dbexisted:
-            utils.drop_database(cls.dbname)
+        # Clusters before the database: a drop_database failure used to abort
+        # the teardown before anything was terminated, leaving three clusters
+        # to the sweep.
         while cls.clusters:
             cluster = cls.clusters.pop()
             try:
@@ -1503,6 +1518,11 @@ class _ClusterFusionMixin:
                 cluster.terminate(force=True)
             except Exception:
                 pass
+        try:
+            if not cls.dbexisted:
+                utils.drop_database(cls.dbname)
+        except Exception:
+            pass
 
     def setUp(self):
         self.enabled = os.environ.get('SINGLESTOREDB_FUSION_ENABLED')
@@ -1833,16 +1853,32 @@ class TestClusterFusionProject(_ClusterFusionMixin, unittest.TestCase):
                 'this test is for',
             )
 
-        with self.assertRaises(Exception):
-            self.cur.execute(
-                f'create cluster "{name}" in region "{region.region_name}"',
-            )
+        live = []
+        try:
+            with self.assertRaises(Exception):
+                self.cur.execute(
+                    f'create cluster "{name}" in region '
+                    f'"{region.region_name}"',
+                )
+        finally:
+            # One listing, serving both purposes: the assertion that nothing
+            # was created, and the cleanup for when something was. The test
+            # only passes if this comes back empty, so the terminate below
+            # fires exactly when the assertion is about to fail -- which is
+            # also the only case where a cluster exists. Nothing else would
+            # remove it: the create goes through Fusion SQL rather than
+            # ClusterManager.create_cluster, so the tracking wrapper never sees
+            # it and there is no _tracked entry for the sweep to find.
+            live = [
+                x for x in mgr.clusters
+                if x.name == name and x.terminated_at is None
+            ]
+            for cluster in live:
+                try:
+                    utils.terminate(cluster)
+                except Exception:
+                    pass
 
-        # Nothing should have been created
-        live = [
-            x for x in mgr.clusters
-            if x.name == name and x.terminated_at is None
-        ]
         assert not live, live
 
     def test_create_cluster_named_project(self):

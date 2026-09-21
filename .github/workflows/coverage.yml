@@ -10,6 +10,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: Base
 
+    # One ledger for the whole job, so the cleanup step below can reap what any
+    # of the pytest steps created. Per job rather than shared: the jobs here run
+    # concurrently, and a shared ledger would have each one terminating the
+    # other's clusters mid-run.
+    env:
+      SINGLESTOREDB_TEST_DEPLOYMENT_LOG: ${{ github.workspace }}/deployments.jsonl
+
     services:
       singlestore:
         image: ghcr.io/singlestore-labs/singlestoredb-dev:latest
@@ -86,6 +93,25 @@ jobs:
           coverage xml
           coverage html
 
+      # if: always() is the whole point -- this has to run when the job is
+      # cancelled, which is the case that produced the leak. Run 35631802648
+      # was cancelled 19 minutes into TestClusterFusion.setUpClass's
+      # create_cluster(wait_on_active=True, wait_timeout=1200); the log ends at
+      # '##[error]The operation was canceled.' with no pytest summary and no
+      # sweep output, so three clusters were left billing with nothing in the
+      # process having recorded them. The ledger is that record.
+      #
+      # Last step in the job so it covers every pytest step above it. Placing
+      # it after each one instead would add nothing: a cancellation anywhere
+      # still runs the remaining always() steps.
+      - name: Terminate any deployment the tests left behind
+        if: always()
+        run: |
+          python -m singlestoredb.tests.cleanup_deployments \
+            --ledger "$SINGLESTOREDB_TEST_DEPLOYMENT_LOG" --yes
+        env:
+          SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
+
   # The deprecated v1 management API. management.version defaults to v2, so this
   # is a legacy gate: it runs here nightly rather than on every PR, and it is
   # what gets deleted along with management/v1/. Selects both the mocked v1
@@ -93,6 +119,12 @@ jobs:
   management-v1-tests:
     runs-on: ubuntu-latest
     environment: Base
+
+    # A ledger of its own, not shared with test-coverage: the two jobs run
+    # concurrently, and one sweeping the other's ledger would terminate
+    # clusters a live run is using.
+    env:
+      SINGLESTOREDB_TEST_DEPLOYMENT_LOG: ${{ github.workspace }}/deployments.jsonl
 
     services:
       singlestore:
@@ -128,3 +160,14 @@ jobs:
           SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
           SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
           SINGLESTOREDB_FUSION_ENABLE_HIDDEN: "1"
+
+      # See the matching step in test-coverage for why this is if: always().
+      # The v1 suite deploys workspace groups, which are the kind that force
+      # exists for.
+      - name: Terminate any deployment the tests left behind
+        if: always()
+        run: |
+          python -m singlestoredb.tests.cleanup_deployments \
+            --ledger "$SINGLESTOREDB_TEST_DEPLOYMENT_LOG" --yes
+        env:
+          SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}

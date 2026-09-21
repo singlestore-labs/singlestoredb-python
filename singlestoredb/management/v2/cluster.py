@@ -715,7 +715,12 @@ class Cluster:
 
         """
         manager = self._require_manager()
-        manager._delete(f'clusters/{self.id}', params=dict(force=force))
+        # 'true'/'false', not the bool: requests renders a bool param with
+        # str(), so force=True went out as force=True.
+        manager._delete(
+            f'clusters/{self.id}',
+            params=dict(force='true' if force else 'false'),
+        )
         if wait_on_terminated:
             remaining = float(wait_timeout)
             while True:

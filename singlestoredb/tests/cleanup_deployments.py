@@ -42,20 +42,31 @@ For deployments the current process created, nothing here is needed: those
 are tracked as they are created and swept per test class by ``conftest.py``,
 which cannot see -- or touch -- another run's deployments.
 
-Why strays keep appearing: that tracking, the per-class sweep and this script
-all live on the ``versioned-management-api`` branch and nowhere else. A run
-from ``main`` has only ``tearDownClass``, so a killed run or a ``setUpClass``
-that raises leaks a workspace group permanently, and ``main`` still uses names
-this script only knows through :data:`LEGACY_PATTERNS`. Until the sweep is on
-the default branch, expect to run this by hand.
+The exception, and the reason this is wired into CI, is ``--ledger``. A run
+with ``SINGLESTOREDB_TEST_DEPLOYMENT_LOG`` set records every creation to a
+JSONL file as it happens (``utils.ledger_pending``/``ledger_live``/
+``ledger_gone``), so a run that was killed outright leaves an exact list of
+what it made::
+
+    python -m singlestoredb.tests.cleanup_deployments --ledger deployments.jsonl
+
+That mode replaces *both* guards above -- the name patterns and the age
+filter. Neither is needed, because the ledger names the deployments rather
+than guessing at them, and neither is safe: a ledger entry is minutes old by
+construction, so the age filter would spare everything it lists. What keeps
+such a run off other people's deployments is that it only ever touches ids and
+names the ledger records, and that each CI job writes its own ledger.
 """
 import argparse
 import datetime
+import json
+import os
 import re
 import sys
 import warnings
 from collections.abc import Container
 from typing import Any
+from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -84,6 +95,12 @@ DEFAULT_MIN_AGE_HOURS = 6.0
 PATTERNS = [
     # test_management_v1.py / test_management_v2.py fixtures
     re.compile(r'^(wg|ws|cl)-test-[A-Za-z0-9_-]+$'),
+    # TestWorkspace.test_update renames its live group from wg-test-<token> to
+    # wg-foo-<token> and never renames it back, so the group carries this name
+    # for the rest of the class. No pattern matched it, which made a group
+    # stranded after that test invisible to this sweep -- it would pile up
+    # while the tool reported nothing.
+    re.compile(r'^wg-foo-[A-Za-z0-9_-]+$'),
     re.compile(r'^starter-(ws|cl)-test-[A-Za-z0-9_-]+$'),
     # test_fusion.py fixtures
     re.compile(r'^[A-C] Fusion Testing [0-9a-f]+$'),
@@ -254,7 +271,7 @@ def find_leftovers(
 
     if 'cluster' in kinds or 'starter-cluster' in kinds:
         try:
-            clusters = s2.manage_clusters(version='v2')
+            clusters = _manager('v2')
         except Exception as exc:
             print(f'! Could not reach management API v2: {exc}', file=sys.stderr)
         else:
@@ -274,14 +291,7 @@ def find_leftovers(
 
     if 'workspace-group' in kinds or 'starter-workspace' in kinds:
         try:
-            # v1 is deprecated, and asking for it here is the point: workspace
-            # groups exist nowhere else, so the warning is noise on every run.
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    'ignore', category=DeprecationWarning,
-                    message='.*manage_workspaces.*',
-                )
-                workspaces = s2.manage_workspaces(version='v1')
+            workspaces = _manager('v1')
         except Exception as exc:
             print(f'! Could not reach management API v1: {exc}', file=sys.stderr)
         else:
@@ -304,11 +314,296 @@ def find_leftovers(
     return found, spared, unmatched
 
 
+#
+# Ledger mode
+#
+# What this exists for: GH Actions run 35631802648, job ``test-coverage``, was
+# cancelled 19 minutes into a ``create_cluster(wait_on_active=True,
+# wait_timeout=1200)`` and the log ends at ``##[error]The operation was
+# canceled.`` with no pytest summary and no sweep output at all. Three clusters
+# were live and no in-process handler ever ran. Reading a file written as the
+# clusters were created is the only way to know that from another process.
+#
+
+#: How each ledger kind is resolved back to a live object: the management API
+#: version that owns it, the point lookup for a record that has an id, and the
+#: listing to search by name for a ``pending`` record that never got one.
+#:
+#: The kinds are the values of ``utils._KIND_BY_CLASS``; a kind this does not
+#: know is reported rather than skipped, since the alternative is silently not
+#: reaping it.
+LEDGER_KINDS = {
+    'cluster': (
+        'v2', 'get_cluster', lambda mgr: mgr.clusters,
+    ),
+    'starter_cluster': (
+        'v2', 'get_starter_cluster', lambda mgr: mgr.starter_clusters,
+    ),
+    'workspace_group': (
+        'v1', 'get_workspace_group', lambda mgr: mgr.workspace_groups,
+    ),
+    'workspace': (
+        # WorkspaceManager has no `workspaces` of its own, so the search goes
+        # group by group -- the same walk utils._CREATORS uses.
+        'v1', 'get_workspace',
+        lambda mgr: [w for g in mgr.workspace_groups for w in g.workspaces],
+    ),
+    'starter_workspace': (
+        'v1', 'get_starter_workspace', lambda mgr: mgr.starter_workspaces,
+    ),
+}
+
+
+def _manager(version: str) -> Any:
+    """Management API manager for ``'v1'`` or ``'v2'``."""
+    if version == 'v2':
+        return s2.manage_clusters(version='v2')
+    # v1 is deprecated, and asking for it here is the point: workspace groups
+    # exist nowhere else, so the warning is noise on every run.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            'ignore', category=DeprecationWarning,
+            message='.*manage_workspaces.*',
+        )
+        return s2.manage_workspaces(version='v1')
+
+
+def fold_ledger(lines: Any) -> List[Dict[str, Any]]:
+    """
+    Reduce ledger records to the deployments that should still be live.
+
+    The ledger is append-only and written from several processes (one per xdist
+    worker), so it is a history, not a state: a deployment shows up as
+    ``pending``, then ``live`` once it has an id, then ``gone`` once something
+    terminated it. Folding keeps whatever the last event for a deployment was
+    not ``gone``.
+
+    A ``pending`` is keyed by ``(kind, name)`` because that is all it has; the
+    matching ``live`` retires it and re-keys on the id. So the two records a
+    normal creation writes collapse to one entry, and a ``pending`` left
+    standing means the creator was interrupted before it returned -- the
+    cancelled-mid-``wait_on_active`` case, resolvable only by name.
+
+    Order is creation order, since dicts preserve insertion order and a
+    deployment's key is first inserted when it first appears. The caller
+    reverses it, so a workspace goes before the group that holds it, matching
+    ``utils.cleanup_tracked()``.
+
+    Malformed lines are skipped with a warning rather than aborting: this runs
+    as the last step of a CI job, and one truncated line -- a process killed
+    between the ``write`` and the ``fsync``, which the per-line fsync makes
+    unlikely but not impossible -- must not stop the rest from being reaped.
+    """
+    live: Dict[Any, Dict[str, Any]] = {}
+
+    for lineno, line in enumerate(lines, start=1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError as exc:
+            print(
+                f'! ledger line {lineno} is not JSON, skipping it: {exc}',
+                file=sys.stderr,
+            )
+            continue
+        if not isinstance(record, dict):
+            continue
+
+        event = record.get('event')
+        kind = record.get('kind')
+        name = record.get('name')
+        ident = record.get('id')
+
+        by_name = ('name', kind, name)
+        by_id = ('id', kind, ident)
+
+        if event == 'pending':
+            if name is not None:
+                live.setdefault(by_name, record)
+        elif event == 'live':
+            live.pop(by_name, None)
+            if ident is not None:
+                live[by_id] = record
+            elif name is not None:
+                # No id in the record: keep it findable by name rather than
+                # dropping it. Should not happen, but losing the deployment is
+                # the expensive direction.
+                live[by_name] = record
+        elif event == 'gone':
+            if ident is not None:
+                live.pop(by_id, None)
+            live.pop(by_name, None)
+
+    return list(live.values())
+
+
+def read_ledger(path: str) -> List[Dict[str, Any]]:
+    """
+    Fold the ledger at ``path``, newest first.
+
+    A missing file is not an error: the variable can be set on a job whose
+    tests created nothing, and a CI cleanup step that failed in that case would
+    turn every such run red.
+    """
+    if not os.path.exists(path):
+        print(f'No ledger at {path}; nothing this run created was recorded.')
+        return []
+    with open(path, encoding='utf-8') as file:
+        records = fold_ledger(file)
+    # Newest first, so a workspace is terminated before its group.
+    records.reverse()
+    return records
+
+
+def find_ledger_leftovers(
+    path: str,
+) -> Tuple[List[Tuple[str, Any]], List[str], List[str]]:
+    """
+    Resolve the ledger's still-live records to live deployment objects.
+
+    Returns
+    -------
+    (List[Tuple[str, Any]], List[str], List[str])
+        The deployments to terminate, labels for the records that resolved to
+        nothing -- already gone, so nothing to do -- and labels for the ones
+        that could not be resolved *and* could still be live, which is what
+        makes the run exit non-zero.
+
+    A 404 from the point lookup means the deployment is already gone, which is
+    the common case: the ledger records every creation, and a run that finished
+    normally terminated all of them. Anything else -- a transport failure, an
+    unknown kind -- goes in the third list, because "could not tell" and "not
+    there" must not read the same when the difference is a cluster billing.
+    """
+    from singlestoredb.exceptions import ManagementError
+
+    found: List[Tuple[str, Any]] = []
+    gone: List[str] = []
+    unresolved: List[str] = []
+
+    managers: Dict[str, Any] = {}
+
+    def manager_for(version: str) -> Any:
+        if version not in managers:
+            managers[version] = _manager(version)
+        return managers[version]
+
+    for record in read_ledger(path):
+        kind = record.get('kind')
+        name = record.get('name')
+        ident = record.get('id')
+        label = '{} {} ({})'.format(
+            str(kind).replace('_', ' '), name or '<unnamed>', ident or 'no id',
+        )
+
+        if kind not in LEDGER_KINDS:
+            unresolved.append(f'{label}: unknown kind {kind!r}')
+            continue
+        version, lookup_name, listing = LEDGER_KINDS[kind]
+
+        try:
+            mgr = manager_for(version)
+        except Exception as exc:
+            unresolved.append(
+                f'{label}: could not reach management API '
+                f'{version}: {exc}',
+            )
+            continue
+
+        obj = None
+        try:
+            if ident is not None:
+                obj = getattr(mgr, lookup_name)(ident)
+            else:
+                # A `pending` record: the creator never returned an id, so the
+                # only handle on it is the name. Matched over the listing
+                # exactly as utils._recover_orphan does.
+                for candidate in listing(mgr):
+                    if getattr(candidate, 'name', None) == name:
+                        obj = candidate
+                        break
+        except ManagementError as exc:
+            if exc.errno == 404:
+                gone.append(label)
+                continue
+            unresolved.append(f'{label}: {exc}')
+            continue
+        except Exception as exc:
+            unresolved.append(f'{label}: {exc}')
+            continue
+
+        if obj is None:
+            gone.append(label)
+        elif getattr(obj, 'terminated_at', None) is not None:
+            gone.append(f'{label} (already terminated)')
+        else:
+            found.append((label, obj))
+
+    return found, gone, unresolved
+
+
+def _run_ledger_sweep(path: str, yes: bool) -> int:
+    """Report, and with ``yes`` terminate, everything the ledger still lists."""
+    leftovers, gone, unresolved = find_ledger_leftovers(path)
+
+    print(
+        f'Ledger {path}: {len(leftovers)} still live, {len(gone)} already '
+        f'gone, {len(unresolved)} unresolved.\n',
+    )
+
+    if unresolved:
+        print(
+            f'{len(unresolved)} ledger record(s) could not be resolved, so '
+            'they may still be live:',
+        )
+        for label in unresolved:
+            print(f'  ? {label}')
+        print()
+
+    if not leftovers:
+        # Non-zero only for the records whose state is unknown: a clean run
+        # whose sweep already terminated everything must not fail the job.
+        print('Nothing left behind by this run.')
+        return 1 if unresolved else 0
+
+    print(f'{len(leftovers)} deployment(s) left behind by this run:')
+    for label, _ in leftovers:
+        print(f'  - {label}')
+
+    if not yes:
+        print('\nDry run; pass --yes to terminate these.')
+        return 0
+
+    from singlestoredb.tests import utils
+
+    failed = 0
+    for label, obj in leftovers:
+        try:
+            utils.terminate(obj)
+        except Exception as exc:
+            failed += 1
+            print(f'✗ {label}: {exc}')
+        else:
+            print(f'✓ terminated {label}')
+
+    return 1 if (failed or unresolved) else 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[1])
     parser.add_argument(
         '--yes', action='store_true',
         help='actually terminate; without this the run only reports',
+    )
+    parser.add_argument(
+        '--ledger', metavar='PATH',
+        help='sweep exactly what the run that wrote this JSONL ledger created '
+             '(see SINGLESTOREDB_TEST_DEPLOYMENT_LOG). Replaces both the name '
+             'patterns and the age filter, which a ledger makes unnecessary '
+             'and which would in any case spare everything in it for being '
+             'minutes old. This is the mode CI runs as an if: always() step',
     )
     parser.add_argument(
         '--older-than', type=float, default=DEFAULT_MIN_AGE_HOURS,
@@ -356,6 +651,21 @@ def main(argv: Optional[List[str]] = None) -> int:
              'PATTERNS is invisible here until its name is added',
     )
     args = parser.parse_args(argv)
+
+    # --ledger is a different question entirely -- "what did *this* run make?"
+    # rather than "what looks stranded?" -- so it does not compose with the
+    # name and age guards, and saying so beats silently ignoring them.
+    if args.ledger:
+        for flag, value in (
+            ('--older-than', args.older_than != DEFAULT_MIN_AGE_HOURS),
+            ('--since', args.since is not None),
+            ('--any-name', args.any_name),
+            ('--kind', bool(args.kinds)),
+            ('--show-unmatched', args.show_unmatched),
+        ):
+            if value:
+                parser.error(f'{flag} does not apply with --ledger')
+        return _run_ledger_sweep(args.ledger, args.yes)
 
     kinds = args.kinds or list(KINDS)
 
