@@ -8,6 +8,19 @@ on:
   workflow_dispatch:
 
 
+# A push to a branch supersedes the run already going for it, so cancel that
+# one rather than letting both provision. The management step deploys ~6
+# clusters and holds them for the length of the suite, so two overlapping runs
+# double what the org is carrying for no extra coverage. Cancellation is safe
+# here because the cleanup step is `if: always()` and reaps from the ledger.
+#
+# Not applied to coverage.yml: it is schedule/dispatch only, and its two jobs
+# are meant to run at once with separate ledgers.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
 jobs:
   test-coverage:
     runs-on: ubuntu-latest
