@@ -142,7 +142,7 @@ jobs:
 
       - name: Run tests
         if: ${{ matrix.driver == 'https' }}
-        # -n 0 overrides the -n 3 in pyproject.toml's addopts: the Data API is
+        # -n 0 overrides the -n 2 in pyproject.toml's addopts: the Data API is
         # not run in parallel. This job avoids the `RESTART PROXY` hazard the
         # code-check/coverage HTTP steps hit -- no SINGLESTOREDB_INIT_DB_URL
         # here, so load_sql's setup connection is itself HTTP and skips that
