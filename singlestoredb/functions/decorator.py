@@ -104,6 +104,7 @@ def _func(
     args: Optional[ParameterType] = None,
     returns: Optional[ReturnType] = None,
     timeout: Optional[int] = None,
+    concurrency_limit: Optional[int] = None,
 ) -> UDFType:
     """Generic wrapper for UDF and TVF decorators."""
 
@@ -113,6 +114,7 @@ def _func(
             args=expand_types(args),
             returns=expand_types(returns),
             timeout=timeout,
+            concurrency_limit=concurrency_limit,
         ).items() if v is not None
     }
 
@@ -156,6 +158,7 @@ def udf(
     args: Optional[ParameterType] = None,
     returns: Optional[ReturnType] = None,
     timeout: Optional[int] = None,
+    concurrency_limit: Optional[int] = None,
 ) -> UDFType:
     """
     Define a user-defined function (UDF).
@@ -186,6 +189,10 @@ def udf(
     timeout : int, optional
         The timeout in seconds for the UDF execution. If not specified,
         the global default timeout is used.
+    concurrency_limit : int, optional
+        The maximum number of concurrent subsets of rows that will be
+        processed simultaneously by the UDF. If not specified,
+        the global default concurrency limit is used.
 
     Returns
     -------
@@ -198,4 +205,5 @@ def udf(
         args=args,
         returns=returns,
         timeout=timeout,
+        concurrency_limit=concurrency_limit,
     )
