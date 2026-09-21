@@ -1947,6 +1947,21 @@ class TestSharedClusterPool(unittest.TestCase):
         from singlestoredb.tests import utils
         self.utils = utils
 
+        # Redirected before anything can create a cluster: the stand-in
+        # manager's create_cluster calls the real utils.track, which ledgers,
+        # and _pool_id is the live one, so under CI these mocked units used to
+        # append `id-of-cl-test-shared-N-<real pool id>` to the job's real
+        # ledger. The cleanup step then could not resolve those ids and exited
+        # non-zero on every run, burying any genuine unresolved record.
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        patcher = patch.dict(
+            os.environ,
+            {utils.LEDGER_ENV_VAR: os.path.join(tmp, 'deployments.jsonl')},
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         self.saved_pool = list(utils._pool)
         self.saved_skip = utils._pool_skip
         self.saved_tracked = list(utils._tracked)
