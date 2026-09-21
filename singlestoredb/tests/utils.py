@@ -606,7 +606,9 @@ def untrack(obj: Any) -> None:
 #: reaching ACTIVE is ~460s at worst. Waiting the full provision out here would
 #: stall the sweep between every test class, so this buys the common case --
 #: a deployment most of the way up -- and leaves the rest to the end-of-session
-#: sweep and then to ``cleanup_deployments.py``.
+#: sweep and then to ``cleanup_deployments.py``, which is the end of the line
+#: and waits out a full provision with a longer budget of its own
+#: (``cleanup_deployments.TERMINATE_TIMEOUT``).
 TERMINATE_RETRY_TIMEOUT = 180.0
 TERMINATE_RETRY_INTERVAL = 15.0
 

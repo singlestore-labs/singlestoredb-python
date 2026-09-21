@@ -1772,6 +1772,32 @@ class TestDeploymentLedger(TestDeploymentTracking):
             cleanup_deployments.main(['--ledger', missing, '--yes']), 0,
         )
 
+    def test_the_sweep_waits_out_a_provision_rather_than_the_class_budget(self):
+        """The whole point of the ledger is a job cancelled inside
+        ``wait_on_active``, whose cluster is minutes from deletable. Borrowing
+        ``utils.TERMINATE_RETRY_TIMEOUT`` -- short so the per-class sweep cannot
+        stall the suite -- would exhaust the budget and leave it billing, and
+        nothing runs after this to try again."""
+        from singlestoredb.tests import utils
+        obj = self._deployment('cl-1', classname='Cluster')
+        mod, _ = self.stub_managers(get_cluster=lambda ident: obj)
+        self.write_ledger(
+            dict(event='live', kind='cluster', name='cl-1', id='id-1'),
+        )
+
+        calls = []
+        patcher = patch.object(
+            utils, 'terminate',
+            lambda obj, **kwargs: calls.append(kwargs),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.assertEqual(mod.main(['--ledger', self.ledger, '--yes']), 0)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]['timeout'], mod.TERMINATE_TIMEOUT)
+        self.assertGreater(calls[0]['timeout'], utils.TERMINATE_RETRY_TIMEOUT)
+
     def test_ledger_mode_refuses_the_guards_it_replaces(self):
         """Silently ignoring --older-than would read as a safety guard that is
         not there."""
@@ -2257,6 +2283,14 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
         # Not zero: a default that swept every match would make running this
         # during a test run destructive.
         self.assertGreaterEqual(self.mod.DEFAULT_MIN_AGE_HOURS, 1)
+        # Nothing runs after this tool, so its terminate budget has to cover a
+        # full provision (~460s for an S-00 cluster reaching ACTIVE) rather than
+        # the per-class budget, which is short on purpose.
+        from singlestoredb.tests import utils
+        self.assertGreater(
+            self.mod.TERMINATE_TIMEOUT, utils.TERMINATE_RETRY_TIMEOUT,
+        )
+        self.assertGreaterEqual(self.mod.TERMINATE_TIMEOUT, 460)
         names, spared = self._find([
             self._cluster('cl-test-mid-run', hours=1),
         ])

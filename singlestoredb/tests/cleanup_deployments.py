@@ -89,6 +89,16 @@ KINDS = (
 #: anything younger could belong to a run in progress.
 DEFAULT_MIN_AGE_HOURS = 6.0
 
+#: How long to keep retrying a deployment the API will not delete yet. This is
+#: the end of the line -- nothing runs after this tool -- so it does not borrow
+#: ``utils.TERMINATE_RETRY_TIMEOUT``, which is deliberately short so the sweep
+#: between test classes cannot stall the suite. A cancelled job's cluster may
+#: only just have been POSTed, ``DELETE`` is refused until it is up, and an
+#: S-00 cluster reaching ACTIVE is ~460s at worst, so anything shorter than a
+#: full provision leaves it billing. The only cost of waiting is this CI step's
+#: wall clock.
+TERMINATE_TIMEOUT = 600.0
+
 #: Names the suite generates. Anchored, because these run against a real
 #: organization: a pattern that matched a name someone chose by hand would
 #: terminate a deployment that is not ours.
@@ -581,7 +591,7 @@ def _run_ledger_sweep(path: str, yes: bool) -> int:
     failed = 0
     for label, obj in leftovers:
         try:
-            utils.terminate(obj)
+            utils.terminate(obj, timeout=TERMINATE_TIMEOUT)
         except Exception as exc:
             failed += 1
             print(f'✗ {label}: {exc}')
@@ -725,7 +735,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     failed = 0
     for label, obj in leftovers:
         try:
-            utils.terminate(obj)
+            # Same budget as the ledger sweep: --since or --older-than 0 can
+            # select a deployment that is still provisioning, and nothing runs
+            # after this either.
+            utils.terminate(obj, timeout=TERMINATE_TIMEOUT)
         except Exception as exc:
             failed += 1
             print(f'✗ {label}: {exc}')
