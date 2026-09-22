@@ -133,11 +133,18 @@ jobs:
     # cluster pool -- together they put more on the org than it wants to carry.
     # This is a nightly cron, so the extra wall clock costs nothing.
     #
-    # if: always() because this is a legacy gate, not a downstream build: a v2
-    # failure above says nothing about the v1 endpoints, and skipping v1 for it
-    # would hide a v1 regression behind an unrelated one.
+    # Runs even when test-coverage fails, because this is a legacy gate, not a
+    # downstream build: a v2 failure above says nothing about the v1 endpoints,
+    # and skipping v1 for it would hide a v1 regression behind an unrelated one.
+    #
+    # !cancelled() rather than always(), which stays true through cancellation
+    # too. A cancelled run must not go on to start provisioning workspace groups
+    # here: GitHub force-terminates a cancelled job's remaining steps after a
+    # 5-minute cancellation timeout, so the ledger sweep below would be killed
+    # while the new deployments were still pre-ACTIVE and refusing DELETE -- the
+    # job would strand exactly what it was added to clean up.
     needs: test-coverage
-    if: always()
+    if: ${{ !cancelled() }}
 
     # A ledger of its own, not shared with test-coverage. The jobs no longer
     # overlap, but they still run on separate runners with separate workspaces,
