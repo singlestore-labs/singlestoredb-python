@@ -11,9 +11,9 @@ jobs:
     environment: Base
 
     # One ledger for the whole job, so the cleanup step below can reap what any
-    # of the pytest steps created. Per job rather than shared: the jobs here run
-    # concurrently, and a shared ledger would have each one terminating the
-    # other's clusters mid-run.
+    # of the pytest steps created. Per job rather than shared: each job gets its
+    # own runner and workspace anyway, and keeping the ledgers separate means a
+    # job's sweep can only ever reach records it wrote itself.
     env:
       SINGLESTOREDB_TEST_DEPLOYMENT_LOG: ${{ github.workspace }}/deployments.jsonl
 
@@ -128,9 +128,21 @@ jobs:
     runs-on: ubuntu-latest
     environment: Base
 
-    # A ledger of its own, not shared with test-coverage: the two jobs run
-    # concurrently, and one sweeping the other's ledger would terminate
-    # clusters a live run is using.
+    # Waits for test-coverage rather than running alongside it, so the v1
+    # workspace groups are never in flight at the same time as the v2 suite's
+    # cluster pool -- together they put more on the org than it wants to carry.
+    # This is a nightly cron, so the extra wall clock costs nothing.
+    #
+    # if: always() because this is a legacy gate, not a downstream build: a v2
+    # failure above says nothing about the v1 endpoints, and skipping v1 for it
+    # would hide a v1 regression behind an unrelated one.
+    needs: test-coverage
+    if: always()
+
+    # A ledger of its own, not shared with test-coverage. The jobs no longer
+    # overlap, but they still run on separate runners with separate workspaces,
+    # and keeping the ledgers distinct means neither job's sweep can reach the
+    # other's records.
     env:
       SINGLESTOREDB_TEST_DEPLOYMENT_LOG: ${{ github.workspace }}/deployments.jsonl
 
@@ -160,8 +172,14 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run v1 management API tests
+        # -n 0 overrides the -n 2 in pyproject.toml's addopts. The parallel
+        # default is tuned for the v2 management suite's shared cluster pool; the
+        # v1 classes deploy workspace groups of their own, so two workers here
+        # put twice that in flight, on top of whatever the v2 job is holding at
+        # the same time. Serial keeps this job's contribution to the org's
+        # cluster count to one deployment at a time.
         run: |
-          pytest -v -m 'management_v1' --pyargs singlestoredb.tests
+          pytest -v -n 0 -m 'management_v1' --pyargs singlestoredb.tests
         env:
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3307"
           SINGLESTOREDB_PURE_PYTHON: 0
