@@ -307,6 +307,38 @@ def drop_user(name: str) -> None:
 # ignored -- so tracked objects do not have to be untracked by the tests that
 # clean up after themselves.
 #
+# Everything above is in-process, which is the one thing it cannot fix: the
+# sweep, the ledger and `tearDownClass` all die with the interpreter. A job
+# killed mid-provision -- GitHub force-terminates a cancelled job's remaining
+# steps after a five-minute cancellation timeout -- leaves a PENDING cluster
+# that no code here will ever get another chance to delete. `expires_at` is
+# the answer to that, and only that: it is a property of the deployment, so
+# the control plane honours it whether or not this process is still alive.
+#
+
+#: Expiry to request on every deployment a test creates, as the duration
+#: string `POST` accepts (`resources/create_test_cluster.py` has passed one
+#: nightly since it was written). The backstop under the sweep and the ledger,
+#: not a replacement for either: a test still terminates what it created, and
+#: nothing waits for an expiry to fire.
+#:
+#: Two hours, against a `wait_timeout` of 1200s and a longest test (Fusion
+#: `CREATE`/`DROP`, which provisions twice in sequence) of about twenty
+#: minutes. Enough headroom that an expiry can never land on a deployment a
+#: test is still using, which would show up as an unrelated flake and be read
+#: as an API fault.
+#:
+#: Applied to what accepts it, which is the deployments that cost: v2
+#: `ClusterManager.create_cluster` and v1
+#: `WorkspaceManager.create_workspace_group`. The rest take no `expires_at` and
+#: need none:
+#:
+#: * a v1 workspace -- `expiresAt` is a property of the group, and terminating
+#:   the group takes its workspaces with it;
+#: * the starter deployments -- `create_starter_cluster` and
+#:   `create_starter_workspace` have no such argument, and being shared tier
+#:   they are not what a leak costs.
+DEPLOYMENT_EXPIRES_AT = '2h'
 
 #: (owner, label, object) for every deployment created so far and not yet
 #: swept. The owner is the test class that was running at creation time, so
@@ -1018,10 +1050,16 @@ def tracked_labels() -> List[str]:
 # does ``TestWorkspaceFusion``, whose workspace groups are the subject of its
 # ``SHOW WORKSPACE GROUPS`` assertions and cost 40s to deploy unwaited anyway.
 #
-# What makes the four borrowers safe is that each scopes its assertions to
-# itself: every Stage path is namespaced with the class's ``cls.id``, job
-# listings filter by job id rather than listing a deployment's jobs, and none
-# of them asserts a row count over an org-wide listing.
+# What makes the borrowers safe is that each scopes its assertions to itself:
+# every Stage path is namespaced with the class's ``cls.id``, job listings
+# filter by job id rather than listing a deployment's jobs, and none of them
+# asserts a row count over an org-wide listing.
+#
+# ``TestClusterFusion`` is the one borrower that does count rows, because
+# ``SHOW CLUSTERS ... LIKE`` is what it tests. It stays inside that rule by
+# counting over :func:`shared_cluster_pattern` -- which matches this process's
+# pool and nothing else -- against :func:`shared_cluster_names` rather than a
+# literal, so growing the pool cannot break it.
 #
 # The pool is process-wide, so under ``pytest-xdist`` every worker that gets a
 # borrowing class builds a pool of its own. The ``xdist_group`` marks below
@@ -1030,18 +1068,24 @@ def tracked_labels() -> List[str]:
 
 #: ``xdist_group`` names for the classes that borrow from the pool, so
 #: ``--dist loadgroup`` puts each set on one worker and each set builds one
-#: pool. Two groups rather than one: a single group serialises all four classes
+#: pool. Two groups rather than one: a single group serialises every borrower
 #: behind one pool build, and the groups run concurrently on separate workers,
 #: so splitting costs one extra cluster and halves that chain.
 #:
-#: Stage wants two clusters (``TestStageFusion`` names a second one in
-#: ``IN GROUP``) and jobs want one, so the split follows what they borrow:
+#: The split follows what each set borrows -- three for Stage, one for Jobs:
 #:
-#: * ``SHARED_CLUSTER_STAGE_GROUP`` -- ``TestStageFusion``, v2 ``TestStage``
+#: * ``SHARED_CLUSTER_STAGE_GROUP`` -- ``TestStageFusion`` (two; it names a
+#:   second in ``IN GROUP``), v2 ``TestStage`` (one), ``TestClusterFusion``
+#:   (three, for its ``LIKE``/``ORDER BY``/``LIMIT`` rows)
 #: * ``SHARED_CLUSTER_JOBS_GROUP`` -- ``TestJobsFusion``, v2 ``TestJob``
 #:
+#: ``TestClusterFusion`` sits with Stage rather than Jobs deliberately: the
+#: pool grows to the largest request, so putting the class that wants three
+#: with the group that already wants two costs one extra cluster, where
+#: putting it with Jobs would cost two and leave Stage's pool untouched.
+#:
 #: Without ``-n``/``--dist loadgroup`` the marks do nothing: one process, one
-#: pool of two, which is the serial behaviour they were added on top of.
+#: pool of three, which is the serial behaviour they were added on top of.
 SHARED_CLUSTER_STAGE_GROUP = 'shared-cluster-stage'
 SHARED_CLUSTER_JOBS_GROUP = 'shared-cluster-jobs'
 
@@ -1127,6 +1171,7 @@ def shared_clusters(count: int = 1) -> List[Any]:
                     # pool cluster stands in for those, so it has to be at
                     # least as reachable as what it replaces.
                     firewall_ranges=['0.0.0.0/0'],
+                    expires_at=DEPLOYMENT_EXPIRES_AT,
                     project=project_id,
                     wait_on_active=True,
                     wait_timeout=1200,
@@ -1136,6 +1181,32 @@ def shared_clusters(count: int = 1) -> List[Any]:
         set_owner(prev)
 
     return _pool[:count]
+
+
+def shared_cluster_pattern() -> str:
+    """
+    ``LIKE`` pattern matching this process's pool clusters and nothing else.
+
+    The suffix is what scopes it: ``_pool_id`` is minted per process, so a
+    concurrent run's pool -- or another xdist worker's -- does not match, and
+    neither does any other ``cl-test-*`` deployment.
+
+    For a suite asserting an exact row count over the pool, pair it with
+    :func:`shared_cluster_names` rather than a literal: the pool grows to the
+    largest request any class makes, so the number is not fixed at import.
+    """
+    return f'cl-test-shared-%-{_pool_id}'
+
+
+def shared_cluster_names() -> List[str]:
+    """
+    Names of every cluster in the pool as it stands right now.
+
+    Read at assertion time, not cached: a class that runs later and asks for
+    more clusters than this one did grows the pool, and an expectation built
+    from a literal count would go stale the moment that happened.
+    """
+    return [x.name for x in _pool]
 
 
 class CountingManager:

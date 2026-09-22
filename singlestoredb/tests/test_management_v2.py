@@ -1332,6 +1332,7 @@ class TestCluster(unittest.TestCase):
             region=region,
             size='S-00',
             firewall_ranges=['0.0.0.0/0'],
+            expires_at=utils.DEPLOYMENT_EXPIRES_AT,
             project=_project_id(cls.manager),
             wait_on_active=True,
         )

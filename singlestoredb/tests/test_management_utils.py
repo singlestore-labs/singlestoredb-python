@@ -2126,6 +2126,53 @@ class TestSharedClusterPool(unittest.TestCase):
 
         self.assertEqual(self.created[0][2]['project'], 'chosen-project')
 
+    def test_pool_clusters_are_given_an_expiry(self):
+        # The only cleanup that survives the process being killed, so it has to
+        # be on the POST rather than left to the sweep.
+        with self._patched():
+            self.utils.shared_clusters(2)
+
+        self.assertEqual(
+            [x[2].get('expires_at') for x in self.created],
+            [self.utils.DEPLOYMENT_EXPIRES_AT] * 2,
+        )
+
+    def test_the_pattern_matches_the_pool_and_is_scoped_to_this_process(self):
+        with self._patched():
+            self.utils.shared_clusters(2)
+
+        pattern = self.utils.shared_cluster_pattern()
+        prefix, _, suffix = pattern.partition('%')
+
+        # A LIKE pattern, so assert it the way the server would read it:
+        # every pool name matches, and the suffix is the per-process id that
+        # keeps another run's pool from matching.
+        for name in self.utils.shared_cluster_names():
+            self.assertTrue(name.startswith(prefix), (name, pattern))
+            self.assertTrue(name.endswith(suffix), (name, pattern))
+
+        self.assertEqual(suffix, f'-{self.utils._pool_id}')
+
+        # And another process's pool does not: same prefix, different id.
+        other = f'cl-test-shared-0-{"f" * 8}'
+        self.assertTrue(other.startswith(prefix), (other, pattern))
+        self.assertFalse(other.endswith(suffix), (other, pattern))
+
+    def test_the_names_follow_the_pool_as_it_grows(self):
+        # Read at assertion time rather than cached, so a class that asks for
+        # more clusters later cannot leave an exact-count expectation stale.
+        with self._patched():
+            self.utils.shared_clusters(1)
+            self.assertEqual(len(self.utils.shared_cluster_names()), 1)
+
+            self.utils.shared_clusters(3)
+            self.assertEqual(len(self.utils.shared_cluster_names()), 3)
+
+        self.assertEqual(
+            self.utils.shared_cluster_names(),
+            [x[0] for x in self.created],
+        )
+
 
 class TestClearStage(unittest.TestCase):
     """

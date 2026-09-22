@@ -35,6 +35,7 @@ from singlestoredb.management.job import Status
 from singlestoredb.management.job import TargetType
 from singlestoredb.management.region import Region
 from singlestoredb.management.utils import NamedList
+from singlestoredb.tests import utils
 
 
 TEST_DIR = pathlib.Path(os.path.dirname(__file__))
@@ -77,9 +78,12 @@ class TestWorkspace(unittest.TestCase):
             region=random.choice(us_regions).id,
             admin_password=cls.password,
             firewall_ranges=['0.0.0.0/0'],
+            expires_at=utils.DEPLOYMENT_EXPIRES_AT,
         )
 
         try:
+            # No expiry of its own: only the group has an expiresAt, and it
+            # takes its workspaces with it. See utils.DEPLOYMENT_EXPIRES_AT.
             cls.workspace = cls.workspace_group.create_workspace(
                 f'ws-test-{name}-x',
                 wait_on_active=True,
@@ -382,6 +386,7 @@ class TestStage(unittest.TestCase):
             region=random.choice(us_regions).id,
             admin_password=cls.password,
             firewall_ranges=['0.0.0.0/0'],
+            expires_at=utils.DEPLOYMENT_EXPIRES_AT,
         )
 
     @classmethod
@@ -993,9 +998,12 @@ class TestJob(unittest.TestCase):
             region=random.choice(us_regions).id,
             admin_password=cls.password,
             firewall_ranges=['0.0.0.0/0'],
+            expires_at=utils.DEPLOYMENT_EXPIRES_AT,
         )
 
         try:
+            # No expiry of its own: only the group has an expiresAt, and it
+            # takes its workspaces with it. See utils.DEPLOYMENT_EXPIRES_AT.
             cls.workspace = cls.workspace_group.create_workspace(
                 f'ws-test-{name}-x',
                 wait_on_active=True,
