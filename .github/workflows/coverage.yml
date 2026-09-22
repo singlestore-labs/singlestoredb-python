@@ -104,6 +104,14 @@ jobs:
       # Last step in the job so it covers every pytest step above it. Placing
       # it after each one instead would add nothing: a cancellation anywhere
       # still runs the remaining always() steps.
+      #
+      # What always() does not buy is unlimited time. GitHub force-terminates a
+      # cancelled job's remaining steps after a 5-minute cancellation timeout,
+      # and an S-00 cluster refuses DELETE until it is ACTIVE (~460s). The leak
+      # above is covered because it was cancelled 19 minutes in, well past that;
+      # a cancel in the first several minutes would be killed here still being
+      # told 400/409, and needs `cleanup_deployments.py --older-than` run by
+      # hand afterwards.
       - name: Terminate any deployment the tests left behind
         if: always()
         run: |

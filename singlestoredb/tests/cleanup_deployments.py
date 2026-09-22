@@ -92,11 +92,15 @@ DEFAULT_MIN_AGE_HOURS = 6.0
 #: How long to keep retrying a deployment the API will not delete yet. This is
 #: the end of the line -- nothing runs after this tool -- so it does not borrow
 #: ``utils.TERMINATE_RETRY_TIMEOUT``, which is deliberately short so the sweep
-#: between test classes cannot stall the suite. A cancelled job's cluster may
-#: only just have been POSTed, ``DELETE`` is refused until it is up, and an
-#: S-00 cluster reaching ACTIVE is ~460s at worst, so anything shorter than a
-#: full provision leaves it billing. The only cost of waiting is this CI step's
-#: wall clock.
+#: between test classes cannot stall the suite. Here a deployment may still be
+#: coming up, ``DELETE`` is refused until it is, and an S-00 cluster reaching
+#: ACTIVE is ~460s at worst, so anything shorter than a full provision leaves it
+#: billing. An upper bound on retrying, not a promise of it: the whole budget is
+#: available when the job that calls this ends normally or fails, but a
+#: *cancelled* job's steps are force-terminated after GitHub's 5-minute
+#: cancellation timeout, so a cancel early in a provision gets killed here
+#: regardless of what this says. The only cost of the larger budget is the CI
+#: step's wall clock.
 TERMINATE_TIMEOUT = 600.0
 
 #: Names the suite generates. Anchored, because these run against a real

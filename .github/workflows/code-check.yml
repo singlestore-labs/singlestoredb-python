@@ -8,19 +8,14 @@ on:
   workflow_dispatch:
 
 
-# A push to a branch supersedes the run already going for it, so cancel that
-# one rather than letting both provision. The management step deploys ~6
-# clusters and holds them for the length of the suite, so two overlapping runs
-# double what the org is carrying for no extra coverage. Cancellation is safe
-# here because the cleanup step is `if: always()` and reaps from the ledger.
-#
-# Not applied to coverage.yml: it is schedule/dispatch only, and its two jobs
-# are meant to run at once with separate ledgers.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-
+# No `concurrency` block with `cancel-in-progress`, deliberately. Cancelling the
+# run a push supersedes would halve the clusters two overlapping runs carry, but
+# it cannot be made safe: GitHub force-terminates a cancelled job's remaining
+# steps after a 5-minute cancellation timeout, `if: always()` included, and an
+# S-00 cluster refuses DELETE until it is ACTIVE (~460s). A run cancelled inside
+# its first several minutes would die with a cluster it is not yet allowed to
+# delete, and nothing on a schedule would come along to reap it. Letting both
+# runs finish costs clusters; cancelling them costs stranded clusters.
 jobs:
   test-coverage:
     runs-on: ubuntu-latest
@@ -229,11 +224,19 @@ jobs:
           coverage xml
           coverage html
 
-      # if: always() is the whole point -- this has to run when the job is
-      # cancelled, which is what left three clusters billing in run
+      # if: always() is the whole point -- this has to run when the job fails or
+      # is cancelled, which is what left three clusters billing in run
       # 35631802648 (see the matching step in coverage.yml). On a PR the
       # management step above only runs when the change detector fires, so most
       # runs reach this with an empty ledger and it reports nothing.
+      #
+      # always() is not a guarantee, only a best effort: a cancelled job's
+      # remaining steps are force-terminated after GitHub's 5-minute
+      # cancellation timeout, so this covers a cancel whose clusters are already
+      # ACTIVE -- run 35631802648 was cancelled 19 minutes in -- but not one in
+      # the first several minutes, where DELETE is still being refused when the
+      # step is killed. That remainder needs `cleanup_deployments.py
+      # --older-than` run by hand; nothing here is on a schedule.
       - name: Terminate any deployment the tests left behind
         if: always()
         run: |
