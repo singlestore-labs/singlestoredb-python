@@ -725,19 +725,22 @@ def terminate(
 
 #: Error text the management API comes back with when it will not start a
 #: creation because something else in the organization holds the lock it
-#: needs -- "could not acquire lock". Matched on the message rather than on
-#: ``errno`` because the status it arrives as is not something the API
-#: documents, and because the status alone cannot distinguish a lock conflict
-#: (retry and it goes through) from a rejected request (retry and it never
-#: will).
+#: needs -- "could not acquire lock within duration". Seen from both
+#: ``POST /workspaceGroups`` and ``POST /clusters``, so it is not a v1 quirk.
+#:
+#: Matched on the message rather than on ``errno``: it arrives as a 500, and
+#: 500 is also what an unrelated server-side failure arrives as, so the status
+#: cannot tell a lock conflict (retry and it goes through) from something that
+#: will fail again identically. The wording is also the only part that says
+#: nothing was created -- which is what makes retrying the same name safe.
 LOCK_ERROR_RE = re.compile(r'acquire[^.]{0,40}lock', re.I)
 
 #: Retry budget for :func:`create_retrying`. Five waits at 20s growing to a
 #: 60s cap -- 20, 40, 60, 60, 60, so four minutes at worst.
 #:
-#: Sized for a lock held by another creation rather than for provisioning: a
-#: workspace group POST returns in seconds, so what is being waited out is the
-#: other holder finishing, not a deployment coming up. Hence spacing much
+#: Sized for a lock held by another creation rather than for provisioning: the
+#: POST that takes the lock returns in seconds, so what is being waited out is
+#: the other holder finishing, not a deployment coming up. Hence spacing much
 #: shorter than ``wait_on_active``'s but longer than a transport retry's, and a
 #: budget small enough that a genuinely stuck organization fails the class
 #: instead of idling out the job's timeout.
@@ -761,13 +764,18 @@ def create_retrying(create: Any, *args: Any, **kwargs: Any) -> Any:
             cls.manager.create_workspace_group, f'wg-test-{name}', ...,
         )
 
-    The v1 management API refuses a ``create_workspace_group`` with "could not
-    acquire lock" when another creation in the same organization holds it, and
-    nothing retries that: ``Manager.RETRY_STATUSES`` covers 429 and 5xx only
-    (``management/manager.py``), so the error reaches ``setUpClass``, and an
-    exception there fails every test in the class. A whole management_v1 run
-    went that way. The lock clears on its own in seconds, so the fix is to wait
-    and ask again.
+    The management API refuses a creation with "could not acquire lock" when
+    another creation in the same organization holds the lock -- v1's
+    ``POST /workspaceGroups`` and v2's ``POST /clusters`` alike -- and nothing
+    retries that. ``RETRY_METHODS`` is ``{GET, HEAD, OPTIONS, PUT, DELETE}``
+    (``management/manager.py``), deliberately: a retried POST can create twice.
+    So the 500 reaches ``setUpClass``, and an exception there fails every test
+    in the class. A whole ``management_v1`` run went that way, and the v2
+    shared cluster pool went the same way an hour later.
+
+    Retrying here rather than by widening ``RETRY_METHODS`` is what keeps that
+    guarantee: the message is the evidence that this particular POST created
+    nothing, which the transport, seeing only a 500, does not have.
 
     Only a lock conflict is retried -- any other ``ManagementError`` is a real
     failure and is re-raised immediately, as is the last lock error if the
@@ -1241,8 +1249,13 @@ def shared_clusters(count: int = 1) -> List[Any]:
     set_owner('')
     try:
         while len(_pool) < count:
+            # Retried: POST /clusters comes back "could not acquire lock" when
+            # another creation in the organization holds it, and a raise here
+            # fails every class that borrows from the pool. See
+            # create_retrying.
             _pool.append(
-                mgr.create_cluster(
+                create_retrying(
+                    mgr.create_cluster,
                     f'cl-test-shared-{len(_pool)}-{_pool_id}',
                     region=random.choice(us_regions),
                     size='S-00',

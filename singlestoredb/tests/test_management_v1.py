@@ -88,7 +88,8 @@ class TestWorkspace(unittest.TestCase):
         try:
             # No expiry of its own: only the group has an expiresAt, and it
             # takes its workspaces with it. See utils.DEPLOYMENT_EXPIRES_AT.
-            cls.workspace = cls.workspace_group.create_workspace(
+            cls.workspace = utils.create_retrying(
+                cls.workspace_group.create_workspace,
                 f'ws-test-{name}-x',
                 wait_on_active=True,
             )
@@ -284,7 +285,8 @@ class TestStarterWorkspace(unittest.TestCase):
         if not shared_tier_region:
             raise ValueError('No shared tier regions found')
 
-        cls.starter_workspace = cls.manager.create_starter_workspace(
+        cls.starter_workspace = utils.create_retrying(
+            cls.manager.create_starter_workspace,
             f'starter-ws-test-{name}',
             database_name=cls.database_name,
             provider=shared_tier_region.provider,
@@ -1016,7 +1018,8 @@ class TestJob(unittest.TestCase):
         try:
             # No expiry of its own: only the group has an expiresAt, and it
             # takes its workspaces with it. See utils.DEPLOYMENT_EXPIRES_AT.
-            cls.workspace = cls.workspace_group.create_workspace(
+            cls.workspace = utils.create_retrying(
+                cls.workspace_group.create_workspace,
                 f'ws-test-{name}-x',
                 wait_on_active=True,
             )

@@ -1491,8 +1491,12 @@ class _ClusterFusionMixin:
 
         for prefix in cls.fixture_prefixes:
             region = random.choice(cls.us_regions)
+            # Retried: POST /clusters comes back "could not acquire lock" when
+            # another creation in the organization holds it, and raising here
+            # fails every test in the class. See utils.create_retrying.
             cls.clusters.append(
-                mgr.create_cluster(
+                utils.create_retrying(
+                    mgr.create_cluster,
                     f'{prefix}-fusion-cluster-{cls.id}',
                     region=region,
                     size='S-00',

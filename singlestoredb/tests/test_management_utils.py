@@ -2038,6 +2038,30 @@ class TestCreateRetryingLockConflicts(unittest.TestCase):
             self.assertGreaterEqual(wait, base)
             self.assertLess(wait, base + 5.0)
 
+    def test_both_observed_wordings_match(self):
+        """Verbatim from the two runs that failed. The v2 one says "creating
+        workspace" for a ``/clusters`` POST, so the match cannot key on the
+        noun."""
+        for msg in (
+            'error creating workspace group (wg-test-8jtfylajdmax-vast7ln): '
+            'could not acquire lock within duration [0, 2026/09/23 16:45:04]',
+            'error creating workspace (cl-test-shared-1-b0dad293): could not '
+            'acquire lock within duration [0, 2026-09-23T17:37:16Z]',
+        ):
+            self.assertTrue(
+                self.utils.LOCK_ERROR_RE.search(msg), msg,
+            )
+
+    def test_an_unrelated_500_is_not_retried(self):
+        """500 is also what a name collision and a bad region come back as, so
+        the message is the only thing that says nothing was created."""
+        create = self._creator(
+            'error creating workspace group (wg-test-a): already exists',
+        )
+        with self.assertRaises(ManagementError):
+            self.utils.create_retrying(create, 'wg-test-a')
+        self.assertEqual(len(create.calls), 1)
+
     def test_the_message_match_does_not_need_a_status(self):
         """The status a lock conflict arrives as is not documented, and the
         status alone cannot tell a conflict from a rejection."""
@@ -2095,7 +2119,10 @@ class TestSharedClusterPool(unittest.TestCase):
         self.utils._tracked[:] = self.saved_tracked
         self.utils.set_owner(self.saved_owner)
 
-    def _manager(self, regions=('US East 1',), projects=('STANDARD',)):
+    def _manager(
+        self, regions=('US East 1',), projects=('STANDARD',),
+        lock_failures=0,
+    ):
         """
         A stand-in cluster manager.
 
@@ -2138,6 +2165,8 @@ class TestSharedClusterPool(unittest.TestCase):
         region_list = [Region(x) for x in regions]
         project_list = [Project(x) for x in projects]
 
+        refused = {}
+
         class Manager:
             regions = region_list
             projects = project_list
@@ -2146,6 +2175,20 @@ class TestSharedClusterPool(unittest.TestCase):
                 # The owner in force at creation time is what decides whether
                 # the per-class sweep eats the pool.
                 created.append((name, utils.get_owner(), kwargs))
+                if refused.get(name, 0) < lock_failures:
+                    refused[name] = refused.get(name, 0) + 1
+                    # Verbatim from the run that failed, so the match is
+                    # tested against the real wording rather than a paraphrase
+                    # of it. Note "creating workspace" for a /clusters POST.
+                    raise ManagementError(
+                        errno=500,
+                        msg=(
+                            f'error creating workspace ({name}): could not '
+                            f'acquire lock within duration [0, '
+                            f'2026-09-23T17:37:16Z, 5e340578, '
+                            f'2026/09/23 17:37:16]'
+                        ),
+                    )
                 return utils.track(Cluster(name, kwargs))
 
         return Manager()
@@ -2161,6 +2204,28 @@ class TestSharedClusterPool(unittest.TestCase):
 
         self.assertEqual([x.id for x in first], [x.id for x in second])
         self.assertEqual(len(self.created), 2)
+
+    def test_a_lock_conflict_during_the_pool_build_is_retried(self):
+        """POST /clusters comes back "could not acquire lock" too, and a raise
+        here fails every class that borrows from the pool -- which is how
+        TestClusterFusion went down."""
+        with patch('time.sleep'), self._patched(lock_failures=1):
+            pool = self.utils.shared_clusters(2)
+
+        self.assertEqual(len(pool), 2)
+        # Two clusters, each refused once and then created.
+        self.assertEqual(len(self.created), 4)
+        self.assertEqual(len(self.utils._tracked), 2)
+
+    def test_a_pool_build_that_keeps_losing_the_lock_still_raises(self):
+        with patch('time.sleep'), self._patched(lock_failures=100):
+            with self.assertRaises(ManagementError):
+                self.utils.shared_clusters(1)
+
+        self.assertEqual(
+            len(self.created), self.utils.CREATE_LOCK_RETRY_ATTEMPTS,
+        )
+        self.assertEqual(self.utils._tracked, [])
 
     def test_the_pool_grows_to_the_largest_request(self):
         with self._patched():
