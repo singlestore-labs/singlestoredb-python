@@ -723,6 +723,85 @@ def terminate(
             time.sleep(interval)
 
 
+#: Error text the management API comes back with when it will not start a
+#: creation because something else in the organization holds the lock it
+#: needs -- "could not acquire lock". Matched on the message rather than on
+#: ``errno`` because the status it arrives as is not something the API
+#: documents, and because the status alone cannot distinguish a lock conflict
+#: (retry and it goes through) from a rejected request (retry and it never
+#: will).
+LOCK_ERROR_RE = re.compile(r'acquire[^.]{0,40}lock', re.I)
+
+#: Retry budget for :func:`create_retrying`. Five waits at 20s growing to a
+#: 60s cap -- 20, 40, 60, 60, 60, so four minutes at worst.
+#:
+#: Sized for a lock held by another creation rather than for provisioning: a
+#: workspace group POST returns in seconds, so what is being waited out is the
+#: other holder finishing, not a deployment coming up. Hence spacing much
+#: shorter than ``wait_on_active``'s but longer than a transport retry's, and a
+#: budget small enough that a genuinely stuck organization fails the class
+#: instead of idling out the job's timeout.
+CREATE_LOCK_RETRY_ATTEMPTS = 6
+CREATE_LOCK_RETRY_INTERVAL = 20.0
+CREATE_LOCK_RETRY_MAX_INTERVAL = 60.0
+
+#: Random extra added to each wait. Two xdist workers -- or the v1 nightly and
+#: a concurrent v2 job -- that collide on the lock otherwise retry in step
+#: forever, since they back off by the same amounts from the same moment.
+CREATE_LOCK_RETRY_JITTER = 5.0
+
+
+def create_retrying(create: Any, *args: Any, **kwargs: Any) -> Any:
+    """
+    Call a deployment creator, retrying a lock conflict.
+
+    For a ``setUpClass`` that has to deploy before it can test anything::
+
+        cls.workspace_group = utils.create_retrying(
+            cls.manager.create_workspace_group, f'wg-test-{name}', ...,
+        )
+
+    The v1 management API refuses a ``create_workspace_group`` with "could not
+    acquire lock" when another creation in the same organization holds it, and
+    nothing retries that: ``Manager.RETRY_STATUSES`` covers 429 and 5xx only
+    (``management/manager.py``), so the error reaches ``setUpClass``, and an
+    exception there fails every test in the class. A whole management_v1 run
+    went that way. The lock clears on its own in seconds, so the fix is to wait
+    and ask again.
+
+    Only a lock conflict is retried -- any other ``ManagementError`` is a real
+    failure and is re-raised immediately, as is the last lock error if the
+    budget runs out.
+
+    Safe to retry with the same name because the conflict is a refusal to
+    start: nothing was created, so there is no deployment to collide with and
+    nothing for ``_recover_orphan`` to have found. A create that got far enough
+    to make something and *then* failed does not come back with this message,
+    and would surface on the retry as a name conflict rather than being
+    swallowed.
+    """
+    import time
+
+    for attempt in range(1, CREATE_LOCK_RETRY_ATTEMPTS + 1):
+        try:
+            return create(*args, **kwargs)
+        except ManagementError as exc:
+            if not LOCK_ERROR_RE.search(str(exc)):
+                raise
+            if attempt == CREATE_LOCK_RETRY_ATTEMPTS:
+                raise
+            wait = min(
+                CREATE_LOCK_RETRY_INTERVAL * attempt,
+                CREATE_LOCK_RETRY_MAX_INTERVAL,
+            ) + random.uniform(0, CREATE_LOCK_RETRY_JITTER)
+            logger.info(
+                f'{getattr(create, "__name__", create)} could not take the '
+                f'lock ({exc}); attempt {attempt} of '
+                f'{CREATE_LOCK_RETRY_ATTEMPTS}, retrying in {wait:.1f}s',
+            )
+            time.sleep(wait)
+
+
 def _creator_is_mocked(target: Any) -> bool:
     """
     Is this creation call going through a mocked manager?

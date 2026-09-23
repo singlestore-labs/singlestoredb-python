@@ -970,8 +970,12 @@ class TestWorkspaceFusion(unittest.TestCase):
         # and creation in some non-US regions fails with a control-plane 500.
         us_regions = [x for x in mgr.regions if x.name.startswith('US')]
         for letter in ('A', 'B', 'C'):
+            # Retried: three creations in a row in one organization is exactly
+            # what comes back "could not acquire lock", and raising here fails
+            # every test in the class. See utils.create_retrying.
             cls.workspace_groups.append(
-                mgr.create_workspace_group(
+                utils.create_retrying(
+                    mgr.create_workspace_group,
                     f'{letter} Fusion Testing {cls.id}',
                     region=random.choice(us_regions),
                     firewall_ranges=[],

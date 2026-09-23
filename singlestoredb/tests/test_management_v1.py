@@ -73,7 +73,11 @@ class TestWorkspace(unittest.TestCase):
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
-        cls.workspace_group = cls.manager.create_workspace_group(
+        # Retried: another creation in the organization holding the lock makes
+        # this come back "could not acquire lock", and raising here fails every
+        # test in the class. See utils.create_retrying.
+        cls.workspace_group = utils.create_retrying(
+            cls.manager.create_workspace_group,
             f'wg-test-{name}',
             region=random.choice(us_regions).id,
             admin_password=cls.password,
@@ -381,7 +385,11 @@ class TestStage(unittest.TestCase):
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
-        cls.wg = cls.manager.create_workspace_group(
+        # Retried: another creation in the organization holding the lock makes
+        # this come back "could not acquire lock", and raising here fails every
+        # test in the class. See utils.create_retrying.
+        cls.wg = utils.create_retrying(
+            cls.manager.create_workspace_group,
             f'wg-test-{name}',
             region=random.choice(us_regions).id,
             admin_password=cls.password,
@@ -993,7 +1001,11 @@ class TestJob(unittest.TestCase):
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
-        cls.workspace_group = cls.manager.create_workspace_group(
+        # Retried: another creation in the organization holding the lock makes
+        # this come back "could not acquire lock", and raising here fails every
+        # test in the class. See utils.create_retrying.
+        cls.workspace_group = utils.create_retrying(
+            cls.manager.create_workspace_group,
             f'wg-test-{name}',
             region=random.choice(us_regions).id,
             admin_password=cls.password,

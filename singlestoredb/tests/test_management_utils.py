@@ -1937,6 +1937,122 @@ class TestTerminateRetry(unittest.TestCase):
         self.assertEqual(calls, [True])
 
 
+class TestCreateRetryingLockConflicts(unittest.TestCase):
+    """
+    ``utils.create_retrying()``'s retry for a creation the API will not start
+    because it cannot take the lock.
+
+    A ``create_workspace_group`` that comes back "could not acquire lock" is
+    not retried by the transport -- Manager.RETRY_STATUSES is 429 and 5xx --
+    and it happens in ``setUpClass``, so one lock conflict fails every test in
+    the class. A whole management_v1 run went that way.
+    """
+
+    def setUp(self):
+        from singlestoredb.tests import utils
+        self.utils = utils
+        self.slept = []
+
+        patcher = patch('time.sleep', self.slept.append)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        # Jitter off, so the waits asserted below are the spacing itself.
+        # It is covered separately.
+        patcher = patch.object(utils, 'CREATE_LOCK_RETRY_JITTER', 0.0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _creator(self, *msgs):
+        """A creator that fails with these messages in turn, then succeeds."""
+        calls = []
+
+        def create(name, **kwargs):
+            calls.append(name)
+            if len(calls) <= len(msgs):
+                raise ManagementError(errno=400, msg=msgs[len(calls) - 1])
+            return f'deployment {name}'
+
+        create.calls = calls
+        return create
+
+    def test_a_lock_conflict_is_retried_until_it_succeeds(self):
+        create = self._creator(
+            'could not acquire lock', 'Could not acquire lock on workspace',
+        )
+        out = self.utils.create_retrying(create, 'wg-test-a', region='x')
+        self.assertEqual(out, 'deployment wg-test-a')
+        self.assertEqual(len(create.calls), 3)
+        self.assertEqual(self.slept, [20.0, 40.0])
+
+    def test_the_retry_reuses_the_name(self):
+        """The conflict is a refusal to start, so nothing was created and
+        there is no deployment for the second attempt to collide with."""
+        create = self._creator('could not acquire lock')
+        self.utils.create_retrying(create, 'wg-test-a')
+        self.assertEqual(create.calls, ['wg-test-a', 'wg-test-a'])
+
+    def test_another_error_is_not_retried(self):
+        """A rejected request is a real failure; retrying it only delays the
+        report by four minutes."""
+        create = self._creator('region is not available')
+        with self.assertRaises(ManagementError):
+            self.utils.create_retrying(create, 'wg-test-a')
+        self.assertEqual(len(create.calls), 1)
+        self.assertEqual(self.slept, [])
+
+    def test_the_budget_is_bounded_and_the_error_is_re_raised(self):
+        """A genuinely stuck organization has to fail the class rather than
+        idle out the job's timeout."""
+        create = self._creator(*(['could not acquire lock'] * 100))
+        with self.assertRaises(ManagementError):
+            self.utils.create_retrying(create, 'wg-test-a')
+        self.assertEqual(
+            len(create.calls), self.utils.CREATE_LOCK_RETRY_ATTEMPTS,
+        )
+        self.assertEqual(len(self.slept), 6 - 1)
+
+    def test_the_wait_is_capped(self):
+        """Growth stops at the cap: what is being waited out is another
+        creation finishing, not a deployment coming up."""
+        create = self._creator(*(['could not acquire lock'] * 100))
+        with self.assertRaises(ManagementError):
+            self.utils.create_retrying(create, 'wg-test-a')
+        self.assertLessEqual(
+            max(self.slept), self.utils.CREATE_LOCK_RETRY_MAX_INTERVAL,
+        )
+        self.assertEqual(self.slept, [20.0, 40.0, 60.0, 60.0, 60.0])
+
+    def test_the_waits_are_jittered(self):
+        """Two workers that collide on the lock back off by the same amounts
+        from the same moment, so without jitter they retry in step forever."""
+        patcher = patch.object(self.utils, 'CREATE_LOCK_RETRY_JITTER', 5.0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        create = self._creator(*(['could not acquire lock'] * 100))
+        with self.assertRaises(ManagementError):
+            self.utils.create_retrying(create, 'wg-test-a')
+        self.assertNotEqual(self.slept, [20.0, 40.0, 60.0, 60.0, 60.0])
+        for wait, base in zip(self.slept, [20.0, 40.0, 60.0, 60.0, 60.0]):
+            self.assertGreaterEqual(wait, base)
+            self.assertLess(wait, base + 5.0)
+
+    def test_the_message_match_does_not_need_a_status(self):
+        """The status a lock conflict arrives as is not documented, and the
+        status alone cannot tell a conflict from a rejection."""
+        calls = []
+
+        def create(name):
+            calls.append(name)
+            if len(calls) == 1:
+                raise ManagementError(msg='Could not acquire lock')
+            return name
+
+        self.utils.create_retrying(create, 'wg-test-a')
+        self.assertEqual(len(calls), 2)
+
+
 class TestSharedClusterPool(unittest.TestCase):
     """
     The pool in ``tests/utils.py`` that keeps the Stage and Job suites from
