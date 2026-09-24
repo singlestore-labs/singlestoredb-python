@@ -852,10 +852,9 @@ class WorkspaceGroup:
                 msg='No workspace manager is associated with this object.',
             )
         # 'true'/'false', not the bool: requests renders a bool param with
-        # str(), so force=True went out as force=True. Workspace.terminate
-        # above already builds the lowercase form by hand; this matches it.
-        # force is what makes a group with live workspaces in it go away, so
-        # the value being read is not optional.
+        # str(), so force=True went out as force=True. force is what makes a
+        # group with live workspaces in it go away, so the value has to be read.
+        # Workspace.terminate above spells it out by hand for the same reason.
         self._manager._delete(
             f'workspaceGroups/{self.id}',
             params=dict(force='true' if force else 'false'),

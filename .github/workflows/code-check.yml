@@ -8,14 +8,12 @@ on:
   workflow_dispatch:
 
 
-# No `concurrency` block with `cancel-in-progress`, deliberately. Cancelling the
-# run a push supersedes would halve the clusters two overlapping runs carry, but
-# it cannot be made safe: GitHub force-terminates a cancelled job's remaining
-# steps after a 5-minute cancellation timeout, `if: always()` included, and an
-# S-00 cluster refuses DELETE until it is ACTIVE (~460s). A run cancelled inside
-# its first several minutes would die with a cluster it is not yet allowed to
-# delete, and nothing on a schedule would come along to reap it. Letting both
-# runs finish costs clusters; cancelling them costs stranded clusters.
+# No `concurrency`/`cancel-in-progress`, deliberately. GitHub force-terminates a
+# cancelled job's remaining steps -- `if: always()` included -- after a 5-minute
+# cancellation timeout, and an S-00 cluster refuses DELETE until it is ACTIVE
+# (~460s). A run cancelled in its first few minutes would die holding a cluster
+# it is not yet allowed to delete, with nothing scheduled to reap it. Letting
+# both runs finish costs clusters; cancelling them costs stranded clusters.
 jobs:
   test-coverage:
     runs-on: ubuntu-latest
@@ -46,10 +44,10 @@ jobs:
         uses: actions/checkout@v7
         with:
           # Full history, because the change detector below diffs against
-          # origin/main. A shallow clone does not create that ref -- with
+          # origin/main, a ref a shallow clone does not create. With
           # fetch-depth: 2 every diff died on `fatal: bad revision
-          # 'origin/main'`, which the detector read as "nothing changed", so
-          # the management step never ran on a PR.
+          # 'origin/main'`, which the detector read as "nothing changed", so the
+          # management step never ran on a PR.
           fetch-depth: 0
 
       - name: Set up Python
@@ -228,15 +226,13 @@ jobs:
       # is cancelled, which is what left three clusters billing in run
       # 35631802648 (see the matching step in coverage.yml). On a PR the
       # management step above only runs when the change detector fires, so most
-      # runs reach this with an empty ledger and it reports nothing.
+      # runs reach this with an empty ledger and report nothing.
       #
-      # always() is not a guarantee, only a best effort: a cancelled job's
-      # remaining steps are force-terminated after GitHub's 5-minute
-      # cancellation timeout, so this covers a cancel whose clusters are already
-      # ACTIVE -- run 35631802648 was cancelled 19 minutes in -- but not one in
-      # the first several minutes, where DELETE is still being refused when the
-      # step is killed. That remainder needs `cleanup_deployments.py
-      # --older-than` run by hand; nothing here is on a schedule.
+      # Best effort, not a guarantee: a cancelled job's remaining steps are
+      # force-terminated after GitHub's 5-minute cancellation timeout, so this
+      # covers a cancel whose clusters are already ACTIVE but not one in the
+      # first few minutes, where DELETE is still refused. That remainder needs
+      # `cleanup_deployments.py --older-than` run by hand.
       - name: Terminate any deployment the tests left behind
         if: always()
         run: |

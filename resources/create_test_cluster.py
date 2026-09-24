@@ -36,8 +36,8 @@ parser.add_option(
 parser.add_option(
     '-p', '--password',
     help='password to give the admin user once the cluster is up; required, '
-         'because the password the API generates cannot be handed to another '
-         'CI job (see below)',
+         'because the password the API generates cannot be reported to a '
+         'caller that masks it',
 )
 parser.add_option(
     '-t', '--token',
@@ -87,13 +87,11 @@ mgr = s2.manage_clusters(options.token or None, version='v2')
 
 
 # Find a matching region. A v2 region is identified by the
-# (provider, region_name) pair rather than by an ID, so the matched Region
-# object is what gets handed to create_cluster. Candidates are shuffled to
-# spread deployments across whichever regions match.
-#
-# The pattern is tried against both the display name and the provider region
-# name -- 'US East 1' and 'us-east-1' -- so it does not matter which of the two
-# a given listing puts in Region.name.
+# (provider, region_name) pair rather than an ID, so the matched Region object
+# itself is handed to create_cluster. Candidates are shuffled to spread
+# deployments across whichever regions match, and the pattern is tried against
+# both the display name and the provider region name -- 'US East 1' and
+# 'us-east-1' -- since either may land in Region.name.
 pattern = options.region.replace('*', '.*')
 regions = list(mgr.regions)
 
@@ -141,9 +139,8 @@ else:
 
 
 # A cluster name must match [a-z0-9]([a-z0-9-]*[a-z0-9])? and be 1-32
-# characters, so everything outside that alphabet becomes a hyphen, runs of
-# hyphens collapse, and the result is truncated with any hyphen the cut
-# exposes trimmed off again.
+# characters: fold everything outside that alphabet to a hyphen, truncate, and
+# trim any hyphen the cut exposes.
 name = re.sub(r'[^a-z0-9]+', '-', args[0].lower()).strip('-')[:32].rstrip('-')
 if not name:
     print(f'ERROR: Cluster name is empty after cleaning: {args[0]}', file=sys.stderr)
@@ -175,13 +172,11 @@ if not database:
     database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
 
 # Report before touching the cluster any further. Everything below can fail
-# against a cluster that already exists and is already billing, and the caller's
-# only handle on it is the ID reported here -- a CI teardown job with an empty
-# cluster-id output would issue its DELETE against /v2/clusters/ and leak the
-# cluster it was meant to remove.
+# against a cluster that is already billing, and the ID reported here is the
+# caller's only handle on it -- a CI teardown job with an empty cluster-id output
+# would DELETE /v2/clusters/ and leak the cluster it meant to remove.
 #
-# No password is reported: the caller passed it in, so it already knows it, and
-# under GitHub Actions it is a secret the runner masks on its own.
+# No password is reported: the caller passed it in, so it already has it.
 if options.output == 'env':
     print(f'CLUSTER_ID={cluster.id}')
     print(f'CLUSTER_HOST={host}')
@@ -202,10 +197,10 @@ elif options.output == 'json':
     print('}')
 
 # The API generates the admin password and reports it only on the create
-# response -- there is no route that will hand it back later, and it is None
-# after any refresh(). See item 9 of docs/management-api-audit.md: the API
-# accepts an adminPassword on both POST and PATCH and ignores both, which is
-# why this is read back rather than set.
+# response: no route hands it back later, and it is None after any refresh().
+# It is read back rather than set because the API accepts an adminPassword on
+# both POST and PATCH and ignores both -- item 9 of
+# docs/management-api-audit.md.
 generated = cluster.admin_password
 if not generated:
     print(
@@ -215,16 +210,12 @@ if not generated:
     sys.exit(1)
 
 # Trade the generated password for the caller's, because the generated one
-# cannot leave this process. A caller running under GitHub Actions has to mask
-# it, and the runner drops any output whose value matches a mask -- "Skip output
-# 'cluster-password' since it may contain secret" -- so masking it and passing
-# it to another job are mutually exclusive. The password the caller already
-# holds has neither problem.
+# cannot leave this process: a GitHub Actions runner drops any output whose value
+# is masked -- "Skip output 'cluster-password' since it may contain secret" -- so
+# masking it and passing it to another job are mutually exclusive.
 #
-# ALTER USER is the statement that works: SET PASSWORD wants a pre-hashed value
-# and rejects a literal with '1372: Password hash should be a 41-digit
-# hexadecimal number'. Verified against a live S-00 cluster, including that the
-# control plane leaves the new password alone afterwards.
+# ALTER USER, not SET PASSWORD, which wants a pre-hashed value and rejects a
+# literal with '1372: Password hash should be a 41-digit hexadecimal number'.
 password = options.password
 escaped = password.replace('\\', '\\\\').replace("'", "\\'")
 

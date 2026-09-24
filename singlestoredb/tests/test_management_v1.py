@@ -89,10 +89,9 @@ class TestWorkspace(unittest.TestCase):
                 wait_on_active=True,
             )
         except Exception:
-            # Guarded: an unguarded terminate here replaces the create failure
-            # with whatever the DELETE raised, which both hides the real error
-            # and leaves the group live with nothing having reported why.
-            # utils.cleanup_tracked retries it and says so.
+            # Guarded: an unguarded terminate here would replace the create
+            # failure with whatever the DELETE raised. utils.cleanup_tracked
+            # retries it and reports it.
             try:
                 cls.workspace_group.terminate(force=True)
             except Exception:
@@ -263,13 +262,11 @@ class TestStarterWorkspace(unittest.TestCase):
         name = shared_database_name(secrets.token_urlsafe(20)[:20])
 
         # The starter-tier user name has to be unique across every starter
-        # deployment in the project, not just within this one: creating the
-        # same name in a second starter deployment fails while the first is
-        # live. So it is namespaced like the deployment and the database are,
-        # or this class collides with TestStarterCluster in test_management_v2
-        # -- they run on different xdist workers -- and with any starter
-        # deployment an earlier failed run leaked. The API answers the
-        # collision with a bare 500, which names nothing.
+        # deployment in the project, not just within this one, so it is
+        # namespaced like the deployment and the database are. Otherwise this
+        # class collides with TestStarterCluster in test_management_v2 -- they
+        # run on different xdist workers -- and with anything an earlier failed
+        # run leaked. The API answers the collision with a bare 500.
         cls.starter_username = f'starter_user_{name[:8]}'
         cls.password = secrets.token_urlsafe(20)
 
@@ -957,12 +954,11 @@ class TestSecrets(unittest.TestCase):
             ),
         ).json()
 
-        # The ID comes from the create response rather than from the lookup
-        # under test: binding it inside the try would leave the cleanup raising
-        # UnboundLocalError over whatever the lookup actually failed with.
-        # Without this the secret outlived every run -- it was only ever
-        # removed opportunistically by the sweep at the top of the *next* one.
-        # test_management_v2.py's twin already does it this way.
+        # The ID comes from the create response, not from the lookup under
+        # test: binding it inside the try would leave the cleanup raising
+        # UnboundLocalError over whatever the lookup failed with. Without this
+        # the secret outlived every run, removed only by the sweep at the top of
+        # the *next* one. test_management_v2.py's twin does it this way.
         secret_id = created['secret']['secretID']
         try:
             secret = self.manager.organizations.current.get_secret(
@@ -1009,10 +1005,9 @@ class TestJob(unittest.TestCase):
                 wait_on_active=True,
             )
         except Exception:
-            # Guarded: an unguarded terminate here replaces the create failure
-            # with whatever the DELETE raised, which both hides the real error
-            # and leaves the group live with nothing having reported why.
-            # utils.cleanup_tracked retries it and says so.
+            # Guarded: an unguarded terminate here would replace the create
+            # failure with whatever the DELETE raised. utils.cleanup_tracked
+            # retries it and reports it.
             try:
                 cls.workspace_group.terminate(force=True)
             except Exception:

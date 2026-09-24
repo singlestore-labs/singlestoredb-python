@@ -50,12 +50,11 @@ what it made::
 
     python -m singlestoredb.tests.cleanup_deployments --ledger deployments.jsonl
 
-That mode replaces *both* guards above -- the name patterns and the age
-filter. Neither is needed, because the ledger names the deployments rather
-than guessing at them, and neither is safe: a ledger entry is minutes old by
-construction, so the age filter would spare everything it lists. What keeps
-such a run off other people's deployments is that it only ever touches ids and
-names the ledger records, and that each CI job writes its own ledger.
+That mode replaces *both* guards above. The ledger names deployments rather
+than guessing at them, so the patterns are unnecessary; and its entries are
+minutes old by construction, so the age filter would spare every one of them.
+What keeps it off other people's deployments instead is that it touches only
+ids and names the ledger records, and that each CI job writes its own ledger.
 """
 import argparse
 import datetime
@@ -89,18 +88,15 @@ KINDS = (
 #: anything younger could belong to a run in progress.
 DEFAULT_MIN_AGE_HOURS = 6.0
 
-#: How long to keep retrying a deployment the API will not delete yet. This is
-#: the end of the line -- nothing runs after this tool -- so it does not borrow
-#: ``utils.TERMINATE_RETRY_TIMEOUT``, which is deliberately short so the sweep
-#: between test classes cannot stall the suite. Here a deployment may still be
-#: coming up, ``DELETE`` is refused until it is, and an S-00 cluster reaching
-#: ACTIVE is ~460s at worst, so anything shorter than a full provision leaves it
-#: billing. An upper bound on retrying, not a promise of it: the whole budget is
-#: available when the job that calls this ends normally or fails, but a
-#: *cancelled* job's steps are force-terminated after GitHub's 5-minute
-#: cancellation timeout, so a cancel early in a provision gets killed here
-#: regardless of what this says. The only cost of the larger budget is the CI
-#: step's wall clock.
+#: How long to keep retrying a deployment the API will not delete yet. Longer
+#: than ``utils.TERMINATE_RETRY_TIMEOUT``, which is short so the between-class
+#: sweep cannot stall the suite: nothing runs after this tool, the deployment may
+#: still be coming up, ``DELETE`` is refused until it is, and an S-00 cluster
+#: reaching ACTIVE is ~460s at worst. The only cost is the CI step's wall clock.
+#:
+#: An upper bound, not a promise: a *cancelled* job's steps are force-terminated
+#: after GitHub's 5-minute cancellation timeout, so a cancel early in a provision
+#: gets killed here whatever this says.
 TERMINATE_TIMEOUT = 600.0
 
 #: Names the suite generates. Anchored, because these run against a real
@@ -109,11 +105,9 @@ TERMINATE_TIMEOUT = 600.0
 PATTERNS = [
     # test_management_v1.py / test_management_v2.py fixtures
     re.compile(r'^(wg|ws|cl)-test-[A-Za-z0-9_-]+$'),
-    # TestWorkspace.test_update renames its live group from wg-test-<token> to
-    # wg-foo-<token> and never renames it back, so the group carries this name
-    # for the rest of the class. No pattern matched it, which made a group
-    # stranded after that test invisible to this sweep -- it would pile up
-    # while the tool reported nothing.
+    # TestWorkspace.test_update renames its live group to wg-foo-<token> and
+    # never renames it back, so it carries that name for the rest of the class.
+    # Unmatched, a group stranded after that test was invisible here.
     re.compile(r'^wg-foo-[A-Za-z0-9_-]+$'),
     re.compile(r'^starter-(ws|cl)-test-[A-Za-z0-9_-]+$'),
     # test_fusion.py fixtures
@@ -121,19 +115,17 @@ PATTERNS = [
     re.compile(r'^[a-z]-fusion-cluster-[0-9a-f]+$'),
     re.compile(r'^jobs-fusion-[0-9a-f]+$'),
     re.compile(r'^stage-fusion-\d-[0-9a-f]+$'),
-    # test_create_drop_workspace_group's subject. Hex covers the decimal
-    # id(self) the test used to name it with, so groups stranded by older
-    # runs -- which this pattern did not match, and which therefore piled up
-    # invisibly -- are reaped too.
+    # test_create_drop_workspace_group's subject. Hex also covers the decimal
+    # id(self) the test used to name it with, so groups stranded by older runs
+    # are reaped too.
     re.compile(r'^Create WG Test [0-9a-f]+$'),
 ]
 
-#: Names the suite used to generate. Kept separate so it is obvious what is
-#: only here for cleanup, and matched all the same: a stranded deployment is
-#: billed regardless of which revision made it, and ``main`` still creates
-#: these -- it carries none of ``utils.track()``, the per-class sweep or this
-#: script, so a run there leaks with nothing to reap it. Retire an entry once
-#: no branch produces the name and the organization is clean of it.
+#: Names the suite used to generate. Kept separate so it is obvious what is only
+#: here for cleanup, and matched all the same: a stranded deployment bills
+#: whichever revision made it, and ``main`` still creates these with nothing to
+#: reap them. Retire an entry once no branch produces the name and the
+#: organization is clean of it.
 LEGACY_PATTERNS = [
     # TestStageFusion's two workspace groups, before it moved to v2 clusters
     # named stage-fusion-<n>-<id> and then to the shared cluster pool
@@ -141,11 +133,10 @@ LEGACY_PATTERNS = [
     # TestFilesFusion's workspace group, which nothing in the class ever
     # read; it creates no deployment at all now
     re.compile(r'^Files Fusion Testing [0-9a-f]+$'),
-    # 'Group <hex>'. No revision of this repo generates this, so it is here
-    # on the owner's say-so rather than by attribution. Eight hex characters
-    # minimum, which is what the ones in the organization have: the bare
-    # 'Group 1' / 'Group 2' that a person or the portal produces is a real
-    # deployment someone is using, and a plain [0-9a-f]+ would match it.
+    # 'Group <hex>'. No revision of this repo generates this, so it is here on
+    # the owner's say-so. Eight hex characters minimum, which is what the ones
+    # in the organization have: a plain [0-9a-f]+ would also match the bare
+    # 'Group 1' a person or the portal produces.
     re.compile(r'^Group [0-9a-f]{8,}$'),
 ]
 
@@ -331,21 +322,19 @@ def find_leftovers(
 #
 # Ledger mode
 #
-# What this exists for: GH Actions run 35631802648, job ``test-coverage``, was
-# cancelled 19 minutes into a ``create_cluster(wait_on_active=True,
-# wait_timeout=1200)`` and the log ends at ``##[error]The operation was
-# canceled.`` with no pytest summary and no sweep output at all. Three clusters
-# were live and no in-process handler ever ran. Reading a file written as the
-# clusters were created is the only way to know that from another process.
+# Why: GH Actions run 35631802648, job ``test-coverage``, was cancelled 19
+# minutes into ``create_cluster(wait_on_active=True)``. The log ends at
+# ``##[error]The operation was canceled.`` with no sweep output -- three clusters
+# live, no in-process handler ever run. A file written as they are created is the
+# only way another process can learn their names.
 #
 
 #: How each ledger kind is resolved back to a live object: the management API
 #: version that owns it, the point lookup for a record that has an id, and the
 #: listing to search by name for a ``pending`` record that never got one.
 #:
-#: The kinds are the values of ``utils._KIND_BY_CLASS``; a kind this does not
-#: know is reported rather than skipped, since the alternative is silently not
-#: reaping it.
+#: The kinds are the values of ``utils._KIND_BY_CLASS``. An unknown kind is
+#: reported rather than skipped, the alternative being to silently not reap it.
 LEDGER_KINDS = {
     'cluster': (
         'v2', 'get_cluster', lambda mgr: mgr.clusters,
@@ -386,27 +375,23 @@ def fold_ledger(lines: Any) -> List[Dict[str, Any]]:
     """
     Reduce ledger records to the deployments that should still be live.
 
-    The ledger is append-only and written from several processes (one per xdist
-    worker), so it is a history, not a state: a deployment shows up as
-    ``pending``, then ``live`` once it has an id, then ``gone`` once something
-    terminated it. Folding keeps whatever the last event for a deployment was
-    not ``gone``.
+    The ledger is an append-only history, not a state: a deployment shows up as
+    ``pending``, then ``live`` once it has an id, then ``gone`` once terminated.
+    Folding keeps every deployment whose last event was not ``gone``.
 
     A ``pending`` is keyed by ``(kind, name)`` because that is all it has; the
-    matching ``live`` retires it and re-keys on the id. So the two records a
-    normal creation writes collapse to one entry, and a ``pending`` left
-    standing means the creator was interrupted before it returned -- the
-    cancelled-mid-``wait_on_active`` case, resolvable only by name.
+    matching ``live`` retires it and re-keys on the id, so a normal creation's
+    two records collapse to one entry. A ``pending`` left standing means the
+    creator was interrupted before returning -- the cancelled-mid-wait case,
+    resolvable only by name.
 
-    Order is creation order, since dicts preserve insertion order and a
-    deployment's key is first inserted when it first appears. The caller
+    Order is creation order, since dicts preserve insertion order. The caller
     reverses it, so a workspace goes before the group that holds it, matching
     ``utils.cleanup_tracked()``.
 
-    Malformed lines are skipped with a warning rather than aborting: this runs
-    as the last step of a CI job, and one truncated line -- a process killed
-    between the ``write`` and the ``fsync``, which the per-line fsync makes
-    unlikely but not impossible -- must not stop the rest from being reaped.
+    Malformed lines are skipped with a warning rather than aborting: this is the
+    last step of a CI job, and one truncated line must not stop the rest from
+    being reaped.
     """
     live: Dict[Any, Dict[str, Any]] = {}
 
@@ -485,11 +470,10 @@ def find_ledger_leftovers(
         that could not be resolved *and* could still be live, which is what
         makes the run exit non-zero.
 
-    A 404 from the point lookup means the deployment is already gone, which is
-    the common case: the ledger records every creation, and a run that finished
-    normally terminated all of them. Anything else -- a transport failure, an
-    unknown kind -- goes in the third list, because "could not tell" and "not
-    there" must not read the same when the difference is a cluster billing.
+    A 404 from the point lookup means the deployment is already gone, the common
+    case for a run that finished normally. Anything else -- a transport failure,
+    an unknown kind -- goes in the third list: "could not tell" and "not there"
+    must not read the same when the difference is a cluster billing.
     """
     from singlestoredb.exceptions import ManagementError
 
@@ -588,7 +572,7 @@ def _run_ledger_sweep(path: str, yes: bool) -> int:
 
     if not yes:
         print('\nDry run; pass --yes to terminate these.')
-        return 0
+        return 1 if unresolved else 0
 
     from singlestoredb.tests import utils
 
@@ -614,10 +598,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         '--ledger', metavar='PATH',
         help='sweep exactly what the run that wrote this JSONL ledger created '
-             '(see SINGLESTOREDB_TEST_DEPLOYMENT_LOG). Replaces both the name '
-             'patterns and the age filter, which a ledger makes unnecessary '
-             'and which would in any case spare everything in it for being '
-             'minutes old. This is the mode CI runs as an if: always() step',
+             '(see SINGLESTOREDB_TEST_DEPLOYMENT_LOG). Replaces the name '
+             'patterns and the age filter, which would spare everything in it '
+             'for being minutes old. CI runs this as an if: always() step',
     )
     parser.add_argument(
         '--older-than', type=float, default=DEFAULT_MIN_AGE_HOURS,
@@ -666,9 +649,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    # --ledger is a different question entirely -- "what did *this* run make?"
-    # rather than "what looks stranded?" -- so it does not compose with the
-    # name and age guards, and saying so beats silently ignoring them.
+    # --ledger asks "what did *this* run make?", not "what looks stranded?", so
+    # it does not compose with the name and age guards. Erroring beats silently
+    # ignoring them.
     if args.ledger:
         for flag, value in (
             ('--older-than', args.older_than != DEFAULT_MIN_AGE_HOURS),

@@ -49,17 +49,14 @@ jobs:
 
       - name: Initialize database
         id: initialize-database
-        # A new cluster has exactly one user, admin, which is why that name is
-        # fixed everywhere below. The project is named here rather than read
-        # from a repo variable so the deployment target is visible in the
-        # workflow and does not depend on repository settings.
+        # A new cluster has exactly one user, admin, hence the fixed name below.
+        # The project is named here, not in a repo variable, so the deployment
+        # target is visible in the workflow.
         #
-        # POST /v2/clusters generates its own admin password and ignores any
-        # that is sent, so the script resets it to CLUSTER_PASSWORD over SQL
-        # once the cluster is up. That keeps the credential a secret the runner
-        # masks everywhere, instead of a job output: the runner refuses to write
-        # an output whose value is masked, so a generated password could not
-        # reach these jobs at all.
+        # POST /v2/clusters generates its own admin password and ignores any sent
+        # to it, so the script resets it to CLUSTER_PASSWORD over SQL once the
+        # cluster is up. A generated password could not reach the other jobs
+        # anyway: the runner refuses to write a masked value as a job output.
         run: |
           python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
         env:
@@ -268,9 +265,9 @@ jobs:
       - name: Shutdown cluster
         if: ${{ always() }}
         # An empty ID would send the DELETE to /v2/clusters/ and leave a live
-        # cluster behind, so say so loudly instead: at that point the ID has to
-        # be recovered by hand. --fail-with-body is what makes a refused DELETE
-        # fail this step rather than printing the error and exiting 0.
+        # cluster behind, so fail loudly instead; the ID then has to be recovered
+        # by hand. --fail-with-body makes a refused DELETE fail this step rather
+        # than print the error and exit 0.
         run: |
           if [ -z "$CLUSTER_ID" ]; then
             echo "::error::No cluster ID from setup-database; the cluster (if any) must be terminated by hand"

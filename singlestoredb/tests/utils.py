@@ -290,54 +290,34 @@ def drop_user(name: str) -> None:
 #
 # Live deployment tracking
 #
-# Every workspace group, workspace, cluster and starter cluster a test creates
-# costs money until it is terminated, and the usual `tearDownClass` is not
-# enough on its own:
+# Every deployment a test creates costs money until it is terminated, and
+# `tearDownClass` is not enough on its own: unittest skips it entirely if
+# `setUpClass` raises, so a fixture that dies partway through leaks what it had
+# already made, and a test that fails before its own cleanup line leaks too.
 #
-#   * unittest does not call `tearDownClass` at all if `setUpClass` raises, so
-#     a fixture that dies partway through -- two of three clusters created,
-#     then a dropped connection -- leaks everything it had made so far;
-#   * a test that creates a deployment in its body and then fails before its
-#     own cleanup line leaks it too.
+# So creations are registered here as well, and `cleanup_tracked()` sweeps what
+# is left: per test class as the run moves on, and again for everything at the
+# end of the session (see conftest.py). Terminating twice is harmless, so a test
+# that cleans up after itself need not untrack.
 #
-# So creations are registered here as well, and `cleanup_tracked()` sweeps
-# whatever is left: per test class as the run moves on to the next one, and
-# again for everything at the end of the session (see conftest.py).
-# Terminating twice is harmless -- the second attempt finds it gone and is
-# ignored -- so tracked objects do not have to be untracked by the tests that
-# clean up after themselves.
-#
-# Everything above is in-process, which is the one thing it cannot fix: the
-# sweep, the ledger and `tearDownClass` all die with the interpreter. A job
-# killed mid-provision -- GitHub force-terminates a cancelled job's remaining
-# steps after a five-minute cancellation timeout -- leaves a PENDING cluster
-# that no code here will ever get another chance to delete. `expires_at` is
-# the answer to that, and only that: it is a property of the deployment, so
-# the control plane honours it whether or not this process is still alive.
+# All of that is in-process. A job killed mid-provision leaves a PENDING cluster
+# nothing here gets another chance to delete; `expires_at` is the answer to that
+# and only that, being honoured by the control plane either way.
 #
 
-#: Expiry to request on every deployment a test creates, as the duration
-#: string `POST` accepts (`resources/create_test_cluster.py` has passed one
-#: nightly since it was written). The backstop under the sweep and the ledger,
-#: not a replacement for either: a test still terminates what it created, and
-#: nothing waits for an expiry to fire.
+#: Expiry to request on every deployment a test creates, as the duration string
+#: `POST` accepts. A backstop under the sweep and the ledger, not a replacement:
+#: a test still terminates what it created and nothing waits for an expiry.
 #:
-#: Two hours, against a `wait_timeout` of 1200s and a longest test (Fusion
-#: `CREATE`/`DROP`, which provisions twice in sequence) of about twenty
-#: minutes. Enough headroom that an expiry can never land on a deployment a
-#: test is still using, which would show up as an unrelated flake and be read
-#: as an API fault.
+#: Two hours, against a `wait_timeout` of 1200s and a longest test of about
+#: twenty minutes (Fusion `CREATE`/`DROP`, which provisions twice in sequence):
+#: headroom enough that an expiry cannot land on a deployment still in use and
+#: read as an unrelated API flake.
 #:
-#: Applied to what accepts it, which is the deployments that cost: v2
-#: `ClusterManager.create_cluster` and v1
-#: `WorkspaceManager.create_workspace_group`. The rest take no `expires_at` and
-#: need none:
-#:
-#: * a v1 workspace -- `expiresAt` is a property of the group, and terminating
-#:   the group takes its workspaces with it;
-#: * the starter deployments -- `create_starter_cluster` and
-#:   `create_starter_workspace` have no such argument, and being shared tier
-#:   they are not what a leak costs.
+#: Only `ClusterManager.create_cluster` (v2) and
+#: `WorkspaceManager.create_workspace_group` (v1) take it, which is also where
+#: the cost is. A v1 workspace needs none -- `expiresAt` belongs to the group --
+#: and the starter deployments accept no such argument.
 DEPLOYMENT_EXPIRES_AT = '2h'
 
 #: (owner, label, object) for every deployment created so far and not yet
@@ -346,12 +326,11 @@ DEPLOYMENT_EXPIRES_AT = '2h'
 #: than idling -- and billing -- until the session ends.
 _tracked: List[Tuple[str, str, Any]] = []
 
-#: (receiver, finder, args, kwargs) for every creation call currently
-#: executing. A creator POSTs and only then waits for the deployment to come
-#: up, so for the whole ``wait_on_active`` window -- twenty minutes for a
-#: cluster -- something billable exists that nothing has registered yet:
-#: ``_tracking_wrapper`` tracks on return and recovers in its ``except``, and
-#: neither runs if the process is killed. See :func:`recover_in_flight`.
+#: (receiver, finder, args, kwargs) for every creation call currently executing.
+#: A creator POSTs and only then waits for the deployment to come up, so for the
+#: whole ``wait_on_active`` window -- twenty minutes for a cluster -- something
+#: billable exists that nothing has registered yet. See
+#: :func:`recover_in_flight`.
 _in_flight: List[Tuple[Any, Any, Tuple[Any, ...], Dict[str, Any]]] = []
 
 #: Test class currently running, as set by conftest.
@@ -372,56 +351,36 @@ def set_owner(owner: str) -> None:
 #
 # Durable deployment ledger
 #
-# Everything above this point is in-memory only, and that is the one leak the
-# sweeps cannot cover. A cancelled CI job is the proven case: GH Actions run
-# 35631802648, job ``test-coverage``, was cancelled 19 minutes into
-# ``TestClusterFusion.setUpClass``'s ``create_cluster(wait_on_active=True,
-# wait_timeout=1200)``. The log ends at ``##[error]The operation was
-# canceled.`` with no pytest summary, no "Terminated deployments left behind
-# by tests:" and no ``STILL LIVE`` banner -- the process never got to sweep,
-# and GitHub's cancellation grace period is nowhere near long enough for
-# pytest to unwind three nested class fixtures, list to recover three
-# in-flight creations and issue three DELETEs. After the SIGKILL that follows,
-# ``_tracked`` and ``_in_flight`` are gone with the process and *nothing on
-# disk* records that three clusters were created.
+# The leak the in-memory sweeps cannot cover, proven by GH Actions run
+# 35631802648: job ``test-coverage`` was cancelled 19 minutes into
+# ``TestClusterFusion.setUpClass``'s ``create_cluster(wait_on_active=True)``. The
+# log ends at ``##[error]The operation was canceled.`` -- no pytest summary, no
+# sweep, no ``STILL LIVE`` banner. After the SIGKILL, ``_tracked`` and
+# ``_in_flight`` went with the process and nothing on disk named the three
+# clusters.
 #
 # So every creation is also appended to a JSONL file, flushed and fsync'd per
-# line, which ``cleanup_deployments.py --ledger`` reads afterwards from a
-# separate process -- an ``if: always()`` CI step that still runs on
-# cancellation. The ledger is the record; the in-memory sweeps stay exactly as
-# they were and remain the fast path.
+# line, which ``cleanup_deployments.py --ledger`` reads from a separate process
+# in an ``if: always()`` CI step. The in-memory sweeps remain the fast path;
+# this is the record of last resort.
 #
-# Opt-in, via SINGLESTOREDB_TEST_DEPLOYMENT_LOG. With the variable unset
-# nothing is written and behaviour is byte-for-byte what it was: a local run
-# has a human watching it and does not need a file to reap from.
+# Three events per deployment: ``pending`` before the POST (by name, there being
+# no id yet), ``live`` once there is an id, ``gone`` once terminated. The reaper
+# folds the file and takes anything whose last event is not ``gone``.
 #
-
-#: Ledger event kinds, in the order a deployment normally produces them:
-#:
-#: * ``pending`` -- the creator is about to be called. Written *before* the
-#:   POST, from the name argument, because the whole point is the window where
-#:   the server has a billable deployment and this process has no id for it.
-#: * ``live`` -- the creation returned (or an orphan was recovered), so there
-#:   is an id.
-#: * ``gone`` -- it has been terminated.
-#:
-#: The reaper folds the file: anything whose last event is not ``gone`` is
-#: still live. A ``pending`` with no matching ``live`` is the cancelled-mid-
-#: wait case, and it is resolved by name rather than by id.
+# Opt-in via SINGLESTOREDB_TEST_DEPLOYMENT_LOG: unset, nothing is written.
+#
 
 #: Environment variable naming the ledger file. Read per write rather than
-#: cached at import so a test can point it at a tmp_path with
-#: ``mock.patch.dict(os.environ, ...)``.
+#: cached at import so a test can point it at a tmp_path.
 LEDGER_ENV_VAR = 'SINGLESTOREDB_TEST_DEPLOYMENT_LOG'
 
-#: Deployment kind for each created object's class. The ledger records a kind
-#: so the reaper knows which manager and which point lookup to resolve a
-#: record against, instead of guessing from the name -- ``cl-test-abc`` and
-#: ``ws-test-abc`` are only distinguishable by convention, and a ``--ledger``
-#: run deliberately does not consult :data:`cleanup_deployments.PATTERNS`.
+#: Deployment kind for each created object's class, so the reaper knows which
+#: manager and point lookup to resolve a record against rather than guessing from
+#: the name, which is convention only.
 #:
-#: Keyed by class name rather than by the class itself to avoid importing v1
-#: and v2 management just to write a log line.
+#: Keyed by class name, not the class, to avoid importing v1 and v2 management
+#: just to write a log line.
 _KIND_BY_CLASS = {
     'WorkspaceGroup': 'workspace_group',
     'Workspace': 'workspace',
@@ -440,19 +399,17 @@ def _ledger_write(**record: Any) -> None:
     """
     Append one record to the deployment ledger.
 
-    Opened, written and closed per record, with ``flush()`` and ``os.fsync()``
-    before the handle goes: surviving SIGKILL is the entire purpose, and a
-    line still sitting in a buffer when the process dies records nothing. The
-    cost is one open per creation, against a creation that takes minutes.
+    Opened, written and fsync'd per record: surviving SIGKILL is the whole
+    purpose, and a line still in a buffer records nothing. One open per creation
+    is nothing against a creation that takes minutes.
 
-    ``O_APPEND`` plus one ``write()`` per line is what makes this safe for the
-    parallel default (``-n 2``): the xdist workers are separate processes
-    sharing the file, and a single write of well under PIPE_BUF cannot
-    interleave with another's on Linux. No locking, therefore, and no partial
-    lines for the reaper to choke on.
+    That also makes it safe for the parallel default without locking. The xdist
+    workers are separate processes sharing the file, but each record is one short
+    ``write()`` to an ``O_APPEND`` handle, which Linux will not interleave, so
+    the reaper never sees a partial line.
 
-    Never raises. This sits on the creation path of every management test, so
-    a full disk or an unwritable path must cost a warning, not a test failure.
+    Never raises: this sits on the creation path of every management test, so an
+    unwritable ledger must cost a warning, not a failed run.
     """
     path = ledger_path()
     if not path:
@@ -483,9 +440,9 @@ def ledger_pending(kind: str, args: Tuple[Any, ...], kwargs: Any) -> None:
     Record that a deployment of this kind is about to be created.
 
     The name is taken the same way :func:`_recover_orphan` takes it -- keyword
-    first, else the first positional -- because it is the first parameter of
-    every creator, which ``test_management_utils.py`` pins. A record with no
-    usable name is skipped: there would be nothing for the reaper to resolve.
+    first, else the first positional, which every creator's signature makes the
+    name (pinned by ``test_management_utils.py``). Without a usable name there
+    is nothing for the reaper to resolve, so no record is written.
     """
     name = kwargs.get('name') or (args[0] if args else None)
     if not isinstance(name, str):
@@ -565,9 +522,8 @@ def track(obj: Any, label: str = '') -> Any:
             ),
             obj,
         ))
-        # Here rather than in the wrapper, so an orphan that `_recover_orphan`
-        # digs out of a listing gets an id into the ledger too -- that path
-        # reaches the server only through this function.
+        # Here rather than in the wrapper, so an orphan `_recover_orphan` digs
+        # out of a listing gets its id into the ledger too.
         ledger_live(obj)
     return obj
 
@@ -623,24 +579,20 @@ def untrack(obj: Any) -> None:
         if entry[2] is obj:
             _tracked.pop(i)
             found = True
-    # Only for something that was actually tracked: untracking an object that
-    # was never registered -- a mocked one, or one already swept -- says
-    # nothing about whether a real deployment is gone, and a spurious ``gone``
-    # would hide a live cluster from the reaper.
+    # Only for something actually tracked. Untracking an object that was never
+    # registered -- a mocked one, or one already swept -- says nothing about a
+    # real deployment, and a spurious ``gone`` hides a live cluster.
     if found:
         ledger_gone(obj)
 
 
 #: How long :func:`terminate` keeps retrying a deployment the API will not
-#: delete yet, and how long it waits between attempts. Three minutes at 15s
-#: spacing: the case being covered is a deployment killed mid-provision, which
-#: has to finish coming up before it can be torn down, and an S-00 cluster
-#: reaching ACTIVE is ~460s at worst. Waiting the full provision out here would
-#: stall the sweep between every test class, so this buys the common case --
-#: a deployment most of the way up -- and leaves the rest to the end-of-session
-#: sweep and then to ``cleanup_deployments.py``, which is the end of the line
-#: and waits out a full provision with a longer budget of its own
-#: (``cleanup_deployments.TERMINATE_TIMEOUT``).
+#: delete yet, and the spacing between attempts. Three minutes is deliberately
+#: less than a full provision (~460s for an S-00 cluster), because waiting one
+#: out here would stall the sweep between every test class. It buys the common
+#: case -- a deployment most of the way up -- and leaves the rest to the
+#: session-end sweep and then to ``cleanup_deployments.TERMINATE_TIMEOUT``,
+#: which is the end of the line and can afford the wait.
 TERMINATE_RETRY_TIMEOUT = 180.0
 TERMINATE_RETRY_INTERVAL = 15.0
 
@@ -654,11 +606,9 @@ def _terminate_once(obj: Any) -> None:
     ``StarterCluster.terminate``) take no arguments at all.
 
     The signature is inspected rather than discovered by catching ``TypeError``
-    from the call, as this used to do. That ``except TypeError`` also caught a
-    ``TypeError`` raised from *inside* a terminate that did accept ``force``,
-    and then retried without it -- two DELETEs for one deployment, the second
-    of them not forced, which is the one shape that leaves a workspace group
-    behind.
+    from the call: that also caught a ``TypeError`` raised from *inside* a
+    terminate which did accept ``force``, and retried without it -- two DELETEs,
+    the second unforced, which is what leaves a workspace group behind.
     """
     import inspect
 
@@ -682,25 +632,19 @@ def terminate(
     """
     Terminate a deployment, whatever kind it is, retrying a 4xx refusal.
 
-    A deployment killed mid-provision is ``PENDING``/``TRANSITIONING``, and the
-    API refuses to delete it in that state with a 400 or a 409. Nothing retries
-    that: ``Manager.RETRY_STATUSES`` is ``{429, 500, 502, 503, 504}``
-    (``management/manager.py:49``), urllib3 only retries what is in that list,
-    and there is no wait-until-deletable helper anywhere in the SDK. So the
-    per-class sweep logged a warning, the session-end sweep tried exactly once
-    more -- usually still too early -- and the deployment was left running.
+    A deployment killed mid-provision is ``PENDING``/``TRANSITIONING`` and the
+    API refuses to delete it, with a 400 or a 409. Nothing else retries that --
+    ``Manager.RETRY_STATUSES`` covers only ``{429, 500, 502, 503, 504}`` -- so
+    the per-class sweep warned, the session-end sweep tried once more, usually
+    still too early, and the deployment stayed up. Hence the bounded retry.
 
-    Hence the bounded retry here. Only 4xx other than 404 is retried:
+    Only 4xx other than 404 is retried. A 404 means it is already gone, so
+    retrying would burn the budget on something that is not coming back; a 5xx
+    or 429 has already been retried by the transport, and another round trip
+    from this layer is not what fixes it.
 
-    * 404 means it is already gone, so retrying would burn the whole budget
-      waiting for something that will never come back. Re-raised, as before,
-      which is also what ``_is_gone()`` upstream normally prevents.
-    * 5xx and 429 are already retried inside the transport, so seeing one here
-      means the transport gave up; another round trip from this layer is not
-      what fixes it.
-
-    Raises the last error if the budget runs out, so ``cleanup_tracked()``
-    keeps the deployment tracked and the session-end sweep gets another go.
+    Raises the last error if the budget runs out, which keeps the deployment in
+    ``_tracked`` so the session-end sweep gets another go.
     """
     import time
 
@@ -756,10 +700,9 @@ def _creator_is_mocked(target: Any) -> bool:
 #: automatic, so a new test cannot leak a cluster by forgetting to register it.
 #:
 #: ``kind`` is the ledger kind the call produces, and must be a value of
-#: :data:`_KIND_BY_CLASS`: it is what lets the ``pending`` record -- written
-#: before the POST, when nothing has an id yet -- say which manager the reaper
-#: should search. It is stated here rather than derived from ``method_name``
-#: because ``create_workspace`` appears twice, on two different receivers.
+#: :data:`_KIND_BY_CLASS`: it tells the reaper which manager to search for a
+#: ``pending`` record, which has no id. Stated here rather than derived from
+#: ``method_name``, which ``create_workspace`` shares across two receivers.
 #:
 #: ``finder`` takes the receiver -- the manager, or the group for
 #: ``WorkspaceGroup.create_workspace`` -- and returns the collection to search
@@ -817,27 +760,20 @@ def _tracking_wrapper(func: Any, kind: str, finder: Any) -> Any:
     (see :func:`recover_in_flight`).
 
     ``_creator_is_mocked``, not ``_is_mocked``: the receiver is the manager (or
-    the workspace group), and ``_is_mocked`` looks for a ``_manager``
-    attribute, which a manager does not have -- so a real manager with a
-    patched ``_post`` would read as live and the recovery would fire a real
-    API call from a unit test. ``_creator_is_mocked`` inspects the receiver's
-    own transport and handles both receiver shapes.
+    the workspace group), and ``_is_mocked`` looks for a ``_manager`` attribute,
+    which a manager does not have -- so a real manager with a patched ``_post``
+    would read as live and the recovery would fire a real API call from a unit
+    test. ``_creator_is_mocked`` inspects the receiver's own transport.
 
-    That same verdict also decides whether the *result* is tracked, rather than
-    leaving it to ``track()``. ``track()`` can only judge what it is handed,
-    and it is deliberately biased toward "real" for anything it cannot place --
-    including an object whose ``_manager`` is ``None``, which is exactly what a
-    unit test's stubbed ``get_cluster`` returns. Nothing a mocked creator
-    returns names a deployment that exists, so the receiver's verdict is the
-    authoritative one and it is the one used here.
+    That same verdict decides whether the *result* is tracked, rather than
+    leaving it to ``track()``, which can only judge what it is handed and is
+    biased toward "real" for anything it cannot place -- including the
+    ``_manager is None`` object a stubbed ``get_cluster`` returns.
 
-    The ``pending`` ledger record is written here, and deliberately *before*
-    ``func`` is called rather than after: from the moment the creator POSTs
-    there is a billable deployment, and everything that could record it --
-    ``track()`` on return, ``_recover_orphan()`` in the ``except``,
-    ``recover_in_flight()`` from a signal handler -- runs after the wait that
-    a cancelled CI job never survives. A ``pending`` line on disk is the only
-    thing that outlives a SIGKILL there.
+    The ``pending`` ledger record is written *before* ``func`` is called. From
+    the POST onward something is billable, and everything else that could record
+    it -- ``track()`` on return, ``_recover_orphan()``, ``recover_in_flight()``
+    -- runs after the wait a cancelled CI job never survives.
     """
     import functools
 
@@ -1001,10 +937,8 @@ def cleanup_tracked(owner: Optional[str] = None) -> List[str]:
         _, label, obj = entry
         if _is_gone(obj):
             _tracked.remove(entry)
-            # The server says it is gone, which is exactly what the ledger's
-            # ``gone`` means -- a test that terminated in its own teardown gets
-            # its record closed here rather than leaving the reaper to look up
-            # an id that 404s.
+            # A test that terminated in its own teardown: close the record here
+            # rather than leaving the reaper to look up an id that 404s.
             ledger_gone(obj)
             continue
         try:
@@ -1036,56 +970,47 @@ def tracked_labels() -> List[str]:
 #
 # Shared deployment pool
 #
-# Several classes need nothing from a deployment but that it is live: the
-# Stage and Job suites read and write through the management API against
-# whatever cluster they are handed. Deploying one apiece cost 2190s of the
-# 8915s a traced run took, and an S-00 cluster reaching ACTIVE is ~460s that
-# cannot be made faster -- so the only lever is deploying fewer of them.
+# Several classes need nothing from a deployment but that it is live: the Stage
+# and Job suites read and write through the management API against whatever
+# cluster they are handed. Deploying one apiece cost 2190s of the 8915s a traced
+# run took, and an S-00 cluster reaching ACTIVE is ~460s that cannot be made
+# faster -- so the only lever is deploying fewer of them.
 #
 # The pool is built on first use and reused for the rest of the process. A
-# class must not mutate what it borrows, so anything whose subject *is* the
+# borrower must not mutate what it borrows, so anything whose subject *is* the
 # deployment keeps deploying its own: ``TestCluster`` and ``TestWorkspace``
-# (``test_update`` PATCHes the cluster and cycles it back through PENDING),
-# ``TestClusterFusionCreateDrop`` and ``TestClusterFusionSuspendResume``. So
-# does ``TestWorkspaceFusion``, whose workspace groups are the subject of its
-# ``SHOW WORKSPACE GROUPS`` assertions and cost 40s to deploy unwaited anyway.
+# (``test_update`` PATCHes the cluster back through PENDING),
+# ``TestClusterFusionCreateDrop``, ``TestClusterFusionSuspendResume`` and
+# ``TestWorkspaceFusion``.
 #
-# What makes the borrowers safe is that each scopes its assertions to itself:
-# every Stage path is namespaced with the class's ``cls.id``, job listings
-# filter by job id rather than listing a deployment's jobs, and none of them
-# asserts a row count over an org-wide listing.
+# Each borrower also scopes its assertions to itself -- Stage paths namespaced
+# with ``cls.id``, job listings filtered by job id -- so none of them asserts a
+# row count over an org-wide listing. ``TestClusterFusion`` does count rows,
+# ``SHOW CLUSTERS ... LIKE`` being what it tests, and stays inside that rule by
+# counting :func:`shared_cluster_pattern` against :func:`shared_cluster_names`.
 #
-# ``TestClusterFusion`` is the one borrower that does count rows, because
-# ``SHOW CLUSTERS ... LIKE`` is what it tests. It stays inside that rule by
-# counting over :func:`shared_cluster_pattern` -- which matches this process's
-# pool and nothing else -- against :func:`shared_cluster_names` rather than a
-# literal, so growing the pool cannot break it.
-#
-# The pool is process-wide, so under ``pytest-xdist`` every worker that gets a
-# borrowing class builds a pool of its own. The ``xdist_group`` marks below
-# keep the borrowers together on a worker; see ``SHARED_CLUSTER_*_GROUP``.
+# The pool is process-wide, so under ``pytest-xdist`` every worker with a
+# borrowing class builds one of its own. The ``xdist_group`` marks below keep the
+# borrowers together on a worker.
 #
 
 #: ``xdist_group`` names for the classes that borrow from the pool, so
-#: ``--dist loadgroup`` puts each set on one worker and each set builds one
-#: pool. Two groups rather than one: a single group serialises every borrower
-#: behind one pool build, and the groups run concurrently on separate workers,
-#: so splitting costs one extra cluster and halves that chain.
-#:
-#: The split follows what each set borrows -- three for Stage, one for Jobs:
+#: ``--dist loadgroup`` puts each set on one worker and each set builds one pool.
+#: Two groups rather than one: a single group serialises every borrower behind one
+#: pool build, where these two run concurrently on separate workers for the cost
+#: of one extra cluster.
 #:
 #: * ``SHARED_CLUSTER_STAGE_GROUP`` -- ``TestStageFusion`` (two; it names a
 #:   second in ``IN GROUP``), v2 ``TestStage`` (one), ``TestClusterFusion``
 #:   (three, for its ``LIKE``/``ORDER BY``/``LIMIT`` rows)
 #: * ``SHARED_CLUSTER_JOBS_GROUP`` -- ``TestJobsFusion``, v2 ``TestJob``
 #:
-#: ``TestClusterFusion`` sits with Stage rather than Jobs deliberately: the
-#: pool grows to the largest request, so putting the class that wants three
-#: with the group that already wants two costs one extra cluster, where
-#: putting it with Jobs would cost two and leave Stage's pool untouched.
+#: ``TestClusterFusion`` sits with Stage deliberately: the pool grows to the
+#: largest request, so the class that wants three costs Stage's pool one extra
+#: cluster, against two if it joined Jobs.
 #:
-#: Without ``-n``/``--dist loadgroup`` the marks do nothing: one process, one
-#: pool of three, which is the serial behaviour they were added on top of.
+#: Without ``-n``/``--dist loadgroup`` the marks do nothing: one process, one pool
+#: of three.
 SHARED_CLUSTER_STAGE_GROUP = 'shared-cluster-stage'
 SHARED_CLUSTER_JOBS_GROUP = 'shared-cluster-jobs'
 
@@ -1187,13 +1112,11 @@ def shared_cluster_pattern() -> str:
     """
     ``LIKE`` pattern matching this process's pool clusters and nothing else.
 
-    The suffix is what scopes it: ``_pool_id`` is minted per process, so a
-    concurrent run's pool -- or another xdist worker's -- does not match, and
-    neither does any other ``cl-test-*`` deployment.
+    The suffix scopes it: ``_pool_id`` is minted per process, so another xdist
+    worker's pool -- or any other ``cl-test-*`` deployment -- does not match.
 
-    For a suite asserting an exact row count over the pool, pair it with
-    :func:`shared_cluster_names` rather than a literal: the pool grows to the
-    largest request any class makes, so the number is not fixed at import.
+    Pair it with :func:`shared_cluster_names`, not a literal count: the pool
+    grows to the largest request any class makes.
     """
     return f'cl-test-shared-%-{_pool_id}'
 
@@ -1202,9 +1125,8 @@ def shared_cluster_names() -> List[str]:
     """
     Names of every cluster in the pool as it stands right now.
 
-    Read at assertion time, not cached: a class that runs later and asks for
-    more clusters than this one did grows the pool, and an expectation built
-    from a literal count would go stale the moment that happened.
+    Read at assertion time, not cached: a later class asking for more clusters
+    grows the pool, which would leave a cached expectation stale.
     """
     return [x.name for x in _pool]
 

@@ -614,16 +614,14 @@ class Cluster:
         admin_password : str, optional
             Admin password for the cluster.
 
-            .. warning:: This is ignored, exactly as it is on
-               ``POST /v2/clusters``. ``PATCH /v2/clusters/{id}`` accepts the
-               field and does not honor it: a live probe found the patched value
-               refused with ``1045: Access denied`` while the password the
-               original create generated kept working. So the admin password
-               cannot be set after the fact either -- the only value that
-               authenticates is the generated one
-               :attr:`Cluster.admin_password` carried on the create response.
-               See item 9 of ``docs/management-api-audit.md``. The field is
-               still sent in case the API starts honoring it.
+            .. warning:: Ignored, exactly as on ``POST /v2/clusters``. ``PATCH``
+               accepts the field and does not honor it: a live probe found the
+               patched value refused with ``1045: Access denied`` while the
+               password the create generated kept working. The only value that
+               authenticates is that generated one, carried on the create
+               response as :attr:`Cluster.admin_password`. Still sent in case
+               the API starts honoring it. See item 9 of
+               ``docs/management-api-audit.md``.
         expires_at : str, optional
             Timestamp of when the cluster will expire. Expiration time can be
             specified as a timestamp or a duration.

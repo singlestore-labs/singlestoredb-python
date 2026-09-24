@@ -11,9 +11,8 @@ jobs:
     environment: Base
 
     # One ledger for the whole job, so the cleanup step below can reap what any
-    # of the pytest steps created. Per job rather than shared: each job gets its
-    # own runner and workspace anyway, and keeping the ledgers separate means a
-    # job's sweep can only ever reach records it wrote itself.
+    # of the pytest steps created. Per job, not shared: a job's sweep can then
+    # only reach records it wrote itself.
     env:
       SINGLESTOREDB_TEST_DEPLOYMENT_LOG: ${{ github.workspace }}/deployments.jsonl
 
@@ -94,24 +93,21 @@ jobs:
           coverage html
 
       # if: always() is the whole point -- this has to run when the job is
-      # cancelled, which is the case that produced the leak. Run 35631802648
-      # was cancelled 19 minutes into TestClusterFusion.setUpClass's
-      # create_cluster(wait_on_active=True, wait_timeout=1200); the log ends at
+      # cancelled, the case that produced the leak. Run 35631802648 was
+      # cancelled 19 minutes into TestClusterFusion.setUpClass's
+      # create_cluster(wait_on_active=True, wait_timeout=1200): the log ends at
       # '##[error]The operation was canceled.' with no pytest summary and no
-      # sweep output, so three clusters were left billing with nothing in the
-      # process having recorded them. The ledger is that record.
+      # sweep output, leaving three clusters billing with nothing in the process
+      # having recorded them. The ledger is that record.
       #
-      # Last step in the job so it covers every pytest step above it. Placing
-      # it after each one instead would add nothing: a cancellation anywhere
-      # still runs the remaining always() steps.
+      # Last step in the job, so it covers every pytest step above it.
       #
-      # What always() does not buy is unlimited time. GitHub force-terminates a
-      # cancelled job's remaining steps after a 5-minute cancellation timeout,
-      # and an S-00 cluster refuses DELETE until it is ACTIVE (~460s). The leak
-      # above is covered because it was cancelled 19 minutes in, well past that;
-      # a cancel in the first several minutes would be killed here still being
-      # told 400/409, and needs `cleanup_deployments.py --older-than` run by
-      # hand afterwards.
+      # Best effort, not a guarantee: a cancelled job's remaining steps are
+      # force-terminated after GitHub's 5-minute cancellation timeout, and an
+      # S-00 cluster refuses DELETE until it is ACTIVE (~460s). The leak above is
+      # covered, being 19 minutes in; a cancel in the first few minutes would be
+      # killed here still getting 400/409, and needs `cleanup_deployments.py
+      # --older-than` run by hand.
       - name: Terminate any deployment the tests left behind
         if: always()
         run: |
@@ -130,26 +126,22 @@ jobs:
 
     # Waits for test-coverage rather than running alongside it, so the v1
     # workspace groups are never in flight at the same time as the v2 suite's
-    # cluster pool -- together they put more on the org than it wants to carry.
-    # This is a nightly cron, so the extra wall clock costs nothing.
+    # cluster pool. This is a nightly cron, so the extra wall clock is free.
     #
-    # Runs even when test-coverage fails, because this is a legacy gate, not a
-    # downstream build: a v2 failure above says nothing about the v1 endpoints,
-    # and skipping v1 for it would hide a v1 regression behind an unrelated one.
+    # Runs even when test-coverage fails: a v2 failure above says nothing about
+    # the v1 endpoints, and skipping v1 for it would hide a v1 regression behind
+    # an unrelated one.
     #
     # !cancelled() rather than always(), which stays true through cancellation
-    # too. A cancelled run must not go on to start provisioning workspace groups
-    # here: GitHub force-terminates a cancelled job's remaining steps after a
-    # 5-minute cancellation timeout, so the ledger sweep below would be killed
-    # while the new deployments were still pre-ACTIVE and refusing DELETE -- the
-    # job would strand exactly what it was added to clean up.
+    # too. A cancelled run must not start provisioning workspace groups here:
+    # remaining steps are force-terminated 5 minutes into a cancel, so the sweep
+    # below would be killed while the new deployments were still pre-ACTIVE and
+    # refusing DELETE -- stranding exactly what it exists to clean up.
     needs: test-coverage
     if: ${{ !cancelled() }}
 
-    # A ledger of its own, not shared with test-coverage. The jobs no longer
-    # overlap, but they still run on separate runners with separate workspaces,
-    # and keeping the ledgers distinct means neither job's sweep can reach the
-    # other's records.
+    # A ledger of its own: separate runner, separate workspace, and neither
+    # job's sweep can reach the other's records.
     env:
       SINGLESTOREDB_TEST_DEPLOYMENT_LOG: ${{ github.workspace }}/deployments.jsonl
 
@@ -179,12 +171,10 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run v1 management API tests
-        # -n 0 overrides the -n 2 in pyproject.toml's addopts. The parallel
-        # default is tuned for the v2 management suite's shared cluster pool; the
-        # v1 classes deploy workspace groups of their own, so two workers here
-        # put twice that in flight, on top of whatever the v2 job is holding at
-        # the same time. Serial keeps this job's contribution to the org's
-        # cluster count to one deployment at a time.
+        # -n 0 overrides the -n 2 in pyproject.toml's addopts, which is tuned for
+        # the v2 suite's shared cluster pool. The v1 classes deploy workspace
+        # groups of their own, so two workers would put twice that in flight.
+        # Serial keeps this job to one deployment at a time.
         run: |
           pytest -v -n 0 -m 'management_v1' --pyargs singlestoredb.tests
         env:

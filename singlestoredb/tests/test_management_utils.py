@@ -2240,9 +2240,9 @@ class TestSharedClusterPool(unittest.TestCase):
         self.assertEqual([x.id for x in first], [x.id for x in second])
         self.assertEqual(len(self.created), 2)
 
-    # The pool build's lock conflict is waited out below this, in
-    # Manager._doit, which a stand-in manager does not go through: see
-    # TestManagerLockRetry.
+    # A lock conflict during the pool build is waited out by the
+    # @retry_on_lock on create_cluster, which a stand-in manager does not
+    # have: see TestLockRetry.
 
     def test_the_pool_grows_to_the_largest_request(self):
         with self._patched():

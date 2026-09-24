@@ -306,24 +306,17 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """
     Sweep in an xdist worker, and hand what survived to the controller.
 
-    ``addopts`` is ``-n 2`` (``pyproject.toml``), so under the default the
-    sweep and its ``STILL LIVE`` banner run in a worker, whose stdout the
-    controller discards. A leak was therefore silent even when the sweep did
-    run and fail -- the one case the banner exists to make loud.
+    Under the parallel default the sweep and its ``STILL LIVE`` banner run in a
+    worker, whose stdout the controller discards -- so a leak was silent even
+    when the sweep ran and failed, the one case the banner exists for.
+    ``config.workeroutput`` is xdist's channel for this; its absence means
+    ``-n 0``, where ``pytest_unconfigure`` already prints to a real terminal.
 
-    ``config.workeroutput`` is the channel xdist provides for exactly this, and
-    it only exists in a worker: its absence is the ``-n 0`` case, where
-    ``pytest_unconfigure`` prints directly to a terminal someone is reading and
-    nothing here is needed.
-
-    Sweeping here rather than leaving it all to ``pytest_unconfigure`` is what
-    makes the labels available at all. xdist's own
-    ``pytest_sessionfinish`` is a hookwrapper that sends ``workeroutput`` after
-    yielding, so anything written to it from this hook is still included --
-    but ``pytest_unconfigure`` runs after the send, so a sweep that waited
-    until then would have nothing left to report. The sweep is idempotent (a
-    successful one empties ``_tracked``), so the later call simply finds
-    nothing to do.
+    The sweep has to happen here, not in ``pytest_unconfigure``, to have
+    anything to report: xdist's ``pytest_sessionfinish`` hookwrapper sends
+    ``workeroutput`` after yielding, which is before ``pytest_unconfigure``
+    runs. The sweep is idempotent -- a successful one empties ``_tracked`` --
+    so the later call finds nothing to do.
     """
     workeroutput = getattr(session.config, 'workeroutput', None)
     if workeroutput is None:
@@ -341,9 +334,8 @@ def pytest_testnodedown(node: Any, error: Any) -> None:
     """
     Report, on the controller, what a worker could not terminate.
 
-    Runs in the controller process, whose output the user actually sees. The
-    worker's own banner went to a captured stream; this is the copy that gets
-    read.
+    The worker's own banner went to a captured stream; this is the copy anyone
+    actually sees.
     """
     stranded = getattr(node, 'workeroutput', {}).get(_STRANDED_KEY) or []
     if not stranded:
@@ -397,10 +389,10 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 #: ``pytest_terminal_summary`` can read it without a fixture.
 #:
 #: Every test that ran under an active trace is in here, including the ones that
-#: made no management call at all: ``trace_management_api_class`` subtracts this
-#: list from the class total to get the fixture share, so a test missing from it
-#: has its wall clock charged to ``setUpClass``. The event-less ones are
-#: filtered out at report time by :func:`_traced` instead.
+#: made no management call: ``trace_management_api_class`` subtracts this list
+#: from the class total to get the fixture share, so a test missing from it would
+#: have its wall clock charged to ``setUpClass``. :func:`_traced` filters the
+#: event-less ones out at report time instead.
 _management_traces: List[Tuple[str, Any]] = []
 
 #: The same, for the class fixtures rather than the tests. Separate because the
