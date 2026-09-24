@@ -1,9 +1,14 @@
 #!/usr/bin/env python
 """SingleStoreDB Base Manager."""
+import functools
+import logging
 import os
+import random
+import re
 import sys
 import time
 from typing import Any
+from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -21,6 +26,9 @@ from ..exceptions import ManagementError
 from ..exceptions import OperationalError
 from ._version_import import DEFAULT_VERSION
 from .utils import get_token
+
+
+logger = logging.getLogger(__name__)
 
 
 def set_organization(kwargs: Dict[str, Any]) -> None:
@@ -42,6 +50,10 @@ def set_organization(kwargs: Dict[str, Any]) -> None:
 #: cover the failure mode that actually shows up -- a keep-alive connection
 #: the far end closed while the client was sleeping between polls, which
 #: surfaces as ``RemoteDisconnected`` on the next request.
+#:
+#: The one exception is a creation the organization lock blocked, which
+#: :func:`retry_on_lock` replays: it is identified by the error message, which
+#: this policy never sees.
 RETRY_METHODS = frozenset(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'])
 
 #: Status codes worth retrying. These are the transient ones; a 4xx other
@@ -73,6 +85,101 @@ def build_retry(
         raise_on_status=False,
         respect_retry_after_header=True,
     )
+
+
+#: "could not acquire lock within duration", the API's refusal to start a
+#: creation while another one in the organization holds the lock. Seen from
+#: ``POST /workspaceGroups`` and ``POST /clusters``, whose message says "error
+#: creating workspace" either way, so the match cannot key on the noun.
+#:
+#: Matched on the message, not the status: the conflict arrives as a 500, and so
+#: does a name collision. The wording is also the only part that says nothing
+#: was created, which is what makes replaying the POST safe.
+LOCK_ERROR_RE = re.compile(r'acquire[^.]{0,40}lock', re.I)
+
+#: Ceiling on the wait between lock retries, and the random extra added to each
+#: one. Capped because what is being waited out is another creation's POST
+#: returning, not a deployment coming up. Jittered because two clients that
+#: collide back off by the same amounts from the same moment -- two xdist
+#: workers, say -- and would otherwise retry in step indefinitely.
+LOCK_RETRY_MAX_INTERVAL = 60.0
+LOCK_RETRY_JITTER = 5.0
+
+
+def lock_retry_policy() -> Tuple[int, float]:
+    """
+    Return the (retries, interval) applied to an organization lock conflict.
+
+    ``retries`` counts attempts *after* the first, so the defaults wait 20, 40,
+    60, 60 and 60 seconds -- four minutes at worst, small enough that a stuck
+    organization fails rather than idling out a CI job's timeout.
+
+    Set ``SINGLESTOREDB_MANAGEMENT_LOCK_RETRIES=0`` to raise the conflict at
+    once instead.
+    """
+    return (
+        int(os.environ.get('SINGLESTOREDB_MANAGEMENT_LOCK_RETRIES', '5')),
+        float(
+            os.environ.get('SINGLESTOREDB_MANAGEMENT_LOCK_RETRY_INTERVAL', '20'),
+        ),
+    )
+
+
+def is_lock_error(exc: BaseException) -> bool:
+    """Is this error the organization refusing to take the lock?"""
+    return bool(LOCK_ERROR_RE.search(str(exc)))
+
+
+def lock_retry_wait(attempt: int, interval: float) -> float:
+    """Seconds to wait before replaying a creation that lost the lock."""
+    return min(interval * attempt, LOCK_RETRY_MAX_INTERVAL) + \
+        random.uniform(0, LOCK_RETRY_JITTER)
+
+
+def retry_on_lock(func: Callable[..., Any]) -> Callable[..., Any]:
+    """
+    Wait out an organization lock conflict on a deployment creation.
+
+    Replaying a POST is safe here where widening :data:`RETRY_METHODS` would not
+    be: the transport sees only a 500 and cannot know whether the server acted,
+    whereas the lock message says the creation never started. A creation that
+    made something and *then* failed does not come back with this message, and
+    would surface on the replay as a name conflict rather than being swallowed.
+
+    Worn by ``WorkspaceManager.create_workspace_group`` and
+    ``ClusterManager.create_cluster`` only -- the two calls that contend for the
+    lock. Fusion SQL's ``CREATE WORKSPACE GROUP`` and ``CREATE CLUSTER`` go
+    through them, so they are covered too.
+
+    Any other ``ManagementError`` is raised at once, as is the conflict itself
+    once :func:`lock_retry_policy`'s budget runs out.
+    """
+    @functools.wraps(func)
+    def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        retries, interval = lock_retry_policy()
+        attempt = 0
+        while True:
+            try:
+                return func(self, *args, **kwargs)
+            except ManagementError as exc:
+                attempt += 1
+                if attempt > retries or not is_lock_error(exc):
+                    raise
+                wait = lock_retry_wait(attempt, interval)
+                logger.info(
+                    f'{func.__name__} could not take the organization lock '
+                    f'({exc}); attempt {attempt} of {retries + 1}, retrying '
+                    f'in {wait:.1f}s',
+                )
+                timing.sleep(wait, f'{func.__name__} organization lock')
+
+    # Says which methods wear this, for a test to assert against. On the
+    # wrapper's ``__dict__``, so ``functools.wraps`` carries it outward through
+    # any later decorator -- the test suite wraps these methods again to track
+    # what a run has deployed.
+    wrapper.__retry_on_lock__ = True  # type: ignore[attr-defined]
+
+    return wrapper
 
 
 def default_timeout() -> Tuple[float, float]:

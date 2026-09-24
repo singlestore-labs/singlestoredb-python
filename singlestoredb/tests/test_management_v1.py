@@ -73,11 +73,7 @@ class TestWorkspace(unittest.TestCase):
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
-        # Retried: another creation in the organization holding the lock makes
-        # this come back "could not acquire lock", and raising here fails every
-        # test in the class. See utils.create_retrying.
-        cls.workspace_group = utils.create_retrying(
-            cls.manager.create_workspace_group,
+        cls.workspace_group = cls.manager.create_workspace_group(
             f'wg-test-{name}',
             region=random.choice(us_regions).id,
             admin_password=cls.password,
@@ -88,8 +84,7 @@ class TestWorkspace(unittest.TestCase):
         try:
             # No expiry of its own: only the group has an expiresAt, and it
             # takes its workspaces with it. See utils.DEPLOYMENT_EXPIRES_AT.
-            cls.workspace = utils.create_retrying(
-                cls.workspace_group.create_workspace,
+            cls.workspace = cls.workspace_group.create_workspace(
                 f'ws-test-{name}-x',
                 wait_on_active=True,
             )
@@ -285,8 +280,7 @@ class TestStarterWorkspace(unittest.TestCase):
         if not shared_tier_region:
             raise ValueError('No shared tier regions found')
 
-        cls.starter_workspace = utils.create_retrying(
-            cls.manager.create_starter_workspace,
+        cls.starter_workspace = cls.manager.create_starter_workspace(
             f'starter-ws-test-{name}',
             database_name=cls.database_name,
             provider=shared_tier_region.provider,
@@ -387,11 +381,7 @@ class TestStage(unittest.TestCase):
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
-        # Retried: another creation in the organization holding the lock makes
-        # this come back "could not acquire lock", and raising here fails every
-        # test in the class. See utils.create_retrying.
-        cls.wg = utils.create_retrying(
-            cls.manager.create_workspace_group,
+        cls.wg = cls.manager.create_workspace_group(
             f'wg-test-{name}',
             region=random.choice(us_regions).id,
             admin_password=cls.password,
@@ -1003,11 +993,7 @@ class TestJob(unittest.TestCase):
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
-        # Retried: another creation in the organization holding the lock makes
-        # this come back "could not acquire lock", and raising here fails every
-        # test in the class. See utils.create_retrying.
-        cls.workspace_group = utils.create_retrying(
-            cls.manager.create_workspace_group,
+        cls.workspace_group = cls.manager.create_workspace_group(
             f'wg-test-{name}',
             region=random.choice(us_regions).id,
             admin_password=cls.password,
@@ -1018,8 +1004,7 @@ class TestJob(unittest.TestCase):
         try:
             # No expiry of its own: only the group has an expiresAt, and it
             # takes its workspaces with it. See utils.DEPLOYMENT_EXPIRES_AT.
-            cls.workspace = utils.create_retrying(
-                cls.workspace_group.create_workspace,
+            cls.workspace = cls.workspace_group.create_workspace(
                 f'ws-test-{name}-x',
                 wait_on_active=True,
             )

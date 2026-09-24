@@ -1327,11 +1327,7 @@ class TestCluster(unittest.TestCase):
 
         # v2 has no workspace group: the cluster is created in one call, with
         # the firewall settings passed alongside the compute settings.
-        # Retried: POST /clusters comes back "could not acquire lock" when
-        # another creation in the organization holds it, and raising here fails
-        # every test in the class. See utils.create_retrying.
-        cls.cluster = utils.create_retrying(
-            cls.manager.create_cluster,
+        cls.cluster = cls.manager.create_cluster(
             f'cl-test-{name}',
             region=region,
             size='S-00',
@@ -1527,8 +1523,7 @@ class TestStarterCluster(unittest.TestCase):
 
         region = random.choice(regions)
 
-        cls.starter_cluster = utils.create_retrying(
-            cls.manager.create_starter_cluster,
+        cls.starter_cluster = cls.manager.create_starter_cluster(
             f'starter-cl-test-{name}',
             database_name=cls.database_name,
             region=region,

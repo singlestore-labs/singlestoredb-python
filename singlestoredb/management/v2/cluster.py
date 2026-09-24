@@ -24,6 +24,7 @@ from ... import connection
 from ...exceptions import ManagementError
 from ..billing import Billing as Billing
 from ..manager import Manager
+from ..manager import retry_on_lock
 from ..organization import Organization
 from ..organization import Organizations as Organizations
 from ..region import Region
@@ -1409,6 +1410,7 @@ class ClusterManager(Manager):
                 ', '.join(f'{x.name} ({x.id})' for x in projects) + '.',
         )
 
+    @retry_on_lock
     def create_cluster(
         self,
         name: str,

@@ -47,6 +47,7 @@ from ... import connection
 from ...exceptions import ManagementError
 from ..billing import Billing as Billing
 from ..manager import Manager
+from ..manager import retry_on_lock
 from ..region import Region
 from ..stage import StageObject as StageObject
 from ..utils import camel_to_snake_dict
@@ -1275,6 +1276,7 @@ class WorkspaceManager(Manager):
             [Region.from_dict(item, self) for item in res.json()],
         )
 
+    @retry_on_lock
     def create_workspace_group(
         self,
         name: str,

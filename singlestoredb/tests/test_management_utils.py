@@ -875,6 +875,200 @@ class TestManagerTransport(unittest.TestCase):
         self.assertIn('clusters/abc', msg)
 
 
+class TestLockRetry(unittest.TestCase):
+    """
+    ``manager.retry_on_lock``, the wait for a creation the organization lock
+    blocks.
+
+    The API refuses the creation with "could not acquire lock" while another one
+    in the organization holds it, and nothing else retries that: POST is out of
+    ``RETRY_METHODS``. In a ``setUpClass`` one conflict fails every test in the
+    class -- a whole ``management_v1`` run went that way, and the v2 shared
+    cluster pool went the same way an hour later.
+    """
+
+    #: Verbatim from the two runs that failed. The ``/clusters`` one says
+    #: "error creating workspace", so the match cannot key on the noun.
+    LOCK_MESSAGES = (
+        'error creating workspace group (wg-test-8jtfylajdmax-vast7ln): '
+        'could not acquire lock within duration [0, 2026/09/23 16:45:04]',
+        'error creating workspace (cl-test-shared-1-b0dad293): could not '
+        'acquire lock within duration [0, 2026-09-23T17:37:16Z]',
+    )
+
+    #: The default budget, per lock_retry_policy.
+    WAITS = [20.0, 40.0, 60.0, 60.0, 60.0]
+
+    def setUp(self):
+        from singlestoredb.management import manager as manager_mod
+        self.manager_mod = manager_mod
+        self.slept = []
+
+        # The waits go through timing.sleep, so a trace reports them as waits.
+        patcher = patch(
+            'singlestoredb.management.timing.time.sleep', self.slept.append,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        # Jitter off, so the waits asserted below are the spacing itself.
+        patcher = patch.object(manager_mod, 'LOCK_RETRY_JITTER', 0.0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _creator(self, *msgs, errno=500):
+        """A decorated creator that fails with these messages, then succeeds."""
+        calls = []
+
+        class Mgr:
+            @self.manager_mod.retry_on_lock
+            def create(self, name, **kwargs):
+                calls.append(name)
+                if len(calls) <= len(msgs):
+                    raise ManagementError(errno=errno, msg=msgs[len(calls) - 1])
+                return f'deployment {name}'
+
+        mgr = Mgr()
+        mgr.calls = calls
+        return mgr
+
+    def test_a_lock_conflict_is_retried_until_it_succeeds(self):
+        mgr = self._creator(*self.LOCK_MESSAGES)
+        self.assertEqual(mgr.create('wg-test-a', region='x'), 'deployment wg-test-a')
+        self.assertEqual(len(mgr.calls), 3)
+        self.assertEqual(self.slept, [20.0, 40.0])
+
+    def test_the_retry_reuses_the_name(self):
+        """The conflict is a refusal to start, so nothing was created and there
+        is no deployment for the next attempt to collide with."""
+        mgr = self._creator(self.LOCK_MESSAGES[0])
+        mgr.create('wg-test-a')
+        self.assertEqual(mgr.calls, ['wg-test-a', 'wg-test-a'])
+
+    def test_another_error_is_not_retried(self):
+        """A rejected request is a real failure; retrying only delays it."""
+        mgr = self._creator('region is not available')
+        with self.assertRaises(ManagementError):
+            mgr.create('wg-test-a')
+        self.assertEqual(len(mgr.calls), 1)
+        self.assertEqual(self.slept, [])
+
+    def test_an_unrelated_500_is_not_retried(self):
+        """500 is also what a name collision comes back as, so the message is
+        the only thing that says nothing was created."""
+        mgr = self._creator('error creating workspace group (x): already exists')
+        with self.assertRaises(ManagementError):
+            mgr.create('wg-test-a')
+        self.assertEqual(len(mgr.calls), 1)
+
+    def test_the_budget_is_bounded_and_the_error_is_raised(self):
+        """A stuck organization has to fail rather than idle out the job."""
+        mgr = self._creator(*([self.LOCK_MESSAGES[0]] * 100))
+        with self.assertRaises(ManagementError) as cm:
+            mgr.create('wg-test-a')
+        self.assertIn('acquire lock', str(cm.exception))
+        self.assertEqual(len(mgr.calls), len(self.WAITS) + 1)
+        self.assertEqual(len(self.slept), len(self.WAITS))
+
+    def test_the_wait_is_capped(self):
+        mgr = self._creator(*([self.LOCK_MESSAGES[0]] * 100))
+        with self.assertRaises(ManagementError):
+            mgr.create('wg-test-a')
+        self.assertLessEqual(
+            max(self.slept), self.manager_mod.LOCK_RETRY_MAX_INTERVAL,
+        )
+        self.assertEqual(self.slept, self.WAITS)
+
+    def test_the_waits_are_jittered(self):
+        """Two clients that collide back off by the same amounts from the same
+        moment, so without jitter they retry in step forever."""
+        patcher = patch.object(self.manager_mod, 'LOCK_RETRY_JITTER', 5.0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        mgr = self._creator(*([self.LOCK_MESSAGES[0]] * 100))
+        with self.assertRaises(ManagementError):
+            mgr.create('wg-test-a')
+        self.assertNotEqual(self.slept, self.WAITS)
+        for wait, base in zip(self.slept, self.WAITS):
+            self.assertGreaterEqual(wait, base)
+            self.assertLess(wait, base + 5.0)
+
+    def test_both_observed_wordings_match(self):
+        for msg in self.LOCK_MESSAGES:
+            mgr = self._creator(msg)
+            mgr.create('wg-test-a')
+            self.assertEqual(len(mgr.calls), 2, msg)
+
+    def test_the_match_does_not_depend_on_the_status(self):
+        """The status a conflict arrives as is not documented, and it cannot
+        tell a conflict from a rejection either way."""
+        mgr = self._creator(self.LOCK_MESSAGES[0], errno=409)
+        mgr.create('wg-test-a')
+        self.assertEqual(len(mgr.calls), 2)
+
+    def test_a_success_is_not_delayed(self):
+        mgr = self._creator()
+        mgr.create('wg-test-a')
+        self.assertEqual(len(mgr.calls), 1)
+        self.assertEqual(self.slept, [])
+
+    def test_the_retry_can_be_turned_off(self):
+        mgr = self._creator(self.LOCK_MESSAGES[0])
+        with patch.dict(
+            os.environ, {'SINGLESTOREDB_MANAGEMENT_LOCK_RETRIES': '0'},
+        ):
+            with self.assertRaises(ManagementError):
+                mgr.create('wg-test-a')
+        self.assertEqual(len(mgr.calls), 1)
+        self.assertEqual(self.slept, [])
+
+    def test_the_budget_is_configurable(self):
+        mgr = self._creator(*([self.LOCK_MESSAGES[0]] * 100))
+        with patch.dict(
+            os.environ, {
+                'SINGLESTOREDB_MANAGEMENT_LOCK_RETRIES': '2',
+                'SINGLESTOREDB_MANAGEMENT_LOCK_RETRY_INTERVAL': '3',
+            },
+        ):
+            with self.assertRaises(ManagementError):
+                mgr.create('wg-test-a')
+        self.assertEqual(len(mgr.calls), 3)
+        self.assertEqual(self.slept, [3.0, 6.0])
+
+
+class TestLockRetryIsApplied(unittest.TestCase):
+    """Which creations wear ``retry_on_lock``: the two that take the lock."""
+
+    def _wears_it(self, method):
+        return getattr(method, '__retry_on_lock__', False)
+
+    def test_the_two_creations_that_take_the_lock(self):
+        from singlestoredb.management.v1.workspace import WorkspaceManager
+        from singlestoredb.management.v2.cluster import ClusterManager
+
+        self.assertTrue(self._wears_it(WorkspaceManager.create_workspace_group))
+        self.assertTrue(self._wears_it(ClusterManager.create_cluster))
+
+    def test_and_nothing_else(self):
+        """Deliberately narrow: a workspace inside an existing group and the
+        starter deployments do not contend for this lock."""
+        from singlestoredb.management.v1.workspace import WorkspaceGroup
+        from singlestoredb.management.v1.workspace import WorkspaceManager
+        from singlestoredb.management.v2.cluster import ClusterManager
+
+        for klass, name in (
+            (WorkspaceManager, 'create_workspace'),
+            (WorkspaceManager, 'create_starter_workspace'),
+            (WorkspaceGroup, 'create_workspace'),
+            (ClusterManager, 'create_starter_cluster'),
+        ):
+            self.assertFalse(
+                self._wears_it(getattr(klass, name)),
+                f'{klass.__name__}.{name}',
+            )
+
+
 class TestWaitOnEndpoint(unittest.TestCase):
     """
     ``Manager._wait_on_endpoint`` polls a new deployment by connecting to it.
@@ -1937,146 +2131,6 @@ class TestTerminateRetry(unittest.TestCase):
         self.assertEqual(calls, [True])
 
 
-class TestCreateRetryingLockConflicts(unittest.TestCase):
-    """
-    ``utils.create_retrying()``'s retry for a creation the API will not start
-    because it cannot take the lock.
-
-    A ``create_workspace_group`` that comes back "could not acquire lock" is
-    not retried by the transport -- Manager.RETRY_STATUSES is 429 and 5xx --
-    and it happens in ``setUpClass``, so one lock conflict fails every test in
-    the class. A whole management_v1 run went that way.
-    """
-
-    def setUp(self):
-        from singlestoredb.tests import utils
-        self.utils = utils
-        self.slept = []
-
-        patcher = patch('time.sleep', self.slept.append)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-
-        # Jitter off, so the waits asserted below are the spacing itself.
-        # It is covered separately.
-        patcher = patch.object(utils, 'CREATE_LOCK_RETRY_JITTER', 0.0)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-
-    def _creator(self, *msgs):
-        """A creator that fails with these messages in turn, then succeeds."""
-        calls = []
-
-        def create(name, **kwargs):
-            calls.append(name)
-            if len(calls) <= len(msgs):
-                raise ManagementError(errno=400, msg=msgs[len(calls) - 1])
-            return f'deployment {name}'
-
-        create.calls = calls
-        return create
-
-    def test_a_lock_conflict_is_retried_until_it_succeeds(self):
-        create = self._creator(
-            'could not acquire lock', 'Could not acquire lock on workspace',
-        )
-        out = self.utils.create_retrying(create, 'wg-test-a', region='x')
-        self.assertEqual(out, 'deployment wg-test-a')
-        self.assertEqual(len(create.calls), 3)
-        self.assertEqual(self.slept, [20.0, 40.0])
-
-    def test_the_retry_reuses_the_name(self):
-        """The conflict is a refusal to start, so nothing was created and
-        there is no deployment for the second attempt to collide with."""
-        create = self._creator('could not acquire lock')
-        self.utils.create_retrying(create, 'wg-test-a')
-        self.assertEqual(create.calls, ['wg-test-a', 'wg-test-a'])
-
-    def test_another_error_is_not_retried(self):
-        """A rejected request is a real failure; retrying it only delays the
-        report by four minutes."""
-        create = self._creator('region is not available')
-        with self.assertRaises(ManagementError):
-            self.utils.create_retrying(create, 'wg-test-a')
-        self.assertEqual(len(create.calls), 1)
-        self.assertEqual(self.slept, [])
-
-    def test_the_budget_is_bounded_and_the_error_is_re_raised(self):
-        """A genuinely stuck organization has to fail the class rather than
-        idle out the job's timeout."""
-        create = self._creator(*(['could not acquire lock'] * 100))
-        with self.assertRaises(ManagementError):
-            self.utils.create_retrying(create, 'wg-test-a')
-        self.assertEqual(
-            len(create.calls), self.utils.CREATE_LOCK_RETRY_ATTEMPTS,
-        )
-        self.assertEqual(len(self.slept), 6 - 1)
-
-    def test_the_wait_is_capped(self):
-        """Growth stops at the cap: what is being waited out is another
-        creation finishing, not a deployment coming up."""
-        create = self._creator(*(['could not acquire lock'] * 100))
-        with self.assertRaises(ManagementError):
-            self.utils.create_retrying(create, 'wg-test-a')
-        self.assertLessEqual(
-            max(self.slept), self.utils.CREATE_LOCK_RETRY_MAX_INTERVAL,
-        )
-        self.assertEqual(self.slept, [20.0, 40.0, 60.0, 60.0, 60.0])
-
-    def test_the_waits_are_jittered(self):
-        """Two workers that collide on the lock back off by the same amounts
-        from the same moment, so without jitter they retry in step forever."""
-        patcher = patch.object(self.utils, 'CREATE_LOCK_RETRY_JITTER', 5.0)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-
-        create = self._creator(*(['could not acquire lock'] * 100))
-        with self.assertRaises(ManagementError):
-            self.utils.create_retrying(create, 'wg-test-a')
-        self.assertNotEqual(self.slept, [20.0, 40.0, 60.0, 60.0, 60.0])
-        for wait, base in zip(self.slept, [20.0, 40.0, 60.0, 60.0, 60.0]):
-            self.assertGreaterEqual(wait, base)
-            self.assertLess(wait, base + 5.0)
-
-    def test_both_observed_wordings_match(self):
-        """Verbatim from the two runs that failed. The v2 one says "creating
-        workspace" for a ``/clusters`` POST, so the match cannot key on the
-        noun."""
-        for msg in (
-            'error creating workspace group (wg-test-8jtfylajdmax-vast7ln): '
-            'could not acquire lock within duration [0, 2026/09/23 16:45:04]',
-            'error creating workspace (cl-test-shared-1-b0dad293): could not '
-            'acquire lock within duration [0, 2026-09-23T17:37:16Z]',
-        ):
-            self.assertTrue(
-                self.utils.LOCK_ERROR_RE.search(msg), msg,
-            )
-
-    def test_an_unrelated_500_is_not_retried(self):
-        """500 is also what a name collision and a bad region come back as, so
-        the message is the only thing that says nothing was created."""
-        create = self._creator(
-            'error creating workspace group (wg-test-a): already exists',
-        )
-        with self.assertRaises(ManagementError):
-            self.utils.create_retrying(create, 'wg-test-a')
-        self.assertEqual(len(create.calls), 1)
-
-    def test_the_message_match_does_not_need_a_status(self):
-        """The status a lock conflict arrives as is not documented, and the
-        status alone cannot tell a conflict from a rejection."""
-        calls = []
-
-        def create(name):
-            calls.append(name)
-            if len(calls) == 1:
-                raise ManagementError(msg='Could not acquire lock')
-            return name
-
-        self.utils.create_retrying(create, 'wg-test-a')
-        self.assertEqual(len(calls), 2)
-
-
 class TestSharedClusterPool(unittest.TestCase):
     """
     The pool in ``tests/utils.py`` that keeps the Stage and Job suites from
@@ -2119,10 +2173,7 @@ class TestSharedClusterPool(unittest.TestCase):
         self.utils._tracked[:] = self.saved_tracked
         self.utils.set_owner(self.saved_owner)
 
-    def _manager(
-        self, regions=('US East 1',), projects=('STANDARD',),
-        lock_failures=0,
-    ):
+    def _manager(self, regions=('US East 1',), projects=('STANDARD',)):
         """
         A stand-in cluster manager.
 
@@ -2165,8 +2216,6 @@ class TestSharedClusterPool(unittest.TestCase):
         region_list = [Region(x) for x in regions]
         project_list = [Project(x) for x in projects]
 
-        refused = {}
-
         class Manager:
             regions = region_list
             projects = project_list
@@ -2175,20 +2224,6 @@ class TestSharedClusterPool(unittest.TestCase):
                 # The owner in force at creation time is what decides whether
                 # the per-class sweep eats the pool.
                 created.append((name, utils.get_owner(), kwargs))
-                if refused.get(name, 0) < lock_failures:
-                    refused[name] = refused.get(name, 0) + 1
-                    # Verbatim from the run that failed, so the match is
-                    # tested against the real wording rather than a paraphrase
-                    # of it. Note "creating workspace" for a /clusters POST.
-                    raise ManagementError(
-                        errno=500,
-                        msg=(
-                            f'error creating workspace ({name}): could not '
-                            f'acquire lock within duration [0, '
-                            f'2026-09-23T17:37:16Z, 5e340578, '
-                            f'2026/09/23 17:37:16]'
-                        ),
-                    )
                 return utils.track(Cluster(name, kwargs))
 
         return Manager()
@@ -2205,27 +2240,9 @@ class TestSharedClusterPool(unittest.TestCase):
         self.assertEqual([x.id for x in first], [x.id for x in second])
         self.assertEqual(len(self.created), 2)
 
-    def test_a_lock_conflict_during_the_pool_build_is_retried(self):
-        """POST /clusters comes back "could not acquire lock" too, and a raise
-        here fails every class that borrows from the pool -- which is how
-        TestClusterFusion went down."""
-        with patch('time.sleep'), self._patched(lock_failures=1):
-            pool = self.utils.shared_clusters(2)
-
-        self.assertEqual(len(pool), 2)
-        # Two clusters, each refused once and then created.
-        self.assertEqual(len(self.created), 4)
-        self.assertEqual(len(self.utils._tracked), 2)
-
-    def test_a_pool_build_that_keeps_losing_the_lock_still_raises(self):
-        with patch('time.sleep'), self._patched(lock_failures=100):
-            with self.assertRaises(ManagementError):
-                self.utils.shared_clusters(1)
-
-        self.assertEqual(
-            len(self.created), self.utils.CREATE_LOCK_RETRY_ATTEMPTS,
-        )
-        self.assertEqual(self.utils._tracked, [])
+    # The pool build's lock conflict is waited out below this, in
+    # Manager._doit, which a stand-in manager does not go through: see
+    # TestManagerLockRetry.
 
     def test_the_pool_grows_to_the_largest_request(self):
         with self._patched():
