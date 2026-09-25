@@ -935,37 +935,30 @@ class TestSecrets(unittest.TestCase):
         cls.manager = None
 
     def test_get_secret(self):
-        # manually create secret and then get secret
-        # try to delete the secret if it exists
-        try:
-            secret = self.manager.organizations.current.get_secret('secret_name')
-
-            secret_id = secret.id
-
-            self.manager._delete(f'secrets/{secret_id}')
-        except s2.ManagementError:
-            pass
+        # Per-run name; see the twin in test_management_v2.py for why the fixed
+        # 'secret_name' this used to carry -- and the leftover-clearing delete
+        # that a fixed name required -- had two concurrent runs deleting each
+        # other's secret.
+        name = f'secret_v1_test_{secrets.token_hex(4)}'
 
         created = self.manager._post(
             'secrets',
             json=dict(
-                name='secret_name',
+                name=name,
                 value='secret_value',
             ),
         ).json()
 
         # The ID comes from the create response, not from the lookup under
         # test: binding it inside the try would leave the cleanup raising
-        # UnboundLocalError over whatever the lookup failed with. Without this
-        # the secret outlived every run, removed only by the sweep at the top of
-        # the *next* one. test_management_v2.py's twin does it this way.
+        # UnboundLocalError over whatever the lookup failed with. This delete is
+        # the only thing that removes the secret now -- nothing else sweeps one
+        # as it is made. test_management_v2.py's twin does it this way.
         secret_id = created['secret']['secretID']
         try:
-            secret = self.manager.organizations.current.get_secret(
-                'secret_name',
-            )
+            secret = self.manager.organizations.current.get_secret(name)
 
-            assert secret.name == 'secret_name'
+            assert secret.name == name
             assert secret.value == 'secret_value'
         finally:
             self.manager._delete(f'secrets/{secret_id}')

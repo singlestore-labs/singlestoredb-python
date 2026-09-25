@@ -108,9 +108,17 @@ jobs:
       # covered, being 19 minutes in; a cancel in the first few minutes would be
       # killed here still getting 400/409, and needs `cleanup_deployments.py
       # --older-than` run by hand.
-      - name: Terminate any deployment the tests left behind
+      - name: Clean up what the tests left behind
         if: always()
         run: |
+          # Secrets first, and its status discarded. TestSecrets creates an
+          # org-scoped secret that only its own test body deletes, so a killed
+          # run strands one for good; --secrets is age-guarded, which keeps it
+          # off this run's and off a concurrent job's, so what it removes is
+          # what *earlier* runs stranded. A secret bills nothing, and the
+          # ledger sweep is what this step's status should report.
+          python -m singlestoredb.tests.cleanup_deployments --secrets --yes \
+            || true
           python -m singlestoredb.tests.cleanup_deployments \
             --ledger "$SINGLESTOREDB_TEST_DEPLOYMENT_LOG" --yes
         env:
@@ -184,12 +192,14 @@ jobs:
           SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
           SINGLESTOREDB_FUSION_ENABLE_HIDDEN: "1"
 
-      # See the matching step in test-coverage for why this is if: always().
-      # The v1 suite deploys workspace groups, which are the kind that force
-      # exists for.
-      - name: Terminate any deployment the tests left behind
+      # See the matching step in test-coverage for why this is if: always(),
+      # and for what the secret sweep is doing here. The v1 suite deploys
+      # workspace groups, which are the kind that force exists for.
+      - name: Clean up what the tests left behind
         if: always()
         run: |
+          python -m singlestoredb.tests.cleanup_deployments --secrets --yes \
+            || true
           python -m singlestoredb.tests.cleanup_deployments \
             --ledger "$SINGLESTOREDB_TEST_DEPLOYMENT_LOG" --yes
         env:

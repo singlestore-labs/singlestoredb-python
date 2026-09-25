@@ -233,9 +233,14 @@ jobs:
       # covers a cancel whose clusters are already ACTIVE but not one in the
       # first few minutes, where DELETE is still refused. That remainder needs
       # `cleanup_deployments.py --older-than` run by hand.
-      - name: Terminate any deployment the tests left behind
+      #
+      # The secret sweep alongside it is the same rolling janitor coverage.yml
+      # runs; see the comment on that step.
+      - name: Clean up what the tests left behind
         if: always()
         run: |
+          python -m singlestoredb.tests.cleanup_deployments --secrets --yes \
+            || true
           python -m singlestoredb.tests.cleanup_deployments \
             --ledger "$SINGLESTOREDB_TEST_DEPLOYMENT_LOG" --yes
         env:

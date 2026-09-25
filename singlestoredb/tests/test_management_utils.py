@@ -2690,6 +2690,206 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
             self.mod.parse_since('last tuesday')
 
 
+class TestStrandedSecretPatterns(unittest.TestCase):
+    """
+    ``--secrets`` deletes org-scoped objects in a real organization, and a
+    secret nobody can read back is not recoverable, so the name gate and the
+    age gate both matter more here than they do for a deployment.
+    """
+
+    def setUp(self):
+        from singlestoredb.tests import cleanup_deployments
+        self.mod = cleanup_deployments
+
+    def test_generated_names_match(self):
+        for name in (
+            'secret_v1_test_deadbeef',
+            'secret_v2_test_deadbeef',
+        ):
+            self.assertTrue(self.mod.is_test_secret(name), name)
+
+    def test_retired_names_still_match(self):
+        # The fixed names, which main still creates. Reaping them is the only
+        # thing that removes one a killed run stranded.
+        for name in ('secret_name', 'secret_v2_test'):
+            self.assertTrue(self.mod.is_test_secret(name), name)
+
+    def test_names_a_person_chose_do_not_match(self):
+        for name in (
+            None,
+            '',
+            'secret',
+            'openai_api_key',
+            'secret_v3_test_deadbeef',
+            'prod_secret_name',
+            'secret_name_prod',
+        ):
+            self.assertFalse(self.mod.is_test_secret(name), name)
+
+    def _secret(self, name, hours=None, deleted=False):
+        """A secret as the API reports one in the listing."""
+        created = None
+        if hours is not None:
+            created = (
+                datetime.datetime.now(tz=datetime.timezone.utc)
+                - datetime.timedelta(hours=hours)
+            ).isoformat()
+        return dict(
+            secretID=f'id-{name}',
+            name=name,
+            createdBy='someone',
+            createdAt=created,
+            lastUpdatedBy='someone',
+            lastUpdatedAt=created,
+            deletedAt=created if deleted else None,
+        )
+
+    def _manager(self, *items):
+        mgr = MagicMock()
+        mgr._get.return_value.json.return_value = dict(secrets=list(items))
+        return mgr
+
+    def _find(self, *items, **kwargs):
+        mgr = self._manager(*items)
+        found, spared, self.unmatched = self.mod.find_stranded_secrets(
+            mgr, **kwargs,
+        )
+        self.listed = mgr._get.call_args[0][0]
+        return [x[1].name for x in found], spared
+
+    def test_the_listing_asks_for_every_secret(self):
+        # Not ?name=: the point is to find names this process never chose.
+        self._find()
+        self.assertEqual(self.listed, 'secrets')
+
+    def test_the_age_filter_spares_a_secret_a_live_run_may_own(self):
+        names, spared = self._find(
+            self._secret('secret_v2_test_deadbeef', hours=5),
+            self._secret('secret_v2_test_beefcafe', hours=0.01),
+        )
+        self.assertEqual(names, ['secret_v2_test_deadbeef'])
+        self.assertEqual(len(spared), 1)
+        self.assertIn('secret_v2_test_beefcafe', spared[0])
+
+    def test_the_default_age_is_shorter_than_the_deployment_one(self):
+        # The window guarded is a test body, not a suite: a secret is created
+        # and deleted seconds apart. Still not zero -- a run killed between the
+        # POST and the DELETE looks like one still between them.
+        self.assertGreater(self.mod.DEFAULT_SECRET_MIN_AGE_HOURS, 0)
+        self.assertLess(
+            self.mod.DEFAULT_SECRET_MIN_AGE_HOURS,
+            self.mod.DEFAULT_MIN_AGE_HOURS,
+        )
+
+    def test_an_unreported_creation_time_is_spared_by_default(self):
+        names, spared = self._find(self._secret('secret_v2_test_ace0'))
+        self.assertEqual(names, [])
+        self.assertIn('secret_v2_test_ace0', spared[0])
+
+        names, _ = self._find(
+            self._secret('secret_v2_test_ace0'), include_unknown_age=True,
+        )
+        self.assertEqual(names, ['secret_v2_test_ace0'])
+
+    def test_an_unrecognized_name_is_reported_not_swept(self):
+        names, _ = self._find(
+            self._secret('secret_v2_test_cafe', hours=10),
+            self._secret('openai_api_key', hours=10),
+        )
+        self.assertEqual(names, ['secret_v2_test_cafe'])
+        self.assertEqual(len(self.unmatched), 1)
+        self.assertIn('openai_api_key', self.unmatched[0])
+
+    def test_an_already_deleted_secret_is_ignored_entirely(self):
+        # Neither swept nor reported as unrecognized: it is already gone, so
+        # there is nothing for a reader of the output to act on.
+        names, spared = self._find(
+            self._secret('secret_v2_test_0ff0', hours=10, deleted=True),
+            self._secret('someones_deleted_key', hours=10, deleted=True),
+        )
+        self.assertEqual((names, spared, self.unmatched), ([], [], []))
+
+
+class TestStrandedSecretSweep(unittest.TestCase):
+    """``--secrets`` end to end, with the management API stubbed out."""
+
+    def setUp(self):
+        from singlestoredb.tests import cleanup_deployments
+        self.mod = cleanup_deployments
+        self.mgr = MagicMock()
+        self.mgr._get.return_value.json.return_value = dict(
+            secrets=[
+                dict(
+                    secretID='id-old', name='secret_v2_test_deadbeef',
+                    createdBy='x', lastUpdatedBy='x', lastUpdatedAt=None,
+                    createdAt=(
+                        datetime.datetime.now(tz=datetime.timezone.utc)
+                        - datetime.timedelta(hours=10)
+                    ).isoformat(),
+                ),
+                dict(
+                    secretID='id-new', name='secret_v2_test_beefcafe',
+                    createdBy='x', lastUpdatedBy='x', lastUpdatedAt=None,
+                    createdAt=datetime.datetime.now(
+                        tz=datetime.timezone.utc,
+                    ).isoformat(),
+                ),
+            ],
+        )
+        patcher = patch.object(
+            self.mod, '_manager', lambda version: self.mgr,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def deleted(self):
+        return [x[0][0] for x in self.mgr._delete.call_args_list]
+
+    def test_the_old_secret_is_deleted_and_the_new_one_is_not(self):
+        self.assertEqual(self.mod.main(['--secrets', '--yes']), 0)
+        self.assertEqual(self.deleted(), ['secrets/id-old'])
+
+    def test_a_dry_run_deletes_nothing(self):
+        self.assertEqual(self.mod.main(['--secrets']), 0)
+        self.assertEqual(self.deleted(), [])
+
+    def test_older_than_is_honoured(self):
+        self.assertEqual(
+            self.mod.main(['--secrets', '--older-than', '20', '--yes']), 0,
+        )
+        self.assertEqual(self.deleted(), [])
+
+    def test_no_deployment_listing_is_touched(self):
+        # --secrets is a different subject, not an extra filter: asking for it
+        # must not walk the clusters or the workspace groups.
+        self.mod.main(['--secrets', '--yes'])
+        self.mgr.clusters.__iter__.assert_not_called()
+
+    def test_a_listing_failure_is_reported_rather_than_raised(self):
+        # A cleanup step, and a secret bills nothing: failing the job over one
+        # is the wrong trade. Non-zero, so the log still says something went
+        # wrong.
+        self.mgr._get.side_effect = ManagementError(msg='no such route')
+        self.assertEqual(self.mod.main(['--secrets', '--yes']), 1)
+
+    def test_a_failed_delete_exits_non_zero(self):
+        self.mgr._delete.side_effect = ManagementError(msg='nope')
+        self.assertEqual(self.mod.main(['--secrets', '--yes']), 1)
+
+    def test_the_deployment_selectors_do_not_compose_with_it(self):
+        import contextlib
+        import io
+        for argv in (
+            ['--secrets', '--kind', 'cluster'],
+            ['--secrets', '--any-name'],
+            ['--secrets', '--since', 'today'],
+            ['--secrets', '--ledger', 'x.jsonl'],
+        ):
+            with self.assertRaises(SystemExit, msg=argv), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                self.mod.main(argv)
+
+
 class TestToDatetime(unittest.TestCase):
     """
     ``to_datetime`` has to read both timestamp shapes the API returns.
