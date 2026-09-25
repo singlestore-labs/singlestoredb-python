@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: 3.11
           cache: "pip"
@@ -28,8 +28,16 @@ jobs:
 
       - name: Initialize database
         id: initialize-database
+        # A new cluster has exactly one user, admin, hence the fixed name below.
+        # The project is named here, not in a repo variable, so the deployment
+        # target is visible in the workflow.
+        #
+        # POST /v2/clusters generates its own admin password and ignores any sent
+        # to it, so the script resets it to CLUSTER_PASSWORD over SQL once the
+        # cluster is up. A generated password could not reach the other jobs
+        # anyway: the runner refuses to write a masked value as a job output.
         run: |
-          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
+          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
@@ -48,12 +56,17 @@ jobs:
       matrix:
         os:
           - ubuntu-24.04
+        # The floor in pyproject.toml (requires-python >=3.9) up to the newest
+        # final release. 3.15 is absent deliberately: as of 2026-09-18 it is at
+        # rc2 (GA 2026-10-01), and setup-python needs allow-prereleases plus an
+        # explicit "3.15.0-rc.2" to install it. Add a bare "3.15" once it ships.
         python-version:
           - "3.9"
           - "3.10"
           - "3.11"
           - "3.12"
           - "3.13"
+          - "3.14"
         driver:
           - mysql
           - https
@@ -100,10 +113,10 @@ jobs:
             buffered: 1
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
@@ -118,11 +131,14 @@ jobs:
         run: pytest -v --pyargs singlestoredb.tests.test_basics
         env:
           PYTHONPATH: ${{ github.workspace }}
-          SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
+          # CLUSTER_PASSWORD goes into the userinfo half of a URL here, so it
+          # has to be free of characters that would need percent-encoding --
+          # ':', '@', '/', '%' and the like. Keep the secret alphanumeric.
+          SINGLESTOREDB_URL: "${{ matrix.driver }}://admin:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
 
       - name: Run tests
         if: ${{ matrix.driver == 'https' }}
-        # -n 0 overrides the -n 3 in pyproject.toml's addopts: the Data API is
+        # -n 0 overrides the -n 2 in pyproject.toml's addopts: the Data API is
         # not run in parallel. This job avoids the `RESTART PROXY` hazard the
         # code-check/coverage HTTP steps hit -- no SINGLESTOREDB_INIT_DB_URL
         # here, so load_sql's setup connection is itself HTTP and skips that
@@ -131,7 +147,7 @@ jobs:
         run: pytest -v -n 0 --pyargs singlestoredb.tests.test_basics
         env:
           PYTHONPATH: ${{ github.workspace }}
-          SINGLESTOREDB_URL: "${{ matrix.driver }}://${{ secrets.CLUSTER_USER }}:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
+          SINGLESTOREDB_URL: "${{ matrix.driver }}://admin:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:443/${{ needs.setup-database.outputs.cluster-database }}?pure_python=${{ matrix.pure-python }}&buffered=${{ matrix.buffered }}"
 
 
   shutdown-database:
@@ -140,10 +156,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: 3.11
           cache: "pip"
@@ -156,14 +172,28 @@ jobs:
 
       - name: Drop database
         if: ${{ always() }}
+        # The password reaches the script through the environment rather than
+        # being interpolated into the command, so the shell never sees its
+        # characters.
         run: |
-          python resources/drop_db.py --user "${{ secrets.CLUSTER_USER }}" --password "${{ secrets.CLUSTER_PASSWORD }}" --host "${{ needs.setup-database.outputs.cluster-host }}" --port 3306 --database "${{ needs.setup-database.outputs.cluster-database }}"
+          python resources/drop_db.py --user admin --password "$CLUSTER_PASSWORD" --host "$CLUSTER_HOST" --port 3306 --database "$CLUSTER_DATABASE"
         env:
           PYTHONPATH: ${{ github.workspace }}
+          CLUSTER_PASSWORD: ${{ secrets.CLUSTER_PASSWORD }}
+          CLUSTER_HOST: ${{ needs.setup-database.outputs.cluster-host }}
+          CLUSTER_DATABASE: ${{ needs.setup-database.outputs.cluster-database }}
 
-      - name: Shutdown workspace
+      - name: Shutdown cluster
         if: ${{ always() }}
+        # An empty ID would send the DELETE to /v2/clusters/ and leave a live
+        # cluster behind, so fail loudly instead; the ID then has to be recovered
+        # by hand. --fail-with-body makes a refused DELETE fail this step rather
+        # than print the error and exit 0.
         run: |
-          curl -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v1/workspaces/${{ env.CLUSTER_ID }}"
+          if [ -z "$CLUSTER_ID" ]; then
+            echo "::error::No cluster ID from setup-database; the cluster (if any) must be terminated by hand"
+            exit 1
+          fi
+          curl --fail-with-body -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v2/clusters/$CLUSTER_ID?force=true"
         env:
           CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}

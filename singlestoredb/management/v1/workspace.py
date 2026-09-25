@@ -47,6 +47,7 @@ from ... import connection
 from ...exceptions import ManagementError
 from ..billing import Billing as Billing
 from ..manager import Manager
+from ..manager import retry_on_lock
 from ..region import Region
 from ..stage import StageObject as StageObject
 from ..utils import camel_to_snake_dict
@@ -850,7 +851,14 @@ class WorkspaceGroup:
             raise ManagementError(
                 msg='No workspace manager is associated with this object.',
             )
-        self._manager._delete(f'workspaceGroups/{self.id}', params=dict(force=force))
+        # 'true'/'false', not the bool: requests renders a bool param with
+        # str(), so force=True went out as force=True. force is what makes a
+        # group with live workspaces in it go away, so the value has to be read.
+        # Workspace.terminate above spells it out by hand for the same reason.
+        self._manager._delete(
+            f'workspaceGroups/{self.id}',
+            params=dict(force='true' if force else 'false'),
+        )
         if wait_on_terminated:
             remaining = float(wait_timeout)
             while True:
@@ -1267,6 +1275,7 @@ class WorkspaceManager(Manager):
             [Region.from_dict(item, self) for item in res.json()],
         )
 
+    @retry_on_lock
     def create_workspace_group(
         self,
         name: str,

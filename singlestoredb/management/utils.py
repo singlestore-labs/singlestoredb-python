@@ -408,6 +408,113 @@ def enable_http_tracing() -> None:
     requests_log.propagate = True
 
 
+#: Both timestamp shapes the API returns: RFC 3339, and a Go ``time.Time``
+#: rendered by ``String()`` -- ``2026-09-17 14:42:41.445984 +0000 UTC``, which is
+#: how ``GET /v2/clusters/{id}`` reports ``expiresAt``. The trailing zone name is
+#: not ISO 8601, so that value used to fail to parse and read as unset. It and
+#: Go's monotonic reading are both optional.
+#:
+#: ``Z`` counts as an offset so RFC 3339 gets the same fraction padding:
+#: ``...20.43888Z`` otherwise reached the converter with five digits, which only
+#: 3.11 and later parse.
+_GO_DATETIME_RE = re.compile(
+    r'^(?P<stamp>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?)'
+    r'(?:\s*(?P<offset>[Zz]|[+-]\d{2}:?\d{2}))?'
+    r'(?:\s+(?P<zone>[A-Za-z]\S*))?'
+    r'(?:\s+m=\S+)?$',
+)
+
+
+def _normalize_datetime(obj: str) -> str:
+    """
+    Return ``obj`` as something :func:`converters.datetime_fromisoformat` reads.
+
+    Reduces both shapes :data:`_GO_DATETIME_RE` matches to a bare ISO 8601
+    timestamp plus an optional numeric offset. Fractional seconds are padded to
+    microseconds: Go trims trailing zeros, and ``datetime.fromisoformat``
+    accepts only 3 or 6 digits before Python 3.11.
+
+    Parameters
+    ----------
+    obj : str
+        Timestamp as reported by the API
+
+    Returns
+    -------
+    str
+
+    """
+    match = _GO_DATETIME_RE.match(obj.strip())
+    if match is None:
+        # Not a shape this recognizes; hand it over untouched so the converter
+        # gets its usual chance to make sense of it.
+        return obj.replace('Z', '')
+
+    stamp = match.group('stamp')
+
+    # Fix datetimes with truncated zeros
+    if '.' in stamp:
+        stamp, micros = stamp.split('.', 1)
+        micros = micros[:6] + '0' * (6 - len(micros))
+        stamp = stamp + '.' + micros
+
+    # Go writes +0000; 3.9 and 3.10 want +00:00, so always emit the colon. Z is
+    # spelled out for the same reason -- nothing before 3.11 reads it.
+    offset = match.group('offset') or ''
+    if offset in ('Z', 'z'):
+        offset = '+00:00'
+    elif offset and ':' not in offset:
+        offset = offset[:3] + ':' + offset[3:]
+
+    return stamp + offset
+
+
+def _is_go_zero_time(obj: Union[datetime.date, datetime.datetime]) -> bool:
+    """
+    Return whether ``obj`` is Go's zero time, which means "unset".
+
+    An unassigned Go ``time.Time`` renders as January 1 of year 1, and the API
+    returns that for a field it has no value for -- most visibly an ``expiresAt``
+    on a resource that does not expire. Testing the parsed value rather than the
+    string covers both spellings (``0001-01-01T00:00:00Z`` and
+    ``0001-01-01 00:00:00 +0000 UTC``) and any trimmings they carry.
+
+    Parameters
+    ----------
+    obj : datetime.date or datetime.datetime
+        Parsed timestamp
+
+    Returns
+    -------
+    bool
+
+    """
+    return (obj.year, obj.month, obj.day) == (1, 1, 1)
+
+
+def _as_naive_utc(obj: datetime.datetime) -> datetime.datetime:
+    """
+    Return ``obj`` as a naive UTC datetime.
+
+    An aware value is shifted onto UTC and stripped; a naive one already means
+    UTC and is left alone. One convention either way, or two timestamps read off
+    the same object could not be compared.
+
+    Parameters
+    ----------
+    obj : datetime.datetime
+        Parsed timestamp, with or without a timezone
+
+    Returns
+    -------
+    datetime.datetime
+
+    """
+    if obj.tzinfo is None:
+        return obj
+    return obj.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+
 def to_datetime(
     obj: Optional[Union[str, datetime.datetime]],
 ) -> Optional[datetime.datetime]:
@@ -416,20 +523,18 @@ def to_datetime(
         return None
     if isinstance(obj, datetime.datetime):
         return obj
-    if obj == '0001-01-01T00:00:00Z':
-        return None
-    obj = obj.replace('Z', '')
-    # Fix datetimes with truncated zeros
-    if '.' in obj:
-        obj, micros = obj.split('.', 1)
-        micros = micros + '0' * (6 - len(micros))
-        obj = obj + '.' + micros
-    out = converters.datetime_fromisoformat(obj)
+    out = converters.datetime_fromisoformat(_normalize_datetime(obj))
     if isinstance(out, str):
+        return None
+    if out is None:
+        return None
+    # Before _as_naive_utc: shifting an aware year-1 value onto UTC can carry it
+    # below datetime.MINYEAR, which raises instead of returning None.
+    if _is_go_zero_time(out):
         return None
     if isinstance(out, datetime.date) and not isinstance(out, datetime.datetime):
         return datetime.datetime(out.year, out.month, out.day)
-    return out
+    return _as_naive_utc(out)
 
 
 def to_datetime_strict(
@@ -440,22 +545,18 @@ def to_datetime_strict(
         raise TypeError('not possible to convert None to datetime')
     if isinstance(obj, datetime.datetime):
         return obj
-    if obj == '0001-01-01T00:00:00Z':
-        raise ValueError('not possible to convert 0001-01-01T00:00:00Z to datetime')
-    obj = obj.replace('Z', '')
-    # Fix datetimes with truncated zeros
-    if '.' in obj:
-        obj, micros = obj.split('.', 1)
-        micros = micros + '0' * (6 - len(micros))
-        obj = obj + '.' + micros
-    out = converters.datetime_fromisoformat(obj)
+    out = converters.datetime_fromisoformat(_normalize_datetime(obj))
     if not out:
         raise TypeError('not possible to convert None to datetime')
     if isinstance(out, str):
         raise ValueError('value cannot be str')
+    # See to_datetime: checked here rather than after the UTC shift, which can
+    # raise on a year-1 value.
+    if _is_go_zero_time(out):
+        raise ValueError(f'not possible to convert {obj} to datetime')
     if isinstance(out, datetime.date) and not isinstance(out, datetime.datetime):
         return datetime.datetime(out.year, out.month, out.day)
-    return out
+    return _as_naive_utc(out)
 
 
 def from_datetime(

@@ -10,6 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     environment: Base
 
+    # One ledger for the whole job, so the cleanup step below can reap what any
+    # of the pytest steps created. Per job, not shared: a job's sweep can then
+    # only reach records it wrote itself.
+    env:
+      SINGLESTOREDB_TEST_DEPLOYMENT_LOG: ${{ github.workspace }}/deployments.jsonl
+
     services:
       singlestore:
         image: ghcr.io/singlestore-labs/singlestoredb-dev:latest
@@ -22,10 +28,10 @@ jobs:
           ROOT_PASSWORD: "root"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
           python-version: "3.10"
           cache: "pip"
@@ -36,8 +42,11 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run MySQL protocol tests
+        # -m 'not management_v1' keeps the v2 management coverage while dropping
+        # the deprecated v1 suite; the management-v1-tests job below is where
+        # that runs.
         run: |
-          pytest -v --cov=singlestoredb --pyargs singlestoredb.tests
+          pytest -v -m 'not management_v1' --cov=singlestoredb --pyargs singlestoredb.tests
         env:
           COVERAGE_FILE: "coverage-mysql.cov"
           SINGLESTOREDB_URL: "root:root@127.0.0.1:3307"
@@ -58,7 +67,7 @@ jobs:
           SINGLESTOREDB_FUSION_ENABLE_HIDDEN: "1"
 
       - name: Run HTTP protocol tests
-        # -n 0 overrides the -n 3 in pyproject.toml's addopts: the HTTP/Data API
+        # -n 0 overrides the -n 2 in pyproject.toml's addopts: the HTTP/Data API
         # run must be serial. Setup goes over SINGLESTOREDB_INIT_DB_URL (MySQL),
         # so load_sql takes its `SET GLOBAL HTTP_PROXY_PORT` + `RESTART PROXY`
         # branch (singlestoredb/tests/utils.py:227) once per worker, and a proxy
@@ -82,3 +91,116 @@ jobs:
           coverage report
           coverage xml
           coverage html
+
+      # if: always() is the whole point -- this has to run when the job is
+      # cancelled, the case that produced the leak. Run 35631802648 was
+      # cancelled 19 minutes into TestClusterFusion.setUpClass's
+      # create_cluster(wait_on_active=True, wait_timeout=1200): the log ends at
+      # '##[error]The operation was canceled.' with no pytest summary and no
+      # sweep output, leaving three clusters billing with nothing in the process
+      # having recorded them. The ledger is that record.
+      #
+      # Last step in the job, so it covers every pytest step above it.
+      #
+      # Best effort, not a guarantee: a cancelled job's remaining steps are
+      # force-terminated after GitHub's 5-minute cancellation timeout, and an
+      # S-00 cluster refuses DELETE until it is ACTIVE (~460s). The leak above is
+      # covered, being 19 minutes in; a cancel in the first few minutes would be
+      # killed here still getting 400/409, and needs `cleanup_deployments.py
+      # --older-than` run by hand.
+      - name: Clean up what the tests left behind
+        if: always()
+        run: |
+          # Secrets first, and its status discarded. TestSecrets creates an
+          # org-scoped secret that only its own test body deletes, so a killed
+          # run strands one for good; --secrets is age-guarded, which keeps it
+          # off this run's and off a concurrent job's, so what it removes is
+          # what *earlier* runs stranded. A secret bills nothing, and the
+          # ledger sweep is what this step's status should report.
+          python -m singlestoredb.tests.cleanup_deployments --secrets --yes \
+            || true
+          python -m singlestoredb.tests.cleanup_deployments \
+            --ledger "$SINGLESTOREDB_TEST_DEPLOYMENT_LOG" --yes
+        env:
+          SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
+
+  # The deprecated v1 management API. management.version defaults to v2, so this
+  # is a legacy gate: it runs here nightly rather than on every PR, and it is
+  # what gets deleted along with management/v1/. Selects both the mocked v1
+  # units and the live v1 deployments, plus test_fusion's v1 WORKSPACE grammar.
+  management-v1-tests:
+    runs-on: ubuntu-latest
+    environment: Base
+
+    # Waits for test-coverage rather than running alongside it, so the v1
+    # workspace groups are never in flight at the same time as the v2 suite's
+    # cluster pool. This is a nightly cron, so the extra wall clock is free.
+    #
+    # Runs even when test-coverage fails: a v2 failure above says nothing about
+    # the v1 endpoints, and skipping v1 for it would hide a v1 regression behind
+    # an unrelated one.
+    #
+    # !cancelled() rather than always(), which stays true through cancellation
+    # too. A cancelled run must not start provisioning workspace groups here:
+    # remaining steps are force-terminated 5 minutes into a cancel, so the sweep
+    # below would be killed while the new deployments were still pre-ACTIVE and
+    # refusing DELETE -- stranding exactly what it exists to clean up.
+    needs: test-coverage
+    if: ${{ !cancelled() }}
+
+    # A ledger of its own: separate runner, separate workspace, and neither
+    # job's sweep can reach the other's records.
+    env:
+      SINGLESTOREDB_TEST_DEPLOYMENT_LOG: ${{ github.workspace }}/deployments.jsonl
+
+    services:
+      singlestore:
+        image: ghcr.io/singlestore-labs/singlestoredb-dev:latest
+        ports:
+          - 3307:3306
+          - 8081:8080
+          - 9081:9081
+        env:
+          SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
+          ROOT_PASSWORD: "root"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run v1 management API tests
+        # -n 0 overrides the -n 2 in pyproject.toml's addopts, which is tuned for
+        # the v2 suite's shared cluster pool. The v1 classes deploy workspace
+        # groups of their own, so two workers would put twice that in flight.
+        # Serial keeps this job to one deployment at a time.
+        run: |
+          pytest -v -n 0 -m 'management_v1' --pyargs singlestoredb.tests
+        env:
+          SINGLESTOREDB_URL: "root:root@127.0.0.1:3307"
+          SINGLESTOREDB_PURE_PYTHON: 0
+          SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
+          SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
+          SINGLESTOREDB_FUSION_ENABLE_HIDDEN: "1"
+
+      # See the matching step in test-coverage for why this is if: always(),
+      # and for what the secret sweep is doing here. The v1 suite deploys
+      # workspace groups, which are the kind that force exists for.
+      - name: Clean up what the tests left behind
+        if: always()
+        run: |
+          python -m singlestoredb.tests.cleanup_deployments --secrets --yes \
+            || true
+          python -m singlestoredb.tests.cleanup_deployments \
+            --ledger "$SINGLESTOREDB_TEST_DEPLOYMENT_LOG" --yes
+        env:
+          SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}

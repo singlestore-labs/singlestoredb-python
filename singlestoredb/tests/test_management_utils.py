@@ -8,8 +8,10 @@ a container. These were originally written alongside the versioned wrappers
 only because that is where the bugs were found.
 """
 import datetime
+import json
 import os
 import pathlib
+import shutil
 import tempfile
 import unittest
 from types import SimpleNamespace
@@ -17,7 +19,11 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from singlestoredb.exceptions import ManagementError
+from singlestoredb.management.utils import _normalize_datetime
 from singlestoredb.management.utils import normalize_remote_path
+from singlestoredb.management.utils import to_datetime
+from singlestoredb.management.utils import to_datetime_strict
+from singlestoredb.tests.utils import admin_password
 from singlestoredb.tests.utils import counting_file_space
 from singlestoredb.tests.utils import counting_stage
 
@@ -870,6 +876,200 @@ class TestManagerTransport(unittest.TestCase):
         self.assertIn('clusters/abc', msg)
 
 
+class TestLockRetry(unittest.TestCase):
+    """
+    ``manager.retry_on_lock``, the wait for a creation the organization lock
+    blocks.
+
+    The API refuses the creation with "could not acquire lock" while another one
+    in the organization holds it, and nothing else retries that: POST is out of
+    ``RETRY_METHODS``. In a ``setUpClass`` one conflict fails every test in the
+    class -- a whole ``management_v1`` run went that way, and the v2 shared
+    cluster pool went the same way an hour later.
+    """
+
+    #: Verbatim from the two runs that failed. The ``/clusters`` one says
+    #: "error creating workspace", so the match cannot key on the noun.
+    LOCK_MESSAGES = (
+        'error creating workspace group (wg-test-8jtfylajdmax-vast7ln): '
+        'could not acquire lock within duration [0, 2026/09/23 16:45:04]',
+        'error creating workspace (cl-test-shared-1-b0dad293): could not '
+        'acquire lock within duration [0, 2026-09-23T17:37:16Z]',
+    )
+
+    #: The default budget, per lock_retry_policy.
+    WAITS = [20.0, 40.0, 60.0, 60.0, 60.0]
+
+    def setUp(self):
+        from singlestoredb.management import manager as manager_mod
+        self.manager_mod = manager_mod
+        self.slept = []
+
+        # The waits go through timing.sleep, so a trace reports them as waits.
+        patcher = patch(
+            'singlestoredb.management.timing.time.sleep', self.slept.append,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        # Jitter off, so the waits asserted below are the spacing itself.
+        patcher = patch.object(manager_mod, 'LOCK_RETRY_JITTER', 0.0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _creator(self, *msgs, errno=500):
+        """A decorated creator that fails with these messages, then succeeds."""
+        calls = []
+
+        class Mgr:
+            @self.manager_mod.retry_on_lock
+            def create(self, name, **kwargs):
+                calls.append(name)
+                if len(calls) <= len(msgs):
+                    raise ManagementError(errno=errno, msg=msgs[len(calls) - 1])
+                return f'deployment {name}'
+
+        mgr = Mgr()
+        mgr.calls = calls
+        return mgr
+
+    def test_a_lock_conflict_is_retried_until_it_succeeds(self):
+        mgr = self._creator(*self.LOCK_MESSAGES)
+        self.assertEqual(mgr.create('wg-test-a', region='x'), 'deployment wg-test-a')
+        self.assertEqual(len(mgr.calls), 3)
+        self.assertEqual(self.slept, [20.0, 40.0])
+
+    def test_the_retry_reuses_the_name(self):
+        """The conflict is a refusal to start, so nothing was created and there
+        is no deployment for the next attempt to collide with."""
+        mgr = self._creator(self.LOCK_MESSAGES[0])
+        mgr.create('wg-test-a')
+        self.assertEqual(mgr.calls, ['wg-test-a', 'wg-test-a'])
+
+    def test_another_error_is_not_retried(self):
+        """A rejected request is a real failure; retrying only delays it."""
+        mgr = self._creator('region is not available')
+        with self.assertRaises(ManagementError):
+            mgr.create('wg-test-a')
+        self.assertEqual(len(mgr.calls), 1)
+        self.assertEqual(self.slept, [])
+
+    def test_an_unrelated_500_is_not_retried(self):
+        """500 is also what a name collision comes back as, so the message is
+        the only thing that says nothing was created."""
+        mgr = self._creator('error creating workspace group (x): already exists')
+        with self.assertRaises(ManagementError):
+            mgr.create('wg-test-a')
+        self.assertEqual(len(mgr.calls), 1)
+
+    def test_the_budget_is_bounded_and_the_error_is_raised(self):
+        """A stuck organization has to fail rather than idle out the job."""
+        mgr = self._creator(*([self.LOCK_MESSAGES[0]] * 100))
+        with self.assertRaises(ManagementError) as cm:
+            mgr.create('wg-test-a')
+        self.assertIn('acquire lock', str(cm.exception))
+        self.assertEqual(len(mgr.calls), len(self.WAITS) + 1)
+        self.assertEqual(len(self.slept), len(self.WAITS))
+
+    def test_the_wait_is_capped(self):
+        mgr = self._creator(*([self.LOCK_MESSAGES[0]] * 100))
+        with self.assertRaises(ManagementError):
+            mgr.create('wg-test-a')
+        self.assertLessEqual(
+            max(self.slept), self.manager_mod.LOCK_RETRY_MAX_INTERVAL,
+        )
+        self.assertEqual(self.slept, self.WAITS)
+
+    def test_the_waits_are_jittered(self):
+        """Two clients that collide back off by the same amounts from the same
+        moment, so without jitter they retry in step forever."""
+        patcher = patch.object(self.manager_mod, 'LOCK_RETRY_JITTER', 5.0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        mgr = self._creator(*([self.LOCK_MESSAGES[0]] * 100))
+        with self.assertRaises(ManagementError):
+            mgr.create('wg-test-a')
+        self.assertNotEqual(self.slept, self.WAITS)
+        for wait, base in zip(self.slept, self.WAITS):
+            self.assertGreaterEqual(wait, base)
+            self.assertLess(wait, base + 5.0)
+
+    def test_both_observed_wordings_match(self):
+        for msg in self.LOCK_MESSAGES:
+            mgr = self._creator(msg)
+            mgr.create('wg-test-a')
+            self.assertEqual(len(mgr.calls), 2, msg)
+
+    def test_the_match_does_not_depend_on_the_status(self):
+        """The status a conflict arrives as is not documented, and it cannot
+        tell a conflict from a rejection either way."""
+        mgr = self._creator(self.LOCK_MESSAGES[0], errno=409)
+        mgr.create('wg-test-a')
+        self.assertEqual(len(mgr.calls), 2)
+
+    def test_a_success_is_not_delayed(self):
+        mgr = self._creator()
+        mgr.create('wg-test-a')
+        self.assertEqual(len(mgr.calls), 1)
+        self.assertEqual(self.slept, [])
+
+    def test_the_retry_can_be_turned_off(self):
+        mgr = self._creator(self.LOCK_MESSAGES[0])
+        with patch.dict(
+            os.environ, {'SINGLESTOREDB_MANAGEMENT_LOCK_RETRIES': '0'},
+        ):
+            with self.assertRaises(ManagementError):
+                mgr.create('wg-test-a')
+        self.assertEqual(len(mgr.calls), 1)
+        self.assertEqual(self.slept, [])
+
+    def test_the_budget_is_configurable(self):
+        mgr = self._creator(*([self.LOCK_MESSAGES[0]] * 100))
+        with patch.dict(
+            os.environ, {
+                'SINGLESTOREDB_MANAGEMENT_LOCK_RETRIES': '2',
+                'SINGLESTOREDB_MANAGEMENT_LOCK_RETRY_INTERVAL': '3',
+            },
+        ):
+            with self.assertRaises(ManagementError):
+                mgr.create('wg-test-a')
+        self.assertEqual(len(mgr.calls), 3)
+        self.assertEqual(self.slept, [3.0, 6.0])
+
+
+class TestLockRetryIsApplied(unittest.TestCase):
+    """Which creations wear ``retry_on_lock``: the two that take the lock."""
+
+    def _wears_it(self, method):
+        return getattr(method, '__retry_on_lock__', False)
+
+    def test_the_two_creations_that_take_the_lock(self):
+        from singlestoredb.management.v1.workspace import WorkspaceManager
+        from singlestoredb.management.v2.cluster import ClusterManager
+
+        self.assertTrue(self._wears_it(WorkspaceManager.create_workspace_group))
+        self.assertTrue(self._wears_it(ClusterManager.create_cluster))
+
+    def test_and_nothing_else(self):
+        """Deliberately narrow: a workspace inside an existing group and the
+        starter deployments do not contend for this lock."""
+        from singlestoredb.management.v1.workspace import WorkspaceGroup
+        from singlestoredb.management.v1.workspace import WorkspaceManager
+        from singlestoredb.management.v2.cluster import ClusterManager
+
+        for klass, name in (
+            (WorkspaceManager, 'create_workspace'),
+            (WorkspaceManager, 'create_starter_workspace'),
+            (WorkspaceGroup, 'create_workspace'),
+            (ClusterManager, 'create_starter_cluster'),
+        ):
+            self.assertFalse(
+                self._wears_it(getattr(klass, name)),
+                f'{klass.__name__}.{name}',
+            )
+
+
 class TestWaitOnEndpoint(unittest.TestCase):
     """
     ``Manager._wait_on_endpoint`` polls a new deployment by connecting to it.
@@ -949,8 +1149,18 @@ class TestDeploymentTracking(unittest.TestCase):
         self.utils._in_flight.clear()
         self.utils._in_flight.extend(self.saved_in_flight)
 
-    def _deployment(self, name, terminated_at=None, state='ACTIVE'):
-        """A stand-in that is not a Mock, so tracking does not skip it."""
+    def _deployment(
+        self, name, terminated_at=None, state='ACTIVE', classname=None,
+    ):
+        """
+        A stand-in that is not a Mock, so tracking does not skip it.
+
+        ``classname`` renames the class, which is how the ledger decides a
+        kind (``utils._KIND_BY_CLASS`` is keyed by class name). The default
+        ``Deployment`` is deliberately *not* a ledger kind, so the tests that
+        only care about tracking write no ledger records even when one is
+        configured.
+        """
         class Deployment:
             def __init__(self):
                 self.name = name
@@ -966,6 +1176,8 @@ class TestDeploymentTracking(unittest.TestCase):
             def terminate(self, force=False):
                 self.terminated_with = force
 
+        if classname:
+            Deployment.__name__ = classname
         return Deployment()
 
     def test_mocked_deployments_are_not_tracked(self):
@@ -1071,7 +1283,7 @@ class TestDeploymentTracking(unittest.TestCase):
             raise ManagementError(msg=f'Exceeded waiting time for {name}')
 
         wrapped = self.utils._tracking_wrapper(
-            create_then_fail_waiting, lambda recv: recv.clusters,
+            create_then_fail_waiting, 'cluster', lambda recv: recv.clusters,
         )
         with self.assertRaises(ManagementError):
             wrapped(receiver, 'cl-test-shared-0-abc', wait_on_active=True)
@@ -1096,7 +1308,7 @@ class TestDeploymentTracking(unittest.TestCase):
             raise KeyboardInterrupt
 
         wrapped = self.utils._tracking_wrapper(
-            interrupted, lambda recv: recv.clusters,
+            interrupted, 'cluster', lambda recv: recv.clusters,
         )
         with self.assertRaises(KeyboardInterrupt):
             wrapped(receiver, 'cl-1')
@@ -1118,7 +1330,7 @@ class TestDeploymentTracking(unittest.TestCase):
         for value in (returned, 'sentinel'):
             wrapped = self.utils._tracking_wrapper(
                 lambda recv, name, value=value, **kwargs: value,
-                lambda recv: [],
+                'cluster', lambda recv: [],
             )
             self.assertIs(wrapped(mgr, 'my-cluster'), value)
 
@@ -1133,7 +1345,7 @@ class TestDeploymentTracking(unittest.TestCase):
         returned._manager = None
 
         wrapped = self.utils._tracking_wrapper(
-            lambda recv, name, **kwargs: returned, lambda recv: [],
+            lambda recv, name, **kwargs: returned, 'cluster', lambda recv: [],
         )
         wrapped(mgr, 'cl-1')
         self.assertEqual(self.utils.tracked_labels(), ["Deployment 'cl-1'"])
@@ -1144,7 +1356,9 @@ class TestDeploymentTracking(unittest.TestCase):
         def boom(recv, name, **kwargs):
             raise ManagementError(msg='boom')
 
-        wrapped = self.utils._tracking_wrapper(boom, lambda recv: recv.clusters)
+        wrapped = self.utils._tracking_wrapper(
+            boom, 'cluster', lambda recv: recv.clusters,
+        )
         with self.assertRaises(ManagementError):
             wrapped(MagicMock(), 'cl-1')
         self.assertEqual(self.utils._tracked, [])
@@ -1162,7 +1376,7 @@ class TestDeploymentTracking(unittest.TestCase):
         def finder(recv):
             raise AssertionError('recovery called the live API')
 
-        wrapped = self.utils._tracking_wrapper(boom, finder)
+        wrapped = self.utils._tracking_wrapper(boom, 'cluster', finder)
         with self.assertRaises(ManagementError):
             wrapped(receiver, 'cl-1')
         self.assertEqual(self.utils._tracked, [])
@@ -1184,7 +1398,7 @@ class TestDeploymentTracking(unittest.TestCase):
             raise AssertionError('the process would have been killed here')
 
         wrapped = self.utils._tracking_wrapper(
-            create_then_wait, lambda recv: recv.clusters,
+            create_then_wait, 'cluster', lambda recv: recv.clusters,
         )
         with self.assertRaises(AssertionError):
             wrapped(receiver, 'cl-1', wait_on_active=True)
@@ -1205,7 +1419,7 @@ class TestDeploymentTracking(unittest.TestCase):
 
         made = self._deployment('cl-1')
         wrapped = self.utils._tracking_wrapper(
-            lambda recv, name, **kwargs: made, finder,
+            lambda recv, name, **kwargs: made, 'cluster', finder,
         )
         self.assertIs(wrapped(receiver, 'cl-1'), made)
         self.assertEqual(self.utils._in_flight, [])
@@ -1216,7 +1430,9 @@ class TestDeploymentTracking(unittest.TestCase):
 
         receiver.clusters = [self._deployment('cl-2')]
         with self.assertRaises(ManagementError):
-            self.utils._tracking_wrapper(boom, finder)(receiver, 'cl-2')
+            self.utils._tracking_wrapper(
+                boom, 'cluster', finder,
+            )(receiver, 'cl-2')
         self.assertEqual(self.utils._in_flight, [])
         # The orphan was recovered once, not once per code path.
         self.assertEqual(len(self.utils._tracked), 2)
@@ -1226,7 +1442,7 @@ class TestDeploymentTracking(unittest.TestCase):
             raise AssertionError(str(self.utils._in_flight))
 
         wrapped = self.utils._tracking_wrapper(
-            create, lambda recv: recv.clusters,
+            create, 'cluster', lambda recv: recv.clusters,
         )
         with self.assertRaises(AssertionError) as raised:
             wrapped(MagicMock(), 'cl-1')
@@ -1296,7 +1512,7 @@ class TestDeploymentTracking(unittest.TestCase):
         import importlib
 
         self.utils.install_deployment_tracking()
-        for module_name, class_name, method_name, _ in self.utils._CREATORS:
+        for module_name, class_name, method_name, _, _ in self.utils._CREATORS:
             klass = getattr(importlib.import_module(module_name), class_name)
             method = getattr(klass, method_name, None)
             self.assertIsNotNone(
@@ -1313,7 +1529,9 @@ class TestDeploymentTracking(unittest.TestCase):
         import importlib
         import inspect
 
-        for module_name, class_name, method_name, finder in \
+        from singlestoredb.tests import cleanup_deployments
+
+        for module_name, class_name, method_name, kind, finder in \
                 self.utils._CREATORS:
             klass = getattr(importlib.import_module(module_name), class_name)
             method = getattr(klass, method_name)
@@ -1328,6 +1546,590 @@ class TestDeploymentTracking(unittest.TestCase):
                 'a failed create would not be recoverable',
             )
             self.assertTrue(callable(finder))
+            # The ledger's `pending` record carries this kind, and the reaper
+            # resolves it through cleanup_deployments.LEDGER_KINDS. A kind
+            # neither side knows would make a cancelled create unreapable,
+            # which is the whole point of the ledger.
+            self.assertIn(
+                kind, set(self.utils._KIND_BY_CLASS.values()),
+                f'{class_name}.{method_name} has an unknown ledger kind',
+            )
+            self.assertIn(kind, cleanup_deployments.LEDGER_KINDS)
+
+
+class TestDeploymentLedger(TestDeploymentTracking):
+    """
+    The on-disk ledger that makes a killed run's deployments reapable.
+
+    Inherits ``TestDeploymentTracking``'s fixtures for the module globals and
+    the non-Mock deployment stand-in. It re-runs that class's tests with a
+    ledger configured, which is worth having: those tests all use the default
+    ``Deployment`` classname, so they also pin that a ledger being configured
+    changes nothing about the in-memory behaviour.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        self.ledger = os.path.join(self.dir, 'deployments.jsonl')
+        patcher = patch.dict(
+            os.environ, {self.utils.LEDGER_ENV_VAR: self.ledger},
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def records(self):
+        """Every record in the ledger, in the order it was written."""
+        if not os.path.exists(self.ledger):
+            return []
+        with open(self.ledger) as file:
+            return [json.loads(x) for x in file if x.strip()]
+
+    def events(self):
+        return [(x['event'], x.get('kind'), x.get('name')) for x in
+                self.records()]
+
+    #
+    # Writing
+    #
+
+    def test_no_ledger_is_written_without_the_environment_variable(self):
+        """Opt-in is the whole contract: a local run must behave exactly as it
+        did before, with no file appearing anywhere."""
+        with patch.dict(os.environ, {}, clear=False):
+            del os.environ[self.utils.LEDGER_ENV_VAR]
+            self.utils.track(self._deployment('cl-1', classname='Cluster'))
+        self.assertFalse(os.path.exists(self.ledger))
+
+    def test_a_mocked_creation_writes_nothing(self):
+        """The unit tests drive the creators with patched transports. Recording
+        those would have the reaper chasing ids that never existed, and -- worse
+        -- exit non-zero on every one it could not resolve."""
+        wrapped = self.utils._tracking_wrapper(
+            lambda recv, name, **kwargs: MagicMock(),
+            'cluster', lambda recv: [],
+        )
+        wrapped(MagicMock(), 'cl-1')
+        self.utils.track(MagicMock())
+        self.assertEqual(self.records(), [])
+
+    def test_a_real_creation_writes_pending_then_live(self):
+        """In that order, and with the pending written before the creator is
+        even called: the window this closes is the one where the POST has landed
+        and nothing in the process knows an id yet."""
+        made = self._deployment('cl-1', classname='Cluster')
+        seen = []
+
+        def create(recv, name, **kwargs):
+            # What the ledger holds *during* the wait, which is where the
+            # cancelled job died.
+            seen.extend(self.events())
+            return made
+
+        receiver = SimpleNamespace(
+            _get=object(), _post=object(), _delete=object(),
+        )
+        wrapped = self.utils._tracking_wrapper(
+            create, 'cluster', lambda recv: [],
+        )
+        wrapped(receiver, 'cl-1')
+
+        self.assertEqual(seen, [('pending', 'cluster', 'cl-1')])
+        self.assertEqual(
+            self.events(), [
+                ('pending', 'cluster', 'cl-1'),
+                ('live', 'cluster', 'cl-1'),
+            ],
+        )
+        self.assertEqual(self.records()[1]['id'], 'cl-1')
+
+    def test_the_pending_name_comes_from_the_keyword_too(self):
+        receiver = SimpleNamespace(
+            _get=object(), _post=object(), _delete=object(),
+        )
+        self.utils._tracking_wrapper(
+            lambda recv, name, **kwargs: None, 'workspace_group',
+            lambda recv: [],
+        )(receiver, name='wg-1')
+        self.assertEqual(
+            self.events(), [('pending', 'workspace_group', 'wg-1')],
+        )
+
+    def test_a_create_that_dies_mid_wait_leaves_pending_with_no_gone(self):
+        """The reported failure, as the ledger sees it. The creator raises and
+        the orphan is not in the listing yet, so nothing else is ever written --
+        and that lone `pending` is what the reaper resolves by name."""
+        receiver = SimpleNamespace(
+            _get=object(), _post=object(), _delete=object(), clusters=[],
+        )
+
+        def create_then_fail_waiting(recv, name, **kwargs):
+            raise ManagementError(msg=f'Exceeded waiting time for {name}')
+
+        wrapped = self.utils._tracking_wrapper(
+            create_then_fail_waiting, 'cluster', lambda recv: recv.clusters,
+        )
+        with self.assertRaises(ManagementError):
+            wrapped(receiver, 'a-fusion-cluster-1f2e', wait_on_active=True)
+
+        self.assertEqual(
+            self.events(),
+            [('pending', 'cluster', 'a-fusion-cluster-1f2e')],
+        )
+
+    def test_a_recovered_orphan_is_recorded_live(self):
+        """``_recover_orphan`` goes through ``track()``, so the id it digs out
+        of the listing reaches the ledger and the reaper can use the point
+        lookup instead of searching by name."""
+        orphan = self._deployment('cl-1', classname='Cluster')
+        receiver = SimpleNamespace(
+            _get=object(), _post=object(), _delete=object(),
+            clusters=[orphan],
+        )
+
+        def boom(recv, name, **kwargs):
+            raise ManagementError(msg='boom')
+
+        with self.assertRaises(ManagementError):
+            self.utils._tracking_wrapper(
+                boom, 'cluster', lambda recv: recv.clusters,
+            )(receiver, 'cl-1')
+
+        self.assertEqual(
+            self.events(), [
+                ('pending', 'cluster', 'cl-1'),
+                ('live', 'cluster', 'cl-1'),
+            ],
+        )
+
+    def test_a_successful_sweep_appends_gone(self):
+        obj = self._deployment('cl-1', classname='Cluster')
+        self.utils.track(obj)
+        self.assertEqual(len(self.utils.cleanup_tracked()), 1)
+        self.assertEqual(
+            self.events(), [
+                ('live', 'cluster', 'cl-1'),
+                ('gone', 'cluster', 'cl-1'),
+            ],
+        )
+
+    def test_a_deployment_already_gone_is_recorded_gone(self):
+        """A test that terminated in its own teardown: the sweep finds it gone
+        rather than terminating it, and the record still has to be closed or
+        the reaper spends a lookup on it and reports it unresolved."""
+        obj = self._deployment(
+            'cl-1', terminated_at='now', classname='Cluster',
+        )
+        self.utils.track(obj)
+        self.assertEqual(self.utils.cleanup_tracked(), [])
+        self.assertEqual(
+            [x['event'] for x in self.records()], ['live', 'gone'],
+        )
+
+    def test_a_failed_terminate_writes_no_gone(self):
+        """The deployment is still live and still billing, so the reaper must
+        still see it."""
+        obj = self._deployment('cl-1', classname='Cluster')
+
+        def boom(force=False):
+            raise ManagementError(errno=500, msg='boom')
+
+        obj.terminate = boom
+        self.utils.track(obj)
+        self.assertEqual(self.utils.cleanup_tracked(), [])
+        self.assertEqual([x['event'] for x in self.records()], ['live'])
+
+    def test_untrack_records_gone_only_for_something_tracked(self):
+        obj = self._deployment('cl-1', classname='Cluster')
+        self.utils.untrack(obj)
+        self.assertEqual(self.records(), [])
+
+        self.utils.track(obj)
+        self.utils.untrack(obj)
+        self.assertEqual([x['event'] for x in self.records()], ['live', 'gone'])
+
+    def test_a_write_failure_is_logged_and_not_raised(self):
+        """This sits on the creation path of every management test: an
+        unwritable ledger must cost a warning, not a failed test run."""
+        with patch.dict(
+            os.environ,
+            {self.utils.LEDGER_ENV_VAR: os.path.join(self.dir, 'no', 'such')},
+        ):
+            with self.assertLogs(self.utils.logger, 'WARNING') as logs:
+                self.utils.track(self._deployment('cl-1', classname='Cluster'))
+        self.assertIn('deployment ledger', logs.output[0])
+
+    #
+    # Folding
+    #
+
+    def fold(self, *lines):
+        from singlestoredb.tests import cleanup_deployments
+        return cleanup_deployments.fold_ledger(lines)
+
+    def test_folding_keeps_only_what_is_not_gone(self):
+        kept = self.fold(
+            json.dumps(dict(event='pending', kind='cluster', name='cl-1')),
+            json.dumps(
+                dict(event='live', kind='cluster', name='cl-1', id='id-1'),
+            ),
+            json.dumps(
+                dict(event='gone', kind='cluster', name='cl-1', id='id-1'),
+            ),
+            # Created and never terminated.
+            json.dumps(dict(event='pending', kind='cluster', name='cl-2')),
+            json.dumps(
+                dict(event='live', kind='cluster', name='cl-2', id='id-2'),
+            ),
+            # Interrupted before it returned: pending only.
+            json.dumps(dict(event='pending', kind='cluster', name='cl-3')),
+        )
+        self.assertEqual(
+            [(x['event'], x.get('id'), x['name']) for x in kept],
+            [('live', 'id-2', 'cl-2'), ('pending', None, 'cl-3')],
+        )
+
+    def test_a_live_record_retires_its_pending(self):
+        """Otherwise the reaper resolves the same cluster twice -- once by id
+        and once by name -- and reports two."""
+        kept = self.fold(
+            json.dumps(dict(event='pending', kind='cluster', name='cl-1')),
+            json.dumps(
+                dict(event='live', kind='cluster', name='cl-1', id='id-1'),
+            ),
+        )
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0]['id'], 'id-1')
+
+    def test_gone_cancels_a_pending_that_never_went_live(self):
+        kept = self.fold(
+            json.dumps(dict(event='pending', kind='cluster', name='cl-1')),
+            json.dumps(dict(event='gone', kind='cluster', name='cl-1')),
+        )
+        self.assertEqual(kept, [])
+
+    def test_the_same_name_in_two_kinds_is_two_deployments(self):
+        """`cl-test-abc` as a cluster and as a workspace are different things,
+        and a `gone` for one must not clear the other."""
+        kept = self.fold(
+            json.dumps(dict(event='pending', kind='cluster', name='x')),
+            json.dumps(dict(event='pending', kind='workspace', name='x')),
+            json.dumps(dict(event='gone', kind='cluster', name='x')),
+        )
+        self.assertEqual([x['kind'] for x in kept], ['workspace'])
+
+    def test_a_malformed_line_is_skipped_rather_than_fatal(self):
+        """A truncated last line -- a process killed between the write and the
+        fsync -- must not cost the reaper every other record."""
+        kept = self.fold(
+            json.dumps(dict(event='pending', kind='cluster', name='cl-1')),
+            '{"event": "pending", "kin',
+            '',
+            '[]',
+        )
+        self.assertEqual([x['name'] for x in kept], ['cl-1'])
+
+    def test_reading_reverses_into_newest_first(self):
+        """A workspace has to be terminated before the group that holds it, the
+        same ordering ``cleanup_tracked`` uses."""
+        from singlestoredb.tests import cleanup_deployments
+        with open(self.ledger, 'w') as file:
+            for kind, name in (
+                ('workspace_group', 'wg-1'), ('workspace', 'ws-1'),
+            ):
+                file.write(
+                    json.dumps(dict(event='pending', kind=kind, name=name))
+                    + '\n',
+                )
+        self.assertEqual(
+            [x['name'] for x in cleanup_deployments.read_ledger(self.ledger)],
+            ['ws-1', 'wg-1'],
+        )
+
+    #
+    # Resolving, with the management API stubbed out
+    #
+
+    def stub_managers(self, **attrs):
+        """Patch the reaper's manager lookup with a namespace."""
+        from singlestoredb.tests import cleanup_deployments
+        mgr = SimpleNamespace(**attrs)
+        patcher = patch.object(
+            cleanup_deployments, '_manager', lambda version: mgr,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return cleanup_deployments, mgr
+
+    def write_ledger(self, *records):
+        with open(self.ledger, 'w') as file:
+            for record in records:
+                file.write(json.dumps(record) + '\n')
+
+    def test_an_id_that_404s_is_treated_as_already_gone(self):
+        """The common case by far: the ledger records every creation, and a run
+        that ended normally terminated all of them. A clean sweep must exit 0
+        and terminate nothing."""
+        def get_cluster(ident):
+            raise ManagementError(errno=404, msg='not found')
+
+        mod, _ = self.stub_managers(get_cluster=get_cluster)
+        self.write_ledger(
+            dict(event='live', kind='cluster', name='cl-1', id='id-1'),
+        )
+        found, gone, unresolved = mod.find_ledger_leftovers(self.ledger)
+        self.assertEqual(found, [])
+        self.assertEqual(len(gone), 1)
+        self.assertEqual(unresolved, [])
+        self.assertEqual(mod.main(['--ledger', self.ledger, '--yes']), 0)
+
+    def test_a_live_id_is_resolved_and_terminated(self):
+        obj = self._deployment('cl-1', classname='Cluster')
+        mod, _ = self.stub_managers(get_cluster=lambda ident: obj)
+        self.write_ledger(
+            dict(event='live', kind='cluster', name='cl-1', id='id-1'),
+        )
+        self.assertEqual(mod.main(['--ledger', self.ledger, '--yes']), 0)
+        self.assertTrue(obj.terminated_with)
+
+    def test_a_dry_run_terminates_nothing(self):
+        obj = self._deployment('cl-1', classname='Cluster')
+        mod, _ = self.stub_managers(get_cluster=lambda ident: obj)
+        self.write_ledger(
+            dict(event='live', kind='cluster', name='cl-1', id='id-1'),
+        )
+        self.assertEqual(mod.main(['--ledger', self.ledger]), 0)
+        self.assertIsNone(obj.terminated_with)
+
+    def test_a_pending_record_is_resolved_by_name_over_the_listing(self):
+        """No id was ever returned, so the listing is the only handle -- the
+        same match ``_recover_orphan`` makes, and the case a cancelled
+        ``wait_on_active`` leaves."""
+        wanted = self._deployment('a-fusion-cluster-1f2e', classname='Cluster')
+        other = self._deployment('someone-elses', classname='Cluster')
+        mod, _ = self.stub_managers(clusters=[other, wanted])
+        self.write_ledger(
+            dict(event='pending', kind='cluster', name='a-fusion-cluster-1f2e'),
+        )
+        self.assertEqual(mod.main(['--ledger', self.ledger, '--yes']), 0)
+        self.assertTrue(wanted.terminated_with)
+        self.assertIsNone(other.terminated_with)
+
+    def test_a_pending_name_absent_from_the_listing_is_gone(self):
+        """The POST never landed, so there is nothing to reap and nothing to
+        complain about."""
+        mod, _ = self.stub_managers(clusters=[])
+        self.write_ledger(dict(event='pending', kind='cluster', name='cl-1'))
+        found, gone, unresolved = mod.find_ledger_leftovers(self.ledger)
+        self.assertEqual((found, len(gone), unresolved), ([], 1, []))
+
+    def test_an_already_terminated_deployment_is_not_terminated_again(self):
+        obj = self._deployment(
+            'cl-1', terminated_at='now', classname='Cluster',
+        )
+        mod, _ = self.stub_managers(get_cluster=lambda ident: obj)
+        self.write_ledger(
+            dict(event='live', kind='cluster', name='cl-1', id='id-1'),
+        )
+        self.assertEqual(mod.main(['--ledger', self.ledger, '--yes']), 0)
+        self.assertIsNone(obj.terminated_with)
+
+    def test_a_lookup_failure_that_is_not_a_404_exits_non_zero(self):
+        """"Could not tell" and "not there" must not read the same when the
+        difference is a cluster billing."""
+        def get_cluster(ident):
+            raise ManagementError(errno=500, msg='gateway sulked')
+
+        mod, _ = self.stub_managers(get_cluster=get_cluster)
+        self.write_ledger(
+            dict(event='live', kind='cluster', name='cl-1', id='id-1'),
+        )
+        found, gone, unresolved = mod.find_ledger_leftovers(self.ledger)
+        self.assertEqual((found, gone), ([], []))
+        self.assertEqual(len(unresolved), 1)
+        self.assertEqual(mod.main(['--ledger', self.ledger, '--yes']), 1)
+
+    def test_an_unknown_kind_is_reported_rather_than_skipped(self):
+        mod, _ = self.stub_managers()
+        self.write_ledger(dict(event='live', kind='mystery', name='x', id='1'))
+        _, _, unresolved = mod.find_ledger_leftovers(self.ledger)
+        self.assertEqual(len(unresolved), 1)
+        self.assertIn('unknown kind', unresolved[0])
+
+    def test_a_missing_ledger_is_not_an_error(self):
+        """The variable is set for a whole job, including steps whose tests
+        create nothing. Failing there would turn those runs red."""
+        from singlestoredb.tests import cleanup_deployments
+        missing = os.path.join(self.dir, 'never-written.jsonl')
+        self.assertEqual(cleanup_deployments.read_ledger(missing), [])
+        self.assertEqual(
+            cleanup_deployments.main(['--ledger', missing, '--yes']), 0,
+        )
+
+    def test_the_sweep_waits_out_a_provision_rather_than_the_class_budget(self):
+        """The whole point of the ledger is a job cancelled inside
+        ``wait_on_active``, whose cluster is minutes from deletable. Borrowing
+        ``utils.TERMINATE_RETRY_TIMEOUT`` -- short so the per-class sweep cannot
+        stall the suite -- would exhaust the budget and leave it billing, and
+        nothing runs after this to try again."""
+        from singlestoredb.tests import utils
+        obj = self._deployment('cl-1', classname='Cluster')
+        mod, _ = self.stub_managers(get_cluster=lambda ident: obj)
+        self.write_ledger(
+            dict(event='live', kind='cluster', name='cl-1', id='id-1'),
+        )
+
+        calls = []
+        patcher = patch.object(
+            utils, 'terminate',
+            lambda obj, **kwargs: calls.append(kwargs),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.assertEqual(mod.main(['--ledger', self.ledger, '--yes']), 0)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]['timeout'], mod.TERMINATE_TIMEOUT)
+        self.assertGreater(calls[0]['timeout'], utils.TERMINATE_RETRY_TIMEOUT)
+
+    def test_ledger_mode_refuses_the_guards_it_replaces(self):
+        """Silently ignoring --older-than would read as a safety guard that is
+        not there."""
+        from singlestoredb.tests import cleanup_deployments
+        for extra in (
+            ['--older-than', '0'], ['--any-name'],
+            ['--kind', 'cluster'], ['--show-unmatched'],
+        ):
+            with self.assertRaises(SystemExit):
+                cleanup_deployments.main(
+                    ['--ledger', self.ledger] + extra,
+                )
+
+
+class TestTerminateRetry(unittest.TestCase):
+    """
+    ``utils.terminate()``'s bounded retry for a deployment the API will not
+    delete yet.
+
+    A deployment killed mid-provision is PENDING/TRANSITIONING and the DELETE
+    comes back 400 or 409. Nothing retried that: Manager.RETRY_STATUSES is
+    {429, 500, 502, 503, 504}, so the per-class sweep warned, the session-end
+    sweep tried once more and the cluster stayed up.
+    """
+
+    def setUp(self):
+        from singlestoredb.tests import utils
+        self.utils = utils
+        self.slept = []
+        # A fake clock, not just a stubbed sleep: the retry budget is measured
+        # with time.monotonic(), so a sleep that does not advance it makes the
+        # deadline unreachable and the loop only ends when the stub runs out of
+        # refusals. That is the opposite of what the budget test asserts.
+        self.now = 0.0
+
+        def sleep(seconds):
+            self.slept.append(seconds)
+            self.now += seconds
+
+        for name, value in (
+            ('sleep', sleep), ('monotonic', lambda: self.now),
+        ):
+            patcher = patch(f'time.{name}', value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _refuser(self, *errnos):
+        """A deployment whose terminate raises these in turn, then succeeds."""
+        class Deployment:
+            attempts = 0
+            terminated_with = None
+
+            def terminate(inner, force=False):
+                inner.attempts += 1
+                if inner.attempts <= len(errnos):
+                    raise ManagementError(
+                        errno=errnos[inner.attempts - 1],
+                        msg='still provisioning',
+                    )
+                inner.terminated_with = force
+
+        return Deployment()
+
+    def test_a_400_is_retried_until_it_succeeds(self):
+        obj = self._refuser(400, 409)
+        self.utils.terminate(obj)
+        self.assertEqual(obj.attempts, 3)
+        self.assertTrue(obj.terminated_with)
+        self.assertEqual(self.slept, [15.0, 15.0])
+
+    def test_a_404_is_not_retried(self):
+        """It is already gone; retrying would burn the whole budget waiting for
+        something that is not coming back."""
+        obj = self._refuser(404)
+        with self.assertRaises(ManagementError):
+            self.utils.terminate(obj)
+        self.assertEqual(obj.attempts, 1)
+        self.assertEqual(self.slept, [])
+
+    def test_a_5xx_is_not_retried_here(self):
+        """The transport already retried it; another round trip from this layer
+        is not what fixes it."""
+        obj = self._refuser(503)
+        with self.assertRaises(ManagementError):
+            self.utils.terminate(obj)
+        self.assertEqual(obj.attempts, 1)
+
+    def test_the_budget_is_bounded_and_the_error_is_re_raised(self):
+        """Raising is what keeps the deployment in ``_tracked``, so the
+        end-of-session sweep gets another go at it."""
+        obj = self._refuser(*([409] * 100))
+        with self.assertRaises(ManagementError):
+            self.utils.terminate(obj, timeout=45.0, interval=15.0)
+        self.assertEqual(obj.attempts, 3)
+        self.assertEqual(self.slept, [15.0, 15.0])
+
+    def test_a_starter_kind_is_terminated_without_force(self):
+        """StarterWorkspace.terminate / StarterCluster.terminate take no
+        arguments at all."""
+        class Starter:
+            called = False
+
+            def terminate(inner):
+                inner.called = True
+
+        obj = Starter()
+        self.utils.terminate(obj)
+        self.assertTrue(obj.called)
+
+    def test_force_is_passed_when_the_signature_accepts_it(self):
+        """``force`` is what makes a workspace group with live workspaces in it
+        go away, so this is not cosmetic."""
+        seen = []
+
+        class Group:
+            def terminate(inner, force=False):
+                seen.append(force)
+
+        self.utils.terminate(Group())
+        self.assertEqual(seen, [True])
+
+    def test_a_type_error_from_inside_terminate_is_not_a_second_delete(self):
+        """The signature is inspected rather than discovered by catching
+        TypeError from the call. The old ``except TypeError`` also caught one
+        raised *inside* a terminate that did accept force, and retried without
+        it -- two DELETEs, the second unforced, which is exactly the shape that
+        leaves a workspace group behind."""
+        calls = []
+
+        class Group:
+            def terminate(inner, force=False):
+                calls.append(force)
+                raise TypeError('something inside went wrong')
+
+        with self.assertRaises(TypeError):
+            self.utils.terminate(Group())
+        self.assertEqual(calls, [True])
 
 
 class TestSharedClusterPool(unittest.TestCase):
@@ -1339,6 +2141,21 @@ class TestSharedClusterPool(unittest.TestCase):
     def setUp(self):
         from singlestoredb.tests import utils
         self.utils = utils
+
+        # Redirected before anything can create a cluster: the stand-in
+        # manager's create_cluster calls the real utils.track, which ledgers,
+        # and _pool_id is the live one, so under CI these mocked units used to
+        # append `id-of-cl-test-shared-N-<real pool id>` to the job's real
+        # ledger. The cleanup step then could not resolve those ids and exited
+        # non-zero on every run, burying any genuine unresolved record.
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        patcher = patch.dict(
+            os.environ,
+            {utils.LEDGER_ENV_VAR: os.path.join(tmp, 'deployments.jsonl')},
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
         self.saved_pool = list(utils._pool)
         self.saved_skip = utils._pool_skip
@@ -1424,6 +2241,10 @@ class TestSharedClusterPool(unittest.TestCase):
         self.assertEqual([x.id for x in first], [x.id for x in second])
         self.assertEqual(len(self.created), 2)
 
+    # A lock conflict during the pool build is waited out by the
+    # @retry_on_lock on create_cluster, which a stand-in manager does not
+    # have: see TestLockRetry.
+
     def test_the_pool_grows_to_the_largest_request(self):
         with self._patched():
             one = self.utils.shared_clusters(1)
@@ -1503,6 +2324,53 @@ class TestSharedClusterPool(unittest.TestCase):
                 self.utils.shared_clusters(1)
 
         self.assertEqual(self.created[0][2]['project'], 'chosen-project')
+
+    def test_pool_clusters_are_given_an_expiry(self):
+        # The only cleanup that survives the process being killed, so it has to
+        # be on the POST rather than left to the sweep.
+        with self._patched():
+            self.utils.shared_clusters(2)
+
+        self.assertEqual(
+            [x[2].get('expires_at') for x in self.created],
+            [self.utils.DEPLOYMENT_EXPIRES_AT] * 2,
+        )
+
+    def test_the_pattern_matches_the_pool_and_is_scoped_to_this_process(self):
+        with self._patched():
+            self.utils.shared_clusters(2)
+
+        pattern = self.utils.shared_cluster_pattern()
+        prefix, _, suffix = pattern.partition('%')
+
+        # A LIKE pattern, so assert it the way the server would read it:
+        # every pool name matches, and the suffix is the per-process id that
+        # keeps another run's pool from matching.
+        for name in self.utils.shared_cluster_names():
+            self.assertTrue(name.startswith(prefix), (name, pattern))
+            self.assertTrue(name.endswith(suffix), (name, pattern))
+
+        self.assertEqual(suffix, f'-{self.utils._pool_id}')
+
+        # And another process's pool does not: same prefix, different id.
+        other = f'cl-test-shared-0-{"f" * 8}'
+        self.assertTrue(other.startswith(prefix), (other, pattern))
+        self.assertFalse(other.endswith(suffix), (other, pattern))
+
+    def test_the_names_follow_the_pool_as_it_grows(self):
+        # Read at assertion time rather than cached, so a class that asks for
+        # more clusters later cannot leave an exact-count expectation stale.
+        with self._patched():
+            self.utils.shared_clusters(1)
+            self.assertEqual(len(self.utils.shared_cluster_names()), 1)
+
+            self.utils.shared_clusters(3)
+            self.assertEqual(len(self.utils.shared_cluster_names()), 3)
+
+        self.assertEqual(
+            self.utils.shared_cluster_names(),
+            [x[0] for x in self.created],
+        )
 
 
 class TestClearStage(unittest.TestCase):
@@ -1676,6 +2544,14 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
         # Not zero: a default that swept every match would make running this
         # during a test run destructive.
         self.assertGreaterEqual(self.mod.DEFAULT_MIN_AGE_HOURS, 1)
+        # Nothing runs after this tool, so its terminate budget has to cover a
+        # full provision (~460s for an S-00 cluster reaching ACTIVE) rather than
+        # the per-class budget, which is short on purpose.
+        from singlestoredb.tests import utils
+        self.assertGreater(
+            self.mod.TERMINATE_TIMEOUT, utils.TERMINATE_RETRY_TIMEOUT,
+        )
+        self.assertGreaterEqual(self.mod.TERMINATE_TIMEOUT, 460)
         names, spared = self._find([
             self._cluster('cl-test-mid-run', hours=1),
         ])
@@ -1813,6 +2689,369 @@ class TestLeftoverDeploymentPatterns(unittest.TestCase):
         import argparse
         with self.assertRaises(argparse.ArgumentTypeError):
             self.mod.parse_since('last tuesday')
+
+
+class TestStrandedSecretPatterns(unittest.TestCase):
+    """
+    ``--secrets`` deletes org-scoped objects in a real organization, and a
+    secret nobody can read back is not recoverable, so the name gate and the
+    age gate both matter more here than they do for a deployment.
+    """
+
+    def setUp(self):
+        from singlestoredb.tests import cleanup_deployments
+        self.mod = cleanup_deployments
+
+    def test_generated_names_match(self):
+        for name in (
+            'secret_v1_test_deadbeef',
+            'secret_v2_test_deadbeef',
+        ):
+            self.assertTrue(self.mod.is_test_secret(name), name)
+
+    def test_retired_names_still_match(self):
+        # The fixed names, which main still creates. Reaping them is the only
+        # thing that removes one a killed run stranded.
+        for name in ('secret_name', 'secret_v2_test'):
+            self.assertTrue(self.mod.is_test_secret(name), name)
+
+    def test_names_a_person_chose_do_not_match(self):
+        for name in (
+            None,
+            '',
+            'secret',
+            'openai_api_key',
+            'secret_v3_test_deadbeef',
+            'prod_secret_name',
+            'secret_name_prod',
+        ):
+            self.assertFalse(self.mod.is_test_secret(name), name)
+
+    def _secret(self, name, hours=None, deleted=False):
+        """A secret as the API reports one in the listing."""
+        created = None
+        if hours is not None:
+            created = (
+                datetime.datetime.now(tz=datetime.timezone.utc)
+                - datetime.timedelta(hours=hours)
+            ).isoformat()
+        return dict(
+            secretID=f'id-{name}',
+            name=name,
+            createdBy='someone',
+            createdAt=created,
+            lastUpdatedBy='someone',
+            lastUpdatedAt=created,
+            deletedAt=created if deleted else None,
+        )
+
+    def _manager(self, *items):
+        mgr = MagicMock()
+        mgr._get.return_value.json.return_value = dict(secrets=list(items))
+        return mgr
+
+    def _find(self, *items, **kwargs):
+        mgr = self._manager(*items)
+        found, spared, self.unmatched = self.mod.find_stranded_secrets(
+            mgr, **kwargs,
+        )
+        self.listed = mgr._get.call_args[0][0]
+        return [x[1].name for x in found], spared
+
+    def test_the_listing_asks_for_every_secret(self):
+        # Not ?name=: the point is to find names this process never chose.
+        self._find()
+        self.assertEqual(self.listed, 'secrets')
+
+    def test_the_age_filter_spares_a_secret_a_live_run_may_own(self):
+        names, spared = self._find(
+            self._secret('secret_v2_test_deadbeef', hours=5),
+            self._secret('secret_v2_test_beefcafe', hours=0.01),
+        )
+        self.assertEqual(names, ['secret_v2_test_deadbeef'])
+        self.assertEqual(len(spared), 1)
+        self.assertIn('secret_v2_test_beefcafe', spared[0])
+
+    def test_the_default_age_is_shorter_than_the_deployment_one(self):
+        # The window guarded is a test body, not a suite: a secret is created
+        # and deleted seconds apart. Still not zero -- a run killed between the
+        # POST and the DELETE looks like one still between them.
+        self.assertGreater(self.mod.DEFAULT_SECRET_MIN_AGE_HOURS, 0)
+        self.assertLess(
+            self.mod.DEFAULT_SECRET_MIN_AGE_HOURS,
+            self.mod.DEFAULT_MIN_AGE_HOURS,
+        )
+
+    def test_an_unreported_creation_time_is_spared_by_default(self):
+        names, spared = self._find(self._secret('secret_v2_test_ace0'))
+        self.assertEqual(names, [])
+        self.assertIn('secret_v2_test_ace0', spared[0])
+
+        names, _ = self._find(
+            self._secret('secret_v2_test_ace0'), include_unknown_age=True,
+        )
+        self.assertEqual(names, ['secret_v2_test_ace0'])
+
+    def test_an_unrecognized_name_is_reported_not_swept(self):
+        names, _ = self._find(
+            self._secret('secret_v2_test_cafe', hours=10),
+            self._secret('openai_api_key', hours=10),
+        )
+        self.assertEqual(names, ['secret_v2_test_cafe'])
+        self.assertEqual(len(self.unmatched), 1)
+        self.assertIn('openai_api_key', self.unmatched[0])
+
+    def test_an_already_deleted_secret_is_ignored_entirely(self):
+        # Neither swept nor reported as unrecognized: it is already gone, so
+        # there is nothing for a reader of the output to act on.
+        names, spared = self._find(
+            self._secret('secret_v2_test_0ff0', hours=10, deleted=True),
+            self._secret('someones_deleted_key', hours=10, deleted=True),
+        )
+        self.assertEqual((names, spared, self.unmatched), ([], [], []))
+
+
+class TestStrandedSecretSweep(unittest.TestCase):
+    """``--secrets`` end to end, with the management API stubbed out."""
+
+    def setUp(self):
+        from singlestoredb.tests import cleanup_deployments
+        self.mod = cleanup_deployments
+        self.mgr = MagicMock()
+        self.mgr._get.return_value.json.return_value = dict(
+            secrets=[
+                dict(
+                    secretID='id-old', name='secret_v2_test_deadbeef',
+                    createdBy='x', lastUpdatedBy='x', lastUpdatedAt=None,
+                    createdAt=(
+                        datetime.datetime.now(tz=datetime.timezone.utc)
+                        - datetime.timedelta(hours=10)
+                    ).isoformat(),
+                ),
+                dict(
+                    secretID='id-new', name='secret_v2_test_beefcafe',
+                    createdBy='x', lastUpdatedBy='x', lastUpdatedAt=None,
+                    createdAt=datetime.datetime.now(
+                        tz=datetime.timezone.utc,
+                    ).isoformat(),
+                ),
+            ],
+        )
+        patcher = patch.object(
+            self.mod, '_manager', lambda version: self.mgr,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def deleted(self):
+        return [x[0][0] for x in self.mgr._delete.call_args_list]
+
+    def test_the_old_secret_is_deleted_and_the_new_one_is_not(self):
+        self.assertEqual(self.mod.main(['--secrets', '--yes']), 0)
+        self.assertEqual(self.deleted(), ['secrets/id-old'])
+
+    def test_a_dry_run_deletes_nothing(self):
+        self.assertEqual(self.mod.main(['--secrets']), 0)
+        self.assertEqual(self.deleted(), [])
+
+    def test_older_than_is_honoured(self):
+        self.assertEqual(
+            self.mod.main(['--secrets', '--older-than', '20', '--yes']), 0,
+        )
+        self.assertEqual(self.deleted(), [])
+
+    def test_no_deployment_listing_is_touched(self):
+        # --secrets is a different subject, not an extra filter: asking for it
+        # must not walk the clusters or the workspace groups.
+        self.mod.main(['--secrets', '--yes'])
+        self.mgr.clusters.__iter__.assert_not_called()
+
+    def test_a_listing_failure_is_reported_rather_than_raised(self):
+        # A cleanup step, and a secret bills nothing: failing the job over one
+        # is the wrong trade. Non-zero, so the log still says something went
+        # wrong.
+        self.mgr._get.side_effect = ManagementError(msg='no such route')
+        self.assertEqual(self.mod.main(['--secrets', '--yes']), 1)
+
+    def test_a_failed_delete_exits_non_zero(self):
+        self.mgr._delete.side_effect = ManagementError(msg='nope')
+        self.assertEqual(self.mod.main(['--secrets', '--yes']), 1)
+
+    def test_the_deployment_selectors_do_not_compose_with_it(self):
+        import contextlib
+        import io
+        for argv in (
+            ['--secrets', '--kind', 'cluster'],
+            ['--secrets', '--any-name'],
+            ['--secrets', '--since', 'today'],
+            ['--secrets', '--ledger', 'x.jsonl'],
+        ):
+            with self.assertRaises(SystemExit, msg=argv), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                self.mod.main(argv)
+
+
+class TestToDatetime(unittest.TestCase):
+    """
+    ``to_datetime`` has to read both timestamp shapes the API returns.
+
+    Most fields come back as RFC 3339, but ``GET /v2/clusters/{id}`` reports
+    ``expiresAt`` as a Go ``time.Time.String()`` rendering -- verified live:
+    ``2026-09-17 14:42:41.445984 +0000 UTC`` against a ``createdAt`` of
+    ``2026-09-17T13:42:41.493848Z`` on the same cluster. The trailing zone name
+    is not ISO 8601, and parsing it used to fail into ``None``, which reads as
+    "this cluster never expires".
+    """
+
+    def test_rfc_3339(self):
+        out = to_datetime('2026-09-17T13:42:41.493848Z')
+        self.assertEqual(out, datetime.datetime(2026, 9, 17, 13, 42, 41, 493848))
+
+    def test_go_time_string(self):
+        out = to_datetime('2026-09-17 14:42:41.445984 +0000 UTC')
+        self.assertEqual(out, datetime.datetime(2026, 9, 17, 14, 42, 41, 445984))
+
+    def test_offset_is_normalized_to_include_a_colon(self):
+        # Go writes +0000; datetime.fromisoformat only accepts that spelling on
+        # 3.11 and later, so the normalizer has to insert the colon itself. This
+        # asserts on the normalized string rather than on a parsed result
+        # because the parsed result is only wrong on 3.9 and 3.10, which would
+        # leave the failure invisible to anyone testing on a newer interpreter.
+        self.assertEqual(
+            _normalize_datetime('2026-09-17 14:42:41.445984 +0000 UTC'),
+            '2026-09-17 14:42:41.445984+00:00',
+        )
+        self.assertEqual(
+            _normalize_datetime('2026-09-17 09:42:41 +0530 IST'),
+            '2026-09-17 09:42:41+05:30',
+        )
+        # An offset that already carries a colon is left as it is.
+        self.assertEqual(
+            _normalize_datetime('2026-09-17 09:42:41 +05:30 IST'),
+            '2026-09-17 09:42:41+05:30',
+        )
+
+    def test_rfc_3339_fraction_is_padded(self):
+        # The API trims trailing zeros here too: a job's createdAt came back as
+        # '2026-09-18T12:39:20.43888Z'. Only 3.11 and later read a fraction that
+        # is neither 3 nor 6 digits, so before Z was recognized as an offset this
+        # value skipped the padding and to_datetime_strict raised on 3.10.
+        self.assertEqual(
+            _normalize_datetime('2026-09-18T12:39:20.43888Z'),
+            '2026-09-18T12:39:20.438880+00:00',
+        )
+        self.assertEqual(
+            to_datetime_strict('2026-09-18T12:39:20.43888Z'),
+            datetime.datetime(2026, 9, 18, 12, 39, 20, 438880),
+        )
+
+    def test_rfc_3339_nanoseconds_are_truncated(self):
+        # Nine digits does not fit a datetime; the extra ones are dropped.
+        self.assertEqual(
+            _normalize_datetime('2026-09-18T12:39:20.438880123Z'),
+            '2026-09-18T12:39:20.438880+00:00',
+        )
+
+    def test_go_time_string_with_truncated_fraction(self):
+        # Go trims trailing zeros, so the fraction is not always 6 digits.
+        out = to_datetime('2026-09-17 14:42:41.4 +0000 UTC')
+        self.assertEqual(out, datetime.datetime(2026, 9, 17, 14, 42, 41, 400000))
+
+    def test_go_time_string_with_monotonic_reading(self):
+        out = to_datetime(
+            '2026-09-17 14:42:41.445984 +0000 UTC m=+0.000000001',
+        )
+        self.assertEqual(out, datetime.datetime(2026, 9, 17, 14, 42, 41, 445984))
+
+    def test_offset_is_applied_and_dropped(self):
+        # Shifted onto UTC and left naive, matching the RFC 3339 values, so two
+        # timestamps read off one object can be compared.
+        out = to_datetime('2026-09-17 09:42:41 -0500 EST')
+        self.assertEqual(out, datetime.datetime(2026, 9, 17, 14, 42, 41))
+        self.assertIsNone(out.tzinfo)
+
+    def test_both_shapes_subtract(self):
+        created = to_datetime('2026-09-17T13:42:41.493848Z')
+        expires = to_datetime('2026-09-17 14:42:41.445984 +0000 UTC')
+        self.assertAlmostEqual(
+            (expires - created).total_seconds(), 3600, delta=1,
+        )
+
+    def test_date_only(self):
+        out = to_datetime('2026-09-17')
+        self.assertEqual(out, datetime.datetime(2026, 9, 17))
+
+    def test_zero_sentinel_and_unparseable_are_none(self):
+        self.assertIsNone(to_datetime('0001-01-01T00:00:00Z'))
+        self.assertIsNone(to_datetime(None))
+        self.assertIsNone(to_datetime(''))
+        self.assertIsNone(to_datetime('not a date'))
+
+    def test_the_go_spelling_of_the_zero_sentinel_is_none_too(self):
+        # Go's zero time means "unset" -- an expiresAt on a resource that does
+        # not expire -- and arrives in whichever shape the field uses. Reading
+        # the Go spelling as a real timestamp reported year 1 as an expiry.
+        self.assertIsNone(to_datetime('0001-01-01 00:00:00 +0000 UTC'))
+        # Recognized from the parsed value, so the trimmings Go may add do not
+        # each need their own literal.
+        self.assertIsNone(
+            to_datetime('0001-01-01 00:00:00 +0000 UTC m=+0.000000001'),
+        )
+        self.assertIsNone(to_datetime('0001-01-01 00:00:00 +0000 GMT'))
+        self.assertIsNone(to_datetime('0001-01-01'))
+
+    def test_datetime_passes_through(self):
+        given = datetime.datetime(2026, 9, 17, 13, 42, 41)
+        self.assertIs(to_datetime(given), given)
+
+    def test_strict_reads_the_go_shape_too(self):
+        out = to_datetime_strict('2026-09-17 14:42:41.445984 +0000 UTC')
+        self.assertEqual(out, datetime.datetime(2026, 9, 17, 14, 42, 41, 445984))
+
+    def test_strict_still_raises_on_nothing(self):
+        with self.assertRaises(TypeError):
+            to_datetime_strict(None)
+        with self.assertRaises(ValueError):
+            to_datetime_strict('0001-01-01T00:00:00Z')
+
+    def test_strict_raises_on_the_go_spelling_of_the_sentinel(self):
+        with self.assertRaises(ValueError):
+            to_datetime_strict('0001-01-01 00:00:00 +0000 UTC')
+
+
+class TestAdminPassword(unittest.TestCase):
+    """The generated admin password must satisfy the API's policy on every
+    draw, not merely most of them: a ``secrets.token_urlsafe`` password
+    containing ``abc`` or ``321``, or one whose only punctuation is the ``&``
+    the API does not count as special, is rejected with a 400 -- which the old
+    generator hit at a low enough rate to look like an API flake."""
+
+    #: Enough draws that a per-character rule would have to be enforced, not
+    #: just usually satisfied, to pass. A 24-character password holds 22
+    #: three-character windows.
+    DRAWS = 2000
+
+    def test_the_policy_holds_on_every_draw(self):
+        for _ in range(self.DRAWS):
+            password = admin_password()
+            self.assertEqual(len(password), 24)
+            self.assertTrue(any(x.islower() for x in password), password)
+            self.assertTrue(any(x.isupper() for x in password), password)
+            self.assertTrue(any(x.isdigit() for x in password), password)
+            # A special character the API actually counts as one: `&` is
+            # accepted in a password but does not satisfy the rule.
+            self.assertTrue(any(x in '-_$' for x in password), password)
+            self.assertFalse('&' in password, password)
+            for i in range(len(password) - 2):
+                a, b, c = (ord(x) for x in password[i:i+3])
+                # No three characters a step of -1, 0 or 1 apart in a row.
+                self.assertFalse(b - a == c - b and abs(b - a) <= 1, password)
+
+    def test_the_length_is_honoured(self):
+        self.assertEqual(len(admin_password(32)), 32)
+
+    def test_the_draws_differ(self):
+        self.assertEqual(len({admin_password() for _ in range(100)}), 100)
 
 
 if __name__ == '__main__':
