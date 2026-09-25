@@ -1517,7 +1517,7 @@ class TestStarterCluster(unittest.TestCase):
         # xdist worker -- and with anything an earlier failed run leaked. The
         # API reports the collision as a bare 500.
         cls.starter_username = f'starter_user_{name[:8]}'
-        cls.password = secrets.token_urlsafe(20)
+        cls.password = utils.admin_password()
 
         cls.database_name = f'starter_db_{name}'
 

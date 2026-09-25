@@ -8,6 +8,7 @@ import os
 import random
 import re
 import secrets
+import string
 import unittest
 import uuid
 from types import SimpleNamespace
@@ -285,6 +286,61 @@ def drop_user(name: str) -> None:
         with s2.connect(**args) as conn:
             with conn.cursor() as cur:
                 cur.execute(f'DROP USER IF EXISTS {name};')
+
+
+#: The characters the API counts towards `password must contain at least 1
+#: special characters`. Probed one character at a time against
+#: `POST /v1/workspaceGroups`, which checks the password before it looks the
+#: region up: `-`, `_`, `$`, `!`, `@`, `#`, `%` and `*` all satisfy the rule,
+#: and `&` does not -- so a password whose only punctuation is an `&` is a
+#: 400. The old hand-appended `-x&$` suffix passed on its `-` and `$`, not on
+#: its `&`. These three are the ones that are also URL-unreserved or a
+#: sub-delimiter, in case a password ever reaches a connection string.
+_PASSWORD_SPECIALS = '-_$'
+
+#: Characters an admin password is drawn from.
+_PASSWORD_ALPHABET = string.ascii_letters + string.digits + _PASSWORD_SPECIALS
+
+
+def _runs_on(a: str, b: str, c: str) -> bool:
+    """Whether ``a b c`` is three characters in a row of the same step."""
+    first, second = ord(b) - ord(a), ord(c) - ord(b)
+    return first == second and abs(first) <= 1
+
+
+def admin_password(length: int = 24) -> str:
+    """
+    Return a password the management API will accept.
+
+    The API enforces a policy the obvious ``secrets.token_urlsafe(20)`` does
+    not satisfy: the password must mix cases, digits and at least one special
+    character (see :data:`_PASSWORD_SPECIALS`), and it must not contain more
+    than two consecutive sequential characters -- a
+    token holding ``abc`` or ``321`` anywhere in it is rejected with a 400,
+    which made the old generator fail a small fraction of runs rather than
+    never. Identical runs (``aaa``) are excluded on the same terms, being the
+    same shape of rule and no loss of entropy worth keeping.
+
+    Sequential is read on code points here, which is stricter than the letter
+    and digit sequences the API means but simpler, and it costs nothing: a
+    character that would close a run is redrawn, not the whole password.
+
+    """
+    while True:
+        chars: List[str] = []
+        while len(chars) < length:
+            char = secrets.choice(_PASSWORD_ALPHABET)
+            if len(chars) >= 2 and _runs_on(chars[-2], chars[-1], char):
+                continue
+            chars.append(char)
+        password = ''.join(chars)
+        if (
+            any(x.islower() for x in password)
+            and any(x.isupper() for x in password)
+            and any(x.isdigit() for x in password)
+            and any(x in _PASSWORD_SPECIALS for x in password)
+        ):
+            return password
 
 
 #

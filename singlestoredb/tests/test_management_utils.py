@@ -23,6 +23,7 @@ from singlestoredb.management.utils import _normalize_datetime
 from singlestoredb.management.utils import normalize_remote_path
 from singlestoredb.management.utils import to_datetime
 from singlestoredb.management.utils import to_datetime_strict
+from singlestoredb.tests.utils import admin_password
 from singlestoredb.tests.utils import counting_file_space
 from singlestoredb.tests.utils import counting_stage
 
@@ -3016,6 +3017,41 @@ class TestToDatetime(unittest.TestCase):
     def test_strict_raises_on_the_go_spelling_of_the_sentinel(self):
         with self.assertRaises(ValueError):
             to_datetime_strict('0001-01-01 00:00:00 +0000 UTC')
+
+
+class TestAdminPassword(unittest.TestCase):
+    """The generated admin password must satisfy the API's policy on every
+    draw, not merely most of them: a ``secrets.token_urlsafe`` password
+    containing ``abc`` or ``321``, or one whose only punctuation is the ``&``
+    the API does not count as special, is rejected with a 400 -- which the old
+    generator hit at a low enough rate to look like an API flake."""
+
+    #: Enough draws that a per-character rule would have to be enforced, not
+    #: just usually satisfied, to pass. A 24-character password holds 22
+    #: three-character windows.
+    DRAWS = 2000
+
+    def test_the_policy_holds_on_every_draw(self):
+        for _ in range(self.DRAWS):
+            password = admin_password()
+            self.assertEqual(len(password), 24)
+            self.assertTrue(any(x.islower() for x in password), password)
+            self.assertTrue(any(x.isupper() for x in password), password)
+            self.assertTrue(any(x.isdigit() for x in password), password)
+            # A special character the API actually counts as one: `&` is
+            # accepted in a password but does not satisfy the rule.
+            self.assertTrue(any(x in '-_$' for x in password), password)
+            self.assertFalse('&' in password, password)
+            for i in range(len(password) - 2):
+                a, b, c = (ord(x) for x in password[i:i+3])
+                # No three characters a step of -1, 0 or 1 apart in a row.
+                self.assertFalse(b - a == c - b and abs(b - a) <= 1, password)
+
+    def test_the_length_is_honoured(self):
+        self.assertEqual(len(admin_password(32)), 32)
+
+    def test_the_draws_differ(self):
+        self.assertEqual(len({admin_password() for _ in range(100)}), 100)
 
 
 if __name__ == '__main__':

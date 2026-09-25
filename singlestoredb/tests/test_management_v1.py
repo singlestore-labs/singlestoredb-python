@@ -69,7 +69,7 @@ class TestWorkspace(unittest.TestCase):
         cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
+        cls.password = utils.admin_password()
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
@@ -268,7 +268,7 @@ class TestStarterWorkspace(unittest.TestCase):
         # run on different xdist workers -- and with anything an earlier failed
         # run leaked. The API answers the collision with a bare 500.
         cls.starter_username = f'starter_user_{name[:8]}'
-        cls.password = secrets.token_urlsafe(20)
+        cls.password = utils.admin_password()
 
         cls.database_name = f'starter_db_{name}'
 
@@ -374,7 +374,7 @@ class TestStage(unittest.TestCase):
         cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
+        cls.password = utils.admin_password()
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
@@ -978,7 +978,7 @@ class TestJob(unittest.TestCase):
         cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
+        cls.password = utils.admin_password()
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
