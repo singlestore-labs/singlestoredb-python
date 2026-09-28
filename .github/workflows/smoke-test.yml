@@ -14,10 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Python 3.11
+      # This job only drives resources/create_test_cluster.py; the versions the
+      # package is tested against are the smoke-test matrix below. So it tracks
+      # the newest final release.
+      - name: Set up Python 3.14
         uses: actions/setup-python@v7
         with:
-          python-version: 3.11
+          python-version: "3.14"
           cache: "pip"
 
       - name: Install dependencies
@@ -158,10 +161,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Python 3.11
+      # As in setup-database: this only drives resources/drop_db.py.
+      - name: Set up Python 3.14
         uses: actions/setup-python@v7
         with:
-          python-version: 3.11
+          python-version: "3.14"
           cache: "pip"
 
       - name: Install dependencies

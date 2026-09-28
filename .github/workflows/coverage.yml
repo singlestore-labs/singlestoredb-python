@@ -30,10 +30,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # One version, not a matrix: the supported range is covered by
+      # smoke-test.yml and pre-commit.yml, so this tracks the newest final
+      # release rather than the floor in pyproject.toml.
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.10"
+          python-version: "3.14"
           cache: "pip"
 
       - name: Install dependencies
@@ -167,10 +170,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # As in test-coverage above: newest final release, not the floor.
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.10"
+          python-version: "3.14"
           cache: "pip"
 
       - name: Install dependencies
