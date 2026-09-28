@@ -892,6 +892,10 @@ def get_schema(
 
     spec = utils.resolve_type_alias(spec)
     spec, is_optional = unwrap_optional(spec)
+    # Again: the first pass only sees the outermost layer. An Optional is a
+    # Union, not an alias, so `Optional[NDArray[...]]` -- every typed numpy
+    # annotation marked nullable, on numpy 2.5 -- reaches here unexpanded.
+    spec = utils.resolve_type_alias(spec)
     origin = typing.get_origin(spec)
     args = typing.get_args(spec)
     args_origins = [typing.get_origin(x) if x is not None else None for x in args]

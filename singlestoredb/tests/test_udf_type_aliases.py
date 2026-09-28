@@ -20,6 +20,7 @@ import typing
 import unittest
 from typing import Any
 from typing import Callable
+from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -63,6 +64,35 @@ class TypeAliasTest(unittest.TestCase):
             return x * 2
 
         assert to_sql(foo_b) == '`foo_b`(`x` DOUBLE NOT NULL) RETURNS DOUBLE NOT NULL'
+
+    def test_optional_subscripted_alias(self) -> None:
+        ScalarT = typing.TypeVar('ScalarT')
+        NDArrayAlias = typing.TypeAliasType(  # noqa: TYP006
+            'NDArrayAlias',
+            np.ndarray[Any, np.dtype[ScalarT]],
+            type_params=(ScalarT,),
+        )
+
+        @udf
+        def foo_c(
+            x: Optional[NDArrayAlias[np.str_]],
+        ) -> Optional[NDArrayAlias[np.str_]]:
+            return x
+
+        # NOT NULL despite the Optional: the numpy branch of `get_schema` does
+        # not thread `is_optional` into its ParamSpec. Pre-existing on every
+        # numpy version, and asserted here so the alias expansion above is
+        # provably nullability-neutral.
+        assert to_sql(foo_c) == '`foo_c`(`x` TEXT NOT NULL) RETURNS TEXT NOT NULL'
+
+    def test_optional_bare_alias(self) -> None:
+        Vec = typing.TypeAliasType('Vec', npt.NDArray[np.float64])  # noqa: TYP006
+
+        @udf
+        def foo_d(x: Optional[Vec]) -> Optional[Vec]:
+            return x
+
+        assert to_sql(foo_d) == '`foo_d`(`x` DOUBLE NOT NULL) RETURNS DOUBLE NOT NULL'
 
 
 if __name__ == '__main__':
