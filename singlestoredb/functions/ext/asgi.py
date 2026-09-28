@@ -522,7 +522,7 @@ def build_udf_endpoint(
     """
     if returns_data_format in ['scalar', 'list']:
 
-        is_async = asyncio.iscoroutinefunction(func)
+        is_async = inspect.iscoroutinefunction(func)
 
         async def do_func(
             cancel_event: threading.Event,
@@ -568,7 +568,7 @@ def build_vector_udf_endpoint(
     """
     masks = get_masked_params(func)
     array_cls = get_array_class(returns_data_format)
-    is_async = asyncio.iscoroutinefunction(func)
+    is_async = inspect.iscoroutinefunction(func)
 
     async def do_func(
         cancel_event: threading.Event,
@@ -633,7 +633,7 @@ def build_tvf_endpoint(
     """
     if returns_data_format in ['scalar', 'list']:
 
-        is_async = asyncio.iscoroutinefunction(func)
+        is_async = inspect.iscoroutinefunction(func)
 
         async def do_func(
             cancel_event: threading.Event,
@@ -698,7 +698,7 @@ def build_vector_tvf_endpoint(
         #        each result row, so we just have to use the same
         #        row ID for all rows in the result.
 
-        is_async = asyncio.iscoroutinefunction(func)
+        is_async = inspect.iscoroutinefunction(func)
 
         # Call function on each column of data
         async with timer('call_function'):
@@ -787,7 +787,7 @@ def make_func(
     info['timeout'] = max(timeout, 1)
 
     # Set async flag
-    info['is_async'] = asyncio.iscoroutinefunction(func)
+    info['is_async'] = inspect.iscoroutinefunction(func)
 
     # Setup argument types for rowdat_1 parser
     colspec = []

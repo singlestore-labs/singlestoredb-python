@@ -36,6 +36,62 @@ def is_union(x: Any) -> bool:
     return typing.get_origin(x) in _UNION_TYPES
 
 
+def _is_type_alias(obj: Any) -> bool:
+    """Check if an object is a PEP 695 type alias."""
+    # Duck-typed rather than isinstance(obj, typing.TypeAliasType): the class
+    # only exists in 3.12+, and a library supporting older versions may be
+    # using the typing_extensions backport instead.
+    return hasattr(obj, '__value__') and hasattr(obj, '__type_params__')
+
+
+def resolve_type_alias(obj: Any) -> Any:
+    """
+    Expand a PEP 695 type alias to the type it stands for.
+
+    numpy 2.5 redefined ``npt.NDArray`` as an alias --
+    ``type NDArray[ScalarT] = ndarray[_AnyShape, dtype[ScalarT]]`` -- rather
+    than a subscripted generic. For ``NDArray[np.str_]`` that makes
+    ``typing.get_origin`` return the alias object instead of ``numpy.ndarray``
+    and ``typing.get_args`` return ``(np.str_,)`` instead of the
+    ``(shape, dtype[...])`` pair the type checks here read. Expanding the alias
+    puts the annotation back into the subscripted-generic form, so the rest of
+    the introspection works the same on every numpy version.
+
+    Parameters
+    ----------
+    obj : Any
+        Python type annotation
+
+    Returns
+    -------
+    Any
+        The annotation with any type aliases expanded
+
+    """
+    while True:
+        origin = typing.get_origin(obj)
+
+        # A subscripted alias: `NDArray[np.str_]`. Subscripting the alias's own
+        # value substitutes the arguments for its type parameters. This case is
+        # tested before the bare one below because a subscripted alias forwards
+        # attribute lookups to the alias it came from, so it answers to
+        # __value__ as well -- reading that here would drop the arguments.
+        if _is_type_alias(origin):
+            try:
+                obj = origin.__value__[typing.get_args(obj)]
+            except TypeError:
+                # Not substitutable; leave it for the caller to reject
+                return obj
+            continue
+
+        # A bare alias used directly as an annotation: `type Vec = NDArray[f64]`
+        if origin is None and _is_type_alias(obj):
+            obj = obj.__value__
+            continue
+
+        return obj
+
+
 def get_annotations(obj: Any) -> Dict[str, Any]:
     """Get the annotations of an object."""
     return typing.get_type_hints(obj)
@@ -60,6 +116,8 @@ def get_type_name(obj: Any) -> str:
 
 def is_numpy(obj: Any) -> bool:
     """Check if an object is a numpy array."""
+    obj = resolve_type_alias(obj)
+
     if str(obj).startswith('numpy.ndarray['):
         return True
 

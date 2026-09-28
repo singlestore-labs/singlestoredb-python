@@ -276,6 +276,7 @@ def simplify_dtype(dtype: Any) -> List[Any]:
         list of dtype strings, TupleCollections, and ArrayCollections
 
     """
+    dtype = utils.resolve_type_alias(dtype)
     origin = typing.get_origin(dtype)
     atype = type(dtype)
     args = []
@@ -889,6 +890,7 @@ def get_schema(
     function_type = 'udf'
     udf_parameter = '`returns=`' if mode == 'return' else '`args=`'
 
+    spec = utils.resolve_type_alias(spec)
     spec, is_optional = unwrap_optional(spec)
     origin = typing.get_origin(spec)
     args = typing.get_args(spec)
@@ -1151,6 +1153,8 @@ def vector_check(obj: Any) -> Tuple[Any, str]:
         'scalar', 'list', 'numpy', 'pandas', or 'polars'
 
     """
+    obj = utils.resolve_type_alias(obj)
+
     if utils.is_numpy(obj):
         if len(typing.get_args(obj)) < 2:
             return None, 'numpy'
