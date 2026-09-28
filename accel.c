@@ -369,18 +369,28 @@ inline int IMIN(int a, int b) { return((a) < (b) ? a : b); }
 
 static PyObject *create_numpy_array(PyObject *py_memview, char *data_format, int data_type, PyObject *py_objs);
 
+// Returns a newly allocated UTF-8 copy of `unicode`; the caller owns it
+// and must free() it.
 char *_PyUnicode_AsUTF8(PyObject *unicode) {
     PyObject *bytes = PyUnicode_AsEncodedString(unicode, "utf-8", "strict");
     if (!bytes) return NULL;
 
     char *str = NULL;
     Py_ssize_t str_l = 0;
-    if (PyBytes_AsStringAndSize(bytes, &str, &str_l) < 0) {
-        return NULL;
-    }
+    char *out = NULL;
 
-    char *out = calloc(str_l + 1, 1);
+    if (PyBytes_AsStringAndSize(bytes, &str, &str_l) < 0) goto exit;
+
+    out = calloc(str_l + 1, 1);
+    if (!out) {
+        PyErr_NoMemory();
+        goto exit;
+    }
     memcpy(out, str, str_l);
+
+exit:
+    Py_DECREF(bytes);
+
     return out;
 }
 
@@ -924,14 +934,45 @@ error:
 }
 
 
+// Name of the capsule, stored in the struct sequence type's dict, that owns
+// the type's field name storage.
+#define STRUCTSEQUENCE_FIELDS_CAPSULE "singlestoredb.Row.fields"
+
+
+// Frees a NULL name terminated array of struct sequence fields and the
+// names in it.
+static void free_structsequence_fields(PyStructSequence_Field *fields) {
+    if (!fields) return;
+    for (PyStructSequence_Field *field = fields; field->name; field++) {
+        free((void*)field->name);
+    }
+    free(fields);
+}
+
+
+static void structsequence_fields_capsule_destructor(PyObject *py_capsule) {
+    PyStructSequence_Field *fields = (PyStructSequence_Field*)
+        PyCapsule_GetPointer(py_capsule, STRUCTSEQUENCE_FIELDS_CAPSULE);
+    if (!fields) {
+        PyErr_Clear();
+        return;
+    }
+    free_structsequence_fields(fields);
+}
+
+
 static void State_clear_fields(StateObject *self) {
     if (!self) return;
     DESTROY(self->offsets);
     DESTROY(self->scales);
     DESTROY(self->flags);
     DESTROY(self->type_codes);
-    DESTROY(self->encodings);
-    DESTROY(self->structsequence_desc.fields);
+    if (self->encodings) {
+        for (unsigned long i = 0; i < self->n_cols; i++) {
+            DESTROY(self->encodings[i]);
+        }
+        DESTROY(self->encodings);
+    }
     DESTROY(self->encoding_errors);
     if (self->py_converters) {
         for (unsigned long i = 0; i < self->n_cols; i++) {
@@ -958,6 +999,11 @@ static void State_clear_fields(StateObject *self) {
         DESTROY(self->py_invalid_values);
     }
     Py_CLEAR(self->structsequence);
+    // Only reached if the type was never built, or building it failed before
+    // the capsule took ownership. Once the capsule holds the fields, this is
+    // NULL and the names outlive us along with the type.
+    free_structsequence_fields(self->structsequence_desc.fields);
+    self->structsequence_desc.fields = NULL;
     Py_CLEAR(self->py_namedtuple);
     Py_CLEAR(self->py_namedtuple_args);
     Py_CLEAR(self->py_names_list);
@@ -1201,10 +1247,29 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
             if (!self->structsequence_desc.fields) goto error;
             for (unsigned long i = 0; i < self->n_cols; i++) {
                 self->structsequence_desc.fields[i].name = _PyUnicode_AsUTF8(self->py_names[i]);
+                if (!self->structsequence_desc.fields[i].name) goto error;
                 self->structsequence_desc.fields[i].doc = NULL;
             }
             self->structsequence = PyStructSequence_NewType(&self->structsequence_desc);
             if (!self->structsequence) goto error;
+
+            // The type stores the field name pointers rather than copying the
+            // strings, and reads them again when a row is repr'd. Rows can
+            // outlive this State, so the storage is handed to a capsule in the
+            // type's dict, which frees it when the type itself goes away.
+            PyObject *py_fields_capsule = PyCapsule_New(
+                self->structsequence_desc.fields,
+                STRUCTSEQUENCE_FIELDS_CAPSULE,
+                &structsequence_fields_capsule_destructor
+            );
+            if (!py_fields_capsule) goto error;
+            self->structsequence_desc.fields = NULL;
+
+            rc = PyObject_SetAttrString((PyObject*)self->structsequence,
+                                        "__singlestoredb_fields__",
+                                        py_fields_capsule);
+            Py_DECREF(py_fields_capsule);
+            if (rc != 0) goto error;
         }
 
         // Fall through
