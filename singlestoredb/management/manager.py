@@ -1,9 +1,14 @@
 #!/usr/bin/env python
 """SingleStoreDB Base Manager."""
+import functools
+import logging
 import os
+import random
+import re
 import sys
 import time
 from typing import Any
+from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -23,6 +28,9 @@ from ._version_import import DEFAULT_VERSION
 from .utils import get_token
 
 
+logger = logging.getLogger(__name__)
+
+
 def set_organization(kwargs: Dict[str, Any]) -> None:
     """Set the organization ID in the dictionary."""
     if kwargs.get('params', {}).get('organizationID', None):
@@ -35,13 +43,15 @@ def set_organization(kwargs: Dict[str, Any]) -> None:
         kwargs['params']['organizationID'] = org
 
 
-#: Methods that may be replayed after a transport-level failure. POST is
-#: absent on purpose: a dropped connection does not say whether the server
-#: acted on the request, and replaying ``POST /clusters`` would deploy twice.
-#: Everything the long ``wait_on_*`` loops issue is a GET, so the retries
-#: cover the failure mode that actually shows up -- a keep-alive connection
-#: the far end closed while the client was sleeping between polls, which
-#: surfaces as ``RemoteDisconnected`` on the next request.
+#: Methods that may be replayed after a transport-level failure. POST is absent
+#: on purpose: a dropped connection does not say whether the server acted, and
+#: replaying ``POST /clusters`` would deploy twice. Everything the long
+#: ``wait_on_*`` loops issue is a GET, so this covers the failure mode that shows
+#: up -- a keep-alive connection the far end closed while the client slept
+#: between polls, surfacing as ``RemoteDisconnected`` on the next request.
+#:
+#: :func:`retry_on_lock` is the one POST replay, keyed on an error message this
+#: policy never sees.
 RETRY_METHODS = frozenset(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'])
 
 #: Status codes worth retrying. These are the transient ones; a 4xx other
@@ -75,6 +85,97 @@ def build_retry(
     )
 
 
+#: "could not acquire lock within duration", the API's refusal to start a
+#: creation while another one in the organization holds the lock. Both
+#: ``POST /workspaceGroups`` and ``POST /clusters`` say "error creating
+#: workspace", so the match cannot key on the noun.
+#:
+#: Matched on the message, not the status: a name collision is a 500 too, and
+#: only the wording says nothing was created, which is what makes replaying the
+#: POST safe.
+LOCK_ERROR_RE = re.compile(r'acquire[^.]{0,40}lock', re.I)
+
+#: Ceiling on the wait between lock retries, and the random extra added to each
+#: one. Capped because what is being waited out is another creation's POST
+#: returning, not a deployment coming up. Jittered because two clients that
+#: collided back off identically from the same moment -- two xdist workers, say
+#: -- and would otherwise retry in step indefinitely.
+LOCK_RETRY_MAX_INTERVAL = 60.0
+LOCK_RETRY_JITTER = 5.0
+
+
+def lock_retry_policy() -> Tuple[int, float]:
+    """
+    Return the (retries, interval) applied to an organization lock conflict.
+
+    ``retries`` counts attempts *after* the first, so the defaults wait 20, 40,
+    60, 60 and 60 seconds -- four minutes at worst, small enough that a stuck
+    organization fails rather than idling out a CI job's timeout.
+
+    Set ``SINGLESTOREDB_MANAGEMENT_LOCK_RETRIES=0`` to raise the conflict at
+    once instead.
+    """
+    return (
+        int(os.environ.get('SINGLESTOREDB_MANAGEMENT_LOCK_RETRIES', '5')),
+        float(
+            os.environ.get('SINGLESTOREDB_MANAGEMENT_LOCK_RETRY_INTERVAL', '20'),
+        ),
+    )
+
+
+def is_lock_error(exc: BaseException) -> bool:
+    """Is this error the organization refusing to take the lock?"""
+    return bool(LOCK_ERROR_RE.search(str(exc)))
+
+
+def lock_retry_wait(attempt: int, interval: float) -> float:
+    """Seconds to wait before replaying a creation that lost the lock."""
+    return min(interval * attempt, LOCK_RETRY_MAX_INTERVAL) + \
+        random.uniform(0, LOCK_RETRY_JITTER)
+
+
+def retry_on_lock(func: Callable[..., Any]) -> Callable[..., Any]:
+    """
+    Wait out an organization lock conflict on a deployment creation.
+
+    Replaying this POST is safe where widening :data:`RETRY_METHODS` would not
+    be: the lock message says the creation never started. A creation that made
+    something and *then* failed reports something else, and would surface on the
+    replay as a name conflict rather than being swallowed.
+
+    Worn by ``WorkspaceManager.create_workspace_group`` and
+    ``ClusterManager.create_cluster`` only -- the two calls that contend for the
+    lock, and the ones Fusion's ``CREATE WORKSPACE GROUP``/``CREATE CLUSTER``
+    go through. Any other ``ManagementError`` is raised at once, as is the
+    conflict itself once :func:`lock_retry_policy`'s budget runs out.
+    """
+    @functools.wraps(func)
+    def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        retries, interval = lock_retry_policy()
+        attempt = 0
+        while True:
+            try:
+                return func(self, *args, **kwargs)
+            except ManagementError as exc:
+                attempt += 1
+                if attempt > retries or not is_lock_error(exc):
+                    raise
+                wait = lock_retry_wait(attempt, interval)
+                logger.info(
+                    f'{func.__name__} could not take the organization lock '
+                    f'({exc}); attempt {attempt} of {retries + 1}, retrying '
+                    f'in {wait:.1f}s',
+                )
+                timing.sleep(wait, f'{func.__name__} organization lock')
+
+    # Says which methods wear this, for a test to assert against. On the
+    # wrapper's ``__dict__``, so ``functools.wraps`` carries it out through any
+    # later decorator -- the test suite wraps these methods again.
+    wrapper.__retry_on_lock__ = True  # type: ignore[attr-defined]
+
+    return wrapper
+
+
 def default_timeout() -> Tuple[float, float]:
     """
     Return the (connect, read) timeout applied when a caller gives none.
@@ -103,12 +204,11 @@ class Manager:
 
     #: Management API version if none is specified. The shared
     #: :data:`~singlestoredb.management._version_import.DEFAULT_VERSION`, which
-    #: also supplies the ``management.version`` option default, so the two
-    #: cannot drift. Deliberately not a reading of that option: it is read by
-    #: the ``manage_*`` factories at call time, and reading it here would let a
-    #: version-specific class declare itself to be whatever the option happened
-    #: to say. A class that implements one specific version pins that version
-    #: as a literal instead of inheriting this.
+    #: also supplies the ``management.version`` option default, so the two cannot
+    #: drift. Deliberately not a reading of that option, which the ``manage_*``
+    #: factories read at call time: reading it here would let a version-specific
+    #: class declare itself to be whatever the option happened to say. Such a
+    #: class pins its version as a literal instead of inheriting this.
     default_version = DEFAULT_VERSION
 
     #: Base URL if none is specified.

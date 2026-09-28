@@ -297,6 +297,67 @@ def _install_sweep_fallbacks() -> None:
         logger.debug('Not the main thread; no SIGTERM sweep installed')
 
 
+#: Key the workers stash their stranded deployment labels under in
+#: ``config.workeroutput``.
+_STRANDED_KEY = 'singlestoredb_stranded_deployments'
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """
+    Sweep in an xdist worker, and hand what survived to the controller.
+
+    Under the parallel default the sweep and its ``STILL LIVE`` banner run in a
+    worker, whose stdout the controller discards -- so a leak was silent even
+    when the sweep ran and failed, the one case the banner exists for.
+    ``config.workeroutput`` is xdist's channel for this; its absence means
+    ``-n 0``, where ``pytest_unconfigure`` already prints to a real terminal.
+
+    The sweep has to happen here, not in ``pytest_unconfigure``, to have
+    anything to report: xdist's ``pytest_sessionfinish`` hookwrapper sends
+    ``workeroutput`` after yielding, which is before ``pytest_unconfigure``
+    runs. The sweep is idempotent -- a successful one empties ``_tracked`` --
+    so the later call finds nothing to do.
+    """
+    workeroutput = getattr(session.config, 'workeroutput', None)
+    if workeroutput is None:
+        return
+
+    _sweep_live_deployments()
+
+    try:
+        workeroutput[_STRANDED_KEY] = _test_utils().tracked_labels()
+    except Exception:  # pragma: no cover - shutdown path
+        pass
+
+
+def pytest_testnodedown(node: Any, error: Any) -> None:
+    """
+    Report, on the controller, what a worker could not terminate.
+
+    The worker's own banner went to a captured stream; this is the copy anyone
+    actually sees.
+    """
+    stranded = getattr(node, 'workeroutput', {}).get(_STRANDED_KEY) or []
+    if not stranded:
+        return
+
+    print('\n' + '!' * 70)
+    print(
+        f'STILL LIVE on {node.gateway.id} -- these deployments could not be '
+        'terminated and are costing money:',
+    )
+    for label in stranded:
+        print(f'  - {label}')
+    print(
+        'Reap them with: python -m singlestoredb.tests.cleanup_deployments '
+        '--yes',
+    )
+    print('!' * 70)
+    logger.error(
+        f'{len(stranded)} deployment(s) left live by {node.gateway.id}',
+    )
+
+
 def pytest_unconfigure(config: pytest.Config) -> None:
     """
     Pytest hook that runs after all tests complete.
@@ -328,10 +389,10 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 #: ``pytest_terminal_summary`` can read it without a fixture.
 #:
 #: Every test that ran under an active trace is in here, including the ones that
-#: made no management call at all: ``trace_management_api_class`` subtracts this
-#: list from the class total to get the fixture share, so a test missing from it
-#: has its wall clock charged to ``setUpClass``. The event-less ones are
-#: filtered out at report time by :func:`_traced` instead.
+#: made no management call: ``trace_management_api_class`` subtracts this list
+#: from the class total to get the fixture share, so a test missing from it would
+#: have its wall clock charged to ``setUpClass``. :func:`_traced` filters the
+#: event-less ones out at report time instead.
 _management_traces: List[Tuple[str, Any]] = []
 
 #: The same, for the class fixtures rather than the tests. Separate because the

@@ -14,12 +14,14 @@ jobs:
       actions: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      # Only drives resources/gen_fusion_handlers_doc.py, so this tracks the
+      # newest final release rather than anything the package supports.
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v7
         with:
-          python-version: 3.11
+          python-version: "3.14"
           cache: "pip"
 
       - name: Install dependencies

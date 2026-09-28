@@ -35,6 +35,7 @@ from singlestoredb.management.job import Status
 from singlestoredb.management.job import TargetType
 from singlestoredb.management.region import Region
 from singlestoredb.management.utils import NamedList
+from singlestoredb.tests import utils
 
 
 TEST_DIR = pathlib.Path(os.path.dirname(__file__))
@@ -68,7 +69,7 @@ class TestWorkspace(unittest.TestCase):
         cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
+        cls.password = utils.admin_password()
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
@@ -77,15 +78,24 @@ class TestWorkspace(unittest.TestCase):
             region=random.choice(us_regions).id,
             admin_password=cls.password,
             firewall_ranges=['0.0.0.0/0'],
+            expires_at=utils.DEPLOYMENT_EXPIRES_AT,
         )
 
         try:
+            # No expiry of its own: only the group has an expiresAt, and it
+            # takes its workspaces with it. See utils.DEPLOYMENT_EXPIRES_AT.
             cls.workspace = cls.workspace_group.create_workspace(
                 f'ws-test-{name}-x',
                 wait_on_active=True,
             )
         except Exception:
-            cls.workspace_group.terminate(force=True)
+            # Guarded: an unguarded terminate here would replace the create
+            # failure with whatever the DELETE raised. utils.cleanup_tracked
+            # retries it and reports it.
+            try:
+                cls.workspace_group.terminate(force=True)
+            except Exception:
+                pass
             raise
 
     @classmethod
@@ -252,15 +262,13 @@ class TestStarterWorkspace(unittest.TestCase):
         name = shared_database_name(secrets.token_urlsafe(20)[:20])
 
         # The starter-tier user name has to be unique across every starter
-        # deployment in the project, not just within this one: creating the
-        # same name in a second starter deployment fails while the first is
-        # live. So it is namespaced like the deployment and the database are,
-        # or this class collides with TestStarterCluster in test_management_v2
-        # -- they run on different xdist workers -- and with any starter
-        # deployment an earlier failed run leaked. The API answers the
-        # collision with a bare 500, which names nothing.
+        # deployment in the project, not just within this one, so it is
+        # namespaced like the deployment and the database are. Otherwise this
+        # class collides with TestStarterCluster in test_management_v2 -- they
+        # run on different xdist workers -- and with anything an earlier failed
+        # run leaked. The API answers the collision with a bare 500.
         cls.starter_username = f'starter_user_{name[:8]}'
-        cls.password = secrets.token_urlsafe(20)
+        cls.password = utils.admin_password()
 
         cls.database_name = f'starter_db_{name}'
 
@@ -366,7 +374,7 @@ class TestStage(unittest.TestCase):
         cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
+        cls.password = utils.admin_password()
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
@@ -375,6 +383,7 @@ class TestStage(unittest.TestCase):
             region=random.choice(us_regions).id,
             admin_password=cls.password,
             firewall_ranges=['0.0.0.0/0'],
+            expires_at=utils.DEPLOYMENT_EXPIRES_AT,
         )
 
     @classmethod
@@ -926,29 +935,33 @@ class TestSecrets(unittest.TestCase):
         cls.manager = None
 
     def test_get_secret(self):
-        # manually create secret and then get secret
-        # try to delete the secret if it exists
-        try:
-            secret = self.manager.organizations.current.get_secret('secret_name')
+        # Per-run name; see the twin in test_management_v2.py for why the fixed
+        # 'secret_name' this used to carry -- and the leftover-clearing delete
+        # that a fixed name required -- had two concurrent runs deleting each
+        # other's secret.
+        name = f'secret_v1_test_{secrets.token_hex(4)}'
 
-            secret_id = secret.id
-
-            self.manager._delete(f'secrets/{secret_id}')
-        except s2.ManagementError:
-            pass
-
-        self.manager._post(
+        created = self.manager._post(
             'secrets',
             json=dict(
-                name='secret_name',
+                name=name,
                 value='secret_value',
             ),
-        )
+        ).json()
 
-        secret = self.manager.organizations.current.get_secret('secret_name')
+        # The ID comes from the create response, not from the lookup under
+        # test: binding it inside the try would leave the cleanup raising
+        # UnboundLocalError over whatever the lookup failed with. This delete is
+        # the only thing that removes the secret now -- nothing else sweeps one
+        # as it is made. test_management_v2.py's twin does it this way.
+        secret_id = created['secret']['secretID']
+        try:
+            secret = self.manager.organizations.current.get_secret(name)
 
-        assert secret.name == 'secret_name'
-        assert secret.value == 'secret_value'
+            assert secret.name == name
+            assert secret.value == 'secret_value'
+        finally:
+            self.manager._delete(f'secrets/{secret_id}')
 
 
 @pytest.mark.management
@@ -965,7 +978,7 @@ class TestJob(unittest.TestCase):
         cls.manager = s2.manage_workspaces(version='v1')
 
         us_regions = [x for x in cls.manager.regions if 'US' in x.name]
-        cls.password = secrets.token_urlsafe(20) + '-x&$'
+        cls.password = utils.admin_password()
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
 
@@ -974,15 +987,24 @@ class TestJob(unittest.TestCase):
             region=random.choice(us_regions).id,
             admin_password=cls.password,
             firewall_ranges=['0.0.0.0/0'],
+            expires_at=utils.DEPLOYMENT_EXPIRES_AT,
         )
 
         try:
+            # No expiry of its own: only the group has an expiresAt, and it
+            # takes its workspaces with it. See utils.DEPLOYMENT_EXPIRES_AT.
             cls.workspace = cls.workspace_group.create_workspace(
                 f'ws-test-{name}-x',
                 wait_on_active=True,
             )
         except Exception:
-            cls.workspace_group.terminate(force=True)
+            # Guarded: an unguarded terminate here would replace the create
+            # failure with whatever the DELETE raised. utils.cleanup_tracked
+            # retries it and reports it.
+            try:
+                cls.workspace_group.terminate(force=True)
+            except Exception:
+                pass
             raise
 
     @classmethod

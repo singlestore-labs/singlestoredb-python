@@ -24,6 +24,7 @@ from ... import connection
 from ...exceptions import ManagementError
 from ..billing import Billing as Billing
 from ..manager import Manager
+from ..manager import retry_on_lock
 from ..organization import Organization
 from ..organization import Organizations as Organizations
 from ..region import Region
@@ -611,7 +612,16 @@ class Cluster:
         allow_all_traffic : bool, optional
             Allow all traffic to the cluster
         admin_password : str, optional
-            Admin password for the cluster
+            Admin password for the cluster.
+
+            .. warning:: Ignored, exactly as on ``POST /v2/clusters``. ``PATCH``
+               accepts the field and does not honor it: a live probe found the
+               patched value refused with ``1045: Access denied`` while the
+               password the create generated kept working. The only value that
+               authenticates is that generated one, carried on the create
+               response as :attr:`Cluster.admin_password`. Still sent in case
+               the API starts honoring it. See item 9 of
+               ``docs/management-api-audit.md``.
         expires_at : str, optional
             Timestamp of when the cluster will expire. Expiration time can be
             specified as a timestamp or a duration.
@@ -704,7 +714,12 @@ class Cluster:
 
         """
         manager = self._require_manager()
-        manager._delete(f'clusters/{self.id}', params=dict(force=force))
+        # 'true'/'false', not the bool: requests renders a bool param with
+        # str(), so force=True went out as force=True.
+        manager._delete(
+            f'clusters/{self.id}',
+            params=dict(force='true' if force else 'false'),
+        )
         if wait_on_terminated:
             remaining = float(wait_timeout)
             while True:
@@ -1393,6 +1408,7 @@ class ClusterManager(Manager):
                 ', '.join(f'{x.name} ({x.id})' for x in projects) + '.',
         )
 
+    @retry_on_lock
     def create_cluster(
         self,
         name: str,

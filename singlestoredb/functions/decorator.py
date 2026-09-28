@@ -1,4 +1,3 @@
-import asyncio
 import functools
 import inspect
 from typing import Any
@@ -122,7 +121,7 @@ def _func(
     if func is None:
         def decorate(func: UDFType) -> UDFType:
 
-            if asyncio.iscoroutinefunction(func):
+            if inspect.iscoroutinefunction(func):
                 async def async_wrapper(*args: Any, **kwargs: Any) -> UDFType:
                     return await func(*args, **kwargs)  # type: ignore
                 async_wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
@@ -136,7 +135,7 @@ def _func(
 
         return decorate
 
-    if asyncio.iscoroutinefunction(func):
+    if inspect.iscoroutinefunction(func):
         async def async_wrapper(*args: Any, **kwargs: Any) -> UDFType:
             return await func(*args, **kwargs)  # type: ignore
         async_wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore

@@ -42,20 +42,41 @@ For deployments the current process created, nothing here is needed: those
 are tracked as they are created and swept per test class by ``conftest.py``,
 which cannot see -- or touch -- another run's deployments.
 
-Why strays keep appearing: that tracking, the per-class sweep and this script
-all live on the ``versioned-management-api`` branch and nowhere else. A run
-from ``main`` has only ``tearDownClass``, so a killed run or a ``setUpClass``
-that raises leaks a workspace group permanently, and ``main`` still uses names
-this script only knows through :data:`LEGACY_PATTERNS`. Until the sweep is on
-the default branch, expect to run this by hand.
+The exception, and the reason this is wired into CI, is ``--ledger``. A run
+with ``SINGLESTOREDB_TEST_DEPLOYMENT_LOG`` set records every creation to a
+JSONL file as it happens (``utils.ledger_pending``/``ledger_live``/
+``ledger_gone``), so a run that was killed outright leaves an exact list of
+what it made::
+
+    python -m singlestoredb.tests.cleanup_deployments --ledger deployments.jsonl
+
+That mode replaces *both* guards above. The ledger names deployments rather
+than guessing at them, so the patterns are unnecessary; and its entries are
+minutes old by construction, so the age filter would spare every one of them.
+What keeps it off other people's deployments instead is that it touches only
+ids and names the ledger records, and that each CI job writes its own ledger.
+
+Finally, ``--secrets`` sweeps a different subject: the org-scoped secrets
+``TestSecrets.test_get_secret`` creates. They bill nothing, but they are
+permanent, and the test deletes its own only if it is not killed mid-test::
+
+    python -m singlestoredb.tests.cleanup_deployments --secrets --yes
+
+That is a rolling janitor rather than a run-scoped cleanup -- a secret is named
+per-run but a name still says nothing about *which* run, so the age guard is
+what keeps this off a live one. It cannot reap the run it is called from; what
+it removes is what earlier runs stranded.
 """
 import argparse
 import datetime
+import json
+import os
 import re
 import sys
 import warnings
 from collections.abc import Container
 from typing import Any
+from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -78,31 +99,44 @@ KINDS = (
 #: anything younger could belong to a run in progress.
 DEFAULT_MIN_AGE_HOURS = 6.0
 
+#: How long to keep retrying a deployment the API will not delete yet. Longer
+#: than ``utils.TERMINATE_RETRY_TIMEOUT``, which is short so the between-class
+#: sweep cannot stall the suite: nothing runs after this tool, the deployment may
+#: still be coming up, ``DELETE`` is refused until it is, and an S-00 cluster
+#: reaching ACTIVE is ~460s at worst. The only cost is the CI step's wall clock.
+#:
+#: An upper bound, not a promise: a *cancelled* job's steps are force-terminated
+#: after GitHub's 5-minute cancellation timeout, so a cancel early in a provision
+#: gets killed here whatever this says.
+TERMINATE_TIMEOUT = 600.0
+
 #: Names the suite generates. Anchored, because these run against a real
 #: organization: a pattern that matched a name someone chose by hand would
 #: terminate a deployment that is not ours.
 PATTERNS = [
     # test_management_v1.py / test_management_v2.py fixtures
     re.compile(r'^(wg|ws|cl)-test-[A-Za-z0-9_-]+$'),
+    # TestWorkspace.test_update renames its live group to wg-foo-<token> and
+    # never renames it back, so it carries that name for the rest of the class.
+    # Unmatched, a group stranded after that test was invisible here.
+    re.compile(r'^wg-foo-[A-Za-z0-9_-]+$'),
     re.compile(r'^starter-(ws|cl)-test-[A-Za-z0-9_-]+$'),
     # test_fusion.py fixtures
     re.compile(r'^[A-C] Fusion Testing [0-9a-f]+$'),
     re.compile(r'^[a-z]-fusion-cluster-[0-9a-f]+$'),
     re.compile(r'^jobs-fusion-[0-9a-f]+$'),
     re.compile(r'^stage-fusion-\d-[0-9a-f]+$'),
-    # test_create_drop_workspace_group's subject. Hex covers the decimal
-    # id(self) the test used to name it with, so groups stranded by older
-    # runs -- which this pattern did not match, and which therefore piled up
-    # invisibly -- are reaped too.
+    # test_create_drop_workspace_group's subject. Hex also covers the decimal
+    # id(self) the test used to name it with, so groups stranded by older runs
+    # are reaped too.
     re.compile(r'^Create WG Test [0-9a-f]+$'),
 ]
 
-#: Names the suite used to generate. Kept separate so it is obvious what is
-#: only here for cleanup, and matched all the same: a stranded deployment is
-#: billed regardless of which revision made it, and ``main`` still creates
-#: these -- it carries none of ``utils.track()``, the per-class sweep or this
-#: script, so a run there leaks with nothing to reap it. Retire an entry once
-#: no branch produces the name and the organization is clean of it.
+#: Names the suite used to generate. Kept separate so it is obvious what is only
+#: here for cleanup, and matched all the same: a stranded deployment bills
+#: whichever revision made it, and ``main`` still creates these with nothing to
+#: reap them. Retire an entry once no branch produces the name and the
+#: organization is clean of it.
 LEGACY_PATTERNS = [
     # TestStageFusion's two workspace groups, before it moved to v2 clusters
     # named stage-fusion-<n>-<id> and then to the shared cluster pool
@@ -110,13 +144,37 @@ LEGACY_PATTERNS = [
     # TestFilesFusion's workspace group, which nothing in the class ever
     # read; it creates no deployment at all now
     re.compile(r'^Files Fusion Testing [0-9a-f]+$'),
-    # 'Group <hex>'. No revision of this repo generates this, so it is here
-    # on the owner's say-so rather than by attribution. Eight hex characters
-    # minimum, which is what the ones in the organization have: the bare
-    # 'Group 1' / 'Group 2' that a person or the portal produces is a real
-    # deployment someone is using, and a plain [0-9a-f]+ would match it.
+    # 'Group <hex>'. No revision of this repo generates this, so it is here on
+    # the owner's say-so. Eight hex characters minimum, which is what the ones
+    # in the organization have: a plain [0-9a-f]+ would also match the bare
+    # 'Group 1' a person or the portal produces.
     re.compile(r'^Group [0-9a-f]{8,}$'),
 ]
+
+
+#: Secret names the suite generates. A secret is not a deployment -- it bills
+#: nothing and lives on its own route -- so these are swept only when
+#: ``--secrets`` asks for it, and never alongside the deployment patterns.
+SECRET_PATTERNS = [
+    # TestSecrets.test_get_secret, v1 and v2
+    re.compile(r'^secret_v[12]_test_[0-9a-f]+$'),
+]
+
+#: Secret names earlier revisions generated. Both are fixed rather than
+#: per-run, which is what let two concurrent runs delete each other's secret;
+#: ``main`` still creates them, so they are still reaped.
+LEGACY_SECRET_PATTERNS = [
+    re.compile(r'^secret_name$'),
+    re.compile(r'^secret_v2_test$'),
+]
+
+#: Hours a secret must have existed before it is treated as stranded. Far lower
+#: than :data:`DEFAULT_MIN_AGE_HOURS`, because the window it guards is far
+#: shorter: the test creates a secret and deletes it in the same test body, a
+#: second or two apart, so no secret a live run owns is even minutes old. Not
+#: zero, because a run killed between the POST and the DELETE looks exactly
+#: like one that is still between them.
+DEFAULT_SECRET_MIN_AGE_HOURS = 1.0
 
 
 def is_test_deployment(name: Optional[str]) -> bool:
@@ -124,6 +182,13 @@ def is_test_deployment(name: Optional[str]) -> bool:
     if not name:
         return False
     return any(x.match(name) for x in PATTERNS + LEGACY_PATTERNS)
+
+
+def is_test_secret(name: Optional[str]) -> bool:
+    """Was this secret name generated by the test suite, now or in the past?"""
+    if not name:
+        return False
+    return any(x.match(name) for x in SECRET_PATTERNS + LEGACY_SECRET_PATTERNS)
 
 
 def _created_at(obj: Any) -> Optional[datetime.datetime]:
@@ -254,7 +319,7 @@ def find_leftovers(
 
     if 'cluster' in kinds or 'starter-cluster' in kinds:
         try:
-            clusters = s2.manage_clusters(version='v2')
+            clusters = _manager('v2')
         except Exception as exc:
             print(f'! Could not reach management API v2: {exc}', file=sys.stderr)
         else:
@@ -274,14 +339,7 @@ def find_leftovers(
 
     if 'workspace-group' in kinds or 'starter-workspace' in kinds:
         try:
-            # v1 is deprecated, and asking for it here is the point: workspace
-            # groups exist nowhere else, so the warning is noise on every run.
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    'ignore', category=DeprecationWarning,
-                    message='.*manage_workspaces.*',
-                )
-                workspaces = s2.manage_workspaces(version='v1')
+            workspaces = _manager('v1')
         except Exception as exc:
             print(f'! Could not reach management API v1: {exc}', file=sys.stderr)
         else:
@@ -304,11 +362,429 @@ def find_leftovers(
     return found, spared, unmatched
 
 
+#
+# Secret mode
+#
+# Why this is separate from everything above: a secret is org-scoped and
+# permanent, it costs nothing to leave lying around, and it is reached through
+# ``secrets`` rather than through any deployment listing. It is here because
+# ``TestSecrets.test_get_secret`` is the one test that creates an org-scoped
+# named object, and nothing in the suite sweeps one as it is created -- a run
+# killed between its POST and its DELETE strands a secret for good.
+#
+
+
+def find_stranded_secrets(
+    mgr: Any,
+    older_than: float = DEFAULT_SECRET_MIN_AGE_HOURS,
+    include_unknown_age: bool = False,
+) -> Tuple[List[Tuple[str, Any]], List[str], List[str]]:
+    """
+    List the organization's secrets that the test suite stranded.
+
+    Returns the same three lists as :func:`find_leftovers` -- the secrets to
+    delete, labels for the ones the age guard held back, and labels for the
+    ones whose names :data:`SECRET_PATTERNS` does not recognize.
+
+    Only one version's manager is needed: ``secrets`` is identical at v1 and
+    v2 (see ``management/v2/organization.py``).
+    """
+    from singlestoredb.management.organization import Secret
+
+    found: List[Tuple[str, Any]] = []
+    spared: List[str] = []
+    unmatched: List[str] = []
+
+    # Verified live only this far: ``GET secrets`` with no parameters is
+    # accepted and answers with a ``secrets`` array -- the ``?name=`` form is
+    # all ``Organization.get_secret`` ever sends. UNVERIFIED: that the array is
+    # *every* secret in the organization rather than a page of them. It could
+    # not be shown against an organization that has none; if the route turns
+    # out to paginate, a sweep here is incomplete rather than wrong.
+    res = mgr._get('secrets')
+    for item in res.json().get('secrets') or []:
+        secret = Secret.from_dict(item)
+
+        if secret.deleted_at is not None:
+            continue
+
+        age = _age_hours(secret)
+
+        if not is_test_secret(secret.name):
+            unmatched.append(
+                '{}{}'.format(
+                    secret.name or '<unnamed>',
+                    '' if age is None else f' ({age:.1f}h old)',
+                ),
+            )
+            continue
+
+        if age is None:
+            if not include_unknown_age:
+                spared.append(f'{secret.name} (creation time not reported)')
+                continue
+        elif older_than > 0 and age < older_than:
+            spared.append(f'{secret.name} ({age:.1f}h old, too new)')
+            continue
+
+        found.append((f'secret {secret.name} ({secret.id})', secret))
+
+    return found, spared, unmatched
+
+
+def _run_secret_sweep(
+    older_than: float,
+    include_unknown_age: bool,
+    yes: bool,
+    show_unmatched: bool,
+) -> int:
+    """Report, and with ``yes`` delete, the secrets the suite stranded."""
+    mgr = _manager('v2')
+
+    try:
+        leftovers, spared, unmatched = find_stranded_secrets(
+            mgr, older_than, include_unknown_age,
+        )
+    except Exception as exc:
+        # Reported, not raised: this runs as a cleanup step, and a secret bills
+        # nothing, so failing the job over one is the wrong trade.
+        print(f'! Could not list secrets: {exc}', file=sys.stderr)
+        return 1
+
+    if show_unmatched:
+        if unmatched:
+            print(
+                f'{len(unmatched)} secret(s) not recognized as the suite\'s, '
+                'and so never swept:',
+            )
+            for label in sorted(unmatched):
+                print(f'  ? {label}')
+            print()
+        else:
+            print('Every secret is recognized by SECRET_PATTERNS.\n')
+
+    if spared:
+        print(f'{len(spared)} match(es) left alone by the age filter:')
+        for label in spared:
+            print(f'  - {label}')
+        print()
+
+    if not leftovers:
+        print('No stranded test secrets found.')
+        return 0
+
+    print(f'{len(leftovers)} stranded test secret(s):')
+    for label, _ in leftovers:
+        print(f'  - {label}')
+
+    if not yes:
+        print('\nDry run; pass --yes to delete these.')
+        return 0
+
+    failed = 0
+    for label, secret in leftovers:
+        try:
+            mgr._delete(f'secrets/{secret.id}')
+        except Exception as exc:
+            failed += 1
+            print(f'✗ {label}: {exc}')
+        else:
+            print(f'✓ deleted {label}')
+
+    return 1 if failed else 0
+
+
+#
+# Ledger mode
+#
+# Why: GH Actions run 35631802648, job ``test-coverage``, was cancelled 19
+# minutes into ``create_cluster(wait_on_active=True)``. The log ends at
+# ``##[error]The operation was canceled.`` with no sweep output -- three clusters
+# live, no in-process handler ever run. A file written as they are created is the
+# only way another process can learn their names.
+#
+
+#: How each ledger kind is resolved back to a live object: the management API
+#: version that owns it, the point lookup for a record that has an id, and the
+#: listing to search by name for a ``pending`` record that never got one.
+#:
+#: The kinds are the values of ``utils._KIND_BY_CLASS``. An unknown kind is
+#: reported rather than skipped, the alternative being to silently not reap it.
+LEDGER_KINDS = {
+    'cluster': (
+        'v2', 'get_cluster', lambda mgr: mgr.clusters,
+    ),
+    'starter_cluster': (
+        'v2', 'get_starter_cluster', lambda mgr: mgr.starter_clusters,
+    ),
+    'workspace_group': (
+        'v1', 'get_workspace_group', lambda mgr: mgr.workspace_groups,
+    ),
+    'workspace': (
+        # WorkspaceManager has no `workspaces` of its own, so the search goes
+        # group by group -- the same walk utils._CREATORS uses.
+        'v1', 'get_workspace',
+        lambda mgr: [w for g in mgr.workspace_groups for w in g.workspaces],
+    ),
+    'starter_workspace': (
+        'v1', 'get_starter_workspace', lambda mgr: mgr.starter_workspaces,
+    ),
+}
+
+
+def _manager(version: str) -> Any:
+    """Management API manager for ``'v1'`` or ``'v2'``."""
+    if version == 'v2':
+        return s2.manage_clusters(version='v2')
+    # v1 is deprecated, and asking for it here is the point: workspace groups
+    # exist nowhere else, so the warning is noise on every run.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            'ignore', category=DeprecationWarning,
+            message='.*manage_workspaces.*',
+        )
+        return s2.manage_workspaces(version='v1')
+
+
+def fold_ledger(lines: Any) -> List[Dict[str, Any]]:
+    """
+    Reduce ledger records to the deployments that should still be live.
+
+    The ledger is an append-only history, not a state: a deployment shows up as
+    ``pending``, then ``live`` once it has an id, then ``gone`` once terminated.
+    Folding keeps every deployment whose last event was not ``gone``.
+
+    A ``pending`` is keyed by ``(kind, name)`` because that is all it has; the
+    matching ``live`` retires it and re-keys on the id, so a normal creation's
+    two records collapse to one entry. A ``pending`` left standing means the
+    creator was interrupted before returning -- the cancelled-mid-wait case,
+    resolvable only by name.
+
+    Order is creation order, since dicts preserve insertion order. The caller
+    reverses it, so a workspace goes before the group that holds it, matching
+    ``utils.cleanup_tracked()``.
+
+    Malformed lines are skipped with a warning rather than aborting: this is the
+    last step of a CI job, and one truncated line must not stop the rest from
+    being reaped.
+    """
+    live: Dict[Any, Dict[str, Any]] = {}
+
+    for lineno, line in enumerate(lines, start=1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError as exc:
+            print(
+                f'! ledger line {lineno} is not JSON, skipping it: {exc}',
+                file=sys.stderr,
+            )
+            continue
+        if not isinstance(record, dict):
+            continue
+
+        event = record.get('event')
+        kind = record.get('kind')
+        name = record.get('name')
+        ident = record.get('id')
+
+        by_name = ('name', kind, name)
+        by_id = ('id', kind, ident)
+
+        if event == 'pending':
+            if name is not None:
+                live.setdefault(by_name, record)
+        elif event == 'live':
+            live.pop(by_name, None)
+            if ident is not None:
+                live[by_id] = record
+            elif name is not None:
+                # No id in the record: keep it findable by name rather than
+                # dropping it. Should not happen, but losing the deployment is
+                # the expensive direction.
+                live[by_name] = record
+        elif event == 'gone':
+            if ident is not None:
+                live.pop(by_id, None)
+            live.pop(by_name, None)
+
+    return list(live.values())
+
+
+def read_ledger(path: str) -> List[Dict[str, Any]]:
+    """
+    Fold the ledger at ``path``, newest first.
+
+    A missing file is not an error: the variable can be set on a job whose
+    tests created nothing, and a CI cleanup step that failed in that case would
+    turn every such run red.
+    """
+    if not os.path.exists(path):
+        print(f'No ledger at {path}; nothing this run created was recorded.')
+        return []
+    with open(path, encoding='utf-8') as file:
+        records = fold_ledger(file)
+    # Newest first, so a workspace is terminated before its group.
+    records.reverse()
+    return records
+
+
+def find_ledger_leftovers(
+    path: str,
+) -> Tuple[List[Tuple[str, Any]], List[str], List[str]]:
+    """
+    Resolve the ledger's still-live records to live deployment objects.
+
+    Returns
+    -------
+    (List[Tuple[str, Any]], List[str], List[str])
+        The deployments to terminate, labels for the records that resolved to
+        nothing -- already gone, so nothing to do -- and labels for the ones
+        that could not be resolved *and* could still be live, which is what
+        makes the run exit non-zero.
+
+    A 404 from the point lookup means the deployment is already gone, the common
+    case for a run that finished normally. Anything else -- a transport failure,
+    an unknown kind -- goes in the third list: "could not tell" and "not there"
+    must not read the same when the difference is a cluster billing.
+    """
+    from singlestoredb.exceptions import ManagementError
+
+    found: List[Tuple[str, Any]] = []
+    gone: List[str] = []
+    unresolved: List[str] = []
+
+    managers: Dict[str, Any] = {}
+
+    def manager_for(version: str) -> Any:
+        if version not in managers:
+            managers[version] = _manager(version)
+        return managers[version]
+
+    for record in read_ledger(path):
+        kind = record.get('kind')
+        name = record.get('name')
+        ident = record.get('id')
+        label = '{} {} ({})'.format(
+            str(kind).replace('_', ' '), name or '<unnamed>', ident or 'no id',
+        )
+
+        if kind not in LEDGER_KINDS:
+            unresolved.append(f'{label}: unknown kind {kind!r}')
+            continue
+        version, lookup_name, listing = LEDGER_KINDS[kind]
+
+        try:
+            mgr = manager_for(version)
+        except Exception as exc:
+            unresolved.append(
+                f'{label}: could not reach management API '
+                f'{version}: {exc}',
+            )
+            continue
+
+        obj = None
+        try:
+            if ident is not None:
+                obj = getattr(mgr, lookup_name)(ident)
+            else:
+                # A `pending` record: the creator never returned an id, so the
+                # only handle on it is the name. Matched over the listing
+                # exactly as utils._recover_orphan does.
+                for candidate in listing(mgr):
+                    if getattr(candidate, 'name', None) == name:
+                        obj = candidate
+                        break
+        except ManagementError as exc:
+            if exc.errno == 404:
+                gone.append(label)
+                continue
+            unresolved.append(f'{label}: {exc}')
+            continue
+        except Exception as exc:
+            unresolved.append(f'{label}: {exc}')
+            continue
+
+        if obj is None:
+            gone.append(label)
+        elif getattr(obj, 'terminated_at', None) is not None:
+            gone.append(f'{label} (already terminated)')
+        else:
+            found.append((label, obj))
+
+    return found, gone, unresolved
+
+
+def _run_ledger_sweep(path: str, yes: bool) -> int:
+    """Report, and with ``yes`` terminate, everything the ledger still lists."""
+    leftovers, gone, unresolved = find_ledger_leftovers(path)
+
+    print(
+        f'Ledger {path}: {len(leftovers)} still live, {len(gone)} already '
+        f'gone, {len(unresolved)} unresolved.\n',
+    )
+
+    if unresolved:
+        print(
+            f'{len(unresolved)} ledger record(s) could not be resolved, so '
+            'they may still be live:',
+        )
+        for label in unresolved:
+            print(f'  ? {label}')
+        print()
+
+    if not leftovers:
+        # Non-zero only for the records whose state is unknown: a clean run
+        # whose sweep already terminated everything must not fail the job.
+        print('Nothing left behind by this run.')
+        return 1 if unresolved else 0
+
+    print(f'{len(leftovers)} deployment(s) left behind by this run:')
+    for label, _ in leftovers:
+        print(f'  - {label}')
+
+    if not yes:
+        print('\nDry run; pass --yes to terminate these.')
+        return 1 if unresolved else 0
+
+    from singlestoredb.tests import utils
+
+    failed = 0
+    for label, obj in leftovers:
+        try:
+            utils.terminate(obj, timeout=TERMINATE_TIMEOUT)
+        except Exception as exc:
+            failed += 1
+            print(f'✗ {label}: {exc}')
+        else:
+            print(f'✓ terminated {label}')
+
+    return 1 if (failed or unresolved) else 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[1])
     parser.add_argument(
         '--yes', action='store_true',
         help='actually terminate; without this the run only reports',
+    )
+    parser.add_argument(
+        '--ledger', metavar='PATH',
+        help='sweep exactly what the run that wrote this JSONL ledger created '
+             '(see SINGLESTOREDB_TEST_DEPLOYMENT_LOG). Replaces the name '
+             'patterns and the age filter, which would spare everything in it '
+             'for being minutes old. CI runs this as an if: always() step',
+    )
+    parser.add_argument(
+        '--secrets', action='store_true',
+        help='sweep stranded org-scoped secrets instead of deployments (see '
+             'SECRET_PATTERNS). Honours --yes, --older-than, '
+             f'--include-unknown-age and --show-unmatched; --older-than '
+             f'defaults to {DEFAULT_SECRET_MIN_AGE_HOURS} here rather than '
+             f'{DEFAULT_MIN_AGE_HOURS}, since a secret a live run owns is '
+             'seconds old, not hours',
     )
     parser.add_argument(
         '--older-than', type=float, default=DEFAULT_MIN_AGE_HOURS,
@@ -356,6 +832,46 @@ def main(argv: Optional[List[str]] = None) -> int:
              'PATTERNS is invisible here until its name is added',
     )
     args = parser.parse_args(argv)
+
+    # --ledger asks "what did *this* run make?", not "what looks stranded?", so
+    # it does not compose with the name and age guards. Erroring beats silently
+    # ignoring them.
+    if args.ledger:
+        for flag, value in (
+            ('--older-than', args.older_than != DEFAULT_MIN_AGE_HOURS),
+            ('--since', args.since is not None),
+            ('--any-name', args.any_name),
+            ('--kind', bool(args.kinds)),
+            ('--show-unmatched', args.show_unmatched),
+            ('--secrets', args.secrets),
+        ):
+            if value:
+                parser.error(f'{flag} does not apply with --ledger')
+        return _run_ledger_sweep(args.ledger, args.yes)
+
+    # A different subject, not a different filter: --secrets sweeps secrets
+    # *instead of* deployments, so the flags that select deployments do not
+    # compose with it either.
+    if args.secrets:
+        for flag, value in (
+            ('--since', args.since is not None),
+            ('--any-name', args.any_name),
+            ('--kind', bool(args.kinds)),
+        ):
+            if value:
+                parser.error(f'{flag} does not apply with --secrets')
+        # An explicit --older-than 6 is indistinguishable from the default
+        # here, which costs nothing: it is the value the caller asked for
+        # either way.
+        older_than = (
+            DEFAULT_SECRET_MIN_AGE_HOURS
+            if args.older_than == DEFAULT_MIN_AGE_HOURS
+            else args.older_than
+        )
+        return _run_secret_sweep(
+            older_than, args.include_unknown_age, args.yes,
+            args.show_unmatched,
+        )
 
     kinds = args.kinds or list(KINDS)
 
@@ -415,7 +931,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     failed = 0
     for label, obj in leftovers:
         try:
-            utils.terminate(obj)
+            # Same budget as the ledger sweep: --since or --older-than 0 can
+            # select a deployment that is still provisioning, and nothing runs
+            # after this either.
+            utils.terminate(obj, timeout=TERMINATE_TIMEOUT)
         except Exception as exc:
             failed += 1
             print(f'✗ {label}: {exc}')

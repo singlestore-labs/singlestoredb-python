@@ -5,8 +5,6 @@ import singlestoredb.mysql as sv
 from . import capabilities
 from singlestoredb.mysql.tests import base
 
-warnings.filterwarnings('error')
-
 
 class test_MySQLdb(capabilities.DatabaseTest):
 
@@ -24,6 +22,30 @@ class test_MySQLdb(capabilities.DatabaseTest):
     )
 
     leak_test = False
+
+    # These tests want warnings raised as exceptions -- test_truncation asks the
+    # server for an over-long column and expects the driver to complain. Scoped
+    # to the test rather than set at module import: this package's __init__
+    # imports this module, so a module-level warnings.filterwarnings('error')
+    # was installed process-wide the moment anything imported one of these
+    # classes (singlestoredb/tests/test_dbapi.py does), and every later warning
+    # in the session -- a DeprecationWarning from a dependency, say -- became a
+    # fatal error in an unrelated test.
+    def setUp(self):
+        self._warnings = warnings.catch_warnings()
+        self._warnings.__enter__()
+        warnings.simplefilter('error')
+        try:
+            super().setUp()
+        except Exception:
+            self._warnings.__exit__(None, None, None)
+            raise
+
+    def tearDown(self):
+        try:
+            super().tearDown()
+        finally:
+            self._warnings.__exit__(None, None, None)
 
     def quote_identifier(self, ident):
         return '`%s`' % ident

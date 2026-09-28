@@ -1332,6 +1332,7 @@ class TestCluster(unittest.TestCase):
             region=region,
             size='S-00',
             firewall_ranges=['0.0.0.0/0'],
+            expires_at=utils.DEPLOYMENT_EXPIRES_AT,
             project=_project_id(cls.manager),
             wait_on_active=True,
         )
@@ -1516,7 +1517,7 @@ class TestStarterCluster(unittest.TestCase):
         # xdist worker -- and with anything an earlier failed run leaked. The
         # API reports the collision as a bare 500.
         cls.starter_username = f'starter_user_{name[:8]}'
-        cls.password = secrets.token_urlsafe(20)
+        cls.password = utils.admin_password()
 
         cls.database_name = f'starter_db_{name}'
 
@@ -1764,20 +1765,20 @@ class TestSecrets(unittest.TestCase):
         cls.manager = None
 
     def test_get_secret(self):
-        # A fixed name, deliberately not one built from id(self): that is a
-        # process-local address, so a name built from it can never match what
-        # an interrupted run left behind, which makes the cleanup below dead
-        # code. A secret is org-scoped and permanent and nothing sweeps them,
-        # so a leaked one is leaked for good. Distinct from the v1 suite's
-        # 'secret_name' so the two suites do not delete each other's.
-        name = 'secret_v2_test'
-
-        # Clear a leftover secret from a previous run
-        try:
-            leftover = self.manager.organizations.current.get_secret(name)
-            self.manager._delete(f'secrets/{leftover.id}')
-        except s2.ManagementError:
-            pass
+        # Per-run name. A secret is org-scoped, so a fixed one is shared with
+        # every other run in the organization -- and this test used to open by
+        # deleting any leftover of that fixed name, which is a concurrent run's
+        # live secret as often as a stranded one. Two runs at once then raced:
+        # each deleted what the other had just created, and the loser's
+        # get_secret() failed or read the wrong value.
+        #
+        # Not id(self) either: that is a process-local address, so two
+        # processes can mint the same name.
+        #
+        # Nothing sweeps secrets as they are created, so the delete below is
+        # the cleanup; cleanup_deployments.py --secrets reaps what a run killed
+        # between the POST and the DELETE strands.
+        name = f'secret_v2_test_{secrets.token_hex(4)}'
 
         created = self.manager._post(
             'secrets',

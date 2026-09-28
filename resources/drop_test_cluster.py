@@ -2,7 +2,6 @@
 # type: ignore
 from __future__ import annotations
 
-import re
 import sys
 from optparse import OptionParser
 
@@ -10,11 +9,11 @@ import singlestoredb as s2
 
 
 # Handle command-line options
-usage = 'usage: %prog [options] workspace-id'
+usage = 'usage: %prog [options] cluster-id'
 parser = OptionParser(usage=usage)
 parser.add_option(
     '-t', '--token',
-    help='API key for the workspace management API',
+    help='API key for the management API',
 )
 (options, args) = parser.parse_args()
 
@@ -23,33 +22,10 @@ if len(args) != 1:
     sys.exit(1)
 
 
-# Connect to workspace. This is still the deprecated v1 workspace-group
-# grammar because the v1 test suite it sets up needs workspace groups;
-# it gets ported to manage_clusters() when that suite goes. Pinned to v1
-# because manage_workspaces() otherwise follows the management.version option.
-wm = s2.manage_workspaces(options.token or None, version='v1')
+# Pin v2 explicitly rather than following the ambient management.version
+# option: clusters only exist in v2.
+mgr = s2.manage_clusters(options.token or None, version='v2')
 
-wg_name = 'Python Client Testing'
-
-wgs = [x for x in wm.workspace_groups if x.name == wg_name]
-if len(wgs) > 1:
-    print('ERROR: There is more than one workspace group with the specified name.')
-    sys.exit(1)
-elif len(wgs) == 0:
-    print('ERROR: There is no workspace group with the specified name.')
-    sys.exit(1)
-wg = wgs[0]
-
-ws_name = re.sub(r'^-|-$', r'', re.sub(r'-+', r'-', re.sub(r'\s+', '-', args[0].lower())))
-
-wss = [x for x in wg.workspaces if x.name == ws_name]
-if len(wss) > 1:
-    print('ERROR: There is more than one workspace with the specified name.')
-    sys.exit(1)
-elif len(wss) == 0:
-    print('ERROR: There is no workspace with the specified name.')
-    sys.exit(1)
-ws = wss[0]
-
-# Terminate workspace
-ws.terminate()
+# force=True so a cluster with connections still open goes away; this only
+# ever runs against clusters this repo's CI created.
+mgr.get_cluster(args[0]).terminate(force=True, wait_on_terminated=True)
