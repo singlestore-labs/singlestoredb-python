@@ -67,10 +67,6 @@ from . import arrow
 from . import json as jdata
 from . import rowdat_1
 from . import utils
-from .function_url import classify_interactive_registration
-from .function_url import extract_service_url
-from .function_url import is_function_not_defined
-from .function_url import urls_equal
 from ... import connection
 from ...config import get_option
 from ...management.stage import get_stage
@@ -79,6 +75,10 @@ from ..signature import get_signature
 from ..signature import signature_to_sql
 from ..typing import Masked
 from ..typing import Table
+from .function_url import classify_interactive_registration
+from .function_url import extract_service_url
+from .function_url import is_function_not_defined
+from .function_url import urls_equal
 from .timer import Timer
 from singlestoredb.docstring.parser import parse
 from singlestoredb.functions.dtypes import escape_name

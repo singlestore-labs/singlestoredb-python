@@ -1,5 +1,4 @@
 """Parse and classify external function service URLs from SHOW CREATE."""
-
 from __future__ import annotations
 
 import re
