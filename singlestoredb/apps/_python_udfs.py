@@ -78,13 +78,19 @@ async def run_udf_app(
 
     # Register the functions only if the app is running interactively.
     if app_config.running_interactively:
-        app.register_functions(replace=True)
+        app.register_interactive_functions()
 
     _running_server = AwaitableUvicornServer(config)
     asyncio.create_task(_running_server.serve())
     await _running_server.wait_for_startup()
 
     print(f'Python UDF registered at {base_url}')
+    if app_config.running_interactively:
+        sql_names = [
+            info['signature']['name']
+            for _func, info in app.endpoints.values()
+        ]
+        print(f'Registered SQL functions: {", ".join(sql_names)}')
 
     return UdfConnectionInfo(base_url, app.get_function_info())
 

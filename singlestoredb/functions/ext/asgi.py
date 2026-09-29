@@ -67,6 +67,10 @@ from . import arrow
 from . import json as jdata
 from . import rowdat_1
 from . import utils
+from .function_url import classify_interactive_registration
+from .function_url import extract_service_url
+from .function_url import is_function_not_defined
+from .function_url import urls_equal
 from ... import connection
 from ...config import get_option
 from ...management.stage import get_stage
@@ -1607,8 +1611,7 @@ class Application(object):
             # See if function URL matches url
             cur.execute(f'SHOW CREATE FUNCTION {database_prefix}{escape_name(name)}')
             for fname, _, code, *_ in list(cur):
-                m = re.search(r" (?:\w+) (?:SERVICE|MANAGED) '([^']+)'", code)
-                if m and m.group(1) == self.url:
+                if urls_equal(extract_service_url(code), self.url):
                     funcs.add(f'{database_prefix}{escape_name(fname)}')
                     if link and re.match(r'^py_ext_func_link_\S{14}$', link):
                         links.add(link)
@@ -1811,6 +1814,65 @@ class Application(object):
                         cur.execute(f'DROP LINK {link}')
                 for func in self.get_create_functions(replace=replace):
                     cur.execute(func)
+
+    def _show_create_service_url(self, cur: Any, sql_name: str) -> Optional[str]:
+        if self.function_database:
+            qualified = (
+                f'{escape_name(self.function_database)}.{escape_name(sql_name)}'
+            )
+        else:
+            qualified = escape_name(sql_name)
+        try:
+            cur.execute(f'SHOW CREATE FUNCTION {qualified}')
+        except Exception as exc:
+            if is_function_not_defined(exc):
+                return None
+            raise
+        rows = list(cur)
+        if not rows:
+            return None
+        code = rows[0][2]
+        if isinstance(code, bytes):
+            code = code.decode('utf-8')
+        return extract_service_url(code)
+
+    def register_interactive_functions(
+        self,
+        *connection_args: Any,
+        **connection_kwargs: Any,
+    ) -> None:
+        """Register functions for an interactive notebook session.
+
+        Creates or replaces a name only when it is missing or already
+        points at this session's interactive URL. Published and
+        other-session functions are left unchanged.
+        """
+        with connection.connect(*connection_args, **connection_kwargs) as conn:
+            with conn.cursor() as cur:
+                for _key, (_endpoint, info) in self.endpoints.items():
+                    sig = info['signature']
+                    sql_name = sig['name']
+                    existing = self._show_create_service_url(cur, sql_name)
+                    try:
+                        action = classify_interactive_registration(
+                            existing, self.url,
+                        )
+                    except ValueError as exc:
+                        raise RuntimeError(
+                            f'Cannot register SQL function `{sql_name}`: {exc}',
+                        ) from exc
+                    create_sqls = [
+                        signature_to_sql(
+                            sig,
+                            url=self.url,
+                            data_format=self.data_format,
+                            app_mode=self.app_mode,
+                            replace=(action == 'replace'),
+                            database=self.function_database or None,
+                        ),
+                    ]
+                    for stmt in create_sqls:
+                        cur.execute(stmt)
 
     def drop_functions(
         self,
