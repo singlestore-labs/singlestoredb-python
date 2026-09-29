@@ -1200,8 +1200,14 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
         self->py_encodings[i] = (py_encoding == Py_None) ? NULL : py_encoding;
         Py_XINCREF(self->py_encodings[i]);
 
-        self->encodings[i] = (!py_encoding || py_encoding == Py_None) ?
-                              NULL : _PyUnicode_AsUTF8(py_encoding);
+        // NULL is the binary-column sentinel, so an allocation failure here
+        // can not be left in place; it has to go to the error path.
+        if (py_encoding == Py_None) {
+            self->encodings[i] = NULL;
+        } else {
+            self->encodings[i] = _PyUnicode_AsUTF8(py_encoding);
+            if (!self->encodings[i]) goto error;
+        }
 
         self->py_invalid_values[i] = (!py_invalid_value || py_invalid_value == Py_None) ?
                                       NULL : py_converter;
