@@ -2,7 +2,6 @@
 # type: ignore
 """Test that the C accelerator does not leak memory per query."""
 import gc
-import os
 import sys
 import unittest
 
@@ -24,7 +23,9 @@ ITERATIONS = 200
 MAX_BLOCKS_PER_QUERY = 5.0
 
 has_accel = mysql_connection._singlestoredb_accel is not None
-pure_python = bool(int(os.environ.get('SINGLESTOREDB_PURE_PYTHON', '0')))
+# Read the parsed option rather than the environment variable: the option's
+# validator already accepts true/yes/on, which int() would choke on.
+pure_python = bool(s2.get_option('pure_python'))
 
 
 @unittest.skipIf(not has_accel, 'C extension is not available')
@@ -94,6 +95,47 @@ class TestAccelLeaks(unittest.TestCase):
         assert rows[0].c0 == 0, rows[0].c0
         assert getattr(rows[0], f'c{N_COLS - 1}') == N_COLS - 1
         assert f'c{N_COLS - 1}=' in repr(rows[0]), repr(rows[0])
+
+    def test_field_names_survive_stripping_the_type_dict(self):
+        """No class attribute may own the field name storage.
+
+        The names are read again by repr, so a deletable attribute holding
+        the only reference would turn `delattr` into a use-after-free.
+        """
+        with s2.connect(
+            results_type='structsequences', pure_python=False,
+        ) as conn:
+            with conn.cursor() as cur:
+                cur.execute(WIDE_QUERY)
+                rows = cur.fetchall()
+
+        row_type = type(rows[0])
+
+        # Nothing in the type's dict may be the owner: every entry there is
+        # reachable, and most of them are deletable.
+        for name, value in vars(row_type).items():
+            assert type(value).__name__ != 'PyCapsule', name
+
+        # Held so the field names are still read out of the type after the
+        # loop below deletes the type's own __repr__ entry.
+        row_repr = row_type.__repr__
+
+        # CPython reads these three back out of the dict itself, so deleting
+        # them breaks a struct sequence whatever owns its names.
+        keep = ('n_fields', 'n_sequence_fields', 'n_unnamed_fields')
+
+        for name in list(vars(row_type)):
+            if name in keep:
+                continue
+            try:
+                delattr(row_type, name)
+            except (AttributeError, TypeError):
+                pass
+
+        gc.collect()
+
+        # repr reads the names out of the C field table, not the type dict.
+        assert f'c{N_COLS - 1}=' in row_repr(rows[0]), row_repr(rows[0])
 
 
 if __name__ == '__main__':

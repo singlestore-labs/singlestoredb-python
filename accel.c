@@ -578,6 +578,8 @@ typedef struct {
     PyObject *create_numpy_array_kwargs_vector[8];
     PyObject *struct_unpack_args;
     PyObject *bson_decode_args;
+    PyObject *structsequence_fields_registry;
+    PyObject *structsequence_fields_release;
 } PyObjects;
 
 static PyObjects PyObj = {0};
@@ -934,8 +936,9 @@ error:
 }
 
 
-// Name of the capsule, stored in the struct sequence type's dict, that owns
-// the type's field name storage.
+// Name of the capsule that owns a struct sequence type's field name storage.
+// The capsule is held by PyObj.structsequence_fields_registry, keyed by a weak
+// reference to the type, and is dropped when the type is collected.
 #define STRUCTSEQUENCE_FIELDS_CAPSULE "singlestoredb.Row.fields"
 
 
@@ -959,6 +962,31 @@ static void structsequence_fields_capsule_destructor(PyObject *py_capsule) {
     }
     free_structsequence_fields(fields);
 }
+
+
+// Weak reference callback for a struct sequence type. Dropping the registry
+// entry drops the last reference to the capsule, whose destructor frees the
+// names. The weak reference itself is the key: by the time this runs the
+// referent is already gone, so the type cannot be used to find the entry.
+static PyObject *structsequence_fields_release(PyObject *self, PyObject *py_weakref) {
+    (void)self;
+    if (PyObj.structsequence_fields_registry) {
+        if (PyDict_DelItem(PyObj.structsequence_fields_registry, py_weakref)) {
+            // A callback must not raise.
+            PyErr_Clear();
+        }
+    }
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+
+static PyMethodDef structsequence_fields_release_def = {
+    "structsequence_fields_release",
+    (PyCFunction)structsequence_fields_release,
+    METH_O,
+    NULL
+};
 
 
 static void State_clear_fields(StateObject *self) {
@@ -1255,8 +1283,12 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
 
             // The type stores the field name pointers rather than copying the
             // strings, and reads them again when a row is repr'd. Rows can
-            // outlive this State, so the storage is handed to a capsule in the
-            // type's dict, which frees it when the type itself goes away.
+            // outlive this State, so the storage is handed to a capsule owned
+            // by a module-private registry, keyed by a weak reference to the
+            // type. The names are freed when the type is collected. Rows are
+            // instances of a heap type and so keep it alive; nothing on the
+            // type refers to the capsule, so Python code cannot release it
+            // early.
             PyObject *py_fields_capsule = PyCapsule_New(
                 self->structsequence_desc.fields,
                 STRUCTSEQUENCE_FIELDS_CAPSULE,
@@ -1265,9 +1297,18 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
             if (!py_fields_capsule) goto error;
             self->structsequence_desc.fields = NULL;
 
-            rc = PyObject_SetAttrString((PyObject*)self->structsequence,
-                                        "__singlestoredb_fields__",
-                                        py_fields_capsule);
+            PyObject *py_fields_weakref = PyWeakref_NewRef(
+                (PyObject*)self->structsequence,
+                PyObj.structsequence_fields_release
+            );
+            if (!py_fields_weakref) {
+                Py_DECREF(py_fields_capsule);
+                goto error;
+            }
+
+            rc = PyDict_SetItem(PyObj.structsequence_fields_registry,
+                                py_fields_weakref, py_fields_capsule);
+            Py_DECREF(py_fields_weakref);
             Py_DECREF(py_fields_capsule);
             if (rc != 0) goto error;
         }
@@ -6139,6 +6180,15 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
 
     PyObj.bson_decode_args = PyTuple_New(1);
     if (!PyObj.bson_decode_args) goto error;
+
+    // Owns the field name storage of every live struct sequence type:
+    // weak reference to the type => capsule holding its names.
+    PyObj.structsequence_fields_registry = PyDict_New();
+    if (!PyObj.structsequence_fields_registry) goto error;
+
+    PyObj.structsequence_fields_release = PyCFunction_NewEx(
+        &structsequence_fields_release_def, NULL, NULL);
+    if (!PyObj.structsequence_fields_release) goto error;
 
     return PyModule_Create(&_singlestoredb_accelmodule);
 
