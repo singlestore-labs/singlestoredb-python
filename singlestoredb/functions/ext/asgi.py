@@ -1849,9 +1849,18 @@ class Application(object):
         """
         with connection.connect(*connection_args, **connection_kwargs) as conn:
             with conn.cursor() as cur:
+                planned = []
+                if self.function_database:
+                    database_prefix = escape_name(self.function_database) + '.'
+                else:
+                    database_prefix = ''
+                current_names = set()
                 for _key, (_endpoint, info) in self.endpoints.items():
                     sig = info['signature']
                     sql_name = sig['name']
+                    current_names.add(
+                        f'{database_prefix}{escape_name(sql_name)}',
+                    )
                     existing = self._show_create_service_url(cur, sql_name)
                     try:
                         action = classify_interactive_registration(
@@ -1861,7 +1870,7 @@ class Application(object):
                         raise RuntimeError(
                             f'Cannot register SQL function `{sql_name}`: {exc}',
                         ) from exc
-                    create_sqls = [
+                    planned.append(
                         signature_to_sql(
                             sig,
                             url=self.url,
@@ -1870,9 +1879,15 @@ class Application(object):
                             replace=(action == 'replace'),
                             database=self.function_database or None,
                         ),
-                    ]
-                    for stmt in create_sqls:
-                        cur.execute(stmt)
+                    )
+
+                funcs, _links = self._locate_app_functions(cur)
+                for fname in funcs:
+                    if fname not in current_names:
+                        cur.execute(f'DROP FUNCTION IF EXISTS {fname}')
+
+                for stmt in planned:
+                    cur.execute(stmt)
 
     def drop_functions(
         self,

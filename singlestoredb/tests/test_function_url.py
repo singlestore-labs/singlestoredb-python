@@ -4,7 +4,9 @@ from collections.abc import Iterator
 from typing import Any
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import Tuple
+from unittest.mock import patch
 
 from singlestoredb.functions.ext.function_url import classify_interactive_registration
 from singlestoredb.functions.ext.function_url import extract_service_url
@@ -151,6 +153,109 @@ class TestFunctionURL(unittest.TestCase):
                 show_url(_Cursor(rows=[('shi_test', '', published_sql)])),
                 this_session,
             )
+
+    def _interactive_app(self, names: List[str]) -> Any:
+        from singlestoredb.functions.ext.asgi import Application
+
+        app = Application.__new__(Application)
+        app.function_database = None
+        app.url = 'https://gw/pythonudfs/sess/interactive/'
+        app.data_format = 'rowdat_1'
+        app.app_mode = 'managed'
+        app.endpoints = {}
+        for name in names:
+            app.endpoints[name.encode('utf-8')] = (
+                None,
+                {
+                    'signature': {
+                        'name': name,
+                        'args': [{'name': 'v', 'sql': 'BIGINT'}],
+                        'returns': [{'name': '', 'sql': 'BIGINT'}],
+                    },
+                },
+            )
+        return app
+
+    def test_register_interactive_preflight(self) -> None:
+        app = self._interactive_app(['keep_test', 'steal_test'])
+        executed: List[str] = []
+
+        def show(_cur: Any, sql_name: str) -> Optional[str]:
+            if sql_name == 'steal_test':
+                return 'https://gw/pythonudfs/published-id/'
+            return None
+
+        app._show_create_service_url = show  # type: ignore[method-assign]
+
+        class _Cursor:
+            def execute(self, sql: str) -> None:
+                executed.append(sql)
+
+        class _CM:
+            def __init__(self, inner: Any) -> None:
+                self.inner = inner
+
+            def __enter__(self) -> Any:
+                return self.inner
+
+            def __exit__(self, *args: Any) -> bool:
+                return False
+
+        class _Conn:
+            def cursor(self) -> _CM:
+                return _CM(_Cursor())
+
+        with patch(
+            'singlestoredb.functions.ext.asgi.connection.connect',
+            return_value=_CM(_Conn()),
+        ):
+            with self.assertRaises(RuntimeError):
+                app.register_interactive_functions()
+        self.assertEqual(executed, [])
+
+    def test_register_interactive_drops_stale(self) -> None:
+        app = self._interactive_app(['keep_test'])
+        executed: List[str] = []
+
+        def show(_cur: Any, _sql_name: str) -> Optional[str]:
+            return None
+
+        def locate(_cur: Any) -> Tuple[Set[str], Set[str]]:
+            return {'`keep_test`', '`stale_test`'}, set()
+
+        app._show_create_service_url = show  # type: ignore[method-assign]
+        app._locate_app_functions = locate  # type: ignore[method-assign]
+
+        class _Cursor:
+            def execute(self, sql: str) -> None:
+                executed.append(sql)
+
+        class _CM:
+            def __init__(self, inner: Any) -> None:
+                self.inner = inner
+
+            def __enter__(self) -> Any:
+                return self.inner
+
+            def __exit__(self, *args: Any) -> bool:
+                return False
+
+        class _Conn:
+            def cursor(self) -> _CM:
+                return _CM(_Cursor())
+
+        with patch(
+            'singlestoredb.functions.ext.asgi.connection.connect',
+            return_value=_CM(_Conn()),
+        ):
+            app.register_interactive_functions()
+        self.assertIn('DROP FUNCTION IF EXISTS `stale_test`', executed)
+        self.assertTrue(
+            any('CREATE' in sql and 'keep_test' in sql for sql in executed),
+        )
+        self.assertFalse(
+            any('DROP' in sql and 'keep_test' in sql for sql in executed),
+        )
 
 
 if __name__ == '__main__':
