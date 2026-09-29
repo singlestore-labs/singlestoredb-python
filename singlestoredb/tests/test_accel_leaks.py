@@ -8,19 +8,67 @@ import unittest
 import singlestoredb as s2
 from singlestoredb.mysql import connection as mysql_connection
 
-# The leak in issue #135 was one allocation per column per query, so a wide
-# result makes it unmistakable: it shows up as ~N_COLS blocks per query, three
-# orders of magnitude above the noise floor of a few blocks over the run.
-N_COLS = 100
-WIDE_QUERY = 'SELECT ' + ', '.join(f'{i} AS c{i}' for i in range(N_COLS))
+# The leak in issue #135 was one allocation per column per query, so the
+# signal to look for is retention that grows with the width of the result.
+# Measuring two widths and taking the difference is what makes this robust:
+# anything a query costs that is flat in the column count drops out, and one
+# such cost is unavoidable here. Under coverage.py's sys.monitoring backend
+# every code object ever seen is retained forever, deliberately, keyed by
+# id() (see `code_objects` in coverage/sysmon.py). collections.namedtuple
+# compiles a fresh __new__ on each call and the accelerator builds one Row
+# class per query, so a coverage run retains ~15 blocks per query on the
+# namedtuples path however narrow the result is. That is the tracer's
+# accounting, not our allocation, and CI runs under --cov.
+NARROW_COLS = 10
+WIDE_COLS = 100
 
 WARMUP = 50
 ITERATIONS = 200
 
-# Per-query budget, in allocated blocks. Zero is what a fixed accelerator
-# actually measures; this leaves room for caches that fill on the first few
-# queries while staying far below the N_COLS a per-column leak would cost.
+
+def query_for(n_cols):
+    return 'SELECT ' + ', '.join(f'{i} AS c{i}' for i in range(n_cols))
+
+
+# Per-column budget, in allocated blocks. A fixed accelerator measures zero;
+# the leak this guards against cost one block per column, so anything above
+# the noise floor of a fraction of a block is the bug coming back.
+MAX_BLOCKS_PER_COLUMN = 0.05
+
+# Per-query budget for the width-independent part, in allocated blocks. Room
+# for caches that fill on the first few queries, plus the tracer overhead
+# above, which is measured rather than assumed so the budget stays tight when
+# nothing is tracing.
 MAX_BLOCKS_PER_QUERY = 5.0
+
+N_COLS = WIDE_COLS
+WIDE_QUERY = query_for(WIDE_COLS)
+
+
+def blocks_retained_per_namedtuple():
+    """Return the blocks a tracer retains per collections.namedtuple() call.
+
+    Zero when nothing is tracing. Non-zero under coverage, which the
+    accelerator then pays once per query on the namedtuples path.
+    """
+    import collections
+
+    fields = [f'c{i}' for i in range(WIDE_COLS)]
+
+    def build(n):
+        for _ in range(n):
+            collections.namedtuple('Row', fields, rename=True)
+
+    build(WARMUP)
+    gc.collect()
+    before = sys.getallocatedblocks()
+
+    build(ITERATIONS)
+    gc.collect()
+    after = sys.getallocatedblocks()
+
+    return max(0.0, (after - before) / ITERATIONS)
+
 
 has_accel = mysql_connection._singlestoredb_accel is not None
 # Read the parsed option rather than the environment variable: the option's
@@ -43,19 +91,20 @@ class TestAccelLeaks(unittest.TestCase):
         except Exception:
             pass
 
-    def blocks_per_query(self, results_type):
-        """Return the allocated blocks retained per query of WIDE_QUERY."""
+    def blocks_per_query(self, results_type, n_cols=WIDE_COLS):
+        """Return the allocated blocks retained per query of n_cols columns."""
+        query = query_for(n_cols)
         with s2.connect(results_type=results_type, pure_python=False) as conn:
             with conn.cursor() as cur:
                 for _ in range(WARMUP):
-                    cur.execute(WIDE_QUERY)
+                    cur.execute(query)
                     cur.fetchall()
 
                 gc.collect()
                 before = sys.getallocatedblocks()
 
                 for _ in range(ITERATIONS):
-                    cur.execute(WIDE_QUERY)
+                    cur.execute(query)
                     cur.fetchall()
 
                 gc.collect()
@@ -63,12 +112,47 @@ class TestAccelLeaks(unittest.TestCase):
 
         return (after - before) / ITERATIONS
 
-    def test_no_leak_per_query(self):
+    def test_no_leak_per_column(self):
+        """Retention must not grow with the width of the result.
+
+        This is the shape of the issue #135 leak, and differencing two widths
+        cancels every per-query cost that is flat in the column count -- see
+        the note on the tracer overhead at the top of this module.
+        """
         for results_type in ('tuples', 'dicts', 'namedtuples', 'structsequences'):
             with self.subTest(results_type=results_type):
+                narrow = self.blocks_per_query(results_type, NARROW_COLS)
+                wide = self.blocks_per_query(results_type, WIDE_COLS)
+
+                per_column = (wide - narrow) / (WIDE_COLS - NARROW_COLS)
+
+                assert per_column < MAX_BLOCKS_PER_COLUMN, \
+                    f'{results_type} leaks {per_column} blocks per column ' \
+                    f'({narrow} blocks/query at {NARROW_COLS} columns, ' \
+                    f'{wide} at {WIDE_COLS})'
+
+    def test_no_leak_per_query(self):
+        """Retention must not grow per query either.
+
+        The per-column check above cannot see a leak of something allocated
+        once per query, so budget that separately. The namedtuples path is
+        allowed the tracer's per-class overhead on top, measured here so the
+        budget stays tight when nothing is tracing.
+        """
+        tracer_overhead = blocks_retained_per_namedtuple()
+
+        for results_type in ('tuples', 'dicts', 'namedtuples', 'structsequences'):
+            with self.subTest(results_type=results_type):
+                budget = MAX_BLOCKS_PER_QUERY
+                if results_type == 'namedtuples':
+                    budget += tracer_overhead
+
                 leaked = self.blocks_per_query(results_type)
-                assert leaked < MAX_BLOCKS_PER_QUERY, \
-                    f'{results_type} leaks {leaked} blocks per query'
+
+                assert leaked < budget, \
+                    f'{results_type} leaks {leaked} blocks per query ' \
+                    f'(budget {budget}, of which {tracer_overhead} is ' \
+                    f'tracer overhead)'
 
     def test_rows_outlive_the_result_state(self):
         """Struct sequence rows must survive the state that created them.
