@@ -64,9 +64,9 @@ def classify_interactive_registration(
 
 def is_function_not_defined(exc: BaseException) -> bool:
     errno = getattr(exc, 'errno', None)
-    if errno == ER.FUNCTION_NOT_DEFINED:
+    if errno in (ER.FUNCTION_NOT_DEFINED, ER.SP_DOES_NOT_EXIST):
         return True
     args = getattr(exc, 'args', ())
-    if args and args[0] == ER.FUNCTION_NOT_DEFINED:
+    if args and args[0] in (ER.FUNCTION_NOT_DEFINED, ER.SP_DOES_NOT_EXIST):
         return True
     return False

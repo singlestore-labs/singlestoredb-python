@@ -88,8 +88,11 @@ class TestFunctionURL(unittest.TestCase):
         )
 
     def test_function_not_defined(self) -> None:
-        exc = type('E', (Exception,), {'errno': ER.FUNCTION_NOT_DEFINED})()
-        self.assertTrue(is_function_not_defined(exc))
+        missing = type('E', (Exception,), {'errno': ER.FUNCTION_NOT_DEFINED})()
+        self.assertTrue(is_function_not_defined(missing))
+        sp_missing = type('E', (Exception,), {'errno': ER.SP_DOES_NOT_EXIST})()
+        self.assertTrue(is_function_not_defined(sp_missing))
+        self.assertTrue(is_function_not_defined(Exception(ER.SP_DOES_NOT_EXIST)))
         self.assertFalse(is_function_not_defined(ValueError('nope')))
 
     def test_fake_cursor_ownership(self) -> None:
