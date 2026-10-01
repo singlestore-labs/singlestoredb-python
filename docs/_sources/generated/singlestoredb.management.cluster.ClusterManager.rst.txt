@@ -1,0 +1,26 @@
+﻿singlestoredb.management.cluster.ClusterManager
+===============================================
+.. currentmodule:: singlestoredb.management.cluster
+.. autoclass:: ClusterManager
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~ClusterManager.__init__
+      ~ClusterManager.create_cluster
+      ~ClusterManager.create_starter_cluster
+      ~ClusterManager.get_cluster
+      ~ClusterManager.get_project
+      ~ClusterManager.get_starter_cluster
+   .. rubric:: Attributes
+   .. autosummary::
+      ~ClusterManager.billing
+      ~ClusterManager.clusters
+      ~ClusterManager.default_base_url
+      ~ClusterManager.default_version
+      ~ClusterManager.obj_type
+      ~ClusterManager.organization
+      ~ClusterManager.organizations
+      ~ClusterManager.projects
+      ~ClusterManager.regions
+      ~ClusterManager.shared_tier_regions
+      ~ClusterManager.starter_clusters

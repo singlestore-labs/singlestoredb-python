@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FilesObject.abspath
+==================================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FilesObject.abspath

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>singlestoredb.management.cluster.ClusterManager.regions &mdash; SingleStoreDB 1.18.0 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+        <script src="../_static/documentation_options.js?v=256cef93"></script>
+        <script src="../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="singlestoredb.management.cluster.ClusterManager.shared_tier_regions" href="singlestoredb.management.cluster.ClusterManager.shared_tier_regions.html" />
+    <link rel="prev" title="singlestoredb.management.cluster.ClusterManager.projects" href="singlestoredb.management.cluster.ClusterManager.projects.html" />
+</head>
+<body class="wy-body-for-nav">
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          <a href="../index.html" class="icon icon-home">
+            SingleStoreDB
+          </a>
+              <div class="version">
+                1.18.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../whatsnew.html">What’s New</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started.html">Getting Started</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../api.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../api.html#connections">Connections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api.html#utilities">Utilities</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../api.html#management-api">Management API</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="singlestoredb.manage_clusters.html">singlestoredb.manage_clusters</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="../api.html#clustermanager">ClusterManager</a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.html">cluster.ClusterManager</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.organization.html">cluster.ClusterManager.organization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.organizations.html">cluster.ClusterManager.organizations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.billing.html">cluster.ClusterManager.billing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.clusters.html">cluster.ClusterManager.clusters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.starter_clusters.html">cluster.ClusterManager.starter_clusters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.projects.html">cluster.ClusterManager.projects</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">cluster.ClusterManager.regions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.shared_tier_regions.html">cluster.ClusterManager.shared_tier_regions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.create_cluster.html">cluster.ClusterManager.create_cluster</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.create_starter_cluster.html">cluster.ClusterManager.create_starter_cluster</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.get_cluster.html">cluster.ClusterManager.get_cluster</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.get_starter_cluster.html">cluster.ClusterManager.get_starter_cluster</a></li>
+<li class="toctree-l4"><a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.get_project.html">cluster.ClusterManager.get_project</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#cluster">Cluster</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#startercluster">StarterCluster</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#project">Project</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#workspaces-v1">Workspaces (v1)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#workspacemanager">WorkspaceManager</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#workspacegroup">WorkspaceGroup</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#workspace">Workspace</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#region">Region</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#organization">Organization</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#secret">Secret</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#jobs-management">Jobs Management</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#stage-files">Stage Files</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#personal-shared-and-model-files">Personal, Shared, and Model Files</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../api.html#filesobject">FilesObject</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../api.html#notebook-tools">Notebook Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api.html#server-tools">Server Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api.html#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+</ul>
+        </div>
+      </div>
+    </nav>
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">SingleStoreDB</a>
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">API Reference</a></li>
+      <li class="breadcrumb-item active">singlestoredb.management.cluster.ClusterManager.regions</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/generated/singlestoredb.management.cluster.ClusterManager.regions.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+  <section id="singlestoredb-management-cluster-clustermanager-regions">
+<h1>singlestoredb.management.cluster.ClusterManager.regions<a class="headerlink" href="#singlestoredb-management-cluster-clustermanager-regions" title="Link to this heading">¶</a></h1>
+<dl class="py property">
+<dt class="sig sig-object py" id="singlestoredb.management.cluster.ClusterManager.regions">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ClusterManager.</span></span><span class="sig-name descname"><span class="pre">regions</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">NamedList</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="singlestoredb.management.region.Region.html#singlestoredb.management.region.Region" title="singlestoredb.management.region.Region"><span class="pre">Region</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#singlestoredb.management.cluster.ClusterManager.regions" title="Link to this definition">¶</a></dt>
+<dd><p>Return a list of available regions.</p>
+<p>Cached for the same reason as <a class="reference internal" href="singlestoredb.management.cluster.ClusterManager.projects.html#singlestoredb.management.cluster.ClusterManager.projects" title="singlestoredb.management.cluster.ClusterManager.projects"><code class="xref py py-attr docutils literal notranslate"><span class="pre">projects</span></code></a>: <code class="xref py py-attr docutils literal notranslate"><span class="pre">Cluster.region</span></code>
+resolves against this list, and a caller reading it per row of a
+listing – <code class="docutils literal notranslate"><span class="pre">SHOW</span> <span class="pre">CLUSTERS</span></code> does – would otherwise cost a
+<code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/v2/regions</span></code> per cluster.</p>
+</dd></dl>
+</section>
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="singlestoredb.management.cluster.ClusterManager.projects.html" class="btn btn-neutral float-left" title="singlestoredb.management.cluster.ClusterManager.projects" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="singlestoredb.management.cluster.ClusterManager.shared_tier_regions.html" class="btn btn-neutral float-right" title="singlestoredb.management.cluster.ClusterManager.shared_tier_regions" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+  <hr/>
+  <div role="contentinfo">
+    <p>&#169; Copyright 2022 SingleStore. All Rights Reserved.</p>
+  </div>
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+</body>
+</html>

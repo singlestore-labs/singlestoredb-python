@@ -1,0 +1,4 @@
+﻿singlestoredb.management.stage.Stage.upload\_folder
+===================================================
+.. currentmodule:: singlestoredb.management.stage
+.. automethod:: Stage.upload_folder

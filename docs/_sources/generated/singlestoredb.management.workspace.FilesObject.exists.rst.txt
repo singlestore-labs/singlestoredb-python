@@ -1,4 +1,0 @@
-﻿singlestoredb.management.workspace.FilesObject.exists
-=====================================================
-.. currentmodule:: singlestoredb.management.workspace
-.. automethod:: FilesObject.exists

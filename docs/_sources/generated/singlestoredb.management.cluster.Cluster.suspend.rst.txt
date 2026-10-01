@@ -1,0 +1,4 @@
+﻿singlestoredb.management.cluster.Cluster.suspend
+================================================
+.. currentmodule:: singlestoredb.management.cluster
+.. automethod:: Cluster.suspend

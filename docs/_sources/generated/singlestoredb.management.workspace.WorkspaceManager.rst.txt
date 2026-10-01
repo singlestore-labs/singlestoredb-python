@@ -12,8 +12,6 @@
       ~WorkspaceManager.get_starter_workspace
       ~WorkspaceManager.get_workspace
       ~WorkspaceManager.get_workspace_group
-      ~WorkspaceManager.regions
-      ~WorkspaceManager.shared_tier_regions
    .. rubric:: Attributes
    .. autosummary::
       ~WorkspaceManager.billing
@@ -22,5 +20,7 @@
       ~WorkspaceManager.obj_type
       ~WorkspaceManager.organization
       ~WorkspaceManager.organizations
+      ~WorkspaceManager.regions
+      ~WorkspaceManager.shared_tier_regions
       ~WorkspaceManager.starter_workspaces
       ~WorkspaceManager.workspace_groups

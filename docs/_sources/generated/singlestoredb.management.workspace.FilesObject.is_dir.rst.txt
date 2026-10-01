@@ -1,4 +1,0 @@
-﻿singlestoredb.management.workspace.FilesObject.is\_dir
-======================================================
-.. currentmodule:: singlestoredb.management.workspace
-.. automethod:: FilesObject.is_dir

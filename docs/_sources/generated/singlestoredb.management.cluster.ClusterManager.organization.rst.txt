@@ -1,0 +1,4 @@
+﻿singlestoredb.management.cluster.ClusterManager.organization
+============================================================
+.. currentmodule:: singlestoredb.management.cluster
+.. autoproperty:: ClusterManager.organization

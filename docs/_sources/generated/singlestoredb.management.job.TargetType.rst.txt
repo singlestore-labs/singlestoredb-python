@@ -11,3 +11,4 @@
       ~TargetType.WORKSPACE
       ~TargetType.CLUSTER
       ~TargetType.VIRTUAL_WORKSPACE
+      ~TargetType.VIRTUAL_CLUSTER

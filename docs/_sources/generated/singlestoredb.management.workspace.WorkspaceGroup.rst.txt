@@ -24,3 +24,15 @@
       ~WorkspaceGroup.firewall_ranges
       ~WorkspaceGroup.terminated_at
       ~WorkspaceGroup.allow_all_traffic
+      ~WorkspaceGroup.deployment_type
+      ~WorkspaceGroup.expires_at
+      ~WorkspaceGroup.high_availability_two_zones
+      ~WorkspaceGroup.opt_in_preview_feature
+      ~WorkspaceGroup.outbound_allow_list
+      ~WorkspaceGroup.project_id
+      ~WorkspaceGroup.project_name
+      ~WorkspaceGroup.smart_dr_status
+      ~WorkspaceGroup.state
+      ~WorkspaceGroup.update_window
+      ~WorkspaceGroup.provider
+      ~WorkspaceGroup.region_name

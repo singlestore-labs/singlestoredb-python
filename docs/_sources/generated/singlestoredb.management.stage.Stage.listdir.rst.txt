@@ -1,0 +1,4 @@
+﻿singlestoredb.management.stage.Stage.listdir
+============================================
+.. currentmodule:: singlestoredb.management.stage
+.. automethod:: Stage.listdir

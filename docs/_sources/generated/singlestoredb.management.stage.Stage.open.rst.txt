@@ -1,0 +1,4 @@
+﻿singlestoredb.management.stage.Stage.open
+=========================================
+.. currentmodule:: singlestoredb.management.stage
+.. automethod:: Stage.open

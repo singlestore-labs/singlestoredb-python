@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FilesObject.removedirs
+=====================================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FilesObject.removedirs

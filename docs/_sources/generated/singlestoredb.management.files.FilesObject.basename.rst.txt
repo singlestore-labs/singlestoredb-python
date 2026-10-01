@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FilesObject.basename
+===================================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FilesObject.basename

@@ -8,6 +8,13 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.18.0 - October 1, 2026
+-------------------------
+* Add versioned management API wrappers (#126)
+* Fix interactive and portal publish PythonUDF (#138)
+* Fix the per-query memory leak in the C accelerator (#136)
+* Move CI provisioning from v1 workspaces to v2 clusters (#134)
+
 v1.17.3 - September 10, 2026
 ----------------------------
 * Propagate OpenTelemetry context on inference API calls (#132)

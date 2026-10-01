@@ -1,0 +1,4 @@
+﻿singlestoredb.management.stage.Stage.download\_folder
+=====================================================
+.. currentmodule:: singlestoredb.management.stage
+.. automethod:: Stage.download_folder

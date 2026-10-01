@@ -1,0 +1,4 @@
+﻿singlestoredb.management.cluster.Cluster.stage
+==============================================
+.. currentmodule:: singlestoredb.management.cluster
+.. autoproperty:: Cluster.stage

@@ -1,0 +1,4 @@
+﻿singlestoredb.management.cluster.ClusterManager.billing
+=======================================================
+.. currentmodule:: singlestoredb.management.cluster
+.. autoproperty:: ClusterManager.billing

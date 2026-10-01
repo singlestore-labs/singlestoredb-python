@@ -1,0 +1,4 @@
+﻿singlestoredb.management.stage.Stage.remove
+===========================================
+.. currentmodule:: singlestoredb.management.stage
+.. automethod:: Stage.remove

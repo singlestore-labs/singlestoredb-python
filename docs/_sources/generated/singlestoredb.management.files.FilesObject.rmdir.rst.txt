@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FilesObject.rmdir
+================================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FilesObject.rmdir

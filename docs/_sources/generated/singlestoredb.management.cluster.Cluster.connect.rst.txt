@@ -1,0 +1,4 @@
+﻿singlestoredb.management.cluster.Cluster.connect
+================================================
+.. currentmodule:: singlestoredb.management.cluster
+.. automethod:: Cluster.connect

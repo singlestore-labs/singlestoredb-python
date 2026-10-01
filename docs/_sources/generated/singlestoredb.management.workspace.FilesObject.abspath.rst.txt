@@ -1,4 +1,0 @@
-﻿singlestoredb.management.workspace.FilesObject.abspath
-======================================================
-.. currentmodule:: singlestoredb.management.workspace
-.. automethod:: FilesObject.abspath

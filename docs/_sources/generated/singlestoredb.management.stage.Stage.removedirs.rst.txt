@@ -1,0 +1,4 @@
+﻿singlestoredb.management.stage.Stage.removedirs
+===============================================
+.. currentmodule:: singlestoredb.management.stage
+.. automethod:: Stage.removedirs

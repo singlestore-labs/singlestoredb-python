@@ -1,0 +1,4 @@
+﻿singlestoredb.management.cluster.Cluster.terminate
+==================================================
+.. currentmodule:: singlestoredb.management.cluster
+.. automethod:: Cluster.terminate

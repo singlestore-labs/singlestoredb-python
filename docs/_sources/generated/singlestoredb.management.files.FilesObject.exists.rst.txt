@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FilesObject.exists
+=================================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FilesObject.exists

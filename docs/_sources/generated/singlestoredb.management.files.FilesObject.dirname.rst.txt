@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FilesObject.dirname
+==================================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FilesObject.dirname

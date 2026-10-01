@@ -1,0 +1,4 @@
+﻿singlestoredb.management.cluster.Cluster.update
+===============================================
+.. currentmodule:: singlestoredb.management.cluster
+.. automethod:: Cluster.update

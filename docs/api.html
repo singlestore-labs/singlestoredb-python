@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStoreDB 1.17.3 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 1.18.0 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
-        <script src="_static/documentation_options.js?v=a487ca7d"></script>
+        <script src="_static/documentation_options.js?v=256cef93"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                1.17.3
+                1.18.0
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -113,7 +113,55 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#management-api">Management API</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.manage_workspaces.html">singlestoredb.manage_workspaces</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/singlestoredb.manage_clusters.html">singlestoredb.manage_clusters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#clustermanager">ClusterManager</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.html">cluster.ClusterManager</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.organization.html">cluster.ClusterManager.organization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.organizations.html">cluster.ClusterManager.organizations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.billing.html">cluster.ClusterManager.billing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.clusters.html">cluster.ClusterManager.clusters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.starter_clusters.html">cluster.ClusterManager.starter_clusters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.projects.html">cluster.ClusterManager.projects</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.regions.html">cluster.ClusterManager.regions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.shared_tier_regions.html">cluster.ClusterManager.shared_tier_regions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.create_cluster.html">cluster.ClusterManager.create_cluster</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.create_starter_cluster.html">cluster.ClusterManager.create_starter_cluster</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.get_cluster.html">cluster.ClusterManager.get_cluster</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.get_starter_cluster.html">cluster.ClusterManager.get_starter_cluster</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.get_project.html">cluster.ClusterManager.get_project</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#cluster">Cluster</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.html">cluster.Cluster</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.organization.html">cluster.Cluster.organization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.stage.html">cluster.Cluster.stage</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.admin_password.html">cluster.Cluster.admin_password</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.connect.html">cluster.Cluster.connect</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.refresh.html">cluster.Cluster.refresh</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.update.html">cluster.Cluster.update</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.suspend.html">cluster.Cluster.suspend</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.resume.html">cluster.Cluster.resume</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.terminate.html">cluster.Cluster.terminate</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#startercluster">StarterCluster</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.html">cluster.StarterCluster</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.organization.html">cluster.StarterCluster.organization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.stage.html">cluster.StarterCluster.stage</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.connect.html">cluster.StarterCluster.connect</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.refresh.html">cluster.StarterCluster.refresh</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.create_user.html">cluster.StarterCluster.create_user</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.terminate.html">cluster.StarterCluster.terminate</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#project">Project</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.cluster.Project.html">cluster.Project</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#workspaces-v1">Workspaces (v1)</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.manage_workspaces.html">singlestoredb.manage_workspaces</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="#workspacemanager">WorkspaceManager</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.html">workspace.WorkspaceManager</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.organization.html">workspace.WorkspaceManager.organization</a></li>
@@ -155,7 +203,6 @@
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.html">organization.Organization</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.get_secret.html">organization.Organization.get_secret</a></li>
 <li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.jobs.html">organization.Organization.jobs</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.inference_apis.html">organization.Organization.inference_apis</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#secret">Secret</a><ul>
@@ -169,22 +216,22 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#stage-files">Stage Files</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.html">workspace.Stage</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.open.html">workspace.stage.open</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.download_file.html">workspace.stage.download_file</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.download_folder.html">workspace.stage.download_folder</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.upload_file.html">workspace.stage.upload_file</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.upload_folder.html">workspace.stage.upload_folder</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.info.html">workspace.stage.info</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.listdir.html">workspace.stage.listdir</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.exists.html">workspace.stage.exists</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.is_dir.html">workspace.stage.is_dir</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.is_file.html">workspace.stage.is_file</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.mkdir.html">workspace.stage.mkdir</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.rename.html">workspace.stage.rename</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.remove.html">workspace.stage.remove</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.removedirs.html">workspace.stage.removedirs</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.rmdir.html">workspace.stage.rmdir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.html">stage.Stage</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.open.html">stage.Stage.open</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.download_file.html">stage.Stage.download_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.download_folder.html">stage.Stage.download_folder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.upload_file.html">stage.Stage.upload_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.upload_folder.html">stage.Stage.upload_folder</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.info.html">stage.Stage.info</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.listdir.html">stage.Stage.listdir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.exists.html">stage.Stage.exists</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.is_dir.html">stage.Stage.is_dir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.is_file.html">stage.Stage.is_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.mkdir.html">stage.Stage.mkdir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.rename.html">stage.Stage.rename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.remove.html">stage.Stage.remove</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.removedirs.html">stage.Stage.removedirs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.rmdir.html">stage.Stage.rmdir</a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#personal-shared-and-model-files">Personal, Shared, and Model Files</a><ul>
@@ -212,21 +259,21 @@
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#filesobject">FilesObject</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.html">workspace.FilesObject</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.open.html">workspace.FilesObject.open</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.download.html">workspace.FilesObject.download</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.exists.html">workspace.FilesObject.exists</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.is_dir.html">workspace.FilesObject.is_dir</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.is_file.html">workspace.FilesObject.is_file</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.abspath.html">workspace.FilesObject.abspath</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.basename.html">workspace.FilesObject.basename</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.dirname.html">workspace.FilesObject.dirname</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.getmtime.html">workspace.FilesObject.getmtime</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.getctime.html">workspace.FilesObject.getctime</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.rename.html">workspace.FilesObject.rename</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.remove.html">workspace.FilesObject.remove</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.removedirs.html">workspace.FilesObject.removedirs</a></li>
-<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.rmdir.html">workspace.FilesObject.rmdir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.html">files.FilesObject</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.open.html">files.FilesObject.open</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.download.html">files.FilesObject.download</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.exists.html">files.FilesObject.exists</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.is_dir.html">files.FilesObject.is_dir</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.is_file.html">files.FilesObject.is_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.abspath.html">files.FilesObject.abspath</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.basename.html">files.FilesObject.basename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.dirname.html">files.FilesObject.dirname</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.getmtime.html">files.FilesObject.getmtime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.getctime.html">files.FilesObject.getctime</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.rename.html">files.FilesObject.rename</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.remove.html">files.FilesObject.remove</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.removedirs.html">files.FilesObject.removedirs</a></li>
+<li class="toctree-l4"><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.rmdir.html">files.FilesObject.rmdir</a></li>
 </ul>
 </li>
 </ul>
@@ -595,9 +642,213 @@ option on the <code class="docutils literal notranslate"><span class="pre">curso
 <section id="management-api">
 <h2>Management API<a class="headerlink" href="#management-api" title="Link to this heading">¶</a></h2>
 <p>The management objects allow you to create, destroy, and interact with
-workspaces in the SingleStoreDB Cloud.</p>
+deployments in the SingleStoreDB Cloud.</p>
+<p>The API is versioned. Version 2 is the default, and calls a deployment a<a href="singlestoredb.management.cluster.Cluster.html">
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Cluster</span></code></a>; version 1 called it a<a href="singlestoredb.management.workspace.Workspace.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Workspace</span></code></a> inside a<a href="singlestoredb.management.workspace.WorkspaceGroup.html">
+<code class="xref py py-class docutils literal notranslate"><span class="pre">WorkspaceGroup</span></code></a>. Which version you get is controlled by the
+<code class="docutils literal notranslate"><span class="pre">management.version</span></code> option (the <code class="docutils literal notranslate"><span class="pre">SINGLESTOREDB_MANAGEMENT_VERSION</span></code>
+environment variable), or by passing <code class="docutils literal notranslate"><span class="pre">version=</span></code> to the <code class="docutils literal notranslate"><span class="pre">manage_*</span></code>
+functions.</p>
+<p>The <code class="xref py py-func docutils literal notranslate"><span class="pre">manage_clusters()</span></code> function will return a<a href="singlestoredb.management.cluster.ClusterManager.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">ClusterManager</span></code></a>
+object that can be used to interact with the Management API. The v1 entry
+point, <code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code>, is documented under <a class="reference internal" href="#workspaces-v1">Workspaces (v1)</a>.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.manage_clusters.html#singlestoredb.manage_clusters" title="singlestoredb.manage_clusters"><code class="xref py py-obj docutils literal notranslate"><span class="pre">manage_clusters</span></code></a>([access_token, version, ...])</p></td>
+<td><p>Retrieve a SingleStoreDB cluster manager.</p></td>
+</tr>
+</tbody>
+</table>
+<section id="clustermanager">
+<h3>ClusterManager<a class="headerlink" href="#clustermanager" title="Link to this heading">¶</a></h3>
+<p>ClusterManager objects are returned by the <a class="reference internal" href="generated/singlestoredb.manage_clusters.html#singlestoredb.manage_clusters" title="singlestoredb.manage_clusters"><code class="xref py py-func docutils literal notranslate"><span class="pre">manage_clusters()</span></code></a> function.
+They allow you to retrieve information about the clusters in your account, or
+create new ones. Clusters are flat: unlike v1 workspaces they are not contained
+in a group, so there is nothing to resolve before reaching one.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.html#singlestoredb.management.cluster.ClusterManager" title="singlestoredb.management.cluster.ClusterManager"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager</span></code></a>([access_token, version, ...])</p></td>
+<td><p>SingleStoreDB cluster manager.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.organization.html#singlestoredb.management.cluster.ClusterManager.organization" title="singlestoredb.management.cluster.ClusterManager.organization"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.organization</span></code></a></p></td>
+<td><p>Return the current organization.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.organizations.html#singlestoredb.management.cluster.ClusterManager.organizations" title="singlestoredb.management.cluster.ClusterManager.organizations"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.organizations</span></code></a></p></td>
+<td><p>Return the organizations.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.billing.html#singlestoredb.management.cluster.ClusterManager.billing" title="singlestoredb.management.cluster.ClusterManager.billing"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.billing</span></code></a></p></td>
+<td><p>Return the current billing information.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.clusters.html#singlestoredb.management.cluster.ClusterManager.clusters" title="singlestoredb.management.cluster.ClusterManager.clusters"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.clusters</span></code></a></p></td>
+<td><p>Return a list of available clusters.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.starter_clusters.html#singlestoredb.management.cluster.ClusterManager.starter_clusters" title="singlestoredb.management.cluster.ClusterManager.starter_clusters"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.starter_clusters</span></code></a></p></td>
+<td><p>Return a list of available starter clusters.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.projects.html#singlestoredb.management.cluster.ClusterManager.projects" title="singlestoredb.management.cluster.ClusterManager.projects"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.projects</span></code></a></p></td>
+<td><p>Return a list of projects in the current organization.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.regions.html#singlestoredb.management.cluster.ClusterManager.regions" title="singlestoredb.management.cluster.ClusterManager.regions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.regions</span></code></a></p></td>
+<td><p>Return a list of available regions.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.shared_tier_regions.html#singlestoredb.management.cluster.ClusterManager.shared_tier_regions" title="singlestoredb.management.cluster.ClusterManager.shared_tier_regions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.shared_tier_regions</span></code></a></p></td>
+<td><p>Return a list of regions that support starter clusters.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.create_cluster.html#singlestoredb.management.cluster.ClusterManager.create_cluster" title="singlestoredb.management.cluster.ClusterManager.create_cluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.create_cluster</span></code></a>(name[, ...])</p></td>
+<td><p>Create a new cluster.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.create_starter_cluster.html#singlestoredb.management.cluster.ClusterManager.create_starter_cluster" title="singlestoredb.management.cluster.ClusterManager.create_starter_cluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.create_starter_cluster</span></code></a>(name, ...)</p></td>
+<td><p>Create a new starter (shared tier) cluster.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.get_cluster.html#singlestoredb.management.cluster.ClusterManager.get_cluster" title="singlestoredb.management.cluster.ClusterManager.get_cluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.get_cluster</span></code></a>(id)</p></td>
+<td><p>Retrieve a cluster definition.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.get_starter_cluster.html#singlestoredb.management.cluster.ClusterManager.get_starter_cluster" title="singlestoredb.management.cluster.ClusterManager.get_starter_cluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.get_starter_cluster</span></code></a>(id)</p></td>
+<td><p>Retrieve a starter cluster definition.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.get_project.html#singlestoredb.management.cluster.ClusterManager.get_project" title="singlestoredb.management.cluster.ClusterManager.get_project"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusterManager.get_project</span></code></a>(id)</p></td>
+<td><p>Retrieve a project definition.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="cluster">
+<h3>Cluster<a class="headerlink" href="#cluster" title="Link to this heading">¶</a></h3>
+<p>Cluster objects are retrieved from <a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.get_cluster.html#singlestoredb.management.cluster.ClusterManager.get_cluster" title="singlestoredb.management.cluster.ClusterManager.get_cluster"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ClusterManager.get_cluster()</span></code></a> or by
+retrieving an element from <a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.clusters.html#singlestoredb.management.cluster.ClusterManager.clusters" title="singlestoredb.management.cluster.ClusterManager.clusters"><code class="xref py py-attr docutils literal notranslate"><span class="pre">ClusterManager.clusters</span></code></a>. They are created
+with <a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.create_cluster.html#singlestoredb.management.cluster.ClusterManager.create_cluster" title="singlestoredb.management.cluster.ClusterManager.create_cluster"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ClusterManager.create_cluster()</span></code></a>, which replaces v1’s two-step
+workspace group plus workspace creation.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.html#singlestoredb.management.cluster.Cluster" title="singlestoredb.management.cluster.Cluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cluster</span></code></a>(name, id, state[, group, size, ...])</p></td>
+<td><p>SingleStoreDB cluster definition.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.organization.html#singlestoredb.management.cluster.Cluster.organization" title="singlestoredb.management.cluster.Cluster.organization"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cluster.organization</span></code></a></p></td>
+<td><p>Return the organization the cluster belongs to.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.stage.html#singlestoredb.management.cluster.Cluster.stage" title="singlestoredb.management.cluster.Cluster.stage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cluster.stage</span></code></a></p></td>
+<td><p>Stage manager.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.admin_password.html#singlestoredb.management.cluster.Cluster.admin_password" title="singlestoredb.management.cluster.Cluster.admin_password"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cluster.admin_password</span></code></a></p></td>
+<td><p>Generated password for the <code class="docutils literal notranslate"><span class="pre">admin</span></code> database user.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.connect.html#singlestoredb.management.cluster.Cluster.connect" title="singlestoredb.management.cluster.Cluster.connect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cluster.connect</span></code></a>(**kwargs)</p></td>
+<td><p>Create a connection to the database server for this cluster.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.refresh.html#singlestoredb.management.cluster.Cluster.refresh" title="singlestoredb.management.cluster.Cluster.refresh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cluster.refresh</span></code></a>()</p></td>
+<td><p>Update the object to the current state.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.update.html#singlestoredb.management.cluster.Cluster.update" title="singlestoredb.management.cluster.Cluster.update"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cluster.update</span></code></a>([name, size, scale_factor, ...])</p></td>
+<td><p>Update the cluster definition.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.suspend.html#singlestoredb.management.cluster.Cluster.suspend" title="singlestoredb.management.cluster.Cluster.suspend"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cluster.suspend</span></code></a>([wait_on_suspended, ...])</p></td>
+<td><p>Suspend the cluster.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.resume.html#singlestoredb.management.cluster.Cluster.resume" title="singlestoredb.management.cluster.Cluster.resume"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cluster.resume</span></code></a>([disable_auto_suspend, ...])</p></td>
+<td><p>Resume the cluster.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.terminate.html#singlestoredb.management.cluster.Cluster.terminate" title="singlestoredb.management.cluster.Cluster.terminate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Cluster.terminate</span></code></a>([wait_on_terminated, ...])</p></td>
+<td><p>Terminate the cluster.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="startercluster">
+<h3>StarterCluster<a class="headerlink" href="#startercluster" title="Link to this heading">¶</a></h3>
+<p>Starter clusters are the shared-tier deployment. They are created with
+<a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.create_starter_cluster.html#singlestoredb.management.cluster.ClusterManager.create_starter_cluster" title="singlestoredb.management.cluster.ClusterManager.create_starter_cluster"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ClusterManager.create_starter_cluster()</span></code></a> and retrieved from
+<a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.get_starter_cluster.html#singlestoredb.management.cluster.ClusterManager.get_starter_cluster" title="singlestoredb.management.cluster.ClusterManager.get_starter_cluster"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ClusterManager.get_starter_cluster()</span></code></a> or
+<a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.starter_clusters.html#singlestoredb.management.cluster.ClusterManager.starter_clusters" title="singlestoredb.management.cluster.ClusterManager.starter_clusters"><code class="xref py py-attr docutils literal notranslate"><span class="pre">ClusterManager.starter_clusters</span></code></a>. They support a smaller surface than a
+<a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.html#singlestoredb.management.cluster.Cluster" title="singlestoredb.management.cluster.Cluster"><code class="xref py py-class docutils literal notranslate"><span class="pre">Cluster</span></code></a> — there is no update, suspend or resume.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.html#singlestoredb.management.cluster.StarterCluster" title="singlestoredb.management.cluster.StarterCluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StarterCluster</span></code></a>(name, id, database_name[, ...])</p></td>
+<td><p>SingleStoreDB starter (shared tier) cluster definition.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.organization.html#singlestoredb.management.cluster.StarterCluster.organization" title="singlestoredb.management.cluster.StarterCluster.organization"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StarterCluster.organization</span></code></a></p></td>
+<td><p>Return the organization the starter cluster belongs to.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.stage.html#singlestoredb.management.cluster.StarterCluster.stage" title="singlestoredb.management.cluster.StarterCluster.stage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StarterCluster.stage</span></code></a></p></td>
+<td><p>Stage manager.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.connect.html#singlestoredb.management.cluster.StarterCluster.connect" title="singlestoredb.management.cluster.StarterCluster.connect"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StarterCluster.connect</span></code></a>(**kwargs)</p></td>
+<td><p>Create a connection to the database server for this starter cluster.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.refresh.html#singlestoredb.management.cluster.StarterCluster.refresh" title="singlestoredb.management.cluster.StarterCluster.refresh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StarterCluster.refresh</span></code></a>()</p></td>
+<td><p>Update the object to the current state.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.create_user.html#singlestoredb.management.cluster.StarterCluster.create_user" title="singlestoredb.management.cluster.StarterCluster.create_user"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StarterCluster.create_user</span></code></a>(username[, password])</p></td>
+<td><p>Create a new user for this starter cluster.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.terminate.html#singlestoredb.management.cluster.StarterCluster.terminate" title="singlestoredb.management.cluster.StarterCluster.terminate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">StarterCluster.terminate</span></code></a>()</p></td>
+<td><p>Terminate the starter cluster.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="project">
+<h3>Project<a class="headerlink" href="#project" title="Link to this heading">¶</a></h3>
+<p>Projects group the clusters in an organization. Project objects are retrieved
+from <a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.get_project.html#singlestoredb.management.cluster.ClusterManager.get_project" title="singlestoredb.management.cluster.ClusterManager.get_project"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ClusterManager.get_project()</span></code></a> or by retrieving an element from
+<a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.projects.html#singlestoredb.management.cluster.ClusterManager.projects" title="singlestoredb.management.cluster.ClusterManager.projects"><code class="xref py py-attr docutils literal notranslate"><span class="pre">ClusterManager.projects</span></code></a>, and a project is what
+<a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.create_cluster.html#singlestoredb.management.cluster.ClusterManager.create_cluster" title="singlestoredb.management.cluster.ClusterManager.create_cluster"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ClusterManager.create_cluster()</span></code></a> places a new cluster in. An organization
+with exactly one project does not need to name it.</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Project.html#singlestoredb.management.cluster.Project" title="singlestoredb.management.cluster.Project"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Project</span></code></a>(id, name[, edition, created_at])</p></td>
+<td><p>Project definition.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="workspaces-v1">
+<h3>Workspaces (v1)<a class="headerlink" href="#workspaces-v1" title="Link to this heading">¶</a></h3>
+<div class="deprecated">
+<p><span class="versionmodified deprecated">Deprecated since version Management: </span>API v1 as a whole is deprecated, not just the
+workspace vocabulary below. <code class="docutils literal notranslate"><span class="pre">management.version</span></code> now defaults to <code class="docutils literal notranslate"><span class="pre">'v2'</span></code>,
+and every entry point that resolves to v1 raises a
+<a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#DeprecationWarning" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DeprecationWarning</span></code></a> – whether v1 was named with <code class="docutils literal notranslate"><span class="pre">version='v1'</span></code> or
+inherited from the <code class="docutils literal notranslate"><span class="pre">management.version</span></code> option
+(<code class="docutils literal notranslate"><span class="pre">SINGLESTOREDB_MANAGEMENT_VERSION</span></code>).</p>
+<p><strong>v1 still works.</strong> Deprecated here means warned about, not removed: every
+function and class below still operates against the live v1 endpoints, and
+<code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code> still returns a working<a href="singlestoredb.management.workspace.WorkspaceManager.html">
+<code class="xref py py-class docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a> without being asked for a version. Nothing raises
+because the default moved. When you are ready to move off v1:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>v1</p></th>
+<th class="head"><p>v2</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code></p></td>
+<td><p><code class="xref py py-func docutils literal notranslate"><span class="pre">manage_clusters()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><a href="singlestoredb.management.workspace.WorkspaceManager.html"><code class="xref py py-class docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a></p></td>
+<td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.ClusterManager.html#singlestoredb.management.cluster.ClusterManager" title="singlestoredb.management.cluster.ClusterManager"><code class="xref py py-class docutils literal notranslate"><span class="pre">ClusterManager</span></code></a></p></td>
+</tr>
+<tr class="row-even"><td><p><a href="singlestoredb.management.workspace.WorkspaceGroup.html"><code class="xref py py-class docutils literal notranslate"><span class="pre">WorkspaceGroup</span></code></a></p></td>
+<td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.html#singlestoredb.management.cluster.Cluster" title="singlestoredb.management.cluster.Cluster"><code class="xref py py-class docutils literal notranslate"><span class="pre">Cluster</span></code></a></p></td>
+</tr>
+<tr class="row-odd"><td><p><a href="singlestoredb.management.workspace.Workspace.html"><code class="xref py py-class docutils literal notranslate"><span class="pre">Workspace</span></code></a></p></td>
+<td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.html#singlestoredb.management.cluster.Cluster" title="singlestoredb.management.cluster.Cluster"><code class="xref py py-class docutils literal notranslate"><span class="pre">Cluster</span></code></a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-class docutils literal notranslate"><span class="pre">StarterWorkspace</span></code></p></td>
+<td><p><a class="reference internal" href="generated/singlestoredb.management.cluster.StarterCluster.html#singlestoredb.management.cluster.StarterCluster" title="singlestoredb.management.cluster.StarterCluster"><code class="xref py py-class docutils literal notranslate"><span class="pre">StarterCluster</span></code></a></p></td>
+</tr>
+</tbody>
+</table>
+<p>Note that<a href="singlestoredb.management.workspace.WorkspaceGroup.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">WorkspaceGroup</span></code></a> and<a href="singlestoredb.management.workspace.Workspace.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Workspace</span></code></a> both collapse onto
+<a class="reference internal" href="generated/singlestoredb.management.cluster.Cluster.html#singlestoredb.management.cluster.Cluster" title="singlestoredb.management.cluster.Cluster"><code class="xref py py-class docutils literal notranslate"><span class="pre">Cluster</span></code></a>: v2 is flat, so there is no container resource and no
+two-step create. Grouping is expressed by <a class="reference internal" href="generated/singlestoredb.management.cluster.Project.html#singlestoredb.management.cluster.Project" title="singlestoredb.management.cluster.Project"><code class="xref py py-class docutils literal notranslate"><span class="pre">Project</span></code></a>, which is an
+organizational unit rather than a deployment parent.</p>
+<p><code class="xref py py-func docutils literal notranslate"><span class="pre">manage_files()</span></code> and <code class="xref py py-func docutils literal notranslate"><span class="pre">manage_regions()</span></code> need no migration – their
+routes are identical at both versions, so simply stop passing
+<code class="docutils literal notranslate"><span class="pre">version='v1'</span></code>.</p>
+</div>
 <p>The <code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code> function will return a<a href="singlestoredb.management.workspace.WorkspaceManager.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a>
-object that can be used to interact with the Management API.</p>
+object that can be used to interact with version 1 of the Management API.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.manage_workspaces.html#singlestoredb.manage_workspaces" title="singlestoredb.manage_workspaces"><code class="xref py py-obj docutils literal notranslate"><span class="pre">manage_workspaces</span></code></a>([access_token, version, ...])</p></td>
@@ -605,6 +856,7 @@ object that can be used to interact with the Management API.</p>
 </tr>
 </tbody>
 </table>
+</section>
 <section id="workspacemanager">
 <h3>WorkspaceManager<a class="headerlink" href="#workspacemanager" title="Link to this heading">¶</a></h3>
 <p>WorkspaceManager objects are returned by the <a class="reference internal" href="generated/singlestoredb.manage_workspaces.html#singlestoredb.manage_workspaces" title="singlestoredb.manage_workspaces"><code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code></a> function.
@@ -708,7 +960,8 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 </section>
 <section id="region">
 <h3>Region<a class="headerlink" href="#region" title="Link to this heading">¶</a></h3>
-<p>Region objects are accessed from the <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html#singlestoredb.management.workspace.WorkspaceManager.regions" title="singlestoredb.management.workspace.WorkspaceManager.regions"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a> attribute.</p>
+<p>Region objects are accessed from the<a href="singlestoredb.management.cluster.ClusterManager.regions.html"> <code class="xref py py-attr docutils literal notranslate"><span class="pre">ClusterManager.regions</span></code></a> attribute,
+or from <a class="reference internal" href="generated/singlestoredb.management.workspace.WorkspaceManager.regions.html#singlestoredb.management.workspace.WorkspaceManager.regions" title="singlestoredb.management.workspace.WorkspaceManager.regions"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.regions</span></code></a> at v1.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.region.Region.html#singlestoredb.management.region.Region" title="singlestoredb.management.region.Region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Region</span></code></a>(name, provider[, id, region_name])</p></td>
@@ -719,8 +972,9 @@ or by retrieving an element from <a class="reference internal" href="generated/s
 </section>
 <section id="organization">
 <h3>Organization<a class="headerlink" href="#organization" title="Link to this heading">¶</a></h3>
-<p>Organization objects are retrieved from<a href="singlestoredb.management.workspace.WorkspaceManager.organization.html"> <code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.organization</span></code></a>.
-They provide access to organization-level resources and operations.</p>
+<p>Organization objects are retrieved from<a href="singlestoredb.management.cluster.ClusterManager.organization.html"> <code class="xref py py-attr docutils literal notranslate"><span class="pre">ClusterManager.organization</span></code></a>, or
+from<a href="singlestoredb.management.workspace.WorkspaceManager.organization.html"> <code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceManager.organization</span></code></a> at v1. They provide access to
+organization-level resources and operations.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.html#singlestoredb.management.organization.Organization" title="singlestoredb.management.organization.Organization"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Organization</span></code></a>(id, name, firewall_ranges)</p></td>
@@ -731,9 +985,6 @@ They provide access to organization-level resources and operations.</p>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.jobs.html#singlestoredb.management.organization.Organization.jobs" title="singlestoredb.management.organization.Organization.jobs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Organization.jobs</span></code></a></p></td>
 <td><p>Retrieve a SingleStoreDB scheduled job manager.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.organization.Organization.inference_apis.html#singlestoredb.management.organization.Organization.inference_apis" title="singlestoredb.management.organization.Organization.inference_apis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Organization.inference_apis</span></code></a></p></td>
-<td><p>Retrieve a SingleStoreDB inference api manager.</p></td>
 </tr>
 </tbody>
 </table>
@@ -825,7 +1076,7 @@ methods for creating, monitoring, and managing scheduled notebook jobs.</p>
 <td><p></p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.TargetType.html#singlestoredb.management.job.TargetType" title="singlestoredb.management.job.TargetType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TargetType</span></code></a>(value[, names, module, qualname, ...])</p></td>
-<td><p></p></td>
+<td><p>Job target type, spanning both management API versions.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.job.Status.html#singlestoredb.management.job.Status" title="singlestoredb.management.job.Status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Status</span></code></a>(value[, names, module, qualname, ...])</p></td>
 <td><p></p></td>
@@ -863,58 +1114,57 @@ methods for creating, monitoring, and managing scheduled notebook jobs.</p>
 </section>
 <section id="stage-files">
 <h3>Stage Files<a class="headerlink" href="#stage-files" title="Link to this heading">¶</a></h3>
-<p>To interact with files in your Stage, use the<a href="singlestoredb.management.workspace.WorkspaceGroup.stage.html">
-<code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceGroup.stage</span></code></a> attribute.
-It will return a<a href="singlestoredb.management.workspace.Stage.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Stage</span></code></a> object which defines the following
-methods and attributes.</p>
+<p>To interact with files in your Stage, use the<a href="singlestoredb.management.cluster.Cluster.stage.html"> <code class="xref py py-attr docutils literal notranslate"><span class="pre">Cluster.stage</span></code></a> attribute
+(<a href="singlestoredb.management.workspace.WorkspaceGroup.stage.html"><code class="xref py py-attr docutils literal notranslate"><span class="pre">WorkspaceGroup.stage</span></code></a> at v1). It will return a<a href="singlestoredb.management.stage.Stage.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">Stage</span></code></a> object
+which defines the following methods and attributes.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.html#singlestoredb.management.workspace.Stage" title="singlestoredb.management.workspace.Stage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage</span></code></a>(deployment_id, manager)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.html#singlestoredb.management.stage.Stage" title="singlestoredb.management.stage.Stage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage</span></code></a>(deployment_id, manager)</p></td>
 <td><p>Stage manager.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.open.html#singlestoredb.management.workspace.Stage.open" title="singlestoredb.management.workspace.Stage.open"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.open</span></code></a>(stage_path[, mode, encoding])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.open.html#singlestoredb.management.stage.Stage.open" title="singlestoredb.management.stage.Stage.open"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.open</span></code></a>(stage_path[, mode, encoding])</p></td>
 <td><p>Open a Stage path for reading or writing.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.download_file.html#singlestoredb.management.workspace.Stage.download_file" title="singlestoredb.management.workspace.Stage.download_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.download_file</span></code></a>(stage_path[, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.download_file.html#singlestoredb.management.stage.Stage.download_file" title="singlestoredb.management.stage.Stage.download_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.download_file</span></code></a>(stage_path[, ...])</p></td>
 <td><p>Download the content of a stage path.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.download_folder.html#singlestoredb.management.workspace.Stage.download_folder" title="singlestoredb.management.workspace.Stage.download_folder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.download_folder</span></code></a>(stage_path[, ...])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.download_folder.html#singlestoredb.management.stage.Stage.download_folder" title="singlestoredb.management.stage.Stage.download_folder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.download_folder</span></code></a>(stage_path[, ...])</p></td>
 <td><p>Download a Stage folder to a local directory.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.upload_file.html#singlestoredb.management.workspace.Stage.upload_file" title="singlestoredb.management.workspace.Stage.upload_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.upload_file</span></code></a>(local_path, stage_path, *)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.upload_file.html#singlestoredb.management.stage.Stage.upload_file" title="singlestoredb.management.stage.Stage.upload_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.upload_file</span></code></a>(local_path, stage_path, *)</p></td>
 <td><p>Upload a local file.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.upload_folder.html#singlestoredb.management.workspace.Stage.upload_folder" title="singlestoredb.management.workspace.Stage.upload_folder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.upload_folder</span></code></a>(local_path, stage_path, *)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.upload_folder.html#singlestoredb.management.stage.Stage.upload_folder" title="singlestoredb.management.stage.Stage.upload_folder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.upload_folder</span></code></a>(local_path, stage_path, *)</p></td>
 <td><p>Upload a folder recursively.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.info.html#singlestoredb.management.workspace.Stage.info" title="singlestoredb.management.workspace.Stage.info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.info</span></code></a>(stage_path)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.info.html#singlestoredb.management.stage.Stage.info" title="singlestoredb.management.stage.Stage.info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.info</span></code></a>(stage_path)</p></td>
 <td><p>Return information about a stage location.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.listdir.html#singlestoredb.management.workspace.Stage.listdir" title="singlestoredb.management.workspace.Stage.listdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.listdir</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.listdir.html#singlestoredb.management.stage.Stage.listdir" title="singlestoredb.management.stage.Stage.listdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.listdir</span></code></a>()</p></td>
 <td><p>List the files / folders at the given path.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.exists.html#singlestoredb.management.workspace.Stage.exists" title="singlestoredb.management.workspace.Stage.exists"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.exists</span></code></a>(stage_path)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.exists.html#singlestoredb.management.stage.Stage.exists" title="singlestoredb.management.stage.Stage.exists"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.exists</span></code></a>(stage_path)</p></td>
 <td><p>Does the given stage path exist?</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.is_dir.html#singlestoredb.management.workspace.Stage.is_dir" title="singlestoredb.management.workspace.Stage.is_dir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.is_dir</span></code></a>(stage_path)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.is_dir.html#singlestoredb.management.stage.Stage.is_dir" title="singlestoredb.management.stage.Stage.is_dir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.is_dir</span></code></a>(stage_path)</p></td>
 <td><p>Is the given stage path a directory?</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.is_file.html#singlestoredb.management.workspace.Stage.is_file" title="singlestoredb.management.workspace.Stage.is_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.is_file</span></code></a>(stage_path)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.is_file.html#singlestoredb.management.stage.Stage.is_file" title="singlestoredb.management.stage.Stage.is_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.is_file</span></code></a>(stage_path)</p></td>
 <td><p>Is the given stage path a file?</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.mkdir.html#singlestoredb.management.workspace.Stage.mkdir" title="singlestoredb.management.workspace.Stage.mkdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.mkdir</span></code></a>(stage_path[, overwrite])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.mkdir.html#singlestoredb.management.stage.Stage.mkdir" title="singlestoredb.management.stage.Stage.mkdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.mkdir</span></code></a>(stage_path[, overwrite])</p></td>
 <td><p>Make a directory in the stage.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.rename.html#singlestoredb.management.workspace.Stage.rename" title="singlestoredb.management.workspace.Stage.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.rename</span></code></a>(old_path, new_path, *[, overwrite])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.rename.html#singlestoredb.management.stage.Stage.rename" title="singlestoredb.management.stage.Stage.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.rename</span></code></a>(old_path, new_path, *[, overwrite])</p></td>
 <td><p>Move the stage file to a new location.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.remove.html#singlestoredb.management.workspace.Stage.remove" title="singlestoredb.management.workspace.Stage.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.remove</span></code></a>(stage_path)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.remove.html#singlestoredb.management.stage.Stage.remove" title="singlestoredb.management.stage.Stage.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.remove</span></code></a>(stage_path)</p></td>
 <td><p>Delete a stage location.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.removedirs.html#singlestoredb.management.workspace.Stage.removedirs" title="singlestoredb.management.workspace.Stage.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.removedirs</span></code></a>(stage_path)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.removedirs.html#singlestoredb.management.stage.Stage.removedirs" title="singlestoredb.management.stage.Stage.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.removedirs</span></code></a>(stage_path)</p></td>
 <td><p>Delete a stage folder recursively.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.Stage.rmdir.html#singlestoredb.management.workspace.Stage.rmdir" title="singlestoredb.management.workspace.Stage.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.rmdir</span></code></a>(stage_path)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.stage.Stage.rmdir.html#singlestoredb.management.stage.Stage.rmdir" title="singlestoredb.management.stage.Stage.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stage.rmdir</span></code></a>(stage_path)</p></td>
 <td><p>Delete a stage folder.</p></td>
 </tr>
 </tbody>
@@ -1009,54 +1259,54 @@ personal, shared, or model files.</p>
 </section>
 <section id="filesobject">
 <h3>FilesObject<a class="headerlink" href="#filesobject" title="Link to this heading">¶</a></h3>
-<p><code class="xref py py-class docutils literal notranslate"><span class="pre">FilesObject`s</span> <span class="pre">are</span> <span class="pre">returned</span> <span class="pre">by</span> <span class="pre">the</span> <span class="pre">:meth:`StageObject.upload_file</span></code>
-<code class="xref py py-meth docutils literal notranslate"><span class="pre">FilesObject.upload_folder()</span></code>, <code class="xref py py-meth docutils literal notranslate"><span class="pre">FilesObject.mkdir()</span></code>,
-<code class="xref py py-meth docutils literal notranslate"><span class="pre">FilesObject.rename()</span></code>, and <code class="xref py py-meth docutils literal notranslate"><span class="pre">FilesObject.info()</span></code> methods.</p>
+<p><code class="xref py py-class docutils literal notranslate"><span class="pre">FilesObject`s</span> <span class="pre">are</span> <span class="pre">returned</span> <span class="pre">by</span> <span class="pre">the</span> <span class="pre">:meth:`FileSpace.upload_file</span></code>,
+<a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.upload_folder.html#singlestoredb.management.files.FileSpace.upload_folder" title="singlestoredb.management.files.FileSpace.upload_folder"><code class="xref py py-meth docutils literal notranslate"><span class="pre">FileSpace.upload_folder()</span></code></a>, <a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.mkdir.html#singlestoredb.management.files.FileSpace.mkdir" title="singlestoredb.management.files.FileSpace.mkdir"><code class="xref py py-meth docutils literal notranslate"><span class="pre">FileSpace.mkdir()</span></code></a>,
+<a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.rename.html#singlestoredb.management.files.FileSpace.rename" title="singlestoredb.management.files.FileSpace.rename"><code class="xref py py-meth docutils literal notranslate"><span class="pre">FileSpace.rename()</span></code></a>, and <a class="reference internal" href="generated/singlestoredb.management.files.FileSpace.info.html#singlestoredb.management.files.FileSpace.info" title="singlestoredb.management.files.FileSpace.info"><code class="xref py py-meth docutils literal notranslate"><span class="pre">FileSpace.info()</span></code></a> methods.</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.html#singlestoredb.management.workspace.FilesObject" title="singlestoredb.management.workspace.FilesObject"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject</span></code></a>(name, path, size, type, format, ...)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.html#singlestoredb.management.files.FilesObject" title="singlestoredb.management.files.FilesObject"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject</span></code></a>(name, path, size, type, format, ...)</p></td>
 <td><p>File / folder object.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.open.html#singlestoredb.management.workspace.FilesObject.open" title="singlestoredb.management.workspace.FilesObject.open"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.open</span></code></a>([mode, encoding])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.open.html#singlestoredb.management.files.FilesObject.open" title="singlestoredb.management.files.FilesObject.open"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.open</span></code></a>([mode, encoding])</p></td>
 <td><p>Open a file path for reading or writing.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.download.html#singlestoredb.management.workspace.FilesObject.download" title="singlestoredb.management.workspace.FilesObject.download"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.download</span></code></a>([local_path, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.download.html#singlestoredb.management.files.FilesObject.download" title="singlestoredb.management.files.FilesObject.download"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.download</span></code></a>([local_path, ...])</p></td>
 <td><p>Download the content of a file path.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.exists.html#singlestoredb.management.workspace.FilesObject.exists" title="singlestoredb.management.workspace.FilesObject.exists"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.exists</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.exists.html#singlestoredb.management.files.FilesObject.exists" title="singlestoredb.management.files.FilesObject.exists"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.exists</span></code></a>()</p></td>
 <td><p>Does the file / folder exist?</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.is_dir.html#singlestoredb.management.workspace.FilesObject.is_dir" title="singlestoredb.management.workspace.FilesObject.is_dir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.is_dir</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.is_dir.html#singlestoredb.management.files.FilesObject.is_dir" title="singlestoredb.management.files.FilesObject.is_dir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.is_dir</span></code></a>()</p></td>
 <td><p>Is the object a directory?</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.is_file.html#singlestoredb.management.workspace.FilesObject.is_file" title="singlestoredb.management.workspace.FilesObject.is_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.is_file</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.is_file.html#singlestoredb.management.files.FilesObject.is_file" title="singlestoredb.management.files.FilesObject.is_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.is_file</span></code></a>()</p></td>
 <td><p>Is the object a file?</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.abspath.html#singlestoredb.management.workspace.FilesObject.abspath" title="singlestoredb.management.workspace.FilesObject.abspath"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.abspath</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.abspath.html#singlestoredb.management.files.FilesObject.abspath" title="singlestoredb.management.files.FilesObject.abspath"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.abspath</span></code></a>()</p></td>
 <td><p>Return the full path of the object.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.basename.html#singlestoredb.management.workspace.FilesObject.basename" title="singlestoredb.management.workspace.FilesObject.basename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.basename</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.basename.html#singlestoredb.management.files.FilesObject.basename" title="singlestoredb.management.files.FilesObject.basename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.basename</span></code></a>()</p></td>
 <td><p>Return the basename of the object.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.dirname.html#singlestoredb.management.workspace.FilesObject.dirname" title="singlestoredb.management.workspace.FilesObject.dirname"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.dirname</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.dirname.html#singlestoredb.management.files.FilesObject.dirname" title="singlestoredb.management.files.FilesObject.dirname"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.dirname</span></code></a>()</p></td>
 <td><p>Return the directory name of the object.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.getmtime.html#singlestoredb.management.workspace.FilesObject.getmtime" title="singlestoredb.management.workspace.FilesObject.getmtime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.getmtime</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.getmtime.html#singlestoredb.management.files.FilesObject.getmtime" title="singlestoredb.management.files.FilesObject.getmtime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.getmtime</span></code></a>()</p></td>
 <td><p>Return the last modified datetime as a UNIX timestamp.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.getctime.html#singlestoredb.management.workspace.FilesObject.getctime" title="singlestoredb.management.workspace.FilesObject.getctime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.getctime</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.getctime.html#singlestoredb.management.files.FilesObject.getctime" title="singlestoredb.management.files.FilesObject.getctime"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.getctime</span></code></a>()</p></td>
 <td><p>Return the creation datetime as a UNIX timestamp.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.rename.html#singlestoredb.management.workspace.FilesObject.rename" title="singlestoredb.management.workspace.FilesObject.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.rename</span></code></a>(new_path, *[, overwrite])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.rename.html#singlestoredb.management.files.FilesObject.rename" title="singlestoredb.management.files.FilesObject.rename"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.rename</span></code></a>(new_path, *[, overwrite])</p></td>
 <td><p>Move the file to a new location.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.remove.html#singlestoredb.management.workspace.FilesObject.remove" title="singlestoredb.management.workspace.FilesObject.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.remove</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.remove.html#singlestoredb.management.files.FilesObject.remove" title="singlestoredb.management.files.FilesObject.remove"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.remove</span></code></a>()</p></td>
 <td><p>Delete the file.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.removedirs.html#singlestoredb.management.workspace.FilesObject.removedirs" title="singlestoredb.management.workspace.FilesObject.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.removedirs</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.removedirs.html#singlestoredb.management.files.FilesObject.removedirs" title="singlestoredb.management.files.FilesObject.removedirs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.removedirs</span></code></a>()</p></td>
 <td><p>Delete the directory recursively.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.workspace.FilesObject.rmdir.html#singlestoredb.management.workspace.FilesObject.rmdir" title="singlestoredb.management.workspace.FilesObject.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.rmdir</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/singlestoredb.management.files.FilesObject.rmdir.html#singlestoredb.management.files.FilesObject.rmdir" title="singlestoredb.management.files.FilesObject.rmdir"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FilesObject.rmdir</span></code></a>()</p></td>
 <td><p>Delete the empty directory.</p></td>
 </tr>
 </tbody>

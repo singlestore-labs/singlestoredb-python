@@ -1,0 +1,4 @@
+﻿singlestoredb.management.cluster.StarterCluster.refresh
+=======================================================
+.. currentmodule:: singlestoredb.management.cluster
+.. automethod:: StarterCluster.refresh

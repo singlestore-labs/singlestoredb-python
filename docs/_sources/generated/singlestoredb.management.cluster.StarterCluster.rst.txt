@@ -1,0 +1,26 @@
+﻿singlestoredb.management.cluster.StarterCluster
+===============================================
+.. currentmodule:: singlestoredb.management.cluster
+.. autoclass:: StarterCluster
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~StarterCluster.__init__
+      ~StarterCluster.connect
+      ~StarterCluster.create_user
+      ~StarterCluster.from_dict
+      ~StarterCluster.refresh
+      ~StarterCluster.terminate
+   .. rubric:: Attributes
+   .. autosummary::
+      ~StarterCluster.organization
+      ~StarterCluster.project
+      ~StarterCluster.stage
+      ~StarterCluster.stages
+      ~StarterCluster.starter_clusters
+      ~StarterCluster.name
+      ~StarterCluster.id
+      ~StarterCluster.database_name
+      ~StarterCluster.endpoint
+      ~StarterCluster.mysql_dml_port
+      ~StarterCluster.websocket_port

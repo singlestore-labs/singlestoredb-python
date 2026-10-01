@@ -1,0 +1,4 @@
+﻿singlestoredb.management.cluster.Cluster.resume
+===============================================
+.. currentmodule:: singlestoredb.management.cluster
+.. automethod:: Cluster.resume

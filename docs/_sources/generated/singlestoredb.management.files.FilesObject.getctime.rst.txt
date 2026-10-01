@@ -1,0 +1,4 @@
+﻿singlestoredb.management.files.FilesObject.getctime
+===================================================
+.. currentmodule:: singlestoredb.management.files
+.. automethod:: FilesObject.getctime

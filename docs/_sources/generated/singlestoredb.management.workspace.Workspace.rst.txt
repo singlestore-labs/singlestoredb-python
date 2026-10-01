@@ -29,3 +29,6 @@
       ~Workspace.resume_attachments
       ~Workspace.scaling_progress
       ~Workspace.last_resumed_at
+      ~Workspace.auto_scale
+      ~Workspace.kai_enabled
+      ~Workspace.scale_factor

@@ -1,0 +1,4 @@
+﻿singlestoredb.management.cluster.ClusterManager.create\_starter\_cluster
+========================================================================
+.. currentmodule:: singlestoredb.management.cluster
+.. automethod:: ClusterManager.create_starter_cluster

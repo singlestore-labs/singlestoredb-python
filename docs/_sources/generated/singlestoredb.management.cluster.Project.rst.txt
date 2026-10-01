@@ -1,0 +1,15 @@
+﻿singlestoredb.management.cluster.Project
+========================================
+.. currentmodule:: singlestoredb.management.cluster
+.. autoclass:: Project
+   .. automethod:: __init__
+   .. rubric:: Methods
+   .. autosummary::
+      ~Project.__init__
+      ~Project.from_dict
+   .. rubric:: Attributes
+   .. autosummary::
+      ~Project.id
+      ~Project.name
+      ~Project.edition
+      ~Project.created_at

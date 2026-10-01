@@ -1,0 +1,4 @@
+﻿singlestoredb.management.cluster.StarterCluster.create\_user
+============================================================
+.. currentmodule:: singlestoredb.management.cluster
+.. automethod:: StarterCluster.create_user

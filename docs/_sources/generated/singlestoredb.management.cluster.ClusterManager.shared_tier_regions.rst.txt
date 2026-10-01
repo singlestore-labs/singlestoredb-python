@@ -1,0 +1,4 @@
+﻿singlestoredb.management.cluster.ClusterManager.shared\_tier\_regions
+=====================================================================
+.. currentmodule:: singlestoredb.management.cluster
+.. autoproperty:: ClusterManager.shared_tier_regions

@@ -1,4 +1,4 @@
 ﻿singlestoredb.management.workspace.WorkspaceManager.shared\_tier\_regions
 =========================================================================
 .. currentmodule:: singlestoredb.management.workspace
-.. automethod:: WorkspaceManager.shared_tier_regions
+.. autoproperty:: WorkspaceManager.shared_tier_regions

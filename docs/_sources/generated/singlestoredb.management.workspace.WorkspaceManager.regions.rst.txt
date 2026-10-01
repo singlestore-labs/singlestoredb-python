@@ -1,4 +1,4 @@
 ﻿singlestoredb.management.workspace.WorkspaceManager.regions
 ===========================================================
 .. currentmodule:: singlestoredb.management.workspace
-.. automethod:: WorkspaceManager.regions
+.. autoproperty:: WorkspaceManager.regions

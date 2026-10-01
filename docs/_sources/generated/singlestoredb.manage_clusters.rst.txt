@@ -1,0 +1,4 @@
+﻿singlestoredb.manage\_clusters
+==============================
+.. currentmodule:: singlestoredb
+.. autofunction:: manage_clusters
