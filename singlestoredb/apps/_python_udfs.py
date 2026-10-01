@@ -38,17 +38,6 @@ async def run_udf_app(
 
     app_config = AppConfig.from_env()
 
-    if kill_existing_app_server:
-        # Shutdown the server gracefully if it was started by us.
-        # Since the uvicorn server doesn't start a new subprocess
-        # killing the process would result in kernel dying.
-        if _running_server is not None:
-            await _running_server.shutdown()
-            _running_server = None
-
-        # Kill if any other process is occupying the port
-        kill_process_by_port(app_config.listen_port)
-
     base_url = generate_base_url(app_config)
 
     udf_suffix = ''
@@ -68,6 +57,21 @@ async def run_udf_app(
             f'You can only define a maximum of {MAX_UDFS_LIMIT} functions.',
         )
 
+    # Prove every name is allowed before killing a live interactive server.
+    if app_config.running_interactively:
+        app.preflight_interactive_functions()
+
+    if kill_existing_app_server:
+        # Shutdown the server gracefully if it was started by us.
+        # Since the uvicorn server doesn't start a new subprocess
+        # killing the process would result in kernel dying.
+        if _running_server is not None:
+            await _running_server.shutdown()
+            _running_server = None
+
+        # Kill if any other process is occupying the port
+        kill_process_by_port(app_config.listen_port)
+
     config = uvicorn.Config(
         app,
         host='0.0.0.0',
@@ -78,13 +82,19 @@ async def run_udf_app(
 
     # Register the functions only if the app is running interactively.
     if app_config.running_interactively:
-        app.register_functions(replace=True)
+        app.register_interactive_functions()
 
     _running_server = AwaitableUvicornServer(config)
     asyncio.create_task(_running_server.serve())
     await _running_server.wait_for_startup()
 
     print(f'Python UDF registered at {base_url}')
+    if app_config.running_interactively:
+        sql_names = [
+            info['signature']['name']
+            for _func, info in app.endpoints.values()
+        ]
+        print(f'Registered SQL functions: {", ".join(sql_names)}')
 
     return UdfConnectionInfo(base_url, app.get_function_info())
 

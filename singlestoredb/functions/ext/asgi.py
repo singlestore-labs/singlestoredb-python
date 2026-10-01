@@ -75,6 +75,10 @@ from ..signature import get_signature
 from ..signature import signature_to_sql
 from ..typing import Masked
 from ..typing import Table
+from .function_url import classify_interactive_registration
+from .function_url import extract_service_url
+from .function_url import is_function_not_defined
+from .function_url import urls_equal
 from .timer import Timer
 from singlestoredb.docstring.parser import parse
 from singlestoredb.functions.dtypes import escape_name
@@ -1607,8 +1611,7 @@ class Application(object):
             # See if function URL matches url
             cur.execute(f'SHOW CREATE FUNCTION {database_prefix}{escape_name(name)}')
             for fname, _, code, *_ in list(cur):
-                m = re.search(r" (?:\w+) (?:SERVICE|MANAGED) '([^']+)'", code)
-                if m and m.group(1) == self.url:
+                if urls_equal(extract_service_url(code), self.url):
                     funcs.add(f'{database_prefix}{escape_name(fname)}')
                     if link and re.match(r'^py_ext_func_link_\S{14}$', link):
                         links.add(link)
@@ -1811,6 +1814,105 @@ class Application(object):
                         cur.execute(f'DROP LINK {link}')
                 for func in self.get_create_functions(replace=replace):
                     cur.execute(func)
+
+    def _service_url_for_qualified(
+        self,
+        cur: Any,
+        qualified: str,
+    ) -> Optional[str]:
+        try:
+            cur.execute(f'SHOW CREATE FUNCTION {qualified}')
+        except Exception as exc:
+            if is_function_not_defined(exc):
+                return None
+            raise
+        rows = list(cur)
+        if not rows:
+            return None
+        code = rows[0][2]
+        if isinstance(code, bytes):
+            code = code.decode('utf-8')
+        return extract_service_url(code)
+
+    def _show_create_service_url(self, cur: Any, sql_name: str) -> Optional[str]:
+        if self.function_database:
+            qualified = (
+                f'{escape_name(self.function_database)}.{escape_name(sql_name)}'
+            )
+        else:
+            qualified = escape_name(sql_name)
+        return self._service_url_for_qualified(cur, qualified)
+
+    def _classify_interactive_name(self, cur: Any, sql_name: str) -> str:
+        existing = self._show_create_service_url(cur, sql_name)
+        try:
+            return classify_interactive_registration(existing, self.url)
+        except ValueError as exc:
+            raise RuntimeError(
+                f'Cannot register SQL function `{sql_name}`: {exc}',
+            ) from exc
+
+    def preflight_interactive_functions(
+        self,
+        *connection_args: Any,
+        **connection_kwargs: Any,
+    ) -> None:
+        """Raise if any current name is published or owned by another session.
+
+        Read-only: does not CREATE or DROP functions.
+        """
+        with connection.connect(*connection_args, **connection_kwargs) as conn:
+            with conn.cursor() as cur:
+                for _key, (_endpoint, info) in self.endpoints.items():
+                    sql_name = info['signature']['name']
+                    self._classify_interactive_name(cur, sql_name)
+
+    def register_interactive_functions(
+        self,
+        *connection_args: Any,
+        **connection_kwargs: Any,
+    ) -> None:
+        """Register functions for an interactive notebook session.
+
+        Creates or replaces a name only when it is missing or already
+        points at this session's interactive URL. Published and
+        other-session functions are left unchanged. Ownership is
+        re-checked immediately before each write or drop.
+        """
+        with connection.connect(*connection_args, **connection_kwargs) as conn:
+            with conn.cursor() as cur:
+                if self.function_database:
+                    database_prefix = escape_name(self.function_database) + '.'
+                else:
+                    database_prefix = ''
+                current_names = set()
+                for _key, (_endpoint, info) in self.endpoints.items():
+                    sql_name = info['signature']['name']
+                    current_names.add(
+                        f'{database_prefix}{escape_name(sql_name)}',
+                    )
+                    self._classify_interactive_name(cur, sql_name)
+
+                funcs, _links = self._locate_app_functions(cur)
+                for fname in funcs:
+                    if fname not in current_names:
+                        existing = self._service_url_for_qualified(cur, fname)
+                        if urls_equal(existing, self.url):
+                            cur.execute(f'DROP FUNCTION IF EXISTS {fname}')
+
+                for _key, (_endpoint, info) in self.endpoints.items():
+                    sig = info['signature']
+                    action = self._classify_interactive_name(cur, sig['name'])
+                    cur.execute(
+                        signature_to_sql(
+                            sig,
+                            url=self.url,
+                            data_format=self.data_format,
+                            app_mode=self.app_mode,
+                            replace=(action == 'replace'),
+                            database=self.function_database or None,
+                        ),
+                    )
 
     def drop_functions(
         self,
