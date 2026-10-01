@@ -28,6 +28,8 @@ from typing import Tuple
 
 from .connection import _write_all_fd
 from .connection import handle_connection
+from .registry import FunctionNotDynamicError
+from .registry import FunctionNotFoundError
 from .registry import FunctionRegistry
 
 logger = logging.getLogger('plugin.server')
@@ -131,8 +133,9 @@ class SharedRegistry:
     def delete_function(self, function_name: str) -> None:
         """Delete a dynamically registered function by name.
 
-        Raises ValueError if the function was not dynamically registered
-        or does not exist at all.
+        Raises FunctionNotDynamicError if the function exists as a base
+        (non-dynamic) function, FunctionNotFoundError if it does not
+        exist at all.
         """
         with self._lock:
             # Find matching code blocks by parsing signature_json
@@ -148,11 +151,11 @@ class SharedRegistry:
                     self._base_registry is not None
                     and function_name in self._base_registry.functions
                 ):
-                    raise ValueError(
+                    raise FunctionNotDynamicError(
                         f"Cannot delete '{function_name}': "
                         f'not a dynamically registered function',
                     )
-                raise ValueError(
+                raise FunctionNotFoundError(
                     f"Function '{function_name}' not found",
                 )
 
