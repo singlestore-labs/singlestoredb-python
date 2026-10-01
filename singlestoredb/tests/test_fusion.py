@@ -261,19 +261,18 @@ class TestFusion(unittest.TestCase):
         assert '<region-id>' in syntax, syntax
         assert 'KMS' in syntax.upper(), syntax
 
-    def test_v1_workspace_commands_are_deprecated(self):
+    def test_only_v1_create_commands_are_deprecated(self):
         """
-        Every v1 WORKSPACE command points at its v2 CLUSTER replacement.
+        Only the v1 commands that create a deployment warn.
 
-        No exceptions: every command in the module reads the v1 API, so every
-        one of them warns. ``SHOW REGIONS`` is the loosest pairing -- v2 assigns
-        no region IDs, so ``SHOW CLUSTER REGIONS`` reports ``RegionName`` where
-        it reports ``ID`` -- but it is still where a caller has to go. Asserted
-        so that adding a v1 command without a pointer fails here.
+        New deployments should be clusters, so ``CREATE WORKSPACE GROUP`` and
+        ``CREATE WORKSPACE`` point at ``CREATE CLUSTER``. The rest manage
+        workspace groups that already exist, and a warning there would tell
+        their owners to move to clusters when nothing requires it.
         """
         from singlestoredb.fusion import registry
 
-        undeprecated = set()
+        deprecated = {}
         for key, handler in registry._handlers.items():
             if not handler.__module__.endswith('.workspace'):
                 continue
@@ -281,10 +280,12 @@ class TestFusion(unittest.TestCase):
                 # The replacement must be a real command, not a typo.
                 assert handler._deprecated_by in registry._handlers, \
                     (key, handler._deprecated_by)
-            else:
-                undeprecated.add(key)
+                deprecated[key] = handler._deprecated_by
 
-        assert not undeprecated, undeprecated
+        assert deprecated == {
+            'CREATE WORKSPACE GROUP': 'CREATE CLUSTER',
+            'CREATE WORKSPACE': 'CREATE CLUSTER',
+        }, deprecated
 
     def test_v2_cluster_commands_are_not_deprecated(self):
         """The replacements must not themselves warn."""
@@ -742,18 +743,18 @@ class TestFusion(unittest.TestCase):
 
     def test_in_group_resolves_a_workspace_group_against_v1(self):
         """
-        ``IN GROUP`` names a v1 workspace group, by name and by ID.
+        ``IN GROUP`` names a v1 workspace group, by name and by ID, silently.
 
         Stage is attached to the group itself at v1, so a group names a Stage on
         its own. The cluster manager must not be touched at all: a group ID is
         not a cluster ID, and looking one up as the other is what made this
         spelling miss.
         """
+        import warnings
         from unittest.mock import MagicMock
         from unittest.mock import patch
 
         from singlestoredb.fusion.handlers import utils
-        from singlestoredb.warnings import DeprecatedFeatureWarning
 
         group_id = '11111111-1111-4111-8111-111111111111'
         group = MagicMock()
@@ -771,8 +772,11 @@ class TestFusion(unittest.TestCase):
                         utils, 'get_cluster_manager', return_value=clusters,
                     ):
                 self._fusion_env()
-                with self.assertWarns(DeprecatedFeatureWarning):
-                    return utils.get_deployment(params)
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter('always')
+                    found = utils.get_deployment(params)
+                assert not caught, (params, [str(x.message) for x in caught])
+                return found
 
         for params in (
             dict(group=dict(group_name='wsg1')),
@@ -792,11 +796,11 @@ class TestFusion(unittest.TestCase):
         A starter workspace owns its Stage the same way a group does and was
         reachable through this spelling before, so it stays reachable.
         """
+        import warnings
         from unittest.mock import MagicMock
         from unittest.mock import patch
 
         from singlestoredb.fusion.handlers import utils
-        from singlestoredb.warnings import DeprecatedFeatureWarning
 
         starter_id = '22222222-2222-4222-8222-222222222222'
         starter = MagicMock()
@@ -812,8 +816,11 @@ class TestFusion(unittest.TestCase):
         def resolve(params):
             with patch.object(utils, 'get_workspace_manager', return_value=v1):
                 self._fusion_env()
-                with self.assertWarns(DeprecatedFeatureWarning):
-                    return utils.get_deployment(params)
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter('always')
+                    found = utils.get_deployment(params)
+                assert not caught, (params, [str(x.message) for x in caught])
+                return found
 
         for params in (
             {'in': dict(in_group=dict(group_name='starter1'))},
@@ -827,9 +834,9 @@ class TestFusion(unittest.TestCase):
 
         A bare ``IN`` named a workspace group before the Stage commands moved to
         v2 -- a group was the only kind of Stage owner there was -- so a
-        statement written then keeps working, and silently: ``IN`` is the
-        spelling to use for either kind of owner, so there is nothing about the
-        statement to warn about. Only ``IN GROUP`` warns.
+        statement written then keeps working, and silently: ``IN`` names
+        either kind of owner, so there is nothing about the statement to warn
+        about.
         """
         import warnings
         from unittest.mock import MagicMock
@@ -1035,16 +1042,13 @@ class TestWorkspaceFusion(unittest.TestCase):
         is empty, which is enough to prove the route was reached -- a cluster
         lookup would have raised instead.
         """
-        from singlestoredb.warnings import DeprecatedFeatureWarning
-
         wg = type(self).workspace_groups[0]
 
         for clause in [
             f"in group id '{wg.id}'",
             f"in group '{wg.name}'",
         ]:
-            with self.assertWarns(DeprecatedFeatureWarning):
-                self.cur.execute(f'show stage files {clause}')
+            self.cur.execute(f'show stage files {clause}')
             assert len(list(self.cur)) == 0, clause
 
     def test_show_regions(self):

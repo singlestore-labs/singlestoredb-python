@@ -14,8 +14,3 @@ import cycle. Neither package can host them: ``config`` is imported before
 #: class. Classes that implement one specific version name it literally
 #: instead, and do not follow this.
 DEFAULT_MANAGEMENT_VERSION = 'v2'
-
-#: Management API version being wound down. Public entry points that resolve
-#: to it raise a :class:`DeprecationWarning`, and everything under
-#: ``singlestoredb.management.v1`` goes away with it.
-DEPRECATED_MANAGEMENT_VERSION = 'v1'

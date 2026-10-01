@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import datetime
 import os
-import warnings
 from typing import Any
 from typing import Dict
 from typing import Optional
@@ -27,7 +26,6 @@ from ...management.workspace import StarterWorkspace
 from ...management.workspace import Workspace
 from ...management.workspace import WorkspaceGroup
 from ...management.workspace import WorkspaceManager
-from ...warnings import DeprecatedFeatureWarning
 
 
 def get_workspace_manager() -> WorkspaceManager:
@@ -513,22 +511,6 @@ def _get_stage_group(
     if not group_name and not group_id:
         return None
 
-    # Warned before the lookup, so a caller who named a group that is gone
-    # still hears that the spelling itself is going. stacklevel reaches the
-    # handler method: user code is an unknown number of execute() frames
-    # further up, so there is no frame count that lands on it.
-    #
-    # The warning is about the clause, not the resource: a bare IN resolves a
-    # workspace group too, so dropping the GROUP keyword is an edit the caller
-    # can make today whether or not their Stage has moved to a cluster.
-    warnings.warn(
-        'IN GROUP is deprecated: it names a workspace group explicitly, and '
-        'workspace groups are a management API v1 resource that goes away '
-        'with v1. Use a bare IN instead, which names a deployment or a '
-        'workspace group.',
-        DeprecatedFeatureWarning, stacklevel=3,
-    )
-
     group = _workspace_group(name=group_name, id=group_id)
     if group is None:
         raise KeyError(
@@ -556,9 +538,7 @@ def _group_fallback(
     a cluster or a group is a fact about their org, not about their SQL. The
     group resource does go away with ``management/v1/``, but a warning here
     would ask for a migration that no edit to the statement can perform --
-    the same reason :func:`.workspace._manage_workspaces_v1` exists. ``IN
-    GROUP`` still warns, because that spelling *is* something the user can
-    change.
+    the same reason :func:`.workspace._manage_workspaces_v1` exists.
 
     The deployment lookup goes first, so a name that is both a cluster's and a
     group's is the cluster's, and nothing that resolves today changes meaning.
