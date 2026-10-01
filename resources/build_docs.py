@@ -216,10 +216,13 @@ class DocBuilder:
     # Build Functions
     def clean_build_directory(self) -> None:
         """Clean the build directory."""
-        html_build_dir = self.build_dir / 'html'
-        if html_build_dir.exists():
-            self.log(f'Cleaning build directory: {html_build_dir}')
-            shutil.rmtree(html_build_dir)
+        # doctrees holds the pickled environment, including the intersphinx
+        # cache; stale entries in it can break later builds
+        for name in ('html', 'doctrees'):
+            path = self.build_dir / name
+            if path.exists():
+                self.log(f'Cleaning build directory: {path}')
+                shutil.rmtree(path)
 
     def copy_custom_css(self) -> bool:
         """Copy custom CSS to the _static directory."""
