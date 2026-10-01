@@ -1815,13 +1815,11 @@ class Application(object):
                 for func in self.get_create_functions(replace=replace):
                     cur.execute(func)
 
-    def _show_create_service_url(self, cur: Any, sql_name: str) -> Optional[str]:
-        if self.function_database:
-            qualified = (
-                f'{escape_name(self.function_database)}.{escape_name(sql_name)}'
-            )
-        else:
-            qualified = escape_name(sql_name)
+    def _service_url_for_qualified(
+        self,
+        cur: Any,
+        qualified: str,
+    ) -> Optional[str]:
         try:
             cur.execute(f'SHOW CREATE FUNCTION {qualified}')
         except Exception as exc:
@@ -1836,6 +1834,39 @@ class Application(object):
             code = code.decode('utf-8')
         return extract_service_url(code)
 
+    def _show_create_service_url(self, cur: Any, sql_name: str) -> Optional[str]:
+        if self.function_database:
+            qualified = (
+                f'{escape_name(self.function_database)}.{escape_name(sql_name)}'
+            )
+        else:
+            qualified = escape_name(sql_name)
+        return self._service_url_for_qualified(cur, qualified)
+
+    def _classify_interactive_name(self, cur: Any, sql_name: str) -> str:
+        existing = self._show_create_service_url(cur, sql_name)
+        try:
+            return classify_interactive_registration(existing, self.url)
+        except ValueError as exc:
+            raise RuntimeError(
+                f'Cannot register SQL function `{sql_name}`: {exc}',
+            ) from exc
+
+    def preflight_interactive_functions(
+        self,
+        *connection_args: Any,
+        **connection_kwargs: Any,
+    ) -> None:
+        """Raise if any current name is published or owned by another session.
+
+        Read-only: does not CREATE or DROP functions.
+        """
+        with connection.connect(*connection_args, **connection_kwargs) as conn:
+            with conn.cursor() as cur:
+                for _key, (_endpoint, info) in self.endpoints.items():
+                    sql_name = info['signature']['name']
+                    self._classify_interactive_name(cur, sql_name)
+
     def register_interactive_functions(
         self,
         *connection_args: Any,
@@ -1845,32 +1876,34 @@ class Application(object):
 
         Creates or replaces a name only when it is missing or already
         points at this session's interactive URL. Published and
-        other-session functions are left unchanged.
+        other-session functions are left unchanged. Ownership is
+        re-checked immediately before each write or drop.
         """
         with connection.connect(*connection_args, **connection_kwargs) as conn:
             with conn.cursor() as cur:
-                planned = []
                 if self.function_database:
                     database_prefix = escape_name(self.function_database) + '.'
                 else:
                     database_prefix = ''
                 current_names = set()
                 for _key, (_endpoint, info) in self.endpoints.items():
-                    sig = info['signature']
-                    sql_name = sig['name']
+                    sql_name = info['signature']['name']
                     current_names.add(
                         f'{database_prefix}{escape_name(sql_name)}',
                     )
-                    existing = self._show_create_service_url(cur, sql_name)
-                    try:
-                        action = classify_interactive_registration(
-                            existing, self.url,
-                        )
-                    except ValueError as exc:
-                        raise RuntimeError(
-                            f'Cannot register SQL function `{sql_name}`: {exc}',
-                        ) from exc
-                    planned.append(
+                    self._classify_interactive_name(cur, sql_name)
+
+                funcs, _links = self._locate_app_functions(cur)
+                for fname in funcs:
+                    if fname not in current_names:
+                        existing = self._service_url_for_qualified(cur, fname)
+                        if urls_equal(existing, self.url):
+                            cur.execute(f'DROP FUNCTION IF EXISTS {fname}')
+
+                for _key, (_endpoint, info) in self.endpoints.items():
+                    sig = info['signature']
+                    action = self._classify_interactive_name(cur, sig['name'])
+                    cur.execute(
                         signature_to_sql(
                             sig,
                             url=self.url,
@@ -1880,14 +1913,6 @@ class Application(object):
                             database=self.function_database or None,
                         ),
                     )
-
-                funcs, _links = self._locate_app_functions(cur)
-                for fname in funcs:
-                    if fname not in current_names:
-                        cur.execute(f'DROP FUNCTION IF EXISTS {fname}')
-
-                for stmt in planned:
-                    cur.execute(stmt)
 
     def drop_functions(
         self,

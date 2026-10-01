@@ -38,17 +38,6 @@ async def run_udf_app(
 
     app_config = AppConfig.from_env()
 
-    if kill_existing_app_server:
-        # Shutdown the server gracefully if it was started by us.
-        # Since the uvicorn server doesn't start a new subprocess
-        # killing the process would result in kernel dying.
-        if _running_server is not None:
-            await _running_server.shutdown()
-            _running_server = None
-
-        # Kill if any other process is occupying the port
-        kill_process_by_port(app_config.listen_port)
-
     base_url = generate_base_url(app_config)
 
     udf_suffix = ''
@@ -67,6 +56,21 @@ async def run_udf_app(
         raise ValueError(
             f'You can only define a maximum of {MAX_UDFS_LIMIT} functions.',
         )
+
+    # Prove every name is allowed before killing a live interactive server.
+    if app_config.running_interactively:
+        app.preflight_interactive_functions()
+
+    if kill_existing_app_server:
+        # Shutdown the server gracefully if it was started by us.
+        # Since the uvicorn server doesn't start a new subprocess
+        # killing the process would result in kernel dying.
+        if _running_server is not None:
+            await _running_server.shutdown()
+            _running_server = None
+
+        # Kill if any other process is occupying the port
+        kill_process_by_port(app_config.listen_port)
 
     config = uvicorn.Config(
         app,
