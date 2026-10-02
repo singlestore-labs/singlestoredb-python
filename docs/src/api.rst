@@ -340,18 +340,19 @@ with exactly one project does not need to name it.
 Workspaces (v1)
 ...............
 
-.. deprecated:: Management API v1 as a whole is deprecated, not just the
-   workspace vocabulary below. ``management.version`` now defaults to ``'v2'``,
-   and every entry point that resolves to v1 raises a
-   :class:`DeprecationWarning` -- whether v1 was named with ``version='v1'`` or
-   inherited from the ``management.version`` option
-   (``SINGLESTOREDB_MANAGEMENT_VERSION``).
+.. deprecated:: :func:`manage_workspaces` is deprecated, because new
+   deployments should be clusters, and raises a :class:`DeprecationWarning`.
+   So do the Fusion SQL ``CREATE WORKSPACE GROUP`` and ``CREATE WORKSPACE``
+   commands, which point at ``CREATE CLUSTER``. ``management.version`` now
+   defaults to ``'v2'``.
 
-   **v1 still works.** Deprecated here means warned about, not removed: every
-   function and class below still operates against the live v1 endpoints, and
-   :func:`manage_workspaces` still returns a working
-   :class:`WorkspaceManager` without being asked for a version. Nothing raises
-   because the default moved. When you are ready to move off v1:
+   **v1 still works.** Every function and class below still operates against
+   the live v1 endpoints, and :func:`manage_workspaces` still returns a working
+   :class:`WorkspaceManager` without being asked for a version. Other entry
+   points that resolve to v1 -- whether v1 was named with ``version='v1'`` or
+   inherited from the ``management.version`` option
+   (``SINGLESTOREDB_MANAGEMENT_VERSION``) -- do not warn. When you are ready to
+   move to clusters:
 
    ==============================  ==============================
    v1                              v2
@@ -369,8 +370,7 @@ Workspaces (v1)
    organizational unit rather than a deployment parent.
 
    :func:`manage_files` and :func:`manage_regions` need no migration -- their
-   routes are identical at both versions, so simply stop passing
-   ``version='v1'``.
+   routes are identical at both versions.
 
 The :func:`manage_workspaces` function will return a :class:`WorkspaceManager`
 object that can be used to interact with version 1 of the Management API.

@@ -197,8 +197,9 @@ c = manager.create_cluster(
 
 The API is versioned, and version 2 — the flat `Cluster` resource shown above —
 is the default. Version 1, which called a deployment a `Workspace` inside a
-`WorkspaceGroup` and is reached through `s2.manage_workspaces()`, still works
-but is deprecated in its entirety. Select a version with the
+`WorkspaceGroup` and is reached through `s2.manage_workspaces()`, still works.
+`manage_workspaces()` is deprecated, because new deployments should be
+clusters. Select a version with the
 `management.version` option (`SINGLESTOREDB_MANAGEMENT_VERSION`) or by passing
 `version=` to any `manage_*` function.
 
@@ -258,8 +259,8 @@ conn.execute("""
 ```
 
 The `WORKSPACE` and `WORKSPACE GROUP` commands, and the version-less
-`SHOW REGIONS`, still work but are deprecated along with the rest of management
-API v1.
+`SHOW REGIONS`, still work. `CREATE WORKSPACE GROUP` and `CREATE WORKSPACE` are
+deprecated, because new deployments should be clusters: use `CREATE CLUSTER`.
 
 See [singlestoredb/fusion/README.md](singlestoredb/fusion/README.md)
 for details on writing custom Fusion SQL handlers.

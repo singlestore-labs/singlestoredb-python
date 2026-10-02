@@ -11,10 +11,9 @@ group this way is what Stage statements always did -- a group was the only kind
 of Stage owner before v2 -- and which kind a given name belongs to is a fact
 about the org rather than about the statement.
 
-``IN GROUP`` names a workspace group explicitly, and is the one deprecated
-spelling here: it goes away with ``management/v1/``, and dropping the keyword
-is an edit that works today either way. :func:`.utils.get_deployment` resolves
-all of this, and everything it can return exposes ``.stage``.
+``IN GROUP`` names a workspace group explicitly.
+:func:`.utils.get_deployment` resolves all of this, and everything it can
+return exposes ``.stage``.
 """
 from typing import Any
 from typing import Dict
@@ -94,9 +93,7 @@ class ShowStageFilesHandler(SQLHandler):
     * The ``IN`` clause specifies the ID or the name of the deployment --
       or, for a Stage that has not moved off one, the workspace group --
       in which the Stage is attached.
-    * The ``IN GROUP`` clause names a workspace group explicitly. It is
-      deprecated and goes away with management API v1, which is the version
-      workspace groups belong to: drop the ``GROUP`` keyword, since a bare
+    * The ``IN GROUP`` clause names a workspace group explicitly. A bare
       ``IN`` resolves a workspace group too.
     * Use the ``RECURSIVE`` clause to list the files recursively.
     * To return more information about the files, use the ``EXTENDED``
@@ -221,9 +218,7 @@ class UploadStageFileHandler(SQLHandler):
     * The ``IN`` clause specifies the ID or the name of the deployment --
       or, for a Stage that has not moved off one, the workspace group --
       in which the Stage is attached.
-    * The ``IN GROUP`` clause names a workspace group explicitly. It is
-      deprecated and goes away with management API v1, which is the version
-      workspace groups belong to: drop the ``GROUP`` keyword, since a bare
+    * The ``IN GROUP`` clause names a workspace group explicitly. A bare
       ``IN`` resolves a workspace group too.
     * If the ``OVERWRITE`` clause is specified, any existing file at the
       specified path in the Stage is overwritten.
@@ -322,9 +317,7 @@ class DownloadStageFileHandler(SQLHandler):
     * The ``IN`` clause specifies the ID or the name of the deployment --
       or, for a Stage that has not moved off one, the workspace group --
       in which the Stage is attached.
-    * The ``IN GROUP`` clause names a workspace group explicitly. It is
-      deprecated and goes away with management API v1, which is the version
-      workspace groups belong to: drop the ``GROUP`` keyword, since a bare
+    * The ``IN GROUP`` clause names a workspace group explicitly. A bare
       ``IN`` resolves a workspace group too.
     * By default, files are downloaded in binary encoding. To view
       the contents of the file on the standard output, use the
@@ -425,9 +418,7 @@ class DropStageFileHandler(SQLHandler):
     * The ``IN`` clause specifies the ID or the name of the deployment --
       or, for a Stage that has not moved off one, the workspace group --
       in which the Stage is attached.
-    * The ``IN GROUP`` clause names a workspace group explicitly. It is
-      deprecated and goes away with management API v1, which is the version
-      workspace groups belong to: drop the ``GROUP`` keyword, since a bare
+    * The ``IN GROUP`` clause names a workspace group explicitly. A bare
       ``IN`` resolves a workspace group too.
 
     Example
@@ -507,9 +498,7 @@ class DropStageFolderHandler(SQLHandler):
     * The ``IN`` clause specifies the ID or the name of the deployment --
       or, for a Stage that has not moved off one, the workspace group --
       in which the Stage is attached.
-    * The ``IN GROUP`` clause names a workspace group explicitly. It is
-      deprecated and goes away with management API v1, which is the version
-      workspace groups belong to: drop the ``GROUP`` keyword, since a bare
+    * The ``IN GROUP`` clause names a workspace group explicitly. A bare
       ``IN`` resolves a workspace group too.
 
     Example
@@ -590,9 +579,7 @@ class CreateStageFolderHandler(SQLHandler):
     * The ``IN`` clause specifies the ID or the name of the deployment --
       or, for a Stage that has not moved off one, the workspace group --
       in which the Stage is attached.
-    * The ``IN GROUP`` clause names a workspace group explicitly. It is
-      deprecated and goes away with management API v1, which is the version
-      workspace groups belong to: drop the ``GROUP`` keyword, since a bare
+    * The ``IN GROUP`` clause names a workspace group explicitly. A bare
       ``IN`` resolves a workspace group too.
 
     Example

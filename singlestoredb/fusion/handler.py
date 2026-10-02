@@ -585,10 +585,11 @@ class SQLHandler(NodeVisitor):
     _enabled: bool = True
     _preview: bool = False
 
-    #: Command that replaces this one, e.g. ``'SHOW CLUSTERS'``. When set, the
-    #: command still runs but warns on every execution. Used for the management
-    #: API v1 vocabulary (``handlers/workspace.py``), which v2 replaced with the
-    #: flat ``CLUSTER`` commands. Empty means not deprecated.
+    #: Command that replaces this one, e.g. ``'CREATE CLUSTER'``. When set,
+    #: the command still runs but warns on every execution. Used for the
+    #: management API v1 commands that create workspace groups and workspaces
+    #: (``handlers/workspace.py``), since new deployments should be clusters.
+    #: Empty means not deprecated.
     _deprecated_by: str = ''
 
     def __init__(self, connection: Connection):
@@ -677,8 +678,8 @@ class SQLHandler(NodeVisitor):
             # After compile(), so that command_key is populated -- naming the
             # command the user actually typed is the point of the message.
             warnings.warn(
-                f'{" ".join(type(self).command_key).upper()} is a management '
-                'API v1 command and is deprecated. Use '
+                f'{" ".join(type(self).command_key).upper()} is deprecated: '
+                'new deployments should be clusters. Use '
                 f'{type(self)._deprecated_by} instead.',
                 DeprecatedFeatureWarning, stacklevel=2,
             )

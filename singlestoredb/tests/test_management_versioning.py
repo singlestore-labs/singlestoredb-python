@@ -428,21 +428,21 @@ class TestManageWorkspacesDeprecation(unittest.TestCase):
             )
 
 
-class TestDeprecatedVersionWarning(unittest.TestCase):
+class TestV1VersionIsSilent(unittest.TestCase):
     """
-    Every public version-neutral entry point warns when it resolves to v1.
+    The version-neutral entry points do not warn when they resolve to v1.
 
-    v1 is being wound down, so a caller who lands on it -- whether by passing
-    ``version='v1'`` or by inheriting it from the ``management.version``
-    option -- has to be told. The warning fires after resolution rather than in
-    ``_resolve_version``, so both routes are covered and the internal v1-only
-    paths stay silent (see :class:`TestManageWorkspacesDeprecation`).
+    Owners of existing workspace groups still reach their resources through
+    v1, whether by passing ``version='v1'`` or by inheriting it from the
+    ``management.version`` option. A warning here would tell them to move to
+    clusters when nothing requires it; only ``manage_workspaces()`` and the
+    Fusion commands that create a workspace group or workspace warn.
     """
 
     # (label, callable taking a version kwarg). Each is a public entry point
     # that can resolve to v1; ``manage_clusters`` is absent because v1 has no
     # clusters and it raises instead, and ``manage_workspaces`` because it
-    # raises its own more specific warning, asserted separately below.
+    # warns, asserted in :class:`TestManageWorkspacesDeprecation`.
     def _entry_points(self):
         import singlestoredb as s2
         from singlestoredb.management import get_organization
@@ -460,7 +460,7 @@ class TestDeprecatedVersionWarning(unittest.TestCase):
                 ),
             ),
             # The three helpers dispatch through _versioned_attr, so they are
-            # patched out: the assertion is about the warning, not the route.
+            # patched out: the assertion is about warnings, not the route.
             ('get_organization', lambda **kw: get_organization(**kw)),
             ('get_secret', lambda **kw: get_secret('s', **kw)),
             ('get_stage', lambda **kw: get_stage('d', **kw)),
@@ -482,29 +482,26 @@ class TestDeprecatedVersionWarning(unittest.TestCase):
             yield
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
-    def test_explicit_v1_warns(self, _mock_token):
+    def test_explicit_v1_is_silent(self, _mock_token):
         with self._stubbed_helpers():
             for label, call in self._entry_points():
                 with self.subTest(entry_point=label):
-                    with self.assertWarns(DeprecationWarning) as ctx:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('error', DeprecationWarning)
                         call(version='v1')
-                    msg = str(ctx.warning)
-                    self.assertIn('v1', msg)
-                    self.assertIn('deprecated', msg)
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
-    def test_v1_inherited_from_the_option_warns(self, _mock_token):
-        """A caller who never names a version still gets told."""
+    def test_v1_inherited_from_the_option_is_silent(self, _mock_token):
         with self._stubbed_helpers(), management_version('v1'):
             for label, call in self._entry_points():
                 with self.subTest(entry_point=label):
-                    with self.assertWarns(DeprecationWarning) as ctx:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('error', DeprecationWarning)
                         call()
-                    self.assertIn('deprecated', str(ctx.warning))
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
     def test_v2_is_silent(self, _mock_token):
-        """The default version must not warn -- otherwise nobody reads any of them."""
+        """The default version does not warn either."""
         with self._stubbed_helpers(), management_version('v2'):
             for label, call in self._entry_points() + [
                 (
@@ -523,15 +520,15 @@ class TestDeprecatedVersionWarning(unittest.TestCase):
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
     def test_v1_still_works(self, _mock_token):
         """
-        Deprecated must not mean broken. This is the point of the whole set.
+        v2 is the default, but v1 is still a supported version.
 
-        v2 is the default, but v1 is still a supported version: every entry
-        point must return a working v1 object, and none may raise merely
-        because the default moved. Warnings are the only consequence.
+        Every entry point must return a working v1 object, and none may raise
+        merely because the default moved.
         """
         import singlestoredb as s2
         from singlestoredb.management.workspace import manage_workspaces
         with self._stubbed_helpers(), warnings.catch_warnings():
+            # manage_workspaces() still warns; that is asserted elsewhere.
             warnings.simplefilter('ignore', DeprecationWarning)
             for label, call in self._entry_points():
                 with self.subTest(entry_point=label):
@@ -550,25 +547,19 @@ class TestDeprecatedVersionWarning(unittest.TestCase):
                     )
                     self.assertIn('/v1/', mgr._base_url)
 
-    def test_the_deprecated_version_is_not_the_default(self):
-        """Guards the pair: whatever DEPRECATED_VERSION names cannot be the default."""
+    def test_the_default_version_is_v2(self):
         from singlestoredb import config
         from singlestoredb.management import _version_import as vi
-        self.assertNotEqual(vi.DEPRECATED_VERSION, vi.DEFAULT_VERSION)
         self.assertEqual(vi.DEFAULT_VERSION, 'v2')
-        self.assertNotEqual(
-            config.get_default('management.version'), vi.DEPRECATED_VERSION,
-        )
+        self.assertEqual(config.get_default('management.version'), 'v2')
 
     @patch('singlestoredb.management.manager.get_token', return_value=FAKE_TOKEN)
     def test_manage_workspaces_warns_once_not_twice(self, _mock_token):
         """
-        ``manage_workspaces()`` is the one v1 entry point with its own message.
+        ``manage_workspaces()`` warns exactly once.
 
         It reaches v1 through ``_manage_workspaces_v1``, which is deliberately
-        silent, so the caller gets exactly one warning -- the specific one
-        naming ``manage_clusters`` -- rather than that plus the generic
-        "v1 is deprecated".
+        silent, so the caller gets only the warning naming ``manage_clusters``.
         """
         from singlestoredb.management.workspace import manage_workspaces
         with warnings.catch_warnings(record=True) as caught:

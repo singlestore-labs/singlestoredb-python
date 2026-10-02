@@ -208,7 +208,7 @@ ShowMonthHandler.register()
 
 Here is a more complete example demonstrating optional values, selection groups,
 and repeated values. It is abridged from `handlers/workspace.py`, which speaks
-the deprecated management API v1 vocabulary; see `handlers/cluster.py` for the
+the management API v1 vocabulary; see `handlers/cluster.py` for the
 current `CLUSTER` commands.
 
 ```python

@@ -156,8 +156,7 @@ def manage_regions(
     version : str, optional
         Version of the API to use. Defaults to the ``management.version``
         option (the ``SINGLESTOREDB_MANAGEMENT_VERSION`` environment
-        variable). ``'v1'`` is deprecated and raises a
-        :class:`DeprecationWarning`.
+        variable).
     base_url : str, optional
         Base URL of the management API
 
@@ -168,9 +167,7 @@ def manage_regions(
     """
     from ._version_import import _import_versioned_module
     from ._version_import import _resolve_version
-    from ._version_import import _warn_if_deprecated_version
     ver = _resolve_version(version)
-    _warn_if_deprecated_version(ver)
     mod = _import_versioned_module(ver, 'region')
     return mod.RegionManager(
         access_token=access_token,
