@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>API Reference &mdash; SingleStoreDB 1.18.0 documentation</title>
+  <title>API Reference &mdash; SingleStoreDB 1.18.1 documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
       <link rel="stylesheet" href="_static/custom.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="_static/js/html5shiv.min.js"></script>
   <![endif]-->
-        <script src="_static/documentation_options.js?v=256cef93"></script>
+        <script src="_static/documentation_options.js?v=81146b8a"></script>
         <script src="_static/doctools.js?v=9a2dae69"></script>
         <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -28,7 +28,7 @@
             SingleStoreDB
           </a>
               <div class="version">
-                1.18.0
+                1.18.1
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -804,17 +804,18 @@ with exactly one project does not need to name it.</p>
 <section id="workspaces-v1">
 <h3>Workspaces (v1)<a class="headerlink" href="#workspaces-v1" title="Link to this heading">¶</a></h3>
 <div class="deprecated">
-<p><span class="versionmodified deprecated">Deprecated since version Management: </span>API v1 as a whole is deprecated, not just the
-workspace vocabulary below. <code class="docutils literal notranslate"><span class="pre">management.version</span></code> now defaults to <code class="docutils literal notranslate"><span class="pre">'v2'</span></code>,
-and every entry point that resolves to v1 raises a
-<a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#DeprecationWarning" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DeprecationWarning</span></code></a> – whether v1 was named with <code class="docutils literal notranslate"><span class="pre">version='v1'</span></code> or
+<p><span class="versionmodified deprecated">Deprecated since version :func:`manage_workspaces`: </span>is deprecated, because new
+deployments should be clusters, and raises a <a class="reference external" href="https://docs.python.org/3/builtins/exceptions.html#DeprecationWarning" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DeprecationWarning</span></code></a>.
+So do the Fusion SQL <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">WORKSPACE</span> <span class="pre">GROUP</span></code> and <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">WORKSPACE</span></code>
+commands, which point at <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">CLUSTER</span></code>. <code class="docutils literal notranslate"><span class="pre">management.version</span></code> now
+defaults to <code class="docutils literal notranslate"><span class="pre">'v2'</span></code>.</p>
+<p><strong>v1 still works.</strong> Every function and class below still operates against
+the live v1 endpoints, and <code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code> still returns a working<a href="singlestoredb.management.workspace.WorkspaceManager.html">
+<code class="xref py py-class docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a> without being asked for a version. Other entry
+points that resolve to v1 – whether v1 was named with <code class="docutils literal notranslate"><span class="pre">version='v1'</span></code> or
 inherited from the <code class="docutils literal notranslate"><span class="pre">management.version</span></code> option
-(<code class="docutils literal notranslate"><span class="pre">SINGLESTOREDB_MANAGEMENT_VERSION</span></code>).</p>
-<p><strong>v1 still works.</strong> Deprecated here means warned about, not removed: every
-function and class below still operates against the live v1 endpoints, and
-<code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code> still returns a working<a href="singlestoredb.management.workspace.WorkspaceManager.html">
-<code class="xref py py-class docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a> without being asked for a version. Nothing raises
-because the default moved. When you are ready to move off v1:</p>
+(<code class="docutils literal notranslate"><span class="pre">SINGLESTOREDB_MANAGEMENT_VERSION</span></code>) – do not warn. When you are ready to
+move to clusters:</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>v1</p></th>
@@ -844,8 +845,7 @@ because the default moved. When you are ready to move off v1:</p>
 two-step create. Grouping is expressed by <a class="reference internal" href="generated/singlestoredb.management.cluster.Project.html#singlestoredb.management.cluster.Project" title="singlestoredb.management.cluster.Project"><code class="xref py py-class docutils literal notranslate"><span class="pre">Project</span></code></a>, which is an
 organizational unit rather than a deployment parent.</p>
 <p><code class="xref py py-func docutils literal notranslate"><span class="pre">manage_files()</span></code> and <code class="xref py py-func docutils literal notranslate"><span class="pre">manage_regions()</span></code> need no migration – their
-routes are identical at both versions, so simply stop passing
-<code class="docutils literal notranslate"><span class="pre">version='v1'</span></code>.</p>
+routes are identical at both versions.</p>
 </div>
 <p>The <code class="xref py py-func docutils literal notranslate"><span class="pre">manage_workspaces()</span></code> function will return a<a href="singlestoredb.management.workspace.WorkspaceManager.html"> <code class="xref py py-class docutils literal notranslate"><span class="pre">WorkspaceManager</span></code></a>
 object that can be used to interact with version 1 of the Management API.</p>

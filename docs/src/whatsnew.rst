@@ -8,6 +8,10 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.18.1 - October 2, 2026
+-------------------------
+* Narrow v1 deprecation warnings to workspace creation (#139)
+
 v1.18.0 - October 1, 2026
 -------------------------
 * Add versioned management API wrappers (#126)
