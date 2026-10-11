@@ -119,6 +119,46 @@ async def to_thread(
     return await loop.run_in_executor(None, func_call)
 
 
+def _extract_trace_context(
+    headers: Dict[bytes, bytes],
+) -> Tuple[Optional[Any], Optional[str]]:
+    """
+    Return the caller's W3C trace context and its hex trace ID.
+
+    Both are ``None`` when ``opentelemetry-api`` is not installed or the
+    request has no valid ``traceparent`` header.
+
+    """
+    try:
+        from opentelemetry import propagate
+        from opentelemetry import trace as otel_trace
+    except ImportError:
+        return None, None
+    carrier = {
+        k.decode('latin-1'): v.decode('latin-1') for k, v in headers.items()
+    }
+    ctx = propagate.extract(carrier)
+    span_context = otel_trace.get_current_span(ctx).get_span_context()
+    if not span_context.is_valid:
+        return None, None
+    return ctx, otel_trace.format_trace_id(span_context.trace_id)
+
+
+def _attach_trace_context(ctx: Optional[Any]) -> Optional[Any]:
+    """Make ``ctx`` the current OpenTelemetry context; return the detach token."""
+    if ctx is None:
+        return None
+    from opentelemetry import context as otel_context
+    return otel_context.attach(ctx)
+
+
+def _detach_trace_context(token: Optional[Any]) -> None:
+    if token is None:
+        return
+    from opentelemetry import context as otel_context
+    otel_context.detach(token)
+
+
 async def _poll_cancel(cancel_event: threading.Event) -> None:
     """
     Return once ``cancel_event`` is set, polling it on the running loop.
@@ -1339,6 +1379,8 @@ class Application(object):
         method = scope['method']
         path = tuple(x for x in scope['path'].split('/') if x)
         headers = dict(scope['headers'])
+        trace_context, trace_id = _extract_trace_context(headers)
+        trace_extra = {'trace_id': trace_id} if trace_id else {}
 
         content_type = headers.get(
             b'content-type',
@@ -1368,6 +1410,7 @@ class Application(object):
                     'function_name': func_name.decode('utf-8'),
                     'content_type': content_type.decode('utf-8'),
                     'accepts': accepts.decode('utf-8'),
+                    **trace_extra,
                 },
             )
 
@@ -1387,6 +1430,9 @@ class Application(object):
             input_handler = self.handlers[(content_type, data_version, args_data_format)]
             output_handler = self.handlers[(accepts, data_version, returns_data_format)]
 
+            # The UDF tasks created below copy the current context, so outbound
+            # calls made by the UDF propagate the caller's traceparent.
+            trace_token = _attach_trace_context(trace_context)
             try:
                 all_tasks = []
                 result = []
@@ -1470,6 +1516,7 @@ class Application(object):
                         'request_id': request_id,
                         'function_name': func_name.decode('utf-8'),
                         'timeout': func_info['timeout'],
+                        **trace_extra,
                     },
                 )
                 body = (
@@ -1486,6 +1533,7 @@ class Application(object):
                         'app_name': self.name,
                         'request_id': request_id,
                         'function_name': func_name.decode('utf-8'),
+                        **trace_extra,
                     },
                 )
                 body = b'CancelledError: Function call was cancelled'
@@ -1499,6 +1547,7 @@ class Application(object):
                         'request_id': request_id,
                         'function_name': func_name.decode('utf-8'),
                         'exception_type': type(e).__name__,
+                        **trace_extra,
                     },
                 )
                 msg = traceback.format_exc().strip().split(' File ')[-1]
@@ -1512,6 +1561,7 @@ class Application(object):
             finally:
                 cancel_event.set()
                 await cancel_all_tasks(all_tasks)
+                _detach_trace_context(trace_token)
 
         # Handle api reflection
         elif method == 'GET' and path == self.show_create_function_path:
@@ -1567,6 +1617,7 @@ class Application(object):
                     'request_id': request_id,
                     'function_name': timer.metadata.get('function', ''),
                     'metrics': metrics,
+                    **trace_extra,
                 },
             )
 
