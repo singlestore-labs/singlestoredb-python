@@ -222,9 +222,17 @@ The script performs the following steps:
 3. Updates version in both `pyproject.toml` and `singlestoredb/__init__.py`
 4. Generates release notes from git history (or uses provided summary)
 5. Opens an editor to customize release notes for `docs/src/whatsnew.rst`
-6. Builds the documentation
-7. Stages all modified files for commit
-8. Optionally commits and pushes changes
+6. Regenerates `COMPATIBILITY.md`
+7. Builds the documentation
+8. Stages all modified files for commit
+9. Optionally commits and pushes changes
+
+`COMPATIBILITY.md` is generated from the release dates in `docs/src/whatsnew.rst`, the Python matrices in each release tag's smoke-test workflow, and the [SingleStore software EOL policy](https://docs.singlestore.com/db/latest/support/singlestore-software-end-of-life-eol-policy/). An engine is listed when it had been released and its end-of-life date was still in the future on that client release date. Regeneration requires network access. To regenerate or verify the file manually, run:
+
+```bash
+python resources/generate_compatibility.py
+python resources/generate_compatibility.py --verify-matrix
+```
 
 ### Creating a Release
 

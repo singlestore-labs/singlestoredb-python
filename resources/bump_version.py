@@ -389,6 +389,19 @@ def build_docs() -> None:
     status('✅ Documentation built successfully')
 
 
+def generate_compatibility() -> None:
+    """Regenerate the driver, server, and Python compatibility matrix."""
+    generator = Path(__file__).parent / 'generate_compatibility.py'
+    result = subprocess.run([sys.executable, str(generator)])
+    if result.returncode != 0:
+        print(
+            '❌ Error generating COMPATIBILITY.md',
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    status('✅ Compatibility matrix generated successfully')
+
+
 def stage_files() -> None:
     """Stage all modified files for commit."""
     status('📦 Staging files for commit...')
@@ -397,6 +410,7 @@ def stage_files() -> None:
         'pyproject.toml',
         'singlestoredb/__init__.py',
         'docs/src/whatsnew.rst',
+        'COMPATIBILITY.md',
         'docs/',  # All generated documentation files
     ]
 
@@ -435,7 +449,7 @@ def main() -> None:
     print('=' * 50, file=sys.stderr)
 
     # Step 1: Get current version
-    step(1, 6, 'Reading current version')
+    step(1, 7, 'Reading current version')
     current_version = get_current_version()
     status(f'Current version: {current_version}')
 
@@ -444,7 +458,7 @@ def main() -> None:
     status(f'New version will be: {new_version}')
 
     # Step 2: Update version in files
-    step(2, 6, 'Updating version in files')
+    step(2, 7, 'Updating version in files')
     start_time = time.time()
 
     update_version_in_file(Path(__file__).parent.parent / 'pyproject.toml', current_version, new_version)
@@ -461,7 +475,7 @@ def main() -> None:
     status(f'✅ Version files updated in {elapsed:.1f}s')
 
     # Step 3: Generate release summary
-    step(3, 6, 'Generating release summary')
+    step(3, 7, 'Generating release summary')
     start_time = time.time()
 
     if args.summary:
@@ -477,7 +491,7 @@ def main() -> None:
     status(f'✅ Release summary generated in {elapsed:.1f}s')
 
     # Step 4: Update whatsnew.rst with editor
-    step(4, 6, 'Updating release notes')
+    step(4, 7, 'Updating release notes')
     start_time = time.time()
 
     status('📝 Opening editor for release notes...')
@@ -499,12 +513,16 @@ def main() -> None:
     elapsed = time.time() - start_time
     status(f'✅ Release notes updated in {elapsed:.1f}s')
 
-    # Step 5: Build documentation
-    step(5, 6, 'Building documentation')
+    # Step 5: Generate compatibility matrix
+    step(5, 7, 'Generating compatibility matrix')
+    generate_compatibility()
+
+    # Step 6: Build documentation
+    step(6, 7, 'Building documentation')
     build_docs()
 
-    # Step 6: Stage files
-    step(6, 6, 'Staging files for commit')
+    # Step 7: Stage files
+    step(7, 7, 'Staging files for commit')
     stage_files()
 
     total_elapsed = time.time() - total_start_time
