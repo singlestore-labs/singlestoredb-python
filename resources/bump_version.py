@@ -395,10 +395,11 @@ def generate_compatibility() -> None:
     result = subprocess.run([sys.executable, str(generator)])
     if result.returncode != 0:
         print(
-            '❌ Error generating COMPATIBILITY.md',
+            '⚠️  Could not generate COMPATIBILITY.md; continuing without it. '
+            'Run python resources/generate_compatibility.py after the release.',
             file=sys.stderr,
         )
-        sys.exit(1)
+        return
     status('✅ Compatibility matrix generated successfully')
 
 

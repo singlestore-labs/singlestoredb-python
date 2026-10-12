@@ -14,6 +14,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 
@@ -22,6 +23,7 @@ OUTPUT_PATH = ROOT / 'COMPATIBILITY.md'
 WHATSNEW_PATH = ROOT / 'docs' / 'src' / 'whatsnew.rst'
 WORKFLOW_PATH = '.github/workflows/smoke-test.yml'
 VERSION_PATTERN = re.compile(r'^v(\d+\.\d+\.\d+) - (.+)$', re.MULTILINE)
+ROW_VERSION_PATTERN = re.compile(r'^\d+\.\d+\.\d+$')
 EOL_PAGE_URL = (
     'https://docs.singlestore.com/db/latest/support/'
     'singlestore-software-end-of-life-eol-policy/'
@@ -29,6 +31,12 @@ EOL_PAGE_URL = (
 RC_VERSIONS_URL = (
     'https://release.memsql.com/rc/index/singlestoredbserver/latest.json'
 )
+HEADER = [
+    'Driver Version',
+    'Release date',
+    'Engine versions in support',
+    'Tested Python versions',
+]
 EngineRelease = Tuple[str, datetime.date, datetime.date]
 
 
@@ -77,11 +85,22 @@ def get_client_releases() -> List[Tuple[str, datetime.date]]:
     )
 
 
-def read_workflow(version: str, current_version: str) -> str:
-    """Read the smoke-test workflow used by a release."""
-    if version == current_version:
-        return (ROOT / WORKFLOW_PATH).read_text()
+def read_existing_rows() -> Dict[str, List[str]]:
+    """Read the rows already published in COMPATIBILITY.md."""
+    if not OUTPUT_PATH.exists():
+        return {}
+    rows: Dict[str, List[str]] = {}
+    for line in OUTPUT_PATH.read_text().splitlines():
+        if not line.startswith('|'):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
+        if len(cells) == len(HEADER) and ROW_VERSION_PATTERN.match(cells[0]):
+            rows[cells[0]] = cells
+    return rows
 
+
+def read_tagged_workflow(version: str) -> Optional[str]:
+    """Read the smoke-test workflow at a release tag, if the tag exists."""
     result = subprocess.run(
         ['git', 'show', f'v{version}:{WORKFLOW_PATH}'],
         cwd=ROOT,
@@ -89,23 +108,38 @@ def read_workflow(version: str, current_version: str) -> str:
         text=True,
         check=False,
     )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f'Could not read {WORKFLOW_PATH} from tag v{version}: '
-            f'{result.stderr.strip()}',
-        )
-    return result.stdout
+    return result.stdout if result.returncode == 0 else None
+
+
+def read_workflow(version: str, current_version: str) -> str:
+    """Read the smoke-test workflow used by a release."""
+    workflow = read_tagged_workflow(version)
+    if workflow is not None:
+        return workflow
+    if version == current_version:
+        return (ROOT / WORKFLOW_PATH).read_text()
+    raise RuntimeError(f'Could not read {WORKFLOW_PATH} from tag v{version}')
 
 
 def get_tested_python_versions(workflow: str) -> List[str]:
     """Extract the Python matrix from a smoke-test workflow."""
     lines = workflow.splitlines()
     for index, line in enumerate(lines):
-        if line.strip() != 'python-version:':
+        key, _, value = line.strip().partition(':')
+        if key != 'python-version':
+            continue
+
+        value = value.strip()
+        if value.startswith('['):
+            versions = re.findall(r'3\.\d+', value)
+            if versions:
+                return versions
+            continue
+        if value:
             continue
 
         indentation = len(line) - len(line.lstrip())
-        versions: List[str] = []
+        versions = []
         for item in lines[index + 1:]:
             item_indentation = len(item) - len(item.lstrip())
             if item.strip() and item_indentation <= indentation:
@@ -138,12 +172,13 @@ def fetch_bytes(url: str) -> bytes:
 
 
 class _EOLTableParser(HTMLParser):
-    """Extract the engine lifecycle table from the EOL policy page."""
+    """Extract the first engine lifecycle table from the EOL policy page."""
 
     def __init__(self) -> None:
         super().__init__()
         self.rows: List[List[str]] = []
         self._in_table = False
+        self._table_done = False
         self._in_cell = False
         self._row: List[str] = []
         self._cell: List[str] = []
@@ -154,7 +189,11 @@ class _EOLTableParser(HTMLParser):
         attrs: List[Tuple[str, str | None]],
     ) -> None:
         attributes = dict(attrs)
-        if tag == 'table' and 'table-component' in (attributes.get('class') or ''):
+        if (
+            tag == 'table'
+            and not self._table_done
+            and 'table-component' in (attributes.get('class') or '')
+        ):
             self._in_table = True
         elif self._in_table and tag == 'tr':
             self._row = []
@@ -165,6 +204,7 @@ class _EOLTableParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag == 'table' and self._in_table:
             self._in_table = False
+            self._table_done = True
         elif self._in_table and tag in ('td', 'th') and self._in_cell:
             self._row.append(''.join(self._cell).strip())
             self._in_cell = False
@@ -184,11 +224,16 @@ def fetch_engine_releases() -> List[EngineRelease]:
     for row in parser.rows:
         if len(row) < 3 or row[0] == 'Version':
             continue
-        releases.append((
-            row[0].split(' v', 1)[-1],
-            datetime.datetime.strptime(row[1], '%B %d, %Y').date(),
-            datetime.datetime.strptime(row[2], '%B %d, %Y').date(),
-        ))
+        try:
+            releases.append((
+                row[0].split(' v', 1)[-1],
+                datetime.datetime.strptime(row[1], '%B %d, %Y').date(),
+                datetime.datetime.strptime(row[2], '%B %d, %Y').date(),
+            ))
+        except ValueError as exc:
+            raise RuntimeError(
+                f'Could not parse engine row {row} from {EOL_PAGE_URL}',
+            ) from exc
     if not releases:
         raise RuntimeError(f'Could not parse engine versions from {EOL_PAGE_URL}')
     return releases
@@ -207,8 +252,7 @@ def fetch_rc_version() -> str:
 def engines_supported_on(
     as_of: datetime.date,
     engines: Sequence[EngineRelease],
-    rc_version: str,
-    include_rc: bool,
+    rc_version: Optional[str],
 ) -> List[str]:
     """Return engines inside their support window on a client release date."""
     supported = [
@@ -216,7 +260,7 @@ def engines_supported_on(
         for version, release_date, end_of_life in engines
         if release_date <= as_of and end_of_life > as_of
     ]
-    if include_rc and rc_version and rc_version not in supported:
+    if rc_version and rc_version not in supported:
         supported.append(f'{rc_version} RC')
     return sorted(supported, key=lambda version: version_key(version.split()[0]))
 
@@ -239,35 +283,30 @@ def format_table(rows: Sequence[Sequence[str]]) -> str:
     return '\n'.join([render(rows[0]), separator, *map(render, rows[1:])])
 
 
-def generate() -> str:
+def generate(rebuild: bool = False) -> str:
     """Generate the compatibility document."""
-    engines = fetch_engine_releases()
-    rc_version = fetch_rc_version()
     current_version = get_current_version()
-    releases = get_client_releases()
-    rows = [[
-        'Driver Version',
-        'Release date',
-        'Supported engine versions',
-        'Tested Python versions',
-    ]]
+    existing = {} if rebuild else read_existing_rows()
+    engines: Optional[List[EngineRelease]] = None
+    rows = [HEADER]
 
-    for version, release_date in releases:
+    for version, release_date in get_client_releases():
+        if version in existing:
+            rows.append(existing[version])
+            continue
+
+        if engines is None:
+            engines = fetch_engine_releases()
+        rc_version = None
+        if version == current_version and read_tagged_workflow(version) is None:
+            rc_version = fetch_rc_version()
+
         workflow = read_workflow(version, current_version)
-        python_versions = format_python_versions(
-            get_tested_python_versions(workflow),
-        )
-        supported_engines = engines_supported_on(
-            release_date,
-            engines,
-            rc_version,
-            include_rc=version == current_version,
-        )
         rows.append([
             version,
             release_date.isoformat(),
-            ', '.join(supported_engines),
-            python_versions,
+            ', '.join(engines_supported_on(release_date, engines, rc_version)),
+            format_python_versions(get_tested_python_versions(workflow)),
         ])
 
     table = format_table(rows)
@@ -275,9 +314,9 @@ def generate() -> str:
 
 <!-- Generated by resources/generate_compatibility.py; do not edit. -->
 
-This file is regenerated for every client release by `resources/bump_version.py`.
+`resources/bump_version.py` adds a row for every client release. Published rows are kept as they are, so each row reflects what was known on that release date.
 
-Supported engine versions come from the [SingleStore software EOL policy]({EOL_PAGE_URL}). An engine is listed when it had been released and its end-of-life date was still in the future on the client release date. The [latest release-candidate index]({RC_VERSIONS_URL}) does not publish a start date, so the current release candidate is listed on the current client release.
+Engine versions in support come from the [SingleStore software EOL policy]({EOL_PAGE_URL}). An engine is listed when it had been released and its end-of-life date was still in the future on the client release date. These engine versions are not each tested in CI; the smoke tests run against a single managed SingleStore cluster. A version marked RC was the [latest release candidate]({RC_VERSIONS_URL}) when that client version was released.
 
 Tested Python versions come from the smoke-test CI workflow at each release tag.
 
@@ -288,14 +327,20 @@ Tested Python versions come from the smoke-test CI workflow at each release tag.
 def main() -> None:
     """Write the generated document or check that it is current."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
         '--verify-matrix',
         action='store_true',
-        help='fail if COMPATIBILITY.md is not current',
+        help='fail if COMPATIBILITY.md is missing a release or is not current',
+    )
+    group.add_argument(
+        '--rebuild',
+        action='store_true',
+        help='regenerate every row instead of keeping published rows',
     )
     args = parser.parse_args()
 
-    content = generate()
+    content = generate(rebuild=args.rebuild)
     if args.verify_matrix:
         if not OUTPUT_PATH.exists() or OUTPUT_PATH.read_text() != content:
             print(

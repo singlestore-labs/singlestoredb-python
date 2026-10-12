@@ -74,7 +74,7 @@ pip install 'singlestoredb[vectorstore,sqlalchemy]'
 
 ### SingleStore Server Compatibility
 
-See the [driver, server, and Python version compatibility matrix](COMPATIBILITY.md).
+See the [driver, server, and Python version compatibility matrix](https://github.com/singlestore-labs/singlestoredb-python/blob/main/COMPATIBILITY.md).
 
 ## Documentation
 

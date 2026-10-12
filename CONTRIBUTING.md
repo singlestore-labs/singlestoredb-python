@@ -222,16 +222,21 @@ The script performs the following steps:
 3. Updates version in both `pyproject.toml` and `singlestoredb/__init__.py`
 4. Generates release notes from git history (or uses provided summary)
 5. Opens an editor to customize release notes for `docs/src/whatsnew.rst`
-6. Regenerates `COMPATIBILITY.md`
+6. Adds the new release to `COMPATIBILITY.md`
 7. Builds the documentation
 8. Stages all modified files for commit
 9. Optionally commits and pushes changes
 
-`COMPATIBILITY.md` is generated from the release dates in `docs/src/whatsnew.rst`, the Python matrices in each release tag's smoke-test workflow, and the [SingleStore software EOL policy](https://docs.singlestore.com/db/latest/support/singlestore-software-end-of-life-eol-policy/). An engine is listed when it had been released and its end-of-life date was still in the future on that client release date. Regeneration requires network access. To regenerate or verify the file manually, run:
+If `COMPATIBILITY.md` cannot be generated, for example without network access, the script logs a warning and continues the release. Run `python resources/generate_compatibility.py` afterwards to add the missing row.
+
+`COMPATIBILITY.md` is generated from the release dates in `docs/src/whatsnew.rst`, the Python matrices in each release tag's smoke-test workflow, and the [SingleStore software EOL policy](https://docs.singlestore.com/db/latest/support/singlestore-software-end-of-life-eol-policy/). An engine is listed when it had been released and its end-of-life date was still in the future on that client release date. The [latest release candidate](https://release.memsql.com/rc/index/singlestoredbserver/latest.json) is added only to a release whose tag does not exist yet, which is the release being prepared.
+
+Rows already in `COMPATIBILITY.md` are kept as they are; only releases missing from the file are generated, and only those need network access. To add missing rows, check that the file is current, or regenerate every row, run:
 
 ```bash
 python resources/generate_compatibility.py
 python resources/generate_compatibility.py --verify-matrix
+python resources/generate_compatibility.py --rebuild
 ```
 
 ### Creating a Release
