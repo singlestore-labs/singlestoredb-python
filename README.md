@@ -72,6 +72,10 @@ pip install 'singlestoredb[vectorstore,sqlalchemy]'
 | `docker` | Docker SDK for automated test container management |
 | `pytest` | Pytest plugin with SingleStoreDB Docker test fixtures |
 
+### SingleStore Server Compatibility
+
+See the [driver, server, and Python version compatibility matrix](https://github.com/singlestore-labs/singlestoredb-python/blob/main/COMPATIBILITY.md).
+
 ## Documentation
 
 https://singlestore-labs.github.io/singlestoredb-python
