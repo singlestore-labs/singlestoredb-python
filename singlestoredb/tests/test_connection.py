@@ -356,6 +356,24 @@ class TestConnection(unittest.TestCase):
         with self.conn as conn:
             assert conn is self.conn
 
+    def test_sql_mode(self):
+        if self.conn.driver in ['http', 'https']:
+            with self.assertWarns(RuntimeWarning):
+                s2.connect(database=type(self).dbname, sql_mode='ANSI_QUOTES')
+            return
+
+        with s2.connect(database=type(self).dbname, sql_mode='ANSI_QUOTES') as conn:
+            with conn.cursor() as cur:
+                cur.execute('select @@sql_mode')
+                assert 'ANSI_QUOTES' in cur.fetchone()[0]
+
+    def test_sql_mode_param(self):
+        out = sc.build_params(host='me:p455w0rd@s2host.com/mydb?sql_mode=ANSI_QUOTES')
+        assert out['sql_mode'] == 'ANSI_QUOTES', out['sql_mode']
+
+        out = sc.build_params(host='s2host.com', sql_mode='PIPES_AS_CONCAT')
+        assert out['sql_mode'] == 'PIPES_AS_CONCAT', out['sql_mode']
+
     def test_executemany(self):
         # NOTE: Doesn't actually do anything since no rows match
         self.cur.executemany(
