@@ -9,6 +9,7 @@ import math
 import os
 import re
 import time
+import warnings
 from base64 import b64decode
 from collections.abc import Iterable
 from collections.abc import Sequence
@@ -1040,6 +1041,13 @@ class Connection(connection.Connection):
                 'statements within a query',
             )
 
+        if kwargs.get('sql_mode', None) is not None:
+            warnings.warn(
+                'The `sql_mode=` parameter is not supported by the Data API '
+                'and will be ignored for HTTP connections.',
+                RuntimeWarning,
+            )
+
         self._version = kwargs.get('version', 'v2')
         self.driver = kwargs.get('driver', 'https')
 
@@ -1268,5 +1276,6 @@ def connect(
     track_env: Optional[bool] = None,
     enable_extended_data_types: Optional[bool] = None,
     vector_data_format: Optional[str] = None,
+    sql_mode: Optional[str] = None,
 ) -> Connection:
     return Connection(**dict(locals()))

@@ -1382,6 +1382,7 @@ def connect(
     parse_json: Optional[bool] = None,
     interpolate_query_with_empty_args: Optional[bool] = None,
     socket_options: Optional[Dict[int, Dict[int, Any]]] = None,
+    sql_mode: Optional[str] = None,
 ) -> Connection:
     """
     Return a SingleStoreDB connection.
@@ -1475,6 +1476,10 @@ def connect(
         socket level constants (e.g., socket.SOL_SOCKET) and the values should be
         dictionaries mapping socket option constants (e.g., socket.SO_KEEPALIVE) to
         the desired value for that option.
+    sql_mode : str, optional
+        Value of the ``sql_mode`` session variable to set when connecting.
+        This is not supported by HTTP connections and will be ignored
+        with a warning.
 
     Examples
     --------

@@ -94,6 +94,13 @@ register_option(
 )
 
 register_option(
+    'sql_mode', 'string', check_str, None,
+    'Specifies the sql_mode session variable to set when connecting. '
+    'This is only applied to MySQL protocol connections.',
+    environ='SINGLESTOREDB_SQL_MODE',
+)
+
+register_option(
     'local_infile', 'bool', check_bool, False,
     'Should it be possible to load local files?',
     environ='SINGLESTOREDB_LOCAL_INFILE',
