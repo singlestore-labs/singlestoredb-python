@@ -48,6 +48,12 @@ _STATUS_OK_PREFIX = struct.pack('<Q', STATUS_OK)
 # Maximum function name length to prevent resource exhaustion
 _MAX_FUNCTION_NAME_LEN = 4096
 
+# Upper bounds on the out-of-band v3 handshake fds. The envelope is just a
+# signature plus a few scalar attributes; the body is bounded by the
+# engine's blob store. Both reject a runaway fd.
+_MAX_V3_ENVELOPE_BYTES = 1024 * 1024
+_MAX_V3_BODY_BYTES = 64 * 1024 * 1024
+
 # Enable per-request timing via environment variable
 _PROFILE = os.environ.get('SINGLESTOREDB_UDF_PROFILE', '') == '1'
 
@@ -98,9 +104,10 @@ def _handle_connection_inner(
         return
 
     # Receive function name + FDs via SCM_RIGHTS.
-    # v1/v2 pass 2 FDs (input, output); v3 passes 3 FDs (input, output,
-    # metadata memfd carrying the JSON envelope).
-    expected_fd_count = 3 if version == 3 else 2
+    # v1/v2 pass 2 FDs (input, output); v3 passes 4 FDs (input, output,
+    # metadata fd carrying the JSON envelope, body fd carrying the raw
+    # function body).
+    expected_fd_count = 4 if version == 3 else 2
     fd_model = array.array('i', [0] * expected_fd_count)
     msg, ancdata, flags, addr = conn.recvmsg(
         namelen,
@@ -148,20 +155,45 @@ def _handle_connection_inner(
 
         function_name = msg.decode('utf8')
         input_fd, output_fd = received_fds[0], received_fds[1]
-        metadata_fd: Optional[int] = (
-            received_fds[2] if version == 3 else None
-        )
+        metadata_fd: Optional[int] = None
+        body_fd: Optional[int] = None
+        if version == 3:
+            metadata_fd, body_fd = received_fds[2], received_fds[3]
         received_fds = []
     finally:
         for fd in received_fds:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
+            _close_quietly(fd)
 
+    try:
+        _handle_handshake_tail(
+            conn, version, function_name, input_fd, output_fd,
+            metadata_fd, body_fd, shared_registry, shutdown_event,
+            pipe_write_fd,
+        )
+    finally:
+        # The body fd is read lazily (only on a definition cache miss), so
+        # both v3 fds stay open until here on every path.
+        for v3_fd in (metadata_fd, body_fd):
+            if v3_fd is not None:
+                _close_quietly(v3_fd)
+
+
+def _handle_handshake_tail(
+    conn: socket.socket,
+    version: int,
+    function_name: str,
+    input_fd: int,
+    output_fd: int,
+    metadata_fd: Optional[int],
+    body_fd: Optional[int],
+    shared_registry: SharedRegistry,
+    shutdown_event: threading.Event,
+    pipe_write_fd: int | None,
+) -> None:
+    """Finish the handshake after the FDs are received, then dispatch."""
     # v2 carries the parameter type list as a length-prefixed string here.
     # v3 drops this segment entirely — the type list moves into the
-    # envelope carried on the metadata memfd under the top-level key
+    # envelope carried on the metadata fd under the top-level key
     # "param_types".
     v2_input_param_types: Optional[str] = None
     if version == 2:
@@ -174,31 +206,19 @@ def _handle_connection_inner(
             return
         v2_input_param_types = types_bytes.decode('utf8')
 
-    # v3: read the JSON envelope from the sealed metadata memfd. The
-    # engine seals it (SHRINK|GROW|WRITE) before sending, so its size is
-    # fstat(fd).st_size and the payload is raw UTF-8 JSON bytes with no
-    # in-band length prefix.
+    # v3: read the JSON envelope from the metadata fd. The engine seals it
+    # (SHRINK|GROW|WRITE) before sending, so its size is fstat(fd).st_size
+    # and the payload is raw UTF-8 JSON bytes with no in-band length prefix.
     envelope: Optional[Dict[str, Any]] = None
     if version == 3:
         assert metadata_fd is not None
         try:
-            env_size = os.fstat(metadata_fd).st_size
-            if env_size == 0:
-                env_bytes = b''
-            else:
-                mem = mmap.mmap(
-                    metadata_fd, env_size,
-                    mmap.MAP_SHARED, mmap.PROT_READ,
-                )
-                try:
-                    env_bytes = bytes(mem[:env_size])
-                finally:
-                    mem.close()
-        finally:
-            try:
-                os.close(metadata_fd)
-            except OSError:
-                pass
+            env_bytes = _read_sealed_fd(
+                metadata_fd, _MAX_V3_ENVELOPE_BYTES, 'envelope',
+            )
+        except ValueError as e:
+            logger.warning(str(e))
+            return
         try:
             envelope = json.loads(env_bytes) if env_bytes else {}
         except json.JSONDecodeError as e:
@@ -229,16 +249,16 @@ def _handle_connection_inner(
         )
         return
 
-    # v3: install any function definition shipped in the handshake
-    # envelope before entering the request loop. Cache hit ⇒ no work;
-    # miss ⇒ compile and remember it for future replays.
+    # v3: install the function definition shipped in the handshake
+    # (envelope ``signature`` + body fd) before entering the request loop.
+    # Cache hit ⇒ no work; miss ⇒ compile and remember it for future
+    # replays. Without a ``signature`` the body fd is closed unread.
     install_error: Optional[str] = None
-    if envelope is not None:
-        definition = envelope.get('definition')
-        if isinstance(definition, dict):
+    if envelope is not None and body_fd is not None:
+        if 'signature' in envelope:
             try:
                 _install_v3_definition(
-                    definition, shared_registry, pipe_write_fd,
+                    envelope, body_fd, shared_registry, pipe_write_fd,
                 )
             except Exception as e:
                 # Don't drop the connection: the engine is waiting on a
@@ -261,47 +281,64 @@ def _handle_connection_inner(
 
 
 def _install_v3_definition(
-    definition: Dict[str, Any],
+    envelope: Dict[str, Any],
+    body_fd: int,
     shared_registry: SharedRegistry,
     pipe_write_fd: int | None,
 ) -> None:
-    """Install a function definition shipped in the v3 handshake envelope.
+    """Install a function definition shipped in the v3 handshake.
 
-    Cache hit (id already registered) → no-op. Cache miss → call
-    ``SharedRegistry.create_function`` and notify the main process so
-    workers can be re-forked.
+    The definition is split across the handshake: the opaque cache key is
+    the top-level ``envelope['id']``, ``name``/``args``/``returns``/
+    ``replace`` live in ``envelope['signature']``, and the body is the raw
+    contents of ``body_fd`` (the fourth SCM_RIGHTS fd). The body is read
+    lazily, only on a cache miss; the caller owns and closes ``body_fd``.
+
+    Cache hit (id already registered) → no-op. Empty body fd → no-op.
+    Otherwise call ``SharedRegistry.create_function`` and notify the main
+    process so workers can be re-forked.
     """
-    id = definition.get('id')
+    id = envelope.get('id')
     if not isinstance(id, str) or not id:
-        raise ValueError("v3 definition missing required string field 'id'")
+        raise ValueError("v3 envelope missing required string field 'id'")
 
     if shared_registry.has_definition(id):
         return
 
+    definition = envelope.get('signature')
+    if not isinstance(definition, dict):
+        raise ValueError(
+            "v3 envelope missing required object field 'signature'",
+        )
+
     function_name = definition.get('name')
     if not isinstance(function_name, str) or not function_name:
-        raise ValueError("v3 definition missing required string field 'name'")
+        raise ValueError(
+            "v3 envelope 'signature' missing required string field 'name'",
+        )
 
     args = definition.get('args')
     if not isinstance(args, list):
         raise ValueError(
-            "v3 definition missing required array field 'args'",
+            "v3 envelope 'signature' missing required array field 'args'",
         )
 
     returns = definition.get('returns')
     if not isinstance(returns, list):
         raise ValueError(
-            "v3 definition missing required array field 'returns'",
+            "v3 envelope 'signature' missing required array field 'returns'",
         )
 
-    # Body is optional. Signature-only CREATE PLUGIN FUNCTION omits it —
-    # the function is expected to be provided out-of-band (a builtin of
-    # the plugin module loaded at server startup). Nothing to install.
-    body = definition.get('body')
-    if body is None or body == '':
+    # An empty body fd is a signature-only CREATE PLUGIN FUNCTION: the
+    # function is expected to be provided out-of-band (a builtin of the
+    # plugin module loaded at server startup). Nothing to install.
+    if os.fstat(body_fd).st_size == 0:
         return
-    if not isinstance(body, str):
-        raise ValueError("v3 definition field 'body' must be a string")
+    body_bytes = _read_sealed_fd(body_fd, _MAX_V3_BODY_BYTES, 'body')
+    try:
+        body = body_bytes.decode('utf8')
+    except UnicodeDecodeError as e:
+        raise ValueError(f'v3 function body is not valid UTF-8: {e}') from e
 
     replace = bool(definition.get('replace', False))
 
@@ -617,6 +654,37 @@ def _recv_exact_py(sock: socket.socket, n: int) -> bytes | None:
     if orig_timeout is not None:
         sock.settimeout(orig_timeout)
     return bytes(buf)
+
+
+def _read_sealed_fd(fd: int, limit: int, what: str) -> bytes:
+    """Read the entire contents of an out-of-band v3 handshake fd.
+
+    The engine seals its memfds, but the contract is only "read-only fd
+    of exact size": the size is ``fstat``, checked against ``limit``.
+    Reads use ``pread`` from offset 0, since the engine may hand the fd
+    over with its position parked at EOF. ``what`` names the fd in error
+    messages. Raises ``ValueError``; does not close ``fd``.
+    """
+    size = os.fstat(fd).st_size
+    if size > limit:
+        raise ValueError(f'v3 {what} size {size} exceeds limit {limit}')
+    buf = bytearray()
+    while len(buf) < size:
+        chunk = os.pread(fd, size - len(buf), len(buf))
+        if not chunk:
+            raise ValueError(
+                f'short read on v3 {what} fd: expected {size}, '
+                f'got {len(buf)}',
+            )
+        buf += chunk
+    return bytes(buf)
+
+
+def _close_quietly(fd: int) -> None:
+    try:
+        os.close(fd)
+    except OSError:
+        pass
 
 
 def _write_all_fd(fd: int, data: bytes) -> None:

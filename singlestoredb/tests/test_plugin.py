@@ -623,16 +623,23 @@ def _temp_fd():
     return fd
 
 
-def _ovl_definition(id, name, args, body, replace=False):
-    """Build a v3 handshake envelope ``definition`` object."""
+def _ovl_envelope(id, name, args, param_types, replace=False):
+    """Build a v3 handshake envelope carrying a function ``signature``.
+
+    The body is not part of it; it travels on the body fd, which
+    ``_ServerConn.handshake`` takes separately.
+    """
     sig = json.loads(_ovl_sig(name, args))
     return {
         'id': id,
-        'name': name,
-        'args': sig['args'],
-        'returns': sig['returns'],
-        'body': body,
-        'replace': replace,
+        'param_types': param_types,
+        'batch_delimited': False,
+        'signature': {
+            'name': name,
+            'args': sig['args'],
+            'returns': sig['returns'],
+            'replace': replace,
+        },
     }
 
 
@@ -677,24 +684,31 @@ class _ServerConn:
         os.close(self.output_fd)
         assert not self._thread.is_alive(), 'server thread did not exit'
 
-    def handshake(self, function_name, envelope, version=3):
-        """Send a v3 handshake: header, name, and 3 FDs.
+    def handshake(self, function_name, envelope, body=b'', version=3):
+        """Send a v3 handshake: header, name, and 4 FDs.
 
-        The third FD is the metadata memfd carrying the JSON envelope; the
-        engine seals it, so its size alone delimits the payload.
+        The third FD carries the JSON envelope and the fourth the raw
+        function body (empty for signature-only); the engine seals both,
+        so each one's size alone delimits its payload. Offsets are left at
+        EOF, as an engine that just wrote them would.
         """
         name_bytes = function_name.encode('utf8')
         self.sock.sendall(struct.pack('<QQ', version, len(name_bytes)))
         meta_fd = _temp_fd()
+        body_fd = _temp_fd()
         try:
             os.write(meta_fd, json.dumps(envelope).encode('utf8'))
-            fds = array.array('i', [self.input_fd, self.output_fd, meta_fd])
+            os.write(body_fd, body)
+            fds = array.array(
+                'i', [self.input_fd, self.output_fd, meta_fd, body_fd],
+            )
             self.sock.sendmsg(
                 [name_bytes],
                 [(socket.SOL_SOCKET, socket.SCM_RIGHTS, fds)],
             )
         finally:
             os.close(meta_fd)
+            os.close(body_fd)
 
     def handshake_v1(self, function_name):
         """Send a v1 handshake: no envelope, no param type segment."""
@@ -778,29 +792,23 @@ class TestOverloadServerProtocol(unittest.TestCase):
 
     def test_two_v3_definitions_same_name_both_land(self):
         # Each CREATE ships its definition in its own handshake envelope.
-        one = _ovl_definition(
-            'id-1', 'srv_ovl', [('int64', 'BIGINT')], 'return 100 + a0',
+        one = _ovl_envelope(
+            'id-1', 'srv_ovl', [('int64', 'BIGINT')], 'BIGINT',
         )
-        two = _ovl_definition(
+        two = _ovl_envelope(
             'id-2', 'srv_ovl',
-            [('int64', 'BIGINT'), ('int64', 'BIGINT')],
-            'return 200 + a0 + a1',
+            [('int64', 'BIGINT'), ('int64', 'BIGINT')], 'BIGINT;BIGINT',
         )
         shared = self._make_shared()
 
         with _ServerConn(shared) as conn:
-            conn.handshake(
-                'srv_ovl', {'definition': one, 'param_types': 'BIGINT'},
-            )
+            conn.handshake('srv_ovl', one, b'return 100 + a0')
             status, data = conn.call(self._bigints(7))
             assert status == STATUS_OK, data
             assert self._one_bigint_out(data) == 107
 
         with _ServerConn(shared) as conn:
-            conn.handshake(
-                'srv_ovl',
-                {'definition': two, 'param_types': 'BIGINT;BIGINT'},
-            )
+            conn.handshake('srv_ovl', two, b'return 200 + a0 + a1')
             status, data = conn.call(self._bigints(7, 8))
             assert status == STATUS_OK, data
             assert self._one_bigint_out(data) == 215
@@ -981,7 +989,7 @@ class TestOverloadServerProtocol(unittest.TestCase):
 
     def test_bodyless_v3_definition_preserves_base_variants(self):
         # Signature-only CREATE PLUGIN FUNCTION over an overloaded builtin:
-        # the envelope carries no body, so there is nothing to install and
+        # the body fd is empty, so there is nothing to install and
         # the pre-existing variants must be left exactly as they are.
         base = FunctionRegistry()
         base.create_function(
@@ -1002,15 +1010,12 @@ class TestOverloadServerProtocol(unittest.TestCase):
         shared.set_base_registry(base)
         gen_before = shared.generation
 
-        definition = _ovl_definition(
+        envelope = _ovl_envelope(
             'id-nobody', 'srv_base',
-            [('int64', 'BIGINT'), ('int64', 'BIGINT')], '',
+            [('int64', 'BIGINT'), ('int64', 'BIGINT')], 'BIGINT;BIGINT',
         )
         with _ServerConn(shared) as conn:
-            conn.handshake(
-                'srv_base',
-                {'definition': definition, 'param_types': 'BIGINT;BIGINT'},
-            )
+            conn.handshake('srv_base', envelope, b'')
             status, data = conn.call(self._bigints(7, 8))
             assert status == STATUS_OK, data
             assert self._one_bigint_out(data) == 215
@@ -1027,31 +1032,31 @@ class TestOverloadServerProtocol(unittest.TestCase):
     def test_concurrent_v3_registration_of_two_arities(self):
         shared = self._make_shared()
         definitions = [
-            _ovl_definition(
-                'id-1', 'srv_race', [('int64', 'BIGINT')], 'return 100 + a0',
+            (
+                _ovl_envelope(
+                    'id-1', 'srv_race', [('int64', 'BIGINT')], 'BIGINT',
+                ),
+                b'return 100 + a0',
             ),
-            _ovl_definition(
-                'id-2', 'srv_race',
-                [('int64', 'BIGINT'), ('int64', 'BIGINT')],
-                'return 200 + a0 + a1',
+            (
+                _ovl_envelope(
+                    'id-2', 'srv_race',
+                    [('int64', 'BIGINT'), ('int64', 'BIGINT')],
+                    'BIGINT;BIGINT',
+                ),
+                b'return 200 + a0 + a1',
             ),
         ]
-        calls = [
-            ('BIGINT', (7,), 107),
-            ('BIGINT;BIGINT', (7, 8), 215),
-        ]
+        calls = [((7,), 107), ((7, 8), 215)]
         barrier = threading.Barrier(len(definitions))
         results = [None] * len(definitions)
 
         def register_and_call(i):
-            definition = definitions[i]
-            param_types, args, expected = calls[i]
+            envelope, body = definitions[i]
+            args, expected = calls[i]
             with _ServerConn(shared) as conn:
                 barrier.wait(timeout=5)
-                conn.handshake(
-                    'srv_race',
-                    {'definition': definition, 'param_types': param_types},
-                )
+                conn.handshake('srv_race', envelope, body)
                 status, data = conn.call(self._bigints(*args))
                 results[i] = (
                     status,
@@ -1090,20 +1095,96 @@ class TestOverloadServerProtocol(unittest.TestCase):
         # silently: the engine is already waiting on a response frame and
         # would otherwise report only "connection reset by peer".
         shared = self._make_shared()
-        definition = _ovl_definition(
-            'id-bad', 'srv_bad', [('int64', 'BIGINT')], "return 'x' +",
+        envelope = _ovl_envelope(
+            'id-bad', 'srv_bad', [('int64', 'BIGINT')], 'BIGINT',
         )
         with _ServerConn(shared) as conn:
-            conn.handshake(
-                'srv_bad',
-                {'definition': definition, 'param_types': 'BIGINT'},
-            )
+            conn.handshake('srv_bad', envelope, b"return 'x' +")
             status, data = conn.call(self._bigints(7))
 
         assert status == STATUS_ERROR, (status, data)
         assert b'failed to install function definition' in data
         assert b'invalid syntax' in data
         assert not shared.has_definition('id-bad')
+
+    def test_v3_body_fd_round_trips_byte_exact(self):
+        # Characters a JSON-embedded body had to escape, plus non-ASCII
+        # UTF-8, must reach the compiler untouched.
+        shared = self._make_shared()
+        body = (
+            "s = 'say \"hi\" \\\\ back\\tcafé \U0001f600'\n"
+            'return len(s) + a0'
+        ).encode('utf8')
+        envelope = _ovl_envelope(
+            'id-exact', 'srv_exact', [('int64', 'BIGINT')], 'BIGINT',
+        )
+        with _ServerConn(shared) as conn:
+            conn.handshake('srv_exact', envelope, body)
+            status, data = conn.call(self._bigints(100))
+        assert status == STATUS_OK, data
+        assert self._one_bigint_out(data) == 100 + len(
+            'say "hi" \\ back\tcafé \U0001f600',
+        )
+
+    def test_v3_cache_hit_does_not_read_body_fd(self):
+        # Once the id is registered, a body that would fail UTF-8 decoding
+        # is harmless: the body fd is closed unread.
+        shared = self._make_shared()
+        envelope = _ovl_envelope(
+            'id-lazy', 'srv_lazy', [('int64', 'BIGINT')], 'BIGINT',
+        )
+        with _ServerConn(shared) as conn:
+            conn.handshake('srv_lazy', envelope, b'return 3 + a0')
+            status, data = conn.call(self._bigints(4))
+            assert status == STATUS_OK, data
+
+        with _ServerConn(shared) as conn:
+            conn.handshake('srv_lazy', envelope, b'\xff\xfe not utf-8')
+            status, data = conn.call(self._bigints(4))
+        assert status == STATUS_OK, data
+        assert self._one_bigint_out(data) == 7
+
+    def test_v3_invalid_utf8_body_rejected(self):
+        shared = self._make_shared()
+        envelope = _ovl_envelope(
+            'id-utf8', 'srv_utf8', [('int64', 'BIGINT')], 'BIGINT',
+        )
+        with _ServerConn(shared) as conn:
+            conn.handshake('srv_utf8', envelope, b'return a0\xff')
+            status, data = conn.call(self._bigints(1))
+        assert status == STATUS_ERROR, (status, data)
+        assert b'not valid UTF-8' in data
+        assert not shared.has_definition('id-utf8')
+
+    def test_v3_wrong_fd_count_rejected_without_leaking(self):
+        # v3 requires exactly 4 fds. Pass the write end of a pipe as every
+        # fd: once all received copies are closed, a non-blocking read on
+        # the read end sees EOF; a leaked copy would make it EAGAIN.
+        shared = self._make_shared()
+        for n in (3, 5):
+            r, w = os.pipe()
+            os.set_blocking(r, False)
+            try:
+                with _ServerConn(shared) as conn:
+                    name = b'f'
+                    conn.sock.sendall(struct.pack('<QQ', 3, len(name)))
+                    conn.sock.sendmsg(
+                        [name],
+                        [(
+                            socket.SOL_SOCKET, socket.SCM_RIGHTS,
+                            array.array('i', [w] * n),
+                        )],
+                    )
+                    os.close(w)
+                    w = -1
+                    # The server abandons the handshake without replying.
+                    conn._thread.join(timeout=5)
+                    assert not conn._thread.is_alive(), n
+                assert os.read(r, 1) == b'', f'{n} fds: a received fd leaked'
+            finally:
+                os.close(r)
+                if w >= 0:
+                    os.close(w)
 
 
 class TestLazyImport(unittest.TestCase):
