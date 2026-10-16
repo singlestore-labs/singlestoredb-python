@@ -1,8 +1,14 @@
 # type: ignore
+import asyncio
+import http.client
+import json
+import os
 import sys
+import threading
 import unittest
 from collections.abc import Iterator
 from typing import Any
+from typing import Callable
 from typing import List
 from typing import Optional
 from typing import Set
@@ -10,7 +16,11 @@ from typing import Tuple
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+from singlestoredb.apps import _python_udfs
+from singlestoredb.apps import run_udf_app
+from singlestoredb.apps import shutdown_udf_app
 from singlestoredb.apps._config import AppConfig
+from singlestoredb.functions import udf
 from singlestoredb.functions.ext.function_url import classify_interactive_registration
 from singlestoredb.functions.ext.function_url import extract_service_url
 from singlestoredb.functions.ext.function_url import is_function_not_defined
@@ -305,6 +315,7 @@ class TestRunUdfAppInteractiveOrder(unittest.IsolatedAsyncioTestCase):
     def tearDown(self) -> None:
         from singlestoredb.apps import _python_udfs
         _python_udfs._running_server = None
+        _python_udfs._running_server_task = None
 
     def _interactive_config(self) -> AppConfig:
         return AppConfig(
@@ -391,12 +402,15 @@ class TestRunUdfAppInteractiveOrder(unittest.IsolatedAsyncioTestCase):
 
         order: List[str] = []
         existing = MagicMock()
+        existing.should_exit = False
 
-        async def shutdown() -> None:
+        async def serve() -> None:
+            while not existing.should_exit:
+                await asyncio.sleep(0)
             order.append('shutdown')
 
-        existing.shutdown.side_effect = shutdown
         _python_udfs._running_server = existing
+        _python_udfs._running_server_task = asyncio.create_task(serve())
         app = self._mock_app(order, refuse=False)
 
         class FakeServer:
@@ -429,6 +443,221 @@ class TestRunUdfAppInteractiveOrder(unittest.IsolatedAsyncioTestCase):
             order,
             ['preflight', 'shutdown', 'kill', 'register', 'started'],
         )
+
+
+_request_started = threading.Event()
+_release_request = threading.Event()
+_request_finished = threading.Event()
+
+
+@udf
+async def _draining_udf(value: float) -> float:
+    _request_started.set()
+    try:
+        while not _release_request.is_set():
+            await asyncio.sleep(0.01)
+        return value * 2
+    finally:
+        _request_finished.set()
+
+
+class TestUdfShutdown(unittest.IsolatedAsyncioTestCase):
+
+    async def asyncSetUp(self) -> None:
+        self.env = {
+            'SINGLESTOREDB_APP_LISTEN_PORT': '0',
+            'SINGLESTOREDB_APP_BASE_URL': 'http://127.0.0.1',
+            'SINGLESTOREDB_APP_BASE_PATH': '/',
+            'SINGLESTOREDB_NOTEBOOK_SERVER_ID': 'shutdown-test',
+            'SINGLESTOREDB_IS_LOCAL_DEV': 'true',
+            'SINGLESTOREDB_WORKLOAD_TYPE': 'PythonUdf',
+            'SINGLESTOREDB_NOVA_GATEWAY_ENDPOINT': 'http://127.0.0.1',
+            'SINGLESTOREDB_EXT_FUNCTIONS': __name__,
+        }
+        self.previous_env = {name: os.environ.get(name) for name in self.env}
+        os.environ.update(self.env)
+        _request_started.clear()
+        _request_finished.clear()
+        _release_request.set()
+        self.connections: List[http.client.HTTPConnection] = []
+        await run_udf_app(kill_existing_app_server=False)
+        self.server = _python_udfs._running_server
+        self.server_task = _python_udfs._running_server_task
+        assert self.server is not None
+        self.port = self.server.servers[0].sockets[0].getsockname()[1]
+
+    async def asyncTearDown(self) -> None:
+        _release_request.set()
+        try:
+            await asyncio.wait_for(shutdown_udf_app(timeout=0.5), 3)
+        finally:
+            for connection in self.connections:
+                connection.close()
+            for name, value in self.previous_env.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+    async def _wait_for(self, predicate: Callable[[], bool]) -> None:
+        async def wait() -> None:
+            while not predicate():
+                await asyncio.sleep(0.01)
+
+        await asyncio.wait_for(wait(), 3)
+
+    def _connect(self) -> http.client.HTTPConnection:
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
+        self.connections.append(connection)
+        return connection
+
+    async def _invoke(
+        self, connection: http.client.HTTPConnection,
+    ) -> Tuple[int, bytes]:
+        def request() -> Tuple[int, bytes]:
+            connection.request(
+                'POST', '/invoke',
+                json.dumps({'data': [[0, 2.125]]}),
+                {
+                    'Content-Type': 'application/json',
+                    'Accepts': 'application/json',
+                    's2-ef-name': '_draining_udf',
+                    's2-ef-version': '1.0',
+                },
+            )
+            response = connection.getresponse()
+            return response.status, response.read()
+
+        return await asyncio.to_thread(request)
+
+    async def test_closes_idle_connections_without_waiting_for_budget(self) -> None:
+        connection = self._connect()
+        status, body = await self._invoke(connection)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {'data': [[0, 4.25]]})
+        sock = connection.sock
+        assert sock is not None
+
+        start = asyncio.get_running_loop().time()
+        await asyncio.wait_for(shutdown_udf_app(timeout=30), 3)
+        self.assertLess(asyncio.get_running_loop().time() - start, 3)
+        self.assertEqual(await asyncio.to_thread(sock.recv, 1), b'')
+        assert self.server_task is not None
+        self.assertTrue(self.server_task.done())
+        self.assertIsNone(_python_udfs._running_server)
+        self.assertIsNone(_python_udfs._running_server_task)
+        await shutdown_udf_app(timeout=0)
+
+    async def test_drains_active_request_and_refuses_new_connections(self) -> None:
+        idle = self._connect()
+        self.assertEqual((await self._invoke(idle))[0], 200)
+        idle_socket = idle.sock
+        assert idle_socket is not None
+        _request_started.clear()
+        _release_request.clear()
+        request = asyncio.create_task(self._invoke(self._connect()))
+        await self._wait_for(_request_started.is_set)
+
+        shutdown = asyncio.create_task(shutdown_udf_app(timeout=2))
+        server = self.server
+        assert server is not None
+        await self._wait_for(
+            lambda: all(not listener.is_serving() for listener in server.servers),
+        )
+        self.assertFalse(shutdown.done())
+        self.assertEqual(await asyncio.to_thread(idle_socket.recv, 1), b'')
+        with self.assertRaises(OSError):
+            await asyncio.open_connection('127.0.0.1', self.port)
+
+        _release_request.set()
+        status, body = await asyncio.wait_for(request, 3)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {'data': [[0, 4.25]]})
+        await asyncio.wait_for(shutdown, 3)
+        self.assertTrue(_request_finished.is_set())
+
+    async def test_deadline_closes_over_budget_request(self) -> None:
+        _release_request.clear()
+        request = asyncio.create_task(self._invoke(self._connect()))
+        await self._wait_for(_request_started.is_set)
+
+        start = asyncio.get_running_loop().time()
+        await asyncio.wait_for(shutdown_udf_app(timeout=0.1), 3)
+        elapsed = asyncio.get_running_loop().time() - start
+        self.assertGreaterEqual(elapsed, 0.1)
+        self.assertLess(elapsed, 1)
+        try:
+            status, _ = await asyncio.wait_for(request, 3)
+        except (
+            http.client.RemoteDisconnected,
+            http.client.IncompleteRead,
+            ConnectionResetError,
+        ):
+            pass
+        else:
+            self.assertGreaterEqual(status, 500)
+        await self._wait_for(_request_finished.is_set)
+        server = self.server
+        assert server is not None
+        await self._wait_for(lambda: not server.server_state.connections)
+
+    async def test_cancelled_waiter_does_not_cancel_drain(self) -> None:
+        _release_request.clear()
+        request = asyncio.create_task(self._invoke(self._connect()))
+        await self._wait_for(_request_started.is_set)
+
+        first = asyncio.create_task(shutdown_udf_app(timeout=2))
+        server = self.server
+        assert server is not None
+        await self._wait_for(lambda: server.should_exit)
+        first.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await first
+        assert self.server_task is not None
+        self.assertFalse(self.server_task.done())
+
+        second = asyncio.create_task(shutdown_udf_app(timeout=0))
+        await asyncio.sleep(0)
+        self.assertEqual(server.config.timeout_graceful_shutdown, 2)
+        _release_request.set()
+        status, _ = await asyncio.wait_for(request, 3)
+        self.assertEqual(status, 200)
+        await asyncio.wait_for(second, 3)
+
+    async def test_can_start_again_after_shutdown(self) -> None:
+        await shutdown_udf_app(timeout=1)
+        await run_udf_app(kill_existing_app_server=False)
+        server = _python_udfs._running_server
+        assert server is not None
+        self.assertIsNot(server, self.server)
+        self.port = server.servers[0].sockets[0].getsockname()[1]
+        status, _ = await self._invoke(self._connect())
+        self.assertEqual(status, 200)
+
+    async def test_shutdown_while_starting_does_not_leave_listener_open(self) -> None:
+        await shutdown_udf_app(timeout=1)
+        startup = asyncio.create_task(run_udf_app(kill_existing_app_server=False))
+        await asyncio.sleep(0)
+        server = _python_udfs._running_server
+        assert server is not None
+        self.assertFalse(server.started)
+        try:
+            await asyncio.wait_for(shutdown_udf_app(timeout=0), 3)
+            await startup
+            self.assertTrue(all(not listener.is_serving() for listener in server.servers))
+        finally:
+            for listener in server.servers:
+                listener.close()
+
+    async def test_rejects_invalid_budget_without_stopping_server(self) -> None:
+        for timeout in (-1, float('inf'), float('-inf'), float('nan')):
+            with self.subTest(timeout=timeout):
+                with self.assertRaises(ValueError):
+                    await shutdown_udf_app(timeout=timeout)
+        assert self.server is not None
+        self.assertFalse(self.server.should_exit)
+        status, _ = await self._invoke(self._connect())
+        self.assertEqual(status, 200)
 
 
 if __name__ == '__main__':
