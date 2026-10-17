@@ -51,7 +51,7 @@ class JSONFormatter(logging.Formatter):
 
         # Add extra fields if present
         allowed_fields = [
-            'app_name', 'request_id', 'function_name',
+            'app_name', 'request_id', 'trace_id', 'function_name',
             'content_type', 'accepts', 'metrics',
         ]
         for field in allowed_fields:

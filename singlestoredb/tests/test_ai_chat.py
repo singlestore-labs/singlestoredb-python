@@ -48,6 +48,39 @@ class TestInjectOtelHeaders(unittest.TestCase):
         finally:
             client.close()
 
+    def test_async_client_request_injects_trace_context(self):
+        seen = {}
+
+        def handler(request):
+            seen['traceparent'] = request.headers.get('traceparent')
+            return httpx.Response(200)
+
+        def fake_inject(target):
+            target['traceparent'] = 'trace-context'
+
+        fake_propagate = ModuleType('opentelemetry.propagate')
+        fake_propagate.inject = fake_inject
+        fake_otel = ModuleType('opentelemetry')
+        fake_otel.__path__ = []
+
+        async def send():
+            async with httpx.AsyncClient(
+                transport=httpx.MockTransport(handler),
+            ) as client:
+                chat_mod._attach_otel_request_hook(client)
+                await client.get('http://localhost/')
+
+        with patch.dict(
+            'sys.modules',
+            {
+                'opentelemetry': fake_otel,
+                'opentelemetry.propagate': fake_propagate,
+            },
+        ):
+            import asyncio
+            asyncio.run(send())
+        self.assertEqual(seen['traceparent'], 'trace-context')
+
     @patch('singlestoredb.ai.chat.ChatOpenAI')
     def test_openai_default_timeout_is_600(self, mock_chat_openai):
         chat_mod.SingleStoreChatFactory(

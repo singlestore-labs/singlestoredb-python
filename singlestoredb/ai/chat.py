@@ -30,28 +30,9 @@ import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
 
-
-def _inject_otel_headers(headers: Any) -> None:
-    try:
-        from opentelemetry.propagate import inject as otel_inject
-    except ImportError:
-        return
-    try:
-        otel_inject(headers)
-    except Exception:
-        return
-
-
-def _httpx_inject_otel(request: httpx.Request) -> None:
-    _inject_otel_headers(request.headers)
-
-
-def _attach_otel_request_hook(
-    client: Union[httpx.Client, httpx.AsyncClient],
-) -> None:
-    hooks = client.event_hooks.setdefault('request', [])
-    if _httpx_inject_otel not in hooks:
-        hooks.append(_httpx_inject_otel)
+from singlestoredb.utils.otel import attach_otel_request_hook as _attach_otel_request_hook
+from singlestoredb.utils.otel import httpx_inject_otel as _httpx_inject_otel  # noqa: F401
+from singlestoredb.utils.otel import inject_otel_headers as _inject_otel_headers
 
 
 def SingleStoreChatFactory(
