@@ -545,7 +545,8 @@ class TestSharedRegistryIdempotentInstall(unittest.TestCase):
             w = -1
             msg = _read_pipe_message(r)
             assert msg is not None
-            assert json.loads(msg)['action'] == 'register'
+            assert json.loads(msg[0])['action'] == 'register'
+            assert msg[1] == b'return a0'
             assert _read_pipe_message(r) is None
         finally:
             os.close(r)
@@ -795,6 +796,60 @@ class TestOverloadRegistry(unittest.TestCase):
         assert reg._id_to_variant['id-0'] == ('dyn_ovl', '')
         assert reg._id_to_variant['id-1'] == ('dyn_ovl', 'BIGINT')
         assert reg._id_to_variant['id-2'] == ('dyn_ovl', 'BIGINT,BIGINT')
+
+
+class TestRecursiveOverloads(unittest.TestCase):
+    """A variant's own name inside its body must resolve to that variant,
+    not to whichever overload happened to be compiled last."""
+
+    _FACT = 'return 1 if a0 <= 1 else a0 * f(a0 - 1)'
+    _STRLEN = "return 0 if a0 == '' else 1 + f(a0[1:])"
+
+    def _install(self, target):
+        target.create_function(
+            'id-fact', _ovl_sig('f', [('int32', 'INT')]), self._FACT, False,
+        )
+
+    def _install_other_arity(self, target):
+        target.create_function(
+            'id-two', _ovl_sig('f', [('int32', 'INT'), ('int32', 'INT')]),
+            'return a0 + a1', False,
+        )
+
+    def _install_other_type(self, target):
+        target.create_function(
+            'id-len', _ovl_sig('f', [('str', 'TEXT')]), self._STRLEN, False,
+        )
+
+    def _shared(self):
+        from singlestoredb.functions.ext.plugin.server import SharedRegistry
+        shared = SharedRegistry()
+        shared.set_base_registry(FunctionRegistry())
+        return shared
+
+    def test_recursion_survives_different_arity_overload(self):
+        reg = FunctionRegistry()
+        self._install(reg)
+        self._install_other_arity(reg)
+        assert reg.lookup_variant('f', 'INT')['func'](5) == 120
+        assert reg.lookup_variant('f', 'INT;INT')['func'](2, 3) == 5
+
+    def test_same_arity_overloads_each_recurse_into_themselves(self):
+        reg = FunctionRegistry()
+        self._install(reg)
+        self._install_other_type(reg)
+        assert reg.lookup_variant('f', 'INT')['func'](5) == 120
+        assert reg.lookup_variant('f', 'TEXT')['func']('abcd') == 4
+
+    def test_recursion_survives_shared_registry_replay(self):
+        shared = self._shared()
+        self._install(shared)
+        self._install_other_arity(shared)
+        self._install_other_type(shared)
+        reg = shared.get_thread_local_registry()
+        assert reg.lookup_variant('f', 'INT')['func'](5) == 120
+        assert reg.lookup_variant('f', 'INT;INT')['func'](2, 3) == 5
+        assert reg.lookup_variant('f', 'TEXT')['func']('abcd') == 4
 
 
 class TestWasmAdapterParamTypes(unittest.TestCase):

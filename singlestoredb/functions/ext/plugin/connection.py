@@ -297,7 +297,7 @@ def _install_v3_definition(
     Cache hit (id already registered, checked again atomically by
     ``create_function``) → no-op. Empty body fd → no-op.
     Otherwise call ``SharedRegistry.create_function`` and notify the main
-    process so workers can be re-forked. The ``signature`` object and the
+    process so it can replace the workers. The ``signature`` object and the
     body size limit are checked first, so they hold on a cache hit too.
     """
     id = envelope.get('id')
@@ -364,17 +364,18 @@ def _install_v3_definition(
         f'v3 definition installed: function={function_name!r} id={id!r}',
     )
 
-    # Notify main process so it can re-fork workers with updated state.
+    # Notify main process so it can replace workers with updated state.
     if pipe_write_fd is not None:
         from .server import _write_pipe_message
-        payload = json.dumps({
+        # The body travels as the raw blob, not inside the JSON header, so
+        # escaping can't push an accepted body over the pipe's cap.
+        header = json.dumps({
             'action': 'register',
             'id': id,
             'signature_json': signature,
-            'code': body,
             'replace': replace,
         }).encode()
-        _write_pipe_message(pipe_write_fd, payload)
+        _write_pipe_message(pipe_write_fd, header, body_bytes)
 
 
 def _handle_control_signal(

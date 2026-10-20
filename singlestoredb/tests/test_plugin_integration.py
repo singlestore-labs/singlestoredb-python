@@ -19,11 +19,12 @@ import struct
 import tempfile
 import threading
 import time
-import unittest
+import unittest.mock
 
 from singlestoredb.functions.ext import rowdat_1
 from singlestoredb.functions.ext.plugin.connection import _handle_connection_inner
 from singlestoredb.functions.ext.plugin.connection import _install_v3_definition
+from singlestoredb.functions.ext.plugin.connection import _MAX_V3_BODY_BYTES
 from singlestoredb.functions.ext.plugin.connection import handle_connection
 from singlestoredb.functions.ext.plugin.connection import STATUS_ERROR
 from singlestoredb.functions.ext.plugin.connection import STATUS_OK
@@ -31,8 +32,13 @@ from singlestoredb.functions.ext.plugin.connection import SUPPORTED_VERSIONS
 from singlestoredb.functions.ext.plugin.control import dispatch_control_signal
 from singlestoredb.functions.ext.plugin.registry import call_function
 from singlestoredb.functions.ext.plugin.registry import FunctionRegistry
+from singlestoredb.functions.ext.plugin.server import _MAX_PIPE_HEADER
+from singlestoredb.functions.ext.plugin.server import _PIPE_PREFIX
+from singlestoredb.functions.ext.plugin.server import _ProcessPool
 from singlestoredb.functions.ext.plugin.server import _read_pipe_message
 from singlestoredb.functions.ext.plugin.server import _write_pipe_message
+from singlestoredb.functions.ext.plugin.server import PipeFrameError
+from singlestoredb.functions.ext.plugin.server import Server
 from singlestoredb.functions.ext.plugin.server import SharedRegistry
 from singlestoredb.mysql.constants import FIELD_TYPE as ft
 
@@ -67,6 +73,33 @@ def _send_handshake(sock, function_name, input_fd, output_fd):
         [name_bytes],
         [(socket.SOL_SOCKET, socket.SCM_RIGHTS, fd_array)],
     )
+
+
+def _send_handshake_v3(sock, function_name, input_fd, output_fd, envelope, body):
+    """Send a v3 handshake: header, name, and 4 FDs (envelope, body)."""
+    name_bytes = function_name.encode('utf8')
+    sock.sendall(struct.pack('<QQ', 3, len(name_bytes)))
+    meta_fd, body_fd = _create_temp_fds()
+    try:
+        os.write(meta_fd, json.dumps(envelope).encode('utf8'))
+        os.write(body_fd, body)
+        fd_array = array.array('i', [input_fd, output_fd, meta_fd, body_fd])
+        sock.sendmsg(
+            [name_bytes],
+            [(socket.SOL_SOCKET, socket.SCM_RIGHTS, fd_array)],
+        )
+    finally:
+        os.close(meta_fd)
+        os.close(body_fd)
+
+
+def _wait_for(predicate, timeout=10.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.05)
+    return predicate()
 
 
 def _send_udf_request(sock, input_fd, input_data):
@@ -422,10 +455,12 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
                         {'id': id, 'signature': signature},
                         f.fileno(), worker, w_fd,
                     )
-                msg = json.loads(_read_pipe_message(r_fd))
+                header, blob = _read_pipe_message(r_fd)
+                msg = json.loads(header)
                 assert msg['action'] == 'register'
+                assert blob == body
                 main.create_function(
-                    msg['id'], msg['signature_json'], msg['code'],
+                    msg['id'], msg['signature_json'], blob.decode('utf8'),
                     msg['replace'],
                 )
         finally:
@@ -455,8 +490,9 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
 
             msg = _read_pipe_message(r_fd)
             assert msg is not None
-            body = json.loads(msg)
+            body = json.loads(msg[0])
             assert body['action'] == 'delete'
+            assert msg[1] == b''
             assert body['id'] == 'id-pipe_del'
         finally:
             os.close(r_fd)
@@ -650,6 +686,188 @@ class TestServerProcessMode(unittest.TestCase):
             worker.join(timeout=5)
             server_sock.close()
             assert not worker.is_alive()
+
+
+class TestProcessPoolRetire(unittest.TestCase):
+    """A registry change replaces the workers without cutting off the
+    connections the old ones are serving."""
+
+    _ADD1_ENVELOPE = {
+        'id': 'id-add1',
+        'param_types': 'BIGINT',
+        'signature': {
+            'name': 'add1',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+        },
+    }
+
+    def setUp(self):
+        import multiprocessing
+        import singlestoredb.functions.ext.plugin.registry as _reg_mod
+        import singlestoredb.functions.ext.plugin.connection as _conn_mod
+        try:
+            self.ctx = multiprocessing.get_context('fork')
+        except ValueError:
+            self.skipTest('fork not available on this platform')
+        self._orig_has_accel = _reg_mod._has_accel
+        _reg_mod._has_accel = False
+        _conn_mod._has_accel = False
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.sock_path = os.path.join(self.tmpdir.name, 'test.sock')
+        self.server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.server_sock.bind(self.sock_path)
+        self.server_sock.listen(4)
+        self.server = Server({})
+        self.server.shared_registry = _make_shared_registry_with_func()
+
+    def tearDown(self):
+        import singlestoredb.functions.ext.plugin.registry as _reg_mod
+        import singlestoredb.functions.ext.plugin.connection as _conn_mod
+        _reg_mod._has_accel = self._orig_has_accel
+        _conn_mod._has_accel = self._orig_has_accel
+        self.server_sock.close()
+        self.tmpdir.cleanup()
+
+    def _connect(self):
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.settimeout(10)
+        client.connect(self.sock_path)
+        input_fd, output_fd = _create_temp_fds()
+        self.addCleanup(os.close, input_fd)
+        self.addCleanup(os.close, output_fd)
+        self.addCleanup(client.close)
+        return client, input_fd, output_fd
+
+    @staticmethod
+    def _call(client, input_fd, output_fd, value):
+        input_data = bytes(rowdat_1._dump([ft.LONGLONG], [1], [[value]]))
+        _send_udf_request(client, input_fd, input_data)
+        status, data = _recv_udf_response(client, output_fd)
+        assert status == STATUS_OK, data
+        _, rows = rowdat_1._load([('r', ft.LONGLONG)], data)
+        return rows[0][0]
+
+    def _start_pool(self, n_workers=1):
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, n_workers)
+        thread = threading.Thread(target=pool.run, daemon=True)
+        thread.start()
+
+        def stop():
+            self.server.shutdown_event.set()
+            thread.join(timeout=20)
+            assert not thread.is_alive()
+        self.addCleanup(stop)
+        assert _wait_for(lambda: len(pool.workers) == n_workers)
+        return pool
+
+    def test_installing_connection_survives_worker_replacement(self):
+        pool = self._start_pool()
+        (old_proc, _), = pool.workers.values()
+
+        client, input_fd, output_fd = self._connect()
+        _send_handshake_v3(
+            client, 'add1', os.dup(input_fd), os.dup(output_fd),
+            self._ADD1_ENVELOPE, b'return x + 1',
+        )
+        assert self._call(client, input_fd, output_fd, 1) == 2
+
+        # Main has applied the register and retired the serving worker.
+        assert _wait_for(lambda: old_proc.pid in pool.retiring)
+        assert self.server.shared_registry.has_definition('id-add1')
+        assert old_proc.is_alive()
+
+        # The same connection keeps working on the retired worker.
+        assert self._call(client, input_fd, output_fd, 41) == 42
+        client.sendall(struct.pack('<Q', 0))
+
+        # Once its connection ends, the retired worker exits and is reaped.
+        assert _wait_for(lambda: old_proc.pid not in pool.retiring)
+        assert old_proc.exitcode == 0
+
+        # Its replacement was forked with the new definition.
+        client2, input_fd2, output_fd2 = self._connect()
+        _send_handshake(
+            client2, 'add1', os.dup(input_fd2), os.dup(output_fd2),
+        )
+        assert self._call(client2, input_fd2, output_fd2, 9) == 10
+        client2.sendall(struct.pack('<Q', 0))
+
+    def test_cached_register_does_not_retire(self):
+        pool = self._start_pool()
+        (old_proc, _), = pool.workers.values()
+        shared = self.server.shared_registry
+        before = shared.generation
+
+        header = json.dumps({
+            'action': 'register',
+            'id': 'id-triple',
+            'signature_json': json.dumps(
+                {'name': 'triple', 'args': [], 'returns': []},
+            ),
+            'replace': False,
+        }).encode()
+        assert not pool._apply_message(header, b'return 0', 'test')
+        assert shared.generation == before
+
+        client, input_fd, output_fd = self._connect()
+        _send_handshake(client, 'triple', os.dup(input_fd), os.dup(output_fd))
+        assert self._call(client, input_fd, output_fd, 2) == 6
+        client.sendall(struct.pack('<Q', 0))
+        assert list(pool.workers.values())[0][0] is old_proc
+        assert not pool.retiring
+
+    def test_sigusr1_drains_connection_then_exits(self):
+        r_fd, w_fd = os.pipe()
+        self.addCleanup(os.close, r_fd)
+        worker = self.ctx.Process(
+            target=self.server._worker_process_main,
+            args=(self.server_sock, 0, w_fd, [r_fd]),
+            daemon=True,
+        )
+        worker.start()
+        os.close(w_fd)
+        self.addCleanup(worker.kill)
+
+        client, input_fd, output_fd = self._connect()
+        _send_handshake(client, 'triple', os.dup(input_fd), os.dup(output_fd))
+        assert self._call(client, input_fd, output_fd, 1) == 3
+
+        os.kill(worker.pid, signal.SIGUSR1)
+        # A connection queued after SIGUSR1 must never be accepted.
+        late, _, _ = self._connect()
+        time.sleep(0.3)
+
+        assert worker.is_alive()
+        assert self._call(client, input_fd, output_fd, 5) == 15
+        client.sendall(struct.pack('<Q', 0))
+
+        worker.join(timeout=10)
+        assert worker.exitcode == 0
+        # The queued connection is still in the backlog, unaccepted.
+        conn = self.server_sock.accept()[0]
+        conn.close()
+
+    def test_unreadable_frame_retires_active_worker(self):
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, 1)
+        r_fd, w_fd = os.pipe()
+        self.addCleanup(os.close, w_fd)
+        proc = unittest.mock.MagicMock(pid=-1)
+        proc.is_alive.return_value = False
+        pool.workers[0] = (proc, r_fd)
+        replacement = (unittest.mock.MagicMock(), -1)
+        os.write(w_fd, _PIPE_PREFIX.pack(_MAX_PIPE_HEADER + 1, 0))
+        with unittest.mock.patch.object(
+            pool, '_spawn', return_value=replacement,
+        ) as spawn:
+            assert not pool._poll_once()
+        spawn.assert_called_once_with(0)
+        assert pool.workers[0] is replacement
+        assert pool.retiring[-1].proc is proc
+        assert pool.retiring[-1].pipe_r is None
+        # main closed its read end
+        with self.assertRaises(OSError):
+            os.fstat(r_fd)
 
 
 # ---------------------------------------------------------------------------
@@ -914,32 +1132,40 @@ class TestVectorDispatch(unittest.TestCase):
 class TestPipeMessages(unittest.TestCase):
     """Test the pipe message wire format for process mode communication."""
 
-    def test_roundtrip(self):
+    @staticmethod
+    def _roundtrip(header, blob=b''):
         r_fd, w_fd = os.pipe()
         try:
-            payload = b'hello world'
-            _write_pipe_message(w_fd, payload)
-            result = _read_pipe_message(r_fd)
-            assert result == payload
-        finally:
-            os.close(r_fd)
-            os.close(w_fd)
-
-    def test_large_payload(self):
-        r_fd, w_fd = os.pipe()
-        try:
-            payload = b'X' * 100_000
             # Write in a thread to avoid pipe buffer deadlock
             t = threading.Thread(
-                target=lambda: _write_pipe_message(w_fd, payload),
+                target=lambda: _write_pipe_message(w_fd, header, blob),
             )
             t.start()
             result = _read_pipe_message(r_fd)
             t.join()
-            assert result == payload
+            return result
         finally:
             os.close(r_fd)
             os.close(w_fd)
+
+    def test_roundtrip(self):
+        assert self._roundtrip(b'hello', b'world') == (b'hello', b'world')
+
+    def test_header_only(self):
+        assert self._roundtrip(b'hello world') == (b'hello world', b'')
+
+    def test_large_payload(self):
+        payload = b'X' * 100_000
+        assert self._roundtrip(payload, payload) == (payload, payload)
+
+    def test_blob_over_16_mib(self):
+        # The old single-buffer frame capped everything at 16 MiB.
+        blob = b'Y' * (17 * 1024 * 1024)
+        assert self._roundtrip(b'{}', blob) == (b'{}', blob)
+
+    def test_blob_at_body_cap(self):
+        blob = b'Z' * _MAX_V3_BODY_BYTES
+        assert self._roundtrip(b'{}', blob) == (b'{}', blob)
 
     def test_eof_returns_none(self):
         r_fd, w_fd = os.pipe()
@@ -948,17 +1174,80 @@ class TestPipeMessages(unittest.TestCase):
         os.close(r_fd)
         assert result is None
 
+    def test_truncated_frame_returns_none(self):
+        r_fd, w_fd = os.pipe()
+        try:
+            os.write(w_fd, _PIPE_PREFIX.pack(4, 4) + b'abcd' + b'ef')
+            os.close(w_fd)
+            w_fd = -1
+            assert _read_pipe_message(r_fd) is None
+        finally:
+            os.close(r_fd)
+            if w_fd >= 0:
+                os.close(w_fd)
+
+    def _assert_frame_rejected(self, header_len, blob_len):
+        r_fd, w_fd = os.pipe()
+        try:
+            os.write(w_fd, _PIPE_PREFIX.pack(header_len, blob_len))
+            with self.assertRaises(PipeFrameError):
+                _read_pipe_message(r_fd)
+        finally:
+            os.close(r_fd)
+            os.close(w_fd)
+
+    def test_oversized_header_is_an_error_not_a_short_read(self):
+        self._assert_frame_rejected(_MAX_PIPE_HEADER + 1, 0)
+
+    def test_oversized_blob_is_an_error_not_a_short_read(self):
+        self._assert_frame_rejected(2, _MAX_V3_BODY_BYTES + 1)
+
     def test_multiple_messages(self):
         r_fd, w_fd = os.pipe()
         try:
-            msgs = [b'msg1', b'msg2', b'msg3']
+            msgs = [(b'msg1', b''), (b'msg2', b'body2'), (b'msg3', b'b3')]
             for m in msgs:
-                _write_pipe_message(w_fd, m)
+                _write_pipe_message(w_fd, *m)
             for m in msgs:
                 assert _read_pipe_message(r_fd) == m
         finally:
             os.close(r_fd)
             os.close(w_fd)
+
+    def test_escape_heavy_body_travels_raw(self):
+        """A body JSON would escape sixfold still fits: it isn't JSON."""
+        shared = SharedRegistry()
+        shared.set_base_registry(FunctionRegistry())
+        signature = {
+            'name': 'esc_fn',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+        }
+        # A comment of control characters: 3 MiB raw, 18 MiB as JSON.
+        body = b'return x  # ' + b'\x01' * (3 * 1024 * 1024)
+        r_fd, w_fd = os.pipe()
+        result = []
+        reader = threading.Thread(
+            target=lambda: result.append(_read_pipe_message(r_fd)),
+        )
+        reader.start()
+        try:
+            with tempfile.TemporaryFile() as f:
+                f.write(body)
+                f.flush()
+                _install_v3_definition(
+                    {'id': 'id-esc', 'signature': signature},
+                    f.fileno(), shared, w_fd,
+                )
+            reader.join(timeout=10)
+        finally:
+            os.close(w_fd)
+            reader.join(timeout=5)
+            os.close(r_fd)
+        header, blob = result[0]
+        assert blob == body
+        assert 'code' not in json.loads(header)
+        assert len(header) < 1024
 
 
 # ---------------------------------------------------------------------------

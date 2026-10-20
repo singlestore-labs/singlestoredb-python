@@ -105,7 +105,7 @@ def _handle_delete(
             ok=False, data=str(e), code='DELETE_FUNC_NOT_REGISTERED',
         )
 
-    # Notify main process so it can re-fork workers with updated state
+    # Notify main process so it can replace workers with updated state
     if pipe_write_fd is not None:
         from .server import _write_pipe_message
         payload = json.dumps({

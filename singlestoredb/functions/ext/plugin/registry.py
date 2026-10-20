@@ -6,6 +6,7 @@ wasm/udf_handler.py) plus standalone call_function() and
 describe_functions_json() helpers. Both the WASM handler and the
 plugin server use these directly.
 """
+import builtins
 import inspect
 import json
 import logging
@@ -494,29 +495,18 @@ class FunctionRegistry:
         name = 'singlestoredb.functions.ext.plugin._dynamic'
         compiled = compile(full_code, f'<{name}>', 'exec')
 
-        if name in sys.modules:
-            module = sys.modules[name]
-        else:
-            module = types.ModuleType(name)
-            module.__file__ = f'<{name}>'
-            sys.modules[name] = module
+        # Each variant gets its own globals. Overloads share a bare name, so
+        # in a shared namespace a later variant would rebind the name that an
+        # earlier one's body calls — a recursive f(n) would end up calling
+        # f(n, m). A private namespace keeps the name bound to this variant.
+        namespace: Dict[str, Any] = {
+            '__name__': name,
+            '__file__': f'<{name}>',
+            '__builtins__': builtins,
+        }
+        exec(compiled, namespace)  # noqa: S102
 
-        # The dynamic module is reused across many create_function calls.
-        # Each call defines a Python function under `func_name`, which
-        # overwrites the previous one — that's fine since the variants
-        # themselves keep references to the function objects in their
-        # closures (via `self.functions[name][i]['func']`). But we need
-        # `_extract_functions` to see this as a new variant: it picks up
-        # the just-defined function regardless of whether func_name was
-        # already a key in `self.functions`. The duplicate-signature guard
-        # in `_register_function` is what enforces uniqueness now.
-        exec(compiled, module.__dict__)  # noqa: S102
-
-        # Identify the freshly defined Python function and register it as a
-        # new variant. We can't rely on `_extract_functions` to do this for
-        # us because that helper would loop over every attribute of the
-        # dynamic module — including stale ones from earlier calls.
-        compiled_func = module.__dict__.get(func_name)
+        compiled_func = namespace.get(func_name)
         if not callable(compiled_func):
             raise ValueError(
                 f'Function "{func_name}" was not registered. '
@@ -576,11 +566,6 @@ class FunctionRegistry:
             self.functions[name] = variants
         else:
             self.functions.pop(name, None)
-            # No remaining variants — the dynamic-module attribute can go.
-            dyn_module_name = 'singlestoredb.functions.ext.plugin._dynamic'
-            dyn_module = sys.modules.get(dyn_module_name)
-            if dyn_module is not None and hasattr(dyn_module, name):
-                delattr(dyn_module, name)
         logger.info(f'delete_function: removed {name}({sig_key}) (id={id})')
 
     def _register_function(

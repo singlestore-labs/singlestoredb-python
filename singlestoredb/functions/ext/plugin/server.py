@@ -17,8 +17,8 @@ import stat
 import struct
 import sys
 import threading
+import time
 import traceback
-import types
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from typing import Dict
@@ -28,6 +28,9 @@ from typing import Set
 from typing import Tuple
 
 from . import overload as _overload
+from .connection import _close_quietly
+from .connection import _MAX_V3_BODY_BYTES
+from .connection import _MAX_V3_ENVELOPE_BYTES
 from .connection import _write_all_fd
 from .connection import handle_connection
 from .registry import FunctionRegistry
@@ -35,49 +38,95 @@ from .registry import FunctionRegistry
 logger = logging.getLogger('plugin.server')
 
 
-_MAX_PIPE_MESSAGE = 16 * 1024 * 1024  # 16 MiB sanity cap
+# Pipe frame caps. The header is JSON built from a v3 envelope, and JSON
+# escaping can grow a control character sixfold, so it gets headroom over
+# the envelope cap. The blob is a raw function body, so its cap is the
+# handshake's own: any body the handshake accepts can be propagated.
+_MAX_PIPE_HEADER = 8 * _MAX_V3_ENVELOPE_BYTES
+_MAX_PIPE_BLOB = _MAX_V3_BODY_BYTES
+_PIPE_PREFIX = struct.Struct('<IQ')
+
+# How long a retired worker may spend finishing its connection before it
+# is terminated.
+_DRAIN_TIMEOUT = 60.0
 
 
-def _read_pipe_message(fd: int) -> Optional[bytes]:
-    """Read a length-prefixed message from a pipe fd.
+class PipeFrameError(Exception):
+    """A pipe frame that can't be read. The stream can't be resynced."""
 
-    Wire format: [u32 LE length][payload].
-    Returns None on EOF or short read.
+
+class _RetiringWorker:
+    """A worker told to stop accepting, left to finish its connection."""
+
+    def __init__(
+        self,
+        wid: int,
+        proc: multiprocessing.process.BaseProcess,
+        pipe_r: Optional[int],
+        deadline: float,
+    ) -> None:
+        self.wid = wid
+        self.proc = proc
+        self.pipe_r = pipe_r
+        self.deadline = deadline
+        self.terminated = False
+
+    def close_pipe(self) -> None:
+        if self.pipe_r is not None:
+            _close_quietly(self.pipe_r)
+            self.pipe_r = None
+
+
+def _read_exact_fd(fd: int, n: int) -> Optional[bytes]:
+    """Read exactly ``n`` bytes from ``fd``; None on EOF first."""
+    buf = bytearray(n)
+    pos = 0
+    while pos < n:
+        chunk = os.read(fd, n - pos)
+        if not chunk:
+            return None
+        buf[pos:pos + len(chunk)] = chunk
+        pos += len(chunk)
+    return bytes(buf)
+
+
+def _read_pipe_message(fd: int) -> Optional[Tuple[bytes, bytes]]:
+    """Read one ``(header, blob)`` frame from a pipe fd.
+
+    Wire format: [u32 LE header_len][u64 LE blob_len][header][blob].
+    Returns None on EOF or short read. Raises PipeFrameError if a length
+    exceeds its cap: the payload is left unread, so the pipe is unusable.
     """
     try:
-        len_buf = b''
-        while len(len_buf) < 4:
-            chunk = os.read(fd, 4 - len(len_buf))
-            if not chunk:
-                return None
-            len_buf += chunk
-        length = struct.unpack('<I', len_buf)[0]
-        if length > _MAX_PIPE_MESSAGE:
-            logger.error(
-                f'Pipe message too large: {length} bytes '
-                f'(max {_MAX_PIPE_MESSAGE})',
-            )
+        prefix = _read_exact_fd(fd, _PIPE_PREFIX.size)
+        if prefix is None:
             return None
-        payload = bytearray(length)
-        pos = 0
-        while pos < length:
-            chunk = os.read(fd, length - pos)
-            if not chunk:
-                return None
-            payload[pos:pos + len(chunk)] = chunk
-            pos += len(chunk)
-        return bytes(payload)
+        header_len, blob_len = _PIPE_PREFIX.unpack(prefix)
+        if header_len > _MAX_PIPE_HEADER or blob_len > _MAX_PIPE_BLOB:
+            raise PipeFrameError(
+                f'pipe frame too large: header {header_len} bytes '
+                f'(max {_MAX_PIPE_HEADER}), blob {blob_len} bytes '
+                f'(max {_MAX_PIPE_BLOB})',
+            )
+        header = _read_exact_fd(fd, header_len)
+        if header is None:
+            return None
+        blob = _read_exact_fd(fd, blob_len)
+        if blob is None:
+            return None
+        return header, blob
     except OSError:
         return None
 
 
-def _write_pipe_message(fd: int, payload: bytes) -> None:
-    """Write a length-prefixed message to a pipe fd.
+def _write_pipe_message(fd: int, header: bytes, blob: bytes = b'') -> None:
+    """Write one ``(header, blob)`` frame to a pipe fd.
 
-    Wire format: [u32 LE length][payload].
+    Wire format: [u32 LE header_len][u64 LE blob_len][header][blob].
     """
-    header = struct.pack('<I', len(payload))
-    _write_all_fd(fd, header + payload)
+    _write_all_fd(fd, _PIPE_PREFIX.pack(len(header), len(blob)) + header)
+    if blob:
+        _write_all_fd(fd, blob)
 
 
 def _signature_key(signature_json: str) -> Optional[Tuple[str, str]]:
@@ -102,7 +151,9 @@ class SharedRegistry:
     thread-local storage. When a v3 handshake envelope installs a new
     definition (or @@delete removes one), the generation is bumped and
     workers create a fresh registry and replay all code blocks on next
-    call.
+    call. That covers threads within one process; in process mode each
+    worker has its own copy, so main applies the change to its copy and
+    replaces the workers (see :class:`_ProcessPool`).
 
     Code blocks are keyed by an opaque content-addressed id supplied in
     the v3 handshake envelope. Deletion is also keyed by id so callers
@@ -246,19 +297,288 @@ class SharedRegistry:
                 set(self._base_registry._base_function_names)
                 | set(self._base_registry.functions.keys())
             )
-        # Swap in a fresh dynamic module so replayed code blocks get a clean
-        # namespace. Existing function objects keep their original __globals__.
-        dyn_module_name = 'singlestoredb.functions.ext.plugin._dynamic'
-        fresh_dyn = types.ModuleType(dyn_module_name)
-        fresh_dyn.__file__ = f'<{dyn_module_name}>'
-        sys.modules[dyn_module_name] = fresh_dyn
-
         # Replay code blocks
         for id, (sig_json, code, replace) in self._code_blocks.items():
             if exclude and id in exclude:
                 continue
             registry.create_function(id, sig_json, code, replace)
         return registry
+
+
+class _ProcessPool:
+    """The main process's view of a pre-forked worker pool.
+
+    Each worker gets a pipe back to the main process. When a worker
+    installs a v3 envelope definition (or handles @@delete), it writes the
+    registration/deletion to its pipe. The main process applies it to its
+    own registry and, if that changed anything, forks a fresh set of
+    workers from the updated state.
+
+    The old workers are retired, not killed: SIGUSR1 stops their accept
+    loop, so the connection each one is serving -- including the one that
+    shipped the definition -- runs to completion before the worker exits.
+    Main keeps reading a retiring worker's pipe until then, since an
+    in-flight connection can still register. A worker still draining
+    after ``_DRAIN_TIMEOUT`` is terminated.
+    """
+
+    def __init__(
+        self,
+        server: 'Server',
+        ctx: Any,
+        server_sock: socket.socket,
+        n_workers: int,
+    ) -> None:
+        self.server = server
+        self.ctx = ctx
+        self.server_sock = server_sock
+        self.n_workers = n_workers
+        # workers[wid] = (process, pipe_read_fd)
+        self.workers: Dict[
+            int,
+            Tuple[multiprocessing.process.BaseProcess, int],
+        ] = {}
+        # retiring[pid]; a retiring worker's pipe is None once closed
+        self.retiring: Dict[int, _RetiringWorker] = {}
+
+    def run(self) -> None:
+        logger.info(
+            f'Process pool: spawning {self.n_workers} workers',
+        )
+        for i in range(self.n_workers):
+            self.workers[i] = self._spawn(i)
+        try:
+            while not self.server.shutdown_event.is_set():
+                if self._poll_once():
+                    self._retire_and_replace_all()
+                self._reap_retiring()
+                self._respawn_dead()
+        finally:
+            logger.info('Shutting down worker processes...')
+            self._kill_all()
+
+    def _open_pipe_fds(self) -> List[int]:
+        fds = [pipe_r for _, pipe_r in self.workers.values()]
+        fds.extend(
+            r.pipe_r for r in self.retiring.values() if r.pipe_r is not None
+        )
+        return fds
+
+    def _spawn(self, worker_id: int) -> Tuple[
+        multiprocessing.process.BaseProcess, int,
+    ]:
+        pipe_r, pipe_w = os.pipe()
+        p = self.ctx.Process(
+            target=self.server._worker_process_main,
+            args=(
+                self.server_sock, worker_id, pipe_w,
+                self._open_pipe_fds() + [pipe_r],
+            ),
+            daemon=True,
+        )
+        p.start()
+        # Close the write end in the parent — only the child writes
+        os.close(pipe_w)
+        logger.info(
+            f'Started worker {worker_id} (pid={p.pid})',
+        )
+        return p, pipe_r
+
+    def _retire(
+        self,
+        wid: int,
+        proc: multiprocessing.process.BaseProcess,
+        pipe_r: Optional[int],
+    ) -> None:
+        """Stop a worker accepting and leave it to drain."""
+        assert proc.pid is not None
+        if proc.is_alive():
+            # A worker forked so recently that it hasn't installed its
+            # handler yet dies of SIGUSR1's default action instead. It
+            # can't have accepted a connection, so that's harmless.
+            try:
+                os.kill(proc.pid, signal.SIGUSR1)
+            except ProcessLookupError:
+                pass
+        self.retiring[proc.pid] = _RetiringWorker(
+            wid, proc, pipe_r, time.monotonic() + _DRAIN_TIMEOUT,
+        )
+        logger.info(f'Retiring worker {wid} (pid={proc.pid})')
+
+    def _retire_and_replace_all(self) -> None:
+        """Retire every worker and fork replacements from main's state."""
+        old = list(self.workers.items())
+        self.workers.clear()
+        for wid, (proc, pipe_r) in old:
+            self._retire(wid, proc, pipe_r)
+        for i in range(self.n_workers):
+            self.workers[i] = self._spawn(i)
+
+    def _poll_once(self) -> bool:
+        """Read pending worker messages; return True if the registry changed."""
+        poller = select.poll()
+        # fd -> ('active', wid) or ('retiring', pid)
+        fd_owner: Dict[int, Tuple[str, int]] = {}
+        for wid, (_, pipe_r) in self.workers.items():
+            poller.register(pipe_r, select.POLLIN | select.POLLHUP)
+            fd_owner[pipe_r] = ('active', wid)
+        for pid, r in self.retiring.items():
+            if r.pipe_r is not None:
+                poller.register(r.pipe_r, select.POLLIN | select.POLLHUP)
+                fd_owner[r.pipe_r] = ('retiring', pid)
+
+        registry_changed = False
+        for fd, event in poller.poll(500):  # 500ms timeout
+            if fd not in fd_owner:
+                continue
+            kind, key = fd_owner[fd]
+            if kind == 'active':
+                source = f'worker {key}'
+            else:
+                source = f'retiring worker {self.retiring[key].wid}'
+
+            if not event & select.POLLIN:
+                # POLLHUP: the worker exited. Active ones are respawned by
+                # _respawn_dead; a retiring one has nothing left to say.
+                if kind == 'retiring':
+                    self.retiring[key].close_pipe()
+                continue
+
+            try:
+                msg = _read_pipe_message(fd)
+            except PipeFrameError as exc:
+                logger.error(
+                    f'Main process: unreadable pipe frame from {source}: '
+                    f'{exc}; retiring it',
+                )
+                if kind == 'active':
+                    proc, pipe_r = self.workers.pop(key)
+                    _close_quietly(pipe_r)
+                    self._retire(key, proc, None)
+                    self.workers[key] = self._spawn(key)
+                else:
+                    self.retiring[key].close_pipe()
+                continue
+
+            if msg is not None:
+                if self._apply_message(*msg, source):
+                    registry_changed = True
+            elif kind == 'retiring':
+                self.retiring[key].close_pipe()
+        return registry_changed
+
+    def _apply_message(self, header: bytes, blob: bytes, source: str) -> bool:
+        """Apply one worker message; return True if the registry changed."""
+        shared_registry = self.server.shared_registry
+        try:
+            body = json.loads(header)
+            action = body.get('action', 'register')
+            if action == 'register':
+                if shared_registry.create_function(
+                    body['id'],
+                    body['signature_json'],
+                    blob.decode('utf8'),
+                    body['replace'],
+                ) is None:
+                    logger.info(
+                        f'Main process: id={body["id"]!r} from {source} '
+                        'is already registered',
+                    )
+                    return False
+                logger.info(
+                    'Main process: applied v3 envelope registration '
+                    f'from {source}, will replace all workers',
+                )
+                return True
+            if action == 'delete':
+                shared_registry.delete_function(body['id'])
+                logger.info(
+                    f'Main process: applied @@delete from {source}, '
+                    'will replace all workers',
+                )
+                return True
+            logger.error(f'Main process: unknown pipe action: {action}')
+        except Exception:
+            logger.error(
+                'Main process: failed to apply pipe message:\n'
+                f'{traceback.format_exc()}',
+            )
+        return False
+
+    def _reap_retiring(self) -> None:
+        """Collect drained workers; escalate on ones past their deadline."""
+        now = time.monotonic()
+        for pid, r in list(self.retiring.items()):
+            if not r.proc.is_alive():
+                r.proc.join(timeout=0)
+                r.close_pipe()
+                del self.retiring[pid]
+                logger.info(
+                    f'Retired worker {r.wid} (pid={pid}) exited '
+                    f'with code {r.proc.exitcode}',
+                )
+            elif now < r.deadline:
+                continue
+            elif not r.terminated:
+                logger.warning(
+                    f'Retired worker {r.wid} (pid={pid}) still draining '
+                    f'after {_DRAIN_TIMEOUT}s, terminating...',
+                )
+                r.terminated = True
+                r.deadline = now + 5.0
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+            else:
+                logger.warning(
+                    f'Retired worker {r.wid} (pid={pid}) ignored SIGTERM, '
+                    'killing...',
+                )
+                r.proc.kill()
+                r.deadline = now + 5.0
+
+    def _respawn_dead(self) -> None:
+        """Respawn active workers that crashed; retiring ones are reaped."""
+        for wid, (proc, pipe_r) in list(self.workers.items()):
+            if proc.is_alive() or self.server.shutdown_event.is_set():
+                continue
+            logger.warning(
+                f'Worker {wid} (pid={proc.pid}) exited with code '
+                f'{proc.exitcode}, restarting...',
+            )
+            _close_quietly(pipe_r)
+            self.workers[wid] = self._spawn(wid)
+
+    def _kill_all(self) -> None:
+        """SIGTERM active and retiring workers, wait, then SIGKILL."""
+        procs: List[
+            Tuple[int, multiprocessing.process.BaseProcess, Optional[int]]
+        ] = [
+            (wid, proc, pipe_r)
+            for wid, (proc, pipe_r) in self.workers.items()
+        ]
+        procs.extend((r.wid, r.proc, r.pipe_r) for r in self.retiring.values())
+        for _, proc, _ in procs:
+            if proc.is_alive():
+                assert proc.pid is not None
+                try:
+                    os.kill(proc.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+        for wid, proc, _ in procs:
+            proc.join(timeout=5.0)
+            if proc.is_alive():
+                logger.warning(
+                    f'Worker {wid} (pid={proc.pid}) did not exit, killing...',
+                )
+                proc.kill()
+                proc.join(timeout=2.0)
+        for _, _, pipe_r in procs:
+            if pipe_r is not None:
+                _close_quietly(pipe_r)
+        self.workers.clear()
+        self.retiring.clear()
 
 
 class Server:
@@ -363,12 +683,8 @@ class Server:
     ) -> None:
         """Pre-fork worker pool for true CPU parallelism.
 
-        Each worker gets a pipe back to the main process. When a worker
-        installs a v3 envelope definition (or handles @@delete), it
-        writes the registration/deletion payload to its pipe. The main
-        process reads it, updates its own registry, then kills and
-        re-forks all workers so every worker has the updated registry
-        state.
+        See :class:`_ProcessPool` for how registry changes reach the
+        workers without interrupting their connections.
         """
         try:
             ctx = multiprocessing.get_context('fork')
@@ -378,168 +694,36 @@ class Server:
                 'which is not available on this platform. '
                 "Use process_mode='thread' instead.",
             )
-        # workers[wid] = (process, pipe_read_fd)
-        workers: Dict[
-            int,
-            Tuple[multiprocessing.process.BaseProcess, int],
-        ] = {}
-
-        def _spawn_worker(worker_id: int) -> Tuple[
-            multiprocessing.process.BaseProcess, int,
-        ]:
-            pipe_r, pipe_w = os.pipe()
-            p = ctx.Process(
-                target=self._worker_process_main,
-                args=(server_sock, worker_id, pipe_w),
-                daemon=True,
-            )
-            p.start()
-            # Close the write end in the parent — only the child writes
-            os.close(pipe_w)
-            logger.info(
-                f'Started worker {worker_id} (pid={p.pid})',
-            )
-            return p, pipe_r
-
-        def _kill_all_workers() -> None:
-            """SIGTERM all workers, wait, then SIGKILL stragglers."""
-            for wid, (proc, pipe_r) in workers.items():
-                if proc.is_alive():
-                    assert proc.pid is not None
-                    os.kill(proc.pid, signal.SIGTERM)
-            for wid, (proc, pipe_r) in workers.items():
-                proc.join(timeout=5.0)
-                if proc.is_alive():
-                    logger.warning(
-                        f'Worker {wid} (pid={proc.pid}) '
-                        f'did not exit, terminating...',
-                    )
-                    proc.terminate()
-                    proc.join(timeout=2.0)
-            # Close all pipe read fds
-            for wid, (proc, pipe_r) in workers.items():
-                try:
-                    os.close(pipe_r)
-                except OSError:
-                    pass
-
-        def _respawn_all_workers() -> None:
-            """Kill all workers and re-fork them with fresh state."""
-            _kill_all_workers()
-            workers.clear()
-            for i in range(n_workers):
-                workers[i] = _spawn_worker(i)
-
-        # Fork initial workers
-        logger.info(
-            f'Process pool: spawning {n_workers} workers',
-        )
-        for i in range(n_workers):
-            workers[i] = _spawn_worker(i)
-
-        # Monitor loop using poll() over pipe read fds
-        try:
-            while not self.shutdown_event.is_set():
-                poller = select.poll()
-                fd_to_wid: Dict[int, int] = {}
-                for wid, (proc, pipe_r) in workers.items():
-                    poller.register(
-                        pipe_r, select.POLLIN | select.POLLHUP,
-                    )
-                    fd_to_wid[pipe_r] = wid
-
-                events = poller.poll(500)  # 500ms timeout
-
-                registry_changed = False
-                for fd, event in events:
-                    if fd not in fd_to_wid:
-                        continue
-                    wid = fd_to_wid[fd]
-
-                    if event & select.POLLIN:
-                        msg = _read_pipe_message(fd)
-                        if msg is not None:
-                            try:
-                                body = json.loads(msg)
-                                action = body.get('action', 'register')
-                                if action == 'register':
-                                    self.shared_registry.create_function(
-                                        body['id'],
-                                        body['signature_json'],
-                                        body['code'],
-                                        body['replace'],
-                                    )
-                                    logger.info(
-                                        'Main process: applied v3 '
-                                        'envelope registration from '
-                                        f'worker {wid}, will re-fork '
-                                        'all workers',
-                                    )
-                                elif action == 'delete':
-                                    self.shared_registry.delete_function(
-                                        body['id'],
-                                    )
-                                    logger.info(
-                                        'Main process: applied '
-                                        '@@delete from worker '
-                                        f'{wid}, will re-fork all '
-                                        'workers',
-                                    )
-                                else:
-                                    logger.error(
-                                        'Main process: unknown '
-                                        f'pipe action: {action}',
-                                    )
-                                    continue
-                                registry_changed = True
-                            except Exception:
-                                logger.error(
-                                    'Main process: failed to '
-                                    'apply pipe message:\n'
-                                    f'{traceback.format_exc()}',
-                                )
-                    elif event & select.POLLHUP:
-                        # Worker died — will be respawned below
-                        pass
-
-                if registry_changed:
-                    _respawn_all_workers()
-                    continue
-
-                # Check for dead workers and respawn individually
-                for wid, (proc, pipe_r) in list(workers.items()):
-                    if not proc.is_alive():
-                        exitcode = proc.exitcode
-                        if not self.shutdown_event.is_set():
-                            logger.warning(
-                                f'Worker {wid} (pid={proc.pid}) '
-                                f'exited with code {exitcode}, '
-                                f'restarting...',
-                            )
-                            try:
-                                os.close(pipe_r)
-                            except OSError:
-                                pass
-                            workers[wid] = _spawn_worker(wid)
-        finally:
-            logger.info('Shutting down worker processes...')
-            _kill_all_workers()
+        _ProcessPool(self, ctx, server_sock, n_workers).run()
 
     def _worker_process_main(
         self,
         server_sock: socket.socket,
         worker_id: int,
         pipe_w: int,
+        inherited_fds: List[int],
     ) -> None:
         """Entry point for each forked worker process.
 
         Uses ``self.shared_registry`` inherited via fork (contains the
         main process's current state). ``pipe_w`` is used to notify the
         main process when a v3 envelope definition is installed (or
-        @@delete is handled) so it can re-fork all workers.
+        @@delete is handled) so it can replace the workers.
+
+        ``inherited_fds`` are pipe read ends -- its own and the other
+        workers' -- that fork copied in. They are closed so that main closing one is
+        enough to make its writer see EPIPE rather than fill the pipe.
+
+        SIGTERM shuts the worker down, abandoning its connection. SIGUSR1
+        retires it: the accept loop stops, the current connection runs to
+        completion, and then the worker exits.
         """
         try:
+            for fd in inherited_fds:
+                _close_quietly(fd)
+
             local_shutdown = threading.Event()
+            stop_accepting = threading.Event()
 
             def _worker_signal_handler(
                 signum: int,
@@ -547,7 +731,14 @@ class Server:
             ) -> None:
                 local_shutdown.set()
 
+            def _retire_signal_handler(
+                signum: int,
+                frame: Any,
+            ) -> None:
+                stop_accepting.set()
+
             signal.signal(signal.SIGTERM, _worker_signal_handler)
+            signal.signal(signal.SIGUSR1, _retire_signal_handler)
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
             # WARNING: setblocking(False) sets O_NONBLOCK on the open
@@ -566,11 +757,11 @@ class Server:
             )
 
             # Accept loop
-            while not local_shutdown.is_set():
+            while not (local_shutdown.is_set() or stop_accepting.is_set()):
                 readable, _, _ = select.select(
                     [server_sock], [], [], 0.1,
                 )
-                if not readable:
+                if not readable or stop_accepting.is_set():
                     continue
 
                 try:
@@ -583,6 +774,8 @@ class Server:
                         break
                     raise
 
+                # Only SIGTERM interrupts a connection; SIGUSR1 lets it
+                # finish and is acted on once it returns.
                 handle_connection(
                     conn,
                     self.shared_registry,
