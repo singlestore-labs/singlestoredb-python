@@ -7,6 +7,8 @@ describe_functions_json() helpers. Both the WASM handler and the
 plugin server use these directly.
 """
 import builtins
+import datetime as _datetime
+import decimal as _decimal
 import inspect
 import json
 import logging
@@ -25,6 +27,7 @@ from typing import Optional
 from typing import Tuple
 
 from . import overload as _overload
+from singlestoredb.functions import udf
 from singlestoredb.functions.ext import rowdat_1 as _rowdat_1
 from singlestoredb.functions.ext.rowdat_1 import dump as _dump_rowdat_1
 from singlestoredb.functions.ext.rowdat_1 import load as _load_rowdat_1
@@ -115,29 +118,40 @@ rowdat_1_type_map: Dict[str, int] = {
     'decimal': ft.NEWDECIMAL,
 }
 
-# Map dtype strings to Python type annotation strings for code generation.
-_dtype_to_python: Dict[str, str] = {
-    'bool': 'bool',
-    'int8': 'int',
-    'int16': 'int',
-    'int32': 'int',
-    'int64': 'int',
-    'int': 'int',
-    'uint8': 'int',
-    'uint16': 'int',
-    'uint32': 'int',
-    'uint64': 'int',
-    'float32': 'float',
-    'float64': 'float',
-    'float': 'float',
-    'str': 'str',
-    'bytes': 'bytes',
-    'datetime': 'datetime.datetime',
-    'datetime6': 'datetime.datetime',
-    'date': 'datetime.date',
-    'time': 'datetime.timedelta',
-    'time6': 'datetime.timedelta',
-    'decimal': 'decimal.Decimal',
+# Map dtype strings to the Python types used to annotate dynamic functions.
+_dtype_to_python: Dict[str, Any] = {
+    'bool': bool,
+    'int8': int,
+    'int16': int,
+    'int32': int,
+    'int64': int,
+    'int': int,
+    'uint8': int,
+    'uint16': int,
+    'uint32': int,
+    'uint64': int,
+    'float32': float,
+    'float64': float,
+    'float': float,
+    'str': str,
+    'bytes': bytes,
+    'datetime': _datetime.datetime,
+    'datetime6': _datetime.datetime,
+    'date': _datetime.date,
+    'time': _datetime.timedelta,
+    'time6': _datetime.timedelta,
+    'decimal': _decimal.Decimal,
+}
+
+# Names every dynamic function body can use without importing them. Bound
+# once per registry; a dynamic function of the same name replaces its entry.
+_DYNAMIC_PRELUDE: Dict[str, Any] = {
+    'datetime': _datetime,
+    'decimal': _decimal,
+    'Decimal': _decimal.Decimal,
+    'udf': udf,
+    'Optional': Optional,
+    'Tuple': Tuple,
 }
 
 logger = logging.getLogger('udf_handler')
@@ -148,6 +162,11 @@ _DYNAMIC_MODULE_NAME = 'singlestoredb.functions.ext.plugin._dynamic'
 def _dynamic_factory_name(func_name: str) -> str:
     """Name of the factory that defines a dynamic function's variant."""
     return f'__s2_make_{func_name}'
+
+
+def _dynamic_binder_name(func_name: str) -> str:
+    """Name of the factory parameter that decorates a dynamic function."""
+    return f'__s2_bind_{func_name}'
 
 
 def _restore_declared_sql_types(
@@ -201,6 +220,7 @@ class FunctionRegistry:
             '__name__': _DYNAMIC_MODULE_NAME,
             '__file__': f'<{_DYNAMIC_MODULE_NAME}>',
             '__builtins__': builtins,
+            **_DYNAMIC_PRELUDE,
         }
 
     def initialize(self, plugin_module: Any = None) -> None:
@@ -370,7 +390,7 @@ class FunctionRegistry:
         return descriptions
 
     @staticmethod
-    def _python_type_annotation(dtype: str) -> str:
+    def _python_type_annotation(dtype: str) -> Any:
         """Convert a dtype string to a Python type annotation."""
         nullable = dtype.endswith('?')
         base = dtype.rstrip('?')
@@ -378,61 +398,65 @@ class FunctionRegistry:
         if py_type is None:
             raise ValueError(f'Unsupported dtype: {dtype!r}')
         if nullable:
-            return f'Optional[{py_type}]'
+            return Optional[py_type]
         return py_type
+
+    @staticmethod
+    def _build_annotations(sig: Dict[str, Any]) -> Dict[str, Any]:
+        """Build the ``__annotations__`` of a dynamic function from sig."""
+        annotations = {
+            arg['name']: FunctionRegistry._python_type_annotation(arg['dtype'])
+            for arg in sig.get('args', [])
+        }
+        returns = sig.get('returns', [])
+        if len(returns) == 0:
+            annotations['return'] = None
+        elif len(returns) == 1:
+            annotations['return'] = FunctionRegistry._python_type_annotation(
+                returns[0]['dtype'],
+            )
+        else:
+            parts = tuple(
+                FunctionRegistry._python_type_annotation(r['dtype'])
+                for r in returns
+            )
+            annotations['return'] = Tuple[parts]
+        return annotations
 
     @staticmethod
     def _build_python_code(
         sig: Dict[str, Any],
         body: str,
     ) -> str:
-        """Build a complete @udf-decorated Python function from sig + body.
+        """Build the source of a factory that defines a function from body.
 
-        The function is defined inside a factory, ``_dynamic_factory_name``,
-        that returns it. Overloads share a bare name, so if the body looked
-        its own name up in the shared globals, a recursive ``f(n)`` would
-        call whichever variant of ``f`` was registered last. Defined inside
-        the factory, the name is a closure variable bound to this variant;
-        every other name still resolves through the globals at call time.
+        The factory, ``_dynamic_factory_name``, takes a binder that
+        annotates and ``@udf``-decorates the function, and returns the
+        result. Overloads share a bare name, so if the body looked its own
+        name up in the shared globals, a recursive ``f(n)`` would call
+        whichever variant of ``f`` was registered last. Defined inside the
+        factory, the name is a closure variable, rebound to the decorated
+        variant; every other name still resolves through the globals at
+        call time.
+
+        The source names nothing but the function, its parameters, and the
+        binder, whose name is longer than the function's. A function named
+        like the decorator or an annotation type (``udf``, ``int``) would
+        otherwise be read in the factory before its own ``def`` binds it.
         """
         func_name = sig['name']
-        args = sig.get('args', [])
-        returns = sig.get('returns', [])
-
-        params = []
-        for arg in args:
-            ann = FunctionRegistry._python_type_annotation(arg['dtype'])
-            params.append(f'{arg["name"]}: {ann}')
-        params_str = ', '.join(params)
-
-        if len(returns) == 0:
-            ret_ann = 'None'
-        elif len(returns) == 1:
-            ret_ann = FunctionRegistry._python_type_annotation(
-                returns[0]['dtype'],
-            )
-        else:
-            parts = [
-                FunctionRegistry._python_type_annotation(r['dtype'])
-                for r in returns
-            ]
-            ret_ann = f'Tuple[{", ".join(parts)}]'
+        params_str = ', '.join(arg['name'] for arg in sig.get('args', []))
+        binder = _dynamic_binder_name(func_name)
 
         indented_body = '\n'.join(
             f'        {line}' for line in body.splitlines()
         )
 
         return (
-            'import datetime\n'
-            'import decimal\n'
-            'from decimal import Decimal\n'
-            'from singlestoredb.functions import udf\n'
-            'from typing import Optional, Tuple\n'
-            '\n'
-            f'def {_dynamic_factory_name(func_name)}():\n'
-            '    @udf\n'
-            f'    def {func_name}({params_str}) -> {ret_ann}:\n'
+            f'def {_dynamic_factory_name(func_name)}({binder}):\n'
+            f'    def {func_name}({params_str}):\n'
             f'{indented_body}\n'
+            f'    {func_name} = {binder}({func_name})\n'
             f'    return {func_name}\n'
         )
 
@@ -525,7 +549,15 @@ class FunctionRegistry:
         factory_name = _dynamic_factory_name(func_name)
         exec(compiled, namespace)  # noqa: S102
         factory = namespace.pop(factory_name, None)
-        compiled_func = factory() if callable(factory) else None
+        annotations = self._build_annotations(sig)
+
+        def bind(func: Callable[..., Any]) -> Callable[..., Any]:
+            # Before udf: it copies __annotations__ onto its wrapper, and
+            # get_signature reads them from there.
+            func.__annotations__ = annotations
+            return udf(func)
+
+        compiled_func = factory(bind) if callable(factory) else None
         if not callable(compiled_func):
             raise ValueError(
                 f'Function "{func_name}" was not registered. '
@@ -593,11 +625,14 @@ class FunctionRegistry:
         """Point ``name`` in the dynamic globals at its last variant.
 
         Called after a variant is removed, so other dynamic functions stop
-        calling it. With no variants left, the name is unbound.
+        calling it. With no variants left, the name is unbound, or bound
+        back to the prelude entry it shadowed.
         """
         variants = self.functions.get(name)
         if variants:
             self._dynamic_globals[name] = variants[-1]['func']
+        elif name in _DYNAMIC_PRELUDE:
+            self._dynamic_globals[name] = _DYNAMIC_PRELUDE[name]
         else:
             self._dynamic_globals.pop(name, None)
 

@@ -862,6 +862,80 @@ class TestRecursiveOverloads(unittest.TestCase):
         assert reg.lookup_variant('f', 'TEXT')['func']('abcd') == 4
 
 
+class TestShadowingNames(unittest.TestCase):
+    """A dynamic function may share a name with the decorator, an
+    annotation type, or a module the generated code would otherwise use."""
+
+    _FACT = 'return 1 if a0 <= 1 else a0 * {name}(a0 - 1)'
+
+    def _shared(self):
+        from singlestoredb.functions.ext.plugin.server import SharedRegistry
+        shared = SharedRegistry()
+        shared.set_base_registry(FunctionRegistry())
+        return shared
+
+    def _install_fact(self, target, name):
+        target.create_function(
+            f'id-{name}', _ovl_sig(name, [('int64', 'BIGINT')]),
+            self._FACT.format(name=name), False,
+        )
+
+    def test_function_named_udf(self):
+        reg = FunctionRegistry()
+        reg.create_function(
+            'id-udf', _ovl_sig('udf', [('int64', 'BIGINT')]),
+            'return a0 + 1', False,
+        )
+        assert reg.lookup_variant('udf', 'BIGINT')['func'](4) == 5
+
+    def test_function_named_udf_recurses(self):
+        reg = FunctionRegistry()
+        self._install_fact(reg, 'udf')
+        assert reg.lookup_variant('udf', 'BIGINT')['func'](5) == 120
+
+    def test_function_named_int_recurses(self):
+        reg = FunctionRegistry()
+        self._install_fact(reg, 'int')
+        assert reg.lookup_variant('int', 'BIGINT')['func'](5) == 120
+
+    def test_function_named_datetime_is_not_overwritten(self):
+        reg = FunctionRegistry()
+        reg.create_function(
+            'id-dt', _ovl_sig('datetime', [('datetime', 'DATETIME')]),
+            'return a0.year', False,
+        )
+        # Registering a later function must not rebind `datetime` to the
+        # module in the shared globals.
+        reg.create_function(
+            'id-g', _ovl_sig('g', [('datetime', 'DATETIME')]),
+            'return datetime(a0) + 1', False,
+        )
+        when = __import__('datetime').datetime(2020, 1, 1)
+        assert reg.lookup_variant('datetime', 'DATETIME')['func'](when) == 2020
+        assert reg.lookup_variant('g', 'DATETIME')['func'](when) == 2021
+
+    def test_deleting_shadowing_function_restores_prelude(self):
+        reg = FunctionRegistry()
+        reg.create_function(
+            'id-dt', _ovl_sig('datetime', [('int64', 'BIGINT')]),
+            'return a0', False,
+        )
+        reg.create_function(
+            'id-g', _ovl_sig('g', [('int64', 'BIGINT')]),
+            'return datetime.date(2020, 1, a0).day', False,
+        )
+        reg.delete_function('id-dt')
+        assert reg.lookup_variant('g', 'BIGINT')['func'](3) == 3
+
+    def test_shadowing_survives_shared_registry_replay(self):
+        shared = self._shared()
+        self._install_fact(shared, 'udf')
+        self._install_fact(shared, 'int')
+        reg = shared.get_thread_local_registry()
+        assert reg.lookup_variant('udf', 'BIGINT')['func'](5) == 120
+        assert reg.lookup_variant('int', 'BIGINT')['func'](5) == 120
+
+
 class TestCrossFunctionCalls(unittest.TestCase):
     """A dynamic function's body can call another dynamic function by name,
     resolved when called, while its own name stays bound to itself."""
