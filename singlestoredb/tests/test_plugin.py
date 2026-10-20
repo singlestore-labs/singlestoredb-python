@@ -729,6 +729,41 @@ class TestOverloadRegistry(unittest.TestCase):
         assert 'id-dup' not in reg._id_to_variant
         assert reg.lookup_variant('dyn_ovl', 'BIGINT')['func'](1) == 2
 
+    def test_failed_replace_syntax_error_keeps_original(self):
+        reg = FunctionRegistry()
+        reg.create_function(
+            'id-a', _ovl_sig('f', [('int64', 'BIGINT')]), 'return a0 + 1',
+            False,
+        )
+        original = reg.lookup_variant('f', 'BIGINT')['func']
+        with self.assertRaises(SyntaxError):
+            reg.create_function(
+                'id-b', _ovl_sig('f', [('int64', 'BIGINT')]), 'return (',
+                True,
+            )
+        assert reg.lookup_variant('f', 'BIGINT')['func'](1) == 2
+        assert 'id-a' in reg._id_to_variant
+        assert 'id-b' not in reg._id_to_variant
+        assert reg._dynamic_globals['f'] is original
+
+    def test_failed_replace_registration_restores_original(self):
+        # Registration is the one step after the colliding variant is
+        # removed; if it raises, the removal is undone in place.
+        reg = self._registry_with_three_variants()
+        before = [v['func'] for v in reg.functions['dyn_ovl']]
+        ids_before = dict(reg._id_to_variant)
+        with patch.object(
+            reg, '_register_function', side_effect=TypeError('boom'),
+        ), self.assertRaises(TypeError):
+            reg.create_function(
+                'id-1b', _ovl_sig('dyn_ovl', [('int64', 'BIGINT')]),
+                'return a0 + 1000', True,
+            )
+        assert [v['func'] for v in reg.functions['dyn_ovl']] == before
+        assert reg._id_to_variant == ids_before
+        assert reg._dynamic_globals['dyn_ovl'] is before[-1]
+        assert reg.lookup_variant('dyn_ovl', 'BIGINT')['func'](1) == 2
+
     def test_unsupported_dtype_in_second_variant_leaves_first_callable(self):
         reg = FunctionRegistry()
         reg.create_function(
@@ -1054,6 +1089,21 @@ class TestCrossFunctionCalls(unittest.TestCase):
         )
         assert reg.lookup_variant('h', 'INT')['func'](4) == 40
         assert reg.lookup_variant('f', 'INT')['func'](4) == 5
+
+    def test_function_named_like_a_binder_is_callable(self):
+        # f's factory takes its binder as __s2_bind_f; a body calling a
+        # dynamic function of that name must reach the function, not the
+        # binder.
+        reg = FunctionRegistry()
+        reg.create_function(
+            'id-b', _ovl_sig('__s2_bind_f', [('int32', 'INT')]),
+            'return a0 * 10', False,
+        )
+        reg.create_function(
+            'id-f', _ovl_sig('f', [('int32', 'INT')]),
+            'return __s2_bind_f(a0)', False,
+        )
+        assert reg.lookup_variant('f', 'INT')['func'](4) == 40
 
 
 class TestDynamicModule(unittest.TestCase):

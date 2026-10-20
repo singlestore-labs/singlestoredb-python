@@ -455,10 +455,15 @@ class FunctionRegistry:
         binder, whose name is longer than the function's. A function named
         like the decorator or an annotation type (``udf``, ``int``) would
         otherwise be read in the factory before its own ``def`` binds it.
+        The binder's name is also lengthened until the body does not
+        contain it, so a body calling a dynamic function that happens to
+        share it reaches that function rather than the enclosing binder.
         """
         func_name = sig['name']
         params_str = ', '.join(arg['name'] for arg in sig.get('args', []))
         binder = _dynamic_binder_name(func_name)
+        while binder in body:
+            binder += '_'
 
         indented_body = '\n'.join(
             f'        {line}' for line in body.splitlines()
@@ -539,20 +544,6 @@ class FunctionRegistry:
                 f'(use replace=true to overwrite)',
             )
 
-        if collision is not None and replace:
-            existing_variants.remove(collision)
-            if not existing_variants:
-                self.functions.pop(func_name, None)
-            else:
-                self.functions[func_name] = existing_variants
-            # Drop any prior id that pointed at the colliding variant.
-            for prior_id, (prior_name, prior_key) in list(
-                self._id_to_variant.items(),
-            ):
-                if prior_name == func_name and prior_key == incoming_key:
-                    del self._id_to_variant[prior_id]
-            self._rebind_dynamic_name(func_name)
-
         full_code = self._build_python_code(sig, code)
 
         compiled = compile(full_code, f'<{_DYNAMIC_MODULE_NAME}>', 'exec')
@@ -598,7 +589,35 @@ class FunctionRegistry:
         # describe_functions.
         _restore_declared_sql_types(variant_sig, sig)
 
-        self._register_function(compiled_func, func_name, variant_sig)
+        # Nothing above touched the registry, so a body that fails to
+        # compile or bind leaves the variant it would replace in place.
+        prior_variants = list(existing_variants)
+        prior_ids = dict(self._id_to_variant)
+        if collision is not None and replace:
+            existing_variants.remove(collision)
+            if not existing_variants:
+                self.functions.pop(func_name, None)
+            else:
+                self.functions[func_name] = existing_variants
+            # Drop any prior id that pointed at the colliding variant.
+            for prior_id, (prior_name, prior_key) in list(
+                self._id_to_variant.items(),
+            ):
+                if prior_name == func_name and prior_key == incoming_key:
+                    del self._id_to_variant[prior_id]
+            self._rebind_dynamic_name(func_name)
+
+        try:
+            self._register_function(compiled_func, func_name, variant_sig)
+        except Exception:
+            if prior_variants:
+                self.functions[func_name] = prior_variants
+            else:
+                self.functions.pop(func_name, None)
+            self._id_to_variant.clear()
+            self._id_to_variant.update(prior_ids)
+            self._rebind_dynamic_name(func_name)
+            raise
         self._id_to_variant[id] = (func_name, incoming_key)
         self._dynamic_globals[func_name] = compiled_func
 
