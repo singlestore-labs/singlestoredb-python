@@ -19,12 +19,15 @@ from unittest.mock import patch
 
 from singlestoredb.functions.ext import rowdat_1
 from singlestoredb.functions.ext.plugin.connection import _handle_connection_inner
+from singlestoredb.functions.ext.plugin.connection import _install_v3_definition
 from singlestoredb.functions.ext.plugin.connection import _MAX_FUNCTION_NAME_LEN
+from singlestoredb.functions.ext.plugin.connection import _MAX_V3_BODY_BYTES
 from singlestoredb.functions.ext.plugin.connection import _recv_exact_py
 from singlestoredb.functions.ext.plugin.connection import STATUS_ERROR
 from singlestoredb.functions.ext.plugin.connection import STATUS_OK
 from singlestoredb.functions.ext.plugin.connection import SUPPORTED_VERSIONS
 from singlestoredb.functions.ext.plugin.control import dispatch_control_signal
+from singlestoredb.functions.ext.plugin.registry import call_function
 from singlestoredb.functions.ext.plugin.registry import FunctionRegistry
 from singlestoredb.mysql.constants import FIELD_TYPE as ft
 from singlestoredb.utils._lazy_import import get_numpy
@@ -141,7 +144,8 @@ class TestControlSignalDispatch(unittest.TestCase):
         shared = self._make_shared_registry()
         result = dispatch_control_signal('@@unknown', b'', shared)
         assert result.ok is False
-        assert 'Unknown control signal' in result.data
+        assert result.data == 'Unknown control signal: @@unknown'
+        assert result.code == 'UNKNOWN_SIGNAL'
 
     def test_register_signal_no_longer_supported(self):
         """@@register was replaced by in-band v3 envelope registration."""
@@ -149,25 +153,41 @@ class TestControlSignalDispatch(unittest.TestCase):
         result = dispatch_control_signal('@@register', b'', shared)
         assert result.ok is False
         assert 'Unknown control signal' in result.data
+        assert result.code == 'UNKNOWN_SIGNAL'
 
     def test_delete_missing_payload(self):
         shared = self._make_shared_registry()
         result = dispatch_control_signal('@@delete', b'', shared)
         assert result.ok is False
         assert 'Missing deletion payload' in result.data
+        assert result.code == 'DELETE_MISSING_PAYLOAD'
 
     def test_delete_invalid_json(self):
         shared = self._make_shared_registry()
         result = dispatch_control_signal('@@delete', b'not json', shared)
         assert result.ok is False
         assert 'Invalid JSON' in result.data
+        assert result.code == 'DELETE_INVALID_PAYLOAD'
 
     def test_delete_missing_id(self):
         shared = self._make_shared_registry()
         payload = json.dumps({}).encode()
         result = dispatch_control_signal('@@delete', payload, shared)
         assert result.ok is False
-        assert 'id' in result.data
+        assert result.data == 'Missing required string field: id'
+        assert result.code == 'DELETE_INVALID_PAYLOAD'
+
+    def test_delete_bad_id_payloads(self):
+        # A non-string id, a name-keyed payload, and a non-object payload
+        # all fail the same id check without reaching the registry.
+        for body in ({'id': 5}, {'id': None}, {'name': 'x'}, [], 'x'):
+            shared = self._make_shared_registry()
+            payload = json.dumps(body).encode()
+            result = dispatch_control_signal('@@delete', payload, shared)
+            assert result.ok is False, body
+            assert result.data == 'Missing required string field: id', body
+            assert result.code == 'DELETE_INVALID_PAYLOAD', body
+            shared.delete_function.assert_not_called()
 
     def test_delete_unknown_id(self):
         shared = self._make_shared_registry()
@@ -178,6 +198,27 @@ class TestControlSignalDispatch(unittest.TestCase):
         result = dispatch_control_signal('@@delete', payload, shared)
         assert result.ok is False
         assert 'No registered function' in result.data
+        assert result.code == 'DELETE_FUNC_NOT_REGISTERED'
+
+    def test_delete_pipe_write_failure_is_internal_error(self):
+        shared = self._make_shared_registry()
+        # A closed read end makes the parent notification raise
+        # BrokenPipeError after the delete itself succeeded.
+        r_fd, w_fd = os.pipe()
+        os.close(r_fd)
+        try:
+            payload = json.dumps({'id': 'sha-abc'}).encode()
+            result = dispatch_control_signal(
+                '@@delete', payload, shared, pipe_write_fd=w_fd,
+            )
+        finally:
+            os.close(w_fd)
+        assert result.ok is False
+        assert result.code == 'INTERNAL_ERROR'
+
+    def test_success_has_no_code(self):
+        shared = self._make_shared_registry()
+        assert dispatch_control_signal('@@health', b'', shared).code is None
 
     def test_delete_success(self):
         shared = self._make_shared_registry()
@@ -339,6 +380,133 @@ def _ovl_sig(name, args, ret_dtype='int64', ret_sql='BIGINT'):
         ],
         'returns': [{'name': '', 'dtype': ret_dtype, 'sql': ret_sql}],
     })
+
+
+class TestSharedRegistrySupersession(unittest.TestCase):
+    """CREATE OR REPLACE ships a fresh id for an existing (name, param
+    types) and never sends @@delete for the old one."""
+
+    def _make_shared(self, base=None):
+        from singlestoredb.functions.ext.plugin.server import SharedRegistry
+        shared = SharedRegistry()
+        shared.set_base_registry(base or FunctionRegistry())
+        return shared
+
+    @staticmethod
+    def _call(shared, name, param_types, *values):
+        reg = shared.get_thread_local_registry()
+        input_data = bytes(
+            rowdat_1._dump([ft.LONGLONG] * len(values), [1], [list(values)]),
+        )
+        output = call_function(reg, name, input_data, param_types)
+        _, rows = rowdat_1._load([('r', ft.LONGLONG)], output)
+        return rows[0][0]
+
+    def _supersede(self, replace):
+        shared = self._make_shared()
+        sig = _ovl_sig('f', [('int64', 'BIGINT')])
+        shared.create_function('id-A', sig, 'return 100 + a0', False)
+        shared.create_function('id-B', sig, 'return 200 + a0', replace)
+        return shared
+
+    def test_fresh_id_same_signature_supersedes_without_replace(self):
+        shared = self._supersede(replace=False)
+        assert self._call(shared, 'f', 'BIGINT', 1) == 201
+        assert not shared.has_definition('id-A')
+        assert shared.has_definition('id-B')
+        assert len(shared.get_thread_local_registry().functions['f']) == 1
+
+    def test_fresh_id_same_signature_supersedes_with_replace(self):
+        shared = self._supersede(replace=True)
+        assert self._call(shared, 'f', 'BIGINT', 1) == 201
+        assert not shared.has_definition('id-A')
+
+    def test_delete_after_supersession_does_not_resurrect(self):
+        shared = self._supersede(replace=False)
+        shared.delete_function('id-B')
+        reg = shared.get_thread_local_registry()
+        assert 'f' not in reg.functions
+        result = dispatch_control_signal('@@functions', b'', shared)
+        assert json.loads(result.data)['functions'] == []
+
+    def test_supersession_uses_normalized_types(self):
+        # INT and BIGINT are different groups: both variants coexist.
+        shared = self._make_shared()
+        shared.create_function(
+            'id-int', _ovl_sig('f', [('int64', 'INT')]), 'return 1', False,
+        )
+        shared.create_function(
+            'id-big', _ovl_sig('f', [('int64', 'BIGINT')]), 'return 2', False,
+        )
+        assert shared.has_definition('id-int')
+        assert shared.has_definition('id-big')
+
+        # CHAR(10) and CHAR(20) share CHAR_GROUP: the second supersedes.
+        shared.create_function(
+            'id-c10', _ovl_sig('g', [('str', 'CHAR(10)')]), 'return 1', False,
+        )
+        shared.create_function(
+            'id-c20', _ovl_sig('g', [('str', 'CHAR(20)')]), 'return 2', False,
+        )
+        assert not shared.has_definition('id-c10')
+        assert shared.has_definition('id-c20')
+        assert len(shared.get_thread_local_registry().functions['g']) == 1
+
+    def test_sibling_overload_survives_supersession(self):
+        shared = self._make_shared()
+        shared.create_function(
+            'id-1', _ovl_sig('f', [('int64', 'BIGINT')]),
+            'return 100 + a0', False,
+        )
+        shared.create_function(
+            'id-2', _ovl_sig('f', [('int64', 'BIGINT')] * 2),
+            'return 200 + a0 + a1', False,
+        )
+        shared.create_function(
+            'id-3', _ovl_sig('f', [('int64', 'BIGINT')]),
+            'return 300 + a0', False,
+        )
+        assert not shared.has_definition('id-1')
+        assert shared.has_definition('id-2')
+        assert self._call(shared, 'f', 'BIGINT', 1) == 301
+        assert self._call(shared, 'f', 'BIGINT;BIGINT', 1, 2) == 203
+
+    def test_failed_supersession_keeps_old_definition(self):
+        shared = self._make_shared()
+        sig = _ovl_sig('f', [('int64', 'BIGINT')])
+        shared.create_function('id-A', sig, 'return 100 + a0', False)
+        generation = shared.generation
+        with self.assertRaises(SyntaxError):
+            shared.create_function('id-B', sig, 'return (', False)
+        assert shared.has_definition('id-A')
+        assert not shared.has_definition('id-B')
+        assert shared.generation == generation
+        assert self._call(shared, 'f', 'BIGINT', 1) == 101
+
+    def test_resending_superseded_id_supersedes_its_successor(self):
+        # Mirrors the Rust server: an evicted id is just a fresh install.
+        shared = self._supersede(replace=False)
+        sig = _ovl_sig('f', [('int64', 'BIGINT')])
+        shared.create_function('id-A', sig, 'return 100 + a0', False)
+        assert shared.has_definition('id-A')
+        assert not shared.has_definition('id-B')
+        assert self._call(shared, 'f', 'BIGINT', 1) == 101
+
+    def test_builtin_collision_still_rejected(self):
+        base = FunctionRegistry()
+        base.create_function(
+            'base-0', _ovl_sig('f', [('int64', 'BIGINT')]),
+            'return 100 + a0', False,
+        )
+        base._base_function_names = {'f'}
+        shared = self._make_shared(base)
+        with self.assertRaises(ValueError) as ctx:
+            shared.create_function(
+                'id-B', _ovl_sig('f', [('int64', 'BIGINT')]),
+                'return 200 + a0', False,
+            )
+        assert 'not a dynamically registered function' in str(ctx.exception)
+        assert not shared.has_definition('id-B')
 
 
 class TestOverloadRegistry(unittest.TestCase):
@@ -907,9 +1075,44 @@ class TestOverloadServerProtocol(unittest.TestCase):
         with _ServerConn(shared) as conn:
             conn.handshake('@@delete', {})
             status, data = conn.call(json.dumps({'id': 'ghost'}).encode())
-        assert status != STATUS_OK
-        assert b'No registered function' in data
+        # Control-signal failures are 200s; the body in the output mmap
+        # carries the error and its code.
+        assert status == STATUS_OK
+        body = json.loads(data)
+        assert body['code'] == 'DELETE_FUNC_NOT_REGISTERED'
+        assert 'No registered function' in body['error']
         assert [len(e['args']) for e in self._describe(shared)] == [1]
+
+    def test_create_or_replace_fresh_id_frame_supersedes(self):
+        # CREATE OR REPLACE: a fresh id, the same signature, replace=false,
+        # and no @@delete for the old id.
+        shared = self._make_shared()
+        for id, body, expected in (
+            ('id-1', b'return 100 + a0', 107),
+            ('id-2', b'return 200 + a0', 207),
+        ):
+            envelope = _ovl_envelope(
+                id, 'srv_cor', [('int64', 'BIGINT')], 'BIGINT',
+            )
+            with _ServerConn(shared) as conn:
+                conn.handshake('srv_cor', envelope, body)
+                status, data = conn.call(self._bigints(7))
+                assert status == STATUS_OK, data
+                assert self._one_bigint_out(data) == expected
+
+        assert not shared.has_definition('id-1')
+        assert [len(e['args']) for e in self._describe(shared)] == [1]
+
+    def test_unknown_control_signal_frame_returns_coded_error(self):
+        shared = self._make_shared()
+        with _ServerConn(shared) as conn:
+            conn.handshake('@@bogus', {})
+            status, data = conn.call(b'')
+        assert status == STATUS_OK
+        assert json.loads(data) == {
+            'error': 'Unknown control signal: @@bogus',
+            'code': 'UNKNOWN_SIGNAL',
+        }
 
     def test_v3_semicolon_param_types_round_trip(self):
         shared = self._make_shared()
@@ -1143,6 +1346,49 @@ class TestOverloadServerProtocol(unittest.TestCase):
             status, data = conn.call(self._bigints(4))
         assert status == STATUS_OK, data
         assert self._one_bigint_out(data) == 7
+
+    def _install_cached(self):
+        """Return a SharedRegistry with id-cached already installed."""
+        shared = self._make_shared()
+        shared.create_function(
+            'id-cached', _ovl_sig('srv_cached', [('int64', 'BIGINT')]),
+            'return a0', False,
+        )
+        return shared
+
+    def test_v3_cache_hit_still_requires_signature_object(self):
+        shared = self._install_cached()
+        for envelope in ({'id': 'id-cached'}, {'id': 'id-cached', 'signature': []}):
+            with tempfile.TemporaryFile() as f:
+                with self.assertRaises(ValueError) as ctx:
+                    _install_v3_definition(envelope, f.fileno(), shared, None)
+            assert "required object field 'signature'" in str(ctx.exception)
+
+    def test_v3_cache_hit_still_enforces_body_limit(self):
+        shared = self._install_cached()
+        envelope = _ovl_envelope(
+            'id-cached', 'srv_cached', [('int64', 'BIGINT')], 'BIGINT',
+        )
+        with tempfile.TemporaryFile() as f:
+            # Sparse: sets the size without writing 64 MiB.
+            os.ftruncate(f.fileno(), _MAX_V3_BODY_BYTES + 1)
+            with self.assertRaises(ValueError) as ctx:
+                _install_v3_definition(envelope, f.fileno(), shared, None)
+        assert str(ctx.exception) == (
+            f'v3 body size {_MAX_V3_BODY_BYTES + 1} '
+            f'exceeds limit {_MAX_V3_BODY_BYTES}'
+        )
+
+    def test_v3_cache_hit_with_empty_body_is_a_noop(self):
+        shared = self._install_cached()
+        generation = shared.generation
+        envelope = _ovl_envelope(
+            'id-cached', 'srv_cached', [('int64', 'BIGINT')], 'BIGINT',
+        )
+        with tempfile.TemporaryFile() as f:
+            _install_v3_definition(envelope, f.fileno(), shared, None)
+        assert shared.generation == generation
+        assert shared.has_definition('id-cached')
 
     def test_v3_invalid_utf8_body_rejected(self):
         shared = self._make_shared()

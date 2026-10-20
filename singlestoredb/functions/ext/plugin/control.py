@@ -1,15 +1,20 @@
 """
 Control signal dispatch for @@health, @@functions, @@delete.
 
-Matches the Rust wasm-udf-server's dispatch_control_signal behavior.
-Registration happens in-band via the v3 handshake envelope; there is no
-separate @@register control signal.
+Matches the Rust wasm-udf-server's dispatch_control_signal behavior:
+every failure carries a machine-readable ``code`` (UNKNOWN_SIGNAL,
+DELETE_MISSING_PAYLOAD, DELETE_INVALID_PAYLOAD,
+DELETE_FUNC_NOT_REGISTERED, INTERNAL_ERROR) alongside its message, and is
+answered on the wire as a 200 response whose body is
+``{"error": ..., "code": ...}``. Registration happens in-band via the v3
+handshake envelope; there is no separate @@register control signal.
 """
 from __future__ import annotations
 
 import json
 import logging
 from dataclasses import dataclass
+from typing import Optional
 from typing import TYPE_CHECKING
 
 from .registry import describe_functions_json
@@ -25,6 +30,7 @@ class ControlResult:
     """Result of a control signal dispatch."""
     ok: bool
     data: str  # JSON response on success, error message on failure
+    code: Optional[str] = None  # error code, set only when ok is False
 
 
 def dispatch_control_signal(
@@ -47,9 +53,10 @@ def dispatch_control_signal(
             return ControlResult(
                 ok=False,
                 data=f'Unknown control signal: {signal_name}',
+                code='UNKNOWN_SIGNAL',
             )
     except Exception as e:
-        return ControlResult(ok=False, data=str(e))
+        return ControlResult(ok=False, data=str(e), code='INTERNAL_ERROR')
 
 
 def _handle_health() -> ControlResult:
@@ -71,23 +78,32 @@ def _handle_delete(
 ) -> ControlResult:
     """Handle @@delete: delete a dynamically registered function by id."""
     if not request_data:
-        return ControlResult(ok=False, data='Missing deletion payload')
+        return ControlResult(
+            ok=False, data='Missing deletion payload',
+            code='DELETE_MISSING_PAYLOAD',
+        )
 
     try:
         body = json.loads(request_data)
     except json.JSONDecodeError as e:
-        return ControlResult(ok=False, data=f'Invalid JSON: {e}')
-
-    id = body.get('id')
-    if not id:
         return ControlResult(
-            ok=False, data='Missing required field: id',
+            ok=False, data=f'Invalid JSON: {e}',
+            code='DELETE_INVALID_PAYLOAD',
+        )
+
+    id = body.get('id') if isinstance(body, dict) else None
+    if not isinstance(id, str):
+        return ControlResult(
+            ok=False, data='Missing required string field: id',
+            code='DELETE_INVALID_PAYLOAD',
         )
 
     try:
         shared_registry.delete_function(id)
     except ValueError as e:
-        return ControlResult(ok=False, data=str(e))
+        return ControlResult(
+            ok=False, data=str(e), code='DELETE_FUNC_NOT_REGISTERED',
+        )
 
     # Notify main process so it can re-fork workers with updated state
     if pipe_write_fd is not None:

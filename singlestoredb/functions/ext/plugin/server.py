@@ -24,8 +24,10 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 from typing import Tuple
 
+from . import overload as _overload
 from .connection import _write_all_fd
 from .connection import handle_connection
 from .registry import FunctionRegistry
@@ -78,6 +80,21 @@ def _write_pipe_message(fd: int, payload: bytes) -> None:
     _write_all_fd(fd, header + payload)
 
 
+def _signature_key(signature_json: str) -> Optional[Tuple[str, str]]:
+    """Return ``(name, normalized param types key)`` for a signature JSON.
+
+    Returns None if the signature is malformed; the registry's own
+    validation reports that.
+    """
+    try:
+        sig = json.loads(signature_json)
+        return sig['name'], _overload.signature_key([
+            _overload.normalize_sql_type(a['sql']) for a in sig['args']
+        ])
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
 class SharedRegistry:
     """Thread-safe wrapper around FunctionRegistry with generation caching.
 
@@ -126,14 +143,34 @@ class SharedRegistry:
         Thread-safe: acquires the lock, validates via a temporary
         registry, stores the code block keyed by id, and increments
         generation.
+
+        SingleStoreDB's ``CREATE OR REPLACE`` ships a fresh id without an
+        ``@@delete`` for the old one, so any other cached id whose
+        signature has the same ``(name, normalized param types)`` is
+        superseded: left out of the validation replay, installed over with
+        ``replace`` forced on, and evicted only once validation succeeds.
         """
         with self._lock:
+            incoming_key = _signature_key(signature_json)
+            superseded = [
+                other_id
+                for other_id, (sig_json, _, _) in self._code_blocks.items()
+                if other_id != id and incoming_key is not None
+                and _signature_key(sig_json) == incoming_key
+            ]
             # Validate on a temporary registry first
-            test_registry = self._build_fresh_registry()
+            test_registry = self._build_fresh_registry(exclude=set(superseded))
             new_names = test_registry.create_function(
-                id, signature_json, code, replace,
+                id, signature_json, code, replace or bool(superseded),
             )
             # Success: store the code block and bump generation
+            for other_id in superseded:
+                del self._code_blocks[other_id]
+            if superseded:
+                logger.info(
+                    f'SharedRegistry: id={id!r} superseded '
+                    f'ids={superseded!r}',
+                )
             self._code_blocks[id] = (signature_json, code, replace)
             self._generation += 1
             logger.info(
@@ -180,9 +217,13 @@ class SharedRegistry:
         self._local.cached = (gen, registry)
         return registry
 
-    def _build_fresh_registry(self) -> FunctionRegistry:
+    def _build_fresh_registry(
+        self,
+        exclude: Optional[Set[str]] = None,
+    ) -> FunctionRegistry:
         """Build a fresh registry with base functions + all code blocks.
 
+        Code blocks whose id is in ``exclude`` are not replayed.
         Must be called with self._lock held.
         """
         registry = FunctionRegistry()
@@ -207,6 +248,8 @@ class SharedRegistry:
 
         # Replay code blocks
         for id, (sig_json, code, replace) in self._code_blocks.items():
+            if exclude and id in exclude:
+                continue
             registry.create_function(id, sig_json, code, replace)
         return registry
 

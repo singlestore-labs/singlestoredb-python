@@ -36,7 +36,6 @@ logger = logging.getLogger('plugin.connection')
 # Supported handshake protocol versions.
 SUPPORTED_VERSIONS = (1, 2, 3)
 STATUS_OK = 200
-STATUS_BAD_REQUEST = 400
 STATUS_ERROR = 500
 
 # Minimum output mmap size to avoid repeated ftruncate
@@ -296,20 +295,27 @@ def _install_v3_definition(
 
     Cache hit (id already registered) → no-op. Empty body fd → no-op.
     Otherwise call ``SharedRegistry.create_function`` and notify the main
-    process so workers can be re-forked.
+    process so workers can be re-forked. The ``signature`` object and the
+    body size limit are checked first, so they hold on a cache hit too.
     """
     id = envelope.get('id')
     if not isinstance(id, str) or not id:
         raise ValueError("v3 envelope missing required string field 'id'")
-
-    if shared_registry.has_definition(id):
-        return
 
     definition = envelope.get('signature')
     if not isinstance(definition, dict):
         raise ValueError(
             "v3 envelope missing required object field 'signature'",
         )
+
+    body_size = os.fstat(body_fd).st_size
+    if body_size > _MAX_V3_BODY_BYTES:
+        raise ValueError(
+            f'v3 body size {body_size} exceeds limit {_MAX_V3_BODY_BYTES}',
+        )
+
+    if shared_registry.has_definition(id):
+        return
 
     function_name = definition.get('name')
     if not isinstance(function_name, str) or not function_name:
@@ -332,7 +338,7 @@ def _install_v3_definition(
     # An empty body fd is a signature-only CREATE PLUGIN FUNCTION: the
     # function is expected to be provided out-of-band (a builtin of the
     # plugin module loaded at server startup). Nothing to install.
-    if os.fstat(body_fd).st_size == 0:
+    if body_size == 0:
         return
     body_bytes = _read_sealed_fd(body_fd, _MAX_V3_BODY_BYTES, 'body')
     try:
@@ -402,40 +408,46 @@ def _handle_control_signal(
         )
 
         if result.ok:
-            # Write response to output mmap
-            response_bytes = result.data.encode('utf8')
-            response_size = len(response_bytes)
-            if _has_accel:
-                _mmap_write(
-                    output_fd, response_bytes,
-                    max(_MIN_OUTPUT_SIZE, response_size),
-                )
-            else:
-                os.ftruncate(output_fd, max(_MIN_OUTPUT_SIZE, response_size))
-                os.lseek(output_fd, 0, os.SEEK_SET)
-                _write_all_fd(output_fd, response_bytes)
-
-            # Send [status=200, size]
-            conn.sendall(struct.pack('<QQ', STATUS_OK, response_size))
+            response_size = _send_control_response(
+                conn, output_fd, result.data.encode('utf8'),
+            )
             logger.debug(
                 f"Control signal '{signal_name}' succeeded, "
                 f'{response_size} bytes',
             )
         else:
-            # Send [status=400, len, message]
-            err_bytes = result.data.encode('utf8')
-            conn.sendall(
-                struct.pack(
-                    f'<QQ{len(err_bytes)}s',
-                    STATUS_BAD_REQUEST, len(err_bytes), err_bytes,
-                ),
-            )
+            # Failures travel exactly like successes: a 200 whose body is
+            # {"error": ..., "code": ...}, as the Rust server answers.
             logger.warning(
-                f"Control signal '{signal_name}' failed: {result.data}",
+                f"Control signal '{signal_name}' failed "
+                f'[{result.code}]: {result.data}',
             )
+            error_json = json.dumps({'error': result.data, 'code': result.code})
+            _send_control_response(conn, output_fd, error_json.encode('utf8'))
     finally:
         os.close(input_fd)
         os.close(output_fd)
+
+
+def _send_control_response(
+    conn: socket.socket,
+    output_fd: int,
+    response_bytes: bytes,
+) -> int:
+    """Write a control-signal response to the output mmap and send
+    ``[status=200, size]``. Returns the response size."""
+    response_size = len(response_bytes)
+    if _has_accel:
+        _mmap_write(
+            output_fd, response_bytes,
+            max(_MIN_OUTPUT_SIZE, response_size),
+        )
+    else:
+        os.ftruncate(output_fd, max(_MIN_OUTPUT_SIZE, response_size))
+        os.lseek(output_fd, 0, os.SEEK_SET)
+        _write_all_fd(output_fd, response_bytes)
+    conn.sendall(struct.pack('<QQ', STATUS_OK, response_size))
+    return response_size
 
 
 def _handle_udf_loop(

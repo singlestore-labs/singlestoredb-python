@@ -23,8 +23,8 @@ import unittest
 
 from singlestoredb.functions.ext import rowdat_1
 from singlestoredb.functions.ext.plugin.connection import _handle_connection_inner
+from singlestoredb.functions.ext.plugin.connection import _install_v3_definition
 from singlestoredb.functions.ext.plugin.connection import handle_connection
-from singlestoredb.functions.ext.plugin.connection import STATUS_BAD_REQUEST  # noqa: F401
 from singlestoredb.functions.ext.plugin.connection import STATUS_ERROR
 from singlestoredb.functions.ext.plugin.connection import STATUS_OK
 from singlestoredb.functions.ext.plugin.connection import SUPPORTED_VERSIONS
@@ -358,6 +358,28 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         reg = shared.get_thread_local_registry()
         assert 'temp_fn' not in reg.functions
 
+    def test_delete_failures_carry_codes(self):
+        """Each @@delete failure maps to its control-signal error code."""
+        shared = self._make_shared()
+        self._seed(shared, 'keep_fn', 'return x')
+
+        for payload, code in (
+            (b'', 'DELETE_MISSING_PAYLOAD'),
+            (b'{', 'DELETE_INVALID_PAYLOAD'),
+            (b'{"id": 5}', 'DELETE_INVALID_PAYLOAD'),
+            (b'{"name": "keep_fn"}', 'DELETE_INVALID_PAYLOAD'),
+            (b'[]', 'DELETE_INVALID_PAYLOAD'),
+            (b'{"id": "ghost"}', 'DELETE_FUNC_NOT_REGISTERED'),
+            # An empty string is still a string id, as in the Rust server.
+            (b'{"id": ""}', 'DELETE_FUNC_NOT_REGISTERED'),
+        ):
+            result = dispatch_control_signal('@@delete', payload, shared)
+            assert not result.ok, payload
+            assert result.code == code, (payload, result)
+
+        reg = shared.get_thread_local_registry()
+        assert 'keep_fn' in reg.functions
+
     def test_delete_then_recreate(self):
         """Delete a function and re-create it with new behavior."""
         shared = self._make_shared()
@@ -376,6 +398,47 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         output = call_function(reg, 'morph', input_data)
         _, rows = rowdat_1._load([('r', ft.LONGLONG)], output)
         assert rows[0][0] == 1000
+
+    def test_piped_supersession_leaves_one_code_block(self):
+        """The main process applies a worker's register messages through
+        the same create_function, so a fresh id with the same signature
+        evicts the old block there too."""
+        worker = self._make_shared()
+        main = self._make_shared()
+        signature = {
+            'name': 'cor_fn',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'replace': False,
+        }
+
+        r_fd, w_fd = os.pipe()
+        try:
+            for id, body in (('id-old', b'return x'), ('id-new', b'return -x')):
+                with tempfile.TemporaryFile() as f:
+                    f.write(body)
+                    f.flush()
+                    _install_v3_definition(
+                        {'id': id, 'signature': signature},
+                        f.fileno(), worker, w_fd,
+                    )
+                msg = json.loads(_read_pipe_message(r_fd))
+                assert msg['action'] == 'register'
+                main.create_function(
+                    msg['id'], msg['signature_json'], msg['code'],
+                    msg['replace'],
+                )
+        finally:
+            os.close(r_fd)
+            os.close(w_fd)
+
+        for shared in (worker, main):
+            assert list(shared._code_blocks) == ['id-new']
+            reg = shared.get_thread_local_registry()
+            input_data = bytes(rowdat_1._dump([ft.LONGLONG], [1], [[5]]))
+            output = call_function(reg, 'cor_fn', input_data, 'BIGINT')
+            _, rows = rowdat_1._load([('r', ft.LONGLONG)], output)
+            assert rows[0][0] == -5
 
     def test_delete_writes_to_pipe(self):
         """@@delete with pipe_write_fd sends message to parent."""
