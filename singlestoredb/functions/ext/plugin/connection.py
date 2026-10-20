@@ -170,11 +170,12 @@ def _handle_connection_inner(
             pipe_write_fd,
         )
     finally:
-        # The body fd is read lazily (only on a definition cache miss), so
-        # both v3 fds stay open until here on every path.
-        for v3_fd in (metadata_fd, body_fd):
-            if v3_fd is not None:
-                _close_quietly(v3_fd)
+        # Every handshake fd is owned here, so the early returns in the
+        # handshake tail can't leak them. The body fd is read lazily (only
+        # on a definition cache miss), so it too stays open until here.
+        for handshake_fd in (input_fd, output_fd, metadata_fd, body_fd):
+            if handshake_fd is not None:
+                _close_quietly(handshake_fd)
 
 
 def _handle_handshake_tail(
@@ -293,7 +294,8 @@ def _install_v3_definition(
     contents of ``body_fd`` (the fourth SCM_RIGHTS fd). The body is read
     lazily, only on a cache miss; the caller owns and closes ``body_fd``.
 
-    Cache hit (id already registered) → no-op. Empty body fd → no-op.
+    Cache hit (id already registered, checked again atomically by
+    ``create_function``) → no-op. Empty body fd → no-op.
     Otherwise call ``SharedRegistry.create_function`` and notify the main
     process so workers can be re-forked. The ``signature`` object and the
     body size limit are checked first, so they hold on a cache hit too.
@@ -354,7 +356,10 @@ def _install_v3_definition(
         'returns': returns,
     })
 
-    shared_registry.create_function(id, signature, body, replace)
+    # None: another handshake installed this id after our cache check.
+    # Main already has it (or will, from that handshake), so don't notify.
+    if shared_registry.create_function(id, signature, body, replace) is None:
+        return
     logger.info(
         f'v3 definition installed: function={function_name!r} id={id!r}',
     )
@@ -381,52 +386,48 @@ def _handle_control_signal(
     pipe_write_fd: int | None = None,
 ) -> None:
     """Handle a @@-prefixed control signal (one-shot request-response)."""
-    try:
-        # Read 8-byte request length
-        len_buf = _recv_exact_py(conn, 8)
-        if len_buf is None:
-            return
-        length = struct.unpack('<Q', len_buf)[0]
+    # Read 8-byte request length
+    len_buf = _recv_exact_py(conn, 8)
+    if len_buf is None:
+        return
+    length = struct.unpack('<Q', len_buf)[0]
 
-        # Read input data from mmap (if any)
-        request_data = b''
-        if length > 0:
-            if _has_accel:
-                request_data = _mmap_read(input_fd, length)
-            else:
-                mem = mmap.mmap(
-                    input_fd, length, mmap.MAP_SHARED, mmap.PROT_READ,
-                )
-                try:
-                    request_data = bytes(mem[:length])
-                finally:
-                    mem.close()
-
-        # Dispatch
-        result = dispatch_control_signal(
-            signal_name, request_data, shared_registry, pipe_write_fd,
-        )
-
-        if result.ok:
-            response_size = _send_control_response(
-                conn, output_fd, result.data.encode('utf8'),
-            )
-            logger.debug(
-                f"Control signal '{signal_name}' succeeded, "
-                f'{response_size} bytes',
-            )
+    # Read input data from mmap (if any)
+    request_data = b''
+    if length > 0:
+        if _has_accel:
+            request_data = _mmap_read(input_fd, length)
         else:
-            # Failures travel exactly like successes: a 200 whose body is
-            # {"error": ..., "code": ...}, as the Rust server answers.
-            logger.warning(
-                f"Control signal '{signal_name}' failed "
-                f'[{result.code}]: {result.data}',
+            mem = mmap.mmap(
+                input_fd, length, mmap.MAP_SHARED, mmap.PROT_READ,
             )
-            error_json = json.dumps({'error': result.data, 'code': result.code})
-            _send_control_response(conn, output_fd, error_json.encode('utf8'))
-    finally:
-        os.close(input_fd)
-        os.close(output_fd)
+            try:
+                request_data = bytes(mem[:length])
+            finally:
+                mem.close()
+
+    # Dispatch
+    result = dispatch_control_signal(
+        signal_name, request_data, shared_registry, pipe_write_fd,
+    )
+
+    if result.ok:
+        response_size = _send_control_response(
+            conn, output_fd, result.data.encode('utf8'),
+        )
+        logger.debug(
+            f"Control signal '{signal_name}' succeeded, "
+            f'{response_size} bytes',
+        )
+    else:
+        # Failures travel exactly like successes: a 200 whose body is
+        # {"error": ..., "code": ...}, as the Rust server answers.
+        logger.warning(
+            f"Control signal '{signal_name}' failed "
+            f'[{result.code}]: {result.data}',
+        )
+        error_json = json.dumps({'error': result.data, 'code': result.code})
+        _send_control_response(conn, output_fd, error_json.encode('utf8'))
 
 
 def _send_control_response(
@@ -623,9 +624,6 @@ def _handle_udf_loop(
                 break
 
     finally:
-        os.close(input_fd)
-        os.close(output_fd)
-
         if profile and n_requests > 0:
             t_total = (
                 t_recv + t_mmap_read + t_call + t_mmap_write + t_send

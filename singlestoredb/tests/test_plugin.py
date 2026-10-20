@@ -509,6 +509,51 @@ class TestSharedRegistrySupersession(unittest.TestCase):
         assert not shared.has_definition('id-B')
 
 
+class TestSharedRegistryIdempotentInstall(unittest.TestCase):
+    """An id is a content key: installing a cached id again is a no-op."""
+
+    def _make_shared(self):
+        from singlestoredb.functions.ext.plugin.server import SharedRegistry
+        shared = SharedRegistry()
+        shared.set_base_registry(FunctionRegistry())
+        return shared
+
+    def test_same_id_twice_is_a_noop(self):
+        shared = self._make_shared()
+        sig = _ovl_sig('f', [('int64', 'BIGINT')])
+        assert shared.create_function('id-A', sig, 'return a0', False)
+        generation = shared.generation
+        assert shared.create_function('id-A', sig, 'return a0', False) is None
+        assert shared.generation == generation
+        assert len(shared.get_thread_local_registry().functions['f']) == 1
+
+    def test_both_handshakes_miss_cache(self):
+        # Two handshakes for one definition can both pass has_definition
+        # before either installs. Neither may fail, and main gets told once.
+        shared = self._make_shared()
+        envelope = _ovl_envelope('id-A', 'f', [('int64', 'BIGINT')], 'BIGINT')
+        from singlestoredb.functions.ext.plugin.server import _read_pipe_message
+        r, w = os.pipe()
+        try:
+            with patch.object(shared, 'has_definition', return_value=False):
+                for _ in range(2):
+                    with tempfile.TemporaryFile() as f:
+                        f.write(b'return a0')
+                        f.flush()
+                        _install_v3_definition(envelope, f.fileno(), shared, w)
+            os.close(w)
+            w = -1
+            msg = _read_pipe_message(r)
+            assert msg is not None
+            assert json.loads(msg)['action'] == 'register'
+            assert _read_pipe_message(r) is None
+        finally:
+            os.close(r)
+            if w >= 0:
+                os.close(w)
+        assert len(shared.get_thread_local_registry().functions['f']) == 1
+
+
 class TestOverloadRegistry(unittest.TestCase):
     """Registry-level behavior when a name carries multiple variants."""
 
@@ -1535,6 +1580,56 @@ class TestHandshakeProtocol(unittest.TestCase):
             )
         finally:
             a.close()
+
+    def _assert_request_fds_released(self, version, extra_fds):
+        """Hand the server two pipe write ends as the request fds, end the
+        handshake early, and check the server closed its copies.
+
+        Each pipe's read end only sees EOF once every write end is closed.
+        The test closes its own copies after sending, so a non-blocking
+        read that raises instead of returning ``b''`` means the server
+        leaked one.
+        """
+        pipes = [os.pipe(), os.pipe()]
+        for r, _ in pipes:
+            os.set_blocking(r, False)
+        a, b = socket.socketpair()
+        try:
+            name = b'fn'
+            b.sendall(struct.pack('<QQ', version, len(name)))
+            fds = array.array('i', [w for _, w in pipes] + extra_fds)
+            b.sendmsg(
+                [name], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, fds)],
+            )
+            for _, w in pipes:
+                os.close(w)
+            b.close()
+            _handle_connection_inner(
+                a, self._make_shared_registry(), threading.Event(),
+            )
+            for r, _ in pipes:
+                assert os.read(r, 1) == b'', 'request fd still open'
+        finally:
+            a.close()
+            b.close()
+            for r, _ in pipes:
+                os.close(r)
+
+    def test_v3_bad_envelope_releases_request_fds(self):
+        meta_fd = _temp_fd()
+        body_fd = _temp_fd()
+        try:
+            os.write(meta_fd, b'{not json')
+            self._assert_request_fds_released(
+                3, [meta_fd, body_fd],
+            )
+        finally:
+            os.close(meta_fd)
+            os.close(body_fd)
+
+    def test_v2_disconnect_before_type_list_releases_request_fds(self):
+        # The peer hangs up instead of sending the 8-byte type-list length.
+        self._assert_request_fds_released(2, [])
 
     def test_v2_and_v3_accepted_as_versions(self):
         assert 1 in SUPPORTED_VERSIONS

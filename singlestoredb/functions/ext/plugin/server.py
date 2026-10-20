@@ -137,12 +137,17 @@ class SharedRegistry:
         signature_json: str,
         code: str,
         replace: bool,
-    ) -> List[str]:
+    ) -> Optional[List[str]]:
         """Register a new function and bump the generation counter.
 
         Thread-safe: acquires the lock, validates via a temporary
         registry, stores the code block keyed by id, and increments
         generation.
+
+        An id is a content key, so an id that is already cached is the
+        same definition: that is a no-op returning None, with no
+        generation bump. Checking under the lock makes this atomic, so
+        two handshakes that both missed ``has_definition`` can't collide.
 
         SingleStoreDB's ``CREATE OR REPLACE`` ships a fresh id without an
         ``@@delete`` for the old one, so any other cached id whose
@@ -151,6 +156,8 @@ class SharedRegistry:
         ``replace`` forced on, and evicted only once validation succeeds.
         """
         with self._lock:
+            if id in self._code_blocks:
+                return None
             incoming_key = _signature_key(signature_json)
             superseded = [
                 other_id
