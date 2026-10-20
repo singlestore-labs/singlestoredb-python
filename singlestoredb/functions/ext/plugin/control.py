@@ -85,7 +85,7 @@ def _handle_delete(
 
     try:
         body = json.loads(request_data)
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
         return ControlResult(
             ok=False, data=f'Invalid JSON: {e}',
             code='DELETE_INVALID_PAYLOAD',

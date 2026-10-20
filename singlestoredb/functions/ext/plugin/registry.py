@@ -142,6 +142,13 @@ _dtype_to_python: Dict[str, str] = {
 
 logger = logging.getLogger('udf_handler')
 
+_DYNAMIC_MODULE_NAME = 'singlestoredb.functions.ext.plugin._dynamic'
+
+
+def _dynamic_factory_name(func_name: str) -> str:
+    """Name of the factory that defines a dynamic function's variant."""
+    return f'__s2_make_{func_name}'
+
 
 def _restore_declared_sql_types(
     compiled_sig: Dict[str, Any],
@@ -186,6 +193,15 @@ class FunctionRegistry:
         # Maps server-supplied id -> (name, signature_key) for the variant
         # this id registered. Consulted by delete_function.
         self._id_to_variant: Dict[str, Tuple[str, str]] = {}
+        # Globals shared by every dynamic function in this registry, so a
+        # body can call another dynamic function by name. Each name is bound
+        # to its most recently registered variant. Owned by the registry
+        # rather than a module, so each SharedRegistry replay starts clean.
+        self._dynamic_globals: Dict[str, Any] = {
+            '__name__': _DYNAMIC_MODULE_NAME,
+            '__file__': f'<{_DYNAMIC_MODULE_NAME}>',
+            '__builtins__': builtins,
+        }
 
     def initialize(self, plugin_module: Any = None) -> None:
         """Initialize and discover UDF functions from loaded modules.
@@ -370,7 +386,15 @@ class FunctionRegistry:
         sig: Dict[str, Any],
         body: str,
     ) -> str:
-        """Build a complete @udf-decorated Python function from sig + body."""
+        """Build a complete @udf-decorated Python function from sig + body.
+
+        The function is defined inside a factory, ``_dynamic_factory_name``,
+        that returns it. Overloads share a bare name, so if the body looked
+        its own name up in the shared globals, a recursive ``f(n)`` would
+        call whichever variant of ``f`` was registered last. Defined inside
+        the factory, the name is a closure variable bound to this variant;
+        every other name still resolves through the globals at call time.
+        """
         func_name = sig['name']
         args = sig.get('args', [])
         returns = sig.get('returns', [])
@@ -395,7 +419,7 @@ class FunctionRegistry:
             ret_ann = f'Tuple[{", ".join(parts)}]'
 
         indented_body = '\n'.join(
-            f'    {line}' for line in body.splitlines()
+            f'        {line}' for line in body.splitlines()
         )
 
         return (
@@ -405,9 +429,11 @@ class FunctionRegistry:
             'from singlestoredb.functions import udf\n'
             'from typing import Optional, Tuple\n'
             '\n'
-            '@udf\n'
-            f'def {func_name}({params_str}) -> {ret_ann}:\n'
+            f'def {_dynamic_factory_name(func_name)}():\n'
+            '    @udf\n'
+            f'    def {func_name}({params_str}) -> {ret_ann}:\n'
             f'{indented_body}\n'
+            f'    return {func_name}\n'
         )
 
     def create_function(
@@ -489,24 +515,17 @@ class FunctionRegistry:
             ):
                 if prior_name == func_name and prior_key == incoming_key:
                     del self._id_to_variant[prior_id]
+            self._rebind_dynamic_name(func_name)
 
         full_code = self._build_python_code(sig, code)
 
-        name = 'singlestoredb.functions.ext.plugin._dynamic'
-        compiled = compile(full_code, f'<{name}>', 'exec')
+        compiled = compile(full_code, f'<{_DYNAMIC_MODULE_NAME}>', 'exec')
 
-        # Each variant gets its own globals. Overloads share a bare name, so
-        # in a shared namespace a later variant would rebind the name that an
-        # earlier one's body calls — a recursive f(n) would end up calling
-        # f(n, m). A private namespace keeps the name bound to this variant.
-        namespace: Dict[str, Any] = {
-            '__name__': name,
-            '__file__': f'<{name}>',
-            '__builtins__': builtins,
-        }
+        namespace = self._dynamic_globals
+        factory_name = _dynamic_factory_name(func_name)
         exec(compiled, namespace)  # noqa: S102
-
-        compiled_func = namespace.get(func_name)
+        factory = namespace.pop(factory_name, None)
+        compiled_func = factory() if callable(factory) else None
         if not callable(compiled_func):
             raise ValueError(
                 f'Function "{func_name}" was not registered. '
@@ -533,6 +552,7 @@ class FunctionRegistry:
 
         self._register_function(compiled_func, func_name, variant_sig)
         self._id_to_variant[id] = (func_name, incoming_key)
+        self._dynamic_globals[func_name] = compiled_func
 
         logger.info(
             f'create_function({func_name}({incoming_key}), id={id}): '
@@ -566,7 +586,20 @@ class FunctionRegistry:
             self.functions[name] = variants
         else:
             self.functions.pop(name, None)
+        self._rebind_dynamic_name(name)
         logger.info(f'delete_function: removed {name}({sig_key}) (id={id})')
+
+    def _rebind_dynamic_name(self, name: str) -> None:
+        """Point ``name`` in the dynamic globals at its last variant.
+
+        Called after a variant is removed, so other dynamic functions stop
+        calling it. With no variants left, the name is unbound.
+        """
+        variants = self.functions.get(name)
+        if variants:
+            self._dynamic_globals[name] = variants[-1]['func']
+        else:
+            self._dynamic_globals.pop(name, None)
 
     def _register_function(
         self,

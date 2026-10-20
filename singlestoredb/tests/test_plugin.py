@@ -169,6 +169,16 @@ class TestControlSignalDispatch(unittest.TestCase):
         assert 'Invalid JSON' in result.data
         assert result.code == 'DELETE_INVALID_PAYLOAD'
 
+    def test_delete_non_utf8_payload(self):
+        # json.loads raises UnicodeDecodeError, not JSONDecodeError, on
+        # bytes that are not valid UTF-8.
+        shared = self._make_shared_registry()
+        result = dispatch_control_signal('@@delete', b'\xff', shared)
+        assert result.ok is False
+        assert 'Invalid JSON' in result.data
+        assert result.code == 'DELETE_INVALID_PAYLOAD'
+        shared.delete_function.assert_not_called()
+
     def test_delete_missing_id(self):
         shared = self._make_shared_registry()
         payload = json.dumps({}).encode()
@@ -850,6 +860,107 @@ class TestRecursiveOverloads(unittest.TestCase):
         assert reg.lookup_variant('f', 'INT')['func'](5) == 120
         assert reg.lookup_variant('f', 'INT;INT')['func'](2, 3) == 5
         assert reg.lookup_variant('f', 'TEXT')['func']('abcd') == 4
+
+
+class TestCrossFunctionCalls(unittest.TestCase):
+    """A dynamic function's body can call another dynamic function by name,
+    resolved when called, while its own name stays bound to itself."""
+
+    def _install_g(self, target, id='id-g'):
+        target.create_function(
+            id, _ovl_sig('g', [('int32', 'INT')]), 'return a0 * 10', False,
+        )
+
+    def _install_f(self, target):
+        target.create_function(
+            'id-f', _ovl_sig('f', [('int32', 'INT')]), 'return g(a0) + 1',
+            False,
+        )
+
+    def _shared(self):
+        from singlestoredb.functions.ext.plugin.server import SharedRegistry
+        shared = SharedRegistry()
+        shared.set_base_registry(FunctionRegistry())
+        return shared
+
+    def test_callee_installed_first(self):
+        reg = FunctionRegistry()
+        self._install_g(reg)
+        self._install_f(reg)
+        assert reg.lookup_variant('f', 'INT')['func'](4) == 41
+
+    def test_callee_installed_after_caller(self):
+        reg = FunctionRegistry()
+        self._install_f(reg)
+        self._install_g(reg)
+        assert reg.lookup_variant('f', 'INT')['func'](4) == 41
+
+    def test_cross_call_survives_shared_registry_replay(self):
+        for order in (
+            (self._install_g, self._install_f),
+            (self._install_f, self._install_g),
+        ):
+            shared = self._shared()
+            for install in order:
+                install(shared)
+            reg = shared.get_thread_local_registry()
+            assert reg.lookup_variant('f', 'INT')['func'](4) == 41
+
+    def test_recursion_stays_private_alongside_cross_call(self):
+        reg = FunctionRegistry()
+        self._install_g(reg)
+        reg.create_function(
+            'id-f1', _ovl_sig('f', [('int32', 'INT')]),
+            'return g(a0) if a0 <= 1 else f(a0 - 1)', False,
+        )
+        # A later overload of f must not capture the first variant's
+        # recursive call.
+        reg.create_function(
+            'id-f2', _ovl_sig('f', [('int32', 'INT'), ('int32', 'INT')]),
+            'return -1', False,
+        )
+        assert reg.lookup_variant('f', 'INT')['func'](3) == 10
+
+    def test_deleted_callee_is_unbound(self):
+        reg = FunctionRegistry()
+        self._install_g(reg)
+        self._install_f(reg)
+        reg.delete_function('id-g')
+        with self.assertRaises(NameError):
+            reg.lookup_variant('f', 'INT')['func'](4)
+
+    def test_deleting_one_overload_rebinds_to_the_rest(self):
+        reg = FunctionRegistry()
+        self._install_g(reg)
+        reg.create_function(
+            'id-g2', _ovl_sig('g', [('str', 'TEXT')]), 'return len(a0)',
+            False,
+        )
+        self._install_f(reg)
+        # The most recently registered variant (TEXT) is the bound one;
+        # deleting it falls back to the INT variant.
+        reg.delete_function('id-g2')
+        assert reg.lookup_variant('f', 'INT')['func'](4) == 41
+
+    def test_replace_rebinds_callee(self):
+        reg = FunctionRegistry()
+        self._install_g(reg)
+        self._install_f(reg)
+        reg.create_function(
+            'id-g-new', _ovl_sig('g', [('int32', 'INT')]), 'return a0 * 100',
+            True,
+        )
+        assert reg.lookup_variant('f', 'INT')['func'](4) == 401
+
+    def test_registries_do_not_share_bindings(self):
+        with_g = FunctionRegistry()
+        self._install_g(with_g)
+        self._install_f(with_g)
+        without_g = FunctionRegistry()
+        self._install_f(without_g)
+        assert with_g.lookup_variant('f', 'INT')['func'](4) == 41
+        with self.assertRaises(NameError):
+            without_g.lookup_variant('f', 'INT')['func'](4)
 
 
 class TestWasmAdapterParamTypes(unittest.TestCase):
@@ -1675,6 +1786,21 @@ class TestHandshakeProtocol(unittest.TestCase):
         body_fd = _temp_fd()
         try:
             os.write(meta_fd, b'{not json')
+            self._assert_request_fds_released(
+                3, [meta_fd, body_fd],
+            )
+        finally:
+            os.close(meta_fd)
+            os.close(body_fd)
+
+    def test_v3_non_utf8_envelope_releases_request_fds(self):
+        # Not valid UTF-8, so json.loads raises UnicodeDecodeError. The
+        # handshake is dropped like any other bad envelope, not raised.
+        # (No leading BOM bytes: json.loads would sniff those as UTF-16.)
+        meta_fd = _temp_fd()
+        body_fd = _temp_fd()
+        try:
+            os.write(meta_fd, b'{"name": "\xff"}')
             self._assert_request_fds_released(
                 3, [meta_fd, body_fd],
             )

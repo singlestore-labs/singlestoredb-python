@@ -221,7 +221,7 @@ def _handle_handshake_tail(
             return
         try:
             envelope = json.loads(env_bytes) if env_bytes else {}
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.warning(f'Invalid v3 envelope JSON: {e}')
             return
         if not isinstance(envelope, dict):

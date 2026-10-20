@@ -399,6 +399,7 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         for payload, code in (
             (b'', 'DELETE_MISSING_PAYLOAD'),
             (b'{', 'DELETE_INVALID_PAYLOAD'),
+            (b'\xff', 'DELETE_INVALID_PAYLOAD'),
             (b'{"id": 5}', 'DELETE_INVALID_PAYLOAD'),
             (b'{"name": "keep_fn"}', 'DELETE_INVALID_PAYLOAD'),
             (b'[]', 'DELETE_INVALID_PAYLOAD'),
@@ -868,6 +869,97 @@ class TestProcessPoolRetire(unittest.TestCase):
         # main closed its read end
         with self.assertRaises(OSError):
             os.fstat(r_fd)
+
+    @staticmethod
+    def _dead_proc():
+        proc = unittest.mock.MagicMock(pid=-1)
+        proc.is_alive.return_value = False
+        return proc
+
+    def _register_frame(self, envelope, body):
+        header = json.dumps({
+            'action': 'register',
+            'id': envelope['id'],
+            'signature_json': json.dumps(envelope['signature']),
+            'replace': False,
+        }).encode()
+        return header, body
+
+    def _drain(self, pool, retiring):
+        """Poll until ``retiring``'s pipe is closed; return change count."""
+        changes = 0
+        for _ in range(10):
+            if retiring.pipe_r is None:
+                return changes
+            changes += pool._poll_once()
+        self.fail('pipe was never drained to EOF')
+
+    def test_dead_retiring_worker_pipe_drained_before_reap(self):
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, 1)
+        r_fd, w_fd = os.pipe()
+        _write_pipe_message(
+            w_fd, *self._register_frame(self._ADD1_ENVELOPE, b'return x + 1'),
+        )
+        _write_pipe_message(
+            w_fd, json.dumps({'action': 'delete', 'id': 'id-triple'}).encode(),
+        )
+        os.close(w_fd)
+        pool._retire(0, self._dead_proc(), r_fd)
+        retiring = pool.retiring[-1]
+
+        # Exited, but two frames are still queued: not reaped yet.
+        pool._reap_retiring()
+        assert pool.retiring.get(-1) is retiring
+        assert retiring.pipe_r == r_fd
+
+        assert self._drain(pool, retiring) == 2
+        reg = self.server.shared_registry.get_thread_local_registry()
+        assert 'add1' in reg.functions
+        assert 'triple' not in reg.functions
+
+        pool._reap_retiring()
+        assert -1 not in pool.retiring
+
+    def test_dead_pipe_closed_after_deadline(self):
+        import singlestoredb.functions.ext.plugin.server as _server_mod
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, 1)
+        r_fd, w_fd = os.pipe()
+        # A stray write end keeps EOF from ever arriving.
+        self.addCleanup(os.close, w_fd)
+        pool._retire(0, self._dead_proc(), r_fd)
+        with unittest.mock.patch.object(_server_mod, '_EXITED_PIPE_GRACE', 0):
+            pool._reap_retiring()
+        assert -1 not in pool.retiring
+        with self.assertRaises(OSError):
+            os.fstat(r_fd)
+
+    def test_crashed_active_worker_pipe_drained(self):
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, 1)
+        r_fd, w_fd = os.pipe()
+        _write_pipe_message(
+            w_fd, *self._register_frame(self._ADD1_ENVELOPE, b'return x + 1'),
+        )
+        os.close(w_fd)
+        proc = self._dead_proc()
+        pool.workers[0] = (proc, r_fd)
+        # The replacement's pipe stays empty and open, so it never fires.
+        rep_r, rep_w = os.pipe()
+        self.addCleanup(os.close, rep_r)
+        self.addCleanup(os.close, rep_w)
+        replacement = (unittest.mock.MagicMock(), rep_r)
+        with unittest.mock.patch.object(
+            pool, '_spawn', return_value=replacement,
+        ) as spawn:
+            pool._respawn_dead()
+        spawn.assert_called_once_with(0)
+        assert pool.workers[0] is replacement
+        retiring = pool.retiring[-1]
+        assert retiring.proc is proc
+        assert retiring.pipe_r == r_fd
+
+        assert self._drain(pool, retiring) == 1
+        reg = self.server.shared_registry.get_thread_local_registry()
+        assert 'add1' in reg.functions
 
 
 # ---------------------------------------------------------------------------

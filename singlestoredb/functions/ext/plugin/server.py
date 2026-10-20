@@ -49,6 +49,10 @@ _PIPE_PREFIX = struct.Struct('<IQ')
 # How long a retired worker may spend finishing its connection before it
 # is terminated.
 _DRAIN_TIMEOUT = 60.0
+# How long main keeps reading an exited worker's pipe for frames it wrote
+# before exiting. EOF normally arrives at once; this only bounds a pipe
+# whose write end a stray process still holds.
+_EXITED_PIPE_GRACE = 5.0
 
 
 class PipeFrameError(Exception):
@@ -70,6 +74,7 @@ class _RetiringWorker:
         self.pipe_r = pipe_r
         self.deadline = deadline
         self.terminated = False
+        self.exited = False
 
     def close_pipe(self) -> None:
         if self.pipe_r is not None:
@@ -506,12 +511,27 @@ class _ProcessPool:
         return False
 
     def _reap_retiring(self) -> None:
-        """Collect drained workers; escalate on ones past their deadline."""
+        """Collect drained workers; escalate on ones past their deadline.
+
+        An exited worker stays listed until ``_poll_once`` has read its
+        pipe through EOF: it may have written a registration or deletion
+        just before exiting, and ``_poll_once`` reads one frame per pass.
+        """
         now = time.monotonic()
         for pid, r in list(self.retiring.items()):
             if not r.proc.is_alive():
-                r.proc.join(timeout=0)
-                r.close_pipe()
+                if not r.exited:
+                    r.proc.join(timeout=0)
+                    r.exited = True
+                    r.deadline = now + _EXITED_PIPE_GRACE
+                if r.pipe_r is not None:
+                    if now < r.deadline:
+                        continue
+                    logger.warning(
+                        f'Retired worker {r.wid} (pid={pid}) pipe still '
+                        f'open {_EXITED_PIPE_GRACE}s after exit, closing',
+                    )
+                    r.close_pipe()
                 del self.retiring[pid]
                 logger.info(
                     f'Retired worker {r.wid} (pid={pid}) exited '
@@ -539,7 +559,11 @@ class _ProcessPool:
                 r.deadline = now + 5.0
 
     def _respawn_dead(self) -> None:
-        """Respawn active workers that crashed; retiring ones are reaped."""
+        """Respawn active workers that crashed; retiring ones are reaped.
+
+        A crashed worker is moved to the retiring set rather than having
+        its pipe closed, so frames it wrote before crashing are still read.
+        """
         for wid, (proc, pipe_r) in list(self.workers.items()):
             if proc.is_alive() or self.server.shutdown_event.is_set():
                 continue
@@ -547,7 +571,8 @@ class _ProcessPool:
                 f'Worker {wid} (pid={proc.pid}) exited with code '
                 f'{proc.exitcode}, restarting...',
             )
-            _close_quietly(pipe_r)
+            del self.workers[wid]
+            self._retire(wid, proc, pipe_r)
             self.workers[wid] = self._spawn(wid)
 
     def _kill_all(self) -> None:
