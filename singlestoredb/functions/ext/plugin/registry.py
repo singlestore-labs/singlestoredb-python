@@ -10,6 +10,7 @@ import builtins
 import datetime as _datetime
 import decimal as _decimal
 import inspect
+import itertools
 import json
 import logging
 import os
@@ -17,6 +18,7 @@ import sys
 import traceback
 import types
 import typing
+import weakref
 from datetime import datetime
 from datetime import timezone
 from typing import Any
@@ -158,6 +160,9 @@ logger = logging.getLogger('udf_handler')
 
 _DYNAMIC_MODULE_NAME = 'singlestoredb.functions.ext.plugin._dynamic'
 
+# Suffixes that give each registry's dynamic module a unique name.
+_dynamic_module_ids = itertools.count()
+
 
 def _dynamic_factory_name(func_name: str) -> str:
     """Name of the factory that defines a dynamic function's variant."""
@@ -214,14 +219,21 @@ class FunctionRegistry:
         self._id_to_variant: Dict[str, Tuple[str, str]] = {}
         # Globals shared by every dynamic function in this registry, so a
         # body can call another dynamic function by name. Each name is bound
-        # to its most recently registered variant. Owned by the registry
-        # rather than a module, so each SharedRegistry replay starts clean.
-        self._dynamic_globals: Dict[str, Any] = {
-            '__name__': _DYNAMIC_MODULE_NAME,
+        # to its most recently registered variant. They are the namespace of
+        # a module of the registry's own, so each SharedRegistry replay
+        # starts clean. The module is in sys.modules, because code such as
+        # dataclasses looks a class's __module__ up there, and leaves it
+        # when the registry is collected.
+        module_name = f'{_DYNAMIC_MODULE_NAME}_{next(_dynamic_module_ids)}'
+        module = types.ModuleType(module_name)
+        module.__dict__.update({
             '__file__': f'<{_DYNAMIC_MODULE_NAME}>',
             '__builtins__': builtins,
             **_DYNAMIC_PRELUDE,
-        }
+        })
+        sys.modules[module_name] = module
+        weakref.finalize(self, sys.modules.pop, module_name, None)
+        self._dynamic_globals: Dict[str, Any] = module.__dict__
 
     def initialize(self, plugin_module: Any = None) -> None:
         """Initialize and discover UDF functions from loaded modules.
@@ -547,8 +559,12 @@ class FunctionRegistry:
 
         namespace = self._dynamic_globals
         factory_name = _dynamic_factory_name(func_name)
-        exec(compiled, namespace)  # noqa: S102
-        factory = namespace.pop(factory_name, None)
+        # The factory lands in its own locals, not the shared globals, where
+        # it would overwrite a dynamic function of the same name. The
+        # functions it defines still take namespace as their globals.
+        factory_locals: Dict[str, Any] = {}
+        exec(compiled, namespace, factory_locals)  # noqa: S102
+        factory = factory_locals.get(factory_name)
         annotations = self._build_annotations(sig)
 
         def bind(func: Callable[..., Any]) -> Callable[..., Any]:

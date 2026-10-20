@@ -47,6 +47,9 @@ _STATUS_OK_PREFIX = struct.pack('<Q', STATUS_OK)
 # Maximum function name length to prevent resource exhaustion
 _MAX_FUNCTION_NAME_LEN = 4096
 
+# Maximum v2 parameter type list length, checked before the read allocates
+_MAX_V2_PARAM_TYPES_BYTES = 1024 * 1024
+
 # Upper bounds on the out-of-band v3 handshake fds. The envelope is just a
 # signature plus a few scalar attributes; the body is bounded by the
 # engine's blob store. Both reject a runaway fd.
@@ -201,6 +204,9 @@ def _handle_handshake_tail(
         if len_buf is None:
             return
         in_types_len = struct.unpack('<Q', len_buf)[0]
+        if in_types_len > _MAX_V2_PARAM_TYPES_BYTES:
+            logger.warning(f'Parameter type list too long: {in_types_len}')
+            return
         types_bytes = _recv_exact_py(conn, in_types_len) if in_types_len else b''
         if types_bytes is None:
             return
@@ -252,10 +258,13 @@ def _handle_handshake_tail(
     # v3: install the function definition shipped in the handshake
     # (envelope ``signature`` + body fd) before entering the request loop.
     # Cache hit ⇒ no work; miss ⇒ compile and remember it for future
-    # replays. Without a ``signature`` the body fd is closed unread.
+    # replays. An envelope naming neither an ``id`` nor a ``signature``
+    # (a call carrying only ``param_types``) installs nothing, and its body
+    # fd is closed unread; one with either goes through the installer, which
+    # rejects it if the other is missing.
     install_error: Optional[str] = None
     if envelope is not None and body_fd is not None:
-        if 'signature' in envelope:
+        if 'id' in envelope or 'signature' in envelope:
             try:
                 _install_v3_definition(
                     envelope, body_fd, shared_registry, pipe_write_fd,

@@ -1036,6 +1036,60 @@ class TestCrossFunctionCalls(unittest.TestCase):
         with self.assertRaises(NameError):
             without_g.lookup_variant('f', 'INT')['func'](4)
 
+    def test_function_named_like_a_factory_survives_install(self):
+        # f's factory is __s2_make_f; installing f must not unbind a
+        # dynamic function that already has that name.
+        reg = FunctionRegistry()
+        reg.create_function(
+            'id-m', _ovl_sig('__s2_make_f', [('int32', 'INT')]),
+            'return a0 * 10', False,
+        )
+        reg.create_function(
+            'id-f', _ovl_sig('f', [('int32', 'INT')]), 'return a0 + 1',
+            False,
+        )
+        reg.create_function(
+            'id-h', _ovl_sig('h', [('int32', 'INT')]),
+            'return __s2_make_f(a0)', False,
+        )
+        assert reg.lookup_variant('h', 'INT')['func'](4) == 40
+        assert reg.lookup_variant('f', 'INT')['func'](4) == 5
+
+
+class TestDynamicModule(unittest.TestCase):
+    """Each registry's dynamic functions live in a real module, so code that
+    resolves ``cls.__module__`` through ``sys.modules`` works."""
+
+    def test_dataclass_with_string_annotation(self):
+        reg = FunctionRegistry()
+        reg.create_function(
+            'id-p', _ovl_sig('p', [('int32', 'INT')]),
+            'import dataclasses\n'
+            '@dataclasses.dataclass\n'
+            'class P:\n'
+            "    v: 'int'\n"
+            'return P(a0).v + 1',
+            False,
+        )
+        assert reg.lookup_variant('p', 'INT')['func'](4) == 5
+
+    def test_module_is_removed_with_its_registry(self):
+        import gc
+        import sys
+        reg = FunctionRegistry()
+        name = reg._dynamic_globals['__name__']
+        assert sys.modules[name].__dict__ is reg._dynamic_globals
+        del reg
+        gc.collect()
+        assert name not in sys.modules
+
+    def test_registries_get_distinct_modules(self):
+        one = FunctionRegistry()
+        two = FunctionRegistry()
+        assert one._dynamic_globals['__name__'] != \
+            two._dynamic_globals['__name__']
+        assert one._dynamic_globals is not two._dynamic_globals
+
 
 class TestWasmAdapterParamTypes(unittest.TestCase):
     """The WIT adapter must keep ``option<string>`` faithful.
@@ -1649,6 +1703,17 @@ class TestOverloadServerProtocol(unittest.TestCase):
                     _install_v3_definition(envelope, f.fileno(), shared, None)
             assert "required object field 'signature'" in str(ctx.exception)
 
+    def test_v3_envelope_with_id_but_no_signature_is_rejected(self):
+        # Without a signature the handshake must still go through the
+        # installer, which rejects it, rather than skip it.
+        shared = self._install_cached()
+        with _ServerConn(shared) as conn:
+            conn.handshake('srv_cached', {'id': 'id-cached'})
+            status, data = conn.call(self._bigints(4))
+        assert status == STATUS_ERROR
+        assert b'failed to install function definition' in data
+        assert b"required object field 'signature'" in data
+
     def test_v3_cache_hit_still_enforces_body_limit(self):
         shared = self._install_cached()
         envelope = _ovl_envelope(
@@ -1809,6 +1874,45 @@ class TestHandshakeProtocol(unittest.TestCase):
                 pass
         finally:
             a.close()
+
+    def test_v2_param_types_len_too_large(self):
+        import singlestoredb.functions.ext.plugin.connection as conn_mod
+        requested = []
+        real_recv_exact = conn_mod._recv_exact_py
+
+        def spy(sock, n):
+            requested.append(n)
+            # Don't let a regression allocate the oversized buffer.
+            if n > conn_mod._MAX_V2_PARAM_TYPES_BYTES:
+                return None
+            return real_recv_exact(sock, n)
+
+        a, b = socket.socketpair()
+        input_fd = _temp_fd()
+        output_fd = _temp_fd()
+        try:
+            name = b'f'
+            b.sendall(struct.pack('<QQ', 2, len(name)))
+            b.sendmsg(
+                [name],
+                [(
+                    socket.SOL_SOCKET, socket.SCM_RIGHTS,
+                    array.array('i', [input_fd, output_fd]),
+                )],
+            )
+            b.sendall(
+                struct.pack('<Q', conn_mod._MAX_V2_PARAM_TYPES_BYTES + 1),
+            )
+            b.close()
+            with patch.object(conn_mod, '_recv_exact_py', spy):
+                _handle_connection_inner(
+                    a, self._make_shared_registry(), threading.Event(),
+                )
+        finally:
+            a.close()
+            os.close(input_fd)
+            os.close(output_fd)
+        assert max(requested) <= conn_mod._MAX_V2_PARAM_TYPES_BYTES
 
     def test_short_header(self):
         a, b = socket.socketpair()
