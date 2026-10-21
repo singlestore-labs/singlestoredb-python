@@ -51,12 +51,101 @@ _PIPE_PREFIX = struct.Struct('<IQ')
 _DRAIN_TIMEOUT = 60.0
 # How long main keeps reading an exited worker's pipe for frames it wrote
 # before exiting. EOF normally arrives at once; this only bounds a pipe
-# whose write end a stray process still holds.
+# whose write end a stray process still holds, including one left holding
+# a partial frame that will never be finished.
 _EXITED_PIPE_GRACE = 5.0
+# Most bytes _PipeReader.read takes from a pipe per call, so one busy
+# worker can't hold the pool monitor.
+_PIPE_READ_CHUNK = 1 << 20
 
 
 class PipeFrameError(Exception):
-    """A pipe frame that can't be read. The stream can't be resynced."""
+    """A pipe frame that can't be read. The stream can't be resynced.
+
+    ``frames`` holds complete frames that preceded the bad one in the
+    same read; they are still valid.
+    """
+
+    def __init__(self, msg: str) -> None:
+        super().__init__(msg)
+        self.frames: List[Tuple[bytes, bytes]] = []
+
+
+def _check_frame_lengths(header_len: int, blob_len: int) -> None:
+    """Raise PipeFrameError if a frame prefix's lengths exceed their caps."""
+    if header_len > _MAX_PIPE_HEADER or blob_len > _MAX_PIPE_BLOB:
+        raise PipeFrameError(
+            f'pipe frame too large: header {header_len} bytes '
+            f'(max {_MAX_PIPE_HEADER}), blob {blob_len} bytes '
+            f'(max {_MAX_PIPE_BLOB})',
+        )
+
+
+class _PipeReader:
+    """Non-blocking frame reader for one worker pipe's read end.
+
+    POLLIN only means some bytes are readable, not a whole frame, so the
+    pool monitor can't do a blocking frame read: a worker that stalls
+    mid-frame, or exits mid-frame while another process holds the write
+    end, would hang it. This reads what is available, buffers a partial
+    frame, and returns only complete ones.
+
+    Only main reads these fds -- each worker closes its inherited copies
+    -- so making the shared file description non-blocking is safe.
+    """
+
+    def __init__(self, fd: int) -> None:
+        os.set_blocking(fd, False)
+        self.fd = fd
+        self._buf = bytearray()
+
+    @property
+    def pending(self) -> int:
+        """Bytes buffered for a frame that hasn't fully arrived."""
+        return len(self._buf)
+
+    def read(self) -> Tuple[List[Tuple[bytes, bytes]], bool]:
+        """Do one read; return ``(complete frames, eof)``.
+
+        Raises PipeFrameError as soon as a prefix's lengths exceed their
+        caps, so the buffer stays bounded by one maximal frame plus one
+        read. Frames completed ahead of it ride along on the exception.
+        """
+        eof = False
+        try:
+            chunk = os.read(self.fd, _PIPE_READ_CHUNK)
+        except (BlockingIOError, InterruptedError):
+            chunk = None
+        except OSError:
+            chunk = b''
+        if chunk is not None:
+            if chunk:
+                self._buf += chunk
+            else:
+                eof = True
+
+        frames: List[Tuple[bytes, bytes]] = []
+        prefix_size = _PIPE_PREFIX.size
+        while len(self._buf) >= prefix_size:
+            header_len, blob_len = _PIPE_PREFIX.unpack_from(self._buf)
+            try:
+                _check_frame_lengths(header_len, blob_len)
+            except PipeFrameError as exc:
+                exc.frames = frames
+                raise
+            end = prefix_size + header_len + blob_len
+            if len(self._buf) < end:
+                break
+            header_end = prefix_size + header_len
+            frames.append((
+                bytes(self._buf[prefix_size:header_end]),
+                bytes(self._buf[header_end:end]),
+            ))
+            del self._buf[:end]
+        return frames, eof
+
+    def close(self) -> None:
+        _close_quietly(self.fd)
 
 
 class _RetiringWorker:
@@ -66,20 +155,20 @@ class _RetiringWorker:
         self,
         wid: int,
         proc: multiprocessing.process.BaseProcess,
-        pipe_r: Optional[int],
+        pipe: Optional[_PipeReader],
         deadline: float,
     ) -> None:
         self.wid = wid
         self.proc = proc
-        self.pipe_r = pipe_r
+        self.pipe = pipe
         self.deadline = deadline
         self.terminated = False
         self.exited = False
 
     def close_pipe(self) -> None:
-        if self.pipe_r is not None:
-            _close_quietly(self.pipe_r)
-            self.pipe_r = None
+        if self.pipe is not None:
+            self.pipe.close()
+            self.pipe = None
 
 
 def _read_exact_fd(fd: int, n: int) -> Optional[bytes]:
@@ -96,23 +185,21 @@ def _read_exact_fd(fd: int, n: int) -> Optional[bytes]:
 
 
 def _read_pipe_message(fd: int) -> Optional[Tuple[bytes, bytes]]:
-    """Read one ``(header, blob)`` frame from a pipe fd.
+    """Read one ``(header, blob)`` frame from a pipe fd, blocking.
 
     Wire format: [u32 LE header_len][u64 LE blob_len][header][blob].
     Returns None on EOF or short read. Raises PipeFrameError if a length
     exceeds its cap: the payload is left unread, so the pipe is unusable.
+
+    This blocks until the whole frame arrives, so the pool monitor uses
+    ``_PipeReader`` instead.
     """
     try:
         prefix = _read_exact_fd(fd, _PIPE_PREFIX.size)
         if prefix is None:
             return None
         header_len, blob_len = _PIPE_PREFIX.unpack(prefix)
-        if header_len > _MAX_PIPE_HEADER or blob_len > _MAX_PIPE_BLOB:
-            raise PipeFrameError(
-                f'pipe frame too large: header {header_len} bytes '
-                f'(max {_MAX_PIPE_HEADER}), blob {blob_len} bytes '
-                f'(max {_MAX_PIPE_BLOB})',
-            )
+        _check_frame_lengths(header_len, blob_len)
         header = _read_exact_fd(fd, header_len)
         if header is None:
             return None
@@ -338,10 +425,10 @@ class _ProcessPool:
         self.ctx = ctx
         self.server_sock = server_sock
         self.n_workers = n_workers
-        # workers[wid] = (process, pipe_read_fd)
+        # workers[wid] = (process, pipe reader)
         self.workers: Dict[
             int,
-            Tuple[multiprocessing.process.BaseProcess, int],
+            Tuple[multiprocessing.process.BaseProcess, _PipeReader],
         ] = {}
         # retiring[pid]; a retiring worker's pipe is None once closed
         self.retiring: Dict[int, _RetiringWorker] = {}
@@ -363,14 +450,14 @@ class _ProcessPool:
             self._kill_all()
 
     def _open_pipe_fds(self) -> List[int]:
-        fds = [pipe_r for _, pipe_r in self.workers.values()]
+        fds = [pipe.fd for _, pipe in self.workers.values()]
         fds.extend(
-            r.pipe_r for r in self.retiring.values() if r.pipe_r is not None
+            r.pipe.fd for r in self.retiring.values() if r.pipe is not None
         )
         return fds
 
     def _spawn(self, worker_id: int) -> Tuple[
-        multiprocessing.process.BaseProcess, int,
+        multiprocessing.process.BaseProcess, _PipeReader,
     ]:
         pipe_r, pipe_w = os.pipe()
         p = self.ctx.Process(
@@ -387,13 +474,13 @@ class _ProcessPool:
         logger.info(
             f'Started worker {worker_id} (pid={p.pid})',
         )
-        return p, pipe_r
+        return p, _PipeReader(pipe_r)
 
     def _retire(
         self,
         wid: int,
         proc: multiprocessing.process.BaseProcess,
-        pipe_r: Optional[int],
+        pipe: Optional[_PipeReader],
     ) -> None:
         """Stop a worker accepting and leave it to drain."""
         assert proc.pid is not None
@@ -406,7 +493,7 @@ class _ProcessPool:
             except ProcessLookupError:
                 pass
         self.retiring[proc.pid] = _RetiringWorker(
-            wid, proc, pipe_r, time.monotonic() + _DRAIN_TIMEOUT,
+            wid, proc, pipe, time.monotonic() + _DRAIN_TIMEOUT,
         )
         logger.info(f'Retiring worker {wid} (pid={proc.pid})')
 
@@ -414,8 +501,8 @@ class _ProcessPool:
         """Retire every worker and fork replacements from main's state."""
         old = list(self.workers.items())
         self.workers.clear()
-        for wid, (proc, pipe_r) in old:
-            self._retire(wid, proc, pipe_r)
+        for wid, (proc, pipe) in old:
+            self._retire(wid, proc, pipe)
         for i in range(self.n_workers):
             self.workers[i] = self._spawn(i)
 
@@ -424,13 +511,17 @@ class _ProcessPool:
         poller = select.poll()
         # fd -> ('active', wid) or ('retiring', pid)
         fd_owner: Dict[int, Tuple[str, int]] = {}
-        for wid, (_, pipe_r) in self.workers.items():
-            poller.register(pipe_r, select.POLLIN | select.POLLHUP)
-            fd_owner[pipe_r] = ('active', wid)
+        # fd -> its reader, looked up before any pipe is closed this pass
+        readers: Dict[int, _PipeReader] = {}
+        for wid, (_, pipe) in self.workers.items():
+            poller.register(pipe.fd, select.POLLIN | select.POLLHUP)
+            fd_owner[pipe.fd] = ('active', wid)
+            readers[pipe.fd] = pipe
         for pid, r in self.retiring.items():
-            if r.pipe_r is not None:
-                poller.register(r.pipe_r, select.POLLIN | select.POLLHUP)
-                fd_owner[r.pipe_r] = ('retiring', pid)
+            if r.pipe is not None:
+                poller.register(r.pipe.fd, select.POLLIN | select.POLLHUP)
+                fd_owner[r.pipe.fd] = ('retiring', pid)
+                readers[r.pipe.fd] = r.pipe
 
         registry_changed = False
         for fd, event in poller.poll(500):  # 500ms timeout
@@ -449,27 +540,38 @@ class _ProcessPool:
                     self.retiring[key].close_pipe()
                 continue
 
+            reader = readers[fd]
             try:
-                msg = _read_pipe_message(fd)
+                frames, eof = reader.read()
             except PipeFrameError as exc:
+                for frame in exc.frames:
+                    if self._apply_message(*frame, source):
+                        registry_changed = True
                 logger.error(
                     f'Main process: unreadable pipe frame from {source}: '
                     f'{exc}; retiring it',
                 )
                 if kind == 'active':
-                    proc, pipe_r = self.workers.pop(key)
-                    _close_quietly(pipe_r)
+                    proc, pipe = self.workers.pop(key)
+                    pipe.close()
                     self._retire(key, proc, None)
                     self.workers[key] = self._spawn(key)
                 else:
                     self.retiring[key].close_pipe()
                 continue
 
-            if msg is not None:
-                if self._apply_message(*msg, source):
+            for frame in frames:
+                if self._apply_message(*frame, source):
                     registry_changed = True
-            elif kind == 'retiring':
-                self.retiring[key].close_pipe()
+            if eof:
+                if reader.pending:
+                    logger.warning(
+                        f'Main process: pipe from {source} closed '
+                        f'{reader.pending} bytes into a frame; dropping it',
+                    )
+                # An active worker's pipe is left to _respawn_dead.
+                if kind == 'retiring':
+                    self.retiring[key].close_pipe()
         return registry_changed
 
     def _apply_message(self, header: bytes, blob: bytes, source: str) -> bool:
@@ -515,7 +617,8 @@ class _ProcessPool:
 
         An exited worker stays listed until ``_poll_once`` has read its
         pipe through EOF: it may have written a registration or deletion
-        just before exiting, and ``_poll_once`` reads one frame per pass.
+        just before exiting, and ``_poll_once`` reads only what is available
+        per pass.
         """
         now = time.monotonic()
         for pid, r in list(self.retiring.items()):
@@ -524,7 +627,7 @@ class _ProcessPool:
                     r.proc.join(timeout=0)
                     r.exited = True
                     r.deadline = now + _EXITED_PIPE_GRACE
-                if r.pipe_r is not None:
+                if r.pipe is not None:
                     if now < r.deadline:
                         continue
                     logger.warning(
@@ -564,7 +667,7 @@ class _ProcessPool:
         A crashed worker is moved to the retiring set rather than having
         its pipe closed, so frames it wrote before crashing are still read.
         """
-        for wid, (proc, pipe_r) in list(self.workers.items()):
+        for wid, (proc, pipe) in list(self.workers.items()):
             if proc.is_alive() or self.server.shutdown_event.is_set():
                 continue
             logger.warning(
@@ -572,18 +675,22 @@ class _ProcessPool:
                 f'{proc.exitcode}, restarting...',
             )
             del self.workers[wid]
-            self._retire(wid, proc, pipe_r)
+            self._retire(wid, proc, pipe)
             self.workers[wid] = self._spawn(wid)
 
     def _kill_all(self) -> None:
         """SIGTERM active and retiring workers, wait, then SIGKILL."""
         procs: List[
-            Tuple[int, multiprocessing.process.BaseProcess, Optional[int]]
+            Tuple[
+                int,
+                multiprocessing.process.BaseProcess,
+                Optional[_PipeReader],
+            ]
         ] = [
-            (wid, proc, pipe_r)
-            for wid, (proc, pipe_r) in self.workers.items()
+            (wid, proc, pipe)
+            for wid, (proc, pipe) in self.workers.items()
         ]
-        procs.extend((r.wid, r.proc, r.pipe_r) for r in self.retiring.values())
+        procs.extend((r.wid, r.proc, r.pipe) for r in self.retiring.values())
         for _, proc, _ in procs:
             if proc.is_alive():
                 assert proc.pid is not None
@@ -599,9 +706,9 @@ class _ProcessPool:
                 )
                 proc.kill()
                 proc.join(timeout=2.0)
-        for _, _, pipe_r in procs:
-            if pipe_r is not None:
-                _close_quietly(pipe_r)
+        for _, _, pipe in procs:
+            if pipe is not None:
+                pipe.close()
         self.workers.clear()
         self.retiring.clear()
 

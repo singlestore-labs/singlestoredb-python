@@ -34,8 +34,10 @@ from singlestoredb.functions.ext.plugin.registry import call_function
 from singlestoredb.functions.ext.plugin.registry import FunctionRegistry
 from singlestoredb.functions.ext.plugin.server import _MAX_PIPE_HEADER
 from singlestoredb.functions.ext.plugin.server import _PIPE_PREFIX
+from singlestoredb.functions.ext.plugin.server import _PipeReader
 from singlestoredb.functions.ext.plugin.server import _ProcessPool
 from singlestoredb.functions.ext.plugin.server import _read_pipe_message
+from singlestoredb.functions.ext.plugin.server import _RetiringWorker
 from singlestoredb.functions.ext.plugin.server import _write_pipe_message
 from singlestoredb.functions.ext.plugin.server import PipeFrameError
 from singlestoredb.functions.ext.plugin.server import Server
@@ -749,8 +751,16 @@ class TestProcessPoolRetire(unittest.TestCase):
         _, rows = rowdat_1._load([('r', ft.LONGLONG)], data)
         return rows[0][0]
 
-    def _start_pool(self, n_workers=1):
-        pool = _ProcessPool(self.server, self.ctx, self.server_sock, n_workers)
+    def _start_pool(self, n_workers=1, pool=None):
+        """Run a pool's monitor in a thread; stop it at cleanup.
+
+        Pass ``pool`` to seed its state before the monitor starts, so the
+        test never mutates it while the monitor is iterating it.
+        """
+        if pool is None:
+            pool = _ProcessPool(
+                self.server, self.ctx, self.server_sock, n_workers,
+            )
         thread = threading.Thread(target=pool.run, daemon=True)
         thread.start()
 
@@ -855,8 +865,8 @@ class TestProcessPoolRetire(unittest.TestCase):
         self.addCleanup(os.close, w_fd)
         proc = unittest.mock.MagicMock(pid=-1)
         proc.is_alive.return_value = False
-        pool.workers[0] = (proc, r_fd)
-        replacement = (unittest.mock.MagicMock(), -1)
+        pool.workers[0] = (proc, _PipeReader(r_fd))
+        replacement = (unittest.mock.MagicMock(), unittest.mock.MagicMock())
         os.write(w_fd, _PIPE_PREFIX.pack(_MAX_PIPE_HEADER + 1, 0))
         with unittest.mock.patch.object(
             pool, '_spawn', return_value=replacement,
@@ -865,7 +875,7 @@ class TestProcessPoolRetire(unittest.TestCase):
         spawn.assert_called_once_with(0)
         assert pool.workers[0] is replacement
         assert pool.retiring[-1].proc is proc
-        assert pool.retiring[-1].pipe_r is None
+        assert pool.retiring[-1].pipe is None
         # main closed its read end
         with self.assertRaises(OSError):
             os.fstat(r_fd)
@@ -886,10 +896,10 @@ class TestProcessPoolRetire(unittest.TestCase):
         return header, body
 
     def _drain(self, pool, retiring):
-        """Poll until ``retiring``'s pipe is closed; return change count."""
+        """Poll until ``retiring``'s pipe is closed; count changing passes."""
         changes = 0
         for _ in range(10):
-            if retiring.pipe_r is None:
+            if retiring.pipe is None:
                 return changes
             changes += pool._poll_once()
         self.fail('pipe was never drained to EOF')
@@ -904,15 +914,16 @@ class TestProcessPoolRetire(unittest.TestCase):
             w_fd, json.dumps({'action': 'delete', 'id': 'id-triple'}).encode(),
         )
         os.close(w_fd)
-        pool._retire(0, self._dead_proc(), r_fd)
+        pool._retire(0, self._dead_proc(), _PipeReader(r_fd))
         retiring = pool.retiring[-1]
 
         # Exited, but two frames are still queued: not reaped yet.
         pool._reap_retiring()
         assert pool.retiring.get(-1) is retiring
-        assert retiring.pipe_r == r_fd
+        assert retiring.pipe.fd == r_fd
 
-        assert self._drain(pool, retiring) == 2
+        # Both frames are already queued, so one read takes them both.
+        assert self._drain(pool, retiring) == 1
         reg = self.server.shared_registry.get_thread_local_registry()
         assert 'add1' in reg.functions
         assert 'triple' not in reg.functions
@@ -926,7 +937,7 @@ class TestProcessPoolRetire(unittest.TestCase):
         r_fd, w_fd = os.pipe()
         # A stray write end keeps EOF from ever arriving.
         self.addCleanup(os.close, w_fd)
-        pool._retire(0, self._dead_proc(), r_fd)
+        pool._retire(0, self._dead_proc(), _PipeReader(r_fd))
         with unittest.mock.patch.object(_server_mod, '_EXITED_PIPE_GRACE', 0):
             pool._reap_retiring()
         assert -1 not in pool.retiring
@@ -941,12 +952,12 @@ class TestProcessPoolRetire(unittest.TestCase):
         )
         os.close(w_fd)
         proc = self._dead_proc()
-        pool.workers[0] = (proc, r_fd)
+        pool.workers[0] = (proc, _PipeReader(r_fd))
         # The replacement's pipe stays empty and open, so it never fires.
         rep_r, rep_w = os.pipe()
         self.addCleanup(os.close, rep_r)
         self.addCleanup(os.close, rep_w)
-        replacement = (unittest.mock.MagicMock(), rep_r)
+        replacement = (unittest.mock.MagicMock(), _PipeReader(rep_r))
         with unittest.mock.patch.object(
             pool, '_spawn', return_value=replacement,
         ) as spawn:
@@ -955,11 +966,71 @@ class TestProcessPoolRetire(unittest.TestCase):
         assert pool.workers[0] is replacement
         retiring = pool.retiring[-1]
         assert retiring.proc is proc
-        assert retiring.pipe_r == r_fd
+        assert retiring.pipe.fd == r_fd
 
         assert self._drain(pool, retiring) == 1
         reg = self.server.shared_registry.get_thread_local_registry()
         assert 'add1' in reg.functions
+
+    @staticmethod
+    def _stall_mid_frame(w_fd, partial):
+        os.write(w_fd, partial)
+        time.sleep(60)
+
+    def test_stalled_partial_frame_does_not_block_monitor(self):
+        """Half a frame on a pipe nobody closes can't hang the monitor."""
+        import singlestoredb.functions.ext.plugin.server as _server_mod
+        r_fd, w_fd = os.pipe()
+        # The test's own write end means EOF never arrives, even once the
+        # stalled worker is dead.
+        self.addCleanup(os.close, w_fd)
+        partial = _PIPE_PREFIX.pack(16, 0) + b'{"act'
+        stalled = self.ctx.Process(
+            target=self._stall_mid_frame, args=(w_fd, partial), daemon=True,
+        )
+        stalled.start()
+        self.addCleanup(stalled.kill)
+
+        pipe = _PipeReader(r_fd)
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, 1)
+        pool.retiring[stalled.pid] = _RetiringWorker(
+            7, stalled, pipe, time.monotonic() + 0.5,
+        )
+        with unittest.mock.patch.object(
+            _server_mod, '_EXITED_PIPE_GRACE', 0.5,
+        ):
+            pool = self._start_pool(pool=pool)
+            # The drain timeout is enforced...
+            assert _wait_for(lambda: stalled.exitcode == -signal.SIGTERM)
+            # ...and so is the exited-pipe grace, with the write end open.
+            assert _wait_for(lambda: stalled.pid not in pool.retiring)
+        assert pipe.pending == len(partial)
+        with self.assertRaises(OSError):
+            os.fstat(r_fd)
+        # Shutdown is checked by _start_pool's cleanup.
+
+    def test_frame_reassembled_across_polls(self):
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, 1)
+        r_fd, w_fd = os.pipe()
+        self.addCleanup(os.close, w_fd)
+        pipe = _PipeReader(r_fd)
+        self.addCleanup(pipe.close)
+        pool.workers[0] = (self._dead_proc(), pipe)
+        header, blob = self._register_frame(
+            self._ADD1_ENVELOPE, b'return x + 1',
+        )
+        frame = _PIPE_PREFIX.pack(len(header), len(blob)) + header + blob
+        half = len(frame) // 2
+
+        os.write(w_fd, frame[:half])
+        assert not pool._poll_once()
+        assert pipe.pending == half
+        assert not self.server.shared_registry.has_definition('id-add1')
+
+        os.write(w_fd, frame[half:])
+        assert pool._poll_once()
+        assert pipe.pending == 0
+        assert self.server.shared_registry.has_definition('id-add1')
 
 
 # ---------------------------------------------------------------------------
@@ -1340,6 +1411,89 @@ class TestPipeMessages(unittest.TestCase):
         assert blob == body
         assert 'code' not in json.loads(header)
         assert len(header) < 1024
+
+
+class TestPipeReader(unittest.TestCase):
+    """The pool monitor's non-blocking, incremental frame reader."""
+
+    def setUp(self):
+        r_fd, self.w_fd = os.pipe()
+        self.reader = _PipeReader(r_fd)
+        self.addCleanup(self.reader.close)
+
+    def tearDown(self):
+        if self.w_fd >= 0:
+            os.close(self.w_fd)
+
+    def _close_writer(self):
+        os.close(self.w_fd)
+        self.w_fd = -1
+
+    def _read_bounded(self):
+        """``read()`` in a thread, so a blocking regression fails, not hangs."""
+        result = []
+        t = threading.Thread(
+            target=lambda: result.append(self.reader.read()), daemon=True,
+        )
+        t.start()
+        t.join(timeout=5)
+        assert not t.is_alive(), 'read() blocked'
+        return result[0]
+
+    def test_frame_split_across_writes(self):
+        header, blob = b'{"a": 1}', b'body'
+        prefix = _PIPE_PREFIX.pack(len(header), len(blob))
+        for piece in (prefix[:5], prefix[5:] + header):
+            os.write(self.w_fd, piece)
+            assert self._read_bounded() == ([], False)
+        os.write(self.w_fd, blob)
+        assert self._read_bounded() == ([(header, blob)], False)
+        assert self.reader.pending == 0
+
+    def test_several_frames_in_one_read(self):
+        msgs = [(b'msg1', b''), (b'msg2', b'body2'), (b'msg3', b'b3')]
+        os.write(
+            self.w_fd, b''.join(
+                _PIPE_PREFIX.pack(len(h), len(b)) + h + b for h, b in msgs
+            ),
+        )
+        assert self._read_bounded() == (msgs, False)
+
+    def test_partial_frame_with_writer_open_does_not_block(self):
+        os.write(self.w_fd, _PIPE_PREFIX.pack(100, 0) + b'abc')
+        assert self._read_bounded() == ([], False)
+        # Nothing more to read: returns at once rather than waiting.
+        assert self._read_bounded() == ([], False)
+        assert self.reader.pending == _PIPE_PREFIX.size + 3
+
+    def test_oversized_prefix_rejected_before_payload(self):
+        os.write(self.w_fd, _PIPE_PREFIX.pack(_MAX_PIPE_HEADER + 1, 0))
+        with self.assertRaises(PipeFrameError) as cm:
+            self.reader.read()
+        assert cm.exception.frames == []
+
+    def test_frames_before_a_bad_prefix_are_kept(self):
+        good = _PIPE_PREFIX.pack(2, 1) + b'{}' + b'x'
+        bad = _PIPE_PREFIX.pack(2, _MAX_V3_BODY_BYTES + 1)
+        os.write(self.w_fd, good + bad)
+        with self.assertRaises(PipeFrameError) as cm:
+            self.reader.read()
+        assert cm.exception.frames == [(b'{}', b'x')]
+
+    def test_eof_with_partial_frame(self):
+        os.write(self.w_fd, _PIPE_PREFIX.pack(4, 4) + b'abcd' + b'ef')
+        self._close_writer()
+        frames, eof = self._read_bounded()
+        while not eof:
+            assert frames == []
+            frames, eof = self._read_bounded()
+        assert frames == []
+        assert self.reader.pending == _PIPE_PREFIX.size + 6
+
+    def test_eof_on_empty_pipe(self):
+        self._close_writer()
+        assert self._read_bounded() == ([], True)
+        assert self.reader.pending == 0
 
 
 # ---------------------------------------------------------------------------
