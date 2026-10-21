@@ -5772,7 +5772,12 @@ static PyObject *accel_mmap_write(PyObject *self, PyObject *args) {
 
     if (min_size > 0) {
         Py_ssize_t trunc_size = data_len > min_size ? data_len : min_size;
-        if (ftruncate(fd, (off_t)trunc_size) < 0) {
+        int rc;
+        while ((rc = ftruncate(fd, (off_t)trunc_size)) < 0 && errno == EINTR) {
+            if (PyErr_CheckSignals() < 0)
+                return NULL;
+        }
+        if (rc < 0) {
             PyErr_SetFromErrno(PyExc_OSError);
             return NULL;
         }
@@ -5788,6 +5793,11 @@ static PyObject *accel_mmap_write(PyObject *self, PyObject *args) {
     while (remaining > 0) {
         ssize_t written = write(fd, p, (size_t)remaining);
         if (written < 0) {
+            if (errno == EINTR) {
+                if (PyErr_CheckSignals() < 0)
+                    return NULL;
+                continue;
+            }
             PyErr_SetFromErrno(PyExc_OSError);
             return NULL;
         }
@@ -5848,6 +5858,16 @@ static PyObject *accel_recv_exact(PyObject *self, PyObject *args) {
                 return NULL;
             }
             if (poll_rc < 0) {
+                if (errno == EINTR) {
+                    /* Run the Python handlers, then wait again (PEP 475).
+                       The timeout restarts, which only delays the
+                       caller's next shutdown check. */
+                    if (PyErr_CheckSignals() < 0) {
+                        free(buf);
+                        return NULL;
+                    }
+                    continue;
+                }
                 free(buf);
                 PyErr_SetFromErrno(PyExc_OSError);
                 return NULL;
@@ -5860,6 +5880,13 @@ static PyObject *accel_recv_exact(PyObject *self, PyObject *args) {
         Py_END_ALLOW_THREADS
 
         if (received < 0) {
+            if (errno == EINTR) {
+                if (PyErr_CheckSignals() < 0) {
+                    free(buf);
+                    return NULL;
+                }
+                continue;
+            }
             free(buf);
             PyErr_SetFromErrno(PyExc_OSError);
             return NULL;

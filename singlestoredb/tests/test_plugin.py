@@ -8,16 +8,19 @@ These are unit tests that do not require a database connection.
 import array
 import json
 import os
+import signal
 import socket
 import struct
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import ANY
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from singlestoredb.functions.ext import rowdat_1
+from singlestoredb.functions.ext.plugin import registry as _reg_mod
 from singlestoredb.functions.ext.plugin.connection import _handle_connection_inner
 from singlestoredb.functions.ext.plugin.connection import _install_v3_definition
 from singlestoredb.functions.ext.plugin.connection import _MAX_FUNCTION_NAME_LEN
@@ -110,6 +113,77 @@ class TestRecvExactPy(unittest.TestCase):
         finally:
             a.close()
             b.close()
+
+
+@unittest.skipUnless(_reg_mod._has_accel, 'requires the C extension')
+class TestRecvExactAccelSignals(unittest.TestCase):
+    """A signal landing mid-wait must not fail the C recv_exact.
+
+    A worker is retired with SIGUSR1 while its connection sits in this
+    wait; an EINTR surfacing as OSError ends the request loop and closes
+    the socket under the engine, which then fails writing to it.
+    """
+
+    def setUp(self):
+        self.signals = 0
+
+        def handler(signum, frame):
+            self.signals += 1
+
+        self.old_handler = signal.signal(signal.SIGUSR1, handler)
+        self.a, self.b = socket.socketpair()
+
+    def tearDown(self):
+        signal.signal(signal.SIGUSR1, self.old_handler)
+        self.a.close()
+        self.b.close()
+
+    def _later(self, *steps):
+        """Run (delay, action) steps in order on a helper thread."""
+        main = threading.main_thread().ident
+
+        def run():
+            for delay, action in steps:
+                time.sleep(delay)
+                if action == 'signal':
+                    signal.pthread_kill(main, signal.SIGUSR1)
+                else:
+                    self.b.sendall(action)
+
+        t = threading.Thread(target=run)
+        t.start()
+        return t
+
+    def test_signal_during_poll(self):
+        t = self._later((0.1, 'signal'), (0.1, b'12345678'))
+        try:
+            assert _reg_mod._recv_exact(self.a.fileno(), 8, 2000) == b'12345678'
+        finally:
+            t.join()
+        assert self.signals == 1
+
+    def test_signal_during_recv(self):
+        # Once part of a frame is read the wait is a blocking recv.
+        t = self._later(
+            (0, b'1234'), (0.1, 'signal'), (0.1, b'5678'),
+        )
+        try:
+            assert _reg_mod._recv_exact(self.a.fileno(), 8, -1) == b'12345678'
+        finally:
+            t.join()
+        assert self.signals == 1
+
+    def test_handler_exception_propagates(self):
+        def raising(signum, frame):
+            raise KeyboardInterrupt
+
+        signal.signal(signal.SIGUSR1, raising)
+        t = self._later((0.1, 'signal'))
+        try:
+            with self.assertRaises(KeyboardInterrupt):
+                _reg_mod._recv_exact(self.a.fileno(), 8, 2000)
+        finally:
+            t.join()
 
 
 class TestControlSignalDispatch(unittest.TestCase):
