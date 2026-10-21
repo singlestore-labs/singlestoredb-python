@@ -513,6 +513,11 @@ class FunctionRegistry:
             raise ValueError(
                 'signature JSON must contain a "name" field',
             )
+        if func_name.startswith('__') and func_name.endswith('__'):
+            # The dynamic globals are a module namespace; a dunder name would
+            # replace one of its attributes, e.g. __builtins__ for every
+            # function compiled after it.
+            raise ValueError(f'Cannot register {func_name!r}: reserved name')
 
         # Compute the canonical signature key from the incoming sig so we
         # can detect collisions before compiling.

@@ -696,6 +696,32 @@ class TestOverloadRegistry(unittest.TestCase):
         assert reg.lookup_variant('dyn_ints', 'INT')['func'](1) == 'int'
         assert reg.lookup_variant('dyn_ints', 'BIGINT')['func'](1) == 'bigint'
 
+    def test_udf_parameter_default_is_not_part_of_the_key(self):
+        # get_signature renders `x: int = 1` as BIGINT NOT NULL DEFAULT 1;
+        # the default must not leak into the dispatch key.
+        import types
+        from singlestoredb.functions import udf
+
+        @udf
+        def dflt(x: int = 1) -> int:
+            return x + 1
+
+        mod = types.ModuleType('dflt_mod')
+        mod.dflt = dflt
+        reg = FunctionRegistry()
+        reg._extract_functions(mod)
+        assert reg.functions['dflt'][0]['param_sql_types'] == ['BIGINT']
+        assert reg.lookup_variant('dflt', 'BIGINT')['func'](4) == 5
+
+    def test_wire_parameter_default_is_not_part_of_the_key(self):
+        reg = FunctionRegistry()
+        reg.create_function(
+            'id-d',
+            _ovl_sig('dyn_dflt', [('int64', 'BIGINT NOT NULL DEFAULT 1')]),
+            'return a0 + 1', False,
+        )
+        assert reg.lookup_variant('dyn_dflt', 'BIGINT')['func'](4) == 5
+
     def test_describe_emits_one_entry_per_variant_in_order(self):
         from singlestoredb.functions.ext.plugin.registry import (
             describe_functions_json,
@@ -1043,6 +1069,40 @@ class TestShadowingNames(unittest.TestCase):
         reg = shared.get_thread_local_registry()
         assert reg.lookup_variant('udf', 'BIGINT')['func'](5) == 120
         assert reg.lookup_variant('int', 'BIGINT')['func'](5) == 120
+
+    def _assert_dunder_rejected(self, target, name):
+        with self.assertRaises(ValueError):
+            target.create_function(
+                f'id-{name}', _ovl_sig(name, [('int32', 'INT')]),
+                'return a0', False,
+            )
+        target.create_function(
+            'id-f', _ovl_sig('f', [('int64', 'BIGINT')]),
+            'return len(str(a0))', False,
+        )
+
+    def test_builtins_name_rejected(self):
+        import builtins
+        reg = FunctionRegistry()
+        self._assert_dunder_rejected(reg, '__builtins__')
+        assert '__builtins__' not in reg.functions
+        assert reg._dynamic_globals['__builtins__'] is builtins
+        assert reg.lookup_variant('f', 'BIGINT')['func'](123) == 3
+
+    def test_module_dunder_name_rejected(self):
+        reg = FunctionRegistry()
+        before = reg._dynamic_globals['__name__']
+        self._assert_dunder_rejected(reg, '__name__')
+        assert '__name__' not in reg.functions
+        assert reg._dynamic_globals['__name__'] == before
+        assert reg.lookup_variant('f', 'BIGINT')['func'](123) == 3
+
+    def test_builtins_name_rejected_by_shared_registry(self):
+        shared = self._shared()
+        self._assert_dunder_rejected(shared, '__builtins__')
+        reg = shared.get_thread_local_registry()
+        assert '__builtins__' not in reg.functions
+        assert reg.lookup_variant('f', 'BIGINT')['func'](123) == 3
 
 
 class TestCrossFunctionCalls(unittest.TestCase):

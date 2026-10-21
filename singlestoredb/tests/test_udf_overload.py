@@ -40,6 +40,16 @@ class TestNormalizeSqlType(unittest.TestCase):
             == 'INT_GROUP'
         )
 
+    def test_default_stripped(self):
+        cases = {
+            'BIGINT NOT NULL DEFAULT 1': 'BIGINT',
+            "TEXT NULL DEFAULT 'a(b) NOT NULL'": 'BLOB_GROUP',
+            "VARCHAR(10) DEFAULT 'x'": 'VARCHAR_GROUP',
+            'DECIMAL(10,2) DEFAULT 1.5': 'DECIMAL',
+        }
+        for raw, key in cases.items():
+            assert overload.normalize_sql_type(raw) == key, raw
+
     def test_blob_text_family(self):
         for t in (
             'TEXT', 'TINYTEXT', 'MEDIUMTEXT', 'LONGTEXT',

@@ -89,12 +89,16 @@ class MatchKind(Enum):
 def normalize_sql_type(raw: str) -> str:
     """Collapse a raw SQL type to its canonical group key.
 
-    Strips length/precision specifiers, `UNSIGNED`, `NOT NULL`, surrounding
-    whitespace, then maps known equivalences (TINYINT/SMALLINT/BOOL etc.)
-    to a shared key. Unknown types pass through uppercased so they still
-    compare equal to themselves.
+    Strips a trailing `DEFAULT ...` clause, length/precision specifiers,
+    `UNSIGNED`, `NOT NULL`, surrounding whitespace, then maps known
+    equivalences (TINYINT/SMALLINT/BOOL etc.) to a shared key. Unknown
+    types pass through uppercased so they still compare equal to themselves.
     """
     s = raw.strip().upper()
+    # A parameter default is not part of its type: "BIGINT NOT NULL DEFAULT 1".
+    # Strip it first, so a string default such as 'a(b)' can't confuse the
+    # suffix and precision handling below.
+    s = re.sub(r'\s+DEFAULT\b.*$', '', s, flags=re.S)
     # strip "NOT NULL", "NULL", "UNSIGNED", "ZEROFILL" suffixes
     s = re.sub(r'\bUNSIGNED\b', '', s)
     s = re.sub(r'\bZEROFILL\b', '', s)
