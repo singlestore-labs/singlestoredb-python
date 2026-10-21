@@ -1105,6 +1105,25 @@ class TestCrossFunctionCalls(unittest.TestCase):
         )
         assert reg.lookup_variant('f', 'INT')['func'](4) == 40
 
+    def test_binder_name_long_underscore_run(self):
+        # The binder grows geometrically past a long run of underscores
+        # after its base name, rather than one underscore per search.
+        body = '# __s2_bind_f' + '_' * 4000 + '\nreturn a0 + 1'
+        sig = _ovl_sig('f', [('int32', 'INT')])
+        code = FunctionRegistry._build_python_code(json.loads(sig), body)
+        binder = code.split('(', 1)[1].split(')', 1)[0]
+        assert binder.startswith('__s2_bind_f')
+        assert binder not in body
+        # Doubling leaves a tail of 2**n - 1 underscores; one per search
+        # would leave exactly 4001.
+        tail = len(binder) - len('__s2_bind_f')
+        assert tail & (tail + 1) == 0
+        assert tail < 2 * 4001
+
+        reg = FunctionRegistry()
+        reg.create_function('id-f', sig, body, False)
+        assert reg.lookup_variant('f', 'INT')['func'](4) == 5
+
 
 class TestDynamicModule(unittest.TestCase):
     """Each registry's dynamic functions live in a real module, so code that

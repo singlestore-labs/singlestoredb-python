@@ -455,15 +455,18 @@ class FunctionRegistry:
         binder, whose name is longer than the function's. A function named
         like the decorator or an annotation type (``udf``, ``int``) would
         otherwise be read in the factory before its own ``def`` binds it.
-        The binder's name is also lengthened until the body does not
-        contain it, so a body calling a dynamic function that happens to
-        share it reaches that function rather than the enclosing binder.
+        The binder's name is also lengthened, doubling the added
+        underscores each time, until the body does not contain it, so a
+        body calling a dynamic function that happens to share it reaches
+        that function rather than the enclosing binder.
         """
         func_name = sig['name']
         params_str = ', '.join(arg['name'] for arg in sig.get('args', []))
         binder = _dynamic_binder_name(func_name)
+        suffix = '_'
         while binder in body:
-            binder += '_'
+            binder += suffix
+            suffix += suffix
 
         indented_body = '\n'.join(
             f'        {line}' for line in body.splitlines()
