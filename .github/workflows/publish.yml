@@ -180,9 +180,10 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write   # Required for OIDC trusted publishing
-      actions: read     # Required for actions/download-artifact
-      contents: write   # Required for gh release create/upload
+      id-token: write      # Required for OIDC trusted publishing and actions/attest
+      actions: read        # Required for actions/download-artifact
+      contents: write      # Required for gh release create/upload
+      attestations: write  # Required for actions/attest
 
     environment:
       name: publish
@@ -208,6 +209,15 @@ jobs:
         with:
           name: artifacts-macOS
           path: dist
+
+      # Signed SLSA build provenance for the files attached to the GitHub
+      # Release, which otherwise carry nothing to verify them against. PyPI's
+      # copies get their own attestations from gh-action-pypi-publish.
+      # Verify with: gh attestation verify FILE --repo singlestore-labs/singlestoredb-python
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/*
 
       - name: Create GitHub Release
         if: ${{ github.event_name == 'push' }}
