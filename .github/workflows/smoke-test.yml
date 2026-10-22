@@ -60,9 +60,7 @@ jobs:
         os:
           - ubuntu-24.04
         # The floor in pyproject.toml (requires-python >=3.9) up to the newest
-        # final release. 3.15 is absent deliberately: as of 2026-09-18 it is at
-        # rc2 (GA 2026-10-01), and setup-python needs allow-prereleases plus an
-        # explicit "3.15.0-rc.2" to install it. Add a bare "3.15" once it ships.
+        # final release.
         python-version:
           - "3.9"
           - "3.10"
@@ -70,6 +68,7 @@ jobs:
           - "3.12"
           - "3.13"
           - "3.14"
+          - "3.15"
         driver:
           - mysql
           - https
