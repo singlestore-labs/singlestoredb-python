@@ -146,14 +146,17 @@ def escape_None(value: str, mapping: Optional[Encoders] = None) -> str:
 
 
 def escape_timedelta(obj: datetime.timedelta, mapping: Optional[Encoders] = None) -> str:
+    negative = obj.days < 0
+    if negative:
+        obj = -obj
     seconds = int(obj.seconds) % 60
     minutes = int(obj.seconds // 60) % 60
     hours = int(obj.seconds // 3600) % 24 + int(obj.days) * 24
     if obj.microseconds:
-        fmt = "'{0:02d}:{1:02d}:{2:02d}.{3:06d}'"
+        fmt = "'{0}{1:02d}:{2:02d}:{3:02d}.{4:06d}'"
     else:
-        fmt = "'{0:02d}:{1:02d}:{2:02d}'"
-    return fmt.format(hours, minutes, seconds, obj.microseconds)
+        fmt = "'{0}{1:02d}:{2:02d}:{3:02d}'"
+    return fmt.format('-' if negative else '', hours, minutes, seconds, obj.microseconds)
 
 
 def escape_time(obj: datetime.time, mapping: Optional[Encoders] = None) -> str:
