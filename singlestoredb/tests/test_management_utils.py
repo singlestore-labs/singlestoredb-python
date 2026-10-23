@@ -1142,6 +1142,16 @@ class TestDeploymentTracking(unittest.TestCase):
         self.addCleanup(self._restore)
         self.owner = utils.get_owner()
         self.addCleanup(lambda: utils.set_owner(self.owner))
+        # CI sets the ledger job-wide, and the wrapper writes its ``pending``
+        # record for any receiver that is not a Mock -- a SimpleNamespace
+        # included -- under the wrapper's kind, whatever the classname. Left
+        # set, these tests append 'cl-1' and friends to the real ledger, and
+        # the reaper exits non-zero on every one it cannot resolve.
+        # TestDeploymentLedger points it back at a tmp file of its own.
+        patcher = patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(utils.LEDGER_ENV_VAR, None)
 
     def _restore(self):
         self.utils._tracked.clear()
@@ -1157,9 +1167,10 @@ class TestDeploymentTracking(unittest.TestCase):
 
         ``classname`` renames the class, which is how the ledger decides a
         kind (``utils._KIND_BY_CLASS`` is keyed by class name). The default
-        ``Deployment`` is deliberately *not* a ledger kind, so the tests that
-        only care about tracking write no ledger records even when one is
-        configured.
+        ``Deployment`` is deliberately *not* a ledger kind, so ``track()``
+        writes no ``live`` record for it. That does not cover the ``pending``
+        record a ``_tracking_wrapper`` call writes, which takes its kind from
+        the wrapper; ``setUp`` unsetting the ledger is what keeps that out.
         """
         class Deployment:
             def __init__(self):
