@@ -130,7 +130,11 @@ jobs:
 
       - name: Run tests
         if: ${{ matrix.driver != 'https' }}
-        run: pytest -v --pyargs singlestoredb.tests.test_basics
+        # test_asgi_env_file needs no database; it is here, and not in the
+        # https step, to run once on each Python version. It covers the zip
+        # loader in asgi.main(), which differs between 3.9 and 3.10+ and broke
+        # on 3.15.
+        run: pytest -v --pyargs singlestoredb.tests.test_basics singlestoredb.tests.test_asgi_env_file
         env:
           PYTHONPATH: ${{ github.workspace }}
           # CLUSTER_PASSWORD goes into the userinfo half of a URL here, so it

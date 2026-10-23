@@ -2366,7 +2366,13 @@ def main(argv: Optional[List[str]] = None) -> None:
                     )
                 mod = importlib.util.module_from_spec(spec)
                 sys.modules[modname] = mod
-                spec.loader.exec_module(mod)
+                try:
+                    spec.loader.exec_module(mod)
+                except BaseException:
+                    # Match load_module(): don't leave a half-initialized
+                    # module behind for a later import to pick up
+                    sys.modules.pop(modname, None)
+                    raise
             else:
                 mod = zi.load_module(modname)
                 if mod is None:
