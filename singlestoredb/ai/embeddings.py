@@ -43,6 +43,9 @@ import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
 
+from singlestoredb.utils.otel import attach_otel_request_hook
+from singlestoredb.utils.otel import inject_otel_headers
+
 _DEFAULT_TOKEN_ID_PLATFORMS = frozenset({'Nova', 'NovaMultiTenant'})
 
 # Throwaway text used to compare a bare encode against a wrapped one.
@@ -475,6 +478,7 @@ def SingleStoreEmbeddingsFactory(
                 obo_val = obo_token_getter()
                 if obo_val:
                     request.headers['X-S2-OBO'] = obo_val
+            inject_otel_headers(request.headers)
             request.headers.pop('X-Amz-Date', None)
             request.headers.pop('X-Amz-Security-Token', None)
 
@@ -507,8 +511,19 @@ def SingleStoreEmbeddingsFactory(
         api_key=token,
         model=model_name,
     )
-    if http_client is not None:
-        openai_kwargs['http_client'] = http_client
+    http_async_client = kwargs.pop('http_async_client', None)
+    default_timeout = httpx.Timeout(timeout=600.0, connect=5.0)
+    # follow_redirects matches the OpenAI SDK's own default clients.
+    if http_client is None:
+        http_client = httpx.Client(timeout=default_timeout, follow_redirects=True)
+    if http_async_client is None:
+        http_async_client = httpx.AsyncClient(
+            timeout=http_client.timeout, follow_redirects=True,
+        )
+    attach_otel_request_hook(http_client)
+    attach_otel_request_hook(http_async_client)
+    openai_kwargs['http_client'] = http_client
+    openai_kwargs['http_async_client'] = http_async_client
 
     if info.hosting_platform == 'Azure':
         # Real OpenAI models: tiktoken is the right tokenizer, and the model name passed

@@ -7,7 +7,7 @@ import math
 import os
 import sys
 import types
-import unittest
+import unittest.mock
 
 # Stand-ins for a model's BOS/EOS, outside the fake tokenizers' ord()-derived range.
 # Not the real Qwen3 EOS (151643): affixes come from the tokenizer, so no test should
@@ -23,6 +23,8 @@ INJECTED_MODULES = (
     'botocore.config',
     'boto3',
     'transformers',
+    # Imports httpx, so it must be reloaded against the fakes and dropped afterwards.
+    'singlestoredb.utils.otel',
 )
 
 
@@ -75,24 +77,38 @@ class MockConfig:
 
 
 class MockClient:
+
+    def __init__(self, timeout=None, follow_redirects=False, **kwargs):
+        self.timeout = timeout
+        self.follow_redirects = follow_redirects
+        self.event_hooks = {}
+
+
+class MockAsyncClient(MockClient):
     pass
 
 
 class MockTimeout:
 
-    def __init__(self, connect=None, read=None):
-        self.connect = connect
-        self.read = read
+    def __init__(self, timeout=None, connect=None, read=None):
+        self.connect = connect if connect is not None else timeout
+        self.read = read if read is not None else timeout
 
 
 class MockBoto3(types.ModuleType):
 
+    # Bedrock before-send handlers registered by the most recent client, by event.
+    handlers = {}
+
     def client(self, *args, **kwargs):
+        MockBoto3.handlers = {}
+
+        def register_first(event, handler):
+            MockBoto3.handlers[event] = handler
+
         return types.SimpleNamespace(
             _endpoint=types.SimpleNamespace(
-                _event_emitter=types.SimpleNamespace(
-                    register_first=lambda *args, **kwargs: None,
-                ),
+                _event_emitter=types.SimpleNamespace(register_first=register_first),
             ),
         )
 
@@ -150,9 +166,12 @@ class TestEmbeddings(unittest.TestCase):
 
         sys.modules.pop('singlestoredb.ai.embeddings', None)
         sys.modules.pop('_test_embeddings_module', None)
+        sys.modules.pop('singlestoredb.utils.otel', None)
 
         httpx = types.ModuleType('httpx')
         httpx.Client = MockClient
+        httpx.AsyncClient = MockAsyncClient
+        httpx.Request = object
         httpx.Timeout = MockTimeout
         sys.modules['httpx'] = httpx
 
@@ -439,6 +458,70 @@ class TestEmbeddings(unittest.TestCase):
         assert chunker_for(
             'Qwen/Qwen3-Embedding-0.6B', 'Nova', info=info, max_input_tokens=256,
         ).max_input_tokens == 256
+
+    def test_openai_clients_inject_trace_context(self):
+        otel = sys.modules['singlestoredb.utils.otel']
+        embedding = self.embeddings.SingleStoreEmbeddingsFactory(
+            model_name='text-embedding-3-small',
+            api_key='token',
+            base_url='http://localhost:8000',
+            hosting_platform='Azure',
+        )
+
+        http_client = embedding.kwargs['http_client']
+        http_async_client = embedding.kwargs['http_async_client']
+        assert isinstance(http_async_client, MockAsyncClient)
+        assert http_client.event_hooks['request'] == [otel.httpx_inject_otel]
+        assert http_async_client.event_hooks['request'] == [
+            otel.httpx_inject_otel_async,
+        ]
+        assert http_client.timeout.read == 600.0
+        assert http_client.timeout.connect == 5.0
+        assert http_async_client.timeout is http_client.timeout
+        assert http_client.follow_redirects
+        assert http_async_client.follow_redirects
+
+    def test_openai_custom_client_gets_trace_hook(self):
+        otel = sys.modules['singlestoredb.utils.otel']
+        custom = MockClient(timeout=MockTimeout(42.0))
+        embedding = self.embeddings.SingleStoreEmbeddingsFactory(
+            model_name='text-embedding-3-small',
+            api_key='token',
+            base_url='http://localhost:8000',
+            hosting_platform='Azure',
+            http_client=custom,
+        )
+
+        assert embedding.kwargs['http_client'] is custom
+        assert not custom.follow_redirects
+        assert custom.event_hooks['request'] == [otel.httpx_inject_otel]
+        assert embedding.kwargs['http_async_client'].timeout.read == 42.0
+
+    def test_bedrock_request_injects_trace_context(self):
+        self.embeddings.SingleStoreEmbeddingsFactory(
+            model_name='amazon.titan-embed-text-v2:0',
+            api_key='token',
+            base_url='http://localhost:8000',
+            hosting_platform='Amazon',
+        )
+        handler = MockBoto3.handlers['before-send.bedrock-runtime.InvokeModel']
+
+        def fake_inject(carrier):
+            carrier['traceparent'] = 'trace-context'
+
+        fake_otel = types.ModuleType('opentelemetry')
+        fake_otel.__path__ = []
+        fake_propagate = types.ModuleType('opentelemetry.propagate')
+        fake_propagate.inject = fake_inject
+        request = types.SimpleNamespace(headers={})
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {'opentelemetry': fake_otel, 'opentelemetry.propagate': fake_propagate},
+        ):
+            handler(request)
+
+        assert request.headers['traceparent'] == 'trace-context'
+        assert request.headers['Authorization'] == 'Bearer token'
 
 
 if __name__ == '__main__':
