@@ -116,17 +116,13 @@ jobs:
           platforms: all
 
       - name: Build and test wheels
-        uses: pypa/cibuildwheel@v4.3.3
+        uses: pypa/cibuildwheel@v2.16.5
         env:
           # configure cibuildwheel to build native archs ('auto'), and some
           # emulated ones
           CIBW_ARCHS_LINUX: "auto aarch64"
           CIBW_ARCHS_MACOS: "universal2"
-          # The wheel is abi3, so it is built once on cp39. cibuildwheel skips
-          # the build for cp315 because the abi3 wheel already covers it, and
-          # only reruns the tests there, so the oldest and newest supported
-          # interpreters both load the extension.
-          CIBW_BUILD: "cp39-* cp315-*"
+          CIBW_BUILD: "cp39-*"
           CIBW_SKIP: "pp* *-musllinux* *-manylinux_i686"
           CIBW_TEST_COMMAND: "pytest -v --pyargs singlestoredb.tests.test_basics"
           # xdist because pyproject.toml's addopts sets -n/--dist, and PYTHONPATH
