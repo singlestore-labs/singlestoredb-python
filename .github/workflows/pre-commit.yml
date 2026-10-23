@@ -4,7 +4,10 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: that label moves to Ubuntu 26.04, which
+    # setup-python has no Python 3.9 build for, and 3.9 is in the matrix
+    # below. Unpin once 3.9 support is dropped.
+    runs-on: ubuntu-24.04
 
     strategy:
       matrix:
