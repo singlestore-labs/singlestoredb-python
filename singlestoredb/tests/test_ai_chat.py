@@ -99,6 +99,8 @@ class TestInjectOtelHeaders(unittest.TestCase):
             self.assertIsNotNone(http_async_client)
             self.assertEqual(http_async_client.timeout.read, 600.0)
             self.assertEqual(http_async_client.timeout.connect, 5.0)
+            self.assertTrue(http_client.follow_redirects)
+            self.assertTrue(http_async_client.follow_redirects)
         finally:
             if http_client:
                 http_client.close()
@@ -122,6 +124,7 @@ class TestInjectOtelHeaders(unittest.TestCase):
             http_client = kwargs.get('http_client')
             http_async_client = kwargs.get('http_async_client')
             self.assertIs(http_client, custom_sync)
+            self.assertFalse(custom_sync.follow_redirects)
             self.assertIsNotNone(http_async_client)
             self.assertEqual(http_async_client.timeout.read, 42.0)
         finally:

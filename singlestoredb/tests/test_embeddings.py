@@ -78,8 +78,9 @@ class MockConfig:
 
 class MockClient:
 
-    def __init__(self, timeout=None, **kwargs):
+    def __init__(self, timeout=None, follow_redirects=False, **kwargs):
         self.timeout = timeout
+        self.follow_redirects = follow_redirects
         self.event_hooks = {}
 
 
@@ -477,6 +478,8 @@ class TestEmbeddings(unittest.TestCase):
         assert http_client.timeout.read == 600.0
         assert http_client.timeout.connect == 5.0
         assert http_async_client.timeout is http_client.timeout
+        assert http_client.follow_redirects
+        assert http_async_client.follow_redirects
 
     def test_openai_custom_client_gets_trace_hook(self):
         otel = sys.modules['singlestoredb.utils.otel']
@@ -490,6 +493,7 @@ class TestEmbeddings(unittest.TestCase):
         )
 
         assert embedding.kwargs['http_client'] is custom
+        assert not custom.follow_redirects
         assert custom.event_hooks['request'] == [otel.httpx_inject_otel]
         assert embedding.kwargs['http_async_client'].timeout.read == 42.0
 

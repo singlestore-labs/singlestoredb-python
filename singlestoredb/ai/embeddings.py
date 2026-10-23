@@ -513,10 +513,13 @@ def SingleStoreEmbeddingsFactory(
     )
     http_async_client = kwargs.pop('http_async_client', None)
     default_timeout = httpx.Timeout(timeout=600.0, connect=5.0)
+    # follow_redirects matches the OpenAI SDK's own default clients.
     if http_client is None:
-        http_client = httpx.Client(timeout=default_timeout)
+        http_client = httpx.Client(timeout=default_timeout, follow_redirects=True)
     if http_async_client is None:
-        http_async_client = httpx.AsyncClient(timeout=http_client.timeout)
+        http_async_client = httpx.AsyncClient(
+            timeout=http_client.timeout, follow_redirects=True,
+        )
     attach_otel_request_hook(http_client)
     attach_otel_request_hook(http_async_client)
     openai_kwargs['http_client'] = http_client
