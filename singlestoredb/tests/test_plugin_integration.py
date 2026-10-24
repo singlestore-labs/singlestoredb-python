@@ -19,20 +19,28 @@ import struct
 import tempfile
 import threading
 import time
-import unittest
+import unittest.mock
 
 from singlestoredb.functions.ext import rowdat_1
 from singlestoredb.functions.ext.plugin.connection import _handle_connection_inner
+from singlestoredb.functions.ext.plugin.connection import _install_v3_definition
+from singlestoredb.functions.ext.plugin.connection import _MAX_V3_BODY_BYTES
 from singlestoredb.functions.ext.plugin.connection import handle_connection
-from singlestoredb.functions.ext.plugin.connection import PROTOCOL_VERSION
-from singlestoredb.functions.ext.plugin.connection import STATUS_BAD_REQUEST  # noqa: F401
 from singlestoredb.functions.ext.plugin.connection import STATUS_ERROR
 from singlestoredb.functions.ext.plugin.connection import STATUS_OK
+from singlestoredb.functions.ext.plugin.connection import SUPPORTED_VERSIONS
 from singlestoredb.functions.ext.plugin.control import dispatch_control_signal
 from singlestoredb.functions.ext.plugin.registry import call_function
 from singlestoredb.functions.ext.plugin.registry import FunctionRegistry
+from singlestoredb.functions.ext.plugin.server import _MAX_PIPE_HEADER
+from singlestoredb.functions.ext.plugin.server import _PIPE_PREFIX
+from singlestoredb.functions.ext.plugin.server import _PipeReader
+from singlestoredb.functions.ext.plugin.server import _ProcessPool
 from singlestoredb.functions.ext.plugin.server import _read_pipe_message
+from singlestoredb.functions.ext.plugin.server import _RetiringWorker
 from singlestoredb.functions.ext.plugin.server import _write_pipe_message
+from singlestoredb.functions.ext.plugin.server import PipeFrameError
+from singlestoredb.functions.ext.plugin.server import Server
 from singlestoredb.functions.ext.plugin.server import SharedRegistry
 from singlestoredb.mysql.constants import FIELD_TYPE as ft
 
@@ -51,14 +59,14 @@ def _make_shared_registry_with_func():
         'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
         'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
     })
-    shared.create_function(sig, 'return x * 3', False)
+    shared.create_function('id-triple', sig, 'return x * 3', False)
     return shared
 
 
 def _send_handshake(sock, function_name, input_fd, output_fd):
     """Send the binary handshake from client side."""
     name_bytes = function_name.encode('utf8')
-    header = struct.pack('<QQ', PROTOCOL_VERSION, len(name_bytes))
+    header = struct.pack('<QQ', SUPPORTED_VERSIONS[0], len(name_bytes))
     sock.sendall(header)
 
     # Send function name + 2 FDs via SCM_RIGHTS
@@ -67,6 +75,33 @@ def _send_handshake(sock, function_name, input_fd, output_fd):
         [name_bytes],
         [(socket.SOL_SOCKET, socket.SCM_RIGHTS, fd_array)],
     )
+
+
+def _send_handshake_v3(sock, function_name, input_fd, output_fd, envelope, body):
+    """Send a v3 handshake: header, name, and 4 FDs (envelope, body)."""
+    name_bytes = function_name.encode('utf8')
+    sock.sendall(struct.pack('<QQ', 3, len(name_bytes)))
+    meta_fd, body_fd = _create_temp_fds()
+    try:
+        os.write(meta_fd, json.dumps(envelope).encode('utf8'))
+        os.write(body_fd, body)
+        fd_array = array.array('i', [input_fd, output_fd, meta_fd, body_fd])
+        sock.sendmsg(
+            [name_bytes],
+            [(socket.SOL_SOCKET, socket.SCM_RIGHTS, fd_array)],
+        )
+    finally:
+        os.close(meta_fd)
+        os.close(body_fd)
+
+
+def _wait_for(predicate, timeout=10.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.05)
+    return predicate()
 
 
 def _send_udf_request(sock, input_fd, input_data):
@@ -322,12 +357,15 @@ class TestProtocolIntegration(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# P0: @@register success path and @@delete + re-register
+# P0: @@delete via dispatch_control_signal
 # ---------------------------------------------------------------------------
 
 class TestRegisterDeleteIntegration(unittest.TestCase):
-    """Test @@register and @@delete through dispatch_control_signal with
-    a real SharedRegistry (not mocked)."""
+    """Test @@delete through dispatch_control_signal with a real
+    SharedRegistry (not mocked).  @@register no longer exists as a
+    control signal; new function definitions arrive only via the
+    in-band v3 envelope.  Functions are seeded directly through
+    ``SharedRegistry.create_function``."""
 
     def _make_shared(self):
         shared = SharedRegistry()
@@ -335,108 +373,61 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         shared.set_base_registry(base_reg)
         return shared
 
-    def test_register_success_and_callable(self):
-        """@@register a function, then call it via call_function."""
-        shared = self._make_shared()
-        payload = json.dumps({
-            'name': 'double_it',
+    def _seed(self, shared, name, body, replace=False):
+        sig = json.dumps({
+            'name': name,
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x * 2',
-        }).encode()
-
-        result = dispatch_control_signal('@@register', payload, shared)
-        assert result.ok is True, f'Expected ok, got: {result.data}'
-
-        # Verify callable
-        reg = shared.get_thread_local_registry()
-        assert 'double_it' in reg.functions
-        input_data = bytes(rowdat_1._dump([ft.LONGLONG], [1], [[5]]))
-        output = call_function(reg, 'double_it', input_data)
-        _, rows = rowdat_1._load([('r', ft.LONGLONG)], output)
-        assert rows[0][0] == 10
-
-    def test_register_with_replace(self):
-        """@@register with replace=true overwrites existing function."""
-        shared = self._make_shared()
-        payload1 = json.dumps({
-            'name': 'myfunc',
-            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x + 1',
-        }).encode()
-        result = dispatch_control_signal('@@register', payload1, shared)
-        assert result.ok
-
-        payload2 = json.dumps({
-            'name': 'myfunc',
-            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x + 100',
-            'replace': True,
-        }).encode()
-        result = dispatch_control_signal('@@register', payload2, shared)
-        assert result.ok
-
-        reg = shared.get_thread_local_registry()
-        input_data = bytes(rowdat_1._dump([ft.LONGLONG], [1], [[5]]))
-        output = call_function(reg, 'myfunc', input_data)
-        _, rows = rowdat_1._load([('r', ft.LONGLONG)], output)
-        assert rows[0][0] == 105
-
-    def test_register_without_replace_fails(self):
-        """@@register without replace=true fails for existing function."""
-        shared = self._make_shared()
-        payload = json.dumps({
-            'name': 'dup_fn',
-            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x',
-        }).encode()
-        result = dispatch_control_signal('@@register', payload, shared)
-        assert result.ok
-
-        result2 = dispatch_control_signal('@@register', payload, shared)
-        assert result2.ok is False
-        assert 'already exists' in result2.data
+        })
+        shared.create_function(f'id-{name}', sig, body, replace)
 
     def test_delete_then_gone(self):
         """@@delete removes a function so it's no longer callable."""
         shared = self._make_shared()
-        payload = json.dumps({
-            'name': 'temp_fn',
-            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x',
-        }).encode()
-        dispatch_control_signal('@@register', payload, shared)
+        self._seed(shared, 'temp_fn', 'return x')
 
-        del_payload = json.dumps({'name': 'temp_fn'}).encode()
+        del_payload = json.dumps({'id': 'id-temp_fn'}).encode()
         result = dispatch_control_signal('@@delete', del_payload, shared)
         assert result.ok
 
         reg = shared.get_thread_local_registry()
         assert 'temp_fn' not in reg.functions
 
-    def test_delete_then_reregister(self):
-        """Delete a function and re-register it with new behavior."""
+    def test_delete_failures_carry_codes(self):
+        """Each @@delete failure maps to its control-signal error code."""
         shared = self._make_shared()
-        sig = {
-            'name': 'morph',
-            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x + 1',
-        }
-        dispatch_control_signal('@@register', json.dumps(sig).encode(), shared)
+        self._seed(shared, 'keep_fn', 'return x')
+
+        for payload, code in (
+            (b'', 'DELETE_MISSING_PAYLOAD'),
+            (b'{', 'DELETE_INVALID_PAYLOAD'),
+            (b'\xff', 'DELETE_INVALID_PAYLOAD'),
+            (b'{"id": 5}', 'DELETE_INVALID_PAYLOAD'),
+            (b'{"name": "keep_fn"}', 'DELETE_INVALID_PAYLOAD'),
+            (b'[]', 'DELETE_INVALID_PAYLOAD'),
+            (b'{"id": "ghost"}', 'DELETE_FUNC_NOT_REGISTERED'),
+            # An empty string is still a string id, as in the Rust server.
+            (b'{"id": ""}', 'DELETE_FUNC_NOT_REGISTERED'),
+        ):
+            result = dispatch_control_signal('@@delete', payload, shared)
+            assert not result.ok, payload
+            assert result.code == code, (payload, result)
+
+        reg = shared.get_thread_local_registry()
+        assert 'keep_fn' in reg.functions
+
+    def test_delete_then_recreate(self):
+        """Delete a function and re-create it with new behavior."""
+        shared = self._make_shared()
+        self._seed(shared, 'morph', 'return x + 1')
 
         dispatch_control_signal(
             '@@delete',
-            json.dumps({'name': 'morph'}).encode(),
+            json.dumps({'id': 'id-morph'}).encode(),
             shared,
         )
 
-        sig['body'] = 'return x + 999'
-        dispatch_control_signal('@@register', json.dumps(sig).encode(), shared)
+        self._seed(shared, 'morph', 'return x + 999')
 
         reg = shared.get_thread_local_registry()
         input_data = bytes(rowdat_1._dump([ft.LONGLONG], [1], [[1]]))
@@ -444,46 +435,57 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
         _, rows = rowdat_1._load([('r', ft.LONGLONG)], output)
         assert rows[0][0] == 1000
 
-    def test_register_writes_to_pipe(self):
-        """@@register with pipe_write_fd sends message to parent."""
-        shared = self._make_shared()
+    def test_piped_supersession_leaves_one_code_block(self):
+        """The main process applies a worker's register messages through
+        the same create_function, so a fresh id with the same signature
+        evicts the old block there too."""
+        worker = self._make_shared()
+        main = self._make_shared()
+        signature = {
+            'name': 'cor_fn',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'replace': False,
+        }
+
         r_fd, w_fd = os.pipe()
         try:
-            payload = json.dumps({
-                'name': 'piped_fn',
-                'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-                'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-                'body': 'return x',
-            }).encode()
-            result = dispatch_control_signal(
-                '@@register', payload, shared, pipe_write_fd=w_fd,
-            )
-            assert result.ok
-
-            msg = _read_pipe_message(r_fd)
-            assert msg is not None
-            body = json.loads(msg)
-            assert body['action'] == 'register'
-            assert body['signature_json'] is not None
-            assert body['code'] == 'return x'
+            for id, body in (('id-old', b'return x'), ('id-new', b'return -x')):
+                with tempfile.TemporaryFile() as f:
+                    f.write(body)
+                    f.flush()
+                    _install_v3_definition(
+                        {'id': id, 'signature': signature},
+                        f.fileno(), worker, w_fd,
+                    )
+                header, blob = _read_pipe_message(r_fd)
+                msg = json.loads(header)
+                assert msg['action'] == 'register'
+                assert blob == body
+                main.create_function(
+                    msg['id'], msg['signature_json'], blob.decode('utf8'),
+                    msg['replace'],
+                )
         finally:
             os.close(r_fd)
             os.close(w_fd)
 
+        for shared in (worker, main):
+            assert list(shared._code_blocks) == ['id-new']
+            reg = shared.get_thread_local_registry()
+            input_data = bytes(rowdat_1._dump([ft.LONGLONG], [1], [[5]]))
+            output = call_function(reg, 'cor_fn', input_data, 'BIGINT')
+            _, rows = rowdat_1._load([('r', ft.LONGLONG)], output)
+            assert rows[0][0] == -5
+
     def test_delete_writes_to_pipe(self):
         """@@delete with pipe_write_fd sends message to parent."""
         shared = self._make_shared()
-        sig = json.dumps({
-            'name': 'pipe_del',
-            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
-            'body': 'return x',
-        }).encode()
-        dispatch_control_signal('@@register', sig, shared)
+        self._seed(shared, 'pipe_del', 'return x')
 
         r_fd, w_fd = os.pipe()
         try:
-            del_payload = json.dumps({'name': 'pipe_del'}).encode()
+            del_payload = json.dumps({'id': 'id-pipe_del'}).encode()
             result = dispatch_control_signal(
                 '@@delete', del_payload, shared, pipe_write_fd=w_fd,
             )
@@ -491,9 +493,10 @@ class TestRegisterDeleteIntegration(unittest.TestCase):
 
             msg = _read_pipe_message(r_fd)
             assert msg is not None
-            body = json.loads(msg)
+            body = json.loads(msg[0])
             assert body['action'] == 'delete'
-            assert body['function_name'] == 'pipe_del'
+            assert msg[1] == b''
+            assert body['id'] == 'id-pipe_del'
         finally:
             os.close(r_fd)
             os.close(w_fd)
@@ -688,6 +691,348 @@ class TestServerProcessMode(unittest.TestCase):
             assert not worker.is_alive()
 
 
+class TestProcessPoolRetire(unittest.TestCase):
+    """A registry change replaces the workers without cutting off the
+    connections the old ones are serving."""
+
+    _ADD1_ENVELOPE = {
+        'id': 'id-add1',
+        'param_types': 'BIGINT',
+        'signature': {
+            'name': 'add1',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+        },
+    }
+
+    def setUp(self):
+        import multiprocessing
+        import singlestoredb.functions.ext.plugin.registry as _reg_mod
+        import singlestoredb.functions.ext.plugin.connection as _conn_mod
+        try:
+            self.ctx = multiprocessing.get_context('fork')
+        except ValueError:
+            self.skipTest('fork not available on this platform')
+        self._orig_has_accel = _reg_mod._has_accel
+        _reg_mod._has_accel = False
+        _conn_mod._has_accel = False
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.sock_path = os.path.join(self.tmpdir.name, 'test.sock')
+        self.server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.server_sock.bind(self.sock_path)
+        self.server_sock.listen(4)
+        self.server = Server({})
+        self.server.shared_registry = _make_shared_registry_with_func()
+
+    def tearDown(self):
+        import singlestoredb.functions.ext.plugin.registry as _reg_mod
+        import singlestoredb.functions.ext.plugin.connection as _conn_mod
+        _reg_mod._has_accel = self._orig_has_accel
+        _conn_mod._has_accel = self._orig_has_accel
+        self.server_sock.close()
+        self.tmpdir.cleanup()
+
+    def _connect(self):
+        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client.settimeout(10)
+        client.connect(self.sock_path)
+        input_fd, output_fd = _create_temp_fds()
+        self.addCleanup(os.close, input_fd)
+        self.addCleanup(os.close, output_fd)
+        self.addCleanup(client.close)
+        return client, input_fd, output_fd
+
+    @staticmethod
+    def _call(client, input_fd, output_fd, value):
+        input_data = bytes(rowdat_1._dump([ft.LONGLONG], [1], [[value]]))
+        _send_udf_request(client, input_fd, input_data)
+        status, data = _recv_udf_response(client, output_fd)
+        assert status == STATUS_OK, data
+        _, rows = rowdat_1._load([('r', ft.LONGLONG)], data)
+        return rows[0][0]
+
+    def _start_pool(self, n_workers=1, pool=None):
+        """Run a pool's monitor in a thread; stop it at cleanup.
+
+        Pass ``pool`` to seed its state before the monitor starts, so the
+        test never mutates it while the monitor is iterating it.
+        """
+        if pool is None:
+            pool = _ProcessPool(
+                self.server, self.ctx, self.server_sock, n_workers,
+            )
+        thread = threading.Thread(target=pool.run, daemon=True)
+        thread.start()
+
+        def stop():
+            self.server.shutdown_event.set()
+            thread.join(timeout=20)
+            assert not thread.is_alive()
+        self.addCleanup(stop)
+        assert _wait_for(lambda: len(pool.workers) == n_workers)
+        return pool
+
+    def test_installing_connection_survives_worker_replacement(self):
+        pool = self._start_pool()
+        (old_proc, _), = pool.workers.values()
+
+        client, input_fd, output_fd = self._connect()
+        _send_handshake_v3(
+            client, 'add1', os.dup(input_fd), os.dup(output_fd),
+            self._ADD1_ENVELOPE, b'return x + 1',
+        )
+        assert self._call(client, input_fd, output_fd, 1) == 2
+
+        # Main has applied the register and retired the serving worker.
+        assert _wait_for(lambda: old_proc.pid in pool.retiring)
+        assert self.server.shared_registry.has_definition('id-add1')
+        assert old_proc.is_alive()
+
+        # The same connection keeps working on the retired worker.
+        assert self._call(client, input_fd, output_fd, 41) == 42
+        client.sendall(struct.pack('<Q', 0))
+
+        # Once its connection ends, the retired worker exits and is reaped.
+        assert _wait_for(lambda: old_proc.pid not in pool.retiring)
+        assert old_proc.exitcode == 0
+
+        # Its replacement was forked with the new definition.
+        client2, input_fd2, output_fd2 = self._connect()
+        _send_handshake(
+            client2, 'add1', os.dup(input_fd2), os.dup(output_fd2),
+        )
+        assert self._call(client2, input_fd2, output_fd2, 9) == 10
+        client2.sendall(struct.pack('<Q', 0))
+
+    def test_cached_register_does_not_retire(self):
+        pool = self._start_pool()
+        (old_proc, _), = pool.workers.values()
+        shared = self.server.shared_registry
+        before = shared.generation
+
+        header = json.dumps({
+            'action': 'register',
+            'id': 'id-triple',
+            'signature_json': json.dumps(
+                {'name': 'triple', 'args': [], 'returns': []},
+            ),
+            'replace': False,
+        }).encode()
+        assert not pool._apply_message(header, b'return 0', 'test')
+        assert shared.generation == before
+
+        client, input_fd, output_fd = self._connect()
+        _send_handshake(client, 'triple', os.dup(input_fd), os.dup(output_fd))
+        assert self._call(client, input_fd, output_fd, 2) == 6
+        client.sendall(struct.pack('<Q', 0))
+        assert list(pool.workers.values())[0][0] is old_proc
+        assert not pool.retiring
+
+    def test_sigusr1_drains_connection_then_exits(self):
+        r_fd, w_fd = os.pipe()
+        self.addCleanup(os.close, r_fd)
+        worker = self.ctx.Process(
+            target=self.server._worker_process_main,
+            args=(self.server_sock, 0, w_fd, [r_fd]),
+            daemon=True,
+        )
+        worker.start()
+        os.close(w_fd)
+        self.addCleanup(worker.kill)
+
+        client, input_fd, output_fd = self._connect()
+        _send_handshake(client, 'triple', os.dup(input_fd), os.dup(output_fd))
+        assert self._call(client, input_fd, output_fd, 1) == 3
+
+        os.kill(worker.pid, signal.SIGUSR1)
+        # A connection queued after SIGUSR1 must never be accepted.
+        late, _, _ = self._connect()
+        time.sleep(0.3)
+
+        assert worker.is_alive()
+        assert self._call(client, input_fd, output_fd, 5) == 15
+        client.sendall(struct.pack('<Q', 0))
+
+        worker.join(timeout=10)
+        assert worker.exitcode == 0
+        # The queued connection is still in the backlog, unaccepted.
+        conn = self.server_sock.accept()[0]
+        conn.close()
+
+    def test_unreadable_frame_retires_active_worker(self):
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, 1)
+        r_fd, w_fd = os.pipe()
+        self.addCleanup(os.close, w_fd)
+        proc = unittest.mock.MagicMock(pid=-1)
+        proc.is_alive.return_value = False
+        pool.workers[0] = (proc, _PipeReader(r_fd))
+        replacement = (unittest.mock.MagicMock(), unittest.mock.MagicMock())
+        os.write(w_fd, _PIPE_PREFIX.pack(_MAX_PIPE_HEADER + 1, 0))
+        with unittest.mock.patch.object(
+            pool, '_spawn', return_value=replacement,
+        ) as spawn:
+            assert not pool._poll_once()
+        spawn.assert_called_once_with(0)
+        assert pool.workers[0] is replacement
+        assert pool.retiring[-1].proc is proc
+        assert pool.retiring[-1].pipe is None
+        # main closed its read end
+        with self.assertRaises(OSError):
+            os.fstat(r_fd)
+
+    @staticmethod
+    def _dead_proc():
+        proc = unittest.mock.MagicMock(pid=-1)
+        proc.is_alive.return_value = False
+        return proc
+
+    def _register_frame(self, envelope, body):
+        header = json.dumps({
+            'action': 'register',
+            'id': envelope['id'],
+            'signature_json': json.dumps(envelope['signature']),
+            'replace': False,
+        }).encode()
+        return header, body
+
+    def _drain(self, pool, retiring):
+        """Poll until ``retiring``'s pipe is closed; count changing passes."""
+        changes = 0
+        for _ in range(10):
+            if retiring.pipe is None:
+                return changes
+            changes += pool._poll_once()
+        self.fail('pipe was never drained to EOF')
+
+    def test_dead_retiring_worker_pipe_drained_before_reap(self):
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, 1)
+        r_fd, w_fd = os.pipe()
+        _write_pipe_message(
+            w_fd, *self._register_frame(self._ADD1_ENVELOPE, b'return x + 1'),
+        )
+        _write_pipe_message(
+            w_fd, json.dumps({'action': 'delete', 'id': 'id-triple'}).encode(),
+        )
+        os.close(w_fd)
+        pool._retire(0, self._dead_proc(), _PipeReader(r_fd))
+        retiring = pool.retiring[-1]
+
+        # Exited, but two frames are still queued: not reaped yet.
+        pool._reap_retiring()
+        assert pool.retiring.get(-1) is retiring
+        assert retiring.pipe.fd == r_fd
+
+        # Both frames are already queued, so one read takes them both.
+        assert self._drain(pool, retiring) == 1
+        reg = self.server.shared_registry.get_thread_local_registry()
+        assert 'add1' in reg.functions
+        assert 'triple' not in reg.functions
+
+        pool._reap_retiring()
+        assert -1 not in pool.retiring
+
+    def test_dead_pipe_closed_after_deadline(self):
+        import singlestoredb.functions.ext.plugin.server as _server_mod
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, 1)
+        r_fd, w_fd = os.pipe()
+        # A stray write end keeps EOF from ever arriving.
+        self.addCleanup(os.close, w_fd)
+        pool._retire(0, self._dead_proc(), _PipeReader(r_fd))
+        with unittest.mock.patch.object(_server_mod, '_EXITED_PIPE_GRACE', 0):
+            pool._reap_retiring()
+        assert -1 not in pool.retiring
+        with self.assertRaises(OSError):
+            os.fstat(r_fd)
+
+    def test_crashed_active_worker_pipe_drained(self):
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, 1)
+        r_fd, w_fd = os.pipe()
+        _write_pipe_message(
+            w_fd, *self._register_frame(self._ADD1_ENVELOPE, b'return x + 1'),
+        )
+        os.close(w_fd)
+        proc = self._dead_proc()
+        pool.workers[0] = (proc, _PipeReader(r_fd))
+        # The replacement's pipe stays empty and open, so it never fires.
+        rep_r, rep_w = os.pipe()
+        self.addCleanup(os.close, rep_r)
+        self.addCleanup(os.close, rep_w)
+        replacement = (unittest.mock.MagicMock(), _PipeReader(rep_r))
+        with unittest.mock.patch.object(
+            pool, '_spawn', return_value=replacement,
+        ) as spawn:
+            pool._respawn_dead()
+        spawn.assert_called_once_with(0)
+        assert pool.workers[0] is replacement
+        retiring = pool.retiring[-1]
+        assert retiring.proc is proc
+        assert retiring.pipe.fd == r_fd
+
+        assert self._drain(pool, retiring) == 1
+        reg = self.server.shared_registry.get_thread_local_registry()
+        assert 'add1' in reg.functions
+
+    @staticmethod
+    def _stall_mid_frame(w_fd, partial):
+        os.write(w_fd, partial)
+        time.sleep(60)
+
+    def test_stalled_partial_frame_does_not_block_monitor(self):
+        """Half a frame on a pipe nobody closes can't hang the monitor."""
+        import singlestoredb.functions.ext.plugin.server as _server_mod
+        r_fd, w_fd = os.pipe()
+        # The test's own write end means EOF never arrives, even once the
+        # stalled worker is dead.
+        self.addCleanup(os.close, w_fd)
+        partial = _PIPE_PREFIX.pack(16, 0) + b'{"act'
+        stalled = self.ctx.Process(
+            target=self._stall_mid_frame, args=(w_fd, partial), daemon=True,
+        )
+        stalled.start()
+        self.addCleanup(stalled.kill)
+
+        pipe = _PipeReader(r_fd)
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, 1)
+        pool.retiring[stalled.pid] = _RetiringWorker(
+            7, stalled, pipe, time.monotonic() + 0.5,
+        )
+        with unittest.mock.patch.object(
+            _server_mod, '_EXITED_PIPE_GRACE', 0.5,
+        ):
+            pool = self._start_pool(pool=pool)
+            # The drain timeout is enforced...
+            assert _wait_for(lambda: stalled.exitcode == -signal.SIGTERM)
+            # ...and so is the exited-pipe grace, with the write end open.
+            assert _wait_for(lambda: stalled.pid not in pool.retiring)
+        assert pipe.pending == len(partial)
+        with self.assertRaises(OSError):
+            os.fstat(r_fd)
+        # Shutdown is checked by _start_pool's cleanup.
+
+    def test_frame_reassembled_across_polls(self):
+        pool = _ProcessPool(self.server, self.ctx, self.server_sock, 1)
+        r_fd, w_fd = os.pipe()
+        self.addCleanup(os.close, w_fd)
+        pipe = _PipeReader(r_fd)
+        self.addCleanup(pipe.close)
+        pool.workers[0] = (self._dead_proc(), pipe)
+        header, blob = self._register_frame(
+            self._ADD1_ENVELOPE, b'return x + 1',
+        )
+        frame = _PIPE_PREFIX.pack(len(header), len(blob)) + header + blob
+        half = len(frame) // 2
+
+        os.write(w_fd, frame[:half])
+        assert not pool._poll_once()
+        assert pipe.pending == half
+        assert not self.server.shared_registry.has_definition('id-add1')
+
+        os.write(w_fd, frame[half:])
+        assert pool._poll_once()
+        assert pipe.pending == 0
+        assert self.server.shared_registry.has_definition('id-add1')
+
+
 # ---------------------------------------------------------------------------
 # P1: rowdat_1 roundtrip with mixed types including NULL, datetime, decimal
 # ---------------------------------------------------------------------------
@@ -816,7 +1161,7 @@ class TestCallFunctionDispatch(unittest.TestCase):
                 for i, d in enumerate(ret_dtypes)
             ],
         })
-        shared.create_function(sig, body, False)
+        shared.create_function(f'id-{name}', sig, body, False)
         return shared.get_thread_local_registry()
 
     def test_int64_passthrough(self):
@@ -950,32 +1295,40 @@ class TestVectorDispatch(unittest.TestCase):
 class TestPipeMessages(unittest.TestCase):
     """Test the pipe message wire format for process mode communication."""
 
-    def test_roundtrip(self):
+    @staticmethod
+    def _roundtrip(header, blob=b''):
         r_fd, w_fd = os.pipe()
         try:
-            payload = b'hello world'
-            _write_pipe_message(w_fd, payload)
-            result = _read_pipe_message(r_fd)
-            assert result == payload
-        finally:
-            os.close(r_fd)
-            os.close(w_fd)
-
-    def test_large_payload(self):
-        r_fd, w_fd = os.pipe()
-        try:
-            payload = b'X' * 100_000
             # Write in a thread to avoid pipe buffer deadlock
             t = threading.Thread(
-                target=lambda: _write_pipe_message(w_fd, payload),
+                target=lambda: _write_pipe_message(w_fd, header, blob),
             )
             t.start()
             result = _read_pipe_message(r_fd)
             t.join()
-            assert result == payload
+            return result
         finally:
             os.close(r_fd)
             os.close(w_fd)
+
+    def test_roundtrip(self):
+        assert self._roundtrip(b'hello', b'world') == (b'hello', b'world')
+
+    def test_header_only(self):
+        assert self._roundtrip(b'hello world') == (b'hello world', b'')
+
+    def test_large_payload(self):
+        payload = b'X' * 100_000
+        assert self._roundtrip(payload, payload) == (payload, payload)
+
+    def test_blob_over_16_mib(self):
+        # The old single-buffer frame capped everything at 16 MiB.
+        blob = b'Y' * (17 * 1024 * 1024)
+        assert self._roundtrip(b'{}', blob) == (b'{}', blob)
+
+    def test_blob_at_body_cap(self):
+        blob = b'Z' * _MAX_V3_BODY_BYTES
+        assert self._roundtrip(b'{}', blob) == (b'{}', blob)
 
     def test_eof_returns_none(self):
         r_fd, w_fd = os.pipe()
@@ -984,17 +1337,163 @@ class TestPipeMessages(unittest.TestCase):
         os.close(r_fd)
         assert result is None
 
+    def test_truncated_frame_returns_none(self):
+        r_fd, w_fd = os.pipe()
+        try:
+            os.write(w_fd, _PIPE_PREFIX.pack(4, 4) + b'abcd' + b'ef')
+            os.close(w_fd)
+            w_fd = -1
+            assert _read_pipe_message(r_fd) is None
+        finally:
+            os.close(r_fd)
+            if w_fd >= 0:
+                os.close(w_fd)
+
+    def _assert_frame_rejected(self, header_len, blob_len):
+        r_fd, w_fd = os.pipe()
+        try:
+            os.write(w_fd, _PIPE_PREFIX.pack(header_len, blob_len))
+            with self.assertRaises(PipeFrameError):
+                _read_pipe_message(r_fd)
+        finally:
+            os.close(r_fd)
+            os.close(w_fd)
+
+    def test_oversized_header_is_an_error_not_a_short_read(self):
+        self._assert_frame_rejected(_MAX_PIPE_HEADER + 1, 0)
+
+    def test_oversized_blob_is_an_error_not_a_short_read(self):
+        self._assert_frame_rejected(2, _MAX_V3_BODY_BYTES + 1)
+
     def test_multiple_messages(self):
         r_fd, w_fd = os.pipe()
         try:
-            msgs = [b'msg1', b'msg2', b'msg3']
+            msgs = [(b'msg1', b''), (b'msg2', b'body2'), (b'msg3', b'b3')]
             for m in msgs:
-                _write_pipe_message(w_fd, m)
+                _write_pipe_message(w_fd, *m)
             for m in msgs:
                 assert _read_pipe_message(r_fd) == m
         finally:
             os.close(r_fd)
             os.close(w_fd)
+
+    def test_escape_heavy_body_travels_raw(self):
+        """A body JSON would escape sixfold still fits: it isn't JSON."""
+        shared = SharedRegistry()
+        shared.set_base_registry(FunctionRegistry())
+        signature = {
+            'name': 'esc_fn',
+            'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
+            'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
+        }
+        # A comment of control characters: 3 MiB raw, 18 MiB as JSON.
+        body = b'return x  # ' + b'\x01' * (3 * 1024 * 1024)
+        r_fd, w_fd = os.pipe()
+        result = []
+        reader = threading.Thread(
+            target=lambda: result.append(_read_pipe_message(r_fd)),
+        )
+        reader.start()
+        try:
+            with tempfile.TemporaryFile() as f:
+                f.write(body)
+                f.flush()
+                _install_v3_definition(
+                    {'id': 'id-esc', 'signature': signature},
+                    f.fileno(), shared, w_fd,
+                )
+            reader.join(timeout=10)
+        finally:
+            os.close(w_fd)
+            reader.join(timeout=5)
+            os.close(r_fd)
+        header, blob = result[0]
+        assert blob == body
+        assert 'code' not in json.loads(header)
+        assert len(header) < 1024
+
+
+class TestPipeReader(unittest.TestCase):
+    """The pool monitor's non-blocking, incremental frame reader."""
+
+    def setUp(self):
+        r_fd, self.w_fd = os.pipe()
+        self.reader = _PipeReader(r_fd)
+        self.addCleanup(self.reader.close)
+
+    def tearDown(self):
+        if self.w_fd >= 0:
+            os.close(self.w_fd)
+
+    def _close_writer(self):
+        os.close(self.w_fd)
+        self.w_fd = -1
+
+    def _read_bounded(self):
+        """``read()`` in a thread, so a blocking regression fails, not hangs."""
+        result = []
+        t = threading.Thread(
+            target=lambda: result.append(self.reader.read()), daemon=True,
+        )
+        t.start()
+        t.join(timeout=5)
+        assert not t.is_alive(), 'read() blocked'
+        return result[0]
+
+    def test_frame_split_across_writes(self):
+        header, blob = b'{"a": 1}', b'body'
+        prefix = _PIPE_PREFIX.pack(len(header), len(blob))
+        for piece in (prefix[:5], prefix[5:] + header):
+            os.write(self.w_fd, piece)
+            assert self._read_bounded() == ([], False)
+        os.write(self.w_fd, blob)
+        assert self._read_bounded() == ([(header, blob)], False)
+        assert self.reader.pending == 0
+
+    def test_several_frames_in_one_read(self):
+        msgs = [(b'msg1', b''), (b'msg2', b'body2'), (b'msg3', b'b3')]
+        os.write(
+            self.w_fd, b''.join(
+                _PIPE_PREFIX.pack(len(h), len(b)) + h + b for h, b in msgs
+            ),
+        )
+        assert self._read_bounded() == (msgs, False)
+
+    def test_partial_frame_with_writer_open_does_not_block(self):
+        os.write(self.w_fd, _PIPE_PREFIX.pack(100, 0) + b'abc')
+        assert self._read_bounded() == ([], False)
+        # Nothing more to read: returns at once rather than waiting.
+        assert self._read_bounded() == ([], False)
+        assert self.reader.pending == _PIPE_PREFIX.size + 3
+
+    def test_oversized_prefix_rejected_before_payload(self):
+        os.write(self.w_fd, _PIPE_PREFIX.pack(_MAX_PIPE_HEADER + 1, 0))
+        with self.assertRaises(PipeFrameError) as cm:
+            self.reader.read()
+        assert cm.exception.frames == []
+
+    def test_frames_before_a_bad_prefix_are_kept(self):
+        good = _PIPE_PREFIX.pack(2, 1) + b'{}' + b'x'
+        bad = _PIPE_PREFIX.pack(2, _MAX_V3_BODY_BYTES + 1)
+        os.write(self.w_fd, good + bad)
+        with self.assertRaises(PipeFrameError) as cm:
+            self.reader.read()
+        assert cm.exception.frames == [(b'{}', b'x')]
+
+    def test_eof_with_partial_frame(self):
+        os.write(self.w_fd, _PIPE_PREFIX.pack(4, 4) + b'abcd' + b'ef')
+        self._close_writer()
+        frames, eof = self._read_bounded()
+        while not eof:
+            assert frames == []
+            frames, eof = self._read_bounded()
+        assert frames == []
+        assert self.reader.pending == _PIPE_PREFIX.size + 6
+
+    def test_eof_on_empty_pipe(self):
+        self._close_writer()
+        assert self._read_bounded() == ([], True)
+        assert self.reader.pending == 0
 
 
 # ---------------------------------------------------------------------------
@@ -1014,7 +1513,7 @@ class TestSharedRegistryGeneration(unittest.TestCase):
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
         })
-        shared.create_function(sig, 'return x', False)
+        shared.create_function('id-f1', sig, 'return x', False)
         assert shared.generation == 1
 
     def test_generation_increments_on_delete(self):
@@ -1025,10 +1524,10 @@ class TestSharedRegistryGeneration(unittest.TestCase):
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
         })
-        shared.create_function(sig, 'return x', False)
+        shared.create_function('id-f1', sig, 'return x', False)
         assert shared.generation == 1
 
-        shared.delete_function('f1')
+        shared.delete_function('id-f1')
         assert shared.generation == 2
 
     def test_thread_local_cache_refreshes(self):
@@ -1040,11 +1539,11 @@ class TestSharedRegistryGeneration(unittest.TestCase):
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
         })
-        shared.create_function(sig, 'return x', False)
+        shared.create_function('id-f1', sig, 'return x', False)
         reg1 = shared.get_thread_local_registry()
         assert 'f1' in reg1.functions
 
-        shared.delete_function('f1')
+        shared.delete_function('id-f1')
         reg2 = shared.get_thread_local_registry()
         assert 'f1' not in reg2.functions
 
@@ -1056,7 +1555,7 @@ class TestSharedRegistryGeneration(unittest.TestCase):
             'args': [{'name': 'x', 'dtype': 'int64', 'sql': 'BIGINT'}],
             'returns': [{'name': '', 'dtype': 'int64', 'sql': 'BIGINT'}],
         })
-        shared.create_function(sig, 'return x', False)
+        shared.create_function('id-f1', sig, 'return x', False)
 
         reg1 = shared.get_thread_local_registry()
         reg2 = shared.get_thread_local_registry()
