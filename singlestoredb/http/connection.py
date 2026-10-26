@@ -182,14 +182,17 @@ def b64decode_converter(
 
 def encode_timedelta(obj: datetime.timedelta) -> str:
     """Encode timedelta as str."""
+    negative = obj.days < 0
+    if negative:
+        obj = -obj
     seconds = int(obj.seconds) % 60
     minutes = int(obj.seconds // 60) % 60
     hours = int(obj.seconds // 3600) % 24 + int(obj.days) * 24
     if obj.microseconds:
-        fmt = '{0:02d}:{1:02d}:{2:02d}.{3:06d}'
+        fmt = '{0}{1:02d}:{2:02d}:{3:02d}.{4:06d}'
     else:
-        fmt = '{0:02d}:{1:02d}:{2:02d}'
-    return fmt.format(hours, minutes, seconds, obj.microseconds)
+        fmt = '{0}{1:02d}:{2:02d}:{3:02d}'
+    return fmt.format('-' if negative else '', hours, minutes, seconds, obj.microseconds)
 
 
 def encode_time(obj: datetime.time) -> str:
