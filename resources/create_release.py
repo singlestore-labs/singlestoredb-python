@@ -68,18 +68,24 @@ def find_release_commit(version: str) -> str:
     That is the commit to tag, not the tip: anything merged after it is not
     in this release. The release PR is squash-merged, so its commit's subject
     is the PR title, with the PR number GitHub appends.
+
+    The match is on the subject only. ``--grep`` matches any line of the
+    message, so a later commit whose body quotes the release subject would
+    pass it; it is just a prefilter here.
     """
-    pattern = rf'^Prepare for v{re.escape(version)} release( \(#[0-9]+\))?$'
-    commit = git(
-        'log', RELEASE_REF, '-1', '--format=%H',
-        '--extended-regexp', f'--grep={pattern}',
-    ).strip()
-    if not commit:
-        raise ValueError(
-            f'No "Prepare for v{version} release" commit on {RELEASE_REF}; '
-            'has the release pull request been merged?',
-        )
-    return commit
+    pattern = rf'Prepare for v{re.escape(version)} release( \(#[0-9]+\))?'
+    candidates = git(
+        'log', RELEASE_REF, '--format=%H %s',
+        '--extended-regexp', f'--grep=^{pattern}$',
+    )
+    for line in candidates.splitlines():
+        commit, _, subject = line.partition(' ')
+        if re.fullmatch(pattern, subject):
+            return commit
+    raise ValueError(
+        f'No "Prepare for v{version} release" commit on {RELEASE_REF}; '
+        'has the release pull request been merged?',
+    )
 
 
 def read_file_at(commit: str, path: str) -> str:
