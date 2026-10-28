@@ -68,6 +68,7 @@ jobs:
         id: check-changes
         env:
           EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
           HEAD_REF: ${{ github.head_ref }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           REPO: ${{ github.repository }}
@@ -81,8 +82,17 @@ jobs:
             BASE_COMMIT="origin/${{ github.event.pull_request.base.ref }}"
             echo "Pull Request: Comparing against $BASE_COMMIT"
           elif [ "${{ github.ref_name }}" == "main" ] || [ "${{ github.ref_name }}" == "master" ]; then
-            # For pushes to main/master, compare against previous commit
-            BASE_COMMIT="HEAD~1"
+            # For pushes to main/master, compare against the push's own lower
+            # bound, so a multi-commit push (a rebase merge) is checked whole
+            # rather than just its last commit. Falls back to HEAD~1 for a
+            # manual run, which has no `before`, and for a force push whose old
+            # tip the clone does not have.
+            if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              BASE_COMMIT="$BEFORE"
+            else
+              BASE_COMMIT="HEAD~1"
+            fi
             echo "Push to main/master: Comparing against $BASE_COMMIT"
           else
             # For pushes to other branches, compare against master/main
@@ -169,7 +179,13 @@ jobs:
           fi
 
       - name: Trigger smoke tests for release
-        if: steps.check-changes.outputs.changed-directories == 'release'
+        # Not from a PR run: on a release PR smoke-test.yml already runs on its
+        # own pull_request trigger against the PR head, and a dispatch here
+        # would test main on a second cluster. The push-to-main run after the
+        # merge still dispatches, testing the merged release commit.
+        if: >-
+          github.event_name != 'pull_request' &&
+          steps.check-changes.outputs.changed-directories == 'release'
         run: |
           echo "🔥 Triggering smoke tests for release preparation..."
           gh workflow run smoke-test.yml
