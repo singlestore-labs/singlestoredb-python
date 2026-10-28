@@ -219,19 +219,27 @@ python resources/bump_version.py patch --summary "* Fixed critical bug in connec
 The script performs the following steps:
 1. Reads the current version from `pyproject.toml`
 2. Calculates the new version based on bump type
-3. Updates version in both `pyproject.toml` and `singlestoredb/__init__.py`
-4. Generates release notes from git history (or uses provided summary)
-5. Opens an editor to customize release notes for `docs/src/whatsnew.rst`
-6. Adds the new release to `COMPATIBILITY.md`
-7. Builds the documentation
-8. Stages all modified files for commit
-9. Optionally commits to a `release/v<version>` branch, pushes it, and opens a
-   pull request against `main`
+3. Checks the repository is ready for a release (see below), before any file
+   is modified
+4. Updates version in both `pyproject.toml` and `singlestoredb/__init__.py`
+5. Generates release notes from git history (or uses provided summary)
+6. Opens an editor to customize release notes for `docs/src/whatsnew.rst`
+7. Adds the new release to `COMPATIBILITY.md`
+8. Builds the documentation
+9. Stages all modified files for commit
+10. Optionally commits to a `release/v<version>` branch, pushes it, opens a
+    pull request against `main`, and switches back to `main`
 
-Changes to `main` must go through a reviewed pull request, so before touching
-any files the script checks that you are on `main`, that tracked files are
-clean, and that local `main` matches `origin/main`. It also stops if the
-`release/v<version>` branch already exists.
+Changes to `main` must go through a reviewed pull request, so the release
+branch has to start from the current `origin/main`. The check in step 3 stops
+the script unless you are on `main`, tracked files are clean, local `main`
+matches `origin/main`, the `release/v<version>` branch does not exist locally
+or on origin, and `gh` is authenticated.
+
+If the commit in step 10 fails, for example because a pre-commit hook rejects
+it, the staged changes are moved back to `main` and the empty release branch
+is deleted, so you can fix the problem and finish with the manual commands the
+script prints.
 
 If `COMPATIBILITY.md` cannot be generated, for example without network access, the script logs a warning and continues the release. Run `python resources/generate_compatibility.py` afterwards to add the missing row.
 
@@ -277,14 +285,22 @@ Install from https://cli.github.com/ and run `gh auth login`.
 
 ### Complete Release Workflow
 
-1. **Bump the version**:
+1. **Start from an up-to-date `main`** with no uncommitted changes to tracked
+   files:
+   ```bash
+   git switch main
+   git pull --ff-only
+   ```
+
+2. **Bump the version**:
    ```bash
    python resources/bump_version.py patch
    ```
 
-2. **Review and edit release notes** in the editor that opens
+3. **Review and edit release notes** in the editor that opens
 
-3. **Open the release pull request** (the script prompts for this, or do manually):
+4. **Open the release pull request**. The script asks whether to do this; answer
+   yes and it opens the PR in your browser. If you answer no, run:
    ```bash
    git switch -c release/v1.x.x
    git commit -m "Prepare for v1.x.x release"
@@ -293,25 +309,37 @@ Install from https://cli.github.com/ and run `gh auth login`.
    git switch main
    ```
 
-4. **Wait for CI tests to pass** on the pull request, and check the nightly runs:
-   - [Coverage tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml)
-   - [Smoke tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml)
+5. **Wait for CI to pass**. The [code checks](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/code-check.yml)
+   run on the pull request automatically. The
+   [coverage tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml)
+   and [smoke tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml)
+   do not; they run nightly against `main`, so check their latest runs, or start
+   them by hand from the workflow pages.
 
-5. **Get the pull request approved by a code owner and merged**, then update
+6. **Get the pull request approved and merged**. The approval must come from a
+   code owner (see `CODEOWNERS`) other than the PR author. Then update
    your local `main`:
    ```bash
    git pull --ff-only
    ```
 
-6. **Create the GitHub release**:
+7. **Create the GitHub release** (preview it first with `--dry-run`):
    ```bash
    python resources/create_release.py
    ```
 
-7. **Verify [PyPI publish](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/publish.yml)**
+8. **Verify [PyPI publish](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/publish.yml)**
    workflow completes successfully (triggered automatically by the GitHub release).
    Check the [PyPI package page](https://pypi.org/project/singlestoredb/) to confirm
    the new version is available.
+
+9. **Delete the release branch** if it was not deleted when the PR was merged.
+   Use `-D` locally, because git does not recognise a squash-merged branch as
+   merged:
+   ```bash
+   git branch -D release/v1.x.x
+   git push origin --delete release/v1.x.x
+   ```
 
 ### Version File Locations
 
