@@ -1,6 +1,11 @@
 name: pre-commit checks
 
-on: [push, pull_request]
+# Pushes to main only: a push to a PR branch also fires pull_request, and
+# running on both doubled the matrix for every PR update.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
 
 jobs:
   build:
