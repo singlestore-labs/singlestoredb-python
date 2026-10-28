@@ -20,7 +20,6 @@ jobs:
     environment: Base
     permissions:
       contents: read
-      actions: write
 
     # One ledger for the whole job, so the cleanup step at the end can reap
     # what any of the pytest steps created. See the matching block in
@@ -66,6 +65,12 @@ jobs:
 
       - name: Check for changes in monitored directories
         id: check-changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
         run: |
           # Define directories to monitor (space-separated)
           MONITORED_DIRS="singlestoredb/management singlestoredb/fusion"
@@ -76,8 +81,18 @@ jobs:
             BASE_COMMIT="origin/${{ github.event.pull_request.base.ref }}"
             echo "Pull Request: Comparing against $BASE_COMMIT"
           elif [ "${{ github.ref_name }}" == "main" ] || [ "${{ github.ref_name }}" == "master" ]; then
-            # For pushes to main/master, compare against previous commit
-            BASE_COMMIT="HEAD~1"
+            # For pushes to main/master, compare against the push's own lower
+            # bound. The ruleset only allows squash merges, so that is normally
+            # HEAD~1 anyway; this keeps a multi-commit push checked whole if
+            # the merge methods ever change. Falls back to HEAD~1 for a
+            # manual run, which has no `before`, and for a force push whose old
+            # tip the clone does not have.
+            if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              BASE_COMMIT="$BEFORE"
+            else
+              BASE_COMMIT="HEAD~1"
+            fi
             echo "Push to main/master: Comparing against $BASE_COMMIT"
           else
             # For pushes to other branches, compare against master/main
@@ -94,10 +109,12 @@ jobs:
             fi
           fi
 
-          # Check if this is a release preparation commit
-          COMMIT_MSG=$(git log -1 --format='%s' HEAD)
-          if [[ "$COMMIT_MSG" =~ ^Prepare\ for\ v[0-9]+\.[0-9]+\.[0-9]+\ release$ ]]; then
-            echo "🚀 Release preparation commit detected: $COMMIT_MSG"
+          # A release is a pull request from a same-repository release/* branch.
+          # It gets the full suite before merge, so the push to main after it
+          # takes the ordinary path below.
+          if [ "$EVENT_NAME" == "pull_request" ] \
+             && [[ "$HEAD_REF" == release/* ]] && [ "$HEAD_REPO" == "$REPO" ]; then
+            echo "🚀 Release pull request detected: $HEAD_REF"
             echo "changes-detected=true" >> "$GITHUB_OUTPUT"
             echo "changed-directories=release" >> "$GITHUB_OUTPUT"
             echo ""
@@ -150,15 +167,6 @@ jobs:
             echo ""
             echo "🎯 RESULT: No changes in monitored directories"
           fi
-
-      - name: Trigger smoke tests for release
-        if: steps.check-changes.outputs.changed-directories == 'release'
-        run: |
-          echo "🔥 Triggering smoke tests for release preparation..."
-          gh workflow run smoke-test.yml
-          echo "✅ Smoke tests triggered successfully"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run MySQL protocol tests (with management API)
         if: steps.check-changes.outputs.changes-detected == 'true'

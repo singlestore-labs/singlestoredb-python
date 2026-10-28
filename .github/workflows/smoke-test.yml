@@ -4,11 +4,21 @@ on:
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
+  # Release PRs only, so the matrix has passed on the release commit before it
+  # is approved. The trigger cannot filter on the head branch, so
+  # setup-database does; every other PR shows these jobs as skipped.
+  pull_request:
+    branches: [ main ]
 
 
 jobs:
 
   setup-database:
+    # Fork PRs get no secrets, so a fork's release/* branch could only fail.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (startsWith(github.head_ref, 'release/') &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
 
     steps:
@@ -155,7 +165,9 @@ jobs:
 
   shutdown-database:
     needs: [setup-database, smoke-test]
-    if: ${{ always() }}
+    # Skipped means setup-database's gate turned the run down and no cluster
+    # exists; a failed or cancelled setup may still have created one.
+    if: ${{ always() && needs.setup-database.result != 'skipped' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -201,3 +213,21 @@ jobs:
           curl --fail-with-body -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v2/clusters/$CLUSTER_ID?force=true"
         env:
           CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}
+
+
+  # One stable check name for branch protection to require. The matrix's check
+  # names change with the matrix, and on a non-release PR it reports as a single
+  # skipped "smoke-test", so no matrix name can be required directly. A failed
+  # setup-database skips the matrix, hence checking every need, not just it.
+  smoke-test-result:
+    needs: [setup-database, smoke-test]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check smoke-test results
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: |
+          echo "setup-database: ${{ needs.setup-database.result }}"
+          echo "smoke-test: ${{ needs.smoke-test.result }}"
+          exit 1
