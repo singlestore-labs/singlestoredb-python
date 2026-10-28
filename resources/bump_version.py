@@ -306,8 +306,13 @@ def check_repository_state(new_version: str) -> None:
     branch = release_branch(new_version)
     if run(['git', 'rev-parse', '--verify', '--quiet', f'refs/heads/{branch}']).returncode == 0:
         fail(f'Branch {branch} already exists locally')
-    if run(['git', 'ls-remote', '--exit-code', '--heads', 'origin', branch]).returncode == 0:
+    # With --exit-code, status 2 means no matching ref; anything else nonzero
+    # is a failed lookup, which says nothing about whether the branch exists
+    result = run(['git', 'ls-remote', '--exit-code', '--heads', 'origin', branch])
+    if result.returncode == 0:
         fail(f'Branch {branch} already exists on origin')
+    if result.returncode != 2:
+        fail(f'Could not check origin for {branch}: {result.stderr.strip()}')
 
     if run(['gh', 'auth', 'status']).returncode != 0:
         fail('Not authenticated with GitHub; run gh auth login')
@@ -315,15 +320,35 @@ def check_repository_state(new_version: str) -> None:
     status('✅ Repository is ready for a release')
 
 
-def commit_and_open_pr(new_version: str, notes: str) -> str | None:
+def release_steps(new_version: str) -> list[str]:
+    """Return the commands that take staged release files to an open PR.
+
+    commit_and_open_pr runs these same steps in this order, and reports how
+    many of them it got through, so the two must stay in step.
+    """
+    branch = release_branch(new_version)
+    return [
+        f'git switch -c {branch}',
+        f'git commit -m "Prepare for v{new_version} release"',
+        f'git push -u origin {branch}',
+        'gh pr create --base main --fill',
+        'git switch main',
+    ]
+
+
+def commit_and_open_pr(new_version: str, notes: str) -> tuple[str | None, int]:
     """Commit the staged release on its own branch and open a PR for it.
+
+    On a failed push or PR creation the release branch is left checked out,
+    so the remaining steps can be finished from where this stopped.
 
     Args:
         new_version: The new version being released
         notes: The release notes, used as the PR body
 
     Returns:
-        The PR URL if successful, None otherwise
+        The PR URL, or None on failure, and the number of release_steps
+        that were completed
     """
     commit_msg = f'Prepare for v{new_version} release'
     branch = release_branch(new_version)
@@ -332,7 +357,7 @@ def commit_and_open_pr(new_version: str, notes: str) -> str | None:
     result = run(['git', 'switch', '-c', branch])
     if result.returncode != 0:
         print(f'❌ Error creating branch: {result.stderr}', file=sys.stderr)
-        return None
+        return None, 0
 
     status(f'📝 Committing changes: {commit_msg}')
     result = run(['git', 'commit', '-m', commit_msg])
@@ -341,14 +366,14 @@ def commit_and_open_pr(new_version: str, notes: str) -> str | None:
         # Nothing was committed, so the staged changes move back to main intact
         run(['git', 'switch', 'main'])
         run(['git', 'branch', '-D', branch])
-        return None
+        return None, 0
     status('✅ Changes committed successfully')
 
     status(f'🚀 Pushing {branch} to origin...')
     result = run(['git', 'push', '-u', 'origin', branch])
     if result.returncode != 0:
         print(f'❌ Error pushing changes: {result.stderr}', file=sys.stderr)
-        return None
+        return None, 2
     status('✅ Branch pushed successfully')
 
     body = (
@@ -365,13 +390,13 @@ def commit_and_open_pr(new_version: str, notes: str) -> str | None:
     ])
     if result.returncode != 0:
         print(f'❌ Error opening pull request: {result.stderr}', file=sys.stderr)
-        return None
+        return None, 3
     pr_url = result.stdout.strip().splitlines()[-1]
     status(f'✅ Pull request opened: {pr_url}')
 
     run(['git', 'switch', 'main'])
 
-    return pr_url
+    return pr_url, 5
 
 
 def open_page(url: str) -> None:
@@ -600,19 +625,12 @@ def main() -> None:
     print(f'📝 Version: {current_version} → {new_version}', file=sys.stderr)
     print('', file=sys.stderr)
 
-    branch = release_branch(new_version)
-    manual_steps = [
-        f'git switch -c {branch}',
-        f'git commit -m "Prepare for v{new_version} release"',
-        f'git push -u origin {branch}',
-        'gh pr create --base main --fill',
-        'git switch main',
-    ]
+    manual_steps = release_steps(new_version)
 
     # Prompt user to commit and open a PR
     if prompt_yes_no('Do you want to commit, push, and open a pull request now?', default=True):
         print('', file=sys.stderr)
-        pr_url = commit_and_open_pr(new_version, notes)
+        pr_url, done = commit_and_open_pr(new_version, notes)
         if pr_url:
             print('', file=sys.stderr)
             open_page(pr_url)
@@ -625,8 +643,15 @@ def main() -> None:
             print('    📄 Run resources/create_release.py', file=sys.stderr)
         else:
             print('', file=sys.stderr)
-            print('⚠️  Commit/PR failed. Check the state shown by git status, then finish with:', file=sys.stderr)
-            for command in manual_steps:
+            if done:
+                print(
+                    f'⚠️  Commit/PR failed with {release_branch(new_version)} checked out. '
+                    'Check the state shown by git status, then finish with:',
+                    file=sys.stderr,
+                )
+            else:
+                print('⚠️  Commit/PR failed. Check the state shown by git status, then finish with:', file=sys.stderr)
+            for command in manual_steps[done:]:
                 print(f'    📄 {command}', file=sys.stderr)
     else:
         print('', file=sys.stderr)
