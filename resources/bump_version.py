@@ -262,63 +262,128 @@ def prompt_yes_no(question: str, default: bool = True) -> bool:
             print('Please answer y or n')
 
 
-def execute_commit_and_push(new_version: str) -> bool:
-    """Execute git commit and push commands.
+def release_branch(new_version: str) -> str:
+    """Return the name of the branch the release PR is opened from."""
+    return f'release/v{new_version}'
+
+
+def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run a command, capturing its output."""
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+
+def check_repository_state(new_version: str) -> None:
+    """Check the checkout can be released from before anything is modified.
+
+    Changes to main go through a pull request, so the release commit is made
+    on its own branch. That branch has to start from the current origin/main,
+    or the PR would carry unreviewed local commits along with the release.
+    """
+    status('🔍 Checking repository state...')
+
+    def fail(message: str) -> None:
+        print(f'❌ {message}', file=sys.stderr)
+        sys.exit(1)
+
+    branch = run(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).stdout.strip()
+    if branch != 'main':
+        fail(f'Releases are prepared from main, but the current branch is {branch}')
+
+    if run(['git', 'status', '--porcelain', '--untracked-files=no']).stdout.strip():
+        fail('The working tree has uncommitted changes; commit or stash them first')
+
+    if run(['git', 'fetch', 'origin', 'main']).returncode != 0:
+        fail('Could not fetch origin/main')
+
+    head = run(['git', 'rev-parse', 'HEAD']).stdout.strip()
+    origin_main = run(['git', 'rev-parse', 'origin/main']).stdout.strip()
+    if head != origin_main:
+        fail(
+            'Local main does not match origin/main; '
+            'run git pull --ff-only, or move local commits to a branch',
+        )
+
+    branch = release_branch(new_version)
+    if run(['git', 'rev-parse', '--verify', '--quiet', f'refs/heads/{branch}']).returncode == 0:
+        fail(f'Branch {branch} already exists locally')
+    if run(['git', 'ls-remote', '--exit-code', '--heads', 'origin', branch]).returncode == 0:
+        fail(f'Branch {branch} already exists on origin')
+
+    if run(['gh', 'auth', 'status']).returncode != 0:
+        fail('Not authenticated with GitHub; run gh auth login')
+
+    status('✅ Repository is ready for a release')
+
+
+def commit_and_open_pr(new_version: str, notes: str) -> str | None:
+    """Commit the staged release on its own branch and open a PR for it.
 
     Args:
         new_version: The new version being released
+        notes: The release notes, used as the PR body
 
     Returns:
-        True if successful, False otherwise
+        The PR URL if successful, None otherwise
     """
     commit_msg = f'Prepare for v{new_version} release'
+    branch = release_branch(new_version)
+
+    status(f'🌿 Creating branch {branch}')
+    result = run(['git', 'switch', '-c', branch])
+    if result.returncode != 0:
+        print(f'❌ Error creating branch: {result.stderr}', file=sys.stderr)
+        return None
+
+    status(f'📝 Committing changes: {commit_msg}')
+    result = run(['git', 'commit', '-m', commit_msg])
+    if result.returncode != 0:
+        print(f'❌ Error committing changes: {result.stdout}{result.stderr}', file=sys.stderr)
+        # Nothing was committed, so the staged changes move back to main intact
+        run(['git', 'switch', 'main'])
+        run(['git', 'branch', '-D', branch])
+        return None
+    status('✅ Changes committed successfully')
+
+    status(f'🚀 Pushing {branch} to origin...')
+    result = run(['git', 'push', '-u', 'origin', branch])
+    if result.returncode != 0:
+        print(f'❌ Error pushing changes: {result.stderr}', file=sys.stderr)
+        return None
+    status('✅ Branch pushed successfully')
+
+    body = (
+        f'Release notes for v{new_version}:\n\n{notes}\n\n'
+        'Once this is merged, run `python resources/create_release.py`.\n'
+    )
+    status('📬 Opening pull request...')
+    result = run([
+        'gh', 'pr', 'create',
+        '--base', 'main',
+        '--head', branch,
+        '--title', commit_msg,
+        '--body', body,
+    ])
+    if result.returncode != 0:
+        print(f'❌ Error opening pull request: {result.stderr}', file=sys.stderr)
+        return None
+    pr_url = result.stdout.strip().splitlines()[-1]
+    status(f'✅ Pull request opened: {pr_url}')
+
+    run(['git', 'switch', 'main'])
+
+    return pr_url
+
+
+def open_page(url: str) -> None:
+    """Open a page in the default web browser."""
+    status(f'🌐 Opening {url}')
 
     try:
-        # Execute git commit
-        status(f'📝 Committing changes: {commit_msg}')
-        result = subprocess.run(
-            ['git', 'commit', '-m', commit_msg],
-            capture_output=True,
-            text=True,
-        )
-
-        if result.returncode != 0:
-            print(f'❌ Error committing changes: {result.stderr}', file=sys.stderr)
-            return False
-
-        status('✅ Changes committed successfully')
-
-        # Execute git push
-        status('🚀 Pushing to remote repository...')
-        result = subprocess.run(
-            ['git', 'push'],
-            capture_output=True,
-            text=True,
-        )
-
-        if result.returncode != 0:
-            print(f'❌ Error pushing changes: {result.stderr}', file=sys.stderr)
-            return False
-
-        status('✅ Changes pushed successfully')
-        return True
-
-    except Exception as e:
-        print(f'❌ Unexpected error: {e}', file=sys.stderr)
-        return False
-
-
-def open_actions_page() -> None:
-    """Open the GitHub Actions page in the default web browser."""
-    actions_url = 'https://github.com/singlestore-labs/singlestoredb-python/actions'
-    status(f'🌐 Opening GitHub Actions page: {actions_url}')
-
-    try:
-        webbrowser.open(actions_url)
+        webbrowser.open(url)
         status('✅ Browser opened successfully')
     except Exception as e:
         print(f'⚠️  Could not open browser: {e}', file=sys.stderr)
-        print(f'   Please visit: {actions_url}', file=sys.stderr)
+        print(f'   Please visit: {url}', file=sys.stderr)
 
 
 def prepare_whatsnew_content(new_version: str, summary: str) -> str:
@@ -333,11 +398,11 @@ def prepare_whatsnew_content(new_version: str, summary: str) -> str:
     return new_section
 
 
-def update_whatsnew_with_editor(new_version: str, summary: str) -> bool:
+def update_whatsnew_with_editor(new_version: str, summary: str) -> str | None:
     """Update the whatsnew.rst file with the new release, allowing user to edit content.
 
     Returns:
-        True if successful, False if cancelled by user
+        The edited release notes, or None if cancelled by user
     """
     whatsnew_path = Path(__file__).parent.parent / 'docs' / 'src' / 'whatsnew.rst'
 
@@ -347,7 +412,7 @@ def update_whatsnew_with_editor(new_version: str, summary: str) -> bool:
     # Let the user edit the content
     edited_content = edit_content(new_release_content, 'release notes')
     if edited_content is None:
-        return False
+        return None
 
     # Read the current whatsnew.rst file
     with open(whatsnew_path, 'r') as f:
@@ -365,7 +430,7 @@ def update_whatsnew_with_editor(new_version: str, summary: str) -> bool:
     with open(whatsnew_path, 'w') as f:
         f.write(content)
 
-    return True
+    return edited_content
 
 
 def build_docs() -> None:
@@ -458,6 +523,8 @@ def main() -> None:
     new_version = bump_version(current_version, args.bump_type)
     status(f'New version will be: {new_version}')
 
+    check_repository_state(new_version)
+
     # Step 2: Update version in files
     step(2, 7, 'Updating version in files')
     start_time = time.time()
@@ -496,7 +563,8 @@ def main() -> None:
     start_time = time.time()
 
     status('📝 Opening editor for release notes...')
-    if not update_whatsnew_with_editor(new_version, summary):
+    notes = update_whatsnew_with_editor(new_version, summary)
+    if notes is None:
         print('\n❌ Operation cancelled by user', file=sys.stderr)
         status('🔄 Reverting version changes...')
 
@@ -532,27 +600,41 @@ def main() -> None:
     print(f'📝 Version: {current_version} → {new_version}', file=sys.stderr)
     print('', file=sys.stderr)
 
-    # Prompt user to commit and push
-    if prompt_yes_no('Do you want to commit and push now?', default=True):
+    branch = release_branch(new_version)
+    manual_steps = [
+        f'git switch -c {branch}',
+        f'git commit -m "Prepare for v{new_version} release"',
+        f'git push -u origin {branch}',
+        'gh pr create --base main --fill',
+        'git switch main',
+    ]
+
+    # Prompt user to commit and open a PR
+    if prompt_yes_no('Do you want to commit, push, and open a pull request now?', default=True):
         print('', file=sys.stderr)
-        if execute_commit_and_push(new_version):
+        pr_url = commit_and_open_pr(new_version, notes)
+        if pr_url:
             print('', file=sys.stderr)
-            open_actions_page()
+            open_page(pr_url)
             print('', file=sys.stderr)
-            print('✅ Code checks and smoke tests triggered automatically', file=sys.stderr)
+            print('✅ Code checks run on the pull request automatically', file=sys.stderr)
             print('', file=sys.stderr)
-            print('🚀 Next step:', file=sys.stderr)
-            print('    📄 Run resources/create_release.py once tests complete', file=sys.stderr)
+            print('🚀 Next steps:', file=sys.stderr)
+            print('    👀 Get the pull request approved and merged', file=sys.stderr)
+            print('    📄 git pull --ff-only', file=sys.stderr)
+            print('    📄 Run resources/create_release.py', file=sys.stderr)
         else:
             print('', file=sys.stderr)
-            print('⚠️  Commit/push failed. Please manually run:', file=sys.stderr)
-            print('    📄 git commit -m "Prepare for v{} release" && git push'.format(new_version), file=sys.stderr)
+            print('⚠️  Commit/PR failed. Check the state shown by git status, then finish with:', file=sys.stderr)
+            for command in manual_steps:
+                print(f'    📄 {command}', file=sys.stderr)
     else:
         print('', file=sys.stderr)
         print('🚀 Next steps:', file=sys.stderr)
-        print('    📄 git commit -m "Prepare for v{} release" && git push'.format(new_version), file=sys.stderr)
-        print('    ✅ Code checks and smoke tests will trigger automatically', file=sys.stderr)
-        print('    📄 Run resources/create_release.py once tests complete', file=sys.stderr)
+        for command in manual_steps:
+            print(f'    📄 {command}', file=sys.stderr)
+        print('    ✅ Code checks run on the pull request automatically', file=sys.stderr)
+        print('    📄 Once it is merged: git pull --ff-only, then run resources/create_release.py', file=sys.stderr)
 
 
 if __name__ == '__main__':

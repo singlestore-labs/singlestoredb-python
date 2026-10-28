@@ -225,7 +225,13 @@ The script performs the following steps:
 6. Adds the new release to `COMPATIBILITY.md`
 7. Builds the documentation
 8. Stages all modified files for commit
-9. Optionally commits and pushes changes
+9. Optionally commits to a `release/v<version>` branch, pushes it, and opens a
+   pull request against `main`
+
+Changes to `main` must go through a reviewed pull request, so before touching
+any files the script checks that you are on `main`, that tracked files are
+clean, and that local `main` matches `origin/main`. It also stops if the
+`release/v<version>` branch already exists.
 
 If `COMPATIBILITY.md` cannot be generated, for example without network access, the script logs a warning and continues the release. Run `python resources/generate_compatibility.py` afterwards to add the missing row.
 
@@ -241,14 +247,14 @@ python resources/generate_compatibility.py --rebuild
 
 ### Creating a Release
 
-After version bumping and CI tests pass, use the `resources/create_release.py`
+After the release pull request is merged, use the `resources/create_release.py`
 script to create a GitHub release.
 
 ```bash
-# Create release using version from pyproject.toml
+# Create release using the version on origin/main
 python resources/create_release.py
 
-# Create release for a specific version
+# Create release, checking origin/main is at a specific version
 python resources/create_release.py --version 1.16.9
 
 # Preview without creating (dry run)
@@ -257,9 +263,14 @@ python resources/create_release.py --dry-run
 
 The script:
 1. Checks prerequisites (gh CLI installed, authenticated with GitHub)
-2. Extracts version from `pyproject.toml` (or uses specified version)
-3. Reads release notes from `docs/src/whatsnew.rst`
-4. Creates a GitHub release with tag `v<version>`
+2. Fetches `origin/main` and reads the version from its `pyproject.toml`
+   (`--version` must match it), and stops if tag `v<version>` already exists
+3. Reads release notes from `docs/src/whatsnew.rst` on `origin/main`
+4. Creates a GitHub release with tag `v<version>` on that `origin/main` commit
+
+The version and notes are read from `origin/main` rather than your working tree,
+so running the script before the release pull request is merged fails with a
+version mismatch instead of tagging the previous release's code.
 
 **Prerequisites**: The GitHub CLI (`gh`) must be installed and authenticated.
 Install from https://cli.github.com/ and run `gh auth login`.
@@ -273,21 +284,31 @@ Install from https://cli.github.com/ and run `gh auth login`.
 
 2. **Review and edit release notes** in the editor that opens
 
-3. **Commit and push** (the script prompts for this, or do manually):
+3. **Open the release pull request** (the script prompts for this, or do manually):
    ```bash
-   git commit -m "Prepare for v1.x.x release" && git push
+   git switch -c release/v1.x.x
+   git commit -m "Prepare for v1.x.x release"
+   git push -u origin release/v1.x.x
+   gh pr create --base main --fill
+   git switch main
    ```
 
-4. **Wait for CI tests to pass** on GitHub Actions:
+4. **Wait for CI tests to pass** on the pull request, and check the nightly runs:
    - [Coverage tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml)
    - [Smoke tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml)
 
-5. **Create the GitHub release**:
+5. **Get the pull request approved by a code owner and merged**, then update
+   your local `main`:
+   ```bash
+   git pull --ff-only
+   ```
+
+6. **Create the GitHub release**:
    ```bash
    python resources/create_release.py
    ```
 
-6. **Verify [PyPI publish](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/publish.yml)**
+7. **Verify [PyPI publish](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/publish.yml)**
    workflow completes successfully (triggered automatically by the GitHub release).
    Check the [PyPI package page](https://pypi.org/project/singlestoredb/) to confirm
    the new version is available.
