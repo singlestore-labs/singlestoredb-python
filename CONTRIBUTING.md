@@ -232,9 +232,10 @@ The script performs the following steps:
 
 Changes to `main` must go through a reviewed pull request, so the release
 branch has to start from the current `origin/main`. The check in step 3 stops
-the script unless you are on `main`, tracked files are clean, local `main`
-matches `origin/main`, the `release/v<version>` branch does not exist locally
-or on origin, and `gh` is authenticated.
+the script unless you are on `main`, tracked files are clean, `docs/` has no
+untracked files (step 9 stages all of `docs/`), local `main` matches
+`origin/main`, the `release/v<version>` branch does not exist locally or on
+origin, tag `v<version>` does not exist on origin, and `gh` is authenticated.
 
 If the commit in step 10 fails, for example because a pre-commit hook rejects
 it, the staged changes are moved back to `main` and the empty release branch
@@ -273,12 +274,18 @@ The script:
 1. Checks prerequisites (gh CLI installed, authenticated with GitHub)
 2. Fetches `origin/main` and reads the version from its `pyproject.toml`
    (`--version` must match it), and stops if tag `v<version>` already exists
-3. Reads release notes from `docs/src/whatsnew.rst` on `origin/main`
-4. Creates a GitHub release with tag `v<version>` on that `origin/main` commit
+3. Finds the `Prepare for v<version> release` commit on `origin/main`, the
+   squash-merged release pull request
+4. Reads release notes from `docs/src/whatsnew.rst` at that commit
+5. Creates a GitHub release with tag `v<version>` on that commit
 
 The version and notes are read from `origin/main` rather than your working tree,
-so running the script before the release pull request is merged fails with a
-version mismatch instead of tagging the previous release's code.
+so running the script before the release pull request is merged stops instead of
+tagging the previous release's code: tag `v<previous>` already exists, or, with
+`--version`, the versions do not match. The tag goes on the release commit, not
+the tip of `origin/main`, so pull requests merged after the release are not
+published with it. That lookup relies on the merge commit's subject, so keep the
+pull request's title as `Prepare for v<version> release`.
 
 **Prerequisites**: The GitHub CLI (`gh`) must be installed and authenticated.
 Install from https://cli.github.com/ and run `gh auth login`.
@@ -314,12 +321,18 @@ Install from https://cli.github.com/ and run `gh auth login`.
    run on the pull request automatically; the smoke tests run on PRs from
    `release/*` branches only, and are skipped on every other PR. The
    [coverage tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml)
-   do not run on PRs; they run nightly against `main`, so check the latest run,
-   or start one by hand from the workflow page.
+   do not run on PRs; they run nightly against `main`, so check the latest run.
+   To run them on the release itself, start one by hand from the workflow page
+   and pick `release/v1.x.x` under **Use workflow from**; the default there is
+   `main`, which does not have the release commit yet.
 
 6. **Get the pull request approved and merged**. The approval must come from a
-   code owner (see `CODEOWNERS`) other than the PR author. Then update
-   your local `main`:
+   code owner (see `CODEOWNERS`) other than the PR author. The branch must also
+   be up to date with `main` to merge, so if another PR lands first, update the
+   release branch. That reruns the code checks and smoke tests, and brings in
+   changes the release notes may not cover yet, so check `docs/src/whatsnew.rst`
+   again. Keeping the release PR open briefly avoids this. Once it is merged,
+   update your local `main`:
    ```bash
    git pull --ff-only
    ```

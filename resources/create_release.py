@@ -4,14 +4,17 @@ Script to create GitHub releases for SingleStoreDB Python SDK.
 
 This script automatically:
 1. Fetches origin/main and extracts its version from pyproject.toml
-2. Finds the matching release notes from its docs/src/whatsnew.rst
-3. Creates a temporary notes file
-4. Creates a GitHub release using gh CLI, tagging that origin/main commit
+2. Finds the commit on origin/main that merged the release pull request
+3. Reads the matching release notes from that commit's docs/src/whatsnew.rst
+   into a temporary notes file
+4. Creates a GitHub release using gh CLI, tagging that commit
 5. Cleans up temporary files
 
 Everything is read from origin/main rather than the working tree, because the
 version bump reaches main through a pull request. Releasing before that PR is
 merged would otherwise tag the previous release's code with the new version.
+The tag goes on the release commit rather than the tip, so PRs merged after
+the release are not published with it.
 
 Usage:
     python create_release.py [--version VERSION] [--dry-run]
@@ -53,10 +56,30 @@ def git(*args: str) -> str:
     return result.stdout
 
 
-def fetch_release_commit() -> str:
-    """Fetch origin/main and return the commit the release will tag."""
+def fetch_release_ref() -> str:
+    """Fetch origin/main and return the commit at its tip."""
     git('fetch', 'origin', 'main')
     return git('rev-parse', RELEASE_REF).strip()
+
+
+def find_release_commit(version: str) -> str:
+    """Return the commit on origin/main that merged the release PR.
+
+    That is the commit to tag, not the tip: anything merged after it is not
+    in this release. The release PR is squash-merged, so its commit's subject
+    is the PR title, with the PR number GitHub appends.
+    """
+    pattern = rf'^Prepare for v{re.escape(version)} release( \(#[0-9]+\))?$'
+    commit = git(
+        'log', RELEASE_REF, '-1', '--format=%H',
+        '--extended-regexp', f'--grep={pattern}',
+    ).strip()
+    if not commit:
+        raise ValueError(
+            f'No "Prepare for v{version} release" commit on {RELEASE_REF}; '
+            'has the release pull request been merged?',
+        )
+    return commit
 
 
 def read_file_at(commit: str, path: str) -> str:
@@ -67,7 +90,10 @@ def read_file_at(commit: str, path: str) -> str:
 def check_tag_absent(tag: str) -> None:
     """Make sure the release tag does not already exist on origin."""
     if git('ls-remote', '--tags', 'origin', f'refs/tags/{tag}').strip():
-        raise ValueError(f'Tag {tag} already exists on origin')
+        raise ValueError(
+            f'Tag {tag} already exists on origin; if this release is new, '
+            'its pull request has not been merged yet',
+        )
 
 
 def get_version_from_pyproject(commit: str) -> str:
@@ -288,9 +314,9 @@ def main() -> None:
         start_time = time.time()
 
         status(f'🔄 Fetching {RELEASE_REF}...')
-        commit = fetch_release_commit()
-        version = get_version_from_pyproject(commit)
-        status(f'Extracted from pyproject.toml on {RELEASE_REF} ({commit[:12]}): {version}')
+        tip = fetch_release_ref()
+        version = get_version_from_pyproject(tip)
+        status(f'Extracted from pyproject.toml on {RELEASE_REF} ({tip[:12]}): {version}')
 
         if args.version and args.version != version:
             raise ValueError(
@@ -299,6 +325,15 @@ def main() -> None:
             )
 
         check_tag_absent(f'v{version}')
+
+        commit = find_release_commit(version)
+        if commit != tip:
+            later = git('rev-list', '--count', f'{commit}..{tip}').strip()
+            status(f'Release commit is {commit[:12]}; {later} later commit(s) on {RELEASE_REF} are not included')
+        if get_version_from_pyproject(commit) != version:
+            raise ValueError(
+                f'pyproject.toml at release commit {commit[:12]} is not at version {version}',
+            )
 
         elapsed = time.time() - start_time
         status(f'✅ Version determined in {elapsed:.1f}s')

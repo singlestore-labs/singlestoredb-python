@@ -82,8 +82,9 @@ jobs:
             echo "Pull Request: Comparing against $BASE_COMMIT"
           elif [ "${{ github.ref_name }}" == "main" ] || [ "${{ github.ref_name }}" == "master" ]; then
             # For pushes to main/master, compare against the push's own lower
-            # bound, so a multi-commit push (a rebase merge) is checked whole
-            # rather than just its last commit. Falls back to HEAD~1 for a
+            # bound. The ruleset only allows squash merges, so that is normally
+            # HEAD~1 anyway; this keeps a multi-commit push checked whole if
+            # the merge methods ever change. Falls back to HEAD~1 for a
             # manual run, which has no `before`, and for a force push whose old
             # tip the clone does not have.
             if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \

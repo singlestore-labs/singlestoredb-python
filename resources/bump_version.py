@@ -292,6 +292,11 @@ def check_repository_state(new_version: str) -> None:
     if run(['git', 'status', '--porcelain', '--untracked-files=no']).stdout.strip():
         fail('The working tree has uncommitted changes; commit or stash them first')
 
+    # stage_files adds all of docs/, so anything untracked there now would be
+    # committed with the release
+    if run(['git', 'ls-files', '--others', '--exclude-standard', ':(top)docs/']).stdout.strip():
+        fail('docs/ has untracked files, which would be committed with the release; remove them first')
+
     if run(['git', 'fetch', 'origin', 'main']).returncode != 0:
         fail('Could not fetch origin/main')
 
@@ -313,6 +318,13 @@ def check_repository_state(new_version: str) -> None:
         fail(f'Branch {branch} already exists on origin')
     if result.returncode != 2:
         fail(f'Could not check origin for {branch}: {result.stderr.strip()}')
+
+    tag = f'v{new_version}'
+    result = run(['git', 'ls-remote', '--exit-code', '--tags', 'origin', f'refs/tags/{tag}'])
+    if result.returncode == 0:
+        fail(f'Tag {tag} already exists on origin')
+    if result.returncode != 2:
+        fail(f'Could not check origin for tag {tag}: {result.stderr.strip()}')
 
     if run(['gh', 'auth', 'status']).returncode != 0:
         fail('Not authenticated with GitHub; run gh auth login')
@@ -391,10 +403,14 @@ def commit_and_open_pr(new_version: str, notes: str) -> tuple[str | None, int]:
     if result.returncode != 0:
         print(f'❌ Error opening pull request: {result.stderr}', file=sys.stderr)
         return None, 3
-    pr_url = result.stdout.strip().splitlines()[-1]
+    lines = result.stdout.strip().splitlines()
+    pr_url = lines[-1] if lines else 'https://github.com/singlestore-labs/singlestoredb-python/pulls'
     status(f'✅ Pull request opened: {pr_url}')
 
-    run(['git', 'switch', 'main'])
+    result = run(['git', 'switch', 'main'])
+    if result.returncode != 0:
+        print(f'⚠️  Could not switch back to main: {result.stderr}', file=sys.stderr)
+        return pr_url, 4
 
     return pr_url, 5
 
@@ -505,8 +521,10 @@ def stage_files() -> None:
         'docs/',  # All generated documentation files
     ]
 
+    # The paths are relative to the repository root, wherever this is run from
+    repo_root = Path(__file__).parent.parent
     for file_path in files_to_stage:
-        subprocess.run(['git', 'add', file_path], check=True)
+        subprocess.run(['git', 'add', file_path], cwd=repo_root, check=True)
         status(f'   ✓ Staged {file_path}')
 
     status('✅ All modified files staged for commit')
@@ -638,6 +656,8 @@ def main() -> None:
             print('✅ Code checks and smoke tests run on the pull request automatically', file=sys.stderr)
             print('', file=sys.stderr)
             print('🚀 Next steps:', file=sys.stderr)
+            for command in manual_steps[done:]:
+                print(f'    📄 {command}', file=sys.stderr)
             print('    👀 Get the pull request approved and merged', file=sys.stderr)
             print('    📄 git pull --ff-only', file=sys.stderr)
             print('    📄 Run resources/create_release.py', file=sys.stderr)
