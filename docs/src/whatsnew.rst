@@ -8,6 +8,13 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.18.2 - October 28, 2026
+--------------------------
+* Add awaitable UDF server shutdown (#143)
+* Release through a pull request instead of pushing to main (#151)
+* Propagate W3C trace context through Python UDF server and AI clients MCDB-103303 #closes (#140)
+* Pin the pre-commit workflow to Ubuntu 24.04 (#148)
+
 v1.18.1 - October 2, 2026
 -------------------------
 * Narrow v1 deprecation warnings to workspace creation (#139)

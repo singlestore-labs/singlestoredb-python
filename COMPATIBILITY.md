@@ -10,6 +10,7 @@ Tested Python versions come from the smoke-test CI workflow at each release tag.
 
 | Driver Version | Release date | Engine versions in support | Tested Python versions |
 | -------------- | ------------ | -------------------------- | ---------------------- |
+| 1.18.2         | 2026-10-28   | 8.9, 9.0, 9.1 RC, 10       | 3.9–3.14               |
 | 1.18.1         | 2026-10-02   | 8.9, 9.0                   | 3.9–3.14               |
 | 1.18.0         | 2026-10-01   | 8.9, 9.0                   | 3.9–3.14               |
 | 1.17.3         | 2026-09-10   | 8.9, 9.0                   | 3.9–3.13               |
