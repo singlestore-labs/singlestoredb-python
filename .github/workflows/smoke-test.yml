@@ -213,3 +213,21 @@ jobs:
           curl --fail-with-body -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v2/clusters/$CLUSTER_ID?force=true"
         env:
           CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}
+
+
+  # One stable check name for branch protection to require. The matrix's check
+  # names change with the matrix, and on a non-release PR it reports as a single
+  # skipped "smoke-test", so no matrix name can be required directly. A failed
+  # setup-database skips the matrix, hence checking every need, not just it.
+  smoke-test-result:
+    needs: [setup-database, smoke-test]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check smoke-test results
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: |
+          echo "setup-database: ${{ needs.setup-database.result }}"
+          echo "smoke-test: ${{ needs.smoke-test.result }}"
+          exit 1
