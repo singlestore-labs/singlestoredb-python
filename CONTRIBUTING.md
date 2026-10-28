@@ -310,11 +310,12 @@ Install from https://cli.github.com/ and run `gh auth login`.
    ```
 
 5. **Wait for CI to pass**. The [code checks](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/code-check.yml)
-   run on the pull request automatically. The
-   [coverage tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml)
    and [smoke tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml)
-   do not; they run nightly against `main`, so check their latest runs, or start
-   them by hand from the workflow pages.
+   run on the pull request automatically; the smoke tests run on PRs from
+   `release/*` branches only, and are skipped on every other PR. The
+   [coverage tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml)
+   do not run on PRs; they run nightly against `main`, so check the latest run,
+   or start one by hand from the workflow page.
 
 6. **Get the pull request approved and merged**. The approval must come from a
    code owner (see `CODEOWNERS`) other than the PR author. Then update

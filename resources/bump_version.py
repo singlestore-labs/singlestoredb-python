@@ -617,7 +617,7 @@ def main() -> None:
             print('', file=sys.stderr)
             open_page(pr_url)
             print('', file=sys.stderr)
-            print('✅ Code checks run on the pull request automatically', file=sys.stderr)
+            print('✅ Code checks and smoke tests run on the pull request automatically', file=sys.stderr)
             print('', file=sys.stderr)
             print('🚀 Next steps:', file=sys.stderr)
             print('    👀 Get the pull request approved and merged', file=sys.stderr)
@@ -633,7 +633,7 @@ def main() -> None:
         print('🚀 Next steps:', file=sys.stderr)
         for command in manual_steps:
             print(f'    📄 {command}', file=sys.stderr)
-        print('    ✅ Code checks run on the pull request automatically', file=sys.stderr)
+        print('    ✅ Code checks and smoke tests run on the pull request automatically', file=sys.stderr)
         print('    📄 Once it is merged: git pull --ff-only, then run resources/create_release.py', file=sys.stderr)
 
 
