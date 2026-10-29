@@ -5,6 +5,7 @@
 # https://dev.mysql.com/doc/refman/5.5/en/error-handling.html
 import errno
 import functools
+import importlib
 import io
 import os
 import queue
@@ -529,7 +530,10 @@ class Connection(BaseConnection):
 
         if self.pure_python is False and _singlestoredb_accel is None:
             try:
-                import _singlestortedb_accel  # noqa: F401
+                # Retry only to print why it failed. An import statement here
+                # would make _singlestoredb_accel local to __init__ and break
+                # the module-level checks above and below.
+                importlib.import_module('_singlestoredb_accel')
             except Exception:
                 import traceback
                 traceback.print_exc(file=sys.stderr)
