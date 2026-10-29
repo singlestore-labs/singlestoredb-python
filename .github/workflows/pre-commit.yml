@@ -1,10 +1,18 @@
 name: pre-commit checks
 
-on: [push, pull_request]
+# Pushes to main only: a push to a PR branch also fires pull_request, and
+# running on both doubled the matrix for every PR update.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: that label moves to Ubuntu 26.04, which
+    # setup-python has no Python 3.9 build for, and 3.9 is in the matrix
+    # below. Unpin once 3.9 support is dropped.
+    runs-on: ubuntu-24.04
 
     strategy:
       matrix:
@@ -32,3 +40,17 @@ jobs:
     - name: Analysing the code with pre-commit checks
       run: |
         pre-commit run --all-files
+
+  # One stable check name for branch protection to require: the matrix's check
+  # names change whenever a Python version is added or dropped.
+  pre-commit-result:
+    needs: build
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check pre-commit results
+      if: ${{ needs.build.result != 'success' }}
+      run: |
+        echo "build: ${{ needs.build.result }}"
+        exit 1

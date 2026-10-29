@@ -219,13 +219,28 @@ python resources/bump_version.py patch --summary "* Fixed critical bug in connec
 The script performs the following steps:
 1. Reads the current version from `pyproject.toml`
 2. Calculates the new version based on bump type
-3. Updates version in both `pyproject.toml` and `singlestoredb/__init__.py`
-4. Generates release notes from git history (or uses provided summary)
-5. Opens an editor to customize release notes for `docs/src/whatsnew.rst`
-6. Adds the new release to `COMPATIBILITY.md`
-7. Builds the documentation
-8. Stages all modified files for commit
-9. Optionally commits and pushes changes
+3. Checks the repository is ready for a release (see below), before any file
+   is modified
+4. Updates version in both `pyproject.toml` and `singlestoredb/__init__.py`
+5. Generates release notes from git history (or uses provided summary)
+6. Opens an editor to customize release notes for `docs/src/whatsnew.rst`
+7. Adds the new release to `COMPATIBILITY.md`
+8. Builds the documentation
+9. Stages all modified files for commit
+10. Optionally commits to a `release/v<version>` branch, pushes it, opens a
+    pull request against `main`, and switches back to `main`
+
+Changes to `main` must go through a reviewed pull request, so the release
+branch has to start from the current `origin/main`. The check in step 3 stops
+the script unless you are on `main`, tracked files are clean, `docs/` has no
+untracked files (step 9 stages all of `docs/`), local `main` matches
+`origin/main`, the `release/v<version>` branch does not exist locally or on
+origin, tag `v<version>` does not exist on origin, and `gh` is authenticated.
+
+If the commit in step 10 fails, for example because a pre-commit hook rejects
+it, the staged changes are moved back to `main` and the empty release branch
+is deleted, so you can fix the problem and finish with the manual commands the
+script prints.
 
 If `COMPATIBILITY.md` cannot be generated, for example without network access, the script logs a warning and continues the release. Run `python resources/generate_compatibility.py` afterwards to add the missing row.
 
@@ -241,14 +256,14 @@ python resources/generate_compatibility.py --rebuild
 
 ### Creating a Release
 
-After version bumping and CI tests pass, use the `resources/create_release.py`
+After the release pull request is merged, use the `resources/create_release.py`
 script to create a GitHub release.
 
 ```bash
-# Create release using version from pyproject.toml
+# Create release using the version on origin/main
 python resources/create_release.py
 
-# Create release for a specific version
+# Create release, checking origin/main is at a specific version
 python resources/create_release.py --version 1.16.9
 
 # Preview without creating (dry run)
@@ -257,40 +272,88 @@ python resources/create_release.py --dry-run
 
 The script:
 1. Checks prerequisites (gh CLI installed, authenticated with GitHub)
-2. Extracts version from `pyproject.toml` (or uses specified version)
-3. Reads release notes from `docs/src/whatsnew.rst`
-4. Creates a GitHub release with tag `v<version>`
+2. Fetches `origin/main` and reads the version from its `pyproject.toml`
+   (`--version` must match it), and stops if tag `v<version>` already exists
+3. Finds the `Prepare for v<version> release` commit on `origin/main`, the
+   squash-merged release pull request
+4. Reads release notes from `docs/src/whatsnew.rst` at that commit
+5. Creates a GitHub release with tag `v<version>` on that commit
+
+The version and notes are read from `origin/main` rather than your working tree,
+so running the script before the release pull request is merged stops instead of
+tagging the previous release's code: tag `v<previous>` already exists, or, with
+`--version`, the versions do not match. The tag goes on the release commit, not
+the tip of `origin/main`, so pull requests merged after the release are not
+published with it. That lookup relies on the merge commit's subject, so keep the
+pull request's title as `Prepare for v<version> release`.
 
 **Prerequisites**: The GitHub CLI (`gh`) must be installed and authenticated.
 Install from https://cli.github.com/ and run `gh auth login`.
 
 ### Complete Release Workflow
 
-1. **Bump the version**:
+1. **Start from an up-to-date `main`** with no uncommitted changes to tracked
+   files:
+   ```bash
+   git switch main
+   git pull --ff-only
+   ```
+
+2. **Bump the version**:
    ```bash
    python resources/bump_version.py patch
    ```
 
-2. **Review and edit release notes** in the editor that opens
+3. **Review and edit release notes** in the editor that opens
 
-3. **Commit and push** (the script prompts for this, or do manually):
+4. **Open the release pull request**. The script asks whether to do this; answer
+   yes and it opens the PR in your browser. If you answer no, run:
    ```bash
-   git commit -m "Prepare for v1.x.x release" && git push
+   git switch -c release/v1.x.x
+   git commit -m "Prepare for v1.x.x release"
+   git push -u origin release/v1.x.x
+   gh pr create --base main --fill
+   git switch main
    ```
 
-4. **Wait for CI tests to pass** on GitHub Actions:
-   - [Coverage tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml)
-   - [Smoke tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml)
+5. **Wait for CI to pass**. The [code checks](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/code-check.yml)
+   and [smoke tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/smoke-test.yml)
+   run on the pull request automatically; the smoke tests run on PRs from
+   `release/*` branches only, and are skipped on every other PR. The
+   [coverage tests](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/coverage.yml)
+   do not run on PRs; they run nightly against `main`, so check the latest run.
+   To run them on the release itself, start one by hand from the workflow page
+   and pick `release/v1.x.x` under **Use workflow from**; the default there is
+   `main`, which does not have the release commit yet.
 
-5. **Create the GitHub release**:
+6. **Get the pull request approved and merged**. The approval must come from a
+   code owner (see `CODEOWNERS`) other than the PR author. The branch must also
+   be up to date with `main` to merge, so if another PR lands first, update the
+   release branch. That reruns the code checks and smoke tests, and brings in
+   changes the release notes may not cover yet, so check `docs/src/whatsnew.rst`
+   again. Keeping the release PR open briefly avoids this. Once it is merged,
+   update your local `main`:
+   ```bash
+   git pull --ff-only
+   ```
+
+7. **Create the GitHub release** (preview it first with `--dry-run`):
    ```bash
    python resources/create_release.py
    ```
 
-6. **Verify [PyPI publish](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/publish.yml)**
+8. **Verify [PyPI publish](https://github.com/singlestore-labs/singlestoredb-python/actions/workflows/publish.yml)**
    workflow completes successfully (triggered automatically by the GitHub release).
    Check the [PyPI package page](https://pypi.org/project/singlestoredb/) to confirm
    the new version is available.
+
+9. **Delete the release branch** if it was not deleted when the PR was merged.
+   Use `-D` locally, because git does not recognise a squash-merged branch as
+   merged:
+   ```bash
+   git branch -D release/v1.x.x
+   git push origin --delete release/v1.x.x
+   ```
 
 ### Version File Locations
 
