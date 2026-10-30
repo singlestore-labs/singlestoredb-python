@@ -1043,8 +1043,7 @@ propagate bidirectionally between Python and the Portal UI.
 
 ### Server Tools (`singlestoredb/server/`)
 
-Utilities for managing SingleStore server instances, including Docker helpers and
-free tier management.
+Utilities for managing SingleStore server instances in Docker.
 
 #### Docker Server (`singlestoredb/server/docker.py`)
 
@@ -1077,25 +1076,6 @@ with docker.start(password='my_password') as server:
     conn = server.connect()
     # ... use connection ...
 # Server is stopped automatically on exit
-```
-
-#### Free Tier Server (`singlestoredb/server/free_tier.py`)
-
-Start a free tier SingleStore server instance:
-
-```python
-from singlestoredb.server import free_tier
-
-# Start the free tier server (no configuration required)
-server = free_tier.start()
-
-# Connect to the server
-conn = server.connect()
-
-# Use as a context manager
-with free_tier.start() as server:
-    conn = server.connect()
-    # ... use connection ...
 ```
 
 ---
