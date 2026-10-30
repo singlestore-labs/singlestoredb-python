@@ -1,13 +1,20 @@
 """
-Control signal dispatch for @@health, @@functions, @@register, @@delete.
+Control signal dispatch for @@health, @@functions, @@delete.
 
-Matches the Rust wasm-udf-server's dispatch_control_signal behavior.
+Matches the Rust wasm-udf-server's dispatch_control_signal behavior:
+every failure carries a machine-readable ``code`` (UNKNOWN_SIGNAL,
+DELETE_MISSING_PAYLOAD, DELETE_INVALID_PAYLOAD,
+DELETE_FUNC_NOT_REGISTERED, INTERNAL_ERROR) alongside its message, and is
+answered on the wire as a 200 response whose body is
+``{"error": ..., "code": ...}``. Registration happens in-band via the v3
+handshake envelope; there is no separate @@register control signal.
 """
 from __future__ import annotations
 
 import json
 import logging
 from dataclasses import dataclass
+from typing import Optional
 from typing import TYPE_CHECKING
 
 from .registry import describe_functions_json
@@ -23,6 +30,7 @@ class ControlResult:
     """Result of a control signal dispatch."""
     ok: bool
     data: str  # JSON response on success, error message on failure
+    code: Optional[str] = None  # error code, set only when ok is False
 
 
 def dispatch_control_signal(
@@ -37,10 +45,6 @@ def dispatch_control_signal(
             return _handle_health()
         elif signal_name == '@@functions':
             return _handle_functions(shared_registry)
-        elif signal_name == '@@register':
-            return _handle_register(
-                request_data, shared_registry, pipe_write_fd,
-            )
         elif signal_name == '@@delete':
             return _handle_delete(
                 request_data, shared_registry, pipe_write_fd,
@@ -49,9 +53,10 @@ def dispatch_control_signal(
             return ControlResult(
                 ok=False,
                 data=f'Unknown control signal: {signal_name}',
+                code='UNKNOWN_SIGNAL',
             )
     except Exception as e:
-        return ControlResult(ok=False, data=str(e))
+        return ControlResult(ok=False, data=str(e), code='INTERNAL_ERROR')
 
 
 def _handle_health() -> ControlResult:
@@ -66,117 +71,48 @@ def _handle_functions(shared_registry: SharedRegistry) -> ControlResult:
     return ControlResult(ok=True, data=f'{{"functions":{json_str}}}')
 
 
-def _handle_register(
-    request_data: bytes,
-    shared_registry: SharedRegistry,
-    pipe_write_fd: int | None = None,
-) -> ControlResult:
-    """Handle @@register: register a new function dynamically.
-
-    Security: the function body is passed to ``exec()`` via
-    ``FunctionRegistry.create_function``. The security boundary is
-    the Unix socket permission (0o600) set in ``Server._bind_socket``,
-    which restricts access to the socket owner.
-
-    If ``pipe_write_fd`` is not None (process mode), the registration
-    payload is written to the pipe so the main process can update its
-    own registry and re-fork all workers.
-    """
-    if not request_data:
-        return ControlResult(ok=False, data='Missing registration payload')
-
-    try:
-        body = json.loads(request_data)
-    except json.JSONDecodeError as e:
-        return ControlResult(ok=False, data=f'Invalid JSON: {e}')
-
-    function_name = body.get('name')
-    if not function_name:
-        return ControlResult(
-            ok=False, data='Missing required field: name',
-        )
-
-    args = body.get('args')
-    if not isinstance(args, list):
-        return ControlResult(
-            ok=False, data='Missing required field: args (must be an array)',
-        )
-
-    returns = body.get('returns')
-    if not isinstance(returns, list):
-        return ControlResult(
-            ok=False,
-            data='Missing required field: returns (must be an array)',
-        )
-
-    func_body = body.get('body')
-    if not func_body:
-        return ControlResult(
-            ok=False, data='Missing required field: body',
-        )
-
-    replace = body.get('replace', False)
-
-    # Build signature JSON matching describe-functions schema
-    signature = json.dumps({
-        'name': function_name,
-        'args': args,
-        'returns': returns,
-    })
-
-    try:
-        shared_registry.create_function(signature, func_body, replace)
-    except Exception as e:
-        return ControlResult(ok=False, data=str(e))
-
-    # Notify main process so it can re-fork workers with updated state
-    if pipe_write_fd is not None:
-        from .server import _write_pipe_message
-        payload = json.dumps({
-            'action': 'register',
-            'signature_json': signature,
-            'code': func_body,
-            'replace': replace,
-        }).encode()
-        _write_pipe_message(pipe_write_fd, payload)
-
-    logger.info(f"@@register: added function '{function_name}'")
-    return ControlResult(ok=True, data='{"status":"ok"}')
-
-
 def _handle_delete(
     request_data: bytes,
     shared_registry: SharedRegistry,
     pipe_write_fd: int | None = None,
 ) -> ControlResult:
-    """Handle @@delete: delete a dynamically registered function."""
+    """Handle @@delete: delete a dynamically registered function by id."""
     if not request_data:
-        return ControlResult(ok=False, data='Missing deletion payload')
-
-    try:
-        body = json.loads(request_data)
-    except json.JSONDecodeError as e:
-        return ControlResult(ok=False, data=f'Invalid JSON: {e}')
-
-    function_name = body.get('name')
-    if not function_name:
         return ControlResult(
-            ok=False, data='Missing required field: name',
+            ok=False, data='Missing deletion payload',
+            code='DELETE_MISSING_PAYLOAD',
         )
 
     try:
-        shared_registry.delete_function(function_name)
-    except ValueError as e:
-        return ControlResult(ok=False, data=str(e))
+        body = json.loads(request_data)
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        return ControlResult(
+            ok=False, data=f'Invalid JSON: {e}',
+            code='DELETE_INVALID_PAYLOAD',
+        )
 
-    # Notify main process so it can re-fork workers with updated state
+    id = body.get('id') if isinstance(body, dict) else None
+    if not isinstance(id, str):
+        return ControlResult(
+            ok=False, data='Missing required string field: id',
+            code='DELETE_INVALID_PAYLOAD',
+        )
+
+    try:
+        shared_registry.delete_function(id)
+    except ValueError as e:
+        return ControlResult(
+            ok=False, data=str(e), code='DELETE_FUNC_NOT_REGISTERED',
+        )
+
+    # Notify main process so it can replace workers with updated state
     if pipe_write_fd is not None:
         from .server import _write_pipe_message
         payload = json.dumps({
             'action': 'delete',
-            'function_name': function_name,
+            'id': id,
         }).encode()
         _write_pipe_message(pipe_write_fd, payload)
 
-    logger.info(f"@@delete: removed function '{function_name}'")
+    logger.info(f'@@delete: removed function id={id!r}')
     return ControlResult(ok=True, data='{"status":"ok"}')
