@@ -637,6 +637,22 @@ as SingleStore external functions. UDF servers can be deployed in three modes: a
 (remote), a memory-mapped collocated server (lowest latency), or as a plugin
 server using Unix sockets with a thread/process pool (CLI-driven).
 
+### Managed UDF shutdown
+
+The notebook runtime can call `await singlestoredb.apps.shutdown_udf_app(timeout=20)`
+on the same event loop that started `run_udf_app`. Uvicorn closes listeners and idle
+connections, allows active requests to finish within the supplied drain budget, and
+cancels requests exceeding it. The call waits for the serving task to exit and closes
+any remaining connections. Repeated calls are safe; the first shutdown request sets
+the budget. Passing `None` preserves the unbounded drain used when replacing an
+existing server inside a kernel.
+
+The example's 20 seconds is not a platform default. The host must choose a budget
+below its pod termination deadline, leave time for cleanup, and keep the kernel and
+networking alive while awaiting shutdown. This SDK operation does not configure
+Kubernetes, intercept Jupyter shutdown, or forcibly stop synchronous Python work in
+worker threads; the notebook runtime must coordinate process termination afterward.
+
 ### Architecture
 
 ```
@@ -1027,8 +1043,7 @@ propagate bidirectionally between Python and the Portal UI.
 
 ### Server Tools (`singlestoredb/server/`)
 
-Utilities for managing SingleStore server instances, including Docker helpers and
-free tier management.
+Utilities for managing SingleStore server instances in Docker.
 
 #### Docker Server (`singlestoredb/server/docker.py`)
 
@@ -1061,25 +1076,6 @@ with docker.start(password='my_password') as server:
     conn = server.connect()
     # ... use connection ...
 # Server is stopped automatically on exit
-```
-
-#### Free Tier Server (`singlestoredb/server/free_tier.py`)
-
-Start a free tier SingleStore server instance:
-
-```python
-from singlestoredb.server import free_tier
-
-# Start the free tier server (no configuration required)
-server = free_tier.start()
-
-# Connect to the server
-conn = server.connect()
-
-# Use as a context manager
-with free_tier.start() as server:
-    conn = server.connect()
-    # ... use connection ...
 ```
 
 ---

@@ -3,18 +3,25 @@
 Script to create GitHub releases for SingleStoreDB Python SDK.
 
 This script automatically:
-1. Extracts the current version from setup.cfg
-2. Finds the matching release notes from docs/src/whatsnew.rst
-3. Creates a temporary notes file
-4. Creates a GitHub release using gh CLI
+1. Fetches origin/main and extracts its version from pyproject.toml
+2. Finds the commit on origin/main that merged the release pull request
+3. Reads the matching release notes from that commit's docs/src/whatsnew.rst
+   into a temporary notes file
+4. Creates a GitHub release using gh CLI, tagging that commit
 5. Cleans up temporary files
+
+Everything is read from origin/main rather than the working tree, because the
+version bump reaches main through a pull request. Releasing before that PR is
+merged would otherwise tag the previous release's code with the new version.
+The tag goes on the release commit rather than the tip, so PRs merged after
+the release are not published with it.
 
 Usage:
     python create_release.py [--version VERSION] [--dry-run]
 
 Examples:
-    python create_release.py                    # Use current version from pyproject.toml
-    python create_release.py --version 1.15.6   # Use specific version
+    python create_release.py                    # Use the version on origin/main
+    python create_release.py --version 1.15.6   # Check origin/main is at this version
     python create_release.py --dry-run          # Preview without executing
 """
 from __future__ import annotations
@@ -26,7 +33,6 @@ import subprocess
 import sys
 import tempfile
 import time
-from pathlib import Path
 
 
 def status(message: str) -> None:
@@ -39,15 +45,66 @@ def step(step_num: int, total_steps: int, message: str) -> None:
     print(f'📍 Step {step_num}/{total_steps}: {message}', file=sys.stderr)
 
 
-def get_version_from_pyproject() -> str:
-    """Extract the current version from pyproject.toml."""
-    pyproject_path = Path(__file__).parent.parent / 'pyproject.toml'
+RELEASE_REF = 'origin/main'
 
-    if not pyproject_path.exists():
-        raise FileNotFoundError(f'Could not find pyproject.toml at {pyproject_path}')
 
-    with open(pyproject_path, 'r') as f:
-        content = f.read()
+def git(*args: str) -> str:
+    """Run a git command and return its stdout."""
+    result = subprocess.run(['git', *args], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f'git {" ".join(args)} failed: {result.stderr.strip()}')
+    return result.stdout
+
+
+def fetch_release_ref() -> str:
+    """Fetch origin/main and return the commit at its tip."""
+    git('fetch', 'origin', 'main')
+    return git('rev-parse', RELEASE_REF).strip()
+
+
+def find_release_commit(version: str) -> str:
+    """Return the commit on origin/main that merged the release PR.
+
+    That is the commit to tag, not the tip: anything merged after it is not
+    in this release. The release PR is squash-merged, so its commit's subject
+    is the PR title, with the PR number GitHub appends.
+
+    The match is on the subject only. ``--grep`` matches any line of the
+    message, so a later commit whose body quotes the release subject would
+    pass it; it is just a prefilter here.
+    """
+    pattern = rf'Prepare for v{re.escape(version)} release( \(#[0-9]+\))?'
+    candidates = git(
+        'log', RELEASE_REF, '--format=%H %s',
+        '--extended-regexp', f'--grep=^{pattern}$',
+    )
+    for line in candidates.splitlines():
+        commit, _, subject = line.partition(' ')
+        if re.fullmatch(pattern, subject):
+            return commit
+    raise ValueError(
+        f'No "Prepare for v{version} release" commit on {RELEASE_REF}; '
+        'has the release pull request been merged?',
+    )
+
+
+def read_file_at(commit: str, path: str) -> str:
+    """Read a file's contents as of the given commit."""
+    return git('show', f'{commit}:{path}')
+
+
+def check_tag_absent(tag: str) -> None:
+    """Make sure the release tag does not already exist on origin."""
+    if git('ls-remote', '--tags', 'origin', f'refs/tags/{tag}').strip():
+        raise ValueError(
+            f'Tag {tag} already exists on origin; if this release is new, '
+            'its pull request has not been merged yet',
+        )
+
+
+def get_version_from_pyproject(commit: str) -> str:
+    """Extract the version from pyproject.toml as of the given commit."""
+    content = read_file_at(commit, 'pyproject.toml')
 
     match = re.search(r'^version\s*=\s*["\'](.+)["\']$', content, re.MULTILINE)
     if not match:
@@ -56,15 +113,9 @@ def get_version_from_pyproject() -> str:
     return match.group(1).strip()
 
 
-def extract_release_notes(version: str) -> str:
+def extract_release_notes(version: str, commit: str) -> str:
     """Extract release notes for the specified version from whatsnew.rst."""
-    whatsnew_path = Path(__file__).parent.parent / 'docs' / 'src' / 'whatsnew.rst'
-
-    if not whatsnew_path.exists():
-        raise FileNotFoundError(f'Could not find whatsnew.rst at {whatsnew_path}')
-
-    with open(whatsnew_path, 'r') as f:
-        content = f.read()
+    content = read_file_at(commit, 'docs/src/whatsnew.rst')
 
     # Look for the version section
     version_pattern = rf'^v{re.escape(version)}\s*-\s*.*$'
@@ -118,7 +169,7 @@ def extract_release_notes(version: str) -> str:
     return '\n'.join(notes_lines)
 
 
-def create_release(version: str, notes: str, dry_run: bool = False) -> None:
+def create_release(version: str, notes: str, commit: str, dry_run: bool = False) -> None:
     """Create a GitHub release using gh CLI."""
     tag = f'v{version}'
     title = f'SingleStoreDB v{version}'
@@ -129,9 +180,12 @@ def create_release(version: str, notes: str, dry_run: bool = False) -> None:
         notes_file = f.name
 
     try:
-        # Construct the gh release create command
+        # Construct the gh release create command. --target pins the new tag
+        # to the commit the version and notes were read from; without it, gh
+        # tags whatever main is when the API call lands.
         cmd = [
             'gh', 'release', 'create', tag,
+            '--target', commit,
             '--title', title,
             '--notes-file', notes_file,
         ]
@@ -141,6 +195,7 @@ def create_release(version: str, notes: str, dry_run: bool = False) -> None:
             print('=' * 50, file=sys.stderr)
             print(f'Command: {" ".join(cmd)}', file=sys.stderr)
             print(f'Tag: {tag}', file=sys.stderr)
+            print(f'Target: {commit}', file=sys.stderr)
             print(f'Title: {title}', file=sys.stderr)
             print(f'Notes file: {notes_file}', file=sys.stderr)
             print('=' * 50, file=sys.stderr)
@@ -151,6 +206,7 @@ def create_release(version: str, notes: str, dry_run: bool = False) -> None:
 
         status(f'🚀 Creating GitHub release for v{version}...')
         status(f'   📎 Tag: {tag}')
+        status(f'   🎯 Target: {commit}')
         status(f'   📝 Title: {title}')
 
         start_time = time.time()
@@ -228,14 +284,14 @@ def main() -> None:
         description='Create GitHub release for SingleStoreDB Python SDK',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''Examples:
-  %(prog)s                        # Use current version from pyproject.toml
-  %(prog)s --version 1.15.6       # Use specific version
+  %(prog)s                        # Use the version on origin/main
+  %(prog)s --version 1.15.6       # Check origin/main is at this version
   %(prog)s --dry-run               # Preview without executing''',
     )
 
     parser.add_argument(
         '--version',
-        help='Version to release (default: extract from pyproject.toml)',
+        help='Version to release; must match pyproject.toml on origin/main (default: that version)',
     )
 
     parser.add_argument(
@@ -263,12 +319,27 @@ def main() -> None:
         step(2, 4, 'Determining version')
         start_time = time.time()
 
-        if args.version:
-            version = args.version
-            status(f'Using specified version: {version}')
-        else:
-            version = get_version_from_pyproject()
-            status(f'Extracted from pyproject.toml: {version}')
+        status(f'🔄 Fetching {RELEASE_REF}...')
+        tip = fetch_release_ref()
+        version = get_version_from_pyproject(tip)
+        status(f'Extracted from pyproject.toml on {RELEASE_REF} ({tip[:12]}): {version}')
+
+        if args.version and args.version != version:
+            raise ValueError(
+                f'{RELEASE_REF} is at version {version}, not {args.version}; '
+                'has the release pull request been merged?',
+            )
+
+        check_tag_absent(f'v{version}')
+
+        commit = find_release_commit(version)
+        if commit != tip:
+            later = git('rev-list', '--count', f'{commit}..{tip}').strip()
+            status(f'Release commit is {commit[:12]}; {later} later commit(s) on {RELEASE_REF} are not included')
+        if get_version_from_pyproject(commit) != version:
+            raise ValueError(
+                f'pyproject.toml at release commit {commit[:12]} is not at version {version}',
+            )
 
         elapsed = time.time() - start_time
         status(f'✅ Version determined in {elapsed:.1f}s')
@@ -278,7 +349,7 @@ def main() -> None:
         start_time = time.time()
 
         status(f'📄 Reading release notes for v{version}...')
-        notes = extract_release_notes(version)
+        notes = extract_release_notes(version, commit)
         lines_count = len(notes.split('\n'))
 
         elapsed = time.time() - start_time
@@ -286,7 +357,7 @@ def main() -> None:
 
         # Step 4: Create the release
         step(4, 4, 'Creating GitHub release')
-        create_release(version, notes, dry_run=args.dry_run)
+        create_release(version, notes, commit, dry_run=args.dry_run)
 
         total_elapsed = time.time() - total_start_time
         print('=' * 50, file=sys.stderr)

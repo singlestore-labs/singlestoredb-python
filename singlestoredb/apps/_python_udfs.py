@@ -1,4 +1,5 @@
 import asyncio
+import math
 import os
 import typing
 import warnings
@@ -13,6 +14,7 @@ if typing.TYPE_CHECKING:
 
 # Keep track of currently running server
 _running_server: 'typing.Optional[AwaitableUvicornServer]' = None
+_running_server_task: 'typing.Optional[asyncio.Task[None]]' = None
 
 # Maximum number of UDFs allowed
 MAX_UDFS_LIMIT = 10
@@ -28,7 +30,7 @@ async def run_udf_app(
     log_level: str = 'error',
     kill_existing_app_server: bool = True,
 ) -> UdfConnectionInfo:
-    global _running_server
+    global _running_server, _running_server_task
     from ._uvicorn_util import AwaitableUvicornServer
 
     try:
@@ -65,9 +67,7 @@ async def run_udf_app(
         # Shutdown the server gracefully if it was started by us.
         # Since the uvicorn server doesn't start a new subprocess
         # killing the process would result in kernel dying.
-        if _running_server is not None:
-            await _running_server.shutdown()
-            _running_server = None
+        await shutdown_udf_app(timeout=None)
 
         # Kill if any other process is occupying the port
         kill_process_by_port(app_config.listen_port)
@@ -85,7 +85,7 @@ async def run_udf_app(
         app.register_interactive_functions()
 
     _running_server = AwaitableUvicornServer(config)
-    asyncio.create_task(_running_server.serve())
+    _running_server_task = asyncio.create_task(_running_server.serve())
     await _running_server.wait_for_startup()
 
     print(f'Python UDF registered at {base_url}')
@@ -97,6 +97,54 @@ async def run_udf_app(
         print(f'Registered SQL functions: {", ".join(sql_names)}')
 
     return UdfConnectionInfo(base_url, app.get_function_info())
+
+
+async def shutdown_udf_app(timeout: typing.Optional[float]) -> None:
+    """
+    Stop the UDF server started by ``run_udf_app`` in this Python kernel.
+
+    Uvicorn closes listeners and idle connections, then allows active requests
+    to finish for up to ``timeout`` seconds before cancelling them. ``None``
+    waits without a drain limit, preserving the existing server-replacement
+    behavior. A finite timeout must be non-negative.
+
+    Call and await this operation on the same event loop as ``run_udf_app``,
+    before shutting down the kernel or its networking. The budget covers
+    request draining; allow additional time for server cleanup. Python cannot
+    forcibly stop arbitrary synchronous UDF code running in worker threads.
+
+    It is safe to call when no server is running. Concurrent calls await the
+    same server task; the first shutdown request determines the drain budget.
+    """
+    global _running_server, _running_server_task
+
+    if timeout is not None and (not math.isfinite(timeout) or timeout < 0):
+        raise ValueError('timeout must be a finite non-negative number or None')
+
+    server, task = _running_server, _running_server_task
+    if server is None:
+        return
+    if task is None:
+        raise RuntimeError('UDF server has no serving task')
+
+    if not server.should_exit:
+        server.config.timeout_graceful_shutdown = timeout
+        server.should_exit = True
+    try:
+        # Cancelling a caller must not interrupt the server's own drain.
+        await asyncio.shield(task)
+    finally:
+        if task.done():
+            # Uvicorn can skip shutdown when exit was requested during startup.
+            if server.started:
+                for listener in server.servers:
+                    listener.close()
+            # Uvicorn can finish after cancelling requests but before they close.
+            for connection in list(server.server_state.connections):
+                connection.transport.abort()
+            if _running_server is server:
+                _running_server = None
+                _running_server_task = None
 
 
 def generate_base_url(app_config: AppConfig) -> str:
