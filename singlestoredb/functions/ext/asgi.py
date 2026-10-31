@@ -2405,9 +2405,31 @@ def main(argv: Optional[List[str]] = None) -> None:
             # Load zip file as a module
             modname = os.path.splitext(os.path.basename(envs[0]))[0]
             zi = zipimport.zipimporter(envs[0])
-            mod = zi.load_module(modname)
-            if mod is None:
-                raise RuntimeError(f'environment file could not be imported: {envs[0]}')
+            # zipimporter.load_module() was removed in Python 3.15, and
+            # find_spec()/exec_module() only exist from Python 3.10. The else
+            # branch is only for Python 3.9 compatibility and can be dropped
+            # as soon as Python 3.9 support is dropped.
+            if sys.version_info >= (3, 10):
+                spec = zi.find_spec(modname)
+                if spec is None or spec.loader is None:
+                    raise RuntimeError(
+                        f'environment file could not be imported: {envs[0]}',
+                    )
+                mod = importlib.util.module_from_spec(spec)
+                sys.modules[modname] = mod
+                try:
+                    spec.loader.exec_module(mod)
+                except BaseException:
+                    # Match load_module(): don't leave a half-initialized
+                    # module behind for a later import to pick up
+                    sys.modules.pop(modname, None)
+                    raise
+            else:
+                mod = zi.load_module(modname)
+                if mod is None:
+                    raise RuntimeError(
+                        f'environment file could not be imported: {envs[0]}',
+                    )
             functions = [mod]
 
             if defaults:
