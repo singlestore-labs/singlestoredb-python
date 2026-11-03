@@ -1,12 +1,16 @@
 # type: ignore
 import asyncio
+import contextvars
 import http.client
 import json
 import os
+import socket
 import sys
 import threading
 import unittest
 from collections.abc import Iterator
+from concurrent.futures import Future
+from contextlib import ExitStack
 from typing import Any
 from typing import Callable
 from typing import List
@@ -16,11 +20,18 @@ from typing import Tuple
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+import pytest
+
+import singlestoredb as s2
+from singlestoredb import OperationalError
 from singlestoredb.apps import _python_udfs
 from singlestoredb.apps import run_udf_app
 from singlestoredb.apps import shutdown_udf_app
 from singlestoredb.apps._config import AppConfig
+from singlestoredb.apps._uvicorn_util import AwaitableUvicornServer
 from singlestoredb.functions import udf
+from singlestoredb.functions.dtypes import escape_name
+from singlestoredb.functions.ext.asgi import Application
 from singlestoredb.functions.ext.function_url import classify_interactive_registration
 from singlestoredb.functions.ext.function_url import extract_service_url
 from singlestoredb.functions.ext.function_url import is_function_not_defined
@@ -232,6 +243,145 @@ class TestFunctionURL(unittest.TestCase):
                 app.register_interactive_functions()
         self.assertEqual(executed, [])
 
+    def test_register_interactive_missing_name_wrong_object(self) -> None:
+        for create_error in (
+            None,
+            OperationalError(1982, 'Function already exists'),
+            OperationalError(ER.TABLE_EXISTS_ERROR, 'Table already exists'),
+        ):
+            with self.subTest(create_error=create_error):
+                app = self._interactive_app(['double_it_sh_test'])
+                app.function_database = 'pulse'
+                executed: List[str] = []
+                cursor = MagicMock()
+                cursor.__iter__.return_value = []
+
+                def execute(sql: str, args: Any = None) -> None:
+                    executed.append(sql)
+                    if sql.startswith('SHOW CREATE FUNCTION'):
+                        raise OperationalError(
+                            ER.WRONG_OBJECT,
+                            "'pulse.double_it_sh_test' is not a FUNCTION",
+                        )
+                    if sql.startswith('CREATE') and create_error is not None:
+                        raise create_error
+
+                cursor.execute.side_effect = execute
+                with patch(
+                    'singlestoredb.functions.ext.asgi.connection.connect',
+                ) as connect:
+                    conn = connect.return_value.__enter__.return_value
+                    conn.cursor.return_value.__enter__.return_value = cursor
+                    app.preflight_interactive_functions()
+                    if create_error is None:
+                        app.register_interactive_functions()
+                    else:
+                        with self.assertRaises(OperationalError) as ctx:
+                            app.register_interactive_functions()
+                        self.assertIs(ctx.exception, create_error)
+
+                creates = [sql for sql in executed if sql.startswith('CREATE')]
+                self.assertEqual(len(creates), 1)
+                self.assertIn('`pulse`.`double_it_sh_test`', creates[0])
+                self.assertNotIn('OR REPLACE', creates[0])
+
+    def test_wrong_object_preflight_preserves_running_server(self) -> None:
+        for object_type in ('PROCEDURE', 'AGGREGATE', 'BASE TABLE', 'VIEW'):
+            with self.subTest(object_type=object_type):
+                app = self._interactive_app(['free_test', 'taken_test'])
+                app.function_database = 'pulse'
+                executed: List[str] = []
+                cursor = MagicMock()
+                cursor.__iter__.return_value = []
+
+                def execute(sql: str, args: Any = None) -> None:
+                    executed.append(sql)
+                    cursor.__iter__.return_value = []
+                    if sql.startswith('SHOW CREATE FUNCTION'):
+                        raise OperationalError(ER.WRONG_OBJECT, 'is not a FUNCTION')
+                    if 'information_schema.ROUTINES' in sql:
+                        if args[1] == 'taken_test' and object_type != 'AGGREGATE':
+                            cursor.__iter__.return_value = [(object_type,)]
+                    elif sql.startswith('SHOW AGGREGATES'):
+                        if args == (r'taken\_test',) and object_type == 'AGGREGATE':
+                            cursor.__iter__.return_value = [('TAKEN_TEST',)]
+
+                cursor.execute.side_effect = execute
+                existing = MagicMock()
+                config = MagicMock(running_interactively=True)
+                with ExitStack() as stack:
+                    connect = stack.enter_context(
+                        patch(
+                            'singlestoredb.functions.ext.asgi.connection.connect',
+                        ),
+                    )
+                    conn = connect.return_value.__enter__.return_value
+                    conn.cursor.return_value.__enter__.return_value = cursor
+                    stack.enter_context(
+                        patch.object(
+                            AppConfig, 'from_env', return_value=config,
+                        ),
+                    )
+                    stack.enter_context(
+                        patch.object(
+                            _python_udfs, 'generate_base_url', return_value=app.url,
+                        ),
+                    )
+                    stack.enter_context(
+                        patch.object(
+                            _python_udfs, 'Application', return_value=app,
+                        ),
+                    )
+                    stack.enter_context(
+                        patch.object(
+                            _python_udfs, '_running_server', existing,
+                        ),
+                    )
+                    shutdown = stack.enter_context(
+                        patch.object(
+                            _python_udfs, 'shutdown_udf_app',
+                        ),
+                    )
+                    shutdown.side_effect = AssertionError(
+                        'Preflight must reject the conflict before stopping the server',
+                    )
+                    kill = stack.enter_context(
+                        patch.object(
+                            _python_udfs, 'kill_process_by_port',
+                        ),
+                    )
+                    with self.assertRaisesRegex(
+                        RuntimeError, r'Cannot register SQL function.*taken_test',
+                    ):
+                        asyncio.run(run_udf_app())
+                    shutdown.assert_not_awaited()
+                    kill.assert_not_called()
+                    self.assertIs(_python_udfs._running_server, existing)
+                self.assertFalse(
+                    any(
+                        sql.startswith(('CREATE', 'DROP')) for sql in executed
+                    ),
+                )
+
+    def test_wrong_object_catalog_failure_is_not_missing(self) -> None:
+        for failing_query in ('information_schema.ROUTINES', 'SHOW AGGREGATES'):
+            with self.subTest(failing_query=failing_query):
+                app = self._interactive_app(['taken_test'])
+                denied = OperationalError(ER.TABLEACCESS_DENIED_ERROR, 'Access denied')
+                cursor = MagicMock()
+                cursor.__iter__.return_value = []
+
+                def execute(sql: str, args: Any = None) -> None:
+                    if sql.startswith('SHOW CREATE FUNCTION'):
+                        raise OperationalError(ER.WRONG_OBJECT, 'is not a FUNCTION')
+                    if failing_query in sql:
+                        raise denied
+
+                cursor.execute.side_effect = execute
+                with self.assertRaises(OperationalError) as ctx:
+                    app._show_create_service_url(cursor, 'taken_test')
+                self.assertIs(ctx.exception, denied)
+
     def test_register_interactive_rechecks_at_write(self) -> None:
         app = self._interactive_app(['keep_test'])
         executed: List[str] = []
@@ -354,6 +504,7 @@ class TestRunUdfAppInteractiveOrder(unittest.IsolatedAsyncioTestCase):
         fake_util = MagicMock()
         if server_cls is not None:
             fake_util.AwaitableUvicornServer = server_cls
+            fake_util.ThreadedUvicornServer = server_cls
         return patch.dict(
             sys.modules,
             {
@@ -417,6 +568,11 @@ class TestRunUdfAppInteractiveOrder(unittest.IsolatedAsyncioTestCase):
             def __init__(self, _config: Any) -> None:
                 pass
 
+            def start(self) -> Future[None]:
+                completed: Future[None] = Future()
+                completed.set_result(None)
+                return completed
+
             async def serve(self) -> None:
                 return None
 
@@ -448,6 +604,29 @@ class TestRunUdfAppInteractiveOrder(unittest.IsolatedAsyncioTestCase):
 _request_started = threading.Event()
 _release_request = threading.Event()
 _request_finished = threading.Event()
+_notebook_context: contextvars.ContextVar[str] = contextvars.ContextVar(
+    'notebook_context', default='unset',
+)
+
+
+@udf
+def _context_udf(value: float) -> str:
+    return _notebook_context.get()
+
+
+@udf
+def _doubling_udf(value: float) -> float:
+    return value * 2
+
+
+@udf
+def _blocking_sync_udf(value: float) -> float:
+    _request_started.set()
+    try:
+        _release_request.wait(timeout=5)
+        return value * 2
+    finally:
+        _request_finished.set()
 
 
 @udf
@@ -463,6 +642,8 @@ async def _draining_udf(value: float) -> float:
 
 class TestUdfShutdown(unittest.IsolatedAsyncioTestCase):
 
+    interactive = False
+
     async def asyncSetUp(self) -> None:
         self.env = {
             'SINGLESTOREDB_APP_LISTEN_PORT': '0',
@@ -470,8 +651,12 @@ class TestUdfShutdown(unittest.IsolatedAsyncioTestCase):
             'SINGLESTOREDB_APP_BASE_PATH': '/',
             'SINGLESTOREDB_NOTEBOOK_SERVER_ID': 'shutdown-test',
             'SINGLESTOREDB_IS_LOCAL_DEV': 'true',
-            'SINGLESTOREDB_WORKLOAD_TYPE': 'PythonUdf',
+            'SINGLESTOREDB_WORKLOAD_TYPE': (
+                'InteractiveNotebook' if self.interactive else 'PythonUdf'
+            ),
+            'SINGLESTOREDB_APP_TOKEN': 'local-test-token',
             'SINGLESTOREDB_NOVA_GATEWAY_ENDPOINT': 'http://127.0.0.1',
+            'SINGLESTOREDB_NOVA_GATEWAY_DEV_ENDPOINT': 'http://127.0.0.1',
             'SINGLESTOREDB_EXT_FUNCTIONS': __name__,
         }
         self.previous_env = {name: os.environ.get(name) for name in self.env}
@@ -480,6 +665,13 @@ class TestUdfShutdown(unittest.IsolatedAsyncioTestCase):
         _request_finished.clear()
         _release_request.set()
         self.connections: List[http.client.HTTPConnection] = []
+        if self.interactive:
+            for method in (
+                'preflight_interactive_functions', 'register_interactive_functions',
+            ):
+                mocked = patch.object(_python_udfs.Application, method)
+                mocked.start()
+                self.addCleanup(mocked.stop)
         await run_udf_app(kill_existing_app_server=False)
         self.server = _python_udfs._running_server
         self.server_task = _python_udfs._running_server_task
@@ -511,24 +703,30 @@ class TestUdfShutdown(unittest.IsolatedAsyncioTestCase):
         self.connections.append(connection)
         return connection
 
-    async def _invoke(
-        self, connection: http.client.HTTPConnection,
+    def _invoke_sync(
+        self,
+        connection: http.client.HTTPConnection,
+        function_name: str = '_draining_udf',
     ) -> Tuple[int, bytes]:
-        def request() -> Tuple[int, bytes]:
-            connection.request(
-                'POST', '/invoke',
-                json.dumps({'data': [[0, 2.125]]}),
-                {
-                    'Content-Type': 'application/json',
-                    'Accepts': 'application/json',
-                    's2-ef-name': '_draining_udf',
-                    's2-ef-version': '1.0',
-                },
-            )
-            response = connection.getresponse()
-            return response.status, response.read()
+        connection.request(
+            'POST', '/invoke',
+            json.dumps({'data': [[0, 2.125]]}),
+            {
+                'Content-Type': 'application/json',
+                'Accepts': 'application/json',
+                's2-ef-name': function_name + ('_test' if self.interactive else ''),
+                's2-ef-version': '1.0',
+            },
+        )
+        response = connection.getresponse()
+        return response.status, response.read()
 
-        return await asyncio.to_thread(request)
+    async def _invoke(
+        self,
+        connection: http.client.HTTPConnection,
+        function_name: str = '_draining_udf',
+    ) -> Tuple[int, bytes]:
+        return await asyncio.to_thread(self._invoke_sync, connection, function_name)
 
     async def test_closes_idle_connections_without_waiting_for_budget(self) -> None:
         connection = self._connect()
@@ -546,6 +744,8 @@ class TestUdfShutdown(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.server_task.done())
         self.assertIsNone(_python_udfs._running_server)
         self.assertIsNone(_python_udfs._running_server_task)
+        if self.interactive:
+            self.assertFalse(self.server._thread.is_alive())
         await shutdown_udf_app(timeout=0)
 
     async def test_drains_active_request_and_refuses_new_connections(self) -> None:
@@ -634,20 +834,51 @@ class TestUdfShutdown(unittest.IsolatedAsyncioTestCase):
         status, _ = await self._invoke(self._connect())
         self.assertEqual(status, 200)
 
+    async def test_reregistration_reuses_port_after_stopping_old_server(self) -> None:
+        with patch.dict(
+            os.environ, {'SINGLESTOREDB_APP_LISTEN_PORT': str(self.port)},
+        ):
+            with patch.object(_python_udfs, 'kill_process_by_port') as kill:
+                await asyncio.wait_for(run_udf_app(), 3)
+                kill.assert_called_once_with(self.port)
+        self.assertTrue(self.server_task.done())
+        self.assertIsNot(_python_udfs._running_server, self.server)
+        self.assertTrue(
+            all(not listener.is_serving() for listener in self.server.servers),
+        )
+        if self.interactive:
+            self.assertFalse(self.server._thread.is_alive())
+        self.assertEqual((await self._invoke(self._connect()))[0], 200)
+
     async def test_shutdown_while_starting_does_not_leave_listener_open(self) -> None:
         await shutdown_udf_app(timeout=1)
-        startup = asyncio.create_task(run_udf_app(kill_existing_app_server=False))
-        await asyncio.sleep(0)
-        server = _python_udfs._running_server
-        assert server is not None
-        self.assertFalse(server.started)
-        try:
-            await asyncio.wait_for(shutdown_udf_app(timeout=0), 3)
-            await startup
-            self.assertTrue(all(not listener.is_serving() for listener in server.servers))
-        finally:
-            for listener in server.servers:
-                listener.close()
+        entered = threading.Event()
+        proceed = threading.Event()
+        original_startup = AwaitableUvicornServer.startup
+
+        async def delayed_startup(server: Any, *args: Any, **kwargs: Any) -> None:
+            entered.set()
+            while not proceed.is_set():
+                await asyncio.sleep(0.01)
+            await original_startup(server, *args, **kwargs)
+
+        with patch.object(AwaitableUvicornServer, 'startup', delayed_startup):
+            startup = asyncio.create_task(run_udf_app(kill_existing_app_server=False))
+            try:
+                await self._wait_for(entered.is_set)
+                server = _python_udfs._running_server
+                assert server is not None
+                self.assertFalse(server.started)
+                shutdown = asyncio.create_task(shutdown_udf_app(timeout=0))
+                await self._wait_for(lambda: server.should_exit)
+                proceed.set()
+                await asyncio.wait_for(shutdown, 3)
+                await asyncio.wait_for(startup, 3)
+                self.assertTrue(
+                    all(not listener.is_serving() for listener in server.servers),
+                )
+            finally:
+                proceed.set()
 
     async def test_rejects_invalid_budget_without_stopping_server(self) -> None:
         for timeout in (-1, float('inf'), float('-inf'), float('nan')):
@@ -658,6 +889,187 @@ class TestUdfShutdown(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.server.should_exit)
         status, _ = await self._invoke(self._connect())
         self.assertEqual(status, 200)
+
+
+class TestInteractiveUdfServer(TestUdfShutdown):
+
+    interactive = True
+
+    async def test_synchronous_same_kernel_call(self) -> None:
+        for name in ('_doubling_udf', '_draining_udf'):
+            with self.subTest(function=name):
+                status, body = self._invoke_sync(self._connect(), name)
+                self.assertEqual(status, 200)
+                self.assertEqual(json.loads(body), {'data': [[0, 4.25]]})
+
+    async def test_notebook_context_reaches_udf(self) -> None:
+        await shutdown_udf_app(timeout=1)
+        token = _notebook_context.set('from-notebook')
+        try:
+            await run_udf_app(kill_existing_app_server=False)
+        finally:
+            _notebook_context.reset(token)
+        self.port = _python_udfs._running_server.servers[0].sockets[0].getsockname()[1]
+        status, body = self._invoke_sync(self._connect(), '_context_udf')
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {'data': [[0, 'from-notebook']]})
+
+    async def test_failed_bind_can_retry(self) -> None:
+        await shutdown_udf_app(timeout=1)
+        with socket.socket() as occupied:
+            occupied.bind(('127.0.0.1', 0))
+            occupied.listen()
+            with patch.dict(
+                os.environ,
+                {'SINGLESTOREDB_APP_LISTEN_PORT': str(occupied.getsockname()[1])},
+            ):
+                with self.assertRaisesRegex(RuntimeError, 'UDF server exited'):
+                    await asyncio.wait_for(
+                        run_udf_app(kill_existing_app_server=False), 3,
+                    )
+        self.assertIsNone(_python_udfs._running_server)
+        self.assertIsNone(_python_udfs._running_server_task)
+        await run_udf_app(kill_existing_app_server=False)
+        self.port = _python_udfs._running_server.servers[0].sockets[0].getsockname()[1]
+        self.assertEqual(self._invoke_sync(self._connect())[0], 200)
+
+    async def test_cancelled_startup_stops_worker(self) -> None:
+        await shutdown_udf_app(timeout=1)
+        servers: List[Any] = []
+
+        async def cancel_startup(server: Any) -> None:
+            servers.append(server)
+            raise asyncio.CancelledError()
+
+        with patch.object(AwaitableUvicornServer, 'wait_for_startup', cancel_startup):
+            with self.assertRaises(asyncio.CancelledError):
+                await asyncio.wait_for(
+                    run_udf_app(kill_existing_app_server=False), 3,
+                )
+        self.assertIsNone(_python_udfs._running_server)
+        self.assertIsNone(_python_udfs._running_server_task)
+        self.assertFalse(servers[0]._thread.is_alive())
+
+    async def test_repeated_startup_cancellation_preserves_completion(self) -> None:
+        await shutdown_udf_app(timeout=1)
+        entered = threading.Event()
+        proceed = threading.Event()
+        original_startup = AwaitableUvicornServer.startup
+
+        async def delayed_startup(server: Any, *args: Any, **kwargs: Any) -> None:
+            entered.set()
+            while not proceed.is_set():
+                await asyncio.sleep(0.01)
+            await original_startup(server, *args, **kwargs)
+
+        with patch.object(AwaitableUvicornServer, 'startup', delayed_startup):
+            startup = asyncio.create_task(run_udf_app(kill_existing_app_server=False))
+            try:
+                await self._wait_for(entered.is_set)
+                server = _python_udfs._running_server
+                completion = _python_udfs._running_server_task
+                assert server is not None
+                assert completion is not None
+                startup.cancel()
+                await self._wait_for(lambda: server.should_exit)
+                startup.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await startup
+                self.assertFalse(completion.cancelled())
+            finally:
+                proceed.set()
+
+        await asyncio.wait_for(shutdown_udf_app(timeout=0), 3)
+        self.assertIsNone(_python_udfs._running_server)
+        self.assertIsNone(_python_udfs._running_server_task)
+        self.assertFalse(server._thread.is_alive())
+        await run_udf_app(kill_existing_app_server=False)
+        self.port = _python_udfs._running_server.servers[0].sockets[0].getsockname()[1]
+        self.assertEqual(self._invoke_sync(self._connect())[0], 200)
+
+    async def test_sync_udf_does_not_extend_shutdown_budget(self) -> None:
+        _release_request.clear()
+        request = asyncio.create_task(
+            self._invoke(self._connect(), '_blocking_sync_udf'),
+        )
+        try:
+            await self._wait_for(_request_started.is_set)
+            await asyncio.wait_for(shutdown_udf_app(timeout=0.1), 2)
+            self.assertFalse(_request_finished.is_set())
+        finally:
+            _release_request.set()
+        await self._wait_for(_request_finished.is_set)
+        try:
+            status, _ = await asyncio.wait_for(request, 3)
+        except (
+            http.client.RemoteDisconnected,
+            http.client.IncompleteRead,
+            ConnectionResetError,
+        ):
+            pass
+        else:
+            self.assertGreaterEqual(status, 500)
+
+
+def test_interactive_preflight_catalogs(
+    singlestoredb_connection: Any, name_allocator: Any,
+) -> None:
+    database = name_allocator.get_name()
+    with singlestoredb_connection.cursor() as setup_cursor:
+        setup_cursor.execute(f'CREATE DATABASE {escape_name(database)}')
+    params = {
+        key: singlestoredb_connection.connection_params[key]
+        for key in ('host', 'port', 'user', 'password', 'driver')
+    }
+    params['database'] = database
+    try:
+        with s2.connect(**params) as conn:
+            with conn.cursor() as cursor:
+                for statement in (
+                    'CREATE PROCEDURE occupied_proc_test() AS BEGIN ECHO SELECT 1; END',
+                    'CREATE TABLE occupied_table_test(x INT)',
+                    'CREATE VIEW occupied_view_test AS SELECT x FROM occupied_table_test',
+                    'CREATE FUNCTION agg_init() RETURNS INT AS BEGIN RETURN 0; END',
+                    'CREATE FUNCTION agg_combine(a INT, b INT) RETURNS INT '
+                    'AS BEGIN RETURN a + b; END',
+                    'CREATE FUNCTION agg_finish(a INT) RETURNS INT '
+                    'AS BEGIN RETURN a; END',
+                    'CREATE AGGREGATE occupied_agg_test(INT) RETURNS INT WITH STATE INT '
+                    'INITIALIZE WITH agg_init ITERATE WITH agg_combine '
+                    'MERGE WITH agg_combine TERMINATE WITH agg_finish',
+                ):
+                    cursor.execute(statement)
+
+                app = Application.__new__(Application)
+                app.url = 'http://127.0.0.1/pythonudfs/local/interactive/'
+                for function_database in (None, database):
+                    app.function_database = function_database
+                    for name, create_errno in (
+                        ('occupied_proc_test', 1982),
+                        ('occupied_agg_test', 1982),
+                        ('occupied_table_test', ER.TABLE_EXISTS_ERROR),
+                        ('occupied_view_test', ER.TABLE_EXISTS_ERROR),
+                    ):
+                        with pytest.raises(OperationalError) as show_error:
+                            cursor.execute(f'SHOW CREATE FUNCTION {escape_name(name)}')
+                        assert show_error.value.errno == ER.WRONG_OBJECT
+                        with pytest.raises(OperationalError) as create_error:
+                            cursor.execute(
+                                f'CREATE FUNCTION {escape_name(name)}(x DOUBLE) '
+                                'RETURNS DOUBLE AS BEGIN RETURN x * 2; END',
+                            )
+                        assert create_error.value.errno == create_errno
+                        for spelling in (name, name.upper()):
+                            with pytest.raises(RuntimeError, match='already used'):
+                                app._classify_interactive_name(cursor, spelling)
+
+                    for name in (
+                        'fresh_test', 'occupied_agg%test', 'occupied_agg_test_',
+                    ):
+                        assert app._classify_interactive_name(cursor, name) == 'create'
+    finally:
+        with singlestoredb_connection.cursor() as cleanup_cursor:
+            cleanup_cursor.execute(f'DROP DATABASE IF EXISTS {escape_name(database)}')
 
 
 if __name__ == '__main__':
