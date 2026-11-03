@@ -70,9 +70,7 @@ jobs:
         os:
           - ubuntu-24.04
         # The floor in pyproject.toml (requires-python >=3.9) up to the newest
-        # final release. 3.15 is absent deliberately: as of 2026-09-18 it is at
-        # rc2 (GA 2026-10-01), and setup-python needs allow-prereleases plus an
-        # explicit "3.15.0-rc.2" to install it. Add a bare "3.15" once it ships.
+        # final release.
         python-version:
           - "3.9"
           - "3.10"
@@ -80,6 +78,7 @@ jobs:
           - "3.12"
           - "3.13"
           - "3.14"
+          - "3.15"
         driver:
           - mysql
           - https
@@ -141,7 +140,11 @@ jobs:
 
       - name: Run tests
         if: ${{ matrix.driver != 'https' }}
-        run: pytest -v --pyargs singlestoredb.tests.test_basics
+        # test_asgi_env_file needs no database; it is here, and not in the
+        # https step, to run once on each Python version. It covers the zip
+        # loader in asgi.main(), which differs between 3.9 and 3.10+ and broke
+        # on 3.15.
+        run: pytest -v --pyargs singlestoredb.tests.test_basics singlestoredb.tests.test_asgi_env_file
         env:
           PYTHONPATH: ${{ github.workspace }}
           # CLUSTER_PASSWORD goes into the userinfo half of a URL here, so it
