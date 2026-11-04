@@ -744,9 +744,6 @@ The `signature.py` module maps Python types to SQL types:
 | `str` | `TEXT` |
 | `bytes` | `BLOB` |
 | `bool` | `TINYINT` |
-| `datetime.datetime` | `DATETIME` |
-| `datetime.date` | `DATE` |
-| `decimal.Decimal` | `DECIMAL` |
 | `List[T]` | `ARRAY` |
 | `Optional[T]` | Nullable variant |
 
