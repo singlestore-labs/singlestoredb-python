@@ -7,6 +7,7 @@ handshake, control signal dispatch, and UDF request loop with mmap I/O.
 from __future__ import annotations
 
 import array
+import json
 import logging
 import mmap
 import os
@@ -15,6 +16,9 @@ import struct
 import threading
 import time
 import traceback
+from typing import Any
+from typing import Dict
+from typing import Optional
 from typing import TYPE_CHECKING
 
 from .control import dispatch_control_signal
@@ -29,10 +33,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger('plugin.connection')
 
-# Protocol constants
-PROTOCOL_VERSION = 1
+# Supported handshake protocol versions.
+SUPPORTED_VERSIONS = (1, 2, 3)
 STATUS_OK = 200
-STATUS_BAD_REQUEST = 400
 STATUS_ERROR = 500
 
 # Minimum output mmap size to avoid repeated ftruncate
@@ -43,6 +46,15 @@ _STATUS_OK_PREFIX = struct.pack('<Q', STATUS_OK)
 
 # Maximum function name length to prevent resource exhaustion
 _MAX_FUNCTION_NAME_LEN = 4096
+
+# Maximum v2 parameter type list length, checked before the read allocates
+_MAX_V2_PARAM_TYPES_BYTES = 1024 * 1024
+
+# Upper bounds on the out-of-band v3 handshake fds. The envelope is just a
+# signature plus a few scalar attributes; the body is bounded by the
+# engine's blob store. Both reject a runaway fd.
+_MAX_V3_ENVELOPE_BYTES = 1024 * 1024
+_MAX_V3_BODY_BYTES = 64 * 1024 * 1024
 
 # Enable per-request timing via environment variable
 _PROFILE = os.environ.get('SINGLESTOREDB_UDF_PROFILE', '') == '1'
@@ -82,19 +94,26 @@ def _handle_connection_inner(
         return
     version, namelen = struct.unpack('<QQ', header)
 
-    if version != PROTOCOL_VERSION:
-        logger.warning(f'Unsupported protocol version: {version}')
+    if version not in SUPPORTED_VERSIONS:
+        logger.warning(
+            f'Unsupported protocol version: {version} '
+            f'(supported: {SUPPORTED_VERSIONS})',
+        )
         return
 
     if namelen > _MAX_FUNCTION_NAME_LEN:
         logger.warning(f'Function name too long: {namelen}')
         return
 
-    # Receive function name + 2 FDs via SCM_RIGHTS
-    fd_model = array.array('i', [0, 0])
+    # Receive function name + FDs via SCM_RIGHTS.
+    # v1/v2 pass 2 FDs (input, output); v3 passes 4 FDs (input, output,
+    # metadata fd carrying the JSON envelope, body fd carrying the raw
+    # function body).
+    expected_fd_count = 4 if version == 3 else 2
+    fd_model = array.array('i', [0] * expected_fd_count)
     msg, ancdata, flags, addr = conn.recvmsg(
         namelen,
-        socket.CMSG_LEN(2 * fd_model.itemsize),
+        socket.CMSG_LEN(expected_fd_count * fd_model.itemsize),
     )
 
     # Extract FDs from ancdata eagerly so the finally block can close them
@@ -130,21 +149,102 @@ def _handle_connection_inner(
             logger.warning('Ancillary data was truncated (MSG_CTRUNC)')
             return
 
-        if len(received_fds) != 2:
+        if len(received_fds) != expected_fd_count:
             logger.warning(
-                f'Expected 2 FDs, got {len(received_fds)}',
+                f'Expected {expected_fd_count} FDs, got {len(received_fds)}',
             )
             return
 
         function_name = msg.decode('utf8')
         input_fd, output_fd = received_fds[0], received_fds[1]
+        metadata_fd: Optional[int] = None
+        body_fd: Optional[int] = None
+        if version == 3:
+            metadata_fd, body_fd = received_fds[2], received_fds[3]
         received_fds = []
     finally:
         for fd in received_fds:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
+            _close_quietly(fd)
+
+    try:
+        _handle_handshake_tail(
+            conn, version, function_name, input_fd, output_fd,
+            metadata_fd, body_fd, shared_registry, shutdown_event,
+            pipe_write_fd,
+        )
+    finally:
+        # Every handshake fd is owned here, so the early returns in the
+        # handshake tail can't leak them. The body fd is read lazily (only
+        # on a definition cache miss), so it too stays open until here.
+        for handshake_fd in (input_fd, output_fd, metadata_fd, body_fd):
+            if handshake_fd is not None:
+                _close_quietly(handshake_fd)
+
+
+def _handle_handshake_tail(
+    conn: socket.socket,
+    version: int,
+    function_name: str,
+    input_fd: int,
+    output_fd: int,
+    metadata_fd: Optional[int],
+    body_fd: Optional[int],
+    shared_registry: SharedRegistry,
+    shutdown_event: threading.Event,
+    pipe_write_fd: int | None,
+) -> None:
+    """Finish the handshake after the FDs are received, then dispatch."""
+    # v2 carries the parameter type list as a length-prefixed string here.
+    # v3 drops this segment entirely — the type list moves into the
+    # envelope carried on the metadata fd under the top-level key
+    # "param_types".
+    v2_input_param_types: Optional[str] = None
+    if version == 2:
+        len_buf = _recv_exact_py(conn, 8)
+        if len_buf is None:
+            return
+        in_types_len = struct.unpack('<Q', len_buf)[0]
+        if in_types_len > _MAX_V2_PARAM_TYPES_BYTES:
+            logger.warning(f'Parameter type list too long: {in_types_len}')
+            return
+        types_bytes = _recv_exact_py(conn, in_types_len) if in_types_len else b''
+        if types_bytes is None:
+            return
+        v2_input_param_types = types_bytes.decode('utf8')
+
+    # v3: read the JSON envelope from the metadata fd. The engine seals it
+    # (SHRINK|GROW|WRITE) before sending, so its size is fstat(fd).st_size
+    # and the payload is raw UTF-8 JSON bytes with no in-band length prefix.
+    envelope: Optional[Dict[str, Any]] = None
+    if version == 3:
+        assert metadata_fd is not None
+        try:
+            env_bytes = _read_sealed_fd(
+                metadata_fd, _MAX_V3_ENVELOPE_BYTES, 'envelope',
+            )
+        except ValueError as e:
+            logger.warning(str(e))
+            return
+        try:
+            envelope = json.loads(env_bytes) if env_bytes else {}
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.warning(f'Invalid v3 envelope JSON: {e}')
+            return
+        if not isinstance(envelope, dict):
+            logger.warning('v3 envelope must be a JSON object')
+            return
+
+    # Parameter type list used for overload resolution. v1 → None,
+    # v2 → drained string, v3 → envelope["param_types"] if present.
+    if version == 1:
+        input_param_types: Optional[str] = None
+    elif version == 2:
+        input_param_types = v2_input_param_types
+    else:
+        param_types_val = envelope.get('param_types') if envelope else None
+        input_param_types = (
+            param_types_val if isinstance(param_types_val, str) else None
+        )
 
     # --- Control signal path ---
     if function_name.startswith('@@'):
@@ -155,12 +255,136 @@ def _handle_connection_inner(
         )
         return
 
+    # v3: install the function definition shipped in the handshake
+    # (envelope ``signature`` + body fd) before entering the request loop.
+    # Cache hit ⇒ no work; miss ⇒ compile and remember it for future
+    # replays. An envelope naming neither an ``id`` nor a ``signature``
+    # (a call carrying only ``param_types``) installs nothing, and its body
+    # fd is closed unread; one with either goes through the installer, which
+    # rejects it if the other is missing.
+    install_error: Optional[str] = None
+    if envelope is not None and body_fd is not None:
+        if 'id' in envelope or 'signature' in envelope:
+            try:
+                _install_v3_definition(
+                    envelope, body_fd, shared_registry, pipe_write_fd,
+                )
+            except Exception as e:
+                # Don't drop the connection: the engine is waiting on a
+                # response frame and would report a bare "connection reset
+                # by peer" instead of the reason. Carry the message into the
+                # request loop and fail the first request with it.
+                install_error = f'failed to install function definition: {e}'
+                logger.error(
+                    f'Failed to install v3 definition: {e}\n'
+                    f'{traceback.format_exc()}',
+                )
+
     # --- UDF request loop ---
     logger.info(f"Received request for function '{function_name}'")
     _handle_udf_loop(
         conn, function_name, input_fd, output_fd,
         shared_registry, shutdown_event,
+        input_param_types, install_error,
     )
+
+
+def _install_v3_definition(
+    envelope: Dict[str, Any],
+    body_fd: int,
+    shared_registry: SharedRegistry,
+    pipe_write_fd: int | None,
+) -> None:
+    """Install a function definition shipped in the v3 handshake.
+
+    The definition is split across the handshake: the opaque cache key is
+    the top-level ``envelope['id']``, ``name``/``args``/``returns``/
+    ``replace`` live in ``envelope['signature']``, and the body is the raw
+    contents of ``body_fd`` (the fourth SCM_RIGHTS fd). The body is read
+    lazily, only on a cache miss; the caller owns and closes ``body_fd``.
+
+    Cache hit (id already registered, checked again atomically by
+    ``create_function``) → no-op. Empty body fd → no-op.
+    Otherwise call ``SharedRegistry.create_function`` and notify the main
+    process so it can replace the workers. The ``signature`` object and the
+    body size limit are checked first, so they hold on a cache hit too.
+    """
+    id = envelope.get('id')
+    if not isinstance(id, str) or not id:
+        raise ValueError("v3 envelope missing required string field 'id'")
+
+    definition = envelope.get('signature')
+    if not isinstance(definition, dict):
+        raise ValueError(
+            "v3 envelope missing required object field 'signature'",
+        )
+
+    body_size = os.fstat(body_fd).st_size
+    if body_size > _MAX_V3_BODY_BYTES:
+        raise ValueError(
+            f'v3 body size {body_size} exceeds limit {_MAX_V3_BODY_BYTES}',
+        )
+
+    if shared_registry.has_definition(id):
+        return
+
+    function_name = definition.get('name')
+    if not isinstance(function_name, str) or not function_name:
+        raise ValueError(
+            "v3 envelope 'signature' missing required string field 'name'",
+        )
+
+    args = definition.get('args')
+    if not isinstance(args, list):
+        raise ValueError(
+            "v3 envelope 'signature' missing required array field 'args'",
+        )
+
+    returns = definition.get('returns')
+    if not isinstance(returns, list):
+        raise ValueError(
+            "v3 envelope 'signature' missing required array field 'returns'",
+        )
+
+    # An empty body fd is a signature-only CREATE PLUGIN FUNCTION: the
+    # function is expected to be provided out-of-band (a builtin of the
+    # plugin module loaded at server startup). Nothing to install.
+    if body_size == 0:
+        return
+    body_bytes = _read_sealed_fd(body_fd, _MAX_V3_BODY_BYTES, 'body')
+    try:
+        body = body_bytes.decode('utf8')
+    except UnicodeDecodeError as e:
+        raise ValueError(f'v3 function body is not valid UTF-8: {e}') from e
+
+    replace = bool(definition.get('replace', False))
+
+    signature = json.dumps({
+        'name': function_name,
+        'args': args,
+        'returns': returns,
+    })
+
+    # None: another handshake installed this id after our cache check.
+    # Main already has it (or will, from that handshake), so don't notify.
+    if shared_registry.create_function(id, signature, body, replace) is None:
+        return
+    logger.info(
+        f'v3 definition installed: function={function_name!r} id={id!r}',
+    )
+
+    # Notify main process so it can replace workers with updated state.
+    if pipe_write_fd is not None:
+        from .server import _write_pipe_message
+        # The body travels as the raw blob, not inside the JSON header, so
+        # escaping can't push an accepted body over the pipe's cap.
+        header = json.dumps({
+            'action': 'register',
+            'id': id,
+            'signature_json': signature,
+            'replace': replace,
+        }).encode()
+        _write_pipe_message(pipe_write_fd, header, body_bytes)
 
 
 def _handle_control_signal(
@@ -172,67 +396,69 @@ def _handle_control_signal(
     pipe_write_fd: int | None = None,
 ) -> None:
     """Handle a @@-prefixed control signal (one-shot request-response)."""
-    try:
-        # Read 8-byte request length
-        len_buf = _recv_exact_py(conn, 8)
-        if len_buf is None:
-            return
-        length = struct.unpack('<Q', len_buf)[0]
+    # Read 8-byte request length
+    len_buf = _recv_exact_py(conn, 8)
+    if len_buf is None:
+        return
+    length = struct.unpack('<Q', len_buf)[0]
 
-        # Read input data from mmap (if any)
-        request_data = b''
-        if length > 0:
-            if _has_accel:
-                request_data = _mmap_read(input_fd, length)
-            else:
-                mem = mmap.mmap(
-                    input_fd, length, mmap.MAP_SHARED, mmap.PROT_READ,
-                )
-                try:
-                    request_data = bytes(mem[:length])
-                finally:
-                    mem.close()
-
-        # Dispatch
-        result = dispatch_control_signal(
-            signal_name, request_data, shared_registry, pipe_write_fd,
-        )
-
-        if result.ok:
-            # Write response to output mmap
-            response_bytes = result.data.encode('utf8')
-            response_size = len(response_bytes)
-            if _has_accel:
-                _mmap_write(
-                    output_fd, response_bytes,
-                    max(_MIN_OUTPUT_SIZE, response_size),
-                )
-            else:
-                os.ftruncate(output_fd, max(_MIN_OUTPUT_SIZE, response_size))
-                os.lseek(output_fd, 0, os.SEEK_SET)
-                _write_all_fd(output_fd, response_bytes)
-
-            # Send [status=200, size]
-            conn.sendall(struct.pack('<QQ', STATUS_OK, response_size))
-            logger.debug(
-                f"Control signal '{signal_name}' succeeded, "
-                f'{response_size} bytes',
-            )
+    # Read input data from mmap (if any)
+    request_data = b''
+    if length > 0:
+        if _has_accel:
+            request_data = _mmap_read(input_fd, length)
         else:
-            # Send [status=400, len, message]
-            err_bytes = result.data.encode('utf8')
-            conn.sendall(
-                struct.pack(
-                    f'<QQ{len(err_bytes)}s',
-                    STATUS_BAD_REQUEST, len(err_bytes), err_bytes,
-                ),
+            mem = mmap.mmap(
+                input_fd, length, mmap.MAP_SHARED, mmap.PROT_READ,
             )
-            logger.warning(
-                f"Control signal '{signal_name}' failed: {result.data}",
-            )
-    finally:
-        os.close(input_fd)
-        os.close(output_fd)
+            try:
+                request_data = bytes(mem[:length])
+            finally:
+                mem.close()
+
+    # Dispatch
+    result = dispatch_control_signal(
+        signal_name, request_data, shared_registry, pipe_write_fd,
+    )
+
+    if result.ok:
+        response_size = _send_control_response(
+            conn, output_fd, result.data.encode('utf8'),
+        )
+        logger.debug(
+            f"Control signal '{signal_name}' succeeded, "
+            f'{response_size} bytes',
+        )
+    else:
+        # Failures travel exactly like successes: a 200 whose body is
+        # {"error": ..., "code": ...}, as the Rust server answers.
+        logger.warning(
+            f"Control signal '{signal_name}' failed "
+            f'[{result.code}]: {result.data}',
+        )
+        error_json = json.dumps({'error': result.data, 'code': result.code})
+        _send_control_response(conn, output_fd, error_json.encode('utf8'))
+
+
+def _send_control_response(
+    conn: socket.socket,
+    output_fd: int,
+    response_bytes: bytes,
+) -> int:
+    """Write a control-signal response to the output mmap and send
+    ``[status=200, size]``. Returns the response size."""
+    response_size = len(response_bytes)
+    if _has_accel:
+        _mmap_write(
+            output_fd, response_bytes,
+            max(_MIN_OUTPUT_SIZE, response_size),
+        )
+    else:
+        os.ftruncate(output_fd, max(_MIN_OUTPUT_SIZE, response_size))
+        os.lseek(output_fd, 0, os.SEEK_SET)
+        _write_all_fd(output_fd, response_bytes)
+    conn.sendall(struct.pack('<QQ', STATUS_OK, response_size))
+    return response_size
 
 
 def _handle_udf_loop(
@@ -242,8 +468,14 @@ def _handle_udf_loop(
     output_fd: int,
     shared_registry: SharedRegistry,
     shutdown_event: threading.Event,
+    param_types: Optional[str],
+    install_error: Optional[str] = None,
 ) -> None:
-    """Handle the UDF request loop for a single function."""
+    """Handle the UDF request loop for a single function.
+
+    ``install_error`` reports a v3 definition that failed to install: the
+    first request is answered with that message rather than left unanswered.
+    """
     # Track output mmap size to avoid repeated ftruncate
     current_output_size = 0
 
@@ -300,6 +532,28 @@ def _handle_udf_loop(
                 break
             length = struct.unpack('<Q', len_buf)[0]
             if length == 0:
+                # Surface a deferred install error even when the client
+                # closes cleanly without ever issuing a request (the
+                # `create` path of the debug client does exactly this),
+                # matching the Rust server.
+                if install_error is not None:
+                    err_bytes = install_error.encode('utf8')
+                    conn.sendall(
+                        struct.pack(
+                            f'<QQ{len(err_bytes)}s',
+                            STATUS_ERROR, len(err_bytes), err_bytes,
+                        ),
+                    )
+                break
+
+            if install_error is not None:
+                err_bytes = install_error.encode('utf8')
+                conn.sendall(
+                    struct.pack(
+                        f'<QQ{len(err_bytes)}s',
+                        STATUS_ERROR, len(err_bytes), err_bytes,
+                    ),
+                )
                 break
 
             # Read input from mmap
@@ -327,6 +581,7 @@ def _handle_udf_loop(
                     t0 = time.monotonic()
                 output_data = call_function(
                     registry, function_name, input_data,
+                    param_types,
                 )
                 if profile:
                     t_call += time.monotonic() - t0
@@ -379,9 +634,6 @@ def _handle_udf_loop(
                 break
 
     finally:
-        os.close(input_fd)
-        os.close(output_fd)
-
         if profile and n_requests > 0:
             t_total = (
                 t_recv + t_mmap_read + t_call + t_mmap_write + t_send
@@ -422,6 +674,37 @@ def _recv_exact_py(sock: socket.socket, n: int) -> bytes | None:
     if orig_timeout is not None:
         sock.settimeout(orig_timeout)
     return bytes(buf)
+
+
+def _read_sealed_fd(fd: int, limit: int, what: str) -> bytes:
+    """Read the entire contents of an out-of-band v3 handshake fd.
+
+    The engine seals its memfds, but the contract is only "read-only fd
+    of exact size": the size is ``fstat``, checked against ``limit``.
+    Reads use ``pread`` from offset 0, since the engine may hand the fd
+    over with its position parked at EOF. ``what`` names the fd in error
+    messages. Raises ``ValueError``; does not close ``fd``.
+    """
+    size = os.fstat(fd).st_size
+    if size > limit:
+        raise ValueError(f'v3 {what} size {size} exceeds limit {limit}')
+    buf = bytearray()
+    while len(buf) < size:
+        chunk = os.pread(fd, size - len(buf), len(buf))
+        if not chunk:
+            raise ValueError(
+                f'short read on v3 {what} fd: expected {size}, '
+                f'got {len(buf)}',
+            )
+        buf += chunk
+    return bytes(buf)
+
+
+def _close_quietly(fd: int) -> None:
+    try:
+        os.close(fd)
+    except OSError:
+        pass
 
 
 def _write_all_fd(fd: int, data: bytes) -> None:
