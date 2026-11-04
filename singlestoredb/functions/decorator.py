@@ -9,6 +9,7 @@ from typing import Union
 
 from . import utils
 from .dtypes import SQLString
+from .signature import get_signature
 
 
 ParameterType = Union[
@@ -115,37 +116,27 @@ def _func(
         ).items() if v is not None
     }
 
-    # No func was specified, this is an uncalled decorator that will get
-    # called later, so the wrapper much be created with the func passed
-    # in at that time.
+    def decorate(func: UDFType) -> UDFType:
+        if inspect.iscoroutinefunction(func):
+            async def async_wrapper(*args: Any, **kwargs: Any) -> UDFType:
+                return await func(*args, **kwargs)  # type: ignore
+            async_wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
+            wrapped: UDFType = functools.wraps(func)(async_wrapper)
+
+        else:
+            def wrapper(*args: Any, **kwargs: Any) -> UDFType:
+                return func(*args, **kwargs)  # type: ignore
+            wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
+            wrapped = functools.wraps(func)(wrapper)
+
+        get_signature(wrapped)
+
+        return wrapped
+
     if func is None:
-        def decorate(func: UDFType) -> UDFType:
-
-            if inspect.iscoroutinefunction(func):
-                async def async_wrapper(*args: Any, **kwargs: Any) -> UDFType:
-                    return await func(*args, **kwargs)  # type: ignore
-                async_wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
-                return functools.wraps(func)(async_wrapper)
-
-            else:
-                def wrapper(*args: Any, **kwargs: Any) -> UDFType:
-                    return func(*args, **kwargs)  # type: ignore
-                wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
-                return functools.wraps(func)(wrapper)
-
         return decorate
 
-    if inspect.iscoroutinefunction(func):
-        async def async_wrapper(*args: Any, **kwargs: Any) -> UDFType:
-            return await func(*args, **kwargs)  # type: ignore
-        async_wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
-        return functools.wraps(func)(async_wrapper)
-
-    else:
-        def wrapper(*args: Any, **kwargs: Any) -> UDFType:
-            return func(*args, **kwargs)  # type: ignore
-        wrapper._singlestoredb_attrs = _singlestoredb_attrs  # type: ignore
-        return functools.wraps(func)(wrapper)
+    return decorate(func)
 
 
 def udf(

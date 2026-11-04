@@ -3,6 +3,7 @@
 """SingleStoreDB UDF testing."""
 import dataclasses
 import datetime
+import decimal
 import re
 import unittest
 from typing import List
@@ -232,22 +233,75 @@ class TestUDF(unittest.TestCase):
 
     def test_datetimes(self):
 
-        # Datetime
-        def foo(x: datetime.datetime) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` DATETIME NOT NULL) RETURNS TINYINT NULL'
+        for py_type, expected_name in [
+            (datetime.datetime, 'datetime.datetime'),
+            (datetime.date, 'datetime.date'),
+            (datetime.time, 'datetime.time'),
+            (datetime.timedelta, 'datetime.timedelta'),
+            (decimal.Decimal, 'decimal.Decimal'),
+        ]:
+            def foo_param(x: py_type) -> None: ...
+            with self.assertRaisesRegex(TypeError, expected_name):
+                to_sql(foo_param)
 
-        # Date
-        def foo(x: datetime.date) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` DATE NOT NULL) RETURNS TINYINT NULL'
+            def foo_opt_param(x: Optional[py_type]) -> None: ...
+            with self.assertRaisesRegex(TypeError, expected_name):
+                to_sql(foo_opt_param)
 
-        # Time
-        def foo(x: datetime.timedelta) -> None: ...
-        assert to_sql(foo) == '`foo`(`x` TIME NOT NULL) RETURNS TINYINT NULL'
+            def foo_ret() -> py_type: ...
+            with self.assertRaisesRegex(TypeError, expected_name):
+                to_sql(foo_ret)
 
-        # Datetime + Date
+            with self.assertRaisesRegex(TypeError, expected_name):
+                @udf
+                def foo_udf_param(x: py_type) -> int: ...
+
+            with self.assertRaisesRegex(TypeError, expected_name):
+                @udf
+                def foo_udf_ret(x: int) -> py_type: ...
+
+            with self.assertRaisesRegex(TypeError, expected_name):
+                @udf()
+                def foo_udf_call(x: Optional[py_type]) -> int: ...
+
         def foo(x: Union[datetime.datetime, datetime.date]) -> None: ...
         with self.assertRaises(TypeError):
             to_sql(foo)
+
+        for sql_override, expected_sql in [
+            (dt.DATE, 'DATE'),
+            (dt.DATE(), 'DATE'),
+            (dt.DATE(nullable=False), 'DATE'),
+            (dt.TIME, 'TIME'),
+            (dt.TIME(), 'TIME'),
+            (dt.TIME(6), 'TIME'),
+            (dt.DATETIME, 'DATETIME'),
+            (dt.DATETIME(), 'DATETIME'),
+            (dt.DATETIME(6), 'DATETIME'),
+            (dt.TIMESTAMP, 'TIMESTAMP'),
+            (dt.TIMESTAMP(), 'TIMESTAMP'),
+            (dt.TIMESTAMP(6), 'TIMESTAMP'),
+            (dt.YEAR, 'YEAR'),
+            (dt.YEAR(), 'YEAR'),
+            (dt.DECIMAL(10, 2), 'DECIMAL'),
+            (dt.DEC(10, 2), 'DEC'),
+            (dt.FIXED(10, 2), 'FIXED'),
+            (dt.NUMERIC(10, 2), 'NUMERIC'),
+            ('DECIMAL', 'DECIMAL'),
+        ]:
+            with self.assertRaisesRegex(TypeError, expected_sql):
+                @udf(args=sql_override)
+                def foo_arg_override(x: int) -> int: ...
+
+            with self.assertRaisesRegex(TypeError, expected_sql):
+                @udf(returns=sql_override)
+                def foo_ret_override(x: int) -> int: ...
+
+        @udf(args=dt.TEXT, returns=dt.TEXT)
+        def foo_supported_override(x: datetime.date) -> datetime.date:
+            return x
+        assert to_sql(foo_supported_override) == \
+            '`foo_supported_override`(`x` TEXT NULL) RETURNS TEXT NULL'
 
     def test_numerics(self):
         #
@@ -405,10 +459,9 @@ class TestUDF(unittest.TestCase):
         assert to_sql(foo) == '`foo`(`x` BIGINT NOT NULL) RETURNS SMALLINT NOT NULL'
 
         # Override multiple params with one type
-        @udf(args=dt.SMALLINT(nullable=False))
-        def foo(x: int, y: float, z: np.int8) -> int: ...
         with self.assertRaises(ValueError):
-            to_sql(foo)
+            @udf(args=dt.SMALLINT(nullable=False))
+            def foo(x: int, y: float, z: np.int8) -> int: ...
 
         # Override with list
         @udf(args=[dt.SMALLINT, dt.FLOAT, dt.CHAR(30)])
@@ -418,16 +471,14 @@ class TestUDF(unittest.TestCase):
             '`z` CHAR(30) NULL) RETURNS BIGINT NOT NULL'
 
         # Override with too short of a list
-        @udf(args=[dt.SMALLINT, dt.FLOAT])
-        def foo(x: int, y: float, z: str) -> int: ...
         with self.assertRaises(ValueError):
-            to_sql(foo)
+            @udf(args=[dt.SMALLINT, dt.FLOAT])
+            def foo(x: int, y: float, z: str) -> int: ...
 
         # Override with too long of a list
-        @udf(args=[dt.SMALLINT, dt.FLOAT, dt.CHAR(30), dt.TEXT])
-        def foo(x: int, y: float, z: str) -> int: ...
         with self.assertRaises(ValueError):
-            to_sql(foo)
+            @udf(args=[dt.SMALLINT, dt.FLOAT, dt.CHAR(30), dt.TEXT])
+            def foo(x: int, y: float, z: str) -> int: ...
 
         # Override with list
         @udf(args=[dt.SMALLINT, dt.FLOAT, dt.CHAR(30)])
