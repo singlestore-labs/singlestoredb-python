@@ -69,7 +69,9 @@ from . import rowdat_1
 from . import utils
 from ... import connection
 from ...config import get_option
+from ...exceptions import DatabaseError
 from ...management.stage import get_stage
+from ...mysql.constants import ER
 from ...mysql.constants import FIELD_TYPE as ft
 from ..signature import get_resolved_signature
 from ..signature import get_signature
@@ -1893,7 +1895,41 @@ class Application(object):
             )
         else:
             qualified = escape_name(sql_name)
-        return self._service_url_for_qualified(cur, qualified)
+        try:
+            return self._service_url_for_qualified(cur, qualified)
+        except DatabaseError as exc:
+            if exc.errno != ER.WRONG_OBJECT:
+                raise
+
+        database = self.function_database or None
+        cur.execute(
+            'SELECT ROUTINE_TYPE FROM information_schema.ROUTINES '
+            'WHERE ROUTINE_SCHEMA = COALESCE(%s, DATABASE()) '
+            'AND LOWER(ROUTINE_NAME) = LOWER(%s) '
+            'UNION ALL SELECT TABLE_TYPE FROM information_schema.TABLES '
+            'WHERE TABLE_SCHEMA = COALESCE(%s, DATABASE()) '
+            'AND LOWER(TABLE_NAME) = LOWER(%s) '
+            'LIMIT 1',
+            (database, sql_name, database, sql_name),
+        )
+        conflicts = list(cur)
+        if not conflicts:
+            query = 'SHOW AGGREGATES'
+            if database:
+                query += f' IN {escape_name(database)}'
+            pattern = (
+                sql_name.replace('\\', '\\\\').replace('_', '\\_').replace('%', '\\%')
+            )
+            cur.execute(query + ' LIKE %s', (pattern,))
+            if list(cur):
+                conflicts = [('AGGREGATE',)]
+        if conflicts:
+            raise RuntimeError(
+                f'Cannot register SQL function `{sql_name}`: '
+                f'name is already used by a {conflicts[0][0]}. '
+                'Interactive registration will not replace an existing SQL object.',
+            )
+        return None
 
     def _classify_interactive_name(self, cur: Any, sql_name: str) -> str:
         existing = self._show_create_service_url(cur, sql_name)
