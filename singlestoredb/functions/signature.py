@@ -142,12 +142,6 @@ sql_type_map = {
     'str': 'TEXT',
     'bytes': 'BLOB',
     'null': 'NULL',
-    'datetime': 'DATETIME',
-    'datetime6': 'DATETIME(6)',
-    'date': 'DATE',
-    'time': 'TIME',
-    'time6': 'TIME(6)',
-    'decimal': 'DECIMAL',
 }
 
 sql_to_type_map = {
@@ -169,14 +163,6 @@ sql_to_type_map = {
     'FLOAT': 'float32',
     'DOUBLE': 'float64',
     'REAL': 'float64',
-    'DATE': 'date',
-    'TIME': 'time',
-    'TIME(6)': 'time6',
-    'DATETIME': 'datetime',
-    'DATETIME(6)': 'datetime',
-    'TIMESTAMP': 'datetime',
-    'TIMESTAMP(6)': 'datetime',
-    'YEAR': 'uint64',
     'CHAR': 'str',
     'VARCHAR': 'str',
     'TEXT': 'str',
@@ -189,9 +175,36 @@ sql_to_type_map = {
     'TINYBLOB': 'bytes',
     'MEDIUMBLOB': 'bytes',
     'LONGBLOB': 'bytes',
-    'DECIMAL': 'decimal',
-    'NEWDECIMAL': 'decimal',
-    'NUMERIC': 'decimal',
+}
+
+unsupported_python_types = (
+    datetime.datetime,
+    datetime.date,
+    datetime.time,
+    datetime.timedelta,
+    decimal.Decimal,
+)
+
+unsupported_dtypes = {
+    'datetime',
+    'datetime6',
+    'date',
+    'time',
+    'time6',
+    'decimal',
+}
+
+unsupported_sql_types = {
+    'DATE',
+    'TIME',
+    'DATETIME',
+    'TIMESTAMP',
+    'YEAR',
+    'DECIMAL',
+    'NEWDECIMAL',
+    'NUMERIC',
+    'DEC',
+    'FIXED',
 }
 
 
@@ -424,22 +437,11 @@ def normalize_dtype(dtype: Any) -> str:
     if issubclass(dtype, (bytes, bytearray)):
         return 'bytes'
 
-    # Decimal
-    if issubclass(dtype, decimal.Decimal):
-        return 'decimal'
-
-    # Date / Times
-    if issubclass(dtype, datetime.datetime):
-        return 'datetime'
-    if issubclass(dtype, datetime.date):
-        return 'date'
-    if issubclass(dtype, datetime.time):
+    if issubclass(dtype, unsupported_python_types):
         raise TypeError(
-            'datetime.time is not supported for UDF annotations; '
-            'use datetime.timedelta instead',
+            f'{dtype.__module__}.{dtype.__qualname__} is not supported '
+            'for UDF annotations',
         )
-    if issubclass(dtype, datetime.timedelta):
-        return 'time'
 
     # Last resort, guess it by the name...
     name = dtype.__name__.lower()
@@ -572,10 +574,11 @@ def get_dataclass_schema(obj: Any) -> List[ParamSpec]:
         A list of parameter specifications for the dataclass fields
 
     """
+    hints = utils.get_annotations(obj)
     return [
         ParamSpec(
             name=f.name,
-            dtype=f.type,
+            dtype=hints[f.name],
             default=NO_DEFAULT if f.default is dataclasses.MISSING else f.default,
         )
         for f in dataclasses.fields(obj)
@@ -1178,6 +1181,47 @@ def vector_check(obj: Any) -> Tuple[Any, str]:
     return obj, 'scalar'
 
 
+def _is_dtype_str(annotation: str) -> bool:
+    """Is the string a dtype string (e.g. 'int64?', 'array[str]') not Python code?"""
+    dtype = annotation[:-1] if annotation.endswith('?') else annotation
+    dtype = dtype.replace('|null', '')
+    return (
+        dtype in sql_type_map
+        or dtype.startswith(('array[', 'tuple['))
+    )
+
+
+def _resolve_annotation(annotation: Any, func: Callable[..., Any]) -> Any:
+    """
+    Evaluate a string annotation in the function's module namespace.
+
+    String annotations come from ``from __future__ import annotations`` or
+    quoted forward references. Dtype strings are left as-is.
+
+    """
+    if not isinstance(annotation, str) or _is_dtype_str(annotation):
+        return annotation
+    globalns = getattr(inspect.unwrap(func), '__globals__', {})
+    try:
+        return eval(annotation, globalns)
+    except Exception as exc:
+        raise TypeError(
+            f'could not resolve type annotation {annotation!r}: {exc}',
+        ) from exc
+
+
+def get_resolved_signature(func: Callable[..., Any]) -> inspect.Signature:
+    """Return the signature of ``func`` with string annotations evaluated."""
+    signature = inspect.signature(func)
+    return signature.replace(
+        parameters=[
+            p.replace(annotation=_resolve_annotation(p.annotation, func))
+            for p in signature.parameters.values()
+        ],
+        return_annotation=_resolve_annotation(signature.return_annotation, func),
+    )
+
+
 def get_masks(func: Callable[..., Any]) -> Tuple[List[bool], List[bool]]:
     """
     Get the list of masked parameters and return values for the function.
@@ -1195,8 +1239,9 @@ def get_masks(func: Callable[..., Any]) -> Tuple[List[bool], List[bool]]:
 
 
     """
-    params = inspect.signature(func).parameters
-    returns = inspect.signature(func).return_annotation
+    signature = get_resolved_signature(func)
+    params = signature.parameters
+    returns = signature.return_annotation
 
     ret_masks = []
     if typing.get_origin(returns) is Masked:
@@ -1235,7 +1280,7 @@ def get_signature(
     Dict[str, Any]
 
     '''
-    signature = inspect.signature(func)
+    signature = get_resolved_signature(func)
     args: List[Dict[str, Any]] = []
     returns: List[Dict[str, Any]] = []
 
@@ -1250,8 +1295,6 @@ def get_signature(
             raise TypeError('variable positional arguments are not supported')
         elif p.kind == inspect.Parameter.VAR_KEYWORD:
             raise TypeError('variable keyword arguments are not supported')
-
-    # TODO: Use typing.get_type_hints() for parameters / return values?
 
     # Generate the parameter type and the corresponding SQL code for that parameter
     args_schema: List[ParamSpec] = []
@@ -1429,6 +1472,9 @@ def sql_to_dtype(sql: str) -> str:
     elif ' UNSIGNED' in sql:
         sql_type += ' UNSIGNED'
 
+    if sql_type in unsupported_sql_types:
+        raise TypeError(f'{sql_type} is not supported for UDF annotations')
+
     try:
         dtype = sql_to_type_map[sql_type]
     except KeyError:
@@ -1515,7 +1561,15 @@ def dtype_to_sql(
                 f'TABLE({", ".join(item_dtypes)}){nullable}{default_clause}',
             )
 
-    return f'{sql_type_map[dtype]}{nullable}{default_clause}'
+    if dtype in unsupported_dtypes:
+        raise TypeError(f'{dtype} is not supported for UDF annotations')
+
+    try:
+        sql_type = sql_type_map[dtype]
+    except KeyError:
+        raise TypeError(f'unrecognized data type: {dtype}')
+
+    return f'{sql_type}{nullable}{default_clause}'
 
 
 def signature_to_sql(

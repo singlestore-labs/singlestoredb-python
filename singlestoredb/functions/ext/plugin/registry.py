@@ -26,6 +26,7 @@ from typing import Tuple
 from singlestoredb.functions.ext import rowdat_1 as _rowdat_1
 from singlestoredb.functions.ext.rowdat_1 import dump as _dump_rowdat_1
 from singlestoredb.functions.ext.rowdat_1 import load as _load_rowdat_1
+from singlestoredb.functions.signature import get_resolved_signature
 from singlestoredb.functions.signature import get_signature
 from singlestoredb.functions.typing import Masked
 from singlestoredb.mysql.constants import FIELD_TYPE as ft
@@ -496,7 +497,7 @@ class FunctionRegistry:
 
 def _get_masked_params(func: Callable[..., Any]) -> List[bool]:
     """Determine which parameters expect (data, mask) tuples vs just data."""
-    params = inspect.signature(func).parameters
+    params = get_resolved_signature(func).parameters
     return [typing.get_origin(x.annotation) is Masked for x in params.values()]
 
 

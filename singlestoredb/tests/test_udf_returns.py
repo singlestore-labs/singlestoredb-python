@@ -138,17 +138,10 @@ class UDFResultsTest(unittest.TestCase):
             '`foo_h_`(`x` TEXT NOT NULL) RETURNS TABLE(`a` TEXT NOT NULL)'
 
         # Plain TVF using multiple lists -- Illegal!
-        @udf
-        def foo_h(x: str) -> Table[List[int], List[str]]:
-            return Table(list(range(3)), [x] * 3)
-
-        foo_h_out = foo_h('cat')
-
-        assert type(foo_h_out) is Table
-        assert foo_h_out == Table([0, 1, 2], ['cat', 'cat', 'cat'])
-
         with self.assertRaises(TypeError):
-            to_sql(foo_h)
+            @udf
+            def foo_h(x: str) -> Table[List[int], List[str]]:
+                return Table(list(range(3)), [x] * 3)
 
         # Plain TVF using lists of NamedTuples
         @udf
@@ -361,16 +354,10 @@ class UDFResultsTest(unittest.TestCase):
         )
 
         # Vectorized TVF using lists -- Illegal!
-        @udf
-        def foo_t(x: List[str]) -> Table[List[int], List[str]]:
-            return Table(list(range(len(x))), x)
-
-        foo_t_out = foo_t(['cat', 'dog', 'monkey'])
-
-        assert type(foo_t_out) is Table
-        assert foo_t_out == Table([0, 1, 2], ['cat', 'dog', 'monkey'])
         with self.assertRaises(TypeError):
-            to_sql(foo_t)
+            @udf
+            def foo_t(x: List[str]) -> Table[List[int], List[str]]:
+                return Table(list(range(len(x))), x)
 
         # Vectorized TVF using pandas Series
         @udf(args=Parameters, returns=TVFTuple)

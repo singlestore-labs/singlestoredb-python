@@ -71,6 +71,7 @@ from ... import connection
 from ...config import get_option
 from ...management.stage import get_stage
 from ...mysql.constants import FIELD_TYPE as ft
+from ..signature import get_resolved_signature
 from ..signature import get_signature
 from ..signature import signature_to_sql
 from ..typing import Masked
@@ -509,7 +510,7 @@ def get_masked_params(func: Callable[..., Any]) -> List[bool]:
         Boolean list of masked parameters
 
     """
-    params = inspect.signature(func).parameters
+    params = get_resolved_signature(func).parameters
     return [typing.get_origin(x.annotation) is Masked for x in params.values()]
 
 
