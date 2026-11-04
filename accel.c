@@ -371,7 +371,7 @@ static PyObject *create_numpy_array(PyObject *py_memview, char *data_format, int
 
 // Returns a newly allocated UTF-8 copy of `unicode`; the caller owns it
 // and must free() it.
-char *_PyUnicode_AsUTF8(PyObject *unicode) {
+static char *_PyUnicode_AsUTF8(PyObject *unicode) {
     PyObject *bytes = PyUnicode_AsEncodedString(unicode, "utf-8", "strict");
     if (!bytes) return NULL;
 
