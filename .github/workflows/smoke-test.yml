@@ -219,8 +219,10 @@ jobs:
   # names change with the matrix, and on a non-release PR it reports as a single
   # skipped "smoke-test", so no matrix name can be required directly. A failed
   # setup-database skips the matrix, hence checking every need, not just it.
+  # shutdown-database is one of them because a failed teardown can leave a
+  # cluster billing until it expires.
   smoke-test-result:
-    needs: [setup-database, smoke-test]
+    needs: [setup-database, smoke-test, shutdown-database]
     if: ${{ always() }}
     runs-on: ubuntu-latest
 
@@ -230,4 +232,5 @@ jobs:
         run: |
           echo "setup-database: ${{ needs.setup-database.result }}"
           echo "smoke-test: ${{ needs.smoke-test.result }}"
+          echo "shutdown-database: ${{ needs.shutdown-database.result }}"
           exit 1
