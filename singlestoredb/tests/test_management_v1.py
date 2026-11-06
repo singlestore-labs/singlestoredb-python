@@ -87,6 +87,7 @@ class TestWorkspace(unittest.TestCase):
             cls.workspace = cls.workspace_group.create_workspace(
                 f'ws-test-{name}-x',
                 wait_on_active=True,
+                wait_timeout=1200,
             )
         except Exception:
             # Guarded: an unguarded terminate here would replace the create
@@ -996,6 +997,7 @@ class TestJob(unittest.TestCase):
             cls.workspace = cls.workspace_group.create_workspace(
                 f'ws-test-{name}-x',
                 wait_on_active=True,
+                wait_timeout=1200,
             )
         except Exception:
             # Guarded: an unguarded terminate here would replace the create

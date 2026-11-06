@@ -1335,6 +1335,7 @@ class TestCluster(unittest.TestCase):
             expires_at=utils.DEPLOYMENT_EXPIRES_AT,
             project=_project_id(cls.manager),
             wait_on_active=True,
+            wait_timeout=1200,
         )
 
         # v2 generates the admin password and reports it only in the create
@@ -1442,6 +1443,7 @@ class TestCluster(unittest.TestCase):
         # refresh() inside update() still reports the old ranges.
         self.cluster.update(
             firewall_ranges=['192.168.0.0/16'], wait_on_active=True,
+            wait_timeout=1200,
         )
 
         cluster = self.cluster
