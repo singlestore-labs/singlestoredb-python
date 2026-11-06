@@ -216,13 +216,16 @@ jobs:
         # cluster behind, so fail loudly instead; the ID then has to be recovered
         # by hand. --fail-with-body makes a refused DELETE fail this step rather
         # than print the error and exit 0. The API key comes through the
-        # environment, as the password does in the step above.
+        # environment, as the password does in the step above. --max-time
+        # bounds a stalled request, which would otherwise hold the required
+        # smoke-test-result check until the job times out; with force=true the
+        # DELETE only starts termination, so a healthy reply takes seconds.
         run: |
           if [ -z "$CLUSTER_ID" ]; then
             echo "::error::No cluster ID from setup-database; the cluster (if any) must be terminated by hand"
             exit 1
           fi
-          curl --fail-with-body -H "Accept: application/json" -H "Authorization: Bearer $CLUSTER_API_KEY" -X DELETE "https://api.singlestore.com/v2/clusters/$CLUSTER_ID?force=true"
+          curl --fail-with-body --max-time 120 -H "Accept: application/json" -H "Authorization: Bearer $CLUSTER_API_KEY" -X DELETE "https://api.singlestore.com/v2/clusters/$CLUSTER_ID?force=true"
         env:
           CLUSTER_API_KEY: ${{ secrets.CLUSTER_API_KEY }}
           CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}
