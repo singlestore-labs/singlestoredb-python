@@ -24,6 +24,7 @@ from typing import Union
 
 from ..exceptions import ManagementError
 from ._version_import import _versioned_attr
+from .files import _content_size
 from .files import FileLocation
 from .files import FilesObject
 from .files import FilesObjectBytesReader
@@ -300,6 +301,7 @@ class Stage(FileLocation):
 
         self._create(
             self._fs_path(stage_path), stage_path,
+            size=_content_size(content),
             files={'file': content},
             headers={'Content-Type': None},
         )
