@@ -26,6 +26,7 @@ from singlestoredb.management.utils import to_datetime_strict
 from singlestoredb.tests.utils import admin_password
 from singlestoredb.tests.utils import counting_file_space
 from singlestoredb.tests.utils import counting_stage
+from singlestoredb.tests.utils import us_regions
 
 
 TEST_DIR = pathlib.Path(os.path.dirname(__file__))
@@ -714,6 +715,41 @@ class TestRemotePathUtils(unittest.TestCase):
         assert normalize_remote_path('llama3\\', strip_leading=True) + '/' \
             == 'llama3/'
         assert normalize_remote_path('/', strip_leading=True) + '/' == '/'
+
+
+class TestUSRegions(unittest.TestCase):
+    """Coverage for the region filter the live v2 suites deploy through."""
+
+    @staticmethod
+    def _region(name, provider, region_name):
+        return SimpleNamespace(
+            name=name, provider=provider, region_name=region_name,
+        )
+
+    def test_keeps_us_regions_and_drops_avoided_ones(self):
+        mgr = SimpleNamespace(
+            regions=[
+                self._region('US East 1 (N. Virginia)', 'AWS', 'us-east-1'),
+                self._region('US East 2 (Ohio)', 'AWS', 'us-east-2'),
+                self._region('US East 1 (S. Carolina)', 'GCP', 'us-east1'),
+                self._region('East US 2 (Virginia)', 'Azure', 'eastus2'),
+                self._region('Europe West 1 (Ireland)', 'AWS', 'eu-west-1'),
+            ],
+        )
+        got = [(x.provider, x.region_name) for x in us_regions(mgr)]
+        self.assertEqual(
+            got,
+            [('AWS', 'us-east-2'), ('GCP', 'us-east1'), ('Azure', 'eastus2')],
+        )
+
+    def test_skips_when_only_avoided_regions_are_left(self):
+        mgr = SimpleNamespace(
+            regions=[
+                self._region('US East 1 (N. Virginia)', 'AWS', 'us-east-1'),
+            ],
+        )
+        with self.assertRaises(unittest.SkipTest):
+            us_regions(mgr)
 
 
 class TestSecretFromDictTimestamps(unittest.TestCase):

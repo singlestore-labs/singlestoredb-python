@@ -376,6 +376,32 @@ def admin_password(length: int = 24) -> str:
 #: and the starter deployments accept no such argument.
 DEPLOYMENT_EXPIRES_AT = '2h'
 
+#: (provider, region_name) pairs the live v2 suites never deploy into.
+#:
+#: AWS us-east-1: from 2026-11-04 every S-00 cluster the nightly coverage run
+#: created there sat in PENDING past the 1200s wait, while clusters in the
+#: other US regions came up in minutes. Nothing the suites assert depends on
+#: the region, so leaving it out costs no coverage.
+AVOIDED_REGIONS = {('AWS', 'us-east-1')}
+
+
+def us_regions(manager: Any) -> List[Any]:
+    """
+    Return the US regions a v2 manager reports, less ``AVOIDED_REGIONS``.
+
+    Raises ``unittest.SkipTest`` if none are left.
+
+    """
+    out = [
+        x for x in manager.regions
+        if ('US' in x.name or 'us-' in (x.region_name or ''))
+        and (x.provider, x.region_name) not in AVOIDED_REGIONS
+    ]
+    if not out:
+        raise unittest.SkipTest('No usable US regions reported by the v2 API')
+    return out
+
+
 #: (owner, label, object) for every deployment created so far and not yet
 #: swept. The owner is the test class that was running at creation time, so
 #: a class's leftovers can be dropped when the run leaves that class rather
