@@ -2238,6 +2238,7 @@ class TestSharedClusterPool(unittest.TestCase):
             def __init__(self, name):
                 self.name = name
                 self.region_name = name
+                self.provider = 'AWS'
 
         class Project:
             def __init__(self, edition):
@@ -2354,6 +2355,21 @@ class TestSharedClusterPool(unittest.TestCase):
             with self.assertRaises(unittest.SkipTest):
                 self.utils.shared_clusters(1)
 
+        self.assertEqual(self.created, [])
+
+    def test_pool_never_deploys_to_an_avoided_region(self):
+        with self._patched(regions=('us-east-1', 'us-east-2')):
+            self.utils.shared_clusters(3)
+
+        self.assertEqual(
+            [kwargs['region'].region_name for _, _, kwargs in self.created],
+            ['us-east-2'] * 3,
+        )
+
+    def test_only_avoided_regions_skips_rather_than_failing(self):
+        with self._patched(regions=('us-east-1',)):
+            with self.assertRaises(unittest.SkipTest):
+                self.utils.shared_clusters(1)
         self.assertEqual(self.created, [])
 
     def test_no_standard_project_skips_rather_than_failing(self):

@@ -1140,13 +1140,11 @@ def shared_clusters(count: int = 1) -> List[Any]:
     # not follow the management.version option out of v2 either.
     mgr = s2.manage_clusters(version='v2')
 
-    us_regions = [
-        x for x in mgr.regions
-        if 'US' in x.name or 'us-' in (x.region_name or '')
-    ]
-    if not us_regions:
-        _pool_skip = 'No US regions reported by the v2 API'
-        raise unittest.SkipTest(_pool_skip)
+    try:
+        regions = us_regions(mgr)
+    except unittest.SkipTest as exc:
+        _pool_skip = str(exc)
+        raise
 
     project_id = os.environ.get('SINGLESTOREDB_TEST_PROJECT')
     if not project_id:
@@ -1172,7 +1170,7 @@ def shared_clusters(count: int = 1) -> List[Any]:
             _pool.append(
                 mgr.create_cluster(
                     f'cl-test-shared-{len(_pool)}-{_pool_id}',
-                    region=random.choice(us_regions),
+                    region=random.choice(regions),
                     size='S-00',
                     # The v2 suites that deploy their own ask for this, and a
                     # pool cluster stands in for those, so it has to be at
