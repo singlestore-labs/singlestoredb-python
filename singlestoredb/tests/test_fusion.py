@@ -950,6 +950,33 @@ class TestFusion(unittest.TestCase):
             assert 'workspace group' in msg, msg
 
 
+def _longer_wait_on_active(test, klass, method_name, timeout=1200):
+    """
+    Default ``wait_timeout`` on ``klass.method_name`` for the rest of ``test``.
+
+    ``CREATE CLUSTER`` and ``CREATE WORKSPACE`` have no clause for the wait
+    timeout, so their handlers leave it at the 600s default. Provisioning
+    usually takes five or six minutes but sometimes runs past ten, failing the
+    test with "Exceeded waiting time for ... to become active". 1200s is what
+    resources/create_test_cluster.py allows for the same wait.
+
+    Patched on the class because the handlers get their own manager or group.
+    Wrapping what is installed now keeps the deployment tracking from
+    utils.install_deployment_tracking.
+    """
+    from unittest import mock
+
+    method = getattr(klass, method_name)
+
+    def with_longer_wait(receiver, *args, **kwargs):
+        kwargs.setdefault('wait_timeout', timeout)
+        return method(receiver, *args, **kwargs)
+
+    patcher = mock.patch.object(klass, method_name, with_longer_wait)
+    patcher.start()
+    test.addCleanup(patcher.stop)
+
+
 @pytest.mark.management
 @pytest.mark.management_v1
 class TestWorkspaceFusion(unittest.TestCase):
@@ -1266,6 +1293,11 @@ class TestWorkspaceFusion(unittest.TestCase):
         assert names == ['show-ws-3', 'show-ws-2']
 
     def test_create_drop_workspace(self):
+        # The group, not the manager: WorkspaceGroup.create_workspace passes
+        # its own 600s default down explicitly.
+        from singlestoredb.management.v1.workspace import WorkspaceGroup
+        _longer_wait_on_active(self, WorkspaceGroup, 'create_workspace')
+
         mgr = s2.manage_workspaces(version='v1')
         wg = mgr.workspace_groups[f'A Fusion Testing {self.id}']
 
@@ -1728,6 +1760,9 @@ class TestClusterFusionCreateDrop(_ClusterFusionMixin, unittest.TestCase):
             time.sleep(interval)
 
     def test_create_drop_cluster(self):
+        from singlestoredb.management.v2.cluster import ClusterManager
+        _longer_wait_on_active(self, ClusterManager, 'create_cluster')
+
         mgr = type(self).manager
         name = f'd-fusion-cluster-{self.id}'
         region = type(self).us_regions[0]

@@ -3,6 +3,7 @@ import math
 import os
 import typing
 import warnings
+from concurrent.futures import Future
 
 from ..functions.ext.asgi import Application
 from ._config import AppConfig
@@ -14,7 +15,9 @@ if typing.TYPE_CHECKING:
 
 # Keep track of currently running server
 _running_server: 'typing.Optional[AwaitableUvicornServer]' = None
-_running_server_task: 'typing.Optional[asyncio.Task[None]]' = None
+_running_server_task: typing.Optional[
+    typing.Union[asyncio.Task[None], Future[None]]
+] = None
 
 # Maximum number of UDFs allowed
 MAX_UDFS_LIMIT = 10
@@ -32,6 +35,7 @@ async def run_udf_app(
 ) -> UdfConnectionInfo:
     global _running_server, _running_server_task
     from ._uvicorn_util import AwaitableUvicornServer
+    from ._uvicorn_util import ThreadedUvicornServer
 
     try:
         import uvicorn
@@ -84,9 +88,31 @@ async def run_udf_app(
     if app_config.running_interactively:
         app.register_interactive_functions()
 
-    _running_server = AwaitableUvicornServer(config)
-    _running_server_task = asyncio.create_task(_running_server.serve())
-    await _running_server.wait_for_startup()
+    server: AwaitableUvicornServer
+    task: typing.Union[asyncio.Task[None], Future[None]]
+    if app_config.running_interactively:
+        server = ThreadedUvicornServer(config)
+        task = server.start()
+    else:
+        server = AwaitableUvicornServer(config)
+        task = asyncio.create_task(server.serve())
+    _running_server = server
+    _running_server_task = task
+    try:
+        await server.wait_for_startup()
+    except BaseException:
+        if isinstance(server, ThreadedUvicornServer):
+            server.request_shutdown(0)
+            cleanup = asyncio.gather(
+                asyncio.wrap_future(task) if isinstance(task, Future) else task,
+                return_exceptions=True,
+            )
+            await asyncio.shield(cleanup)
+            server.join()
+            if _running_server is server:
+                _running_server = None
+                _running_server_task = None
+        raise
 
     print(f'Python UDF registered at {base_url}')
     if app_config.running_interactively:
@@ -108,8 +134,10 @@ async def shutdown_udf_app(timeout: typing.Optional[float]) -> None:
     waits without a drain limit, preserving the existing server-replacement
     behavior. A finite timeout must be non-negative.
 
-    Call and await this operation on the same event loop as ``run_udf_app``,
-    before shutting down the kernel or its networking. The budget covers
+    Call and await this operation before shutting down the kernel or its
+    networking. Published UDFs require the same event loop as ``run_udf_app``.
+    Interactive UDFs forward shutdown to their dedicated server loop, so the
+    caller may use another event loop in the same kernel. The budget covers
     request draining; allow additional time for server cleanup. Python cannot
     forcibly stop arbitrary synchronous UDF code running in worker threads.
 
@@ -127,21 +155,30 @@ async def shutdown_udf_app(timeout: typing.Optional[float]) -> None:
     if task is None:
         raise RuntimeError('UDF server has no serving task')
 
-    if not server.should_exit:
+    from ._uvicorn_util import ThreadedUvicornServer
+
+    if isinstance(server, ThreadedUvicornServer):
+        server.request_shutdown(timeout)
+    elif not server.should_exit:
         server.config.timeout_graceful_shutdown = timeout
         server.should_exit = True
     try:
         # Cancelling a caller must not interrupt the server's own drain.
-        await asyncio.shield(task)
+        await asyncio.shield(
+            asyncio.wrap_future(task) if isinstance(task, Future) else task,
+        )
     finally:
         if task.done():
-            # Uvicorn can skip shutdown when exit was requested during startup.
-            if server.started:
-                for listener in server.servers:
-                    listener.close()
-            # Uvicorn can finish after cancelling requests but before they close.
-            for connection in list(server.server_state.connections):
-                connection.transport.abort()
+            if isinstance(server, ThreadedUvicornServer):
+                server.join()
+            else:
+                # Uvicorn can skip shutdown when exit was requested during startup.
+                if server.started:
+                    for listener in server.servers:
+                        listener.close()
+                # Uvicorn can finish after cancelling requests but before they close.
+                for connection in list(server.server_state.connections):
+                    connection.transport.abort()
             if _running_server is server:
                 _running_server = None
                 _running_server_task = None

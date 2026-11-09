@@ -7,6 +7,7 @@ import random
 import re
 import subprocess
 import sys
+import time
 import uuid
 from optparse import OptionParser
 
@@ -147,8 +148,10 @@ if not name:
     sys.exit(1)
 
 
-# wait_on_active covers ACTIVE, then the endpoint, then the firewall, so the
-# cluster is actually reachable by the time this returns.
+# No wait_on_active: the waits below can raise -- a timeout, or the endpoint or
+# firewall never landing -- and create_cluster would raise from inside them
+# with the cluster already billing and its ID never reported. So the cluster is
+# created here and waited on below, once its ID is out.
 cluster = mgr.create_cluster(
     name,
     region=region,
@@ -156,9 +159,45 @@ cluster = mgr.create_cluster(
     firewall_ranges=['0.0.0.0/0'],
     expires_at=options.expires,
     project=project_id,
-    wait_on_active=True,
-    wait_timeout=1200,
 )
+
+# The API generates the admin password and reports it only on the create
+# response: no route hands it back later, and it is None after any refresh(),
+# which every wait below does. It is read back rather than set because the API
+# accepts an adminPassword on both POST and PATCH and ignores both -- items 8
+# and 14 of docs/management-api-audit.md.
+generated = cluster.admin_password
+
+database = options.database
+if not database:
+    database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
+
+# Report the ID before touching the cluster any further. Everything below can
+# fail against a cluster that is already billing, and the ID reported here is
+# the caller's only handle on it -- a CI teardown job with an empty cluster-id
+# output would DELETE /v2/clusters/ and leak the cluster it meant to remove.
+# The json format is a single object, so it waits for the rest below and only
+# env and github get the ID early.
+if options.output == 'env':
+    print(f'CLUSTER_ID={cluster.id}', flush=True)
+elif options.output == 'github':
+    with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+        print(f'cluster-id={cluster.id}', file=output)
+
+if not generated:
+    print(
+        'ERROR: cluster was created without a readable admin password',
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+# The same waits create_cluster(wait_on_active=True) runs -- ACTIVE, then the
+# endpoint, then the firewall, so the cluster is actually reachable after them.
+# The SDK has no public wait, hence its private helpers; see
+# ClusterManager.create_cluster in singlestoredb/management/v2/cluster.py.
+cluster = mgr._wait_on_state(cluster, 'ACTIVE', interval=10, timeout=1200)
+cluster = mgr._wait_on_endpoint(cluster, interval=10, timeout=1200)
+cluster = mgr._wait_on_firewall(cluster, interval=10, timeout=1200)
 
 host = cluster.endpoint
 if ':' in host:
@@ -167,24 +206,13 @@ if ':' in host:
 else:
     port = 3306
 
-database = options.database
-if not database:
-    database = 'TEMP_{}'.format(uuid.uuid4()).replace('-', '_')
-
-# Report before touching the cluster any further. Everything below can fail
-# against a cluster that is already billing, and the ID reported here is the
-# caller's only handle on it -- a CI teardown job with an empty cluster-id output
-# would DELETE /v2/clusters/ and leak the cluster it meant to remove.
-#
 # No password is reported: the caller passed it in, so it already has it.
 if options.output == 'env':
-    print(f'CLUSTER_ID={cluster.id}')
     print(f'CLUSTER_HOST={host}')
     print(f'CLUSTER_PORT={port}')
     print(f'CLUSTER_DATABASE={database}')
 elif options.output == 'github':
     with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-        print(f'cluster-id={cluster.id}', file=output)
         print(f'cluster-host={host}', file=output)
         print(f'cluster-port={port}', file=output)
         print(f'cluster-database={database}', file=output)
@@ -196,19 +224,6 @@ elif options.output == 'json':
     print(f'  "cluster-database": "{database}"')
     print('}')
 
-# The API generates the admin password and reports it only on the create
-# response: no route hands it back later, and it is None after any refresh().
-# It is read back rather than set because the API accepts an adminPassword on
-# both POST and PATCH and ignores both -- item 9 of
-# docs/management-api-audit.md.
-generated = cluster.admin_password
-if not generated:
-    print(
-        'ERROR: cluster was created without a readable admin password',
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
 # Trade the generated password for the caller's, because the generated one
 # cannot leave this process: a GitHub Actions runner drops any output whose value
 # is masked -- "Skip output 'cluster-password' since it may contain secret" -- so
@@ -219,10 +234,26 @@ if not generated:
 password = options.password
 escaped = password.replace('\\', '\\\\').replace("'", "\\'")
 
-with s2.connect(
-    host=host, port=port, user='admin',
-    password=generated, connect_timeout=30,
-) as conn:
+# The firewall wait only sees what GET /v2/clusters reports, and item 12 of
+# docs/management-api-audit.md shows that view and the endpoint's actual
+# reachability can disagree. So the connect is retried in case the first one
+# lands in such a gap, but ALTER USER is not: a lost reply may mean it was
+# applied, and the generated password would no longer work for a second attempt.
+tries = 10
+for attempt in range(1, tries + 1):
+    try:
+        conn = s2.connect(
+            host=host, port=port, user='admin',
+            password=generated, connect_timeout=30,
+        )
+        break
+    except (s2.OperationalError, s2.InterfaceError) as exc:
+        if attempt == tries:
+            raise
+        print(f'WARNING: connect attempt {attempt} failed: {exc}', file=sys.stderr)
+        time.sleep(15)
+
+with conn:
     with conn.cursor() as cur:
         cur.execute(f"ALTER USER 'admin'@'%' IDENTIFIED BY '{escaped}'")
 

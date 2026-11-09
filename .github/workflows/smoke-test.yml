@@ -10,6 +10,17 @@ on:
   pull_request:
     branches: [ main ]
 
+# Two quick pushes to a release PR would otherwise each provision a cluster.
+# Runs queue rather than cancel, for the reason code-check.yml gives: a run
+# cancelled before its cluster is ACTIVE cannot delete it. The only run GitHub
+# drops is a queued one superseded by a newer one, and that never started.
+concurrency:
+  group: smoke-test-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 
 jobs:
 
@@ -66,6 +77,8 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      # Run every combination to the end, so one failure does not hide others.
+      fail-fast: false
       matrix:
         os:
           - ubuntu-24.04
@@ -176,7 +189,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # As in setup-database: this only drives resources/drop_db.py.
+      # As in setup-database: this only drives resources/drop_db.py and the
+      # teardown request.
       - name: Set up Python 3.14
         uses: actions/setup-python@v7
         with:
@@ -207,14 +221,19 @@ jobs:
         # An empty ID would send the DELETE to /v2/clusters/ and leave a live
         # cluster behind, so fail loudly instead; the ID then has to be recovered
         # by hand. --fail-with-body makes a refused DELETE fail this step rather
-        # than print the error and exit 0.
+        # than print the error and exit 0. The API key comes through the
+        # environment, as the password does in the step above. --max-time
+        # bounds a stalled request, which would otherwise hold the required
+        # smoke-test-result check until the job times out; with force=true the
+        # DELETE only starts termination, so a healthy reply takes seconds.
         run: |
           if [ -z "$CLUSTER_ID" ]; then
             echo "::error::No cluster ID from setup-database; the cluster (if any) must be terminated by hand"
             exit 1
           fi
-          curl --fail-with-body -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v2/clusters/$CLUSTER_ID?force=true"
+          curl --fail-with-body --max-time 120 -H "Accept: application/json" -H "Authorization: Bearer $CLUSTER_API_KEY" -X DELETE "https://api.singlestore.com/v2/clusters/$CLUSTER_ID?force=true"
         env:
+          CLUSTER_API_KEY: ${{ secrets.CLUSTER_API_KEY }}
           CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}
 
 
@@ -222,8 +241,10 @@ jobs:
   # names change with the matrix, and on a non-release PR it reports as a single
   # skipped "smoke-test", so no matrix name can be required directly. A failed
   # setup-database skips the matrix, hence checking every need, not just it.
+  # shutdown-database is one of them because a failed teardown can leave a
+  # cluster billing until it expires.
   smoke-test-result:
-    needs: [setup-database, smoke-test]
+    needs: [setup-database, smoke-test, shutdown-database]
     if: ${{ always() }}
     runs-on: ubuntu-latest
 
@@ -233,4 +254,5 @@ jobs:
         run: |
           echo "setup-database: ${{ needs.setup-database.result }}"
           echo "smoke-test: ${{ needs.smoke-test.result }}"
+          echo "shutdown-database: ${{ needs.shutdown-database.result }}"
           exit 1
