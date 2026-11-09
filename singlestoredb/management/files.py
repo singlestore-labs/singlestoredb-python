@@ -500,38 +500,29 @@ class FileLocation(ABC):
                 return None
             raise
 
-    def _put_file(
-        self,
-        route: str,
-        path: PathLike,
-        content: Union[str, bytes, io.IOBase],
-    ) -> None:
+    def _create(self, route: str, path: PathLike, **kwargs: Any) -> None:
         """
-        Write ``content`` to ``route``, surviving a lost response.
+        PUT to ``route`` to create ``path``, surviving a lost response.
 
         A transport failure -- most often the read timeout on a slow Files
-        API -- does not say whether the upload landed, and the route only
+        API -- does not say whether the create landed, and the route only
         creates, so it cannot be replayed. The caller has just seen ``path``
-        absent, so a file at it now is the one this upload wrote, and the
+        absent, so an object at it now is the one this request made, and the
         failure is dropped. Anything else, including a failure of that check,
         raises the original error.
 
         Parameters
         ----------
         route : str
-            Request path of the upload
+            Request path of the create
         path : Path or str
-            Path of the file, for the existence check
-        content : str or bytes or file-like
-            Content to upload
+            Path of the file or folder, for the existence check
+        **kwargs : keyword arguments, optional
+            Keyword arguments to add to the PUT request
 
         """
         try:
-            self._manager._put(
-                route,
-                files={'file': content},
-                headers={'Content-Type': None},
-            )
+            self._manager._put(route, **kwargs)
         except ManagementError as exc:
             if not isinstance(exc.__cause__, requests.exceptions.RequestException):
                 raise
@@ -924,7 +915,11 @@ class FileSpace(FileLocation):
                 raise IsADirectoryError('file path is a directory')
             self._manager._delete(f'files/fs/{self._location}/{path}')
 
-        self._put_file(f'files/fs/{self._location}/{path}', path, content)
+        self._create(
+            f'files/fs/{self._location}/{path}', path,
+            files={'file': content},
+            headers={'Content-Type': None},
+        )
 
         return self.info(path) if fetch_info else None
 

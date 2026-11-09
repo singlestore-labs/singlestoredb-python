@@ -298,7 +298,11 @@ class Stage(FileLocation):
                 )
             self._manager._delete(self._fs_path(stage_path))
 
-        self._put_file(self._fs_path(stage_path), stage_path, content)
+        self._create(
+            self._fs_path(stage_path), stage_path,
+            files={'file': content},
+            headers={'Content-Type': None},
+        )
 
         return self.info(stage_path) if fetch_info else None
 
@@ -326,9 +330,7 @@ class Stage(FileLocation):
 
             self.remove(stage_path)
 
-        self._manager._put(
-            self._fs_path(stage_path) + '?isFile=false',
-        )
+        self._create(self._fs_path(stage_path) + '?isFile=false', stage_path)
 
         return self.info(stage_path)
 

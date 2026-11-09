@@ -1282,7 +1282,7 @@ class CountingManager:
     def _put(self, path: Any, **kwargs: Any) -> Any:
         key = self._key(path)
         if 'isFile=false' in str(path):
-            key = re.sub(r'/*$', r'/', key)
+            key = key.rstrip('/') + '/'
         self.calls.append(('PUT', key))
         self.existing.add(key)
         return SimpleNamespace(
