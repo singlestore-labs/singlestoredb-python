@@ -24,7 +24,6 @@ from typing import Union
 
 from ..exceptions import ManagementError
 from ._version_import import _versioned_attr
-from .files import _content_size
 from .files import FileLocation
 from .files import FilesObject
 from .files import FilesObjectBytesReader
@@ -299,9 +298,8 @@ class Stage(FileLocation):
                 )
             self._manager._delete(self._fs_path(stage_path))
 
-        self._create(
-            self._fs_path(stage_path), stage_path,
-            size=_content_size(content),
+        self._manager._put(
+            self._fs_path(stage_path),
             files={'file': content},
             headers={'Content-Type': None},
         )
@@ -332,7 +330,9 @@ class Stage(FileLocation):
 
             self.remove(stage_path)
 
-        self._create(self._fs_path(stage_path) + '?isFile=false', stage_path)
+        self._manager._put(
+            self._fs_path(stage_path) + '?isFile=false',
+        )
 
         return self.info(stage_path)
 

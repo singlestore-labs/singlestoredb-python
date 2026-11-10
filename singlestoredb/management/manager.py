@@ -55,8 +55,8 @@ def set_organization(kwargs: Dict[str, Any]) -> None:
 #:
 #: PUT is absent too. Every PUT the API takes is a Files or Stage create, which
 #: answers a replay of one that landed with 409 "File with the same name
-#: already exists". :meth:`FileLocation._create` asks whether the file or
-#: folder is there instead.
+#: already exists" -- hiding the timeout that caused the replay. A lost
+#: response on an upload is raised as it is, and the caller decides.
 RETRY_METHODS = frozenset(['GET', 'HEAD', 'OPTIONS', 'DELETE'])
 
 #: Status codes worth retrying. These are the transient ones; a 4xx other

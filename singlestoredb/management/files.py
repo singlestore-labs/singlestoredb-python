@@ -17,9 +17,6 @@ from typing import Optional
 from typing import overload
 from typing import Union
 
-import requests
-import urllib3
-
 from .. import config
 from ..exceptions import ManagementError
 from .manager import Manager
@@ -359,54 +356,6 @@ class FilesObjectBytesReader(io.BytesIO):
     """BytesIO wrapper for reading from FileLocation."""
 
 
-def _response_was_lost(exc: ManagementError) -> bool:
-    """
-    Did the request reach the server and only its response go missing?
-
-    A read timeout, a connection dropped while waiting for the response, or a
-    gateway 502/504 for a request it forwarded: the server may have acted. A
-    connect timeout or a connection that never opened sent nothing, and a 503
-    is a refusal, so neither can have created anything.
-
-    """
-    if exc.errno in (502, 504):
-        return True
-    cause = exc.__cause__
-    if isinstance(
-        cause,
-        (requests.exceptions.ReadTimeout, requests.exceptions.ChunkedEncodingError),
-    ):
-        return True
-    # requests wraps a dropped response's ProtocolError directly; a failed
-    # connect arrives wrapped in MaxRetryError instead
-    if isinstance(cause, requests.exceptions.ConnectionError) and cause.args:
-        return isinstance(cause.args[0], urllib3.exceptions.ProtocolError)
-    return False
-
-
-def _content_size(content: Union[str, bytes, io.IOBase]) -> Optional[int]:
-    """
-    Return the number of bytes an upload of ``content`` sends, if known.
-
-    Called before the upload, which consumes a stream. A stream that cannot
-    seek has no size to offer, and a text stream's positions are not bytes.
-
-    """
-    if isinstance(content, bytes):
-        return len(content)
-    if isinstance(content, str):
-        # The multipart body carries a str as UTF-8
-        return len(content.encode('utf-8'))
-    if isinstance(content, io.TextIOBase):
-        return None
-    if isinstance(content, io.IOBase) and content.seekable():
-        pos = content.tell()
-        end = content.seek(0, io.SEEK_END)
-        content.seek(pos)
-        return end - pos
-    return None
-
-
 class FileLocation(ABC):
 
     _manager: Manager
@@ -548,53 +497,6 @@ class FileLocation(ABC):
             if exc.errno == 404:
                 return None
             raise
-
-    def _create(
-        self,
-        route: str,
-        path: PathLike,
-        size: Optional[int] = None,
-        **kwargs: Any,
-    ) -> None:
-        """
-        PUT to ``route`` to create ``path``, surviving a lost response.
-
-        A lost response -- most often the read timeout on a slow Files API --
-        does not say whether the create landed, and the route only creates, so
-        it cannot be replayed. The caller has just seen ``path`` absent, so an
-        object at it now, of the ``size`` that was sent, is taken to be the one
-        this request made, and the failure is dropped. A request that never
-        reached the server, or a failure of that check, raises the original
-        error, as does everything else.
-
-        What this cannot rule out is another client creating the same path,
-        with the same size, inside the timeout. Comparing content would mean
-        downloading the file from the API that has just failed to answer.
-
-        Parameters
-        ----------
-        route : str
-            Request path of the create
-        path : Path or str
-            Path of the file or folder, for the existence check
-        size : int, optional
-            Size in bytes of the upload, checked against the object found.
-            ``None`` checks existence only.
-        **kwargs : keyword arguments, optional
-            Keyword arguments to add to the PUT request
-
-        """
-        try:
-            self._manager._put(route, **kwargs)
-        except ManagementError as exc:
-            if not _response_was_lost(exc):
-                raise
-            try:
-                obj = self._info_or_none(path)
-            except ManagementError:
-                obj = None
-            if obj is None or (size is not None and obj.size != size):
-                raise exc
 
     @abstractmethod
     def exists(self, path: PathLike) -> bool:
@@ -978,9 +880,8 @@ class FileSpace(FileLocation):
                 raise IsADirectoryError('file path is a directory')
             self._manager._delete(f'files/fs/{self._location}/{path}')
 
-        self._create(
-            f'files/fs/{self._location}/{path}', path,
-            size=_content_size(content),
+        self._manager._put(
+            f'files/fs/{self._location}/{path}',
             files={'file': content},
             headers={'Content-Type': None},
         )
