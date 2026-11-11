@@ -1501,12 +1501,7 @@ class _ClusterFusionMixin:
         mgr = s2.manage_clusters(version='v2')
         cls.manager = mgr
 
-        cls.us_regions = [
-            x for x in mgr.regions
-            if 'US' in x.name or 'us-' in (x.region_name or '')
-        ]
-        if not cls.us_regions:
-            raise unittest.SkipTest('No US regions reported by the v2 API')
+        cls.us_regions = utils.us_regions(mgr)
 
         cls.project_id = cls._project_id(mgr)
 
@@ -1765,7 +1760,7 @@ class TestClusterFusionCreateDrop(_ClusterFusionMixin, unittest.TestCase):
 
         mgr = type(self).manager
         name = f'd-fusion-cluster-{self.id}'
-        region = type(self).us_regions[0]
+        region = random.choice(type(self).us_regions)
 
         try:
             self.cur.execute(
