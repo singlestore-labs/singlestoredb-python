@@ -86,6 +86,10 @@ jobs:
 
   build-and-test:
     needs: setup-database
+    # setup-database is skipped only for a fork's pull request, which has no
+    # secrets. Those runs still build every wheel and check that its extension
+    # loads; only the cluster tests are left out.
+    if: ${{ !cancelled() && (needs.setup-database.result == 'success' || needs.setup-database.result == 'skipped') }}
 
     name: Build and test wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -151,7 +155,7 @@ jobs:
           # the pure-Python wheel without any warning.
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
-          CIBW_TEST_COMMAND: "pytest -v --pyargs singlestoredb.tests.test_basics"
+          CIBW_TEST_COMMAND: ${{ needs.setup-database.result == 'success' && 'pytest -v --pyargs singlestoredb.tests.test_basics' || 'python -c "import _singlestoredb_accel, singlestoredb"' }}
           CIBW_TEST_REQUIRES: "pytest"
           # CLUSTER_PASSWORD has to survive both the userinfo half of the URL
           # and the single-quoted shell word cibuildwheel evaluates, so keep the
