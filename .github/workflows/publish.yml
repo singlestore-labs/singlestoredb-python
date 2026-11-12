@@ -25,8 +25,6 @@ on:
       - 'setup.cfg'
       - 'pyproject.toml'
       - 'MANIFEST.in'
-      - 'resources/create_test_cluster.py'
-      - 'resources/drop_db.py'
   # Runner images and cibuildwheel's toolchains are retired out from under the
   # workflow with no change to this repo, so build and test weekly as well.
   schedule:
