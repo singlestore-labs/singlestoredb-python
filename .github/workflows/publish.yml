@@ -15,6 +15,22 @@ on:
       - 'v*-beta*'
   release:
     types: [published]
+  # Build and test, but never publish, when packaging changes, so a broken
+  # release pipeline is caught in review rather than at release time.
+  pull_request:
+    paths:
+      - '.github/workflows/publish.yml'
+      - 'accel.c'
+      - 'setup.py'
+      - 'setup.cfg'
+      - 'pyproject.toml'
+      - 'MANIFEST.in'
+      - 'resources/create_test_cluster.py'
+      - 'resources/drop_db.py'
+  # Runner images and cibuildwheel's toolchains are retired out from under the
+  # workflow with no change to this repo, so build and test weekly as well.
+  schedule:
+    - cron: '0 6 * * 1'
   workflow_dispatch:
     inputs:
       publish_pypi:
@@ -36,6 +52,9 @@ on:
 jobs:
 
   setup-database:
+    # Pull requests from forks get no secrets, so they cannot deploy the test
+    # cluster.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
 
     steps:
@@ -77,7 +96,7 @@ jobs:
       matrix:
         os:
           - ubuntu-24.04
-          - macos-14
+          - macos-15
           - windows-2022
 
     steps:
@@ -135,15 +154,16 @@ jobs:
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
           CIBW_TEST_COMMAND: "pytest -v --pyargs singlestoredb.tests.test_basics"
-          # xdist because pyproject.toml's addopts sets -n/--dist, and PYTHONPATH
-          # points --pyargs at the workspace, so that pyproject is the inifile
-          # here. Without the plugin pytest exits on the unknown arguments.
-          CIBW_TEST_REQUIRES: "pytest pytest-xdist"
+          CIBW_TEST_REQUIRES: "pytest"
           # CLUSTER_PASSWORD has to survive both the userinfo half of the URL
           # and the single-quoted shell word cibuildwheel evaluates, so keep the
           # secret alphanumeric: no ':', '@', '/', '%' or quote characters.
           CIBW_ENVIRONMENT: "SINGLESTOREDB_URL='mysql://admin:${{ secrets.CLUSTER_PASSWORD }}@${{ needs.setup-database.outputs.cluster-host }}:3306/${{ needs.setup-database.outputs.cluster-database }}?pure_python=0'"
-          PYTHONPATH: ${{ github.workspace }}
+          # No PYTHONPATH here: it would put the checkout ahead of the installed
+          # wheel, so the tests would import the checkout's singlestoredb and the
+          # extension that `pip install -e` built in place for the host Python,
+          # not the wheel under test. On Windows the 64-bit host's extension
+          # then fails to load in the 32-bit test interpreter.
 
 #     - name: Build conda
 #       if: ${{ matrix.os != 'windows-latest' }}
@@ -186,6 +206,7 @@ jobs:
 
   publish:
     needs: build-and-test
+    if: ${{ github.event_name != 'pull_request' && github.event_name != 'schedule' }}
 
     runs-on: ubuntu-latest
 
@@ -258,7 +279,9 @@ jobs:
 
   shutdown-database:
     needs: [setup-database, build-and-test]
-    if: ${{ always() }}
+    # Not when setup-database was skipped (a fork's pull request): there is
+    # no cluster, and the empty ID would fail the shutdown step.
+    if: ${{ always() && needs.setup-database.result != 'skipped' }}
     runs-on: ubuntu-latest
 
     steps:
