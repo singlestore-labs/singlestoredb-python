@@ -8,6 +8,14 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.19.0 - November 12, 2026
+---------------------------
+* Add Python 3.15 support (#146)
+* Fix same-kernel Python UDF registration and invocation MCDB-103581 (#156)
+* Preserve negative timedelta values in MySQL parameters (#150)
+* Remove singlestoredb.server.free_tier (#154), it is no longer supported on the server
+* Remove PUT retries in the Management API (#160)
+
 v1.18.2 - October 28, 2026
 --------------------------
 * Add awaitable UDF server shutdown (#143)
