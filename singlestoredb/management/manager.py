@@ -52,7 +52,12 @@ def set_organization(kwargs: Dict[str, Any]) -> None:
 #:
 #: :func:`retry_on_lock` is the one POST replay, keyed on an error message this
 #: policy never sees.
-RETRY_METHODS = frozenset(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'])
+#:
+#: PUT is absent too. Every PUT the API takes is a Files or Stage create, which
+#: answers a replay of one that landed with 409 "File with the same name
+#: already exists" -- hiding the timeout that caused the replay. A lost
+#: response on an upload is raised as it is, and the caller decides.
+RETRY_METHODS = frozenset(['GET', 'HEAD', 'OPTIONS', 'DELETE'])
 
 #: Status codes worth retrying. These are the transient ones; a 4xx other
 #: than 429 is a client error that will fail again identically.

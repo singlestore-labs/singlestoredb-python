@@ -69,8 +69,11 @@ from . import rowdat_1
 from . import utils
 from ... import connection
 from ...config import get_option
+from ...exceptions import DatabaseError
 from ...management.stage import get_stage
+from ...mysql.constants import ER
 from ...mysql.constants import FIELD_TYPE as ft
+from ..signature import get_resolved_signature
 from ..signature import get_signature
 from ..signature import signature_to_sql
 from ..typing import Masked
@@ -509,7 +512,7 @@ def get_masked_params(func: Callable[..., Any]) -> List[bool]:
         Boolean list of masked parameters
 
     """
-    params = inspect.signature(func).parameters
+    params = get_resolved_signature(func).parameters
     return [typing.get_origin(x.annotation) is Masked for x in params.values()]
 
 
@@ -1892,7 +1895,41 @@ class Application(object):
             )
         else:
             qualified = escape_name(sql_name)
-        return self._service_url_for_qualified(cur, qualified)
+        try:
+            return self._service_url_for_qualified(cur, qualified)
+        except DatabaseError as exc:
+            if exc.errno != ER.WRONG_OBJECT:
+                raise
+
+        database = self.function_database or None
+        cur.execute(
+            'SELECT ROUTINE_TYPE FROM information_schema.ROUTINES '
+            'WHERE ROUTINE_SCHEMA = COALESCE(%s, DATABASE()) '
+            'AND LOWER(ROUTINE_NAME) = LOWER(%s) '
+            'UNION ALL SELECT TABLE_TYPE FROM information_schema.TABLES '
+            'WHERE TABLE_SCHEMA = COALESCE(%s, DATABASE()) '
+            'AND LOWER(TABLE_NAME) = LOWER(%s) '
+            'LIMIT 1',
+            (database, sql_name, database, sql_name),
+        )
+        conflicts = list(cur)
+        if not conflicts:
+            query = 'SHOW AGGREGATES'
+            if database:
+                query += f' IN {escape_name(database)}'
+            pattern = (
+                sql_name.replace('\\', '\\\\').replace('_', '\\_').replace('%', '\\%')
+            )
+            cur.execute(query + ' LIKE %s', (pattern,))
+            if list(cur):
+                conflicts = [('AGGREGATE',)]
+        if conflicts:
+            raise RuntimeError(
+                f'Cannot register SQL function `{sql_name}`: '
+                f'name is already used by a {conflicts[0][0]}. '
+                'Interactive registration will not replace an existing SQL object.',
+            )
+        return None
 
     def _classify_interactive_name(self, cur: Any, sql_name: str) -> str:
         existing = self._show_create_service_url(cur, sql_name)
@@ -2405,9 +2442,31 @@ def main(argv: Optional[List[str]] = None) -> None:
             # Load zip file as a module
             modname = os.path.splitext(os.path.basename(envs[0]))[0]
             zi = zipimport.zipimporter(envs[0])
-            mod = zi.load_module(modname)
-            if mod is None:
-                raise RuntimeError(f'environment file could not be imported: {envs[0]}')
+            # zipimporter.load_module() was removed in Python 3.15, and
+            # find_spec()/exec_module() only exist from Python 3.10. The else
+            # branch is only for Python 3.9 compatibility and can be dropped
+            # as soon as Python 3.9 support is dropped.
+            if sys.version_info >= (3, 10):
+                spec = zi.find_spec(modname)
+                if spec is None or spec.loader is None:
+                    raise RuntimeError(
+                        f'environment file could not be imported: {envs[0]}',
+                    )
+                mod = importlib.util.module_from_spec(spec)
+                sys.modules[modname] = mod
+                try:
+                    spec.loader.exec_module(mod)
+                except BaseException:
+                    # Match load_module(): don't leave a half-initialized
+                    # module behind for a later import to pick up
+                    sys.modules.pop(modname, None)
+                    raise
+            else:
+                mod = zi.load_module(modname)
+                if mod is None:
+                    raise RuntimeError(
+                        f'environment file could not be imported: {envs[0]}',
+                    )
             functions = [mod]
 
             if defaults:

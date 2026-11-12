@@ -74,14 +74,6 @@ def shared_database_name(s):
     return re.sub(r'[^\w]', '', s).replace('-', '_').lower()
 
 
-def _us_regions(manager):
-    """Return the US regions a v2 manager reports, or skip the test."""
-    out = [x for x in manager.regions if 'US' in x.name or 'us-' in x.name]
-    if not out:
-        raise unittest.SkipTest('No US regions reported by the v2 API')
-    return out
-
-
 def _project_id(manager):
     """
     Return the project ID the live v2 suites deploy into, or skip the test.
@@ -1320,7 +1312,7 @@ class TestCluster(unittest.TestCase):
     def setUpClass(cls):
         cls.manager = s2.manage_clusters(version='v2')
 
-        us_regions = _us_regions(cls.manager)
+        us_regions = utils.us_regions(cls.manager)
 
         name = clean_name(secrets.token_urlsafe(20)[:20])
         region = random.choice(us_regions)
@@ -1335,6 +1327,7 @@ class TestCluster(unittest.TestCase):
             expires_at=utils.DEPLOYMENT_EXPIRES_AT,
             project=_project_id(cls.manager),
             wait_on_active=True,
+            wait_timeout=1200,
         )
 
         # v2 generates the admin password and reports it only in the create
@@ -1442,6 +1435,7 @@ class TestCluster(unittest.TestCase):
         # refresh() inside update() still reports the old ranges.
         self.cluster.update(
             firewall_ranges=['192.168.0.0/16'], wait_on_active=True,
+            wait_timeout=1200,
         )
 
         cluster = self.cluster
