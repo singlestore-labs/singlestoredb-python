@@ -87,7 +87,9 @@ singlestoredb = "singlestoredb.pytest"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-exclude = ["docs*", "resources*", "examples*", "licenses*"]
+# build* because discovery includes namespace packages, so an earlier build's
+# build/lib/ tree would otherwise be packaged as a package of its own.
+exclude = ["build*", "docs*", "resources*", "examples*", "licenses*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.typed", "*.sql", "*.csv", "*.ipynb"]
