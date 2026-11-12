@@ -330,6 +330,9 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         pass
 
 
+# An xdist hook. Optional so the suite still starts where xdist is not
+# installed, as when the release build tests the wheel's own copy of it.
+@pytest.hookimpl(optionalhook=True)
 def pytest_testnodedown(node: Any, error: Any) -> None:
     """
     Report, on the controller, what a worker could not terminate.
