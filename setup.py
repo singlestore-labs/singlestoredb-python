@@ -6,7 +6,7 @@ from typing import Tuple
 
 from setuptools import Extension
 from setuptools import setup
-from wheel.bdist_wheel import bdist_wheel
+from setuptools.command.bdist_wheel import bdist_wheel
 
 
 py_limited_api = '0x03080000'

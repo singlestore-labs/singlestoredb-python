@@ -1,5 +1,5 @@
 [build-system]
-requires = ["build", "setuptools>=61.0", "wheel"]
+requires = ["build", "setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "singlestoredb"
 version = "1.18.2"
 description = "Interface to the SingleStoreDB database and workspace management APIs"
 readme = {file = "README.md", content-type = "text/markdown"}
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [
     {name = "SingleStore", email = "support@singlestore.com"}
 ]
@@ -69,7 +70,7 @@ docs = [
 ]
 build = [
     "build",
-    "setuptools>=61.0",
+    "setuptools>=77.0",
     "wheel",
 ]
 dev = [
@@ -86,7 +87,9 @@ singlestoredb = "singlestoredb.pytest"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-exclude = ["docs*", "resources*", "examples*", "licenses*"]
+# build* because discovery includes namespace packages, so an earlier build's
+# build/lib/ tree would otherwise be packaged as a package of its own.
+exclude = ["build*", "docs*", "resources*", "examples*", "licenses*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.typed", "*.sql", "*.csv", "*.ipynb"]
