@@ -78,10 +78,16 @@ jobs:
         # to it, so the script resets it to CLUSTER_PASSWORD over SQL once the
         # cluster is up. A generated password could not reach the other jobs
         # anyway: the runner refuses to write a masked value as a job output.
+        #
+        # The secrets reach the script through the environment rather than
+        # being interpolated into the command, so the shell never sees their
+        # characters.
         run: |
-          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
+          python resources/create_test_cluster.py --password="$CLUSTER_PASSWORD" --token="$CLUSTER_API_KEY" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
         env:
           PYTHONPATH: ${{ github.workspace }}
+          CLUSTER_PASSWORD: ${{ secrets.CLUSTER_PASSWORD }}
+          CLUSTER_API_KEY: ${{ secrets.CLUSTER_API_KEY }}
 
     outputs:
       cluster-id: ${{ steps.initialize-database.outputs.cluster-id }}
@@ -257,19 +263,24 @@ jobs:
         with:
           subject-path: dist/*
 
+      # The tag reaches the shell through the environment rather than being
+      # interpolated into the script: tag names may contain $(), backticks
+      # and ';', which the shell would otherwise run.
       - name: Create GitHub Release
         if: ${{ github.event_name == 'push' }}
         run: |
-          gh release create ${{ github.ref_name }} dist/* --prerelease --title "${{ github.ref_name }}"
+          gh release create "$TAG" dist/* --prerelease --title "$TAG"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
 
       - name: Upload release assets
         if: ${{ github.event_name == 'release' }}
         run: |
-          gh release upload ${{ github.event.release.tag_name }} dist/* --clobber
+          gh release upload "$TAG" dist/* --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
 
       - name: Publish to PyPI
         if: ${{ github.event_name == 'release' || github.event.inputs.publish_pypi == 'true' }}
@@ -325,6 +336,7 @@ jobs:
             echo "::error::No cluster ID from setup-database; the cluster (if any) must be terminated by hand"
             exit 1
           fi
-          curl --fail-with-body -H "Accept: application/json" -H "Authorization: Bearer ${{ secrets.CLUSTER_API_KEY }}" -X DELETE "https://api.singlestore.com/v2/clusters/$CLUSTER_ID?force=true"
+          curl --fail-with-body -H "Accept: application/json" -H "Authorization: Bearer $CLUSTER_API_KEY" -X DELETE "https://api.singlestore.com/v2/clusters/$CLUSTER_ID?force=true"
         env:
           CLUSTER_ID: ${{ needs.setup-database.outputs.cluster-id }}
+          CLUSTER_API_KEY: ${{ secrets.CLUSTER_API_KEY }}

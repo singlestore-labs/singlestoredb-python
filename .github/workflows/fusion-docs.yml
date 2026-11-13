@@ -35,8 +35,11 @@ jobs:
           python resources/gen_fusion_handlers_doc.py --dir fusion-docs
           zip -r fusion-docs.zip fusion-docs
 
+      # The tag goes through the environment, not into the script, so the
+      # shell never runs characters in it; see publish.yml.
       - name: Upload release asset
         run: |
-          gh release upload ${{ github.event.release.tag_name }} fusion-docs.zip
+          gh release upload "$TAG" fusion-docs.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
