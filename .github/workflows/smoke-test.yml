@@ -60,10 +60,16 @@ jobs:
         # to it, so the script resets it to CLUSTER_PASSWORD over SQL once the
         # cluster is up. A generated password could not reach the other jobs
         # anyway: the runner refuses to write a masked value as a job output.
+        #
+        # The secrets reach the script through the environment rather than
+        # being interpolated into the command, so the shell never sees their
+        # characters.
         run: |
-          python resources/create_test_cluster.py --password="${{ secrets.CLUSTER_PASSWORD }}" --token="${{ secrets.CLUSTER_API_KEY }}" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
+          python resources/create_test_cluster.py --password="$CLUSTER_PASSWORD" --token="$CLUSTER_API_KEY" --project="Standard Project" --init-sql singlestoredb/tests/test.sql --output=github --expires=2h "python - $GITHUB_WORKFLOW - $GITHUB_RUN_NUMBER"
         env:
           PYTHONPATH: ${{ github.workspace }}
+          CLUSTER_PASSWORD: ${{ secrets.CLUSTER_PASSWORD }}
+          CLUSTER_API_KEY: ${{ secrets.CLUSTER_API_KEY }}
 
     outputs:
       cluster-id: ${{ steps.initialize-database.outputs.cluster-id }}
