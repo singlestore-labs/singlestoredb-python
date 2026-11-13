@@ -71,16 +71,18 @@ jobs:
           HEAD_REF: ${{ github.head_ref }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           # Define directories to monitor (space-separated)
           MONITORED_DIRS="singlestoredb/management singlestoredb/fusion"
 
           # Determine the base commit to compare against
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
+          if [ "$EVENT_NAME" == "pull_request" ]; then
             # For PRs, compare against the target branch (usually master/main)
-            BASE_COMMIT="origin/${{ github.event.pull_request.base.ref }}"
+            BASE_COMMIT="origin/$BASE_REF"
             echo "Pull Request: Comparing against $BASE_COMMIT"
-          elif [ "${{ github.ref_name }}" == "main" ] || [ "${{ github.ref_name }}" == "master" ]; then
+          elif [ "$REF_NAME" == "main" ] || [ "$REF_NAME" == "master" ]; then
             # For pushes to main/master, compare against the push's own lower
             # bound. The ruleset only allows squash merges, so that is normally
             # HEAD~1 anyway; this keeps a multi-commit push checked whole if
