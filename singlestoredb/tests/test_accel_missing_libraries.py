@@ -94,6 +94,40 @@ class TestAccelMissingLibraries(unittest.TestCase):
                             assert BlockNumpy.attempts == 0, (fmt, buffered)
         ''')
 
+    def test_results_type_falls_back_to_rows(self):
+        """A missing results library must give plain rows, not fail.
+
+        The conversion happens in Python, which warns and returns the rows
+        unconverted. The extension used to import the library itself and
+        raise SystemError when that failed.
+        """
+        run_isolated('''
+            import sys
+            import warnings
+
+            # A None entry in sys.modules makes `import name` fail.
+            for name in ('numpy', 'pandas', 'polars', 'pyarrow'):
+                sys.modules[name] = None
+
+            import singlestoredb as s2
+
+            for results_type in ('numpy', 'pandas', 'polars', 'arrow'):
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter('always')
+                    with s2.connect(
+                        results_type=results_type, pure_python=False,
+                    ) as conn:
+                        with conn.cursor() as cur:
+                            cur.execute('SELECT 1 AS a, 2 AS b')
+                            rows = cur.fetchall()
+
+                assert list(rows) in ([(1, 2)], [{'a': 1, 'b': 2}]), \
+                    (results_type, rows)
+                assert any(
+                    issubclass(w.category, RuntimeWarning) for w in caught
+                ), (results_type, [str(w.message) for w in caught])
+        ''')
+
 
 if __name__ == '__main__':
     import nose2

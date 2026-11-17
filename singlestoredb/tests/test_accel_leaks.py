@@ -154,6 +154,34 @@ class TestAccelLeaks(unittest.TestCase):
                     f'(budget {budget}, of which {tracer_overhead} is ' \
                     f'tracer overhead)'
 
+    def test_unbuffered_fetches_release_the_state(self):
+        """Each fetch from an unbuffered cursor must release the State.
+
+        The State is the same object on every fetch, so keeping a reference
+        to it leaks no new blocks per fetch, only the State itself once the
+        query is done. Counting its references shows the leak at once.
+        """
+        digits = ' UNION ALL '.join(f'SELECT {i} AS x' for i in range(10))
+        query = f'SELECT a.x, b.x FROM ({digits}) a, ({digits}) b'
+
+        with s2.connect(pure_python=False, buffered=False) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                cur.fetchone()
+                # Held in a list, not a local: from 3.14 the interpreter may
+                # pass a local to getrefcount without counting it, which
+                # would shift the expected count by one.
+                held = [cur._result._state]
+                for _ in range(50):
+                    cur.fetchone()
+                cur.fetchall()
+
+        gc.collect()
+
+        # One reference from held, one for getrefcount's argument.
+        count = sys.getrefcount(held[0])
+        assert count == 2, count
+
     def test_rows_outlive_the_result_state(self):
         """Struct sequence rows must survive the state that created them.
 
