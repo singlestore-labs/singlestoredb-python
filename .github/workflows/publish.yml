@@ -157,7 +157,12 @@ jobs:
           # the build for cp315 because the abi3 wheel already covers it, and
           # only reruns the tests there, so the oldest and newest supported
           # interpreters both load the extension.
-          CIBW_BUILD: "cp39-* cp315-*"
+          #
+          # Free-threaded CPython cannot load abi3, so cp315t builds a second
+          # wheel for the free-threaded stable ABI, abi3t (see setup.py). It is
+          # tagged cp315-abi3t and covers 3.15t and every later free-threaded
+          # release, so later ones need no entry here.
+          CIBW_BUILD: "cp39-* cp315-* cp315t-*"
           CIBW_SKIP: "*-musllinux* *-manylinux_i686"
           # cibuildwheel v3+ builds on manylinux_2_28 (glibc 2.28) by default.
           # Pin manylinux2014 (glibc 2.17) so CentOS/RHEL 7, Amazon Linux 2 and
@@ -165,7 +170,9 @@ jobs:
           # the pure-Python wheel without any warning.
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
-          CIBW_TEST_COMMAND: ${{ needs.setup-database.result == 'success' && 'pytest -v --pyargs singlestoredb.tests.test_basics' || 'python -c "import _singlestoredb_accel, singlestoredb"' }}
+          # check_accel_import.py also fails the abi3t wheel if importing it
+          # turns the GIL back on.
+          CIBW_TEST_COMMAND: ${{ needs.setup-database.result == 'success' && 'python {project}/resources/check_accel_import.py && pytest -v --pyargs singlestoredb.tests.test_basics' || 'python {project}/resources/check_accel_import.py' }}
           CIBW_TEST_REQUIRES: "pytest"
           # CLUSTER_PASSWORD has to survive both the userinfo half of the URL
           # and the single-quoted shell word cibuildwheel evaluates, so keep the

@@ -1,5 +1,11 @@
 [build-system]
-requires = ["build", "setuptools>=77.0"]
+# setuptools 84.2 is the first to name abi3t extensions (.abi3t.so), which
+# the free-threaded 3.15 build needs.
+requires = [
+    "build",
+    "setuptools>=77.0",
+    "setuptools>=84.2.0; python_version >= '3.15'",
+]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -71,6 +77,7 @@ docs = [
 build = [
     "build",
     "setuptools>=77.0",
+    "setuptools>=84.2.0; python_version >= '3.15'",
     "wheel",
 ]
 dev = [
