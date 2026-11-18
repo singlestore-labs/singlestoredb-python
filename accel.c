@@ -369,6 +369,24 @@ inline int IMIN(int a, int b) { return((a) < (b) ? a : b); }
 
 static PyObject *create_numpy_array(PyObject *py_memview, char *data_format, int data_type, PyObject *py_objs);
 
+// Calls func(arg, **kwargs) and steals the reference to arg, even on failure.
+// arg may be NULL, in which case the error that produced it is passed on.
+// Each call builds its own argument tuple. A tuple cached in a global and
+// refilled per call keeps its last argument alive, and without a GIL would be
+// shared by every thread calling at once.
+static PyObject *call_one_steal(PyObject *func, PyObject *arg, PyObject *kwargs) {
+    if (!arg) return NULL;
+    PyObject *py_args = PyTuple_New(1);
+    if (!py_args) {
+        Py_DECREF(arg);
+        return NULL;
+    }
+    PyTuple_SetItem(py_args, 0, arg);
+    PyObject *py_out = PyObject_Call(func, py_args, kwargs);
+    Py_DECREF(py_args);
+    return py_out;
+}
+
 // Returns a newly allocated UTF-8 copy of `unicode`; the caller owns it
 // and must free() it.
 static char *_PyUnicode_AsUTF8(PyObject *unicode) {
@@ -517,9 +535,6 @@ typedef struct {
     PyObject *Series;
     PyObject *array;
     PyObject *vectorize;
-    PyObject *DataFrame;
-    PyObject *Table;
-    PyObject *from_pylist;
     PyObject *int8;
     PyObject *int16;
     PyObject *int32;
@@ -558,10 +573,6 @@ typedef struct {
     PyObject *numpy_array;
     PyObject *numpy_frombuffer;
     PyObject *numpy_vectorize;
-    PyObject *pandas_DataFrame;
-    PyObject *polars_DataFrame;
-    PyObject *pyarrow_Table;
-    PyObject *pyarrow_Table_from_pylist;
     PyObject *struct_unpack;
     PyObject *bson_decode;
 } PyFunctions;
@@ -573,11 +584,8 @@ static PyFunctions PyFunc = {0};
 //
 typedef struct {
     PyObject *namedtuple_kwargs;
-    PyObject *create_numpy_array_args;
     PyObject *create_numpy_array_kwargs;
     PyObject *create_numpy_array_kwargs_vector[8];
-    PyObject *struct_unpack_args;
-    PyObject *bson_decode_args;
     PyObject *structsequence_fields_registry;
     PyObject *structsequence_fields_release;
 } PyObjects;
@@ -829,7 +837,7 @@ typedef struct {
     char *encoding_errors;
 } StateObject;
 
-static int read_options(MySQLAccelOptions *options, PyObject *dict);
+static void read_options(MySQLAccelOptions *options, PyObject *dict);
 
 #define DESTROY(x) do { if (x) { free((void*)x); (x) = NULL; } } while (0)
 
@@ -858,66 +866,6 @@ error:
     Py_CLEAR(PyFunc.numpy_array);
     Py_CLEAR(PyFunc.numpy_frombuffer);
     Py_CLEAR(PyFunc.numpy_vectorize);
-    PyErr_Clear();
-    return -1;
-}
-
-
-int ensure_pandas() {
-    if (PyFunc.pandas_DataFrame) goto exit;
-
-    // Import pandas if it exists
-    PyObject *pandas_mod = PyImport_ImportModule("pandas");
-    if (!pandas_mod) goto error;
-
-    PyFunc.pandas_DataFrame = PyObject_GetAttr(pandas_mod, PyStr.DataFrame);
-    if (!PyFunc.pandas_DataFrame) goto error;
-
-exit:
-    return 0;
-
-error:
-    PyErr_Clear();
-    return -1;
-}
-
-
-int ensure_polars() {
-    if (PyFunc.polars_DataFrame) goto exit;
-
-    // Import polars if it exists
-    PyObject *polars_mod = PyImport_ImportModule("polars");
-    if (!polars_mod) goto error;
-
-    PyFunc.polars_DataFrame = PyObject_GetAttr(polars_mod, PyStr.DataFrame);
-    if (!PyFunc.polars_DataFrame) goto error;
-
-exit:
-    return 0;
-
-error:
-    PyErr_Clear();
-    return -1;
-}
-
-
-int ensure_pyarrow() {
-    if (PyFunc.pyarrow_Table_from_pylist) goto exit;
-
-    // Import pyarrow if it exists
-    PyObject *pyarrow_mod = PyImport_ImportModule("pyarrow");
-    if (!pyarrow_mod) goto error;
-
-    PyFunc.pyarrow_Table = PyObject_GetAttr(pyarrow_mod, PyStr.Table);
-    if (!PyFunc.pyarrow_Table) goto error;
-
-    PyFunc.pyarrow_Table_from_pylist = PyObject_GetAttr(PyFunc.pyarrow_Table, PyStr.from_pylist);
-    if (!PyFunc.pyarrow_Table_from_pylist) goto error;
-
-exit:
-    return 0;
-
-error:
     PyErr_Clear();
     return -1;
 }
@@ -1053,8 +1001,12 @@ static void State_clear_fields(StateObject *self) {
 }
 
 static void State_dealloc(StateObject *self) {
+    // State is a heap type, so each instance holds a reference to it.
+    PyTypeObject *tp = Py_TYPE(self);
     State_clear_fields(self);
-    PyObject_Del(self);
+    freefunc tp_free = (freefunc)PyType_GetSlot(tp, Py_tp_free);
+    tp_free(self);
+    Py_DECREF(tp);
 }
 
 static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
@@ -1265,8 +1217,7 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
     Py_XDECREF(py_next_seq_id);
 
     if (py_options && PyDict_Check(py_options)) {
-        rc = read_options(&self->options, py_options);
-        if (rc) goto error;
+        read_options(&self->options, py_options);
     }
 
     switch (self->options.results_type) {
@@ -1414,13 +1365,15 @@ static PyType_Spec StateType_spec = {
 // End State
 //
 
-static int read_options(MySQLAccelOptions *options, PyObject *dict) {
-    if (!options || !dict) return 0;
+// numpy, pandas, polars and arrow results are built in Python from the rows
+// returned here (singlestoredb/utils/results.py), which warns and returns the
+// rows when the library is missing. So nothing is imported here.
+static void read_options(MySQLAccelOptions *options, PyObject *dict) {
+    if (!options || !dict) return;
 
     PyObject *key = NULL;
     PyObject *value = NULL;
     Py_ssize_t pos = 0;
-    int rc = 0;
 
     while (PyDict_Next(dict, &pos, &key, &value)) {
         if (PyUnicode_CompareWithASCIIString(key, "results_type") == 0) {
@@ -1438,20 +1391,16 @@ static int read_options(MySQLAccelOptions *options, PyObject *dict) {
             }
             else if (PyUnicode_CompareWithASCIIString(value, "numpy") == 0) {
                 options->results_type = ACCEL_OUT_NUMPY;
-                rc = ensure_numpy();
             }
             else if (PyUnicode_CompareWithASCIIString(value, "pandas") == 0) {
                 options->results_type = ACCEL_OUT_PANDAS;
-                rc = ensure_pandas();
             }
             else if (PyUnicode_CompareWithASCIIString(value, "polars") == 0) {
                 options->results_type = ACCEL_OUT_POLARS;
-                rc = ensure_polars();
             }
             else if (PyUnicode_CompareWithASCIIString(value, "arrow") == 0 ||
                      PyUnicode_CompareWithASCIIString(value, "pyarrow") == 0) {
                 options->results_type = ACCEL_OUT_ARROW;
-                rc = ensure_pyarrow();
             }
             else {
                 options->results_type = ACCEL_OUT_TUPLES;
@@ -1464,8 +1413,6 @@ static int read_options(MySQLAccelOptions *options, PyObject *dict) {
             }
         }
     }
-
-    return rc;
 }
 
 static void raise_exception(
@@ -1919,7 +1866,6 @@ static PyObject *read_row_from_packet(
     PyObject *py_result = NULL;
     PyObject *py_item = NULL;
     PyObject *py_str = NULL;
-    PyObject *py_memview = NULL;
     char end = '\0';
     char *cast_type_codes[] = {"", "f", "d", "b", "h", "i", "q", "e"};
     int item_type_lengths[] = {0, 4, 8, 1, 2, 4, 8, 2};
@@ -2215,10 +2161,9 @@ static PyObject *read_row_from_packet(
                     if (py_state->have_numpy
                         && py_state->type_codes[i] >= MYSQL_TYPE_FLOAT32_VECTOR_JSON
                         && py_state->type_codes[i] <= MYSQL_TYPE_FLOAT16_VECTOR_JSON) {
-                        CHECKRC(PyTuple_SetItem(PyObj.create_numpy_array_args, 0, py_item));
-                        py_item = PyObject_Call(
+                        py_item = call_one_steal(
                             PyFunc.numpy_array,
-                            PyObj.create_numpy_array_args,
+                            py_item,
                             PyObj.create_numpy_array_kwargs_vector[py_state->type_codes[i] % 1000]
                         );
                         if (!py_item) goto error;
@@ -2237,30 +2182,19 @@ static PyObject *read_row_from_packet(
                     int type_idx = py_state->type_codes[i] % 1000;
 
                     if (py_state->have_numpy) {
-                        py_memview = PyBytes_FromStringAndSize(out, out_l);
-                        if (!py_memview) goto error;
-
-                        CHECKRC(PyTuple_SetItem(PyObj.create_numpy_array_args, 0, py_memview));
-
-                        py_item = PyObject_Call(
+                        py_item = call_one_steal(
                             PyFunc.numpy_frombuffer,
-                            PyObj.create_numpy_array_args,
+                            PyBytes_FromStringAndSize(out, out_l),
                             PyObj.create_numpy_array_kwargs_vector[type_idx]
                         );
                         if (!py_item) goto error;
 
                     } else {
-                        py_memview = PyBytes_FromStringAndSize(out, out_l);
-                        if (!py_memview) goto error;
-
-                        CHECKRC(PyTuple_SetItem(PyObj.struct_unpack_args, 0,
-                                                PyUnicode_FromFormat("<%ld%s", out_l / item_type_lengths[type_idx], cast_type_codes[type_idx])));
-                        CHECKRC(PyTuple_SetItem(PyObj.struct_unpack_args, 1, py_memview));
-
-                        py_item = PyObject_Call(
+                        py_item = PyObject_CallFunction(
                             PyFunc.struct_unpack,
-                            PyObj.struct_unpack_args,
-                            NULL
+                            "Ny#",
+                            PyUnicode_FromFormat("<%ld%s", out_l / item_type_lengths[type_idx], cast_type_codes[type_idx]),
+                            out, (Py_ssize_t)out_l
                         );
                         if (!py_item) goto error;
                     }
@@ -2273,12 +2207,7 @@ static PyObject *read_row_from_packet(
                     if (!py_item) goto error;
 
                     if (ensure_bson() == 0) {
-                        CHECKRC(PyTuple_SetItem(PyObj.bson_decode_args, 0, py_item));
-                        py_item = PyObject_Call(
-                            PyFunc.bson_decode,
-                            PyObj.bson_decode_args,
-                            NULL
-                        );
+                        py_item = call_one_steal(PyFunc.bson_decode, py_item, NULL);
                         if (!py_item) goto error;
                     }
 
@@ -2328,7 +2257,7 @@ error:
 
 static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *kwargs) {
     int rc = 0;
-    StateObject *py_state = NULL;
+    StateObject *py_state = NULL; // Owned reference
     PyObject *py_res = NULL;
     PyObject *py_unbuffered = NULL;
     PyObject *py_out = NULL;
@@ -2359,6 +2288,13 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
 
     // Get the rowdata state.
     py_state = (StateObject*)PyObject_GetAttr(py_res, PyStr._state);
+    if (py_state && !PyObject_TypeCheck((PyObject*)py_state, StateType)) {
+        // Anything else here was not put there by this function, and reading
+        // it as a State would read past the end of the object.
+        PyErr_SetString(PyExc_TypeError, "result._state is not a rowdata State");
+        Py_CLEAR(py_state);
+        goto error;
+    }
     if (!py_state) {
         PyErr_Clear();
 
@@ -2441,7 +2377,11 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
     }
 
 exit:
-    if (!py_state) return NULL;
+    if (!py_state) {
+        Py_XDECREF(py_zero);
+        if (py_err_type) PyErr_Restore(py_err_type, py_err_value, py_err_tb);
+        return NULL;
+    }
 
     py_next_seq_id = PyLong_FromUnsignedLongLong(py_state->next_seq_id);
     if (!py_next_seq_id) goto error;
@@ -2459,7 +2399,6 @@ exit:
             PyObject_SetAttr(py_res, PyStr.affected_rows, (py_n_rows) ? py_n_rows : Py_None);
             Py_XDECREF(py_n_rows);
             PyObject_DelAttr(py_res, PyStr._state);
-            Py_CLEAR(py_state);
         }
         else {
             py_out = (requested_n_rows == 1) ?
@@ -2475,11 +2414,12 @@ exit:
         Py_XDECREF(py_n_rows);
         if (py_state->is_eof) {
             PyObject_DelAttr(py_res, PyStr._state);
-            Py_CLEAR(py_state);
         }
     }
 
     Py_XDECREF(py_zero);
+    // Last use of py_state; the State may be freed here if _state was deleted.
+    Py_CLEAR(py_state);
 
     if (PyErr_Occurred()) {
         Py_CLEAR(py_out);
@@ -2508,10 +2448,8 @@ static PyObject *create_numpy_array(PyObject *py_memview, char *data_format, int
     py_memviewc = PyObject_CallMethod(py_memview, "cast", "s", data_format);
     if (!py_memviewc) goto error;
 
-    CHECKRC(PyTuple_SetItem(PyObj.create_numpy_array_args, 0, py_memviewc));
     Py_INCREF(py_memviewc);
-
-    py_out = PyObject_Call(PyFunc.numpy_array, PyObj.create_numpy_array_args, PyObj.create_numpy_array_kwargs);
+    py_out = call_one_steal(PyFunc.numpy_array, py_memviewc, PyObj.create_numpy_array_kwargs);
     if (!py_out) goto error;
 
     // Add series to the output, remapping string values as needed
@@ -6093,9 +6031,6 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     PyStr.Series = PyUnicode_FromString("Series");
     PyStr.array = PyUnicode_FromString("array");
     PyStr.vectorize = PyUnicode_FromString("vectorize");
-    PyStr.DataFrame = PyUnicode_FromString("DataFrame");
-    PyStr.Table = PyUnicode_FromString("Table");
-    PyStr.from_pylist = PyUnicode_FromString("from_pylist");
     PyStr.int8 = PyUnicode_FromString("int8");
     PyStr.int16 = PyUnicode_FromString("int16");
     PyStr.int32 = PyUnicode_FromString("int32");
@@ -6151,9 +6086,6 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
         goto error;
     }
 
-    PyObj.create_numpy_array_args = PyTuple_New(1);
-    if (!PyObj.create_numpy_array_args) goto error;
-
     PyObj.create_numpy_array_kwargs = PyDict_New();
     if (!PyObj.create_numpy_array_kwargs) goto error;
     if (PyDict_SetItemString(PyObj.create_numpy_array_kwargs, "copy", Py_True)) {
@@ -6195,12 +6127,6 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
     if (PyDict_SetItemString(PyObj.create_numpy_array_kwargs_vector[7], "dtype", PyStr.float16)) {
         goto error;
     }
-
-    PyObj.struct_unpack_args = PyTuple_New(2);
-    if (!PyObj.struct_unpack_args) goto error;
-
-    PyObj.bson_decode_args = PyTuple_New(1);
-    if (!PyObj.bson_decode_args) goto error;
 
     // Owns the field name storage of every live struct sequence type:
     // weak reference to the type => capsule holding its names.
