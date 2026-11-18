@@ -122,6 +122,19 @@ jobs:
 #           driver: mysql
 #           pure-python: 0
 #           buffered: 0
+          # Free-threaded: the C extension is built for abi3t rather than
+          # abi3, and has to work with the GIL off. Unbuffered too, since
+          # that is the path that keeps State between fetches.
+          - os: ubuntu-24.04
+            python-version: "3.15t"
+            driver: mysql
+            pure-python: 0
+            buffered: 1
+          - os: ubuntu-24.04
+            python-version: "3.15t"
+            driver: mysql
+            pure-python: 0
+            buffered: 0
           - os: macos-latest
             python-version: "3.11"
             driver: mysql
@@ -153,9 +166,25 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
+        if: ${{ !endsWith(matrix.python-version, 't') }}
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+
+      # Not all of .[dev] has free-threaded wheels (polars has none for
+      # 3.15t, so pip would compile it from Rust). These are all the smoke
+      # tests need; test_basics skips what it cannot import.
+      - name: Install dependencies (free-threaded)
+        if: ${{ endsWith(matrix.python-version, 't') }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . pytest pytest-xdist numpy
+
+      - name: Check the C extension
+        if: ${{ matrix.pure-python == 0 }}
+        run: python resources/check_accel_import.py
+        env:
+          PYTHONPATH: ${{ github.workspace }}
 
       - name: Run tests
         if: ${{ matrix.driver != 'https' }}

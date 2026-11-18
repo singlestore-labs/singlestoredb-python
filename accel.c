@@ -14,6 +14,19 @@
 #endif
 #include <Python.h>
 
+// Shared C state is otherwise protected by the GIL. On a free-threaded build
+// (the abi3t wheel, or a full C API build for 3.13t/3.14t), use a critical
+// section; with a GIL (including every abi3 build, whose headers may not even
+// declare PyCriticalSection), these do nothing. Targeting abi3t defines
+// Py_GIL_DISABLED.
+#if defined(Py_GIL_DISABLED)
+#define ACCEL_LOCK(op) Py_BEGIN_CRITICAL_SECTION(op)
+#define ACCEL_UNLOCK() Py_END_CRITICAL_SECTION()
+#else
+#define ACCEL_LOCK(op) {
+#define ACCEL_UNLOCK() }
+#endif
+
 #ifndef Py_LIMITED_API
 #include <datetime.h>
 #endif
@@ -588,6 +601,7 @@ typedef struct {
     PyObject *create_numpy_array_kwargs_vector[8];
     PyObject *structsequence_fields_registry;
     PyObject *structsequence_fields_release;
+    PyObject *lazy_import_lock; // Only its critical section is used; see lazy_import()
 } PyObjects;
 
 static PyObjects PyObj = {0};
@@ -797,8 +811,13 @@ static inline int64_t encode_rowdat_datetime(PyObject *py_obj) {
 
 static PyTypeObject *StateType = NULL;
 
+// A State instance's fields. abi3t makes PyObject opaque, so there they are
+// stored after the object header (PEP 697) and reached with State_data();
+// elsewhere the struct begins with the header and is the object itself.
 typedef struct {
+#ifndef Py_TARGET_ABI3T
     PyObject_HEAD
+#endif
     PyObject *py_conn; // Database connection
     PyObject *py_fields; // List of table fields
     PyObject *py_rows; // Output object
@@ -837,56 +856,104 @@ typedef struct {
     char *encoding_errors;
 } StateObject;
 
+// Returns the fields of State instance obj. State is subclassable, so the
+// fields are looked up by StateType, not by Py_TYPE(obj).
+static StateObject *State_data(PyObject *obj) {
+#ifdef Py_TARGET_ABI3T
+    return (StateObject*)PyObject_GetTypeData(obj, StateType);
+#else
+    return (StateObject*)obj;
+#endif
+}
+
 static void read_options(MySQLAccelOptions *options, PyObject *dict);
 
 #define DESTROY(x) do { if (x) { free((void*)x); (x) = NULL; } } while (0)
 
-int ensure_numpy() {
-    if (PyFunc.numpy_vectorize) return 0;
+// Optional modules are imported on first use, and what is taken from them is
+// cached in PyFunc. Without a GIL two threads can get here at once, so a
+// cached pointer is only read or written under PyObj.lazy_import_lock. The
+// import itself runs outside the lock: a critical section is suspended while
+// its thread blocks, as it may in an import, so it could not keep a second
+// importer out anyway. Both threads may import; the first to publish wins and
+// the other drops what it got.
 
-    // Import numpy if it exists
-    PyObject *numpy_mod = PyImport_ImportModule("numpy");
-    if (!numpy_mod) goto error;
+// Is the last pointer that ensure_*() publishes already set?
+static int lazy_ready(PyObject **last) {
+    int ready;
+    ACCEL_LOCK(PyObj.lazy_import_lock);
+    ready = *last != NULL;
+    ACCEL_UNLOCK();
+    return ready;
+}
 
-    PyFunc.numpy_array = PyObject_GetAttr(numpy_mod, PyStr.array);
-    if (!PyFunc.numpy_array) goto error;
+// Stores values[i] in *targets[i] unless another thread got there first, and
+// releases whatever was not stored. Steals the references in values.
+static void lazy_publish(PyObject **targets[], PyObject *values[], int n) {
+    ACCEL_LOCK(PyObj.lazy_import_lock);
+    if (*targets[n - 1] == NULL) {
+        for (int i = 0; i < n; i++) {
+            *targets[i] = values[i];
+            values[i] = NULL;
+        }
+    }
+    ACCEL_UNLOCK();
+    for (int i = 0; i < n; i++) {
+        Py_XDECREF(values[i]);
+    }
+}
 
-    PyFunc.numpy_frombuffer = PyObject_GetAttr(numpy_mod, PyStr.frombuffer);
-    if (!PyFunc.numpy_frombuffer) goto error;
+#define LAZY_IMPORT_MAX 3
 
-    PyFunc.numpy_vectorize = PyObject_GetAttr(numpy_mod, PyStr.vectorize);
-    if (!PyFunc.numpy_vectorize) goto error;
+// Imports module_name and caches its attributes names[i] in *targets[i], for
+// n up to LAZY_IMPORT_MAX. Returns 0 on success, or -1 with no exception set
+// if the module or an attribute is missing.
+static int lazy_import(
+    const char *module_name,
+    PyObject **targets[],
+    PyObject *names[],
+    int n
+) {
+    PyObject *values[LAZY_IMPORT_MAX] = {NULL};
+    PyObject *py_mod = NULL;
 
-    Py_DECREF(numpy_mod);
+    if (n < 1 || n > LAZY_IMPORT_MAX) return -1;
+    if (lazy_ready(targets[n - 1])) return 0;
+
+    py_mod = PyImport_ImportModule(module_name);
+    if (!py_mod) goto error;
+
+    for (int i = 0; i < n; i++) {
+        values[i] = PyObject_GetAttr(py_mod, names[i]);
+        if (!values[i]) goto error;
+    }
+
+    Py_DECREF(py_mod);
+    lazy_publish(targets, values, n);
     return 0;
 
 error:
-    // Set all three or none, so the next call starts again from the import.
-    Py_XDECREF(numpy_mod);
-    Py_CLEAR(PyFunc.numpy_array);
-    Py_CLEAR(PyFunc.numpy_frombuffer);
-    Py_CLEAR(PyFunc.numpy_vectorize);
     PyErr_Clear();
+    Py_XDECREF(py_mod);
+    for (int i = 0; i < n; i++) {
+        Py_XDECREF(values[i]);
+    }
     return -1;
+}
+
+int ensure_numpy() {
+    PyObject **targets[] = {
+        &PyFunc.numpy_array, &PyFunc.numpy_frombuffer, &PyFunc.numpy_vectorize,
+    };
+    PyObject *names[] = {PyStr.array, PyStr.frombuffer, PyStr.vectorize};
+    return lazy_import("numpy", targets, names, 3);
 }
 
 
 int ensure_bson() {
-    if (PyFunc.bson_decode) goto exit;
-
-    // Import bson if it exists
-    PyObject *bson_mod = PyImport_ImportModule("bson");
-    if (!bson_mod) goto error;
-
-    PyFunc.bson_decode = PyObject_GetAttr(bson_mod, PyStr.decode);
-    if (!PyFunc.bson_decode) goto error;
-
-exit:
-    return 0;
-
-error:
-    PyErr_Clear();
-    return -1;
+    PyObject **targets[] = {&PyFunc.bson_decode};
+    PyObject *names[] = {PyStr.decode};
+    return lazy_import("bson", targets, names, 1);
 }
 
 
@@ -1000,16 +1067,17 @@ static void State_clear_fields(StateObject *self) {
     Py_CLEAR(self->py_conn);
 }
 
-static void State_dealloc(StateObject *self) {
+static void State_dealloc(PyObject *py_self) {
     // State is a heap type, so each instance holds a reference to it.
-    PyTypeObject *tp = Py_TYPE(self);
-    State_clear_fields(self);
+    PyTypeObject *tp = Py_TYPE(py_self);
+    State_clear_fields(State_data(py_self));
     freefunc tp_free = (freefunc)PyType_GetSlot(tp, Py_tp_free);
-    tp_free(self);
+    tp_free(py_self);
     Py_DECREF(tp);
 }
 
-static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
+static int State_init(PyObject *py_self, PyObject *args, PyObject *kwds) {
+    StateObject *self = State_data(py_self);
     int rc = 0;
     PyObject *py_res = NULL;
     PyObject *py_converters = NULL;
@@ -1355,7 +1423,12 @@ static PyType_Slot StateType_slots[] = {
 
 static PyType_Spec StateType_spec = {
     .name = "_singlestoredb_accel.State",
+#ifdef Py_TARGET_ABI3T
+    // Negative: the size of the fields alone, stored after the header.
+    .basicsize = -(int)sizeof(StateObject),
+#else
     .basicsize = sizeof(StateObject),
+#endif
     .itemsize = 0,
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .slots = StateType_slots,
@@ -2193,7 +2266,7 @@ static PyObject *read_row_from_packet(
                         py_item = PyObject_CallFunction(
                             PyFunc.struct_unpack,
                             "Ny#",
-                            PyUnicode_FromFormat("<%ld%s", out_l / item_type_lengths[type_idx], cast_type_codes[type_idx]),
+                            PyUnicode_FromFormat("<%zd%s", (Py_ssize_t)(out_l / item_type_lengths[type_idx]), cast_type_codes[type_idx]),
                             out, (Py_ssize_t)out_l
                         );
                         if (!py_item) goto error;
@@ -2257,7 +2330,8 @@ error:
 
 static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *kwargs) {
     int rc = 0;
-    StateObject *py_state = NULL; // Owned reference
+    PyObject *py_state_obj = NULL; // Owned reference
+    StateObject *py_state = NULL; // Fields of py_state_obj
     PyObject *py_res = NULL;
     PyObject *py_unbuffered = NULL;
     PyObject *py_out = NULL;
@@ -2287,15 +2361,15 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
     }
 
     // Get the rowdata state.
-    py_state = (StateObject*)PyObject_GetAttr(py_res, PyStr._state);
-    if (py_state && !PyObject_TypeCheck((PyObject*)py_state, StateType)) {
+    py_state_obj = PyObject_GetAttr(py_res, PyStr._state);
+    if (py_state_obj && !PyObject_TypeCheck(py_state_obj, StateType)) {
         // Anything else here was not put there by this function, and reading
         // it as a State would read past the end of the object.
         PyErr_SetString(PyExc_TypeError, "result._state is not a rowdata State");
-        Py_CLEAR(py_state);
+        Py_CLEAR(py_state_obj);
         goto error;
     }
-    if (!py_state) {
+    if (!py_state_obj) {
         PyErr_Clear();
 
         PyObject *py_requested_n_rows = PyLong_FromUnsignedLongLong(requested_n_rows);
@@ -2308,14 +2382,18 @@ static PyObject *read_rowdata_packet(PyObject *self, PyObject *args, PyObject *k
         CHECKRC(PyTuple_SetItem(py_args, 0, py_res));
         CHECKRC(PyTuple_SetItem(py_args, 1, py_requested_n_rows));
 
-        py_state = (StateObject*)PyObject_CallObject((PyObject*)StateType, py_args);
-        if (!py_state) { Py_DECREF(py_args); goto error; }
+        py_state_obj = PyObject_CallObject((PyObject*)StateType, py_args);
+        if (!py_state_obj) { Py_DECREF(py_args); goto error; }
         Py_DECREF(py_args);
+        py_state = State_data(py_state_obj);
 
-        PyObject_SetAttr(py_res, PyStr._state, (PyObject*)py_state);
+        PyObject_SetAttr(py_res, PyStr._state, py_state_obj);
     }
-    else if (requested_n_rows > 0) {
-        State_reset_batch(py_state, py_res, requested_n_rows);
+    else {
+        py_state = State_data(py_state_obj);
+        if (requested_n_rows > 0) {
+            State_reset_batch(py_state, py_res, requested_n_rows);
+        }
     }
 
     if (requested_n_rows == 0) {
@@ -2419,7 +2497,8 @@ exit:
 
     Py_XDECREF(py_zero);
     // Last use of py_state; the State may be freed here if _state was deleted.
-    Py_CLEAR(py_state);
+    py_state = NULL;
+    Py_CLEAR(py_state_obj);
 
     if (PyErr_Occurred()) {
         Py_CLEAR(py_out);
@@ -5973,22 +6052,16 @@ static PyMethodDef PyMySQLAccelMethods[] = {
     {NULL, NULL, 0, NULL}
 };
 
-static struct PyModuleDef _singlestoredb_accelmodule = {
-    PyModuleDef_HEAD_INIT,
-    "_singlestoredb_accel",
-    "PyMySQL row data packet reader accelerator",
-    -1,
-    PyMySQLAccelMethods
-};
-
-PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
+// Sets up the module-level globals (StateType, PyStr, PyObj, ...), which are
+// shared by every instance of the module.
+static int accel_init_globals(void) {
 #ifndef Py_LIMITED_API
     PyDateTime_IMPORT;
 #endif
 
     StateType = (PyTypeObject*)PyType_FromSpec(&StateType_spec);
     if (StateType == NULL || PyType_Ready(StateType) < 0) {
-        return NULL;
+        return -1;
     }
 
     // Populate ints
@@ -6137,8 +6210,72 @@ PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
         &structsequence_fields_release_def, NULL, NULL);
     if (!PyObj.structsequence_fields_release) goto error;
 
-    return PyModule_Create(&_singlestoredb_accelmodule);
+    PyObj.lazy_import_lock = PyDict_New();
+    if (!PyObj.lazy_import_lock) goto error;
+
+    return 0;
 
 error:
-    return NULL;
+    return -1;
 }
+
+// Both definitions below declare the module safe without the GIL: shared
+// state is either set once by accel_init_globals() or guarded (see
+// lazy_import()). A State object belongs to one result set, and a connection
+// is not shared between threads (threadsafety = 1).
+
+#ifdef Py_TARGET_ABI3T
+
+// abi3t has no PyModuleDef (it embeds a PyObject), so the module is defined
+// by the PEP 793 export hook instead of PyInit.
+
+static int accel_exec(PyObject *module) {
+    static int initialized = 0;
+    if (initialized) return 0;
+    if (accel_init_globals() < 0) return -1;
+    initialized = 1;
+    return 0;
+}
+
+PyABIInfo_VAR(accel_abi_info);
+
+static PySlot accel_slots[] = {
+    PySlot_STATIC_DATA(Py_mod_abi, &accel_abi_info),
+    PySlot_STATIC_DATA(Py_mod_name, "_singlestoredb_accel"),
+    PySlot_STATIC_DATA(Py_mod_doc, "PyMySQL row data packet reader accelerator"),
+    PySlot_STATIC_DATA(Py_mod_methods, PyMySQLAccelMethods),
+    PySlot_FUNC(Py_mod_exec, accel_exec),
+    // The globals are per process, not per interpreter.
+    PySlot_DATA(Py_mod_multiple_interpreters, Py_MOD_MULTIPLE_INTERPRETERS_NOT_SUPPORTED),
+    PySlot_DATA(Py_mod_gil, Py_MOD_GIL_NOT_USED),
+    PySlot_END
+};
+
+PyMODEXPORT_FUNC PyModExport__singlestoredb_accel(void) {
+    return accel_slots;
+}
+
+#else
+
+static struct PyModuleDef _singlestoredb_accelmodule = {
+    PyModuleDef_HEAD_INIT,
+    "_singlestoredb_accel",
+    "PyMySQL row data packet reader accelerator",
+    -1,
+    PyMySQLAccelMethods
+};
+
+PyMODINIT_FUNC PyInit__singlestoredb_accel(void) {
+    if (accel_init_globals() < 0) return NULL;
+
+    PyObject *module = PyModule_Create(&_singlestoredb_accelmodule);
+#if defined(Py_GIL_DISABLED) && !defined(Py_LIMITED_API)
+    if (module && PyUnstable_Module_SetGIL(module, Py_MOD_GIL_NOT_USED) < 0) {
+        Py_DECREF(module);
+        return NULL;
+    }
+#endif
+    return module;
+}
+
+#endif
