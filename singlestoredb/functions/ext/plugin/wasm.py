@@ -7,6 +7,7 @@ shared FunctionRegistry in registry.py.
 """
 import logging
 import traceback
+from typing import Optional
 
 from .registry import _accel_error
 from .registry import _has_accel
@@ -38,9 +39,22 @@ class Plugin:
                 )
         _registry.initialize()
 
-    def call_function(self, name: str, input_data: bytes) -> bytes:
-        """Call a function by its registered name."""
-        return call_function(_registry, name, input_data)
+    def call_function(
+        self,
+        name: str,
+        param_types: Optional[str],
+        input_data: bytes,
+    ) -> bytes:
+        """Call a function by its registered name.
+
+        ``param_types`` is the semicolon-separated SQL parameter type list
+        of the call (e.g. ``"BIGINT;VARCHAR"``) used to resolve overloads.
+        It maps the WIT ``option<string>``: ``''`` denotes a *zero-arg*
+        call — matching what the engine puts on the wire — while ``None``
+        means no type list was supplied at all (v1 clients). The two are
+        distinct and are passed through as-is.
+        """
+        return call_function(_registry, name, input_data, param_types)
 
     def describe_functions(self) -> str:
         """Describe all functions as a JSON array.
@@ -56,25 +70,27 @@ class Plugin:
 
     def create_function(
         self,
+        id: str,
         signature: str,
         code: str,
         replace: bool,
     ) -> None:
         """Register a function from its signature and function body.
 
-        The ``code`` parameter should contain the function body, not a
-        full ``def`` statement or ``@udf``-decorated source.
+        ``id`` is the server-supplied identifier used later to delete
+        this function. The ``code`` parameter should contain the function
+        body, not a full ``def`` statement or ``@udf``-decorated source.
         """
         try:
-            _registry.create_function(signature, code, replace)
+            _registry.create_function(id, signature, code, replace)
         except Exception as e:
             tb = traceback.format_exc()
             raise RuntimeError(f'{e}\n{tb}')
 
-    def delete_function(self, signature: str) -> None:
-        """Delete a dynamically registered function by its signature."""
+    def delete_function(self, id: str) -> None:
+        """Delete a previously registered function by its id."""
         try:
-            _registry.delete_function(signature)
+            _registry.delete_function(id)
         except Exception as e:
             tb = traceback.format_exc()
             raise RuntimeError(f'{e}\n{tb}')
