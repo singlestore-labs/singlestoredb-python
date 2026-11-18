@@ -821,6 +821,7 @@ typedef struct {
     MySQLAccelOptions options; // Packet reader options
     int unbuffered; // Are we running in unbuffered mode?
     int is_eof; // Have we hit the eof packet yet?
+    int have_numpy; // There is a vector column and numpy was imported
     struct {
         PyObject *_next_seq_id;
         PyObject *rows;
@@ -833,7 +834,7 @@ static int read_options(MySQLAccelOptions *options, PyObject *dict);
 #define DESTROY(x) do { if (x) { free((void*)x); (x) = NULL; } } while (0)
 
 int ensure_numpy() {
-    if (PyFunc.numpy_array && PyFunc.numpy_vectorize) goto exit;
+    if (PyFunc.numpy_vectorize) return 0;
 
     // Import numpy if it exists
     PyObject *numpy_mod = PyImport_ImportModule("numpy");
@@ -848,10 +849,15 @@ int ensure_numpy() {
     PyFunc.numpy_vectorize = PyObject_GetAttr(numpy_mod, PyStr.vectorize);
     if (!PyFunc.numpy_vectorize) goto error;
 
-exit:
+    Py_DECREF(numpy_mod);
     return 0;
 
 error:
+    // Set all three or none, so the next call starts again from the import.
+    Py_XDECREF(numpy_mod);
+    Py_CLEAR(PyFunc.numpy_array);
+    Py_CLEAR(PyFunc.numpy_frombuffer);
+    Py_CLEAR(PyFunc.numpy_vectorize);
     PyErr_Clear();
     return -1;
 }
@@ -1220,6 +1226,21 @@ static int State_init(StateObject *self, PyObject *args, PyObject *kwds) {
                                  NULL : py_converter;
         Py_XINCREF(self->py_converters[i]);
     }
+
+    // numpy is optional and only used for vector columns. Import it once per
+    // result set, and only if there is one: without numpy, an import attempt
+    // per cell is slow. A numpy installed later is used from the next result
+    // set on.
+    int has_vector = 0;
+    for (unsigned long i = 0; i < self->n_cols; i++) {
+        unsigned long t = self->type_codes[i];
+        if ((t >= MYSQL_TYPE_FLOAT32_VECTOR_JSON && t <= MYSQL_TYPE_FLOAT16_VECTOR_JSON)
+            || (t >= MYSQL_TYPE_FLOAT32_VECTOR && t <= MYSQL_TYPE_FLOAT16_VECTOR)) {
+            has_vector = 1;
+            break;
+        }
+    }
+    self->have_numpy = has_vector && ensure_numpy() == 0;
 
     // Loop over all data packets.
     self->py_conn = PyObject_GetAttr(py_res, PyStr.connection);
@@ -2190,23 +2211,17 @@ static PyObject *read_row_from_packet(
                         if (!py_item) goto error;
                     }
 
-                    if (ensure_numpy() == 0) {
-                        switch (py_state->type_codes[i]) {
-                        case MYSQL_TYPE_FLOAT32_VECTOR_JSON:
-                        case MYSQL_TYPE_FLOAT64_VECTOR_JSON:
-                        case MYSQL_TYPE_INT8_VECTOR_JSON:
-                        case MYSQL_TYPE_INT16_VECTOR_JSON:
-                        case MYSQL_TYPE_INT32_VECTOR_JSON:
-                        case MYSQL_TYPE_INT64_VECTOR_JSON:
-                        case MYSQL_TYPE_FLOAT16_VECTOR_JSON:
-                            CHECKRC(PyTuple_SetItem(PyObj.create_numpy_array_args, 0, py_item));
-                            py_item = PyObject_Call(
-                                PyFunc.numpy_array,
-                                PyObj.create_numpy_array_args,
-                                PyObj.create_numpy_array_kwargs_vector[py_state->type_codes[i] % 1000]
-                            );
-                            if (!py_item) goto error;
-                        }
+                    // String columns share this case.
+                    if (py_state->have_numpy
+                        && py_state->type_codes[i] >= MYSQL_TYPE_FLOAT32_VECTOR_JSON
+                        && py_state->type_codes[i] <= MYSQL_TYPE_FLOAT16_VECTOR_JSON) {
+                        CHECKRC(PyTuple_SetItem(PyObj.create_numpy_array_args, 0, py_item));
+                        py_item = PyObject_Call(
+                            PyFunc.numpy_array,
+                            PyObj.create_numpy_array_args,
+                            PyObj.create_numpy_array_kwargs_vector[py_state->type_codes[i] % 1000]
+                        );
+                        if (!py_item) goto error;
                     }
 
                     break;
@@ -2221,7 +2236,7 @@ static PyObject *read_row_from_packet(
                 {
                     int type_idx = py_state->type_codes[i] % 1000;
 
-                    if (ensure_numpy() == 0) {
+                    if (py_state->have_numpy) {
                         py_memview = PyBytes_FromStringAndSize(out, out_l);
                         if (!py_memview) goto error;
 
