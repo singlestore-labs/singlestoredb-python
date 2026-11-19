@@ -40,17 +40,23 @@ def start_http_server(database, data_format='rowdat_1'):
     """Start an external function server."""
     port = get_open_port()
     print(f'Start UDF HTTP server on http://{HTTP_HOST}:{port}')
+    env = dict(
+        PATH=os.environ['PATH'],
+        PYTHONPATH=os.environ.get('PYTHONPATH', ''),
+        UVICORN_HOST=str(HTTP_HOST),
+        UVICORN_PORT=str(port),
+        UVICORN_FACTORY='1',
+        SINGLESTOREDB_EXT_FUNCTIONS='singlestoredb.tests.ext_funcs',
+        SINGLESTOREDB_PURE_PYTHON=os.environ.get('SINGLESTOREDB_PURE_PYTHON', '0'),
+    )
+    # The env above replaces the server's environment, so a PYTHON_GIL=0 set
+    # for the suite has to be passed on by hand. Only when set: on a build
+    # with a GIL, PYTHON_GIL=0 is a fatal error at startup.
+    if 'PYTHON_GIL' in os.environ:
+        env['PYTHON_GIL'] = os.environ['PYTHON_GIL']
     proc = subprocess.Popen(
         ['uvicorn', 'singlestoredb.functions.ext.asgi:create_app'],
-        env=dict(
-            PATH=os.environ['PATH'],
-            PYTHONPATH=os.environ.get('PYTHONPATH', ''),
-            UVICORN_HOST=str(HTTP_HOST),
-            UVICORN_PORT=str(port),
-            UVICORN_FACTORY='1',
-            SINGLESTOREDB_EXT_FUNCTIONS='singlestoredb.tests.ext_funcs',
-            SINGLESTOREDB_PURE_PYTHON=os.environ.get('SINGLESTOREDB_PURE_PYTHON', '0'),
-        ),
+        env=env,
     )
 
     # Wait for server to be available
