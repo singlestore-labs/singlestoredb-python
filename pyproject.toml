@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "singlestoredb"
-version = "1.19.0"
+version = "1.20.0"
 description = "Interface to the SingleStoreDB database and workspace management APIs"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = "Apache-2.0"

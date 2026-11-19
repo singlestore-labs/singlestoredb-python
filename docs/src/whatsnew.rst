@@ -8,6 +8,11 @@ This document outlines features and improvements from each release.
    are for non-production testing and evaluation, and may include
    changes to the API.
 
+v1.20.0 - November 19, 2026
+---------------------------
+* Build an abi3t wheel for free-threaded Python 3.15+ (#166)
+* Only import numpy for vector columns when reading rows (#165)
+
 v1.19.0 - November 12, 2026
 ---------------------------
 * Add Python 3.15 support (#146)
