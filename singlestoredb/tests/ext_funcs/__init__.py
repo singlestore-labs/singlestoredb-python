@@ -25,7 +25,6 @@ from singlestoredb.functions.dtypes import TEXT
 from singlestoredb.functions.dtypes import TINYINT
 from singlestoredb.functions.typing import numpy as npt
 from singlestoredb.functions.typing import pandas as pdt
-from singlestoredb.functions.typing import polars as plt
 from singlestoredb.functions.typing import pyarrow as pat
 
 
@@ -128,14 +127,6 @@ def arrow_double_mult(x: pat.Array, y: pat.Array) -> pat.Array:
     return pc.multiply(x, y)
 
 
-@udf(
-    args=[DOUBLE(nullable=False), DOUBLE(nullable=False)],
-    returns=DOUBLE(nullable=False),
-)
-def polars_double_mult(x: plt.Series, y: plt.Series) -> plt.Series:
-    return x * y
-
-
 @udf
 def nullable_double_mult(x: Optional[float], y: Optional[float]) -> Optional[float]:
     if x is None or y is None:
@@ -178,11 +169,6 @@ def pandas_tinyint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
 
 
 @tinyint_udf
-def polars_tinyint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
-    return x * y
-
-
-@tinyint_udf
 def numpy_tinyint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return x * y
 
@@ -212,11 +198,6 @@ def smallint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 @smallint_udf
 def pandas_smallint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
-    return x * y
-
-
-@smallint_udf
-def polars_smallint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -255,11 +236,6 @@ def pandas_mediumint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
 
 
 @mediumint_udf
-def polars_mediumint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
-    return x * y
-
-
-@mediumint_udf
 def numpy_mediumint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return x * y
 
@@ -290,11 +266,6 @@ def bigint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 @bigint_udf
 def pandas_bigint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
-    return x * y
-
-
-@bigint_udf
-def polars_bigint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -360,12 +331,6 @@ def pandas_bool_and(x: pdt.Series, y: pdt.Series) -> pdt.Series:
 
 
 @bool_udf
-def polars_bool_and(x: plt.Series, y: plt.Series) -> plt.Series:
-    """Vector bool AND using polars."""
-    return x & y
-
-
-@bool_udf
 def arrow_bool_and(x: pat.Array, y: pat.Array) -> pat.Array:
     """Vector bool AND using pyarrow."""
     import pyarrow as pa
@@ -409,12 +374,6 @@ def numpy_nullable_bool_and(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 @nullable_bool_udf
 def pandas_nullable_bool_and(x: pdt.Series, y: pdt.Series) -> pdt.Series:
     """Nullable vector bool AND using pandas."""
-    return x & y
-
-
-@nullable_bool_udf
-def polars_nullable_bool_and(x: plt.Series, y: plt.Series) -> plt.Series:
-    """Nullable vector bool AND using polars."""
     return x & y
 
 
@@ -465,19 +424,6 @@ def pandas_nullable_bool_and_with_masks(
     args=[BOOL(nullable=True), BOOL(nullable=True)],
     returns=BOOL(nullable=True),
 )
-def polars_nullable_bool_and_with_masks(
-    x: Masked[plt.Series], y: Masked[plt.Series],
-) -> Masked[plt.Series]:
-    """Nullable vector bool AND with masks using polars."""
-    x_data, x_nulls = x
-    y_data, y_nulls = y
-    return Masked(x_data & y_data, x_nulls | y_nulls)
-
-
-@udf(
-    args=[BOOL(nullable=True), BOOL(nullable=True)],
-    returns=BOOL(nullable=True),
-)
 def arrow_nullable_bool_and_with_masks(
     x: Masked[pat.Array], y: Masked[pat.Array],
 ) -> Masked[pat.Array]:
@@ -519,11 +465,6 @@ def pandas_nullable_tinyint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
 
 
 @nullable_tinyint_udf
-def polars_nullable_tinyint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
-    return x * y
-
-
-@nullable_tinyint_udf
 def numpy_nullable_tinyint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return x * y
 
@@ -553,11 +494,6 @@ def nullable_smallint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 @nullable_smallint_udf
 def pandas_nullable_smallint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
-    return x * y
-
-
-@nullable_smallint_udf
-def polars_nullable_smallint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -596,11 +532,6 @@ def pandas_nullable_mediumint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
 
 
 @nullable_mediumint_udf
-def polars_nullable_mediumint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
-    return x * y
-
-
-@nullable_mediumint_udf
 def numpy_nullable_mediumint_mult(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return x * y
 
@@ -631,11 +562,6 @@ def nullable_bigint_mult(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 @nullable_bigint_udf
 def pandas_nullable_bigint_mult(x: pdt.Series, y: pdt.Series) -> pdt.Series:
-    return x * y
-
-
-@nullable_bigint_udf
-def polars_nullable_bigint_mult(x: plt.Series, y: plt.Series) -> plt.Series:
     return x * y
 
 
@@ -711,18 +637,6 @@ def pandas_nullable_tinyint_mult_with_masks(
 def numpy_nullable_tinyint_mult_with_masks(
     x: Masked[npt.NDArray[np.int8]], y: Masked[npt.NDArray[np.int8]],
 ) -> Masked[npt.NDArray[np.int8]]:
-    x_data, x_nulls = x
-    y_data, y_nulls = y
-    return Masked(x_data * y_data, x_nulls | y_nulls)
-
-
-@udf(
-    args=[TINYINT(nullable=True), TINYINT(nullable=True)],
-    returns=TINYINT(nullable=True),
-)
-def polars_nullable_tinyint_mult_with_masks(
-    x: Masked[plt.Series], y: Masked[plt.Series],
-) -> Masked[plt.Series]:
     x_data, x_nulls = x
     y_data, y_nulls = y
     return Masked(x_data * y_data, x_nulls | y_nulls)
@@ -887,3 +801,17 @@ def vec_function_ints_masked2(
         Masked(x_data * y_data, x_nulls | y_nulls),
         Masked(x_data * y_data, x_nulls | y_nulls),
     )
+
+
+# polars has no wheel for every interpreter the suite runs on (none for
+# free-threaded 3.15), so its UDFs live apart and are only defined, and so
+# only registered, where it imports. Imported last: they use the decorators
+# defined above.
+try:
+    import polars  # noqa: F401
+    has_polars = True
+except ImportError:
+    has_polars = False
+
+if has_polars:
+    from ._polars import *  # noqa: F401,F403,E402

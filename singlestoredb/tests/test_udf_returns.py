@@ -11,7 +11,6 @@ from typing import TypedDict
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-import polars as pl
 import pyarrow as pa
 from pydantic import BaseModel
 
@@ -19,6 +18,12 @@ from singlestoredb.functions import Table
 from singlestoredb.functions import udf
 from singlestoredb.functions.signature import get_signature
 from singlestoredb.functions.signature import signature_to_sql
+
+try:
+    import polars as pl
+    has_polars = True
+except ImportError:
+    has_polars = False
 
 
 def to_sql(func: Callable[..., Any]) -> str:
@@ -90,17 +95,6 @@ class UDFResultsTest(unittest.TestCase):
         assert type(foo_d_out) is pd.Series
         assert list(foo_d_out) == ['0: cat', '1: dog', '2: monkey']
         assert to_sql(foo_d) == "`foo_d`(`x` TEXT NULL DEFAULT '') RETURNS TEXT NOT NULL"
-
-        # Vectorized UDF using polars Series
-        @udf(args=Parameters, returns=UDFTuple)
-        def foo_e(x: pl.Series) -> pl.Series:
-            return pl.Series([f'{i}: {y}' for i, y in enumerate(x)])
-
-        foo_e_out = foo_e(pl.Series(['cat', 'dog', 'monkey']))
-
-        assert type(foo_e_out) is pl.Series
-        assert list(foo_e_out) == ['0: cat', '1: dog', '2: monkey']
-        assert to_sql(foo_e) == "`foo_e`(`x` TEXT NULL DEFAULT '') RETURNS TEXT NOT NULL"
 
         # Vectorized UDF using numpy arrays
         @udf(args=Parameters, returns=UDFTuple)
@@ -227,24 +221,6 @@ class UDFResultsTest(unittest.TestCase):
             'RETURNS TABLE(`idx` BIGINT NOT NULL, `value` TEXT NULL)'
         )
 
-        # Plain TVF using polars Series
-        @udf(returns=TVFTuple)
-        def foo_m(x: str) -> Table[pl.Series, pl.Series]:
-            return Table(pl.Series(range(3)), pl.Series([x] * 3))
-
-        foo_m_out = foo_m('cat')
-
-        assert type(foo_m_out) is Table
-        assert len(foo_m_out) == 2
-        assert type(foo_m_out[0]) is pl.Series
-        assert list(foo_m_out[0]) == [0, 1, 2]
-        assert type(foo_m_out[1]) is pl.Series
-        assert list(foo_m_out[1]) == ['cat', 'cat', 'cat']
-        assert to_sql(foo_m) == (
-            '`foo_m`(`x` TEXT NOT NULL) '
-            'RETURNS TABLE(`idx` BIGINT NOT NULL, `value` TEXT NULL)'
-        )
-
         # Plain TVF using pyarrow Array
         @udf(returns=TVFTuple)
         def foo_n(x: str) -> Table[pa.Array, pa.Array]:
@@ -311,22 +287,6 @@ class UDFResultsTest(unittest.TestCase):
             'RETURNS TABLE(`idx` BIGINT NOT NULL, `value` TEXT NULL)'
         )
 
-        # Plain TVF using polars DataFrame
-        @udf(returns=TVFTuple)
-        def foo_r(x: str) -> Table[pl.DataFrame]:
-            return Table(pl.DataFrame([[0, 1, 2], [x] * 3]))  # columns???
-
-        foo_r_out = foo_r('cat')
-
-        assert type(foo_r_out) is Table
-        assert len(foo_r_out) == 1
-        assert list(foo_r_out[0][:, 0]) == [0, 1, 2]
-        assert list(foo_r_out[0][:, 1]) == ['cat', 'cat', 'cat']
-        assert to_sql(foo_r) == (
-            '`foo_r`(`x` TEXT NOT NULL) '
-            'RETURNS TABLE(`idx` BIGINT NOT NULL, `value` TEXT NULL)'
-        )
-
         # Plain TVF using pyarrow Table
         @udf(returns=TVFTuple)
         def foo_s(x: str) -> Table[pa.Table]:
@@ -372,22 +332,6 @@ class UDFResultsTest(unittest.TestCase):
         assert list(foo_u_out[1]) == ['cat', 'dog', 'monkey']
         assert to_sql(foo_u) == (
             "`foo_u`(`x` TEXT NULL DEFAULT '') "
-            'RETURNS TABLE(`idx` BIGINT NOT NULL, `value` TEXT NULL)'
-        )
-
-        # Vectorized TVF using polars Series
-        @udf(args=Parameters, returns=TVFTuple)
-        def foo_v(x: pl.Series) -> Table[pl.Series, pl.Series]:
-            return Table(pl.Series(range(len(x))), pl.Series(x))
-
-        foo_v_out = foo_v(pl.Series(['cat', 'dog', 'monkey']))
-
-        assert type(foo_v_out) is Table
-        assert len(foo_v_out) == 2
-        assert list(foo_v_out[0]) == [0, 1, 2]
-        assert list(foo_v_out[1]) == ['cat', 'dog', 'monkey']
-        assert to_sql(foo_v) == (
-            "`foo_v`(`x` TEXT NULL DEFAULT '') "
             'RETURNS TABLE(`idx` BIGINT NOT NULL, `value` TEXT NULL)'
         )
 
@@ -439,6 +383,69 @@ class UDFResultsTest(unittest.TestCase):
         assert to_sql(foo_y) == (
             '`foo_y`(`x` TEXT NOT NULL) '
             'RETURNS TABLE(`a` BIGINT NOT NULL, `b` TEXT NOT NULL)'
+        )
+
+    @unittest.skipUnless(has_polars, 'polars is not installed')
+    def test_udf_returns_polars(self) -> None:
+        # Vectorized UDF using polars Series
+        @udf(args=Parameters, returns=UDFTuple)
+        def foo_e(x: pl.Series) -> pl.Series:
+            return pl.Series([f'{i}: {y}' for i, y in enumerate(x)])
+
+        foo_e_out = foo_e(pl.Series(['cat', 'dog', 'monkey']))
+
+        assert type(foo_e_out) is pl.Series
+        assert list(foo_e_out) == ['0: cat', '1: dog', '2: monkey']
+        assert to_sql(foo_e) == "`foo_e`(`x` TEXT NULL DEFAULT '') RETURNS TEXT NOT NULL"
+
+        # Plain TVF using polars Series
+        @udf(returns=TVFTuple)
+        def foo_m(x: str) -> Table[pl.Series, pl.Series]:
+            return Table(pl.Series(range(3)), pl.Series([x] * 3))
+
+        foo_m_out = foo_m('cat')
+
+        assert type(foo_m_out) is Table
+        assert len(foo_m_out) == 2
+        assert type(foo_m_out[0]) is pl.Series
+        assert list(foo_m_out[0]) == [0, 1, 2]
+        assert type(foo_m_out[1]) is pl.Series
+        assert list(foo_m_out[1]) == ['cat', 'cat', 'cat']
+        assert to_sql(foo_m) == (
+            '`foo_m`(`x` TEXT NOT NULL) '
+            'RETURNS TABLE(`idx` BIGINT NOT NULL, `value` TEXT NULL)'
+        )
+
+        # Plain TVF using polars DataFrame
+        @udf(returns=TVFTuple)
+        def foo_r(x: str) -> Table[pl.DataFrame]:
+            return Table(pl.DataFrame([[0, 1, 2], [x] * 3]))  # columns???
+
+        foo_r_out = foo_r('cat')
+
+        assert type(foo_r_out) is Table
+        assert len(foo_r_out) == 1
+        assert list(foo_r_out[0][:, 0]) == [0, 1, 2]
+        assert list(foo_r_out[0][:, 1]) == ['cat', 'cat', 'cat']
+        assert to_sql(foo_r) == (
+            '`foo_r`(`x` TEXT NOT NULL) '
+            'RETURNS TABLE(`idx` BIGINT NOT NULL, `value` TEXT NULL)'
+        )
+
+        # Vectorized TVF using polars Series
+        @udf(args=Parameters, returns=TVFTuple)
+        def foo_v(x: pl.Series) -> Table[pl.Series, pl.Series]:
+            return Table(pl.Series(range(len(x))), pl.Series(x))
+
+        foo_v_out = foo_v(pl.Series(['cat', 'dog', 'monkey']))
+
+        assert type(foo_v_out) is Table
+        assert len(foo_v_out) == 2
+        assert list(foo_v_out[0]) == [0, 1, 2]
+        assert list(foo_v_out[1]) == ['cat', 'dog', 'monkey']
+        assert to_sql(foo_v) == (
+            "`foo_v`(`x` TEXT NULL DEFAULT '') "
+            'RETURNS TABLE(`idx` BIGINT NOT NULL, `value` TEXT NULL)'
         )
 
 

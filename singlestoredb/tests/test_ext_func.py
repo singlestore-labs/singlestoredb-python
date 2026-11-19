@@ -287,6 +287,7 @@ class TestExtFunc(unittest.TestCase):
                 'from data order by id',
             )
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_double_mult(self):
         self.cur.execute(
             'select polars_double_mult(value, 100) as res '
@@ -443,6 +444,7 @@ class TestExtFunc(unittest.TestCase):
                 'from data order by id',
             )
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_tinyint_mult(self):
         self.cur.execute(
             'select polars_tinyint_mult(value, 100) as res '
@@ -554,6 +556,7 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.TINY
         assert desc[0].null_ok is True
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_nullable_tinyint_mult(self):
         self.cur.execute(
             'select polars_nullable_tinyint_mult(value, 100) as res '
@@ -569,6 +572,7 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.TINY
         assert desc[0].null_ok is True
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_nullable_tinyint_mult_with_masks(self):
         self.cur.execute(
             'select polars_nullable_tinyint_mult_with_masks(value, 100) '
@@ -688,6 +692,7 @@ class TestExtFunc(unittest.TestCase):
                 'from data order by id',
             )
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_smallint_mult(self):
         self.cur.execute(
             'select polars_smallint_mult(value, 100) as res '
@@ -813,6 +818,7 @@ class TestExtFunc(unittest.TestCase):
                 'from data order by id',
             )
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_mediumint_mult(self):
         self.cur.execute(
             'select polars_mediumint_mult(value, 100) as res '
@@ -938,6 +944,7 @@ class TestExtFunc(unittest.TestCase):
                 'from data order by id',
             )
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_bigint_mult(self):
         self.cur.execute(
             'select polars_bigint_mult(value, 100) as res '
@@ -1173,6 +1180,7 @@ class TestExtFunc(unittest.TestCase):
                 'from bool_data order by id',
             )
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_bool_and(self):
         """Test vector bool AND using polars Series."""
         self.cur.execute(
@@ -1277,6 +1285,7 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.TINY
         assert desc[0].null_ok is True
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_nullable_bool_and(self):
         """Test nullable vector bool AND using polars."""
         self.cur.execute(
@@ -1342,6 +1351,7 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.TINY
         assert desc[0].null_ok is True
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_nullable_bool_and_with_masks(self):
         """Test nullable vector bool AND with masks using polars."""
         self.cur.execute(

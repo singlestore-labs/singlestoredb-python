@@ -27,6 +27,12 @@ except ImportError:
     has_pandas = False
     _pd_str_dtype = 'object'
 
+try:
+    import polars  # noqa: F401
+    has_polars = True
+except ImportError:
+    has_polars = False
+
 
 class TestConnection(unittest.TestCase):
 
@@ -1451,6 +1457,7 @@ class TestConnection(unittest.TestCase):
 
         conn.close()
 
+    @unittest.skipUnless(has_polars, 'polars is not installed')
     def test_alltypes_polars(self):
         if self.conn.driver in ['http', 'https']:
             self.skipTest('Data API does not surface unsigned int information')
@@ -1598,6 +1605,7 @@ class TestConnection(unittest.TestCase):
 
         conn.close()
 
+    @unittest.skipUnless(has_polars, 'polars is not installed')
     def test_alltypes_no_nulls_polars(self):
         if self.conn.driver in ['http', 'https']:
             self.skipTest('Data API does not surface unsigned int information')
@@ -1745,6 +1753,7 @@ class TestConnection(unittest.TestCase):
 
         conn.close()
 
+    @unittest.skipUnless(has_polars, 'polars is not installed')
     def test_alltypes_min_max_polars(self):
         if self.conn.driver in ['http', 'https']:
             self.skipTest('Data API does not surface unsigned int information')
@@ -1760,6 +1769,7 @@ class TestConnection(unittest.TestCase):
 
         conn.close()
 
+    @unittest.skipUnless(has_polars, 'polars is not installed')
     def test_alltypes_nulls_polars(self):
         conn = s2.connect(database=type(self).dbname, results_type='polars')
         cur = conn.cursor()

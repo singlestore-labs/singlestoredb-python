@@ -41,6 +41,14 @@ MAX_BLOCKS_PER_COLUMN = 0.05
 # nothing is tracing.
 MAX_BLOCKS_PER_QUERY = 5.0
 
+# Measurements per check before it fails. sys.getallocatedblocks() counts the
+# whole process, so anything else freeing or allocating inside the window
+# lands in the reading: on free-threaded 3.15 under xdist, one narrow
+# measurement read -5.85 blocks per query, pushing the difference past the
+# per-column budget with nothing leaking. A leak shows on every attempt -- the
+# one in issue #135 cost twenty times the budget -- so it still fails here.
+ATTEMPTS = 3
+
 N_COLS = WIDE_COLS
 WIDE_QUERY = query_for(WIDE_COLS)
 
@@ -121,15 +129,18 @@ class TestAccelLeaks(unittest.TestCase):
         """
         for results_type in ('tuples', 'dicts', 'namedtuples', 'structsequences'):
             with self.subTest(results_type=results_type):
-                narrow = self.blocks_per_query(results_type, NARROW_COLS)
-                wide = self.blocks_per_query(results_type, WIDE_COLS)
+                for _ in range(ATTEMPTS):
+                    narrow = self.blocks_per_query(results_type, NARROW_COLS)
+                    wide = self.blocks_per_query(results_type, WIDE_COLS)
 
-                per_column = (wide - narrow) / (WIDE_COLS - NARROW_COLS)
+                    per_column = (wide - narrow) / (WIDE_COLS - NARROW_COLS)
+                    if per_column < MAX_BLOCKS_PER_COLUMN:
+                        break
 
                 assert per_column < MAX_BLOCKS_PER_COLUMN, \
                     f'{results_type} leaks {per_column} blocks per column ' \
                     f'({narrow} blocks/query at {NARROW_COLS} columns, ' \
-                    f'{wide} at {WIDE_COLS})'
+                    f'{wide} at {WIDE_COLS}; {ATTEMPTS} attempts)'
 
     def test_no_leak_per_query(self):
         """Retention must not grow per query either.
@@ -147,12 +158,15 @@ class TestAccelLeaks(unittest.TestCase):
                 if results_type == 'namedtuples':
                     budget += tracer_overhead
 
-                leaked = self.blocks_per_query(results_type)
+                for _ in range(ATTEMPTS):
+                    leaked = self.blocks_per_query(results_type)
+                    if leaked < budget:
+                        break
 
                 assert leaked < budget, \
                     f'{results_type} leaks {leaked} blocks per query ' \
                     f'(budget {budget}, of which {tracer_overhead} is ' \
-                    f'tracer overhead)'
+                    f'tracer overhead; {ATTEMPTS} attempts)'
 
     def test_unbuffered_fetches_release_the_state(self):
         """Each fetch from an unbuffered cursor must release the State.
