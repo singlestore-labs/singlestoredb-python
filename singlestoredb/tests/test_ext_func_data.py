@@ -8,7 +8,6 @@ import unittest
 
 import numpy as np
 import pandas as pd
-import polars as pl
 import pyarrow as pa
 from numpy.testing import assert_array_equal
 from parameterized import parameterized
@@ -22,6 +21,12 @@ from singlestoredb.functions.ext.rowdat_1 import _pack_time
 from singlestoredb.functions.ext.rowdat_1 import _unpack_date
 from singlestoredb.functions.ext.rowdat_1 import _unpack_datetime
 from singlestoredb.functions.ext.rowdat_1 import _unpack_time
+
+try:
+    import polars as pl
+    has_polars = True
+except ImportError:
+    has_polars = False
 
 
 TINYINT = 1
@@ -94,57 +99,58 @@ numpy_data = [
     (numpy_binary_arr, numpy_nulls),
 ]
 
-polars_row_ids = pl.Series(None, [1, 2, 3, 4], dtype=pl.Int64)
-polars_nulls = pl.Series(None, numpy_nulls, dtype=pl.Boolean)
+if has_polars:
+    polars_row_ids = pl.Series(None, [1, 2, 3, 4], dtype=pl.Int64)
+    polars_nulls = pl.Series(None, numpy_nulls, dtype=pl.Boolean)
 
-polars_tiny_arr = \
-    pl.Series(None, numpy_tiny_arr, dtype=pl.Int8)
-polars_unsigned_tiny_arr = \
-    pl.Series(None, numpy_unsigned_tiny_arr, dtype=pl.UInt8)
-polars_short_arr = \
-    pl.Series(None, numpy_short_arr, dtype=pl.Int16)
-polars_unsigned_short_arr = \
-    pl.Series(None, numpy_unsigned_short_arr, dtype=pl.UInt16)
-polars_long_arr = \
-    pl.Series(None, numpy_long_arr, dtype=pl.Int32)
-polars_unsigned_long_arr = \
-    pl.Series(None, numpy_unsigned_long_arr, dtype=pl.UInt32)
-polars_float_arr = \
-    pl.Series(None, numpy_float_arr, dtype=pl.Float32)
-polars_double_arr = \
-    pl.Series(None, numpy_double_arr, dtype=pl.Float64)
-polars_longlong_arr = \
-    pl.Series(None, numpy_longlong_arr, dtype=pl.Int64)
-polars_unsigned_longlong_arr = \
-    pl.Series(None, numpy_unsigned_longlong_arr, dtype=pl.UInt64)
-polars_int24_arr = \
-    pl.Series(None, numpy_int24_arr, dtype=pl.Int32)
-polars_unsigned_int24_arr = \
-    pl.Series(None, numpy_unsigned_int24_arr, dtype=pl.UInt32)
-polars_string_arr = \
-    pl.Series(None, numpy_string_arr.tolist(), dtype=pl.Utf8)
-polars_binary_arr = \
-    pl.Series(None, numpy_binary_arr.tolist(), dtype=pl.Binary)
+    polars_tiny_arr = \
+        pl.Series(None, numpy_tiny_arr, dtype=pl.Int8)
+    polars_unsigned_tiny_arr = \
+        pl.Series(None, numpy_unsigned_tiny_arr, dtype=pl.UInt8)
+    polars_short_arr = \
+        pl.Series(None, numpy_short_arr, dtype=pl.Int16)
+    polars_unsigned_short_arr = \
+        pl.Series(None, numpy_unsigned_short_arr, dtype=pl.UInt16)
+    polars_long_arr = \
+        pl.Series(None, numpy_long_arr, dtype=pl.Int32)
+    polars_unsigned_long_arr = \
+        pl.Series(None, numpy_unsigned_long_arr, dtype=pl.UInt32)
+    polars_float_arr = \
+        pl.Series(None, numpy_float_arr, dtype=pl.Float32)
+    polars_double_arr = \
+        pl.Series(None, numpy_double_arr, dtype=pl.Float64)
+    polars_longlong_arr = \
+        pl.Series(None, numpy_longlong_arr, dtype=pl.Int64)
+    polars_unsigned_longlong_arr = \
+        pl.Series(None, numpy_unsigned_longlong_arr, dtype=pl.UInt64)
+    polars_int24_arr = \
+        pl.Series(None, numpy_int24_arr, dtype=pl.Int32)
+    polars_unsigned_int24_arr = \
+        pl.Series(None, numpy_unsigned_int24_arr, dtype=pl.UInt32)
+    polars_string_arr = \
+        pl.Series(None, numpy_string_arr.tolist(), dtype=pl.Utf8)
+    polars_binary_arr = \
+        pl.Series(None, numpy_binary_arr.tolist(), dtype=pl.Binary)
 
-polars_data = [
-    (polars_tiny_arr, polars_nulls),
-    (polars_unsigned_tiny_arr, polars_nulls),
-    (polars_short_arr, polars_nulls),
-    (polars_unsigned_short_arr, polars_nulls),
-    (polars_long_arr, polars_nulls),
-    (polars_unsigned_long_arr, polars_nulls),
-    (polars_float_arr, polars_nulls),
-    (polars_double_arr, polars_nulls),
-    (polars_longlong_arr, polars_nulls),
-    (polars_unsigned_longlong_arr, polars_nulls),
-    (polars_int24_arr, polars_nulls),
-    (polars_unsigned_int24_arr, polars_nulls),
-    (polars_string_arr, polars_nulls),
-    (polars_binary_arr, polars_nulls),
-]
+    polars_data = [
+        (polars_tiny_arr, polars_nulls),
+        (polars_unsigned_tiny_arr, polars_nulls),
+        (polars_short_arr, polars_nulls),
+        (polars_unsigned_short_arr, polars_nulls),
+        (polars_long_arr, polars_nulls),
+        (polars_unsigned_long_arr, polars_nulls),
+        (polars_float_arr, polars_nulls),
+        (polars_double_arr, polars_nulls),
+        (polars_longlong_arr, polars_nulls),
+        (polars_unsigned_longlong_arr, polars_nulls),
+        (polars_int24_arr, polars_nulls),
+        (polars_unsigned_int24_arr, polars_nulls),
+        (polars_string_arr, polars_nulls),
+        (polars_binary_arr, polars_nulls),
+    ]
 
-pandas_row_ids = pl.Series(None, [1, 2, 3, 4], dtype=pl.Int64)
-pandas_nulls = pl.Series(None, numpy_nulls, dtype=pl.Boolean)
+pandas_row_ids = pd.Series([1, 2, 3, 4], dtype=np.int64)
+pandas_nulls = pd.Series(numpy_nulls, dtype=np.bool_)
 
 pandas_tiny_arr = \
     pd.Series(numpy_tiny_arr, dtype=np.int8)
@@ -842,6 +848,7 @@ class TestRowdat1(unittest.TestCase):
         assert ids == py_row_ids
         assert_py_equal(columns, py_col_data)
 
+    @unittest.skipUnless(has_polars, 'polars is not installed')
     def test_polars(self):
         dump_res = rowdat_1._dump_polars(
             col_types, polars_row_ids, polars_data,
@@ -867,6 +874,7 @@ class TestRowdat1(unittest.TestCase):
         assert_array_equal(columns[12][0], polars_string_arr, strict=True)
         assert_array_equal(columns[13][0], polars_binary_arr, strict=True)
 
+    @unittest.skipUnless(has_polars, 'polars is not installed')
     def test_polars_accel(self):
         dump_res = rowdat_1._dump_polars_accel(
             col_types, polars_row_ids, polars_data,
@@ -1032,6 +1040,7 @@ class TestJSON(unittest.TestCase):
         assert ids == py_row_ids
         assert_py_equal(columns, py_col_data)
 
+    @unittest.skipUnless(has_polars, 'polars is not installed')
     def test_polars(self):
         dump_res = jsonx.dump_polars(
             col_types, polars_row_ids, polars_data,

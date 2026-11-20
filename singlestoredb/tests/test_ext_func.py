@@ -40,17 +40,23 @@ def start_http_server(database, data_format='rowdat_1'):
     """Start an external function server."""
     port = get_open_port()
     print(f'Start UDF HTTP server on http://{HTTP_HOST}:{port}')
+    env = dict(
+        PATH=os.environ['PATH'],
+        PYTHONPATH=os.environ.get('PYTHONPATH', ''),
+        UVICORN_HOST=str(HTTP_HOST),
+        UVICORN_PORT=str(port),
+        UVICORN_FACTORY='1',
+        SINGLESTOREDB_EXT_FUNCTIONS='singlestoredb.tests.ext_funcs',
+        SINGLESTOREDB_PURE_PYTHON=os.environ.get('SINGLESTOREDB_PURE_PYTHON', '0'),
+    )
+    # The env above replaces the server's environment, so a PYTHON_GIL=0 set
+    # for the suite has to be passed on by hand. Only when set: on a build
+    # with a GIL, PYTHON_GIL=0 is a fatal error at startup.
+    if 'PYTHON_GIL' in os.environ:
+        env['PYTHON_GIL'] = os.environ['PYTHON_GIL']
     proc = subprocess.Popen(
         ['uvicorn', 'singlestoredb.functions.ext.asgi:create_app'],
-        env=dict(
-            PATH=os.environ['PATH'],
-            PYTHONPATH=os.environ.get('PYTHONPATH', ''),
-            UVICORN_HOST=str(HTTP_HOST),
-            UVICORN_PORT=str(port),
-            UVICORN_FACTORY='1',
-            SINGLESTOREDB_EXT_FUNCTIONS='singlestoredb.tests.ext_funcs',
-            SINGLESTOREDB_PURE_PYTHON=os.environ.get('SINGLESTOREDB_PURE_PYTHON', '0'),
-        ),
+        env=env,
     )
 
     # Wait for server to be available
@@ -287,6 +293,7 @@ class TestExtFunc(unittest.TestCase):
                 'from data order by id',
             )
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_double_mult(self):
         self.cur.execute(
             'select polars_double_mult(value, 100) as res '
@@ -443,6 +450,7 @@ class TestExtFunc(unittest.TestCase):
                 'from data order by id',
             )
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_tinyint_mult(self):
         self.cur.execute(
             'select polars_tinyint_mult(value, 100) as res '
@@ -554,6 +562,7 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.TINY
         assert desc[0].null_ok is True
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_nullable_tinyint_mult(self):
         self.cur.execute(
             'select polars_nullable_tinyint_mult(value, 100) as res '
@@ -569,6 +578,7 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.TINY
         assert desc[0].null_ok is True
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_nullable_tinyint_mult_with_masks(self):
         self.cur.execute(
             'select polars_nullable_tinyint_mult_with_masks(value, 100) '
@@ -688,6 +698,7 @@ class TestExtFunc(unittest.TestCase):
                 'from data order by id',
             )
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_smallint_mult(self):
         self.cur.execute(
             'select polars_smallint_mult(value, 100) as res '
@@ -813,6 +824,7 @@ class TestExtFunc(unittest.TestCase):
                 'from data order by id',
             )
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_mediumint_mult(self):
         self.cur.execute(
             'select polars_mediumint_mult(value, 100) as res '
@@ -938,6 +950,7 @@ class TestExtFunc(unittest.TestCase):
                 'from data order by id',
             )
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_bigint_mult(self):
         self.cur.execute(
             'select polars_bigint_mult(value, 100) as res '
@@ -1173,6 +1186,7 @@ class TestExtFunc(unittest.TestCase):
                 'from bool_data order by id',
             )
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_bool_and(self):
         """Test vector bool AND using polars Series."""
         self.cur.execute(
@@ -1277,6 +1291,7 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.TINY
         assert desc[0].null_ok is True
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_nullable_bool_and(self):
         """Test nullable vector bool AND using polars."""
         self.cur.execute(
@@ -1342,6 +1357,7 @@ class TestExtFunc(unittest.TestCase):
         assert desc[0].type_code == ft.TINY
         assert desc[0].null_ok is True
 
+    @unittest.skipUnless(ext_funcs.has_polars, 'polars is not installed')
     def test_polars_nullable_bool_and_with_masks(self):
         """Test nullable vector bool AND with masks using polars."""
         self.cur.execute(

@@ -208,3 +208,68 @@ jobs:
             --ledger "$SINGLESTOREDB_TEST_DEPLOYMENT_LOG" --yes
         env:
           SINGLESTOREDB_MANAGEMENT_TOKEN: ${{ secrets.CLUSTER_API_KEY }}
+
+  # The full non-management suite on free-threaded CPython, where the C
+  # extension is the abi3t build and runs with the GIL off. smoke-test.yml only
+  # runs test_basics there. Its own job, not a step in test-coverage: that job's
+  # report and cleanup steps run on 3.14, and a second setup-python would take
+  # over `python` for them. Nothing here deploys, so it needs neither the
+  # management token nor a cleanup step, and nothing waits on it.
+  #
+  # No --cov: the lines this reaches are the ones test-coverage already
+  # measures, and the job is here for the failures, not the report.
+  free-threaded-tests:
+    runs-on: ubuntu-latest
+    environment: Base
+
+    services:
+      singlestore:
+        image: ghcr.io/singlestore-labs/singlestoredb-dev:latest
+        ports:
+          - 3307:3306
+          - 8081:8080
+          - 9081:9081
+        env:
+          SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
+          ROOT_PASSWORD: "root"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.15t"
+          cache: "pip"
+
+      # .[test] less what has no cp315t wheel: polars (pip would compile it
+      # from Rust) and jupysql (through pyyaml), and less coverage, since this
+      # job does not measure it. No test imports jupysql; the polars tests
+      # skip themselves.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . dash docker fastapi ipython opentelemetry-api \
+            pandas parameterized pyarrow pydantic pytest pytest-xdist \
+            "singlestore-vectorstore>=0.1.2" uvicorn
+
+      # Before PYTHON_GIL is set below, which would hide what this checks: an
+      # extension that turns the GIL back on when imported.
+      - name: Check the C extension
+        run: python resources/check_accel_import.py
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      - name: Run MySQL protocol tests
+        # PYTHON_GIL=0 keeps the GIL off for the whole run. Otherwise any
+        # third-party extension not yet marked free-threading safe would turn
+        # it back on at import, with only a RuntimeWarning, and the suite would
+        # pass without having run the C extension GIL-free.
+        run: |
+          pytest -v -m 'not management' --pyargs singlestoredb.tests
+        env:
+          PYTHON_GIL: "0"
+          SINGLESTOREDB_URL: "root:root@127.0.0.1:3307"
+          SINGLESTOREDB_PURE_PYTHON: 0
+          SINGLESTORE_LICENSE: ${{ secrets.SINGLESTORE_LICENSE }}
+          SINGLESTOREDB_FUSION_ENABLE_HIDDEN: "1"
