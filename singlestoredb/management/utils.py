@@ -567,7 +567,8 @@ def from_datetime(
         return None
     if isinstance(obj, str):
         return obj
-    out = obj.isoformat()
+    # An aware value would otherwise keep its offset and then get a Z as well.
+    out = _as_naive_utc(obj).isoformat()
     if not re.search(r'[A-Za-z]$', out):
         out = f'{out}Z'
     return out
