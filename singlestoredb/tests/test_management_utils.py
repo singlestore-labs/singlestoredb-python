@@ -20,6 +20,7 @@ from unittest.mock import patch
 
 from singlestoredb.exceptions import ManagementError
 from singlestoredb.management.utils import _normalize_datetime
+from singlestoredb.management.utils import from_datetime
 from singlestoredb.management.utils import normalize_remote_path
 from singlestoredb.management.utils import to_datetime
 from singlestoredb.management.utils import to_datetime_strict
@@ -3080,6 +3081,29 @@ class TestToDatetime(unittest.TestCase):
     def test_strict_raises_on_the_go_spelling_of_the_sentinel(self):
         with self.assertRaises(ValueError):
             to_datetime_strict('0001-01-01 00:00:00 +0000 UTC')
+
+
+class TestFromDatetime(unittest.TestCase):
+    """``from_datetime`` builds the timestamps sent as ``startTime``,
+    ``endTime`` and ``startAt``."""
+
+    def test_naive_is_sent_as_utc(self):
+        out = from_datetime(datetime.datetime(2026, 9, 17, 13, 42, 41))
+        self.assertEqual(out, '2026-09-17T13:42:41Z')
+
+    def test_aware_is_shifted_onto_utc(self):
+        ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+        out = from_datetime(datetime.datetime(2026, 9, 17, 19, 12, 41, tzinfo=ist))
+        self.assertEqual(out, '2026-09-17T13:42:41Z')
+
+    def test_aware_utc_has_one_offset(self):
+        out = from_datetime(
+            datetime.datetime(2026, 9, 17, 13, 42, 41, tzinfo=datetime.timezone.utc),
+        )
+        self.assertEqual(out, '2026-09-17T13:42:41Z')
+
+    def test_strings_pass_through(self):
+        self.assertEqual(from_datetime('2026-09-17T13:42:41Z'), '2026-09-17T13:42:41Z')
 
 
 class TestAdminPassword(unittest.TestCase):
